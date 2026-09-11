@@ -6,9 +6,11 @@ import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 
-/** State the event pipeline exposes for applying a resolved editor click/press/drag target to buffer selection. */
-private[manager] trait MouseHitTestingPort:
-  def stateRef: Ref[IO, AppState]
+/** State the event pipeline exposes for applying a resolved editor click/press/drag target to buffer selection, as a
+  * capability record rather than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is
+  * the only reason this needs an interface at all, and a record fakes trivially without one (#1017).
+  */
+final private[manager] case class MouseHitTestingPort(stateRef: Ref[IO, AppState])
 
 /** Routes primary/secondary mouse click, press, drag, and move events to the editor, the context menu, the contextual
   * toolbar, the command palette, pinned panels, and the startup page, in the same precedence order the pipeline

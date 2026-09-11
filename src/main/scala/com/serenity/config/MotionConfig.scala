@@ -134,25 +134,25 @@ object MotionConfig:
       baseline = baseline,
       families = Map(
         MotionFamily.Cursor -> MotionFamilyConfig(
-          enabled = true,
           transitionKind = TransitionKind.Fade,
           animation = base,
           speedScale = config.legacyCursorTransitionSpeedScale
         ),
         MotionFamily.EditorText -> MotionFamilyConfig(
-          enabled = config.editorInsertionTransitionKind != TransitionKind.Disabled,
           transitionKind = config.editorInsertionTransitionKind,
           animation = base,
           speedScale = config.legacyEditorTextTransitionSpeedScale
         ),
         MotionFamily.CommandSurfaces -> MotionFamilyConfig(
-          enabled = commandTransition != TransitionKind.Disabled,
           transitionKind = commandTransition,
           animation = commandAnimation,
           speedScale = config.legacyCommandRunnerTransitionSpeedScale
         ),
+        // `enabled` is derived from `transitionKind` (this family's open transition -- see `MotionFamilyConfig`'s
+        // doc), so a legacy config with the open transition off but the close transition on now resolves this whole
+        // family to disabled rather than the previous open-or-close union; nothing in this codebase's config
+        // authoring surface produces that combination today.
         MotionFamily.PinnedPanels -> MotionFamilyConfig(
-          enabled = panelOpenTransition != TransitionKind.Disabled || panelCloseTransition != TransitionKind.Disabled,
           transitionKind = panelOpenTransition,
           animation = uiAnimation,
           speedScale = config.legacyUiTransitionSpeedScale,
@@ -162,7 +162,6 @@ object MotionConfig:
           )
         ),
         MotionFamily.UiTransitions -> MotionFamilyConfig(
-          enabled = true,
           transitionKind = TransitionKind.Fade,
           animation = uiAnimation,
           speedScale = config.legacyUiTransitionSpeedScale

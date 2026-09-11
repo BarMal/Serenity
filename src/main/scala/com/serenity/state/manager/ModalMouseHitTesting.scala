@@ -6,10 +6,14 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.ui.layout.*
 
-/** State the event pipeline exposes for routing mouse input into a blocking or floating modal workflow. */
-private[manager] trait ModalMouseHitTestingPort:
-  def stateRef: Ref[IO, AppState]
-  def applyReducerResult(result: ReducerResult, fallbackState: AppState): IO[Unit]
+/** State the event pipeline exposes for routing mouse input into a blocking or floating modal workflow, as a
+  * capability record rather than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is
+  * the only reason this needs an interface at all, and a record fakes trivially without one (#1017).
+  */
+final private[manager] case class ModalMouseHitTestingPort(
+    stateRef: Ref[IO, AppState],
+    applyReducerResult: (ReducerResult, AppState) => IO[Unit]
+)
 
 /** Hit-tests mouse input against the topmost blocking modal (or a focused floating modal workflow) and translates a hit
   * into a `ModalEventReducer` click, independent of every other mouse target -- editor text, panels, and overlays are

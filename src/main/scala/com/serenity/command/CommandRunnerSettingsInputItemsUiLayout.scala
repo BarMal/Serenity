@@ -17,7 +17,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
       label = "UI Element Gap",
       hint = s"Cells, decimals supported (${AppConfig.MinUiElementGap}-${AppConfig.MaxUiElementGap})",
       currentValue = elementGapValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toDoubleOption
           .filter(value => value >= AppConfig.MinUiElementGap && value <= AppConfig.MaxUiElementGap)
@@ -31,7 +31,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
       label = "UI Corner Radius",
       hint = s"Pixels (${AppConfig.MinUiCornerRadiusPx}-${AppConfig.MaxUiCornerRadiusPx})",
       currentValue = cornerRadiusValue,
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
       parse = text =>
         text.toIntOption
           .filter(value => value >= AppConfig.MinUiCornerRadiusPx && value <= AppConfig.MaxUiCornerRadiusPx)
@@ -46,7 +46,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
       label = "UI Outline Thickness",
       hint = s"Pixels (${AppConfig.MinUiOutlineThicknessPx}-${AppConfig.MaxUiOutlineThicknessPx})",
       currentValue = outlineThicknessValue,
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
       parse = text =>
         text.toIntOption
           .filter(value => value >= AppConfig.MinUiOutlineThicknessPx && value <= AppConfig.MaxUiOutlineThicknessPx)
@@ -69,7 +69,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
       hint =
         s"Command rows (${AppConfig.MinCommandRunnerVisibleRows}-${AppConfig.MaxCommandRunnerVisibleRows}) or auto",
       currentValue = commandRowsValue,
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.FreeText,
       parse = text =>
         val normalized = text.trim.toLowerCase
         if normalized == "auto" then
@@ -84,8 +84,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
               CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(Some(value))))
             )
       ,
-      category = CommandCategory.Settings,
-      acceptsFreeText = true
+      category = CommandCategory.Settings
     ),
     CommandSurfaceItem.InputItem(
       id = "command-runner-item-gap-rows",
@@ -93,7 +92,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
       hint =
         s"Rows, decimals supported (${AppConfig.MinCommandRunnerItemGapRows}-${AppConfig.MaxCommandRunnerItemGapRows})",
       currentValue = commandItemGapRowsValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.trim.toDoubleOption
           .filter(value =>
@@ -111,7 +110,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
       hint =
         s"Rows, decimals supported (${AppConfig.MinCommandRunnerCursorGapRows}-${AppConfig.MaxCommandRunnerCursorGapRows}) or auto",
       currentValue = commandCursorGapRowsValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.FreeText,
       parse = text =>
         val normalized = text.trim.toLowerCase
         if normalized == "auto" then
@@ -126,7 +125,6 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
               CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerCursorGapRows(Some(value))))
             )
       ,
-      category = CommandCategory.Settings,
-      acceptsFreeText = true
+      category = CommandCategory.Settings
     )
   )

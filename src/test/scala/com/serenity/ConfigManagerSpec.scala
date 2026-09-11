@@ -929,13 +929,11 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
         MotionPreset.Expressive,
         Map(
           MotionFamily.CommandSurfaces -> MotionFamilyConfig(
-            enabled = true,
             transitionKind = TransitionKind.TypedText,
             animation = AnimationConfig.subtle,
             speedScale = 0.5
           ),
           MotionFamily.PinnedPanels -> MotionFamilyConfig(
-            enabled = false,
             transitionKind = TransitionKind.Disabled,
             animation = None,
             speedScale = 0.0
@@ -993,7 +991,6 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
         MotionPreset.Smooth,
         Map(
           MotionFamily.CommandSurfaces -> MotionFamilyConfig(
-            enabled = true,
             transitionKind = TransitionKind.TypedText,
             animation = Some(customAnimation),
             speedScale = 1.0

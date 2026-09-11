@@ -7,10 +7,14 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.ui.layout.*
 
-/** State the event pipeline exposes for hovering and clicking the command palette and its submenus. */
-private[manager] trait CommandRunnerMouseHitTestingPort:
-  def stateRef: Ref[IO, AppState]
-  def applyReducerResult(result: ReducerResult, fallbackState: AppState): IO[Unit]
+/** State the event pipeline exposes for hovering and clicking the command palette and its submenus, as a capability
+  * record rather than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is the only
+  * reason this needs an interface at all, and a record fakes trivially without one (#1017).
+  */
+final private[manager] case class CommandRunnerMouseHitTestingPort(
+    stateRef: Ref[IO, AppState],
+    applyReducerResult: (ReducerResult, AppState) => IO[Unit]
+)
 
 /** Hit-tests hover/click against the open command palette (or its active submenu) and reduces the resulting
   * `CommandRunnerEvent`, independent of every other mouse target.

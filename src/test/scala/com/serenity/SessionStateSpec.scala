@@ -429,13 +429,11 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
                 MotionPreset.Smooth,
                 Map(
                   MotionFamily.CommandSurfaces -> MotionFamilyConfig(
-                    enabled = true,
                     transitionKind = TransitionKind.TypedText,
                     animation = AnimationConfig.subtle,
                     speedScale = 0.5
                   ),
                   MotionFamily.PinnedPanels -> MotionFamilyConfig(
-                    enabled = true,
                     transitionKind = TransitionKind.DirectionalSweep,
                     animation = AnimationConfig.smooth,
                     speedScale = 1.0,

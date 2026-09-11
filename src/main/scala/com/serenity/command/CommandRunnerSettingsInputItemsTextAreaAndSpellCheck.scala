@@ -18,7 +18,7 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
       label = "Left Text Margin",
       hint = "Percent (0-45)",
       currentValue = textAreaLeftValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toDoubleOption
           .filter(value => value >= 0.0 && value <= 45.0)
@@ -32,7 +32,7 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
       label = "Right Text Margin",
       hint = "Percent (0-45)",
       currentValue = textAreaRightValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toDoubleOption
           .filter(value => value >= 0.0 && value <= 45.0)
@@ -46,7 +46,7 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
       label = "Top Text Margin",
       hint = "Percent (0-45)",
       currentValue = textAreaTopValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toDoubleOption
           .filter(value => value >= 0.0 && value <= 45.0)
@@ -60,7 +60,7 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
       label = "Bottom Text Margin",
       hint = "Percent (0-45)",
       currentValue = textAreaBottomValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toDoubleOption
           .filter(value => value >= 0.0 && value <= 45.0)
@@ -78,22 +78,21 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
       label = "Spell Check Languages",
       hint = "Comma-separated codes",
       currentValue = spellCheck.languages.mkString(","),
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.FreeText,
       parse = text =>
         CommandRunnerSettingsTextParsing
           .nonEmptyCommaList(text)
           .map(commandIntentArg =>
             CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckLanguages(commandIntentArg)))
           ),
-      category = CommandCategory.Settings,
-      acceptsFreeText = true
+      category = CommandCategory.Settings
     ),
     CommandSurfaceItem.InputItem(
       id = "spellcheck-dictionaries",
       label = "Spell Check Dictionaries",
       hint = "Comma-separated .dic paths",
       currentValue = spellCheck.dictionaryPaths.mkString(","),
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.FreeText,
       parse = text =>
         Some(
           CommandIntent.Settings(
@@ -104,15 +103,14 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
             )
           )
         ),
-      category = CommandCategory.Settings,
-      acceptsFreeText = true
+      category = CommandCategory.Settings
     ),
     CommandSurfaceItem.InputItem(
       id = "spellcheck-words",
       label = "Accepted Words",
       hint = "Comma-separated words",
       currentValue = spellCheck.additionalWords.mkString(","),
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.FreeText,
       parse = text =>
         Some(
           CommandIntent
@@ -122,7 +120,6 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
               )
             )
         ),
-      category = CommandCategory.Settings,
-      acceptsFreeText = true
+      category = CommandCategory.Settings
     )
   )

@@ -17,22 +17,21 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
       label = "Sitter Frames",
       hint = "Comma-separated glyphs",
       currentValue = sitterConfig.frames.mkString(","),
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.FreeText,
       parse = text =>
         CommandRunnerSettingsTextParsing
           .nonEmptyCommaList(text)
           .map(values =>
             CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterFrames(values.toVector)))
           ),
-      category = CommandCategory.Settings,
-      acceptsFreeText = true
+      category = CommandCategory.Settings
     ),
     CommandSurfaceItem.InputItem(
       id = "window-sitter-active-ticks",
       label = "Sitter Duration",
       hint = "Animation ticks (1-120)",
       currentValue = sitterConfig.activeTicks.toString,
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
       parse = text =>
         text.toIntOption
           .filter(value => value >= 1 && value <= 120)
@@ -47,7 +46,7 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
       label = "Fast Sitter Duration",
       hint = "Fast-typing ticks (1-240)",
       currentValue = sitterConfig.fastActiveTicks.toString,
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
       parse = text =>
         text.toIntOption
           .filter(value => value >= 1 && value <= 240)
@@ -63,7 +62,7 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
       label = "Fast Typing Threshold",
       hint = "Milliseconds (1-5000)",
       currentValue = sitterConfig.fastTypingThresholdMs.toString,
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
       parse = text =>
         text.toIntOption
           .filter(value => value >= 1 && value <= 5000)
@@ -79,7 +78,7 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
       label = "Wheel Scroll Lines",
       hint = "Lines per mouse-wheel notch (1-50)",
       currentValue = wheelScrollLines.toString,
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
       parse = text =>
         text.toIntOption
           .filter(value => value >= 1 && value <= 50)
@@ -102,7 +101,7 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
       label = "Code Font Size",
       hint = "Points (8.0-48.0)",
       currentValue = codeFontSizeValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toFloatOption
           .filter(v => v >= 8.0f && v <= 48.0f)
@@ -116,7 +115,7 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
       label = "Prose Font Size",
       hint = "Points (8.0-48.0)",
       currentValue = textFontSizeValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toFloatOption
           .filter(v => v >= 8.0f && v <= 48.0f)
@@ -130,7 +129,7 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
       label = "UI Font Size",
       hint = "Points (8.0-48.0)",
       currentValue = uiFontSizeValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toFloatOption
           .filter(v => v >= 8.0f && v <= 48.0f)
@@ -144,7 +143,7 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
       label = "Text Scale",
       hint = s"Multiplier (${FontLoader.FontConfig.MinTextScale}-${FontLoader.FontConfig.MaxTextScale})",
       currentValue = textScaleValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toDoubleOption
           .filter(value =>

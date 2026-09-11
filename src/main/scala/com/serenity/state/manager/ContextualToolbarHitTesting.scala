@@ -6,10 +6,14 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
-/** State the event pipeline exposes for hovering and clicking the contextual toolbar. */
-private[manager] trait ContextualToolbarHitTestingPort:
-  def stateRef: Ref[IO, AppState]
-  def executeCommand(command: com.serenity.command.Command): IO[Unit]
+/** State the event pipeline exposes for hovering and clicking the contextual toolbar, as a capability record rather
+  * than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is the only reason this
+  * needs an interface at all, and a record fakes trivially without one (#1017).
+  */
+final private[manager] case class ContextualToolbarHitTestingPort(
+    stateRef: Ref[IO, AppState],
+    executeCommand: com.serenity.command.Command => IO[Unit]
+)
 
 /** Hit-tests hover/click against the open contextual toolbar's top-level items and open detail (dropdown or input),
   * independent of every other mouse target.

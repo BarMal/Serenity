@@ -87,10 +87,9 @@ private[command] object CommandRunnerSettingsKeymapItems:
       label = label,
       hint = "Binding or default",
       currentValue = currentValue.getOrElse(""),
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.Binding,
       parse = text => parseBindingText(text, parse, reset),
-      category = CommandCategory.Settings,
-      acceptsBindingText = true
+      category = CommandCategory.Settings
     )
 
   private def parseBindingText(

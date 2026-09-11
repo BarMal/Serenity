@@ -911,7 +911,7 @@ class ContextualToolbarSpec extends AnyFlatSpec with Matchers with ContextualToo
         label = "Size",
         hint = "Points",
         currentValue = "18",
-        isDecimal = true,
+        kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
         parse = _.toFloatOption.map(commandIntentArg =>
           CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(commandIntentArg))
         ),
