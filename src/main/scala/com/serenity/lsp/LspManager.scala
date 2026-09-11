@@ -247,6 +247,16 @@ object LspManager:
         // `$/cancelRequest` it triggers reaches the wire first. Racing the two (start the new fiber, cancel the old
         // one alongside it) leaves the order of those two queue offers to fiber scheduling, and the new caller has
         // no way to tell the resulting message apart from the request it is waiting for.
+        //
+        // Hover-only is intentional, not an oversight (#1450): hover requests are re-issued continuously as the
+        // cursor moves within the same document version, so without eager cancellation a fast mouse can pile up
+        // many concurrent hover round-trips against the server. Definition requests are one-shot, user-invoked
+        // actions (an explicit "go to definition"); a second one for the same `key` before the first resolves is
+        // rare, and when it does happen the stale result is still discarded correctly -- `requestContexts.update`
+        // above already overwrote this key's context with the new anchor, so `isCurrent` for the first fiber's
+        // response will find a context mismatch and no-op it (see `isCurrent`). Cancelling it too would only save
+        // one redundant network round-trip in an uncommon case, at the cost of the same complexity hover already
+        // carries here, so the asymmetry is left as-is.
         (if kind == RequestKind.Hover then
            requestFibers.modify(fibers => (fibers - key, fibers.get(key))).flatMap(_.traverse_(_.cancel))
          else IO.unit) >>
