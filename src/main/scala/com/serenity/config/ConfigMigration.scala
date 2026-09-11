@@ -23,8 +23,7 @@ final case class ConfigMigrationReport(
     version: ConfigVersion,
     deprecatedEntries: List[DeprecatedConfigEntry] = Nil,
     unknownKeys: List[String] = Nil,
-    invalidEntries: List[InvalidConfigEntry] = Nil,
-    defaultedKeys: List[String] = Nil
+    invalidEntries: List[InvalidConfigEntry] = Nil
 ):
   def hasWarnings: Boolean =
     deprecatedEntries.nonEmpty || unknownKeys.nonEmpty || invalidEntries.nonEmpty

@@ -137,8 +137,14 @@ object LocalDocumentStorageProvider:
     expectedRevision: Option[DocumentRevision]
   ): IO[Either[DocumentStorageError, StoredDocument]] =
     IO.blocking {
+      // Hashing the existing file is only useful when the caller actually supplied a revision to check
+      // against -- `expectedRevision.exists(...)` is trivially false for `None`, so skip the full-content
+      // read (and the SHA-256 pass over it) in that common no-conflict-check case rather than computing a
+      // hash nothing will consult.
       val currentRevision =
-        if Files.exists(path) && Files.isRegularFile(path) then Some(revision(Files.readString(path))) else None
+        if expectedRevision.isDefined && Files.exists(path) && Files.isRegularFile(path) then
+          Some(revision(Files.readString(path)))
+        else None
       if expectedRevision.exists(expected => !currentRevision.contains(expected)) then
         Left(DocumentStorageError.Conflict(location))
       else Right(())
