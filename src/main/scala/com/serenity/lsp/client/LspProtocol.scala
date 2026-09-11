@@ -4,24 +4,35 @@ import com.serenity.lsp.model.*
 import io.circe.syntax.*
 import io.circe.{HCursor, Json}
 
+/** Every shape an incoming JSON-RPC message can actually take (see
+  * https://www.jsonrpc.org/specification#response_object): a successful response, an error response, or a
+  * notification. `Malformed` is a catch-all for anything else (e.g. a server-to-client request, which this client
+  * does not serve) so it can be logged instead of silently dropped.
+  */
+enum JsonRpcMessage:
+  case Response(id: RequestId, result: Json)
+  case ResponseError(id: RequestId, code: Int, message: String)
+  case Notification(method: LspMethod, params: Json)
+  case Malformed(raw: Json)
+
 object LspProtocol:
 
-  final case class JsonRpcRequest(id: Long, method: String, params: Json)
-  final case class JsonRpcNotification(method: String, params: Json)
-  final case class LspLocation(uri: String, range: LspRange)
+  final case class JsonRpcRequest(id: RequestId, method: LspMethod, params: Json)
+  final case class JsonRpcNotification(method: LspMethod, params: Json)
+  final case class LspLocation(uri: DocumentUri, range: LspRange)
 
-  def request(id: Long, method: String, params: Json): Json =
+  def request(id: RequestId, method: LspMethod, params: Json): Json =
     Json.obj(
       "jsonrpc" -> "2.0".asJson,
-      "id"      -> id.asJson,
-      "method"  -> method.asJson,
+      "id"      -> id.value.asJson,
+      "method"  -> method.value.asJson,
       "params"  -> params
     )
 
-  def notification(method: String, params: Json): Json =
+  def notification(method: LspMethod, params: Json): Json =
     Json.obj(
       "jsonrpc" -> "2.0".asJson,
-      "method"  -> method.asJson,
+      "method"  -> method.value.asJson,
       "params"  -> params
     )
 
@@ -29,26 +40,44 @@ object LspProtocol:
     *
     * A notification, not a request -- the server is not expected to reply to it. It may still answer the original
     * request normally if it had already finished, or with `RequestCancelled` (-32800); either way the id is no longer
-    * tracked by then, so [[isResponse]]'s caller drops it.
+    * tracked by then, so [[classify]]'s caller drops it.
     */
-  def cancelRequest(id: Long): Json =
-    notification("$/cancelRequest", Json.obj("id" -> id.asJson))
+  def cancelRequest(id: RequestId): Json =
+    notification(LspMethod("$/cancelRequest"), Json.obj("id" -> id.value.asJson))
 
-  def isResponse(json: Json): Boolean =
-    json.hcursor.downField("id").succeeded && json.hcursor.downField("method").failed
-  def isNotification(json: Json): Boolean =
-    json.hcursor.downField("method").succeeded && json.hcursor.downField("id").failed
+  /** The single exhaustive parse that replaces the old `isResponse`/`isNotification` boolean-predicate pair: every
+    * incoming message is classified once, here, instead of leaving each caller to re-derive "what is this" from the
+    * presence or absence of `id`/`method`/`error` fields.
+    */
+  def classify(json: Json): JsonRpcMessage =
+    val c      = json.hcursor
+    val idOpt  = c.downField("id").as[Long].toOption
+    val method = c.downField("method").as[String].toOption
+    (idOpt, method) match
+      case (Some(id), None) =>
+        c.downField("error").focus match
+          case Some(error) =>
+            val code    = error.hcursor.downField("code").as[Int].getOrElse(0)
+            val message = error.hcursor.downField("message").as[String].getOrElse("Unknown LSP error")
+            JsonRpcMessage.ResponseError(RequestId(id), code, message)
+          case None =>
+            val result = c.downField("result").focus.getOrElse(Json.Null)
+            JsonRpcMessage.Response(RequestId(id), result)
+      case (None, Some(m)) =>
+        val params = c.downField("params").focus.getOrElse(Json.obj())
+        JsonRpcMessage.Notification(LspMethod(m), params)
+      case _ => JsonRpcMessage.Malformed(json)
 
-  def responseId(json: Json): Option[Long]           = json.hcursor.downField("id").as[Long].toOption
-  def notificationMethod(json: Json): Option[String] = json.hcursor.downField("method").as[String].toOption
+  def notificationMethod(json: Json): Option[LspMethod] =
+    json.hcursor.downField("method").as[String].toOption.map(LspMethod(_))
 
   // ── Initialize ──────────────────────────────────────────────────────────────
 
-  def initializeParams(pid: Int, rootUri: String): Json =
+  def initializeParams(pid: Int, rootUri: WorkspaceRootUri): Json =
     Json.obj(
       "processId"  -> pid.asJson,
       "clientInfo" -> Json.obj("name" -> "Serenity".asJson, "version" -> "0.1.0".asJson),
-      "rootUri"    -> rootUri.asJson,
+      "rootUri"    -> rootUri.value.asJson,
       "capabilities" -> Json.obj(
         "textDocument" -> Json.obj(
           "publishDiagnostics" -> Json.obj("relatedInformation" -> true.asJson),
@@ -68,48 +97,50 @@ object LspProtocol:
 
   // ── TextDocument ────────────────────────────────────────────────────────────
 
-  def didOpenParams(uri: String, languageId: String, version: Int, text: String): Json =
+  def didOpenParams(uri: DocumentUri, languageId: String, version: Int, text: String): Json =
     Json.obj(
       "textDocument" -> Json.obj(
-        "uri"        -> uri.asJson,
+        "uri"        -> uri.value.asJson,
         "languageId" -> languageId.asJson,
         "version"    -> version.asJson,
         "text"       -> text.asJson
       )
     )
 
-  def didCloseParams(uri: String): Json =
-    Json.obj("textDocument" -> Json.obj("uri" -> uri.asJson))
+  def didCloseParams(uri: DocumentUri): Json =
+    Json.obj("textDocument" -> Json.obj("uri" -> uri.value.asJson))
 
-  def didChangeParams(uri: String, version: Int, text: String): Json =
+  def didChangeParams(uri: DocumentUri, version: Int, text: String): Json =
     Json.obj(
-      "textDocument"   -> Json.obj("uri" -> uri.asJson, "version" -> version.asJson),
+      "textDocument"   -> Json.obj("uri" -> uri.value.asJson, "version" -> version.asJson),
       "contentChanges" -> Json.arr(Json.obj("text" -> text.asJson))
     )
 
-  def hoverParams(uri: String, line: Int, character: Int): Json =
+  def hoverParams(uri: DocumentUri, line: Int, character: Int): Json =
     textDocumentPositionParams(uri, line, character)
 
-  def definitionParams(uri: String, line: Int, character: Int): Json =
+  def definitionParams(uri: DocumentUri, line: Int, character: Int): Json =
     textDocumentPositionParams(uri, line, character)
 
-  def completionParams(uri: String, line: Int, character: Int): Json =
+  def completionParams(uri: DocumentUri, line: Int, character: Int): Json =
     textDocumentPositionParams(uri, line, character)
 
-  def textDocumentPositionParams(uri: String, line: Int, character: Int): Json =
+  def textDocumentPositionParams(uri: DocumentUri, line: Int, character: Int): Json =
     Json.obj(
-      "textDocument" -> Json.obj("uri" -> uri.asJson),
+      "textDocument" -> Json.obj("uri" -> uri.value.asJson),
       "position" -> Json.obj(
         "line"      -> line.asJson,
         "character" -> character.asJson
       )
     )
 
-  def parseHoverText(json: Json): Option[String] =
-    json.hcursor
-      .downField("result")
+  /** `result` here is already the unwrapped `result` field of a classified [[JsonRpcMessage.Response]] -- callers no
+    * longer hand this the raw top-level response envelope.
+    */
+  def parseHoverText(result: Json): Option[String] =
+    result.hcursor
+      .downField("contents")
       .focus
-      .flatMap(_.hcursor.downField("contents").focus)
       .flatMap(parseHoverContents)
       .map(_.trim)
       .filter(_.nonEmpty)
@@ -132,12 +163,10 @@ object LspProtocol:
       json.hcursor.downField("value").as[String].toOption
     }
 
-  def parseCompletionItems(json: Json): Option[List[String]] =
-    json.hcursor.downField("result").focus.flatMap { result =>
-      result.asArray
-        .orElse(result.hcursor.downField("items").focus.flatMap(_.asArray))
-        .map(_.toList.flatMap(completionLabel))
-    }
+  def parseCompletionItems(result: Json): Option[List[String]] =
+    result.asArray
+      .orElse(result.hcursor.downField("items").focus.flatMap(_.asArray))
+      .map(_.toList.flatMap(completionLabel))
 
   private def completionLabel(json: Json): Option[String] =
     json.asString
@@ -145,10 +174,8 @@ object LspProtocol:
       .map(_.trim)
       .filter(_.nonEmpty)
 
-  def parseDefinitionLocation(json: Json): Option[LspLocation] =
-    json.hcursor.downField("result").focus.flatMap { result =>
-      parseLocation(result).orElse(result.asArray.flatMap(_.toList.view.flatMap(parseLocation).headOption))
-    }
+  def parseDefinitionLocation(result: Json): Option[LspLocation] =
+    parseLocation(result).orElse(result.asArray.flatMap(_.toList.view.flatMap(parseLocation).headOption))
 
   /** Parses the `range.start`/`range.end` line/character pair off `c`, the cursor for the object that holds the `range`
     * field. LSP coordinates are 0-based.
@@ -167,11 +194,11 @@ object LspProtocol:
     for
       uri   <- c.downField("uri").as[String].toOption
       range <- parseRange(c)
-    yield LspLocation(uri, range)
+    yield LspLocation(DocumentUri(uri), range)
 
   // ── PublishDiagnostics ──────────────────────────────────────────────────────
 
-  def parseDiagnostics(json: Json): Option[(String, List[Diagnostic])] =
+  def parseDiagnostics(json: Json): Option[(DocumentUri, List[Diagnostic])] =
     val c = json.hcursor.downField("params")
     for
       uri <- c.downField("uri").as[String].toOption
@@ -180,7 +207,7 @@ object LspProtocol:
         .as[List[Json]]
         .getOrElse(Nil)
         .flatMap(parseDiagnostic)
-    yield (uri, diags)
+    yield (DocumentUri(uri), diags)
 
   private def parseDiagnostic(json: Json): Option[Diagnostic] =
     val c = json.hcursor

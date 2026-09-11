@@ -82,74 +82,63 @@ final private[manager] class StateManagerEventPipeline(
     def rebalancePanes(): cats.effect.IO[Unit] =
       stateRef.update(s => AppEventReducer.rebalancePanes(s, s.focusedBufferId)))
 
-  private val lspDocumentSync = new LspDocumentSync(new LspDocumentSyncPort:
-    def stateRef: cats.effect.Ref[cats.effect.IO, AppState]      = state.stateRef
-    def interpretEffect(effect: AppEffect): cats.effect.IO[Unit] = effects.interpretEffect(effect)
-    def candidateLspBufferIds(previousState: AppState, currentState: AppState): Set[BufferId] =
-      StateManagerEventPipeline.candidateLspBufferIds(previousState, currentState))
+  private val lspDocumentSync = new LspDocumentSync(
+    LspDocumentSyncPort(
+      stateRef = state.stateRef,
+      interpretEffect = effects.interpretEffect,
+      candidateLspBufferIds = StateManagerEventPipeline.candidateLspBufferIds
+    )
+  )
 
   private val animations = new AnimationChoreography(new AnimationChoreographyPort:
     def stateRef: cats.effect.Ref[cats.effect.IO, AppState] = state.stateRef
     def bufferAnimationsRef: cats.effect.Ref[cats.effect.IO, Map[BufferId, AnimationState]] =
       state.bufferAnimationsRef)
 
-  private val editorMouseTargeting = new EditorMouseTargeting(new EditorMouseTargetingPort:
-    def stateRef: cats.effect.Ref[cats.effect.IO, AppState]                            = state.stateRef
-    def mouseTargetCacheRef: cats.effect.Ref[cats.effect.IO, Option[MouseTargetCache]] = state.mouseTargetCacheRef)
-
-  private val modalMouseHitTesting = new ModalMouseHitTesting(new ModalMouseHitTestingPort:
-    def stateRef: cats.effect.Ref[cats.effect.IO, AppState] = state.stateRef
-    def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
-      StateManagerEventPipeline.this.applyReducerResult(result, fallbackState))
-
-  private val startupPageMouseHitTesting = new StartupPageMouseHitTesting(
-    new StartupPageMouseHitTestingPort:
-      def executeCommand(command: com.serenity.command.Command): cats.effect.IO[Unit] =
-        StateManagerEventPipeline.this.executeCommand(command)
+  private val editorMouseTargeting = new EditorMouseTargeting(
+    EditorMouseTargetingPort(stateRef = state.stateRef, mouseTargetCacheRef = state.mouseTargetCacheRef)
   )
 
-  private val editorContextMenuHitTesting = new EditorContextMenuHitTesting(new EditorContextMenuHitTestingPort:
-    def stateRef: cats.effect.Ref[cats.effect.IO, AppState] = state.stateRef
-    def executeCommand(command: com.serenity.command.Command): cats.effect.IO[Unit] =
-      StateManagerEventPipeline.this.executeCommand(command)
-    def resolveMouseTarget(
-      click: MouseInputEvent,
-      state: AppState
-    ): cats.effect.IO[Option[(PaneId, Buffer, CursorPosition)]] =
-      editorMouseTargeting.resolveMouseTarget(click, state))
+  private val modalMouseHitTesting = new ModalMouseHitTesting(
+    ModalMouseHitTestingPort(stateRef = state.stateRef, applyReducerResult = applyReducerResult)
+  )
 
-  private val contextualToolbarHitTesting = new ContextualToolbarHitTesting(new ContextualToolbarHitTestingPort:
-    def stateRef: cats.effect.Ref[cats.effect.IO, AppState] = state.stateRef
-    def executeCommand(command: com.serenity.command.Command): cats.effect.IO[Unit] =
-      StateManagerEventPipeline.this.executeCommand(command))
+  private val startupPageMouseHitTesting = new StartupPageMouseHitTesting(
+    StartupPageMouseHitTestingPort(executeCommand = executeCommand)
+  )
 
-  private val commandRunnerMouseHitTesting = new CommandRunnerMouseHitTesting(new CommandRunnerMouseHitTestingPort:
-    def stateRef: cats.effect.Ref[cats.effect.IO, AppState] = state.stateRef
-    def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
-      StateManagerEventPipeline.this.applyReducerResult(result, fallbackState))
+  private val editorContextMenuHitTesting = new EditorContextMenuHitTesting(
+    EditorContextMenuHitTestingPort(
+      stateRef = state.stateRef,
+      executeCommand = executeCommand,
+      resolveMouseTarget = editorMouseTargeting.resolveMouseTarget
+    )
+  )
 
-  private val pinnedPanelMouseHitTesting = new PinnedPanelMouseHitTesting(new PinnedPanelMouseHitTestingPort:
-    def stateRef: cats.effect.Ref[cats.effect.IO, AppState] = state.stateRef
-    def applyComponentResult(result: ComponentResult, state: AppState): cats.effect.IO[AppState] =
-      StateManagerEventPipeline.this.applyComponentResult(result, state)
-    def validateAndUpdateState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
-      StateManagerEventPipeline.this.validateAndUpdateState(newState, fallbackState)
-    def updateConfig(
-      update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
-    ): cats.effect.IO[com.serenity.config.AppConfig] =
-      StateManagerEventPipeline.this.updateConfig(update)
-    def resizePinnedPanel(target: com.serenity.ui.layout.PanelTarget, newSize: Int): cats.effect.IO[Unit] =
-      StateManagerEventPipeline.this.resizePinnedPanel(target, newSize))
+  private val contextualToolbarHitTesting = new ContextualToolbarHitTesting(
+    ContextualToolbarHitTestingPort(stateRef = state.stateRef, executeCommand = executeCommand)
+  )
+
+  private val commandRunnerMouseHitTesting = new CommandRunnerMouseHitTesting(
+    CommandRunnerMouseHitTestingPort(stateRef = state.stateRef, applyReducerResult = applyReducerResult)
+  )
+
+  private val pinnedPanelMouseHitTesting = new PinnedPanelMouseHitTesting(
+    PinnedPanelMouseHitTestingPort(
+      stateRef = state.stateRef,
+      applyComponentResult = applyComponentResult,
+      validateAndUpdateState = validateAndUpdateState,
+      updateConfig = updateConfig,
+      resizePinnedPanel = resizePinnedPanel
+    )
+  )
 
   private val commentLensMouseHitTesting = new CommentLensMouseHitTesting(
-    new CommentLensMouseHitTestingPort:
-      def stateRef: cats.effect.Ref[cats.effect.IO, AppState] = state.stateRef
+    CommentLensMouseHitTestingPort(stateRef = state.stateRef)
   )
 
   private val mouseHitTesting = new MouseHitTesting(
-    new MouseHitTestingPort:
-      def stateRef: cats.effect.Ref[cats.effect.IO, AppState] = state.stateRef
-    ,
+    MouseHitTestingPort(stateRef = state.stateRef),
     editorMouseTargeting,
     editorContextMenuHitTesting,
     contextualToolbarHitTesting,

@@ -194,11 +194,10 @@ object ConfigGenerators:
 
   val genMotionFamilyConfig: Gen[MotionFamilyConfig] =
     for
-      enabled    <- Gen.oneOf(true, false)
       transition <- oneOfEnum(TransitionKind.values)
       animation  <- Gen.option(genAnimationConfig)
       speed      <- double(AppConfig.MinElementTransitionSpeedScale, AppConfig.MaxElementTransitionSpeedScale)
-    yield MotionFamilyConfig(enabled, transition, animation, speed)
+    yield MotionFamilyConfig(transition, animation, speed)
 
   val genMotionConfig: Gen[MotionConfig] =
     for

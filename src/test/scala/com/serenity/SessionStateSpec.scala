@@ -1405,7 +1405,6 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
           baseline = MotionPreset.Expressive,
           families = Map(
             MotionFamily.Cursor -> MotionFamilyConfig(
-              enabled = true,
               transitionKind = TransitionKind.Fade,
               animation = None,
               speedScale = 1.0
@@ -1470,7 +1469,6 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         baseline = MotionPreset.Expressive,
         families = Map(
           MotionFamily.Cursor -> MotionFamilyConfig(
-            enabled = true,
             transitionKind = TransitionKind.Fade,
             animation = None,
             speedScale = 1.0
