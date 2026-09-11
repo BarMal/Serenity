@@ -140,7 +140,12 @@ final case class ReplaceWorkflowState(
     copy(selectedScope = scopes(wrappedIndex), statusMessage = None)
 
 sealed trait FileWorkflowState:
-  def mode: FileWorkflowMode
+
+  /** Derived from the concrete subtype rather than stored, so it can never disagree with which subtype this is. */
+  def mode: FileWorkflowMode = this match
+    case _: OpenFileWorkflowState   => FileWorkflowMode.Open
+    case _: SaveAsFileWorkflowState => FileWorkflowMode.SaveAs
+
   def filename: String
   def path: String
   def activeField: FileWorkflowField
@@ -298,7 +303,6 @@ final case class OpenFileWorkflowState(
     statusMessage: Option[String] = None,
     bufferHasRichFormatting: Boolean = false
 ) extends FileWorkflowState:
-  val mode: FileWorkflowMode               = FileWorkflowMode.Open
   val operationLabel: String               = "open"
   val supportsFilenameSuggestions: Boolean = true
 
@@ -338,7 +342,6 @@ final case class SaveAsFileWorkflowState(
     statusMessage: Option[String] = None,
     bufferHasRichFormatting: Boolean = false
 ) extends FileWorkflowState:
-  val mode: FileWorkflowMode               = FileWorkflowMode.SaveAs
   val operationLabel: String               = "save-as"
   val supportsFilenameSuggestions: Boolean = false
 

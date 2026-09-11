@@ -4,9 +4,11 @@ import cats.effect.{IO, Ref}
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 
-/** State the event pipeline exposes for clicking inside the floating comment lens's body. */
-private[manager] trait CommentLensMouseHitTestingPort:
-  def stateRef: Ref[IO, AppState]
+/** State the event pipeline exposes for clicking inside the floating comment lens's body, as a capability record rather
+  * than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is the only reason this needs
+  * an interface at all, and a record fakes trivially without one (#1017).
+  */
+final private[manager] case class CommentLensMouseHitTestingPort(stateRef: Ref[IO, AppState])
 
 /** Routes a primary click that lands inside a *read-only* floating comment lens's body to the existing editable state
   * (#1222) -- the read-only display only reachable by clicking a highlighted comment range in floating display mode

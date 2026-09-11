@@ -2,11 +2,17 @@ package com.serenity.config
 
 import java.nio.file.Path
 
-final case class ConfigVersion(value: Int) extends AnyVal:
-  override def toString: String = value.toString
+/** The on-disk config file format's schema version (`config.version`), distinct from
+  * [[com.serenity.session.SessionState.SchemaVersion]] -- a different persisted format with its own version history.
+  */
+opaque type ConfigVersion = Int
 
 object ConfigVersion:
   val Current: ConfigVersion = ConfigVersion(1)
+
+  def apply(value: Int): ConfigVersion = value
+
+  extension (version: ConfigVersion) def value: Int = version
 
 final case class DeprecatedConfigEntry(
     key: String,

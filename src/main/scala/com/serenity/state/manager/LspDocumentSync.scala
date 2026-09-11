@@ -7,12 +7,15 @@ import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
 
 /** State, effect interpretation, and candidate-buffer computation the event pipeline exposes for LSP document-change
   * synchronisation. `candidateLspBufferIds` stays owned by the pipeline (and its own spec) since it is shared with
-  * markdown-preview-commit scheduling, not exclusive to LSP sync.
+  * markdown-preview-commit scheduling, not exclusive to LSP sync. As a capability record rather than a trait -- nothing
+  * here breaks a construction-order cycle (#1389), so mockability is the only reason this needs an interface at all,
+  * and a record fakes trivially without one (#1017).
   */
-private[manager] trait LspDocumentSyncPort:
-  def stateRef: Ref[IO, AppState]
-  def interpretEffect(effect: AppEffect): IO[Unit]
-  def candidateLspBufferIds(previousState: AppState, currentState: AppState): Set[BufferId]
+final private[manager] case class LspDocumentSyncPort(
+    stateRef: Ref[IO, AppState],
+    interpretEffect: AppEffect => IO[Unit],
+    candidateLspBufferIds: (AppState, AppState) => Set[BufferId]
+)
 
 /** Notifies the LSP queue of buffer content changes after each event dispatch, independent of event dispatch and focus
   * routing.

@@ -11,53 +11,49 @@ private[command] object CommandRunnerSettingsInputItemsPresets:
       label = "Save As New Preset",
       hint = "New preset name",
       currentValue = "",
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.FreeText,
       parse = text =>
         CommandRunnerSettingsTextParsing
           .nonEmptyText(text)
           .map(commandIntentArg => CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew(commandIntentArg))),
-      category = CommandCategory.Settings,
-      acceptsFreeText = true
+      category = CommandCategory.Settings
     ),
     CommandSurfaceItem.InputItem(
       id = "ui-preset-apply",
       label = "Apply Preset",
       hint = "Preset name",
       currentValue = "",
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.FreeText,
       parse = text =>
         CommandRunnerSettingsTextParsing
           .nonEmptyText(text)
           .map(commandIntentArg => CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset(commandIntentArg))),
-      category = CommandCategory.Settings,
-      acceptsFreeText = true
+      category = CommandCategory.Settings
     ),
     CommandSurfaceItem.InputItem(
       id = "ui-preset-overwrite",
       label = "Overwrite Preset",
       hint = "Existing custom preset name",
       currentValue = "",
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.FreeText,
       parse = text =>
         CommandRunnerSettingsTextParsing
           .nonEmptyText(text)
           .map(commandIntentArg => CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset(commandIntentArg))),
-      category = CommandCategory.Settings,
-      acceptsFreeText = true
+      category = CommandCategory.Settings
     ),
     CommandSurfaceItem.InputItem(
       id = "ui-preset-duplicate",
       label = "Duplicate Preset",
       hint = "Source -> Copy",
       currentValue = "",
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.FreeText,
       parse = text =>
         CommandRunnerSettingsTextParsing.namedPair(text).map {
           case (sourceName, targetName) =>
             CommandIntent.UiPresets(UiPresetsIntent.DuplicateUiPreset(sourceName, targetName))
         },
-      category = CommandCategory.Settings,
-      acceptsFreeText = true
+      category = CommandCategory.Settings
     )
   )
 
@@ -67,39 +63,36 @@ private[command] object CommandRunnerSettingsInputItemsPresets:
       label = "Rename Preset",
       hint = "Current -> New",
       currentValue = "",
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.FreeText,
       parse = text =>
         CommandRunnerSettingsTextParsing.namedPair(text).map {
           case (sourceName, targetName) =>
             CommandIntent.UiPresets(UiPresetsIntent.RenameUiPreset(sourceName, targetName))
         },
-      category = CommandCategory.Settings,
-      acceptsFreeText = true
+      category = CommandCategory.Settings
     ),
     CommandSurfaceItem.InputItem(
       id = "ui-preset-delete",
       label = "Delete Preset",
       hint = "Preset name",
       currentValue = "",
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.FreeText,
       parse = text =>
         CommandRunnerSettingsTextParsing
           .nonEmptyText(text)
           .map(commandIntentArg => CommandIntent.UiPresets(UiPresetsIntent.DeleteUiPreset(commandIntentArg))),
-      category = CommandCategory.Settings,
-      acceptsFreeText = true
+      category = CommandCategory.Settings
     ),
     CommandSurfaceItem.InputItem(
       id = "ui-preset-reset",
       label = "Reset Preset",
       hint = "Built-in preset name",
       currentValue = "",
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.FreeText,
       parse = text =>
         CommandRunnerSettingsTextParsing
           .nonEmptyText(text)
           .map(commandIntentArg => CommandIntent.UiPresets(UiPresetsIntent.ResetUiPreset(commandIntentArg))),
-      category = CommandCategory.Settings,
-      acceptsFreeText = true
+      category = CommandCategory.Settings
     )
   )

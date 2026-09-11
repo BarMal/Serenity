@@ -429,13 +429,11 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
                 MotionPreset.Smooth,
                 Map(
                   MotionFamily.CommandSurfaces -> MotionFamilyConfig(
-                    enabled = true,
                     transitionKind = TransitionKind.TypedText,
                     animation = AnimationConfig.subtle,
                     speedScale = 0.5
                   ),
                   MotionFamily.PinnedPanels -> MotionFamilyConfig(
-                    enabled = true,
                     transitionKind = TransitionKind.DirectionalSweep,
                     animation = AnimationConfig.smooth,
                     speedScale = 1.0,
@@ -1407,7 +1405,6 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
           baseline = MotionPreset.Expressive,
           families = Map(
             MotionFamily.Cursor -> MotionFamilyConfig(
-              enabled = true,
               transitionKind = TransitionKind.Fade,
               animation = None,
               speedScale = 1.0
@@ -1472,7 +1469,6 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
         baseline = MotionPreset.Expressive,
         families = Map(
           MotionFamily.Cursor -> MotionFamilyConfig(
-            enabled = true,
             transitionKind = TransitionKind.Fade,
             animation = None,
             speedScale = 1.0

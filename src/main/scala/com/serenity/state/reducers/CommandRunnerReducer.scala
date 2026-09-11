@@ -420,7 +420,8 @@ object CommandRunnerReducer:
           case Some(surface) =>
             val page = surface.current
             runner.focusedSubmenuItems.lift(runner.settingsSurfaceSelectedIndex) match
-              case Some(item: CommandSurfaceItem.InputItem) if page.editingItemId.isEmpty && item.acceptsBindingText =>
+              case Some(item: CommandSurfaceItem.InputItem)
+                  if page.editingItemId.isEmpty && item.kind == CommandSurfaceItem.InputKind.Binding =>
                 beginBindingCapture(state, item)
               case Some(_: CommandSurfaceItem.InputItem) if page.editingItemId.isEmpty =>
                 ReducerResult.noEffects(state)
@@ -530,7 +531,7 @@ object CommandRunnerReducer:
 
   private def invalidInputMessage(item: CommandSurfaceItem.InputItem, text: String): String =
     val value = if text.trim.isEmpty then "<empty>" else text
-    if item.acceptsBindingText then s"Invalid binding: $value"
+    if item.kind == CommandSurfaceItem.InputKind.Binding then s"Invalid binding: $value"
     else s"Invalid value: $value"
 
   private def recordBinding(

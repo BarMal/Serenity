@@ -4,7 +4,15 @@ import java.nio.charset.StandardCharsets
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.lsp.client.{LspFramer, LspProtocol}
+import com.serenity.lsp.client.{
+  DocumentUri,
+  JsonRpcMessage,
+  LspFramer,
+  LspMethod,
+  LspProtocol,
+  RequestId,
+  WorkspaceRootUri
+}
 import com.serenity.lsp.model.{DiagnosticSeverity, LspPosition, LspRange}
 import io.circe.Json
 import io.circe.syntax.*
@@ -135,18 +143,36 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     incompleteBody.getMessage should include("truncated body")
   }
 
-  "LspProtocol" should "identify responses and notifications correctly" in {
-    val response     = Json.obj("jsonrpc" -> "2.0".asJson, "id" -> 1.asJson, "result" -> Json.obj())
+  "LspProtocol.classify" should "classify responses, error responses, notifications, and unrecognized messages" in {
+    val response = Json.obj("jsonrpc" -> "2.0".asJson, "id" -> 1.asJson, "result" -> Json.obj("ok" -> true.asJson))
+    val errorResponse = Json.obj(
+      "jsonrpc" -> "2.0".asJson,
+      "id"      -> 9.asJson,
+      "error"   -> Json.obj("code" -> (-32601).asJson, "message" -> "Method not found".asJson)
+    )
     val notification = Json.obj("jsonrpc" -> "2.0".asJson, "method" -> "initialized".asJson, "params" -> Json.obj())
     val request =
       Json.obj("jsonrpc" -> "2.0".asJson, "id" -> 2.asJson, "method" -> "test".asJson, "params" -> Json.obj())
 
-    LspProtocol.isResponse(response) shouldBe true
-    LspProtocol.isNotification(response) shouldBe false
-    LspProtocol.isNotification(notification) shouldBe true
-    LspProtocol.isResponse(notification) shouldBe false
-    LspProtocol.isResponse(request) shouldBe false
-    LspProtocol.isNotification(request) shouldBe false
+    LspProtocol.classify(response) shouldBe JsonRpcMessage.Response(RequestId(1), Json.obj("ok" -> true.asJson))
+    LspProtocol.classify(errorResponse) shouldBe JsonRpcMessage.ResponseError(RequestId(9), -32601, "Method not found")
+    LspProtocol.classify(notification) shouldBe JsonRpcMessage.Notification(LspMethod("initialized"), Json.obj())
+    LspProtocol.classify(request) shouldBe a[JsonRpcMessage.Malformed]
+  }
+
+  it should "surface a JSON-RPC error response instead of silently treating it as an absent result" in {
+    val errorResponse = Json.obj(
+      "jsonrpc" -> "2.0".asJson,
+      "id"      -> 4.asJson,
+      "error"   -> Json.obj("code" -> (-32602).asJson, "message" -> "Invalid params".asJson)
+    )
+
+    LspProtocol.classify(errorResponse) match
+      case JsonRpcMessage.ResponseError(id, code, message) =>
+        id shouldBe RequestId(4)
+        code shouldBe -32602
+        message shouldBe "Invalid params"
+      case other => fail(s"Expected a ResponseError, got $other")
   }
 
   it should "parse publishDiagnostics notifications" in {
@@ -171,7 +197,7 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     val result = LspProtocol.parseDiagnostics(diagJson)
     result shouldBe defined
     val (uri, diags) = result.get
-    uri shouldBe "file:///foo/Bar.scala"
+    uri shouldBe DocumentUri("file:///foo/Bar.scala")
     diags should have size 1
     diags.head.message shouldBe "type mismatch"
     diags.head.severity shouldBe Some(DiagnosticSeverity.Error)
@@ -188,11 +214,11 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
       )
     )
     val result = LspProtocol.parseDiagnostics(json)
-    result shouldBe Some(("file:///foo/Clean.scala", Nil))
+    result shouldBe Some((DocumentUri("file:///foo/Clean.scala"), Nil))
   }
 
   it should "build initialize params with processId and rootUri" in {
-    val params = LspProtocol.initializeParams(12345, "file:///workspace")
+    val params = LspProtocol.initializeParams(12345, WorkspaceRootUri("file:///workspace"))
     params.hcursor.downField("processId").as[Int].toOption shouldBe Some(12345)
     params.hcursor.downField("rootUri").as[String].toOption shouldBe Some("file:///workspace")
     val textDocumentCapabilities = params.hcursor.downField("capabilities").downField("textDocument")
@@ -202,7 +228,7 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "build didOpen params with correct structure" in {
-    val params = LspProtocol.didOpenParams("file:///foo/Bar.scala", "scala", 1, "object Bar")
+    val params = LspProtocol.didOpenParams(DocumentUri("file:///foo/Bar.scala"), "scala", 1, "object Bar")
     val td     = params.hcursor.downField("textDocument")
     td.downField("uri").as[String].toOption shouldBe Some("file:///foo/Bar.scala")
     td.downField("languageId").as[String].toOption shouldBe Some("scala")
@@ -211,7 +237,7 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "build full-text didChange params with the document version" in {
-    val params = LspProtocol.didChangeParams("file:///foo/Bar.scala", 2, "object Updated")
+    val params = LspProtocol.didChangeParams(DocumentUri("file:///foo/Bar.scala"), 2, "object Updated")
     val td     = params.hcursor.downField("textDocument")
 
     td.downField("uri").as[String].toOption shouldBe Some("file:///foo/Bar.scala")
@@ -221,9 +247,9 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "build hover, definition, and completion params from document positions" in {
-    val hover      = LspProtocol.hoverParams("file:///foo/Bar.scala", line = 7, character = 4)
-    val definition = LspProtocol.definitionParams("file:///foo/Bar.scala", line = 8, character = 2)
-    val completion = LspProtocol.completionParams("file:///foo/Bar.scala", line = 9, character = 6)
+    val hover      = LspProtocol.hoverParams(DocumentUri("file:///foo/Bar.scala"), line = 7, character = 4)
+    val definition = LspProtocol.definitionParams(DocumentUri("file:///foo/Bar.scala"), line = 8, character = 2)
+    val completion = LspProtocol.completionParams(DocumentUri("file:///foo/Bar.scala"), line = 9, character = 6)
 
     hover.hcursor.downField("textDocument").downField("uri").as[String].toOption shouldBe Some("file:///foo/Bar.scala")
     hover.hcursor.downField("position").downField("line").as[Int].toOption shouldBe Some(7)
@@ -237,36 +263,30 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "parse hover text from markup content responses" in {
-    val response = Json.obj(
-      "jsonrpc" -> "2.0".asJson,
-      "id"      -> 2.asJson,
-      "result" -> Json.obj(
-        "contents" -> Json.obj(
-          "kind"  -> "markdown".asJson,
-          "value" -> "```scala\nmap[B](f: A => B): List[B]\n```".asJson
-        )
+    // These are already-unwrapped `result` values -- as `LspConnection.handleIncomingJson`/`classify` hands them to
+    // callers, not the raw top-level response envelope.
+    val result = Json.obj(
+      "contents" -> Json.obj(
+        "kind"  -> "markdown".asJson,
+        "value" -> "```scala\nmap[B](f: A => B): List[B]\n```".asJson
       )
     )
 
-    LspProtocol.parseHoverText(response) shouldBe Some("```scala\nmap[B](f: A => B): List[B]\n```")
+    LspProtocol.parseHoverText(result) shouldBe Some("```scala\nmap[B](f: A => B): List[B]\n```")
   }
 
   it should "parse hover text from marked string arrays" in {
-    val response = Json.obj(
-      "jsonrpc" -> "2.0".asJson,
-      "id"      -> 3.asJson,
-      "result" -> Json.obj(
-        "contents" -> Json.arr(
-          "List.map".asJson,
-          Json.obj("language" -> "scala".asJson, "value" -> "def map[B](f: A => B): List[B]".asJson)
-        )
+    val result = Json.obj(
+      "contents" -> Json.arr(
+        "List.map".asJson,
+        Json.obj("language" -> "scala".asJson, "value" -> "def map[B](f: A => B): List[B]".asJson)
       )
     )
 
-    LspProtocol.parseHoverText(response) shouldBe Some("List.map\n\ndef map[B](f: A => B): List[B]")
+    LspProtocol.parseHoverText(result) shouldBe Some("List.map\n\ndef map[B](f: A => B): List[B]")
   }
 
-  it should "parse the first definition location from object or array responses" in {
+  it should "parse the first definition location from object or array results" in {
     val location = Json.obj(
       "uri" -> "file:///foo/Bar.scala".asJson,
       "range" -> Json.obj(
@@ -275,12 +295,12 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val objectResponse = Json.obj("jsonrpc" -> "2.0".asJson, "id" -> 4.asJson, "result" -> location)
-    val arrayResponse  = Json.obj("jsonrpc" -> "2.0".asJson, "id" -> 5.asJson, "result" -> Json.arr(location))
+    val objectResult = location
+    val arrayResult  = Json.arr(location)
 
-    LspProtocol.parseDefinitionLocation(objectResponse).map(_.uri) shouldBe Some("file:///foo/Bar.scala")
-    LspProtocol.parseDefinitionLocation(arrayResponse).map(_.range.start.line) shouldBe Some(7)
-    LspProtocol.parseDefinitionLocation(arrayResponse).map(_.range.start.character) shouldBe Some(4)
+    LspProtocol.parseDefinitionLocation(objectResult).map(_.uri) shouldBe Some(DocumentUri("file:///foo/Bar.scala"))
+    LspProtocol.parseDefinitionLocation(arrayResult).map(_.range.start.line) shouldBe Some(7)
+    LspProtocol.parseDefinitionLocation(arrayResult).map(_.range.start.character) shouldBe Some(4)
   }
 
   it should "parse completion candidates from completion lists, arrays, and empty results" in {
@@ -288,25 +308,13 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
       Json.obj("label" -> "map".asJson),
       Json.obj("label" -> "mapValues".asJson)
     )
-    val completionList = Json.obj(
-      "jsonrpc" -> "2.0".asJson,
-      "id"      -> 6.asJson,
-      "result"  -> Json.obj("isIncomplete" -> false.asJson, "items" -> candidates)
-    )
-    val arrayResponse = Json.obj(
-      "jsonrpc" -> "2.0".asJson,
-      "id"      -> 7.asJson,
-      "result"  -> candidates
-    )
-    val emptyResponse = Json.obj(
-      "jsonrpc" -> "2.0".asJson,
-      "id"      -> 8.asJson,
-      "result"  -> Json.arr()
-    )
+    val completionList = Json.obj("isIncomplete" -> false.asJson, "items" -> candidates)
+    val arrayResult    = candidates
+    val emptyResult    = Json.arr()
 
     LspProtocol.parseCompletionItems(completionList) shouldBe Some(List("map", "mapValues"))
-    LspProtocol.parseCompletionItems(arrayResponse) shouldBe Some(List("map", "mapValues"))
-    LspProtocol.parseCompletionItems(emptyResponse) shouldBe Some(Nil)
+    LspProtocol.parseCompletionItems(arrayResult) shouldBe Some(List("map", "mapValues"))
+    LspProtocol.parseCompletionItems(emptyResult) shouldBe Some(Nil)
   }
 
   it should "parse a range's 0-based start and end positions, including an all-zero range" in {

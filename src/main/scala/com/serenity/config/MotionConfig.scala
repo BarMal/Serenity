@@ -25,21 +25,26 @@ enum MotionFamily(val configKey: String):
   case PinnedPanels    extends MotionFamily("pinned_panels")
   case UiTransitions   extends MotionFamily("ui_transitions")
 
-/** Motion policy for one family before accessibility policy is applied. */
+/** Motion policy for one family before accessibility policy is applied.
+  *
+  * `enabled` is derived from `transitionKind` rather than stored: the two could otherwise disagree (`enabled = true`
+  * with `transitionKind = Disabled`, or vice versa), which every read site below treats as meaning "disabled" anyway.
+  * Deriving it removes that contradiction entirely instead of validating against it.
+  */
 final case class MotionFamilyConfig(
-    enabled: Boolean,
     transitionKind: TransitionKind,
     animation: Option[AnimationConfig],
     speedScale: Double,
     transitionOverrides: Map[TransitionScope, TransitionKind] = Map.empty
 ):
 
+  def enabled: Boolean = transitionKind != TransitionKind.Disabled
+
   def normalized: MotionFamilyConfig =
     copy(speedScale = MotionConfig.clampSpeedScale(speedScale))
 
   def disabled: MotionFamilyConfig =
     copy(
-      enabled = false,
       transitionKind = TransitionKind.Disabled,
       animation = None,
       speedScale = 0.0,
@@ -50,7 +55,7 @@ final case class MotionFamilyConfig(
     transitionOverrides.getOrElse(scope, transitionKind)
 
 object MotionFamilyConfig:
-  val disabled: MotionFamilyConfig = MotionFamilyConfig(false, TransitionKind.Disabled, None, 0.0)
+  val disabled: MotionFamilyConfig = MotionFamilyConfig(TransitionKind.Disabled, None, 0.0)
 
 /** Fully resolved policy consumed by runtime animation paths. */
 final case class EffectiveMotionConfig(families: Map[MotionFamily, MotionFamilyConfig]):
@@ -129,25 +134,25 @@ object MotionConfig:
       baseline = baseline,
       families = Map(
         MotionFamily.Cursor -> MotionFamilyConfig(
-          enabled = true,
           transitionKind = TransitionKind.Fade,
           animation = base,
           speedScale = config.legacyCursorTransitionSpeedScale
         ),
         MotionFamily.EditorText -> MotionFamilyConfig(
-          enabled = config.editorInsertionTransitionKind != TransitionKind.Disabled,
           transitionKind = config.editorInsertionTransitionKind,
           animation = base,
           speedScale = config.legacyEditorTextTransitionSpeedScale
         ),
         MotionFamily.CommandSurfaces -> MotionFamilyConfig(
-          enabled = commandTransition != TransitionKind.Disabled,
           transitionKind = commandTransition,
           animation = commandAnimation,
           speedScale = config.legacyCommandRunnerTransitionSpeedScale
         ),
+        // `enabled` is derived from `transitionKind` (this family's open transition -- see `MotionFamilyConfig`'s
+        // doc), so a legacy config with the open transition off but the close transition on now resolves this whole
+        // family to disabled rather than the previous open-or-close union; nothing in this codebase's config
+        // authoring surface produces that combination today.
         MotionFamily.PinnedPanels -> MotionFamilyConfig(
-          enabled = panelOpenTransition != TransitionKind.Disabled || panelCloseTransition != TransitionKind.Disabled,
           transitionKind = panelOpenTransition,
           animation = uiAnimation,
           speedScale = config.legacyUiTransitionSpeedScale,
@@ -157,7 +162,6 @@ object MotionConfig:
           )
         ),
         MotionFamily.UiTransitions -> MotionFamilyConfig(
-          enabled = true,
           transitionKind = TransitionKind.Fade,
           animation = uiAnimation,
           speedScale = config.legacyUiTransitionSpeedScale

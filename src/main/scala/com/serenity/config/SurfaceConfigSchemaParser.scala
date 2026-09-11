@@ -62,7 +62,14 @@ object SurfaceConfigSchemaParser:
       current  = config.surfaceConfig.motionConfiguration.getOrElse(MotionConfig.fromLegacy(config.surfaceConfig))
       settings = current.families(family)
       updated <- field match
-        case "enabled"    => parseBoolean(value).map(enabled => settings.copy(enabled = enabled))
+        // `enabled` is derived from `transitionKind` (see `MotionFamilyConfig`), so setting it here only has an
+        // effect when turning the family off; turning it on with no transition kind of its own to fall back to would
+        // otherwise leave `transitionKind` at `Disabled` while `enabled` reported true.
+        case "enabled" =>
+          parseBoolean(value).map { enabled =>
+            if enabled then settings
+            else settings.copy(transitionKind = TransitionKind.Disabled)
+          }
         case "transition" => parseTransitionKind(value).map(kind => settings.copy(transitionKind = kind))
         case "animation" | "animation.preset" if value.equalsIgnoreCase("custom") =>
           Some(settings.copy(animation = Some(settings.animation.getOrElse(AnimationConfig.Enabled.smooth))))

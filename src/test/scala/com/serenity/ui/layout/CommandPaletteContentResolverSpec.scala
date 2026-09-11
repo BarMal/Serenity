@@ -144,7 +144,7 @@ class CommandPaletteContentResolverSpec extends AnyFlatSpec with Matchers:
       label = "Size",
       hint = "Points",
       currentValue = "12",
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text => text.toFloatOption.map(size => CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(size))),
       category = CommandCategory.Edit
     )
@@ -162,7 +162,7 @@ class CommandPaletteContentResolverSpec extends AnyFlatSpec with Matchers:
       label = "Size",
       hint = "Points",
       currentValue = "12",
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toFloatOption
           .filter(_ >= 1.0f)
@@ -184,7 +184,7 @@ class CommandPaletteContentResolverSpec extends AnyFlatSpec with Matchers:
       label = "Size",
       hint = "Points",
       currentValue = "12",
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toFloatOption
           .filter(_ >= 1.0f)

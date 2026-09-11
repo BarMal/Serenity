@@ -11,17 +11,16 @@ private[command] object CommandRunnerSettingsInputItemsRichText:
       label = "Selection Font Family",
       hint = "Family name",
       currentValue = "",
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.FreeText,
       parse = CommandRunnerSettingsInputItems.parseRichTextFontFamily,
-      category = CommandCategory.Settings,
-      acceptsFreeText = true
+      category = CommandCategory.Settings
     ),
     CommandSurfaceItem.InputItem(
       id = "rich-text-font-size",
       label = "Selection Font Size",
       hint = "Points (1.0-144.0)",
       currentValue = "",
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toFloatOption
           .filter(v => v >= 1.0f && v <= 144.0f)
@@ -33,9 +32,8 @@ private[command] object CommandRunnerSettingsInputItemsRichText:
       label = "Selection Text Colour",
       hint = "#RRGGBB",
       currentValue = "",
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.FreeText,
       parse = CommandRunnerSettingsInputItems.parseRichTextColor,
-      category = CommandCategory.Settings,
-      acceptsFreeText = true
+      category = CommandCategory.Settings
     )
   )

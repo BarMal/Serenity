@@ -185,8 +185,10 @@ given Encoder[MotionFamilyConfig] = Encoder.instance { config =>
 }
 
 given Decoder[MotionFamilyConfig] = Decoder.instance { cursor =>
+  // "enabled" is read-and-discarded rather than decoded into the model: it is derived from `transitionKind` (see
+  // `MotionFamilyConfig`), so an old session file whose stored `enabled` disagrees with its `transitionKind` should
+  // not resurrect that contradiction on load.
   for
-    enabled        <- cursor.get[Boolean]("enabled")
     transitionKind <- cursor.get[TransitionKind]("transitionKind")
     animation      <- cursor.get[Option[AnimationConfig]]("animation")
     speedScale     <- cursor.get[Double]("speedScale")
@@ -198,7 +200,7 @@ given Decoder[MotionFamilyConfig] = Decoder.instance { cursor =>
           .toRight(DecodingFailure(s"Unknown TransitionScope: $name", cursor.history))
           .map(_ -> kind)
     }
-  yield MotionFamilyConfig(enabled, transitionKind, animation, speedScale, transitionOverrides.toMap)
+  yield MotionFamilyConfig(transitionKind, animation, speedScale, transitionOverrides.toMap)
 }
 
 given Encoder[MotionConfig] = Encoder.instance { config =>

@@ -8,6 +8,18 @@ import com.serenity.config.*
 import com.serenity.state.models.*
 import com.serenity.ui.theme.Theme
 
+/** The persisted session file's own schema version -- distinct from [[com.serenity.config.ConfigVersion]], which
+  * versions the separate config file format.
+  */
+opaque type SchemaVersion = Int
+
+object SchemaVersion:
+  def apply(value: Int): SchemaVersion = value
+
+  extension (version: SchemaVersion)
+    def value: Int                        = version
+    def <=(other: SchemaVersion): Boolean = version <= other
+
 /** Represents the persistent session state that survives application restarts. This is a subset of AppState containing
   * only the information needed to restore the user's workspace.
   */
@@ -22,7 +34,7 @@ final case class SessionState(
     // Keyed by `AppMode.configKey` rather than the enum itself: circe's semi-automatic derivation needs an explicit
     // KeyEncoder/KeyDecoder for a non-string map key, and this reuses the string form the config file already has.
     recentFilesByMode: Map[String, List[String]] = Map.empty,
-    schemaVersion: Int = 2
+    schemaVersion: SchemaVersion = SessionState.CurrentSchemaVersion
 )
 
 object SessionState:
@@ -32,7 +44,7 @@ object SessionState:
     * left-to-right split tree at restore time. Invalid version-2 trees fall back to that same seed while preserving
     * buffers and supported panel content.
     */
-  val CurrentSchemaVersion: Int = 2
+  val CurrentSchemaVersion: SchemaVersion = SchemaVersion(2)
 
   def fromAppState(appState: AppState, persistUnsaved: Boolean = true): SessionState =
     SessionState(

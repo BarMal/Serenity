@@ -18,7 +18,7 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
       label = "Animation Duration",
       hint = "Milliseconds (0-10000)",
       currentValue = durationValue,
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
       parse = text =>
         text.toIntOption
           .filter(v => v >= 0 && v <= 10000)
@@ -33,7 +33,7 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
       label = "Animation Steps",
       hint = "Steps (0-100)",
       currentValue = stepsValue,
-      isDecimal = false,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
       parse = text =>
         text.toIntOption
           .filter(v => v >= 0 && v <= 100)
@@ -47,7 +47,7 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
       label = "Motion Speed Scale",
       hint = "Scale (0.0-4.0)",
       currentValue = speedScaleValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toDoubleOption
           .filter(value =>
@@ -65,7 +65,7 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
       label = "Editor Text Speed",
       hint = "Editor text scale (0.0-4.0)",
       currentValue = editorTextSpeedScaleValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toDoubleOption
           .filter(value =>
@@ -91,7 +91,7 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
       label = "Command Runner Speed",
       hint = "Command runner scale (0.0-4.0)",
       currentValue = commandRunnerSpeedScaleValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toDoubleOption
           .filter(value =>
@@ -109,7 +109,7 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
       label = "Panel/UI Speed",
       hint = "Panel/UI scale (0.0-4.0)",
       currentValue = uiSpeedScaleValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toDoubleOption
           .filter(value =>
@@ -126,7 +126,7 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
       label = "Cursor Speed",
       hint = "Cursor scale (0.0-4.0)",
       currentValue = cursorSpeedScaleValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toDoubleOption
           .filter(value =>
@@ -144,7 +144,7 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
       label = "Blur Radius",
       hint = "Strength (0.0-1.0)",
       currentValue = blurValue,
-      isDecimal = true,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
         text.toFloatOption
           .filter(v => v >= 0.0f && v <= 1.0f)

@@ -4,9 +4,13 @@ import cats.effect.IO
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 
-/** State the event pipeline exposes for routing a primary click on the startup page's launch actions. */
-private[manager] trait StartupPageMouseHitTestingPort:
-  def executeCommand(command: com.serenity.command.Command): IO[Unit]
+/** State the event pipeline exposes for routing a primary click on the startup page's launch actions, as a capability
+  * record rather than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is the only
+  * reason this needs an interface at all, and a record fakes trivially without one (#1017).
+  */
+final private[manager] case class StartupPageMouseHitTestingPort(
+    executeCommand: com.serenity.command.Command => IO[Unit]
+)
 
 /** Hit-tests a primary click against the startup page's launch actions and, on a hit, executes the selected action's
   * command.

@@ -90,8 +90,8 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "apply accessibility motion overrides after independent family settings" in {
-    val editor = MotionFamilyConfig(true, TransitionKind.TypedText, None, 0.5)
-    val panels = MotionFamilyConfig(true, TransitionKind.OutlineThenContent, None, 1.5)
+    val editor = MotionFamilyConfig(TransitionKind.TypedText, None, 0.5)
+    val panels = MotionFamilyConfig(TransitionKind.OutlineThenContent, None, 1.5)
     val config = AppConfig.default.withMotionConfiguration(
       MotionConfig(
         MotionAccessibility.Off,
@@ -117,7 +117,6 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
           MotionPreset.Smooth,
           Map(
             MotionFamily.EditorText -> MotionFamilyConfig(
-              enabled = true,
               transitionKind = TransitionKind.TypedText,
               animation = com.serenity.animation.AnimationConfig.subtle,
               speedScale = 0.5
@@ -141,7 +140,7 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
       MotionConfig(
         MotionAccessibility.Standard,
         MotionPreset.Smooth,
-        Map(MotionFamily.CommandSurfaces -> MotionFamilyConfig(true, TransitionKind.TypedText, commandAnimation, 0.5))
+        Map(MotionFamily.CommandSurfaces -> MotionFamilyConfig(TransitionKind.TypedText, commandAnimation, 0.5))
       )
     )
 
@@ -157,7 +156,6 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
         MotionPreset.Expressive,
         Map(
           MotionFamily.PinnedPanels -> MotionFamilyConfig(
-            enabled = true,
             transitionKind = TransitionKind.DirectionalSweep,
             animation = panelAnimation,
             speedScale = 0.5

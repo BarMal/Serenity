@@ -4,7 +4,12 @@ import java.awt.Color
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
+import scala.jdk.CollectionConverters.*
+
 import cats.effect.unsafe.implicits.global
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import com.serenity.animation.{AnimationConfig, TransitionKind, WindowSitterConfig}
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
@@ -15,6 +20,7 @@ import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.slf4j.LoggerFactory
 
 class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
@@ -929,13 +935,11 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
         MotionPreset.Expressive,
         Map(
           MotionFamily.CommandSurfaces -> MotionFamilyConfig(
-            enabled = true,
             transitionKind = TransitionKind.TypedText,
             animation = AnimationConfig.subtle,
             speedScale = 0.5
           ),
           MotionFamily.PinnedPanels -> MotionFamilyConfig(
-            enabled = false,
             transitionKind = TransitionKind.Disabled,
             animation = None,
             speedScale = 0.0
@@ -968,6 +972,41 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     loaded.surfaceConfig.effectiveMotionBaseline shouldBe MotionPreset.Expressive
   }
 
+  it should "never let a motion family's enabled flag contradict its transition kind" in {
+    // `enabled = true` on a family whose transition kind is otherwise Disabled must not resurrect a contradictory
+    // "enabled but Disabled" family: enabled is derived from transitionKind, so there is nothing else for it to turn
+    // on.
+    val enabledOnly = Files.createTempFile("serenity-motion-enabled-only", ".conf")
+    Files.writeString(
+      enabledOnly,
+      """ui.motion.family.editor_text.transition = off
+        |ui.motion.family.editor_text.enabled = true
+        |""".stripMargin
+    )
+    val loadedEnabledOnly = ConfigManager.loadConfig(Some(enabledOnly.toString))
+    val editorFamily = loadedEnabledOnly.surfaceConfig.motionConfiguration
+      .getOrElse(fail("Expected authoritative motion configuration"))
+      .families(MotionFamily.EditorText)
+    editorFamily.transitionKind shouldBe TransitionKind.Disabled
+    editorFamily.enabled shouldBe false
+
+    // Setting enabled = false must actually disable the family (drive transitionKind to Disabled), not merely be
+    // ignored while transitionKind stays on.
+    val disabledOverride = Files.createTempFile("serenity-motion-disabled-override", ".conf")
+    Files.writeString(
+      disabledOverride,
+      """ui.motion.family.editor_text.transition = typed
+        |ui.motion.family.editor_text.enabled = false
+        |""".stripMargin
+    )
+    val loadedDisabledOverride = ConfigManager.loadConfig(Some(disabledOverride.toString))
+    val disabledEditorFamily = loadedDisabledOverride.surfaceConfig.motionConfiguration
+      .getOrElse(fail("Expected authoritative motion configuration"))
+      .families(MotionFamily.EditorText)
+    disabledEditorFamily.transitionKind shouldBe TransitionKind.Disabled
+    disabledEditorFamily.enabled shouldBe false
+  }
+
   it should "preserve distinct legacy panel transitions when migrating to the authoritative hierarchy" in {
     val legacy = AppConfig.default
       .withPanelOpenTransitionKind(Some(TransitionKind.DirectionalSweep))
@@ -993,7 +1032,6 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
         MotionPreset.Smooth,
         Map(
           MotionFamily.CommandSurfaces -> MotionFamilyConfig(
-            enabled = true,
             transitionKind = TransitionKind.TypedText,
             animation = Some(customAnimation),
             speedScale = 1.0
@@ -1343,6 +1381,50 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.saveConfigIO(AppConfig.default, directoryPath).unsafeRunSync() match
       case Left(error) => error.path shouldBe directoryPath
       case Right(_)    => fail("expected a structured save error")
+  }
+
+  it should "log the real cause instead of silently discarding it when the synchronous save fails" in {
+    // Prior to this test, ConfigManager.saveConfig's `catch case _: Exception => false` swallowed the underlying
+    // exception entirely -- the caller got `false` and nothing else was ever recorded anywhere.
+    val logger   = LoggerFactory.getLogger("com.serenity.config.ConfigManager")
+    val appender = new ListAppender[ILoggingEvent]()
+    appender.start()
+    logger.asInstanceOf[ch.qos.logback.classic.Logger].addAppender(appender)
+    try
+      val directoryPath = Files.createTempDirectory("serenity-sync-save-error")
+
+      ConfigManager.saveConfig(AppConfig.default, directoryPath) shouldBe false
+
+      val errorEvents = appender.list.asScala.toList.filter(_.getLevel == Level.ERROR)
+      errorEvents should not be empty
+      errorEvents.exists(_.getFormattedMessage.contains(directoryPath.toString)) shouldBe true
+      errorEvents.exists(event => Option(event.getThrowableProxy).isDefined) shouldBe true
+    finally
+      logger.asInstanceOf[ch.qos.logback.classic.Logger].detachAppender(appender)
+      appender.stop()
+  }
+
+  it should "narrow the synchronous load's catch to non-fatal failures, matching the IO-based load path" in {
+    val configFile = Files.createTempFile("serenity-sync-load-error", ".conf")
+    // Not "key = value" shaped, so the legacy-format reader (which never throws -- see `parseLegacyConfig`) declines
+    // it, and it falls through to a real HOCON parse of unparseable syntax, which does throw.
+    Files.writeString(configFile, "this is not valid hocon at all {{{\n")
+
+    val logger   = LoggerFactory.getLogger("com.serenity.config.ConfigManager")
+    val appender = new ListAppender[ILoggingEvent]()
+    appender.start()
+    logger.asInstanceOf[ch.qos.logback.classic.Logger].addAppender(appender)
+    try
+      val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+
+      result.config shouldBe AppConfig.default
+
+      val errorEvents = appender.list.asScala.toList.filter(_.getLevel == Level.ERROR)
+      errorEvents should not be empty
+      errorEvents.exists(event => Option(event.getThrowableProxy).isDefined) shouldBe true
+    finally
+      logger.asInstanceOf[ch.qos.logback.classic.Logger].detachAppender(appender)
+      appender.stop()
   }
 
   it should "validate hotkey, keymap, and LSP entries through the structured load API" in {

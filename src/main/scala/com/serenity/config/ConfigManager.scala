@@ -38,7 +38,7 @@ object ConfigManager:
     if Files.exists(path) then
       try parseConfigResult(path)
       catch
-        case error: Exception =>
+        case NonFatal(error) =>
           logger.error(s"[CONFIG] Failed to load config from $path, using defaults", error)
           ConfigLoadResult(AppConfig.default, ConfigMigrationReport.empty)
     else ConfigLoadResult(AppConfig.default, ConfigMigrationReport.empty)
@@ -76,9 +76,14 @@ object ConfigManager:
     ConfigLoadResult(parseConfig(source), inspectConfig(source))
 
   private def parseConfig(source: Config): AppConfig =
-    val entries = hoconEntries(source)
+    // A motion family's `enabled = false` must always win over that same family's `transition` setting, regardless
+    // of which key HOCON happens to enumerate first -- `entrySet()` order isn't guaranteed to match file order.
+    // Processing every `.enabled` key last (after every other key, including `transition`) makes that override
+    // deterministic instead of depending on source-file key ordering.
+    val entries                 = hoconEntries(source)
+    val (ordinary, enabledLast) = entries.partition(entry => !entry.key.endsWith(".enabled"))
 
-    val parsed = entries.foldLeft(AppConfig.default) { (config, entry) =>
+    val parsed = (ordinary ++ enabledLast).foldLeft(AppConfig.default) { (config, entry) =>
       val HoconEntry(key, value, _, raw) = entry
       // The registry knows every setting that is one key to one value, in both directions at once. Only the settings
       // that are not -- the animation presets, the motion families, the key groups, and the spellings that set more
@@ -197,14 +202,18 @@ object ConfigManager:
     saveConfig(config, Paths.get(configPath))
 
   def saveConfig(config: AppConfig, configPath: Path): Boolean =
-    renderedConfig(config).fold(
-      _ => false,
-      text =>
+    renderedConfig(config) match
+      case Left(problem) =>
+        logger.error(s"[CONFIG] Failed to save config to $configPath: $problem")
+        false
+      case Right(text) =>
         try
           AtomicFileWriter.writeBytesBlocking(configPath, text.getBytes(StandardCharsets.UTF_8))
           true
-        catch case _: Exception => false
-    )
+        catch
+          case NonFatal(error) =>
+            logger.error(s"[CONFIG] Failed to save config to $configPath", error)
+            false
 
   /** The config text to write, refused if it is not something this module could read back.
     *

@@ -6,10 +6,14 @@ import com.serenity.state.models.*
 import com.serenity.text.TextEditing
 import com.serenity.ui.layout.*
 
-/** State the event pipeline exposes for resolving a mouse event to an editor pane, buffer, and cursor position. */
-private[manager] trait EditorMouseTargetingPort:
-  def stateRef: Ref[IO, AppState]
-  def mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]]
+/** State the event pipeline exposes for resolving a mouse event to an editor pane, buffer, and cursor position, as a
+  * capability record rather than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is
+  * the only reason this needs an interface at all, and a record fakes trivially without one (#1017).
+  */
+final private[manager] case class EditorMouseTargetingPort(
+    stateRef: Ref[IO, AppState],
+    mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]]
+)
 
 /** Resolves a mouse event's screen position to an editor pane/buffer/cursor via the shared [[MouseTargetCache]],
   * derives word/line/range selections from a resolved cursor, and tracks the currently hovered editor target. Every

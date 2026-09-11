@@ -95,13 +95,12 @@ object CommandRunnerSettingsInputItems:
         label = "Document Comment",
         hint = "Comment text",
         currentValue = "",
-        isDecimal = false,
+        kind = CommandSurfaceItem.InputKind.FreeText,
         parse = text =>
           CommandRunnerSettingsTextParsing
             .nonEmptyText(text)
             .map(commandIntentArg => CommandIntent.Comments(CommentsIntent.AddDocumentComment(commandIntentArg))),
-        category = CommandCategory.Edit,
-        acceptsFreeText = true
+        category = CommandCategory.Edit
       )
     )
 

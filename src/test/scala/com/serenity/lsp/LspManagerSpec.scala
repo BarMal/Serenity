@@ -5,7 +5,7 @@ import scala.concurrent.duration.*
 import cats.effect.std.Queue
 import cats.effect.{Deferred, Fiber, IO, Ref, Resource}
 import com.serenity.keystroke.events.{Event, LspEvent}
-import com.serenity.lsp.client.LspConnection
+import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
 import com.serenity.state.models.CursorPosition
 import com.serenity.testkit.VirtualTime.runVirtual
@@ -26,7 +26,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
   private val scalaServer = LspServerConfig(LanguageId.Scala, LspServerBinary.Metals)
 
   private def resolvedConnection(
-    rootUri: String,
+    rootUri: WorkspaceRootUri,
     connection: LspConnection,
     release: IO[Unit] = IO.unit
   ): LspManager.ResolvedConnection =
@@ -64,10 +64,12 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       provider = new LspManager.ConnectionProvider:
         def resolve(
           languageId: LanguageId,
-          fileUri: String,
-          onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+          fileUri: DocumentUri,
+          onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
         ): IO[Option[LspManager.ResolvedConnection]] =
-          IO.pure(Some(resolvedConnection("file:///workspace", connection, released.complete(()).void)))
+          IO.pure(
+            Some(resolvedConnection(WorkspaceRootUri("file:///workspace"), connection, released.complete(()).void))
+          )
       managerFiber <- Resource.make(
         LspManager
           .runWithProvider(
@@ -288,16 +290,17 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       provider = new LspManager.ConnectionProvider:
         def resolve(
           languageId: LanguageId,
-          fileUri: String,
-          onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+          fileUri: DocumentUri,
+          onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
         ): IO[Option[LspManager.ResolvedConnection]] =
-          connected.update(_ :+ fileUri) >>
-            (if fileUri == secondUri then bothConnected.complete(()).void else IO.unit) >>
+          connected.update(_ :+ fileUri.value) >>
+            (if fileUri.value == secondUri then bothConnected.complete(()).void else IO.unit) >>
             IO.pure(
               Some(
                 resolvedConnection(
-                  if fileUri == firstUri then "file:///workspace-one" else "file:///workspace-two",
-                  if fileUri == firstUri then firstConnection else secondConnection
+                  if fileUri.value == firstUri then WorkspaceRootUri("file:///workspace-one")
+                  else WorkspaceRootUri("file:///workspace-two"),
+                  if fileUri.value == firstUri then firstConnection else secondConnection
                 )
               )
             )
@@ -336,12 +339,13 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       provider = new LspManager.ConnectionProvider:
         def resolve(
           languageId: LanguageId,
-          fileUri: String,
-          onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+          fileUri: DocumentUri,
+          onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
         ): IO[Option[LspManager.ResolvedConnection]] =
           val (rootUri, connection, release) =
-            if fileUri == firstUri then ("file:///workspace-one", firstConnection, firstReleased.complete(()).void)
-            else ("file:///workspace-two", secondConnection, secondReleased.complete(()).void)
+            if fileUri.value == firstUri then
+              (WorkspaceRootUri("file:///workspace-one"), firstConnection, firstReleased.complete(()).void)
+            else (WorkspaceRootUri("file:///workspace-two"), secondConnection, secondReleased.complete(()).void)
           IO.pure(Some(resolvedConnection(rootUri, connection, release)))
       result <- Resource
         .make(
@@ -386,12 +390,12 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       provider = new LspManager.ConnectionProvider:
         def resolve(
           languageId: LanguageId,
-          fileUri: String,
-          onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+          fileUri: DocumentUri,
+          onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
         ): IO[Option[LspManager.ResolvedConnection]] =
-          IO.pure(Some(resolvedConnection("file:///workspace", connection)))
-        override def evictResolution(languageId: LanguageId, fileUri: String): IO[Unit] =
-          evictions.update(_ :+ (languageId -> fileUri))
+          IO.pure(Some(resolvedConnection(WorkspaceRootUri("file:///workspace"), connection)))
+        override def evictResolution(languageId: LanguageId, fileUri: DocumentUri): IO[Unit] =
+          evictions.update(_ :+ (languageId -> fileUri.value))
       result <- Resource
         .make(
           LspManager
@@ -428,13 +432,13 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       provider = new LspManager.ConnectionProvider:
         def resolve(
           languageId: LanguageId,
-          fileUri: String,
-          onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+          fileUri: DocumentUri,
+          onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
         ): IO[Option[LspManager.ResolvedConnection]] =
           IO.pure(
             Some(
               LspManager.ResolvedConnection(
-                LspManager.ConnectionIdentity("file:///workspace", scalaServer),
+                LspManager.ConnectionIdentity(WorkspaceRootUri("file:///workspace"), scalaServer),
                 Resource.make(acquired.update(_ + 1).as(connection))(_ => released.complete(()).void)
               )
             )
@@ -481,17 +485,17 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       provider = new LspManager.ConnectionProvider:
         def resolve(
           languageId: LanguageId,
-          fileUri: String,
-          onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+          fileUri: DocumentUri,
+          onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
         ): IO[Option[LspManager.ResolvedConnection]] =
           val (connection, config) =
-            if fileUri == firstUri then firstConnection -> scalaServer
-            else secondConnection                       -> overrideConfig
-          (if fileUri == secondUri then connected.complete(()).void else IO.unit) >>
+            if fileUri.value == firstUri then firstConnection -> scalaServer
+            else secondConnection                             -> overrideConfig
+          (if fileUri.value == secondUri then connected.complete(()).void else IO.unit) >>
             IO.pure(
               Some(
                 LspManager.ResolvedConnection(
-                  LspManager.ConnectionIdentity("file:///workspace", config),
+                  LspManager.ConnectionIdentity(WorkspaceRootUri("file:///workspace"), config),
                   Resource.pure(connection)
                 )
               )

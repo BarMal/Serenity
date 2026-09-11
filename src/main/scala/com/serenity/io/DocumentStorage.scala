@@ -9,6 +9,7 @@ import scala.util.control.NonFatal
 
 import cats.effect.IO
 import fs2.Stream
+import fs2.io.file.{Files as Fs2Files, Path as Fs2Path}
 
 /** Identifies the revision of a document as reported by its storage provider. */
 final case class DocumentRevision(value: String)
@@ -80,8 +81,7 @@ object LocalDocumentStorageProvider:
       list = directory =>
         localPath(directory) match
           case Left(error) => Stream.emit(Left(error))
-          case Right(path) =>
-            Stream.eval(listLocal(path)).flatMap(Stream.emits),
+          case Right(path) => listLocal(path),
       open = location =>
         localPath(location) match
           case Left(error) => IO.pure(Left(error))
@@ -106,19 +106,24 @@ object LocalDocumentStorageProvider:
       case StorageLocation.Local(path) => Right(path)
       case _                           => Left(DocumentStorageError.UnsupportedLocation(location))
 
-  private def listLocal(directory: Path): IO[List[Either[DocumentStorageError, DocumentMetadata]]] =
-    IO.blocking((Files.exists(directory), Files.isDirectory(directory)))
+  /** Streams directory entries incrementally via `fs2.io.file.Files[IO].list` (backed by a lazy
+    * `java.nio.file.DirectoryStream`) rather than materializing the whole listing up front, so a large directory does
+    * not have to load entirely into memory before the first entry reaches a consumer.
+    */
+  private def listLocal(directory: Path): Stream[IO, Either[DocumentStorageError, DocumentMetadata]] =
+    Stream
+      .eval(IO.blocking((Files.exists(directory), Files.isDirectory(directory))))
       .flatMap {
         case (false, _) =>
-          IO.pure(List(Left(DocumentStorageError.NotFound(StorageLocation.Local(directory)))))
+          Stream.emit(Left(DocumentStorageError.NotFound(StorageLocation.Local(directory))))
         case (_, false) =>
-          IO.pure(List(Left(DocumentStorageError.Failed(s"Not a directory: $directory"))))
+          Stream.emit(Left(DocumentStorageError.Failed(s"Not a directory: $directory")))
         case _ =>
-          FileUtils
-            .listFiles(directory)
-            .flatMap(paths => IO.blocking(paths.map(path => Right(metadata(path, None)))))
+          Fs2Files[IO]
+            .list(Fs2Path.fromNioPath(directory))
+            .evalMap(entry => IO.blocking(Right(metadata(entry.toNioPath, None))))
       }
-      .handleError(error => List(Left(storageError(StorageLocation.Local(directory), error))))
+      .handleErrorWith(error => Stream.emit(Left(storageError(StorageLocation.Local(directory), error))))
 
   private def readLocal(path: Path, location: StorageLocation): IO[Either[DocumentStorageError, StoredDocument]] =
     IO.blocking {

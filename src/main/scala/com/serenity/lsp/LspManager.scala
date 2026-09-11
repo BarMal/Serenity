@@ -7,7 +7,7 @@ import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
 import com.serenity.diagnostics.Trace
 import com.serenity.keystroke.events.{Event, LspEvent}
-import com.serenity.lsp.client.{LspConnection, LspProtocol}
+import com.serenity.lsp.client.{DocumentUri, LspConnection, LspMethod, LspProtocol, WorkspaceRootUri}
 import com.serenity.lsp.config.*
 import com.serenity.state.models.CursorPosition
 import fs2.Stream
@@ -15,7 +15,7 @@ import org.typelevel.log4cats.Logger
 
 object LspManager:
 
-  final private[lsp] case class ConnectionIdentity(rootUri: String, serverConfig: LspServerConfig)
+  final private[lsp] case class ConnectionIdentity(rootUri: WorkspaceRootUri, serverConfig: LspServerConfig)
   final private[lsp] case class ResolvedConnection(identity: ConnectionIdentity, resource: Resource[IO, LspConnection])
 
   final private case class ManagedConnection(connection: LspConnection, release: IO[Unit])
@@ -23,15 +23,15 @@ object LspManager:
   private enum RequestKind:
     case Hover, Definition, Completion
 
-  final private case class RequestKey(uri: String, kind: RequestKind)
+  final private case class RequestKey(uri: DocumentUri, kind: RequestKind)
   final private case class RequestContext(version: Int, anchor: CursorPosition)
 
   private[lsp] trait ConnectionProvider:
 
     def resolve(
       languageId: LanguageId,
-      fileUri: String,
-      onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+      fileUri: DocumentUri,
+      onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
     ): IO[Option[ResolvedConnection]]
 
     /** Drop any cached resolution for a document that's closing, so a later reopen re-resolves the workspace root
@@ -48,7 +48,7 @@ object LspManager:
       * ever shows up as a real cost (e.g. rapid tab close/reopen against a slow filesystem), the fix is to key eviction
       * off an explicit config/workspace-change signal instead of every `FileClosed`, not to drop eviction altogether.
       */
-    def evictResolution(@unused languageId: LanguageId, @unused fileUri: String): IO[Unit] = IO.unit
+    def evictResolution(@unused languageId: LanguageId, @unused fileUri: DocumentUri): IO[Unit] = IO.unit
 
   def run(
     effects: Stream[IO, LspEffect],
@@ -70,8 +70,8 @@ object LspManager:
       case (supervisor, releaseRequests) =>
         for
           connectionsRef      <- Ref.of[IO, Map[ConnectionIdentity, ManagedConnection]](Map.empty)
-          documentConnections <- Ref.of[IO, Map[String, ConnectionIdentity]](Map.empty)
-          documentVersions    <- Ref.of[IO, Map[String, Int]](Map.empty)
+          documentConnections <- Ref.of[IO, Map[DocumentUri, ConnectionIdentity]](Map.empty)
+          documentVersions    <- Ref.of[IO, Map[DocumentUri, Int]](Map.empty)
           requestContexts     <- Ref.of[IO, Map[RequestKey, RequestContext]](Map.empty)
           requestFibers       <- Ref.of[IO, Map[RequestKey, cats.effect.Fiber[IO, Throwable, Unit]]](Map.empty)
           runEffects = effects
@@ -98,8 +98,8 @@ object LspManager:
   private def handleEffect(
     effect: LspEffect,
     connectionsRef: Ref[IO, Map[ConnectionIdentity, ManagedConnection]],
-    documentConnections: Ref[IO, Map[String, ConnectionIdentity]],
-    documentVersions: Ref[IO, Map[String, Int]],
+    documentConnections: Ref[IO, Map[DocumentUri, ConnectionIdentity]],
+    documentVersions: Ref[IO, Map[DocumentUri, Int]],
     requestContexts: Ref[IO, Map[RequestKey, RequestContext]],
     requestFibers: Ref[IO, Map[RequestKey, cats.effect.Fiber[IO, Throwable, Unit]]],
     supervisor: Supervisor[IO],
@@ -109,43 +109,50 @@ object LspManager:
   ): IO[Unit] =
     given Logger[IO] = logger
     effect match
-      case LspEffect.FileOpened(uri, languageId, text) =>
+      case LspEffect.FileOpened(rawUri, languageId, text) =>
+        val uri = DocumentUri(rawUri)
         invalidateDocument(uri, requestContexts, requestFibers) >>
           documentVersions.update(_ + (uri -> 1)) >>
           ensureConnection(connectionsRef, languageId, uri, applyEvent, logger, connectionProvider).flatMap {
             case Some((identity, conn)) =>
               associateDocument(uri, identity, documentConnections, connectionsRef, logger) >>
                 conn
-                  .sendNotification("textDocument/didOpen", LspProtocol.didOpenParams(uri, languageId.id, 1, text))
-                  .handleErrorWith(ex => logger.error(ex)(s"[LSP] didOpen failed: $uri"))
+                  .sendNotification(
+                    LspMethod("textDocument/didOpen"),
+                    LspProtocol.didOpenParams(uri, languageId.id, 1, text)
+                  )
+                  .handleErrorWith(ex => logger.error(ex)(s"[LSP] didOpen failed: $rawUri"))
             case None =>
               logger.debug(s"[LSP] No server for ${languageId.id}, skipping didOpen")
           }
 
-      case LspEffect.FileChanged(uri, languageId, text, version) =>
+      case LspEffect.FileChanged(rawUri, languageId, text, version) =>
+        val uri = DocumentUri(rawUri)
         invalidateDocument(uri, requestContexts, requestFibers) >>
           documentVersions.update(_ + (uri -> version)) >>
           connectionForDocument(uri, documentConnections, connectionsRef).flatMap {
             case Some(managed) =>
               managed.connection
-                .sendNotification("textDocument/didChange", LspProtocol.didChangeParams(uri, version, text))
-                .handleErrorWith(ex => logger.error(ex)(s"[LSP] didChange failed: $uri"))
+                .sendNotification(LspMethod("textDocument/didChange"), LspProtocol.didChangeParams(uri, version, text))
+                .handleErrorWith(ex => logger.error(ex)(s"[LSP] didChange failed: $rawUri"))
             case None => IO.unit
           }
 
-      case LspEffect.FileClosed(uri, languageId) =>
+      case LspEffect.FileClosed(rawUri, languageId) =>
+        val uri = DocumentUri(rawUri)
         invalidateDocument(uri, requestContexts, requestFibers) >>
           documentVersions.update(_ - uri) >>
           connectionProvider.evictResolution(languageId, uri) >>
           connectionForDocument(uri, documentConnections, connectionsRef).flatMap {
             case Some(managed) =>
               managed.connection
-                .sendNotification("textDocument/didClose", LspProtocol.didCloseParams(uri))
-                .handleErrorWith(ex => logger.error(ex)(s"[LSP] didClose failed: $uri"))
+                .sendNotification(LspMethod("textDocument/didClose"), LspProtocol.didCloseParams(uri))
+                .handleErrorWith(ex => logger.error(ex)(s"[LSP] didClose failed: $rawUri"))
             case None => IO.unit
           } >> releaseDocument(uri, documentConnections, connectionsRef, logger)
 
-      case LspEffect.HoverRequested(uri, languageId, line, character, anchor) =>
+      case LspEffect.HoverRequested(rawUri, languageId, line, character, anchor) =>
+        val uri = DocumentUri(rawUri)
         startRequest(
           RequestKind.Hover,
           uri,
@@ -161,8 +168,8 @@ object LspManager:
           connectionProvider
         ) { (conn, context) =>
           Trace
-            .timed(s"lsp.hover.$uri")(
-              conn.sendRequest("textDocument/hover", LspProtocol.hoverParams(uri, line, character))
+            .timed(s"lsp.hover.$rawUri")(
+              conn.sendRequest(LspMethod("textDocument/hover"), LspProtocol.hoverParams(uri, line, character))
             )
             .flatMap(response =>
               LspProtocol.parseHoverText(response).fold(IO.unit) { text =>
@@ -170,10 +177,11 @@ object LspManager:
                   .ifM(applyEvent(LspEvent.LspHoverReceived(text, anchor)), IO.unit)
               }
             )
-            .handleErrorWith(ex => logger.error(ex)(s"[LSP] hover failed: $uri"))
+            .handleErrorWith(ex => logger.error(ex)(s"[LSP] hover failed: $rawUri"))
         }
 
-      case LspEffect.CompletionRequested(uri, languageId, line, character, anchor) =>
+      case LspEffect.CompletionRequested(rawUri, languageId, line, character, anchor) =>
+        val uri = DocumentUri(rawUri)
         startRequest(
           RequestKind.Completion,
           uri,
@@ -189,18 +197,19 @@ object LspManager:
           connectionProvider
         ) { (conn, _) =>
           Trace
-            .timed(s"lsp.completion.$uri")(
-              conn.sendRequest("textDocument/completion", LspProtocol.completionParams(uri, line, character))
+            .timed(s"lsp.completion.$rawUri")(
+              conn.sendRequest(LspMethod("textDocument/completion"), LspProtocol.completionParams(uri, line, character))
             )
             .flatMap(response =>
               LspProtocol
                 .parseCompletionItems(response)
                 .fold(IO.unit)(items => applyEvent(LspEvent.LspCompletionReceived(items, anchor)))
             )
-            .handleErrorWith(ex => logger.error(ex)(s"[LSP] completion failed: $uri"))
+            .handleErrorWith(ex => logger.error(ex)(s"[LSP] completion failed: $rawUri"))
         }
 
-      case LspEffect.DefinitionRequested(uri, languageId, line, character, anchor, symbol) =>
+      case LspEffect.DefinitionRequested(rawUri, languageId, line, character, anchor, symbol) =>
+        val uri = DocumentUri(rawUri)
         startRequest(
           RequestKind.Definition,
           uri,
@@ -216,28 +225,30 @@ object LspManager:
           connectionProvider
         ) { (conn, context) =>
           Trace
-            .timed(s"lsp.definition.$uri")(
-              conn.sendRequest("textDocument/definition", LspProtocol.definitionParams(uri, line, character))
+            .timed(s"lsp.definition.$rawUri")(
+              conn.sendRequest(LspMethod("textDocument/definition"), LspProtocol.definitionParams(uri, line, character))
             )
             .flatMap(response =>
               LspProtocol.parseDefinitionLocation(response).fold(IO.unit) { location =>
                 isCurrent(RequestKey(uri, RequestKind.Definition), context, documentVersions, requestContexts)
                   .ifM(
-                    applyEvent(LspEvent.LspDefinitionReceived(symbol, location.uri, location.range.start, anchor)),
+                    applyEvent(
+                      LspEvent.LspDefinitionReceived(symbol, location.uri.value, location.range.start, anchor)
+                    ),
                     IO.unit
                   )
               }
             )
-            .handleErrorWith(ex => logger.error(ex)(s"[LSP] definition failed: $uri"))
+            .handleErrorWith(ex => logger.error(ex)(s"[LSP] definition failed: $rawUri"))
         }
 
   private def startRequest(
     kind: RequestKind,
-    uri: String,
+    uri: DocumentUri,
     languageId: LanguageId,
     anchor: CursorPosition,
     connectionsRef: Ref[IO, Map[ConnectionIdentity, ManagedConnection]],
-    documentVersions: Ref[IO, Map[String, Int]],
+    documentVersions: Ref[IO, Map[DocumentUri, Int]],
     requestContexts: Ref[IO, Map[RequestKey, RequestContext]],
     requestFibers: Ref[IO, Map[RequestKey, cats.effect.Fiber[IO, Throwable, Unit]]],
     supervisor: Supervisor[IO],
@@ -281,7 +292,7 @@ object LspManager:
   private def isCurrent(
     key: RequestKey,
     context: RequestContext,
-    documentVersions: Ref[IO, Map[String, Int]],
+    documentVersions: Ref[IO, Map[DocumentUri, Int]],
     requestContexts: Ref[IO, Map[RequestKey, RequestContext]]
   ): IO[Boolean] =
     (documentVersions.get, requestContexts.get).mapN { (versions, contexts) =>
@@ -289,7 +300,7 @@ object LspManager:
     }
 
   private def invalidateDocument(
-    uri: String,
+    uri: DocumentUri,
     requestContexts: Ref[IO, Map[RequestKey, RequestContext]],
     requestFibers: Ref[IO, Map[RequestKey, cats.effect.Fiber[IO, Throwable, Unit]]]
   ): IO[Unit] =
@@ -302,8 +313,8 @@ object LspManager:
         .flatMap(_.traverse_(_.cancel))
 
   private def connectionForDocument(
-    uri: String,
-    documentConnections: Ref[IO, Map[String, ConnectionIdentity]],
+    uri: DocumentUri,
+    documentConnections: Ref[IO, Map[DocumentUri, ConnectionIdentity]],
     connectionsRef: Ref[IO, Map[ConnectionIdentity, ManagedConnection]]
   ): IO[Option[ManagedConnection]] =
     (documentConnections.get, connectionsRef.get).mapN { (documents, connections) =>
@@ -311,9 +322,9 @@ object LspManager:
     }
 
   private def associateDocument(
-    uri: String,
+    uri: DocumentUri,
     identity: ConnectionIdentity,
-    documentConnections: Ref[IO, Map[String, ConnectionIdentity]],
+    documentConnections: Ref[IO, Map[DocumentUri, ConnectionIdentity]],
     connectionsRef: Ref[IO, Map[ConnectionIdentity, ManagedConnection]],
     logger: Logger[IO]
   ): IO[Unit] =
@@ -325,8 +336,8 @@ object LspManager:
       .flatMap(_.traverse_(releaseIfUnreferenced(_, documentConnections, connectionsRef, logger)))
 
   private def releaseDocument(
-    uri: String,
-    documentConnections: Ref[IO, Map[String, ConnectionIdentity]],
+    uri: DocumentUri,
+    documentConnections: Ref[IO, Map[DocumentUri, ConnectionIdentity]],
     connectionsRef: Ref[IO, Map[ConnectionIdentity, ManagedConnection]],
     logger: Logger[IO]
   ): IO[Unit] =
@@ -336,7 +347,7 @@ object LspManager:
 
   private def releaseIfUnreferenced(
     identity: ConnectionIdentity,
-    documentConnections: Ref[IO, Map[String, ConnectionIdentity]],
+    documentConnections: Ref[IO, Map[DocumentUri, ConnectionIdentity]],
     connectionsRef: Ref[IO, Map[ConnectionIdentity, ManagedConnection]],
     logger: Logger[IO]
   ): IO[Unit] =
@@ -356,8 +367,8 @@ object LspManager:
     new ConnectionProvider:
       def resolve(
         languageId: LanguageId,
-        fileUri: String,
-        onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+        fileUri: DocumentUri,
+        onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
       ): IO[Option[ResolvedConnection]] =
         resolutionCache
           .resolve(languageId, fileUri) {
@@ -367,7 +378,7 @@ object LspManager:
               case Some(config) =>
                 val filePath = uriToPath(fileUri)
                 WorkspaceRootDetector.detect(filePath, languageId).map { rootOpt =>
-                  val rootUri = rootOpt.map(_.toUri.toString).getOrElse(parentUri(fileUri))
+                  val rootUri = rootOpt.map(r => WorkspaceRootUri(r.toUri.toString)).getOrElse(parentUri(fileUri))
                   Some(config -> rootUri)
                 }
             }
@@ -378,19 +389,19 @@ object LspManager:
               Some(ResolvedConnection(ConnectionIdentity(rootUri, config), LspConnection(config, rootUri, logger)))
           }
 
-      override def evictResolution(languageId: LanguageId, fileUri: String): IO[Unit] =
+      override def evictResolution(languageId: LanguageId, fileUri: DocumentUri): IO[Unit] =
         resolutionCache.evict(languageId, fileUri)
 
   private def ensureConnection(
     connectionsRef: Ref[IO, Map[ConnectionIdentity, ManagedConnection]],
     languageId: LanguageId,
-    fileUri: String,
+    fileUri: DocumentUri,
     applyEvent: Event => IO[Unit],
     logger: Logger[IO],
     connectionProvider: ConnectionProvider
   ): IO[Option[(ConnectionIdentity, LspConnection)]] =
-    val onDiagnostics = (uri: String, diags: List[com.serenity.lsp.model.Diagnostic]) =>
-      applyEvent(LspEvent.LspDiagnosticsReceived(uri, diags))
+    val onDiagnostics = (uri: DocumentUri, diags: List[com.serenity.lsp.model.Diagnostic]) =>
+      applyEvent(LspEvent.LspDiagnosticsReceived(uri.value, diags))
     connectionProvider.resolve(languageId, fileUri, onDiagnostics).flatMap {
       case None => IO.pure(None)
       case Some(resolved) =>
@@ -404,7 +415,7 @@ object LspManager:
   private def spawnConnection(
     connectionsRef: Ref[IO, Map[ConnectionIdentity, ManagedConnection]],
     resolved: ResolvedConnection,
-    onDiagnostics: (String, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit],
+    onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit],
     logger: Logger[IO]
   ): IO[Option[(ConnectionIdentity, LspConnection)]] =
     resolved.resource.allocated
@@ -422,13 +433,15 @@ object LspManager:
         logger.error(ex)(s"[LSP] Failed to connect for ${resolved.identity.serverConfig.languageId.id}").as(None)
       )
 
-  private def uriToPath(uri: String): String =
-    if uri.startsWith("file://") then java.net.URI.create(uri).getPath
-    else uri
+  private def uriToPath(uri: DocumentUri): String =
+    val s = uri.value
+    if s.startsWith("file://") then java.net.URI.create(s).getPath
+    else s
 
-  private def parentUri(uri: String): String =
-    val lastSlash = uri.lastIndexOf('/')
-    if lastSlash > 0 then uri.substring(0, lastSlash) else uri
+  private def parentUri(uri: DocumentUri): WorkspaceRootUri =
+    val s         = uri.value
+    val lastSlash = s.lastIndexOf('/')
+    WorkspaceRootUri(if lastSlash > 0 then s.substring(0, lastSlash) else s)
 
   private def releaseConnections(
     connectionsRef: Ref[IO, Map[ConnectionIdentity, ManagedConnection]],

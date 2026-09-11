@@ -8,17 +8,19 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.Focused
 import com.serenity.ui.layout.*
 
-/** State the event pipeline exposes for selecting, activating, navigating, and resizing pinned/expanded panels. */
-private[manager] trait PinnedPanelMouseHitTestingPort:
-  def stateRef: Ref[IO, AppState]
-  def applyComponentResult(result: ComponentResult, state: AppState): IO[AppState]
-  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
-
-  def updateConfig(
-    update: com.serenity.config.AppConfig => com.serenity.config.AppConfig
-  ): IO[com.serenity.config.AppConfig]
-
-  def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit]
+/** State the event pipeline exposes for selecting, activating, navigating, and resizing pinned/expanded panels, as a
+  * capability record rather than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is
+  * the only reason this needs an interface at all, and a record fakes trivially without one (#1017).
+  */
+final private[manager] case class PinnedPanelMouseHitTestingPort(
+    stateRef: Ref[IO, AppState],
+    applyComponentResult: (ComponentResult, AppState) => IO[AppState],
+    validateAndUpdateState: (AppState, AppState) => IO[Unit],
+    updateConfig: (com.serenity.config.AppConfig => com.serenity.config.AppConfig) => IO[
+      com.serenity.config.AppConfig
+    ],
+    resizePinnedPanel: (PanelTarget, Int) => IO[Unit]
+)
 
 /** Hit-tests mouse input against pinned/expanded panel rows (directory tree, outline, comments, diagnostics), navigates
   * the active editor to a selected location, and resizes panels and the text-area insets from a drag, independent of

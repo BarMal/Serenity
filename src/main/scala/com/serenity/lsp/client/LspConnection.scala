@@ -18,18 +18,19 @@ class LspConnection private (
     val languageId: LanguageId,
     sendQueue: Queue[IO, Option[Json]],
     idRef: Ref[IO, Long],
-    pendingRef: Ref[IO, Map[Long, Deferred[IO, Either[Throwable, Json]]]],
+    pendingRef: Ref[IO, Map[RequestId, Deferred[IO, Either[Throwable, Json]]]],
     notifQueue: Queue[IO, Option[Json]],
     requestTimeout: FiniteDuration,
     logger: Logger[IO]
 ):
 
-  def sendRequest(method: String, params: Json): IO[Json] =
+  def sendRequest(method: LspMethod, params: Json): IO[Json] =
     sendRequest(method, params, requestTimeout)
 
-  def sendRequest(method: String, params: Json, timeout: FiniteDuration): IO[Json] =
+  def sendRequest(method: LspMethod, params: Json, timeout: FiniteDuration): IO[Json] =
     for
-      id       <- idRef.updateAndGet(_ + 1)
+      rawId <- idRef.updateAndGet(_ + 1)
+      id = RequestId(rawId)
       deferred <- Deferred[IO, Either[Throwable, Json]]
       _        <- pendingRef.update(_ + (id -> deferred))
       result <-
@@ -54,14 +55,14 @@ class LspConnection private (
           .onError(_ => cleanup)
     yield result
 
-  def sendNotification(method: String, params: Json): IO[Unit] =
+  def sendNotification(method: LspMethod, params: Json): IO[Unit] =
     sendQueue.offer(Some(LspProtocol.notification(method, params))).void
 
-  def processIncoming(onDiagnostics: (String, List[Diagnostic]) => IO[Unit]): IO[Unit] =
+  def processIncoming(onDiagnostics: (DocumentUri, List[Diagnostic]) => IO[Unit]): IO[Unit] =
     Stream
       .fromQueueNoneTerminated(notifQueue)
       .evalMap { json =>
-        LspProtocol.notificationMethod(json) match
+        LspProtocol.notificationMethod(json).map(_.value) match
           case Some("textDocument/publishDiagnostics") =>
             LspProtocol.parseDiagnostics(json) match
               case Some((uri, diags)) => onDiagnostics(uri, diags)
@@ -74,17 +75,23 @@ class LspConnection private (
       .drain
 
   private[lsp] def handleIncomingJson(json: Json): IO[Unit] =
-    if LspProtocol.isResponse(json) then
-      LspProtocol.responseId(json) match
-        case Some(id) =>
-          pendingRef.modify { pending =>
-            pending.get(id) match
-              case Some(d) => (pending - id, d.complete(Right(json)).void)
-              case None    => (pending, IO.unit)
-          }.flatten
-        case None => IO.unit
-    else if LspProtocol.isNotification(json) then notifQueue.offer(Some(json))
-    else IO.unit
+    LspProtocol.classify(json) match
+      case JsonRpcMessage.Response(id, result) =>
+        completePending(id, Right(result))
+      case JsonRpcMessage.ResponseError(id, code, message) =>
+        logger.warn(s"[LSP] ${languageId.id} response error $code: $message") >>
+          completePending(id, Left(LspConnection.LspResponseError(languageId, code, message)))
+      case JsonRpcMessage.Notification(_, _) =>
+        notifQueue.offer(Some(json))
+      case JsonRpcMessage.Malformed(raw) =>
+        logger.warn(s"[LSP] ${languageId.id} received an unrecognized JSON-RPC message: ${raw.noSpaces}")
+
+  private def completePending(id: RequestId, result: Either[Throwable, Json]): IO[Unit] =
+    pendingRef.modify { pending =>
+      pending.get(id) match
+        case Some(d) => (pending - id, d.complete(result).void)
+        case None    => (pending, IO.unit)
+    }.flatten
 
   private[lsp] def takeOutgoing: IO[Option[Json]] =
     sendQueue.take
@@ -118,8 +125,15 @@ object LspConnection:
 
   val DefaultRequestTimeout: FiniteDuration = 10.seconds
 
-  final case class LspRequestTimeout(languageId: LanguageId, method: String, timeout: FiniteDuration)
-      extends RuntimeException(s"LSP request timed out: ${languageId.id} $method after ${timeout.toMillis} ms")
+  final case class LspRequestTimeout(languageId: LanguageId, method: LspMethod, timeout: FiniteDuration)
+      extends RuntimeException(s"LSP request timed out: ${languageId.id} ${method.value} after ${timeout.toMillis} ms")
+
+  /** Surfaces a JSON-RPC error response (`{"error": {...}}`, no `result`) to whichever caller is awaiting that
+    * request's `Deferred`, the same mechanism [[LspRequestTimeout]] uses -- rather than the previous behavior of
+    * silently treating an error response the same as "no result".
+    */
+  final case class LspResponseError(languageId: LanguageId, code: Int, message: String)
+      extends RuntimeException(s"LSP request failed: ${languageId.id} error $code: $message")
 
   final private case class ConnectionFibers(
       writer: Fiber[IO, Throwable, Unit],
@@ -134,7 +148,7 @@ object LspConnection:
     for
       sendQueue  <- Queue.bounded[IO, Option[Json]](256)
       idRef      <- Ref.of[IO, Long](0L)
-      pendingRef <- Ref.of[IO, Map[Long, Deferred[IO, Either[Throwable, Json]]]](Map.empty)
+      pendingRef <- Ref.of[IO, Map[RequestId, Deferred[IO, Either[Throwable, Json]]]](Map.empty)
       notifQueue <- Queue.bounded[IO, Option[Json]](256)
     yield new LspConnection(languageId, sendQueue, idRef, pendingRef, notifQueue, requestTimeout, logger)
 
@@ -143,7 +157,7 @@ object LspConnection:
     languageId: LanguageId,
     rawIn: java.io.InputStream,
     rawOut: java.io.OutputStream,
-    rootUri: String,
+    rootUri: WorkspaceRootUri,
     logger: Logger[IO],
     requestTimeout: FiniteDuration = DefaultRequestTimeout
   ): Resource[IO, LspConnection] =
@@ -180,7 +194,7 @@ object LspConnection:
 
   def apply(
     config: LspServerConfig,
-    rootUri: String,
+    rootUri: WorkspaceRootUri,
     logger: Logger[IO],
     requestTimeout: FiniteDuration = DefaultRequestTimeout
   ): Resource[IO, LspConnection] =
@@ -202,14 +216,14 @@ object LspConnection:
       )
     yield conn
 
-  private def initHandshake(conn: LspConnection, rootUri: String, logger: Logger[IO]): IO[Unit] =
+  private def initHandshake(conn: LspConnection, rootUri: WorkspaceRootUri, logger: Logger[IO]): IO[Unit] =
     for
       pid <- IO(ProcessHandle.current().pid().toInt)
-      _   <- logger.info(s"[LSP] initialize ${conn.languageId.id} rootUri=$rootUri")
+      _   <- logger.info(s"[LSP] initialize ${conn.languageId.id} rootUri=${rootUri.value}")
       _ <- conn
-        .sendRequest("initialize", LspProtocol.initializeParams(pid, rootUri))
+        .sendRequest(LspMethod("initialize"), LspProtocol.initializeParams(pid, rootUri))
         .handleErrorWith(ex => logger.error(ex)("[LSP] initialize failed") >> IO.raiseError(ex))
-      _ <- conn.sendNotification("initialized", LspProtocol.initializedParams)
+      _ <- conn.sendNotification(LspMethod("initialized"), LspProtocol.initializedParams)
       _ <- logger.info(s"[LSP] Handshake complete: ${conn.languageId.id}")
     yield ()
 

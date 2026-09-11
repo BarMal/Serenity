@@ -8,12 +8,15 @@ import com.serenity.ui.layout.*
 
 /** State the event pipeline exposes for opening, hovering, and selecting from the editor's right-click context menu.
   * `resolveMouseTarget` stays owned by the pipeline's core mouse-targeting module since it is shared with click/press/
-  * drag handling, not exclusive to the context menu.
+  * drag handling, not exclusive to the context menu. As a capability record rather than a trait -- nothing here breaks
+  * a construction-order cycle (#1389), so mockability is the only reason this needs an interface at all, and a record
+  * fakes trivially without one (#1017).
   */
-private[manager] trait EditorContextMenuHitTestingPort:
-  def stateRef: Ref[IO, AppState]
-  def executeCommand(command: com.serenity.command.Command): IO[Unit]
-  def resolveMouseTarget(click: MouseInputEvent, state: AppState): IO[Option[(PaneId, Buffer, CursorPosition)]]
+final private[manager] case class EditorContextMenuHitTestingPort(
+    stateRef: Ref[IO, AppState],
+    executeCommand: com.serenity.command.Command => IO[Unit],
+    resolveMouseTarget: (MouseInputEvent, AppState) => IO[Option[(PaneId, Buffer, CursorPosition)]]
+)
 
 /** Opens the editor context menu at a resolved click target, and hit-tests hover/click against its open items,
   * independent of every other mouse target.

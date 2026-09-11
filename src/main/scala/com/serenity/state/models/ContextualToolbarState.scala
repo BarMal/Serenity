@@ -391,10 +391,9 @@ object ContextualToolbar:
           label = "Family",
           hint = "Family name",
           currentValue = currentFamily,
-          isDecimal = false,
+          kind = CommandSurfaceItem.InputKind.FreeText,
           parse = CommandRunnerSettingsInputItems.parseRichTextFontFamily,
-          category = CommandCategory.Edit,
-          acceptsFreeText = true
+          category = CommandCategory.Edit
         )
       ),
       ContextualToolbarItem.Input(
@@ -406,7 +405,7 @@ object ContextualToolbar:
           label = "Size",
           hint = "Points (1.0-144.0)",
           currentValue = formatFontSize(currentFontSize),
-          isDecimal = true,
+          kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
           parse = text =>
             text.toFloatOption
               .filter(size => size >= 1.0f && size <= 144.0f)
@@ -450,10 +449,9 @@ object ContextualToolbar:
           label = "Hex",
           hint = "#RRGGBB",
           currentValue = currentColorText,
-          isDecimal = false,
+          kind = CommandSurfaceItem.InputKind.FreeText,
           parse = CommandRunnerSettingsInputItems.parseRichTextColor,
-          category = CommandCategory.Edit,
-          acceptsFreeText = true
+          category = CommandCategory.Edit
         )
       )
     )
