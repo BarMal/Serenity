@@ -249,6 +249,33 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
     pendingAfterInterruption shouldBe 0
   }
 
+  it should "not block a later hover on an outstanding, never-completing completion request" in
+    // #1441: CompletionRequested used to be handled inline inside handleEffect, so a completion response that never
+    // arrives (or is simply slow) would stall `effects.evalMap(handleEffect).compile.drain` and every LSP effect
+    // queued behind it. Forking completion through `startRequest`/`supervisor.supervise` -- the same path hover and
+    // definition already use -- means the sequential effects loop moves on to the next effect as soon as the
+    // completion request is sent, without waiting for its response.
+    runVirtual(
+      harness
+        .use { manager =>
+          for
+            _ <- open(manager)
+            _ <- manager.effects.offer(
+              Some(LspEffect.CompletionRequested(uri, LanguageId.Scala, 0, 1, CursorPosition(0, 1)))
+            )
+            completion <- takeMessage(manager.connection)
+            _ = completion.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/completion")
+            // No response is ever sent for the completion request above -- it stays pending forever.
+            _ <- manager.effects.offer(
+              Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 2, CursorPosition(0, 2)))
+            )
+            hover <- takeMessage(manager.connection)
+            _ = hover.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/hover")
+            _ <- manager.stop
+          yield succeed
+        }
+    )
+
   it should "create separate connections for same-language documents in different workspaces" in {
     val firstUri  = "file:///workspace-one/Foo.scala"
     val secondUri = "file:///workspace-two/Bar.scala"

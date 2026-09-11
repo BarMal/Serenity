@@ -15,10 +15,12 @@ final private[lsp] class LspResolutionCache private (
     compute: IO[Option[(LspServerConfig, String)]]
   ): IO[Option[(LspServerConfig, String)]] =
     val key = Key(languageId, fileUri)
-    ref.get.map(_.get(key)).flatMap {
-      case Some(cached) => IO.pure(cached)
-      case None         => compute.flatTap(result => ref.update(_.updated(key, result)))
-    }
+    ref
+      .modify(map => (map, map.get(key)))
+      .flatMap {
+        case Some(cached) => IO.pure(cached)
+        case None         => compute.flatTap(result => ref.update(_.updated(key, result)))
+      }
 
   /** Drop the cached resolution for a (languageId, fileUri), so the next `resolve` for it recomputes rather than
     * reusing a resolution left over from before the document closed.

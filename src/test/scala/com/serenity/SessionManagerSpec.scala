@@ -73,6 +73,30 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       updatedAtEpochMillis = 1L
     )
 
+  private def cleanFileStateWithText(diskText: String): IO[AppState] =
+    IO.blocking {
+      val tempFile = Files.createTempFile("session-manager-file-backed-clean", ".txt")
+      Files.writeString(tempFile, diskText)
+      val buffer  = Buffer.fromFile(BufferId(7), tempFile, diskText)
+      val initial = AppState.initial
+      initial.copy(
+        persisted = initial.persisted.copy(
+          buffers = Map(buffer.id -> buffer),
+          bufferOrder = List(buffer.id),
+          layout = Layout(
+            editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+            activeEditorPaneId = Some(PaneId(0)),
+            workspaceTree = Some(TestWorkspaceTrees.linear(PaneId(0)))
+          ),
+          focus = Focus.EditorPane(PaneId(0))
+        ),
+        runtime = initial.runtime.copy(
+          nextBufferId = BufferId(8),
+          nextPaneId = PaneId(1)
+        )
+      )
+    }
+
   private def dirtyFileStateWithText(diskText: String, unsavedText: String): IO[AppState] =
     IO.blocking {
       val tempFile = Files.createTempFile("session-manager-file-backed", ".txt")
@@ -148,18 +172,32 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
-  it should "not persist dirty buffer content when persistUnsavedBuffers is false" in {
+  it should "persist dirty buffer content even when persistUnsavedBuffers is false" in {
     val sessionManager = createManager(SessionManager.SessionPolicy(persistUnsavedBuffers = false))
 
     val program = for
       sessionId <- sessionManager.saveSessionAs("Draft", dirtyStateWithText("unsaved work"))
       loaded    <- sessionManager.loadSession(sessionId)
-    yield loaded.map(_.persisted.buffers.values.head.document.content.toString).shouldBe(Some(""))
+    yield loaded.map(_.persisted.buffers.values.head.document.content.toString).shouldBe(Some("unsaved work"))
 
     program.unsafeRunSync()
   }
 
-  it should "restore file-backed buffers from disk when persisted session content is absent" in {
+  it should "restore clean file-backed buffers from disk when persisted session content is absent" in {
+    val sessionManager = createManager(SessionManager.SessionPolicy(persistUnsavedBuffers = false))
+
+    val program = for
+      state     <- cleanFileStateWithText("saved on disk")
+      sessionId <- sessionManager.saveSessionAs("File clean", state)
+      loaded    <- sessionManager.loadSession(sessionId)
+    yield
+      loaded.map(_.persisted.buffers.values.head.document.content.toString) shouldBe Some("saved on disk")
+      loaded.map(_.persisted.buffers.values.head.document.isDirty) shouldBe Some(false)
+
+    program.unsafeRunSync()
+  }
+
+  it should "preserve dirty file-backed buffer content over disk when persistUnsavedBuffers is false" in {
     val sessionManager = createManager(SessionManager.SessionPolicy(persistUnsavedBuffers = false))
 
     val program = for
@@ -167,8 +205,8 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       sessionId <- sessionManager.saveSessionAs("File draft", state)
       loaded    <- sessionManager.loadSession(sessionId)
     yield
-      loaded.map(_.persisted.buffers.values.head.document.content.toString) shouldBe Some("saved on disk")
-      loaded.map(_.persisted.buffers.values.head.document.isDirty) shouldBe Some(false)
+      loaded.map(_.persisted.buffers.values.head.document.content.toString) shouldBe Some("unsaved work")
+      loaded.map(_.persisted.buffers.values.head.document.isDirty) shouldBe Some(true)
 
     program.unsafeRunSync()
   }
