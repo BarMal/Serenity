@@ -121,7 +121,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     Files.writeString(
       configFile,
       """syntax.highlighting = true
-        |font.size = 18.0
+        |font.code.size = 18.0
         |""".stripMargin
     )
 
