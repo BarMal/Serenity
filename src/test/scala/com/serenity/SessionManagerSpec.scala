@@ -320,6 +320,51 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
+  // saveSession/saveSessionAs write the session file before the index, and pruneHistory/deleteSession
+  // delete session files before the index is rewritten -- so a crash between the two steps can only ever
+  // leave an orphaned session file (unreferenced by the index) or an index entry pointing at a session
+  // file that no longer exists, never the reverse. Both interim states are exercised directly below to
+  // prove the existing load-time recovery paths (`sanitizeIndex`'s safe-path filter and `loadSessionFile`'s
+  // exists-check) already tolerate a crash landing between the two writes, without needing the two writes
+  // to be merged into one atomic operation.
+  it should "tolerate an index entry left pointing at a session file removed by an interim crash" in {
+    val sessionRoot    = Files.createTempDirectory("session-manager-index-ahead-of-file")
+    val sessionManager = createManagerAt(sessionRoot)
+    writeIndex(
+      sessionRoot,
+      SessionIndex(
+        sessions = List(metadata("ghost", "ghost.json")),
+        currentSessionId = Some(SessionId("ghost"))
+      )
+    )
+
+    val program = for
+      loaded <- sessionManager.loadSession()
+    yield loaded shouldBe None
+
+    program.unsafeRunSync()
+  }
+
+  it should "tolerate an orphaned session file left on disk by an interim crash before the index was written" in {
+    val sessionRoot       = Files.createTempDirectory("session-manager-file-ahead-of-index")
+    val sessionManager    = createManagerAt(sessionRoot)
+    val sessionsDirectory = sessionRoot.resolve("sessions")
+
+    val program = for
+      _ <- sessionManager.saveSession(stateWithText("valid"))
+      _ <- IO.blocking {
+        Files.createDirectories(sessionsDirectory)
+        Files.writeString(sessionsDirectory.resolve("orphan.json"), "{ not referenced by the index }")
+      }
+      loaded   <- sessionManager.loadSession()
+      sessions <- sessionManager.listSessions()
+    yield
+      loaded.map(_.persisted.buffers.values.head.document.content.toString) shouldBe Some("valid")
+      sessions.map(_.sessionFileName) should not contain "orphan.json"
+
+    program.unsafeRunSync()
+  }
+
   it should "preserve config fields including blurRadius through full disk save/load" in {
     val sessionManager = createManager()
 
