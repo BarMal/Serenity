@@ -8,7 +8,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Resource}
-import com.serenity.lsp.client.{LspConnection, LspFramer}
+import com.serenity.lsp.client.{LspConnection, LspFramer, WorkspaceRootUri}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.testkit.RealBoundaryTest
 import io.circe.Json
@@ -136,7 +136,7 @@ class LspConnectionRealSocketIntegrationSpec extends AnyFlatSpec with Matchers:
               LanguageId.Scala,
               clientSocket.getInputStream,
               clientSocket.getOutputStream,
-              "file:///workspace",
+              WorkspaceRootUri("file:///workspace"),
               logger
             )
             .allocated

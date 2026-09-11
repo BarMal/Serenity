@@ -6,7 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Resource}
-import com.serenity.lsp.client.LspConnection
+import com.serenity.lsp.client.{LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.LanguageId
 import io.circe.Json
 import io.circe.parser.parse
@@ -44,13 +44,25 @@ class LspConnectionStreamIntegrationSpec extends AnyFlatSpec with Matchers:
   private def connectionResource(): Resource[IO, (MockLspServer, LspConnection)] =
     for
       server <- MockLspServer.resource(Map("initialize" -> initResult), logger)
-      conn   <- LspConnection.connect(LanguageId.Scala, server.clientIn, server.clientOut, "file:///workspace", logger)
+      conn <- LspConnection.connect(
+        LanguageId.Scala,
+        server.clientIn,
+        server.clientOut,
+        WorkspaceRootUri("file:///workspace"),
+        logger
+      )
     yield (server, conn)
 
   private def serverClosesDuringInitializeResource(): Resource[IO, LspConnection] =
     for
       server <- MockLspServer.resource(Map.empty, logger, closeOnMethods = Set("initialize"))
-      conn   <- LspConnection.connect(LanguageId.Scala, server.clientIn, server.clientOut, "file:///workspace", logger)
+      conn <- LspConnection.connect(
+        LanguageId.Scala,
+        server.clientIn,
+        server.clientOut,
+        WorkspaceRootUri("file:///workspace"),
+        logger
+      )
     yield conn
 
   "LspConnection.connect" should "complete the initialize handshake over streams" in

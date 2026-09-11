@@ -5,7 +5,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
-import com.serenity.lsp.client.{LspConnection, LspProtocol}
+import com.serenity.lsp.client.{DocumentUri, LspConnection, LspMethod, LspProtocol, WorkspaceRootUri}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity}
 import com.serenity.testkit.VirtualTime.runVirtual
@@ -52,37 +52,67 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
   private def withIncomingProcessor[A](
     conn: LspConnection
   )(
-    use: Queue[IO, (String, List[Diagnostic])] => IO[A]
+    use: Queue[IO, (DocumentUri, List[Diagnostic])] => IO[A]
   ): IO[A] =
     for
-      callQueue <- Queue.unbounded[IO, (String, List[Diagnostic])]
+      callQueue <- Queue.unbounded[IO, (DocumentUri, List[Diagnostic])]
       fiber     <- conn.processIncoming((uri, diags) => callQueue.offer((uri, diags))).start
       result    <- use(callQueue).timeout(testTimeout).guarantee(fiber.cancel)
     yield result
 
-  "LspConnection.sendRequest" should "enqueue a request and complete when the matching response arrives" in
+  "LspConnection.sendRequest" should "enqueue a request and complete with the response's unwrapped result" in
     (for
-      conn         <- makeConnection()
-      requestFiber <- conn.sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace")).start
+      conn <- makeConnection()
+      requestFiber <- conn
+        .sendRequest(LspMethod("initialize"), LspProtocol.initializeParams(123, WorkspaceRootUri("file:///workspace")))
+        .start
       outgoing     <- conn.takeOutgoing
       requestJson  <- IO.fromOption(outgoing)(new RuntimeException("Missing outgoing request"))
       requestId <- IO
         .fromOption(requestJson.hcursor.downField("id").as[Long].toOption)(new RuntimeException("Missing request id"))
       _ <- conn.handleIncomingJson(
-        Json.obj("jsonrpc" -> "2.0".asJson, "id" -> requestId.asJson, "result" -> Json.obj())
+        Json.obj(
+          "jsonrpc" -> "2.0".asJson,
+          "id"      -> requestId.asJson,
+          "result"  -> Json.obj("capabilities" -> Json.obj())
+        )
       )
       response <- requestFiber.joinWithNever
     yield
       requestJson.hcursor.downField("method").as[String].toOption shouldBe Some("initialize")
-      response.hcursor.downField("id").as[Long].toOption shouldBe Some(requestId)
+      response shouldBe Json.obj("capabilities" -> Json.obj())
+    ).timeout(testTimeout).unsafeRunSync()
+
+  "LspConnection.sendRequest" should "fail with the server's error when a JSON-RPC error response arrives" in
+    (for
+      conn <- makeConnection()
+      requestFiber <- conn
+        .sendRequest(LspMethod("initialize"), LspProtocol.initializeParams(123, WorkspaceRootUri("file:///workspace")))
+        .attempt
+        .start
+      outgoing    <- conn.takeOutgoing
+      requestJson <- IO.fromOption(outgoing)(new RuntimeException("Missing outgoing request"))
+      requestId <- IO
+        .fromOption(requestJson.hcursor.downField("id").as[Long].toOption)(new RuntimeException("Missing request id"))
+      _ <- conn.handleIncomingJson(
+        Json.obj(
+          "jsonrpc" -> "2.0".asJson,
+          "id"      -> requestId.asJson,
+          "error"   -> Json.obj("code" -> (-32601).asJson, "message" -> "Method not found".asJson)
+        )
+      )
+      result <- requestFiber.joinWithNever
+    yield
+      result.isLeft shouldBe true
+      result.left.toOption.map(_.getMessage).getOrElse("") should include("Method not found")
     ).timeout(testTimeout).unsafeRunSync()
 
   "LspConnection.sendNotification" should "enqueue a notification without an id" in
     (for
       conn <- makeConnection()
       _ <- conn.sendNotification(
-        "textDocument/didOpen",
-        LspProtocol.didOpenParams("file:///workspace/Foo.scala", "scala", 1, "object Foo")
+        LspMethod("textDocument/didOpen"),
+        LspProtocol.didOpenParams(DocumentUri("file:///workspace/Foo.scala"), "scala", 1, "object Foo")
       )
       outgoing    <- conn.takeOutgoing
       messageJson <- IO.fromOption(outgoing)(new RuntimeException("Missing outgoing notification"))
@@ -101,7 +131,7 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
     (for
       conn <- makeConnection()
       requestFiber <- conn
-        .sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace"))
+        .sendRequest(LspMethod("initialize"), LspProtocol.initializeParams(123, WorkspaceRootUri("file:///workspace")))
         .attempt
         .start
       _      <- conn.takeOutgoing
@@ -113,7 +143,7 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
     runVirtual(for
       conn <- makeConnection(shortTimeout)
       requestFiber <- conn
-        .sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace"))
+        .sendRequest(LspMethod("initialize"), LspProtocol.initializeParams(123, WorkspaceRootUri("file:///workspace")))
         .attempt
         .start
       _            <- conn.takeOutgoing
@@ -127,7 +157,7 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
     runVirtual(for
       conn <- makeConnection(shortTimeout)
       requestFiber <- conn
-        .sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace"))
+        .sendRequest(LspMethod("initialize"), LspProtocol.initializeParams(123, WorkspaceRootUri("file:///workspace")))
         .attempt
         .start
       outgoing    <- conn.takeOutgoing
@@ -143,8 +173,10 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
 
   it should "remove pending requests when a waiting fiber is canceled" in
     (for
-      conn         <- makeConnection()
-      requestFiber <- conn.sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace")).start
+      conn <- makeConnection()
+      requestFiber <- conn
+        .sendRequest(LspMethod("initialize"), LspProtocol.initializeParams(123, WorkspaceRootUri("file:///workspace")))
+        .start
       _            <- conn.takeOutgoing
       _            <- requestFiber.cancel
       _            <- requestFiber.join
@@ -153,10 +185,12 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
 
   it should "tell the server to stop when a waiting fiber is canceled" in
     (for
-      conn         <- makeConnection()
-      requestFiber <- conn.sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace")).start
-      outgoing     <- conn.takeOutgoing
-      requestJson  <- IO.fromOption(outgoing)(new RuntimeException("Missing outgoing request"))
+      conn <- makeConnection()
+      requestFiber <- conn
+        .sendRequest(LspMethod("initialize"), LspProtocol.initializeParams(123, WorkspaceRootUri("file:///workspace")))
+        .start
+      outgoing    <- conn.takeOutgoing
+      requestJson <- IO.fromOption(outgoing)(new RuntimeException("Missing outgoing request"))
       requestId <- IO
         .fromOption(requestJson.hcursor.downField("id").as[Long].toOption)(new RuntimeException("Missing request id"))
       _          <- requestFiber.cancel
@@ -172,7 +206,7 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
     runVirtual(for
       conn <- makeConnection(shortTimeout)
       requestFiber <- conn
-        .sendRequest("initialize", LspProtocol.initializeParams(123, "file:///workspace"))
+        .sendRequest(LspMethod("initialize"), LspProtocol.initializeParams(123, WorkspaceRootUri("file:///workspace")))
         .attempt
         .start
       outgoing    <- conn.takeOutgoing
@@ -195,7 +229,7 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
           _      <- conn.handleIncomingJson(pubDiagsErrors)
           result <- callQueue.take.timeout(testTimeout)
         yield
-          result._1 shouldBe "file:///workspace/Foo.scala"
+          result._1 shouldBe DocumentUri("file:///workspace/Foo.scala")
           result._2 should have size 2
           result._2.head.severity shouldBe Some(DiagnosticSeverity.Error)
           result._2.head.message shouldBe "type mismatch: expected Int, found String"
@@ -212,7 +246,7 @@ class LspConnectionSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEac
           _      <- conn.handleIncomingJson(pubDiagsEmpty)
           result <- callQueue.take.timeout(testTimeout)
         yield
-          result._1 shouldBe "file:///workspace/Foo.scala"
+          result._1 shouldBe DocumentUri("file:///workspace/Foo.scala")
           result._2 shouldBe empty
       }
     yield succeed).timeout(testTimeout).unsafeRunSync()

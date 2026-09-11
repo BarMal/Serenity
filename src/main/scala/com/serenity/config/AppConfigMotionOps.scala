@@ -248,12 +248,7 @@ object AppConfigMotionOps:
     def withCommandRunnerTransitionKind(kind: Option[TransitionKind]): AppConfig =
       appConfig.updateAuthoritativeMotion(_.copy(commandRunnerTransitionKind = kind)) { configuration =>
         kind.fold(configuration)(transition =>
-          updateMotionFamily(configuration, MotionFamily.CommandSurfaces)(
-            _.copy(
-              enabled = transition != TransitionKind.Disabled,
-              transitionKind = transition
-            )
-          )
+          updateMotionFamily(configuration, MotionFamily.CommandSurfaces)(_.copy(transitionKind = transition))
         )
       }
 
@@ -321,8 +316,11 @@ object AppConfigMotionOps:
   ): MotionConfig =
     updateMotionFamily(configuration, MotionFamily.PinnedPanels) { panel =>
       val overrides = panel.transitionOverrides.updated(scope, transition)
+      // `enabled` is derived from `transitionKind` (this family's open transition), not from either override
+      // independently, so a config with the open transition off and the close transition on now resolves the whole
+      // family to disabled rather than the previous open-or-close union -- see the equivalent note in
+      // `MotionConfig.fromLegacy`.
       panel.copy(
-        enabled = overrides.values.exists(_ != TransitionKind.Disabled),
         transitionKind = overrides.getOrElse(TransitionScope.PanelOpen, panel.transitionKind),
         transitionOverrides = overrides
       )

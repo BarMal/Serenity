@@ -197,12 +197,11 @@ object ConfigManager:
     saveConfig(config, Paths.get(configPath))
 
   def saveConfig(config: AppConfig, configPath: Path): Boolean =
-    renderedConfig(config).fold(
-      problem => {
+    renderedConfig(config) match
+      case Left(problem) =>
         logger.error(s"[CONFIG] Failed to save config to $configPath: $problem")
         false
-      },
-      text =>
+      case Right(text) =>
         try
           AtomicFileWriter.writeBytesBlocking(configPath, text.getBytes(StandardCharsets.UTF_8))
           true
@@ -210,7 +209,6 @@ object ConfigManager:
           case NonFatal(error) =>
             logger.error(s"[CONFIG] Failed to save config to $configPath", error)
             false
-    )
 
   /** The config text to write, refused if it is not something this module could read back.
     *
