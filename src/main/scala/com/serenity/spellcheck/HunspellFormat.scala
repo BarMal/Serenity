@@ -11,6 +11,40 @@ private[spellcheck] enum HunspellFlagMode:
   case Long
   case Num
 
+/** One `CHECKCOMPOUNDPATTERN` rule (hunspell(5), issue #1198): forbids compounding when the preceding compound member
+  * ends with `endChars` (and, if `endFlag` is set, carries that flag) and the following member begins with `beginChars`
+  * (and, if `beginFlag` is set, carries that flag). `replacement`, when present, is not a suppression of that forbid --
+  * the literal concatenation stays forbidden -- but names an alternate, elided spelling of the boundary
+  * (`endChars`+`beginChars` replaced by `replacement`) that IS accepted, verified against hunspell's own
+  * `tests/checkcompoundpattern2.{aff,dic,good,wrong}` (`o b z`: "foobar" forbidden, "fozar" accepted) and
+  * `tests/checkcompoundpattern3.{aff,dic,good,wrong}` (`o/X b/Y z`, flag-conditioned).
+  */
+final private[spellcheck] case class CheckCompoundPattern(
+    endChars: String,
+    endFlag: Option[String],
+    beginChars: String,
+    beginFlag: Option[String],
+    replacement: Option[String]
+)
+
+/** The `CHECKCOMPOUND*`/`SIMPLIFIEDTRIPLE` boundary-validation family (hunspell(5), issue #1198): post-hoc filters
+  * `HunspellFreeCompoundMatcher` applies to each adjacent pair of members in a segmentation it finds. `checkTriple`
+  * forbids a literal triple-letter run at the boundary regardless of `simplifiedTriple`; `simplifiedTriple` instead
+  * adds an alternate, elided-spelling segmentation (one repeated letter dropped) as also acceptable -- verified against
+  * hunspell's own `tests/simplifiedtriple.{aff,dic,good,wrong}` ("glasssko" forbidden, "glassko" accepted).
+  */
+final private[spellcheck] case class CompoundCheckRules(
+    checkCase: Boolean,
+    checkDup: Boolean,
+    checkRep: Boolean,
+    checkTriple: Boolean,
+    simplifiedTriple: Boolean,
+    patterns: List[CheckCompoundPattern]
+)
+
+private[spellcheck] object CompoundCheckRules:
+  val empty: CompoundCheckRules = CompoundCheckRules(false, false, false, false, false, Nil)
+
 /** `continuationFlags` (issue #1187) are the flags attached after '/' in a PFX/SFX rule's append field -- hunspell(5)'s
   * continuation classes, granted to the derived word for further affixation. Only CIRCUMFIX consumes them here (see
   * `HunspellFormat.expand`); every other rule ignores them, so a dictionary using continuation classes for anything
@@ -40,7 +74,9 @@ final private[spellcheck] case class HunspellAffixRules(
     compoundBeginFlag: Option[String],
     compoundMiddleFlag: Option[String],
     compoundEndFlag: Option[String],
-    compoundWordMax: Option[Int]
+    compoundWordMax: Option[Int],
+    compoundCheckRules: CompoundCheckRules,
+    onlyInCompoundFlag: Option[String]
 )
 
 private[spellcheck] object HunspellAffixRules:
@@ -62,6 +98,8 @@ private[spellcheck] object HunspellAffixRules:
       None,
       None,
       None,
+      None,
+      CompoundCheckRules.empty,
       None
     )
 
@@ -88,25 +126,22 @@ private[spellcheck] object HunspellFormat:
     * description for why this project carries a partial parser instead of a dependency on Lucene's Hunspell
     * implementation.
     *
-    * ICONV/OCONV and NEEDAFFIX (issue #1182); COMPOUNDRULE/COMPOUNDMIN and CIRCUMFIX (issue #1187); and
+    * ICONV/OCONV and NEEDAFFIX (issue #1182); COMPOUNDRULE/COMPOUNDMIN and CIRCUMFIX (issue #1187);
     * COMPOUNDFLAG/COMPOUNDBEGIN/COMPOUNDMIDDLE/COMPOUNDEND (accepting the older COMPOUNDLAST spelling as an alias) and
     * COMPOUNDWORDMAX -- Hunspell's free-form dictionary word-segmentation compounding, as opposed to COMPOUNDRULE's
-    * explicit flag grammar (issue #1198) -- are implemented and intentionally absent from this set: see
-    * `parseConversionTable`/`parseNeedAffixFlag`, `parseCompoundRules`/`parseCompoundMin`/`parseCircumfixFlag`, and
+    * explicit flag grammar (issue #1198, PR 1 of 2); and the CHECKCOMPOUND* boundary-validation family --
+    * CHECKCOMPOUNDCASE/DUP/REP/TRIPLE, SIMPLIFIEDTRIPLE, CHECKCOMPOUNDPATTERN and ONLYINCOMPOUND (issue #1198, PR 2 of
+    * 2) -- are implemented and intentionally absent from this set: see `parseConversionTable`/`parseNeedAffixFlag`,
+    * `parseCompoundRules`/`parseCompoundMin`/`parseCircumfixFlag`,
     * `parseCompoundFlag`/`parseCompoundBeginFlag`/`parseCompoundMiddleFlag`/`parseCompoundEndFlag`/
-    * `parseCompoundWordMax`. The CHECKCOMPOUND family (plus SIMPLIFIEDTRIPLE), COMPOUNDSYLLABLE, SYLLABLENUM, and
-    * ONLYINCOMPOUND remain unsupported and are deferred to a follow-up issue -- see the PR description for why.
+    * `parseCompoundWordMax`, and `parseCompoundCheckRules`/`parseSingleValueDirective(lines, "ONLYINCOMPOUND")`.
+    * COMPOUNDSYLLABLE and SYLLABLENUM remain unsupported: both are Hungarian-specific syllable-counting compounding
+    * limits requiring a per-language vowel-counting heuristic that no real fixture surveyed for #1198 exercises in a
+    * way this project can verify with confidence -- see the PR description for the full reasoning.
     */
   private val UnsupportedAffixDirectives = Set(
     "COMPOUNDSYLLABLE",
     "SYLLABLENUM",
-    "ONLYINCOMPOUND",
-    "CHECKCOMPOUNDCASE",
-    "CHECKCOMPOUNDDUP",
-    "CHECKCOMPOUNDREP",
-    "CHECKCOMPOUNDTRIPLE",
-    "CHECKCOMPOUNDPATTERN",
-    "SIMPLIFIEDTRIPLE",
     "PSEUDOROOT",
     "FORBIDDENWORD",
     "WARN",
@@ -138,7 +173,9 @@ private[spellcheck] object HunspellFormat:
     val compoundMiddleFlag = parseSingleValueDirective(lines, "COMPOUNDMIDDLE")
     val compoundEndFlag =
       parseSingleValueDirective(lines, "COMPOUNDEND").orElse(parseSingleValueDirective(lines, "COMPOUNDLAST"))
-    val compoundWordMax = parseCompoundWordMax(lines)
+    val compoundWordMax    = parseCompoundWordMax(lines)
+    val compoundCheckRules = parseCompoundCheckRules(lines)
+    val onlyInCompoundFlag = parseSingleValueDirective(lines, "ONLYINCOMPOUND")
     HunspellAffixRules(
       flagMode,
       flagAliases,
@@ -155,7 +192,9 @@ private[spellcheck] object HunspellFormat:
       compoundBeginFlag,
       compoundMiddleFlag,
       compoundEndFlag,
-      compoundWordMax
+      compoundWordMax,
+      compoundCheckRules,
+      onlyInCompoundFlag
     )
 
   def unsupportedAffixDirectives(lines: List[String], affixPath: Path): List[String] =
@@ -186,56 +225,71 @@ private[spellcheck] object HunspellFormat:
       .filter(_.exists(_.isLetter))
       .map(word => HunspellEntry(word, parseEntryFlags(withoutMorphology, affixRules)))
 
+  /** Standalone accepted surface forms of `entry`: every affix-expanded spelling, minus NEEDAFFIX's bare-root exclusion
+    * and ONLYINCOMPOUND's exclusions (issue #1198). ONLYINCOMPOUND applies two ways, both per hunspell(5) ("the
+    * ONLYINCOMPOUND flag also works on words"), verified against hunspell's own `tests/onlyincompound.{aff,dic,
+    * good,wrong}`: a *root* flagged with `affixRules.onlyInCompoundFlag` makes its whole entry -- bare word and every
+    * affixed form alike -- compound-member-only, so nothing from that entry is added here; a *PFX/SFX rule* carrying
+    * the flag in its own continuation class (the same mechanism CIRCUMFIX uses) makes only the forms produced by that
+    * specific rule compound-only, leaving the root's other forms standalone-valid. Compound-member eligibility itself
+    * is unaffected -- `DictionaryLoader` builds `compoundWordFlags` from raw `.dic` entries, not from this method's
+    * output.
+    */
   def expand(entry: HunspellEntry, affixRules: HunspellAffixRules): Set[String] =
-    val prefixRules = entry.flags.flatMap(flag => affixRules.prefixes.getOrElse(flag, Nil))
-    val suffixRules = entry.flags.flatMap(flag => affixRules.suffixes.getOrElse(flag, Nil))
+    if affixRules.onlyInCompoundFlag.exists(entry.flags.contains) then Set.empty
+    else
+      val prefixRules = entry.flags.flatMap(flag => affixRules.prefixes.getOrElse(flag, Nil))
+      val suffixRules = entry.flags.flatMap(flag => affixRules.suffixes.getOrElse(flag, Nil))
 
-    def isCircumfix(rule: HunspellAffixRule): Boolean =
-      affixRules.circumfixFlag.exists(rule.continuationFlags.contains)
-    def circumfixPairValid(prefixRule: HunspellAffixRule, suffixRule: HunspellAffixRule): Boolean =
-      isCircumfix(prefixRule) == isCircumfix(suffixRule)
+      def isCircumfix(rule: HunspellAffixRule): Boolean =
+        affixRules.circumfixFlag.exists(rule.continuationFlags.contains)
+      def isOnlyInCompound(rule: HunspellAffixRule): Boolean =
+        affixRules.onlyInCompoundFlag.exists(rule.continuationFlags.contains)
+      def circumfixPairValid(prefixRule: HunspellAffixRule, suffixRule: HunspellAffixRule): Boolean =
+        isCircumfix(prefixRule) == isCircumfix(suffixRule)
 
-    // CIRCUMFIX (#1187, hunspell(5)): an affix whose continuation class carries the CIRCUMFIX flag may never
-    // surface on its own -- only paired with a counterpart that is itself CIRCUMFIX-flagged.
-    val prefixes = prefixRules.filterNot(isCircumfix).flatMap(applyPrefix(entry.word, _))
-    val suffixes = suffixRules.filterNot(isCircumfix).flatMap(applySuffix(entry.word, _))
+      // CIRCUMFIX (#1187, hunspell(5)): an affix whose continuation class carries the CIRCUMFIX flag may never
+      // surface on its own -- only paired with a counterpart that is itself CIRCUMFIX-flagged.
+      val prefixes = prefixRules.filterNot(isCircumfix).filterNot(isOnlyInCompound).flatMap(applyPrefix(entry.word, _))
+      val suffixes = suffixRules.filterNot(isCircumfix).filterNot(isOnlyInCompound).flatMap(applySuffix(entry.word, _))
 
-    val combined =
-      for
-        prefixRule <- prefixRules if prefixRule.combineable
-        suffixRule <- suffixRules if suffixRule.combineable && circumfixPairValid(prefixRule, suffixRule)
-        suffixed   <- applySuffix(entry.word, suffixRule)
-        combined   <- applyPrefix(suffixed, prefixRule)
-      yield combined
+      val combined =
+        for
+          prefixRule <- prefixRules if prefixRule.combineable && !isOnlyInCompound(prefixRule)
+          suffixRule <- suffixRules
+          if suffixRule.combineable && circumfixPairValid(prefixRule, suffixRule) && !isOnlyInCompound(suffixRule)
+          suffixed <- applySuffix(entry.word, suffixRule)
+          combined <- applyPrefix(suffixed, prefixRule)
+        yield combined
 
-    // CIRCUMFIX continuation chaining: the canonical Hungarian superlative ("legnagyobb") only reaches its prefix
-    // via the suffix's continuation class -- the bare root never carries the prefix's own flag directly (see the
-    // circumfix.aff fixture in hunspell's own test suite) -- so a CIRCUMFIX-flagged affix also looks for its
-    // counterpart among the flags the *other* affix's continuation class grants, applying only when that
-    // counterpart is itself CIRCUMFIX-flagged.
-    val suffixThenPrefix: Set[String] =
-      suffixRules.filter(isCircumfix).flatMap { suffixRule =>
-        applySuffix(entry.word, suffixRule).toList.flatMap { suffixed =>
-          suffixRule.continuationFlags
-            .flatMap(flag => affixRules.prefixes.getOrElse(flag, Nil))
-            .filter(isCircumfix)
-            .flatMap(prefixRule => applyPrefix(suffixed, prefixRule))
+      // CIRCUMFIX continuation chaining: the canonical Hungarian superlative ("legnagyobb") only reaches its prefix
+      // via the suffix's continuation class -- the bare root never carries the prefix's own flag directly (see the
+      // circumfix.aff fixture in hunspell's own test suite) -- so a CIRCUMFIX-flagged affix also looks for its
+      // counterpart among the flags the *other* affix's continuation class grants, applying only when that
+      // counterpart is itself CIRCUMFIX-flagged.
+      val suffixThenPrefix: Set[String] =
+        suffixRules.filter(isCircumfix).flatMap { suffixRule =>
+          applySuffix(entry.word, suffixRule).toList.flatMap { suffixed =>
+            suffixRule.continuationFlags
+              .flatMap(flag => affixRules.prefixes.getOrElse(flag, Nil))
+              .filter(rule => isCircumfix(rule) && !isOnlyInCompound(rule))
+              .flatMap(prefixRule => applyPrefix(suffixed, prefixRule))
+          }
         }
-      }
-    val prefixThenSuffix: Set[String] =
-      prefixRules.filter(isCircumfix).flatMap { prefixRule =>
-        applyPrefix(entry.word, prefixRule).toList.flatMap { prefixed =>
-          prefixRule.continuationFlags
-            .flatMap(flag => affixRules.suffixes.getOrElse(flag, Nil))
-            .filter(isCircumfix)
-            .flatMap(suffixRule => applySuffix(prefixed, suffixRule))
+      val prefixThenSuffix: Set[String] =
+        prefixRules.filter(isCircumfix).flatMap { prefixRule =>
+          applyPrefix(entry.word, prefixRule).toList.flatMap { prefixed =>
+            prefixRule.continuationFlags
+              .flatMap(flag => affixRules.suffixes.getOrElse(flag, Nil))
+              .filter(rule => isCircumfix(rule) && !isOnlyInCompound(rule))
+              .flatMap(suffixRule => applySuffix(prefixed, suffixRule))
+          }
         }
-      }
 
-    // NEEDAFFIX (#1182): a root flagged with the configured NEEDAFFIX flag is a "virtual stem" -- valid only
-    // affixed, per hunspell(5) -- so the bare word is dropped here while its affixed forms above are kept.
-    val standalone = if affixRules.needAffixFlag.exists(entry.flags.contains) then Set.empty else Set(entry.word)
-    standalone ++ prefixes ++ suffixes ++ combined ++ suffixThenPrefix ++ prefixThenSuffix
+      // NEEDAFFIX (#1182): a root flagged with the configured NEEDAFFIX flag is a "virtual stem" -- valid only
+      // affixed, per hunspell(5) -- so the bare word is dropped here while its affixed forms above are kept.
+      val standalone = if affixRules.needAffixFlag.exists(entry.flags.contains) then Set.empty else Set(entry.word)
+      standalone ++ prefixes ++ suffixes ++ combined ++ suffixThenPrefix ++ prefixThenSuffix
 
   /** The `.aff` file's FLAG mode decides how every flag field in both files is tokenized -- a `.dic` entry's flags, a
     * PFX/SFX rule's continuation class, and an AF alias line all go through here.
@@ -420,6 +474,49 @@ private[spellcheck] object HunspellFormat:
     lines.collectFirst {
       case line if line.startsWith("COMPOUNDWORDMAX ") => line.stripPrefix("COMPOUNDWORDMAX ").trim.toIntOption
     }.flatten
+
+  /** The `CHECKCOMPOUND*`/`SIMPLIFIEDTRIPLE` boundary-validation family (hunspell(5), issue #1198):
+    * `CHECKCOMPOUNDCASE`, `CHECKCOMPOUNDDUP`, `CHECKCOMPOUNDREP`, `CHECKCOMPOUNDTRIPLE` and `SIMPLIFIEDTRIPLE` are bare
+    * directives (no argument on the line), and `CHECKCOMPOUNDPATTERN` is `parseCheckCompoundPatterns`'s own multi-line
+    * block.
+    */
+  private def parseCompoundCheckRules(lines: List[String]): CompoundCheckRules =
+    CompoundCheckRules(
+      checkCase = parseBooleanDirective(lines, "CHECKCOMPOUNDCASE"),
+      checkDup = parseBooleanDirective(lines, "CHECKCOMPOUNDDUP"),
+      checkRep = parseBooleanDirective(lines, "CHECKCOMPOUNDREP"),
+      checkTriple = parseBooleanDirective(lines, "CHECKCOMPOUNDTRIPLE"),
+      simplifiedTriple = parseBooleanDirective(lines, "SIMPLIFIEDTRIPLE"),
+      patterns = parseCheckCompoundPatterns(lines)
+    )
+
+  private def parseBooleanDirective(lines: List[String], directive: String): Boolean =
+    lines.exists(_.trim == directive)
+
+  /** `CHECKCOMPOUNDPATTERN` (hunspell(5), issue #1198): a `CHECKCOMPOUNDPATTERN count` header (skipped here, like
+    * `parseCompoundRules`'s COMPOUNDRULE header) followed by `count` `CHECKCOMPOUNDPATTERN endchars[/flag]
+    * beginchars[/flag] [replacement]` lines. Confirmed against hunspell's own `tests/checkcompoundpattern{,2,3}.aff`:
+    * the bare form (`nny ny`, Hungarian), the flagless form with a replacement (`o b z`), and the flag-conditioned form
+    * (`o/X b/Y z`); `0` as either `endchars` or `beginchars` means an empty string, matching `zeroAsEmpty`'s existing
+    * convention for PFX/SFX strip/append fields -- e.g. `0/B /A` from real-world Dutch `.aff` usage.
+    */
+  private def parseCheckCompoundPatterns(lines: List[String]): List[CheckCompoundPattern] =
+    lines.flatMap { line =>
+      line.split("\\s+").toList match
+        case "CHECKCOMPOUNDPATTERN" :: count :: Nil if count.forall(_.isDigit) =>
+          None
+        case "CHECKCOMPOUNDPATTERN" :: endToken :: beginToken :: rest if !endToken.forall(_.isDigit) =>
+          val (endChars, endFlag)     = parseCheckCompoundPatternToken(endToken)
+          val (beginChars, beginFlag) = parseCheckCompoundPatternToken(beginToken)
+          Some(CheckCompoundPattern(endChars, endFlag, beginChars, beginFlag, rest.headOption))
+        case _ =>
+          None
+    }
+
+  private def parseCheckCompoundPatternToken(token: String): (String, Option[String]) =
+    token.split("/", 2) match
+      case Array(text, flag) => zeroAsEmpty(text)  -> Some(flag)
+      case _                 => zeroAsEmpty(token) -> None
 
   private def zeroAsEmpty(value: String): String =
     if value == "0" then "" else value

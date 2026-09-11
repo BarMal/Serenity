@@ -25,7 +25,8 @@ final private[spellcheck] case class DictionaryLoadResult(
     compoundBeginFlag: Option[String],
     compoundMiddleFlag: Option[String],
     compoundEndFlag: Option[String],
-    compoundWordMax: Option[Int]
+    compoundWordMax: Option[Int],
+    compoundCheckRules: CompoundCheckRules
 )
 
 /** One entry per normalized dictionary path, holding only the most recently loaded version of that dictionary. A path
@@ -169,6 +170,7 @@ object DictionaryLoader:
     val compoundFlagTrie =
       if compoundRoleFlags.isEmpty then CompoundTrie.empty
       else CompoundTrie.build(compoundWordFlags.filter { case (_, flags) => flags.exists(compoundRoleFlags.contains) })
+    val compoundCheckRules = mergeCompoundCheckRules(externalResults.map(_.compoundCheckRules))
 
     val context = DictionaryContext(
       words = (externalWords ++ fallbackWords ++ normalized.additionalWords).map(DictionaryWord.normalize),
@@ -184,7 +186,8 @@ object DictionaryLoader:
       compoundMiddleFlag = compoundMiddleFlag,
       compoundEndFlag = compoundEndFlag,
       compoundWordMax = compoundWordMax,
-      compoundFlagTrie = compoundFlagTrie
+      compoundFlagTrie = compoundFlagTrie,
+      compoundCheckRules = compoundCheckRules
     )
     DictionarySnapshot(context, SpellCheckConfig.discoverDictionaryFingerprints(normalized))
 
@@ -239,14 +242,30 @@ object DictionaryLoader:
           affixRules.compoundBeginFlag,
           affixRules.compoundMiddleFlag,
           affixRules.compoundEndFlag,
-          affixRules.compoundWordMax
+          affixRules.compoundWordMax,
+          affixRules.compoundCheckRules
         )
       catch
         case NonFatal(error) =>
           failedLoad(s"Could not load dictionary $path: ${error.getMessage}")
 
   private def failedLoad(failure: String): DictionaryLoadResult =
-    DictionaryLoadResult(Set.empty, Map.empty, List(failure), Nil, Nil, Nil, 3, Map.empty, None, None, None, None, None)
+    DictionaryLoadResult(
+      Set.empty,
+      Map.empty,
+      List(failure),
+      Nil,
+      Nil,
+      Nil,
+      3,
+      Map.empty,
+      None,
+      None,
+      None,
+      None,
+      None,
+      CompoundCheckRules.empty
+    )
 
   private def affixPathFor(dictionaryPath: Path): Option[Path] =
     SpellCheckConfig
@@ -282,4 +301,18 @@ object DictionaryLoader:
       wordFlags.foldLeft(merged) {
         case (acc, (word, flags)) => acc.updated(word, acc.getOrElse(word, Set.empty) ++ flags)
       }
+    }
+
+  // Booleans OR'd (any configured dictionary enabling a CHECKCOMPOUND* check applies it) and CHECKCOMPOUNDPATTERN
+  // rules concatenated, matching how compoundRules/iconv/oconv are already merged above.
+  private def mergeCompoundCheckRules(rules: List[CompoundCheckRules]): CompoundCheckRules =
+    rules.foldLeft(CompoundCheckRules.empty) { (merged, rule) =>
+      CompoundCheckRules(
+        checkCase = merged.checkCase || rule.checkCase,
+        checkDup = merged.checkDup || rule.checkDup,
+        checkRep = merged.checkRep || rule.checkRep,
+        checkTriple = merged.checkTriple || rule.checkTriple,
+        simplifiedTriple = merged.simplifiedTriple || rule.simplifiedTriple,
+        patterns = merged.patterns ++ rule.patterns
+      )
     }
