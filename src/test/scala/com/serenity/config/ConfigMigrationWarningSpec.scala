@@ -11,7 +11,7 @@ class ConfigMigrationWarningSpec extends AnyFlatSpec with Matchers with OptionVa
   "ConfigMigrationWarning" should "format actionable startup warnings" in {
     val report = ConfigMigrationReport(
       version = ConfigVersion.Current,
-      deprecatedEntries = List(DeprecatedConfigEntry("font_size", "font.code.size and font.text.size")),
+      deprecatedEntries = List(DeprecatedConfigEntry("cursor_mode", "cursor.mode")),
       unknownKeys = List("custom.old"),
       invalidEntries = List(InvalidConfigEntry("syntax.highlighting", "maybe", "Invalid boolean"))
     )
@@ -19,7 +19,7 @@ class ConfigMigrationWarningSpec extends AnyFlatSpec with Matchers with OptionVa
     val message = ConfigMigrationWarning.message(Paths.get("config.conf"), report).value
 
     message should include("[CONFIG] Deprecated config format detected in config.conf.")
-    message should include("- font_size -> use font.code.size and font.text.size")
+    message should include("- cursor_mode -> use cursor.mode")
     message should include("Unknown entries:")
     message should include("- custom.old")
     message should include("Invalid entries:")

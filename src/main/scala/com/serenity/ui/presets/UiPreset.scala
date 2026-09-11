@@ -4,7 +4,6 @@ import java.text.Normalizer
 import java.util.Locale
 
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.session.SessionLayout
 import com.serenity.session.given
 import com.serenity.state.models.*

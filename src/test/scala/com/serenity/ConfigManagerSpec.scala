@@ -135,7 +135,7 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     val configFile = Files.createTempFile("serenity-config-result", ".conf")
     Files.writeString(
       configFile,
-      """font_size = 18.0
+      """font_code_size = 18.0
         |unknown.setting = yes
         |syntax.highlighting = maybe
         |""".stripMargin
@@ -144,9 +144,8 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     val result = ConfigManager.loadConfigResult(Some(configFile.toString))
 
     result.config.editorConfig.fontConfig.codeFontSize shouldBe 18.0f
-    result.config.editorConfig.fontConfig.textFontSize shouldBe 18.0f
-    result.report.deprecatedEntries.map(_.key) should contain("font_size")
-    result.report.deprecatedEntries.map(_.replacement) should contain("font.code.size and font.text.size")
+    result.report.deprecatedEntries.map(_.key) should contain("font_code_size")
+    result.report.deprecatedEntries.map(_.replacement) should contain("font.code.size")
     result.report.unknownKeys should contain("unknown.setting")
     result.report.invalidEntries.map(_.key) should contain("syntax.highlighting")
     result.report.hasWarnings shouldBe true
@@ -370,24 +369,6 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
     written should include("keymap.editor.page_down = pagedown")
     written should include("keymap.editor.extend_selection_right = \"shift+right\"")
-  }
-
-  it should "load legacy shared font size and ligature keys for code and prose fonts" in {
-    val configFile = Files.createTempFile("serenity-legacy-font-config", ".conf")
-    Files.writeString(
-      configFile,
-      """font.size = 17.0
-        |font.ligatures = false
-        |""".stripMargin
-    )
-
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
-
-    config.editorConfig.fontConfig.codeFontSize shouldBe 17.0f
-    config.editorConfig.fontConfig.textFontSize shouldBe 17.0f
-    config.editorConfig.fontConfig.codeLigatures shouldBe false
-    config.editorConfig.fontConfig.textLigatures shouldBe false
-    config.editorConfig.fontConfig.uiLigatures shouldBe false
   }
 
   it should "load and write active and inactive cursor colour overrides" in {
