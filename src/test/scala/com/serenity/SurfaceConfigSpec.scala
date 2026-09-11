@@ -14,6 +14,14 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     PostProcessingEffect.fromConfigKey("glow") shouldBe Some(PostProcessingEffect.Glow)
   }
 
+  "SurfaceConfig.normalized" should "clamp rendererFrameStateCacheCapacity to AppConfig's configured bounds" in {
+    SurfaceConfig(rendererFrameStateCacheCapacity = Int.MaxValue).normalized.rendererFrameStateCacheCapacity shouldBe
+      AppConfig.MaxRendererFrameStateCacheCapacity
+    SurfaceConfig(rendererFrameStateCacheCapacity = -100).normalized.rendererFrameStateCacheCapacity shouldBe
+      AppConfig.MinRendererFrameStateCacheCapacity
+    SurfaceConfig(rendererFrameStateCacheCapacity = 128).normalized.rendererFrameStateCacheCapacity shouldBe 128
+  }
+
   "SurfaceConfig" should "own the motion-hierarchy schema metadata" in {
     // #1406: material, post-processing, display, command-runner, text-area and viewport keys used to be duplicated
     // here too, but `ConfigRegistry` already owned parsing/validation/writing for every one of them end-to-end, so

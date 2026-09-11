@@ -19,6 +19,7 @@ import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPresetStore
+import com.serenity.ui.renderer.RendererFrameState
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
@@ -261,6 +262,7 @@ object StateManager:
       com.serenity.ui.tui.MarkdownPreviewWindowAvailability.Unavailable
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
+    RendererFrameState.configureCacheCapacity(initialConfig.surfaceConfig.rendererFrameStateCacheCapacity)
     for
       resolvedSessionRootOverride <- resolveSessionRootOverride(sessionRootOverride)
       stateRef                    <- Ref.of[IO, AppState](AppState.initial(initialConfig))

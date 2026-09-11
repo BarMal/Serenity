@@ -71,12 +71,18 @@ final case class SurfaceConfig(
     // None (default) keeps the active theme's own panel alpha, matching every other floating panel. Some overrides
     // just the cursor info bar's background alpha, independent of theme -- see `TextOverlayRenderer`'s per-row
     // background colour, the one paint site this is scoped to.
-    cursorInfoBarBackgroundAlpha: Option[Double] = None
+    cursorInfoBarBackgroundAlpha: Option[Double] = None,
+    // Per-cache capacity for RendererFrameState's bounded-LRU caches (issue #1433): a Ref-backed Map can't observe
+    // GC reachability the way the WeakHashMap it replaced could, so growth is bounded by recency instead. 64 is a
+    // conservative default for a single window; tune it up if a session with many concurrently open surfaces (or a
+    // busy test run sharing these process-wide caches) sees avoidable extra redraws from eviction churn.
+    rendererFrameStateCacheCapacity: Int = 64
 ):
 
   def normalized: SurfaceConfig =
     copy(
       blurRadius = blurRadius.max(0.0f).min(1.0f),
+      rendererFrameStateCacheCapacity = AppConfig.clampRendererFrameStateCacheCapacity(rendererFrameStateCacheCapacity),
       elementTransitionSpeedScale = AppConfig.clampElementTransitionSpeedScale(elementTransitionSpeedScale),
       editorTextTransitionSpeedScale = editorTextTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
       commandRunnerTransitionSpeedScale =

@@ -254,6 +254,12 @@ final private[manager] class StateManagerConfigEffects(
         (newState, newConfig)
       }
       .flatTap(config =>
+        IO(
+          com.serenity.ui.renderer.RendererFrameState
+            .configureCacheCapacity(config.surfaceConfig.rendererFrameStateCacheCapacity)
+        )
+      )
+      .flatTap(config =>
         configPersistencePath match
           case Some(path) =>
             com.serenity.config.ConfigManager.saveConfigIO(config, path).flatMap {

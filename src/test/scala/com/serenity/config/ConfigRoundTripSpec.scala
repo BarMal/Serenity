@@ -90,6 +90,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withCommandRunnerCursorPeekPlacement(SurfacePlacement.AboveCursor)
     .withRenderFpsTarget(RenderFpsTarget.Fps30)
     .withRenderDamageGranularity(RenderDamageGranularity.Cells)
+    .withRendererFrameStateCacheCapacity(96)
     .withCursorInfoBarBackgroundAlpha(Some(0.5))
     .withCursorMode(CursorMode.Breathe)
     .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position, CursorInfoBarSegment.WordCount))
