@@ -25,6 +25,12 @@ import com.serenity.config.SpellCheckDictionaryFingerprint
   * of those flags -- built once here by `DictionaryLoader.loadSnapshot` so `HunspellFreeCompoundMatcher.matches` never
   * rebuilds it per check. Empty/`None` on every dictionary that declares no free-form compounding, in which case
   * `HunspellFreeCompoundMatcher.matches` returns `false` immediately.
+  *
+  * `compoundCheckRules` (issue #1198, PR 2 of 2) merges the `CHECKCOMPOUND*`/`SIMPLIFIEDTRIPLE`/`CHECKCOMPOUNDPATTERN`
+  * boundary-validation directives across every loaded dictionary (booleans OR'd, patterns concatenated) --
+  * `HunspellFreeCompoundMatcher.matches` applies them to each adjacent pair of members in a segmentation it finds,
+  * using `words`/`replacements`/`compoundWordFlags` above for the standalone-word and pattern-reconstruction lookups
+  * `CHECKCOMPOUNDREP`/`CHECKCOMPOUNDPATTERN` need.
   */
 final case class DictionaryContext(
     words: Set[String],
@@ -40,7 +46,8 @@ final case class DictionaryContext(
     compoundMiddleFlag: Option[String] = None,
     compoundEndFlag: Option[String] = None,
     compoundWordMax: Option[Int] = None,
-    compoundFlagTrie: CompoundTrie = CompoundTrie.empty
+    compoundFlagTrie: CompoundTrie = CompoundTrie.empty,
+    compoundCheckRules: CompoundCheckRules = CompoundCheckRules.empty
 )
 
 /** The result of one explicit dictionary-discovery pass: the loaded words/replacements/failures plus the on-disk

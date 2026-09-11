@@ -195,7 +195,16 @@ object SpellChecker:
         dictionary.compoundEndFlag
       ),
       dictionary.compoundMin,
-      dictionary.compoundWordMax
+      dictionary.compoundWordMax,
+      // CHECKCOMPOUND*/SIMPLIFIEDTRIPLE/CHECKCOMPOUNDPATTERN (#1198, PR 2 of 2): a post-hoc filter over the
+      // segmentation(s) the DP above finds, backed by the same word/flag/REP data `dictionary.words`,
+      // `dictionary.compoundWordFlags` and `dictionary.replacements` already carry for standalone lookup.
+      dictionary.compoundCheckRules,
+      dictionary.compoundWordFlags,
+      dictionary.words,
+      dictionary.replacements,
+      // CHECKCOMPOUNDCASE needs the word as typed, not `normalized`'s case-folded form used for the trie walk.
+      originalWord = word
     )
 
   private def isSpellCheckDiagnostic(diagnostic: Diagnostic): Boolean =
