@@ -167,16 +167,68 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
     RendererFrameState.drainScreenDamage(Some(output)) shouldBe Damage.Everything
   }
 
-  "the bounded per-cache store" should "evict the least recently written entry once capacity is exceeded" in {
-    // One more than RendererFrameState's documented per-cache capacity: every screen identity but the very first
-    // gets a fresh drain (first-drain semantics == "never tracked"), and the first one must go back to reporting
-    // Everything once it's pushed out, exactly like a WeakHashMap entry whose key nothing else reaches anymore.
-    val screens = List.fill(RendererFrameState.PerCacheCapacity + 1)(frameOutput(new Object))
+  /** [[RendererFrameState.cacheCapacity]] is process-wide mutable state (issue #1433): a test that reconfigures it must
+    * restore the previous value afterward, or a later test relying on the default (in this file or any other sharing
+    * the same JVM) would silently see a different bound than it assumed.
+    */
+  private def withCacheCapacity[A](capacity: Int)(test: => A): A =
+    val previous = RendererFrameState.currentCacheCapacity
+    RendererFrameState.configureCacheCapacity(capacity)
+    try test
+    finally RendererFrameState.configureCacheCapacity(previous)
 
-    screens.foreach { output =>
-      RendererFrameState.drainScreenDamage(Some(output)) // first touch of each: establishes tracking
+  "the bounded per-cache store" should "evict the least recently written entry once capacity is exceeded" in
+    withCacheCapacity(64) {
+      // One more than the configured per-cache capacity: every screen identity but the very first gets a fresh
+      // drain (first-drain semantics == "never tracked"), and the first one must go back to reporting Everything
+      // once it's pushed out, exactly like a WeakHashMap entry whose key nothing else reaches anymore.
+      val screens = List.fill(RendererFrameState.currentCacheCapacity + 1)(frameOutput(new Object))
+
+      screens.foreach { output =>
+        RendererFrameState.drainScreenDamage(Some(output)) // first touch of each: establishes tracking
+      }
+
+      val evicted = screens.head
+      RendererFrameState.drainScreenDamage(Some(evicted)) shouldBe Damage.Everything
     }
 
-    val evicted = screens.head
-    RendererFrameState.drainScreenDamage(Some(evicted)) shouldBe Damage.Everything
-  }
+  "configureCacheCapacity" should "clamp to AppConfig's configured bounds" in
+    withCacheCapacity(64) {
+      RendererFrameState.configureCacheCapacity(Int.MaxValue)
+      RendererFrameState.currentCacheCapacity shouldBe com.serenity.config.AppConfig.MaxRendererFrameStateCacheCapacity
+
+      RendererFrameState.configureCacheCapacity(-100)
+      RendererFrameState.currentCacheCapacity shouldBe com.serenity.config.AppConfig.MinRendererFrameStateCacheCapacity
+    }
+
+  it should "shrink the bound live, evicting down to the new capacity on the next write" in
+    withCacheCapacity(8) {
+      val screens = List.fill(8)(frameOutput(new Object))
+      screens.foreach(output => RendererFrameState.drainScreenDamage(Some(output)))
+
+      // Shrinking alone doesn't retroactively evict -- only a write re-checks the bound, same as the retired
+      // WeakHashMap only ever shed entries lazily, never eagerly, on a capacity/GC change.
+      RendererFrameState.configureCacheCapacity(4)
+      val trigger = frameOutput(new Object)
+      RendererFrameState.drainScreenDamage(Some(trigger)) // one write past the new capacity
+
+      val oldestStillTracked = screens.drop(screens.size - 3).map(_.screenToken)
+      screens.map(_.screenToken).filterNot(oldestStillTracked.contains).foreach { evictedToken =>
+        RendererFrameState.drainScreenDamage(Some(FrameOutput(evictedToken, trigger.repaintRegion))) shouldBe
+          Damage.Everything
+      }
+    }
+
+  it should "grow the bound live, so entries beyond the old capacity stop evicting each other" in
+    withCacheCapacity(4) {
+      val screens = List.fill(4)(frameOutput(new Object))
+      screens.foreach(output => RendererFrameState.drainScreenDamage(Some(output)))
+
+      RendererFrameState.configureCacheCapacity(8)
+      val extra = List.fill(4)(frameOutput(new Object))
+      extra.foreach(output => RendererFrameState.drainScreenDamage(Some(output)))
+
+      // All 8 fit under the raised capacity, so the original 4 (which would have been evicted under the old
+      // capacity of 4) are still tracked.
+      screens.foreach(output => RendererFrameState.drainScreenDamage(Some(output)) shouldNot be(Damage.Everything))
+    }

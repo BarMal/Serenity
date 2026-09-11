@@ -463,6 +463,18 @@ object ConfigRegistry:
       (config, value) => config.withRenderDamageGranularity(value)
     ),
     field(
+      "render.frame_state_cache_capacity",
+      "render.frame_state.cache_capacity",
+      "render_frame_state_cache_capacity"
+    )(
+      int.filtered(capacity =>
+        capacity >= AppConfig.MinRendererFrameStateCacheCapacity && capacity <= AppConfig.MaxRendererFrameStateCacheCapacity
+      )
+    )(
+      _.surfaceConfig.rendererFrameStateCacheCapacity,
+      (config, value) => config.withRendererFrameStateCacheCapacity(value)
+    ),
+    field(
       "display.cursor_info_bar_background_alpha",
       "display.cursor_info_bar.background_alpha",
       "display_cursor_info_bar_background_alpha"
