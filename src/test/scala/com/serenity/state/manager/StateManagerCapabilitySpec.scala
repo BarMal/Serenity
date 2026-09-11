@@ -99,8 +99,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
 
     calls.get.unsafeRunSync() shouldBe List(
       s"open:$path",
-      "save:BufferId(0)",
-      s"save-as:BufferId(0):$path"
+      "save:0",
+      s"save-as:0:$path"
     )
   }
 

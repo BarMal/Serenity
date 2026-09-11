@@ -76,9 +76,14 @@ object ConfigManager:
     ConfigLoadResult(parseConfig(source), inspectConfig(source))
 
   private def parseConfig(source: Config): AppConfig =
-    val entries = hoconEntries(source)
+    // A motion family's `enabled = false` must always win over that same family's `transition` setting, regardless
+    // of which key HOCON happens to enumerate first -- `entrySet()` order isn't guaranteed to match file order.
+    // Processing every `.enabled` key last (after every other key, including `transition`) makes that override
+    // deterministic instead of depending on source-file key ordering.
+    val entries                 = hoconEntries(source)
+    val (ordinary, enabledLast) = entries.partition(entry => !entry.key.endsWith(".enabled"))
 
-    val parsed = entries.foldLeft(AppConfig.default) { (config, entry) =>
+    val parsed = (ordinary ++ enabledLast).foldLeft(AppConfig.default) { (config, entry) =>
       val HoconEntry(key, value, _, raw) = entry
       // The registry knows every setting that is one key to one value, in both directions at once. Only the settings
       // that are not -- the animation presets, the motion families, the key groups, and the spellings that set more
