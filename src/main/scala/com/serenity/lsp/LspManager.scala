@@ -21,7 +21,7 @@ object LspManager:
   final private case class ManagedConnection(connection: LspConnection, release: IO[Unit])
 
   private enum RequestKind:
-    case Hover, Definition
+    case Hover, Definition, Completion
 
   final private case class RequestKey(uri: String, kind: RequestKind)
   final private case class RequestContext(version: Int, anchor: CursorPosition)
@@ -164,20 +164,30 @@ object LspManager:
         }
 
       case LspEffect.CompletionRequested(uri, languageId, line, character, anchor) =>
-        ensureConnection(connectionsRef, languageId, uri, applyEvent, logger, connectionProvider).flatMap {
-          case Some((_, conn)) =>
-            Trace
-              .timed(s"lsp.completion.$uri")(
-                conn.sendRequest("textDocument/completion", LspProtocol.completionParams(uri, line, character))
-              )
-              .flatMap(response =>
-                LspProtocol
-                  .parseCompletionItems(response)
-                  .fold(IO.unit)(items => applyEvent(LspEvent.LspCompletionReceived(items, anchor)))
-              )
-              .handleErrorWith(ex => logger.error(ex)(s"[LSP] completion failed: $uri"))
-          case None =>
-            applyEvent(LspEvent.LspHoverReceived(s"No LSP server available for ${languageId.displayName}", anchor))
+        startRequest(
+          RequestKind.Completion,
+          uri,
+          languageId,
+          anchor,
+          connectionsRef,
+          documentVersions,
+          requestContexts,
+          requestFibers,
+          supervisor,
+          applyEvent,
+          logger,
+          connectionProvider
+        ) { (conn, _) =>
+          Trace
+            .timed(s"lsp.completion.$uri")(
+              conn.sendRequest("textDocument/completion", LspProtocol.completionParams(uri, line, character))
+            )
+            .flatMap(response =>
+              LspProtocol
+                .parseCompletionItems(response)
+                .fold(IO.unit)(items => applyEvent(LspEvent.LspCompletionReceived(items, anchor)))
+            )
+            .handleErrorWith(ex => logger.error(ex)(s"[LSP] completion failed: $uri"))
         }
 
       case LspEffect.DefinitionRequested(uri, languageId, line, character, anchor, symbol) =>
