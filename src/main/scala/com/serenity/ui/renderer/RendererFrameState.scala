@@ -1,8 +1,9 @@
 package com.serenity.ui.renderer
 
 import java.awt.image.BufferedImage
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
+import com.serenity.config.AppConfig
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -106,25 +107,26 @@ final case class PreparedScene(
       uiMetrics == candidateUiMetrics &&
       viewportSize == candidateViewportSize
 
-/** An `AtomicReference[Map[K, V]]`-backed cache bounded to [[RendererFrameState.PerCacheCapacity]] most-recently-
-  * written entries, standing in for `java.util.WeakHashMap`'s GC-driven eviction (see that constant's doc comment for
-  * why a recency bound is an equivalent, and simpler, way to keep these process-wide caches from growing without
-  * limit). A manual compare-and-set retry loop ([[casUpdate]]/[[casModify]]) replaces the manual `synchronized` blocks
-  * this module used to need for the same "render thread isn't guaranteed to be one thread" reason -- this module was
-  * briefly `Ref[IO, ...]`-backed (#1431), but every accessor forced that `IO` synchronously via `unsafeRunSync` right
-  * back out again to keep the module's long-standing synchronous API, which just hid a plain in-memory CAS behind an
-  * effect type nothing here ever suspended on (#1434). `AtomicReference` gives the same lock-free CAS semantics without
-  * the indirection.
+/** An `AtomicReference[Map[K, V]]`-backed cache bounded to [[RendererFrameState.cacheCapacity]] most-recently- written
+  * entries, standing in for `java.util.WeakHashMap`'s GC-driven eviction (see that constant's doc comment for why a
+  * recency bound is an equivalent, and simpler, way to keep these process-wide caches from growing without limit). A
+  * manual compare-and-set retry loop ([[casUpdate]]/[[casModify]]) replaces the manual `synchronized` blocks this
+  * module used to need for the same "render thread isn't guaranteed to be one thread" reason -- this module was briefly
+  * `Ref[IO, ...]`-backed (#1431), but every accessor forced that `IO` synchronously via `unsafeRunSync` right back out
+  * again to keep the module's long-standing synchronous API, which just hid a plain in-memory CAS behind an effect type
+  * nothing here ever suspended on (#1434). `AtomicReference` gives the same lock-free CAS semantics without the
+  * indirection.
   */
-final private class BoundedRefCache[K, V](capacity: Int):
+final private class BoundedRefCache[K, V](capacity: AtomicInteger):
   private case class Contents(entries: Map[K, V], order: Vector[K])
 
   private val state: AtomicReference[Contents] = new AtomicReference(Contents(Map.empty, Vector.empty))
 
   private def bounded(contents: Contents): Contents =
-    if contents.order.size <= capacity then contents
+    val currentCapacity = capacity.get()
+    if contents.order.size <= currentCapacity then contents
     else
-      val dropCount = contents.order.size - capacity
+      val dropCount = contents.order.size - currentCapacity
       val dropped   = contents.order.take(dropCount)
       Contents(contents.entries -- dropped, contents.order.drop(dropCount))
 
@@ -181,9 +183,10 @@ final private class BoundedRefCache[K, V](capacity: Int):
   */
 object RendererFrameState:
 
-  /** Per-cache capacity for every [[BoundedRefCache]] below. These caches are process-wide singletons keyed by object
-    * identity (`SurfaceContentIdentity`, `ScreenIdentity`, `RenderSurface`) with no notion of when their key is done
-    * being useful -- the retired `WeakHashMap`s handled that by letting an entry disappear once nothing else in the app
+  /** Per-cache capacity for every [[BoundedRefCache]] below, shared by all of them so [[configureCacheCapacity]]
+    * retunes every cache at once. These caches are process-wide singletons keyed by object identity
+    * (`SurfaceContentIdentity`, `ScreenIdentity`, `RenderSurface`) with no notion of when their key is done being
+    * useful -- the retired `WeakHashMap`s handled that by letting an entry disappear once nothing else in the app
     * referenced its key, which also kept a recycled image-pool identity or a long-lived test run's surfaces from
     * pinning cache entries forever. A `Ref`-backed `Map` cannot observe reachability the way a weak key can, so this
     * bounds growth the other safe way instead: capping each cache to its most recently *written* entries and evicting
@@ -191,11 +194,23 @@ object RendererFrameState:
     * exactly like one that has never been seen -- `drainBufferDamage`/`drainScreenDamage` report `Damage.Everything`,
     * `drawStateChanged`/`screenPaneIdsChanged` report a change, and a cached layer image simply isn't reused. So an
     * evicted-but-still-live surface costs one extra full redraw the next time it's touched, not incorrect output. 64
-    * mirrors the bound [[com.serenity.state.manager.AuthoritativeUiScene]]'s own `prepared` cache already uses for the
-    * same "no real bound, but must not grow forever" reason, comfortably above the handful of surfaces/screens a single
-    * window (or a single test) ever has live at once.
+    * (the config default, see `AppConfig.surfaceConfig.rendererFrameStateCacheCapacity`) mirrors the bound
+    * [[com.serenity.state.manager.AuthoritativeUiScene]]'s own `prepared` cache already uses for the same "no real
+    * bound, but must not grow forever" reason, comfortably above the handful of surfaces/screens a single window (or a
+    * single test) ever has live at once -- raise it if a session with many concurrently open surfaces sees avoidable
+    * extra redraws from eviction churn (#1433).
     */
-  val PerCacheCapacity: Int = 64
+  private val cacheCapacity: AtomicInteger = new AtomicInteger(64)
+
+  /** Retunes every [[BoundedRefCache]]'s capacity at once, clamped to `AppConfig`'s configured bounds. Applied once at
+    * `StateManager` construction from the loaded config, and again by `StateManagerConfigEffects` whenever
+    * `render.frame_state_cache_capacity` changes, so a session picks up a tuned value both at startup and live.
+    */
+  def configureCacheCapacity(capacity: Int): Unit =
+    cacheCapacity.set(AppConfig.clampRendererFrameStateCacheCapacity(capacity))
+
+  /** The capacity every [[BoundedRefCache]] is currently bounded to, for diagnostics and tests. */
+  def currentCacheCapacity: Int = cacheCapacity.get()
 
   /** Frame state below is kept per surface, keyed by the same [[SurfaceContentIdentity]] the damage accumulator uses:
     * what one surface drew last frame says nothing about what another one preserves, and a single slot shared by every
@@ -203,7 +218,7 @@ object RendererFrameState:
     * persistence key preserves nothing between frames, so it has no previous frame to remember and none is kept for it
     * -- it redraws in full, which is what a non-persisting surface does anyway.
     */
-  private val preparedScenes = new BoundedRefCache[SurfaceContentIdentity, PreparedScene](PerCacheCapacity)
+  private val preparedScenes = new BoundedRefCache[SurfaceContentIdentity, PreparedScene](cacheCapacity)
 
   def preparedSceneFor(surface: RenderSurface): Option[PreparedScene] =
     surface.persistentContentKey.flatMap(preparedScenes.get)
@@ -218,7 +233,7 @@ object RendererFrameState:
     * of `renderFloatingPanels` once this frame's rects are known, ready for the next frame's `planFrame` call.
     */
   private val previousFloatingSurfaceRects =
-    new BoundedRefCache[SurfaceContentIdentity, Map[SurfaceId, PixelRect]](PerCacheCapacity)
+    new BoundedRefCache[SurfaceContentIdentity, Map[SurfaceId, PixelRect]](cacheCapacity)
 
   def previousFloatingSurfaceRectsFor(key: SurfaceContentIdentity): Map[SurfaceId, PixelRect] =
     previousFloatingSurfaceRects.get(key).getOrElse(Map.empty)
@@ -236,7 +251,7 @@ object RendererFrameState:
     * known by the time `planFrame` runs, so there's no need to wait for painting to record it.
     */
   private val previousSnapshots =
-    new BoundedRefCache[SurfaceContentIdentity, Map[PaneId, TextLayoutSnapshot]](PerCacheCapacity)
+    new BoundedRefCache[SurfaceContentIdentity, Map[PaneId, TextLayoutSnapshot]](cacheCapacity)
 
   def previousSnapshotsFor(key: SurfaceContentIdentity): Map[PaneId, TextLayoutSnapshot] =
     previousSnapshots.get(key).getOrElse(Map.empty)
@@ -252,8 +267,8 @@ object RendererFrameState:
     previousSnapshots.remove(key)
     previousFloatingSurfaceRects.remove(key)
 
-  private val bufferDamage    = new BoundedRefCache[SurfaceContentIdentity, Damage](PerCacheCapacity)
-  private val bufferDrawState = new BoundedRefCache[SurfaceContentIdentity, DrawState](PerCacheCapacity)
+  private val bufferDamage    = new BoundedRefCache[SurfaceContentIdentity, Damage](cacheCapacity)
+  private val bufferDrawState = new BoundedRefCache[SurfaceContentIdentity, DrawState](cacheCapacity)
 
   /** Which screen each tracked buffer identity was last drawn for, so [[accumulateBufferDamage]] only folds a frame's
     * damage into buffers that actually belong to the same screen -- e.g. the same `SwingWindow`'s own two pooled
@@ -263,13 +278,13 @@ object RendererFrameState:
     * render session -- another window, or another independent `render` call in the same process -- would otherwise have
     * its damage silently mixed into this one's, and vice versa.
     */
-  private val bufferScreen = new BoundedRefCache[SurfaceContentIdentity, ScreenIdentity](PerCacheCapacity)
+  private val bufferScreen = new BoundedRefCache[SurfaceContentIdentity, ScreenIdentity](cacheCapacity)
 
   /** Distinct from [[bufferDamage]] because base images alternate: the pixels a surface preserves come from two frames
     * ago, while the screen shows the last one published.
     */
-  private val screenDamage  = new BoundedRefCache[ScreenIdentity, Damage](PerCacheCapacity)
-  private val screenPaneIds = new BoundedRefCache[ScreenIdentity, Set[PaneId]](PerCacheCapacity)
+  private val screenDamage  = new BoundedRefCache[ScreenIdentity, Damage](cacheCapacity)
+  private val screenPaneIds = new BoundedRefCache[ScreenIdentity, Set[PaneId]](cacheCapacity)
 
   /** Keyed by the [[RenderSurface]] a frame was painted onto, exactly like [[bufferScreen]] above and for the same
     * reason: a single JVM-wide slot would let one surface's cached modal image leak into another surface's frame --
@@ -277,7 +292,7 @@ object RendererFrameState:
     * render session in the same process, tests included, since these caches are process-wide singletons every suite
     * shares.
     */
-  private val modalLayerBuffers = new BoundedRefCache[RenderSurface, CachedModalLayer](PerCacheCapacity)
+  private val modalLayerBuffers = new BoundedRefCache[RenderSurface, CachedModalLayer](cacheCapacity)
 
   def cachedModalLayerFor(surface: RenderSurface): Option[CachedModalLayer] = modalLayerBuffers.get(surface)
 
@@ -291,7 +306,7 @@ object RendererFrameState:
     * rendered surfaces that happen to reuse the same `SurfaceId` (unremarkable: tests across many specs all use
     * `SurfaceId("outline")`) stomp on each other's cached panel image.
     */
-  private val panelLayerBuffers = new BoundedRefCache[RenderSurface, Map[SurfaceId, CachedPanelLayer]](PerCacheCapacity)
+  private val panelLayerBuffers = new BoundedRefCache[RenderSurface, Map[SurfaceId, CachedPanelLayer]](cacheCapacity)
 
   def cachedPanelLayersFor(surface: RenderSurface): Map[SurfaceId, CachedPanelLayer] =
     panelLayerBuffers.get(surface).getOrElse(Map.empty)

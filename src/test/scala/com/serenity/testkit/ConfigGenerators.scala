@@ -265,6 +265,10 @@ object ConfigGenerators:
       width         <- genViewportAxisSizing
       height        <- genViewportAxisSizing
       infoBarAlpha  <- Gen.option(double(0.0, 1.0))
+      frameStateCacheCapacity <- Gen.choose(
+        AppConfig.MinRendererFrameStateCacheCapacity,
+        AppConfig.MaxRendererFrameStateCacheCapacity
+      )
     yield SurfaceConfig(
       showLineNumbers = lineNumbers,
       showGutter = gutter,
@@ -291,7 +295,8 @@ object ConfigGenerators:
       renderDamageGranularity = damage,
       textAreaInsets = insets,
       viewportSizing = ViewportSizing(width, height),
-      cursorInfoBarBackgroundAlpha = infoBarAlpha
+      cursorInfoBarBackgroundAlpha = infoBarAlpha,
+      rendererFrameStateCacheCapacity = frameStateCacheCapacity
     )
 
   /** The material settings, applied through the setters for the same reason as the motion ones: choosing a blur or a

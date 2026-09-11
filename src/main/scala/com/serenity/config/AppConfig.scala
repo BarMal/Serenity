@@ -188,6 +188,9 @@ final case class AppConfig(
   def withContextualToolbarDisplayMode(mode: ToolbarDisplayMode): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(contextualToolbarDisplayMode = mode))
 
+  def withRendererFrameStateCacheCapacity(capacity: Int): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(rendererFrameStateCacheCapacity = capacity))
+
   // #1316: re-assigning a setting its own current value is not customising it -- flip the preset only when the value
   // actually changes, so putting back what was already there is a no-op.
   def withBlurRadius(r: Float): AppConfig =
@@ -360,6 +363,10 @@ object AppConfig:
   // multi-second) values; 200 (the default, matching `ModifierTapDetector.WindowMillis`) sits well inside it.
   val MinCommandRunnerCursorPeekTapWindowMillis: Long = 50L
   val MaxCommandRunnerCursorPeekTapWindowMillis: Long = 2000L
+  // Lower bound keeps RendererFrameState's caches usefully sized even at their floor; upper bound is a sanity
+  // ceiling against a fat-fingered config value, not a meaningful capacity anyone would actually want (see #1433).
+  val MinRendererFrameStateCacheCapacity: Int = 8
+  val MaxRendererFrameStateCacheCapacity: Int = 4096
 
   def clampElementTransitionSpeedScale(scale: Double): Double =
     scale.max(MinElementTransitionSpeedScale).min(MaxElementTransitionSpeedScale)
@@ -393,6 +400,9 @@ object AppConfig:
 
   def clampCommandRunnerCursorPeekTapWindowMillis(millis: Long): Long =
     millis.max(MinCommandRunnerCursorPeekTapWindowMillis).min(MaxCommandRunnerCursorPeekTapWindowMillis)
+
+  def clampRendererFrameStateCacheCapacity(capacity: Int): Int =
+    capacity.max(MinRendererFrameStateCacheCapacity).min(MaxRendererFrameStateCacheCapacity)
 
   def scaledAnimation(animation: Option[AnimationConfig], speedScale: Double): Option[AnimationConfig] =
     animation.flatMap(_.scaledBy(clampElementTransitionSpeedScale(speedScale)))

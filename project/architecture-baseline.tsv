@@ -6,7 +6,7 @@
 # Columns: path <TAB> detail <TAB> measured
 main/scala/com/serenity/app/AppRuntime.scala	file length	793
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	133
-main/scala/com/serenity/config/ConfigRegistry.scala	file length	668
+main/scala/com/serenity/config/ConfigRegistry.scala	file length	680
 main/scala/com/serenity/state/models/ContextualToolbarState.scala	method proseItems	173
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	file length	655
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method submitSubmenu	104
@@ -23,7 +23,7 @@ test/scala/com/serenity/CommandRunnerCoreCommandsSpec.scala	file length	1859
 test/scala/com/serenity/CommandRunnerFloatingRenderingSpec.scala	file length	754
 test/scala/com/serenity/CommandRunnerReducerSpec.scala	file length	1514
 test/scala/com/serenity/CommandRunnerSpec.scala	file length	1121
-test/scala/com/serenity/ConfigManagerSpec.scala	file length	1402
+test/scala/com/serenity/ConfigManagerSpec.scala	file length	1416
 test/scala/com/serenity/ContextualToolbarSpec.scala	file length	1283
 test/scala/com/serenity/EditorBehaviorSpec.scala	file length	603
 test/scala/com/serenity/EditorEventReducerSpec.scala	file length	2296

@@ -756,6 +756,20 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     ConfigManager.configToString(config) should include("ui.corner_radius = 14")
   }
 
+  it should "load and write the renderer frame-state cache capacity" in {
+    val configFile = Files.createTempFile("serenity-render-frame-state-cache-capacity-config", ".conf")
+    Files.writeString(
+      configFile,
+      """render.frame_state_cache_capacity = 128
+        |""".stripMargin
+    )
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.surfaceConfig.rendererFrameStateCacheCapacity shouldBe 128
+    ConfigManager.configToString(config) should include("render.frame_state_cache_capacity = 128")
+  }
+
   it should "load and write UI outline thickness" in {
     val configFile = Files.createTempFile("serenity-ui-outline-thickness-config", ".conf")
     Files.writeString(
