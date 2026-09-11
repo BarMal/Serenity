@@ -15,8 +15,8 @@ object TextEditing:
     text.substring(0, boundary) + text.substring(text.length)
 
   def deleteWordForward(text: String): String =
-    val boundary = nextWordBoundary(text, text.length)
-    text.substring(0, text.length) + text.substring(boundary)
+    val boundary = nextWordBoundary(text, 0)
+    text.substring(0, 0) + text.substring(boundary)
 
   def previousWordBoundary(text: String, cursor: Int): Int =
     previousWordBoundary(StringCharacterSource(text), cursor)

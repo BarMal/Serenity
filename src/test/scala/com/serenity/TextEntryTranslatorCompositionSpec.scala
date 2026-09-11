@@ -149,6 +149,18 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
     a[MatchError] should be thrownBy converter(unmatched)
   }
 
+  it should "resolve a local keymap trigger bound to two actions in favor of the first-listed action" in {
+    val trigger = com.serenity.config.HotkeyTrigger(InputKey.PageDown, None, Set.empty)
+    val converter = LocalKeymapConverters.converter(
+      Map(
+        EditorKeyAction.PageDown -> List(trigger),
+        EditorKeyAction.Escape   -> List(trigger)
+      )
+    )
+
+    converter(KeyStrokeInfo(InputKey.PageDown, None, Set.empty)) shouldBe PageDown
+  }
+
   it should "leave unmatched text hotkey partial functions undefined" in {
     val converter = TextHotkeyConverters.hotkeyConverter()
     // F2 rather than F1: F1 is now bound to Toggle Shortcuts Help (issue #1247) by default, so it is no longer an

@@ -20,9 +20,11 @@ Compile / scalacOptions ++= Seq(
   // 4 non-exhaustive matches, 2 potential-issue, 1 deprecation. That backlog is gone: a clean compile now reports
   // zero warnings, so -Werror holds a line already reached rather than demanding a migration first.
   //
-  // One consequence to know: the wart traversers below are still split into errors and warnings, but under -Werror
-  // that split now only changes the message, not the outcome. The four "warning" warts are at zero violations, so
-  // per the staging policy documented there they are candidates to move up to wartremoverErrors outright.
+  // One consequence to know: under -Werror, whether a wart is registered as an error or a warning only changes the
+  // message, not the outcome -- both fail the build. The four warts that used to be staged as warnings (#1449:
+  // Wart.Null, Wart.Throw, Wart.OptionPartial, Wart.IterableOps) have since been promoted to wartremoverErrors
+  // outright, once an audit confirmed their only usage sits inside the packages wartremoverExcluded already drops
+  // from wart checking entirely.
   "-Werror"
 )
 
@@ -66,23 +68,23 @@ lazy val root = (project in file("."))
       // Cleared during this change: the remaining casts were replaced by type ascription, and the
       // isInstanceOf checks by named pattern-matching predicates.
       Wart.AsInstanceOf,
-      Wart.IsInstanceOf
-    ),
-    // Reported but not failing. Each needs its own migration and is tracked separately; null and throw
-    // are concentrated in Swing/AWT interop and the richtext/LSP parsers, which
-    // docs/coding-standards.md already treats as the outermost boundary.
-    //
-    // Deliberately absent: Wart.MutableDataStructures. It flags StringBuilder, which
-    // docs/coding-standards.md explicitly permits ("Private local mutation is acceptable when it is
-    // contained and earns its place, for example StringBuilder during rendering or rope traversal").
-    // 31 of its 33 hits here are exactly that sanctioned use, so the wart would fight the standard
-    // rather than enforce it. Contained mutation is already governed by DisableSyntax.noVars.
-    Compile / wartremoverWarnings ++= Seq(
+      Wart.IsInstanceOf,
+      // Promoted from wartremoverWarnings (#1449): an audit confirmed all current usage of these four
+      // patterns is concentrated in the four packages listed in wartremoverExcluded below. That exclusion
+      // list is a file-level filter applied ahead of severity -- it drops those sources from wart checking
+      // entirely, for both wartremoverErrors and wartremoverWarnings alike -- so promoting these warts to
+      // Errors does not touch the legitimate interop code in those packages; it only turns on enforcement
+      // everywhere else, where the audit found zero violations.
       Wart.Null,
       Wart.Throw,
       Wart.OptionPartial,
       Wart.IterableOps
     ),
+    // Deliberately absent from both wartremoverErrors and wartremoverWarnings: Wart.MutableDataStructures. It flags
+    // StringBuilder, which docs/coding-standards.md explicitly permits ("Private local mutation is acceptable when
+    // it is contained and earns its place, for example StringBuilder during rendering or rope traversal"). The large
+    // majority of hits here are exactly that sanctioned use, so the wart would fight the standard rather than
+    // enforce it. Contained mutation is already governed by DisableSyntax.noVars.
     // Tests are exempt, the same way Test / scalacOptions already drops the -W flags above. Test code
     // legitimately uses casts, throws and partial access to build failure fixtures and to assert on
     // representation invariants -- RopeSpec, for instance, subclasses Leaf to prove that search never

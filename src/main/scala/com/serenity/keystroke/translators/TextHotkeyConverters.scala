@@ -1,6 +1,6 @@
 package com.serenity.keystroke.translators
 
-import com.serenity.config.{AppConfig, HotkeyAction, HotkeyConfig}
+import com.serenity.config.{AppConfig, HotkeyAction, HotkeyConfig, HotkeyTrigger}
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.*
 
@@ -43,5 +43,14 @@ object TextHotkeyConverters:
           val bindings =
             actionEvents.flatMap((action, event) => config.inputConfig.hotkeyConfig.bindingsFor(action).map(_ -> event))
 
-          Function.unlift(info => bindings.collectFirst { case (trigger, event) if trigger.matches(info) => event })
+          // `HotkeyTrigger` is an exact-match key (see `HotkeyTrigger.matches`), so a `Map` gives O(1) dispatch in
+          // place of the O(n) `collectFirst` scan this used to do per keystroke (issue #1465). Built with `foldLeft`
+          // rather than a plain `.toMap` so that, on the rare conflicting binding, the first one encountered in
+          // `bindings` wins -- matching `collectFirst`'s original first-match-wins behavior -- instead of `.toMap`'s
+          // last-write-wins.
+          val lookup = bindings.foldLeft(Map.empty[HotkeyTrigger, Event]) { case (acc, (trigger, event)) =>
+            if acc.contains(trigger) then acc else acc + (trigger -> event)
+          }
+
+          Function.unlift(lookup.get)
       )

@@ -542,10 +542,26 @@ object Rope:
 
     loop(0, inWord = false, 0)
 
-  // Normalizes CRLF and bare CR to LF on entry so all downstream code
+  // Normalizes CRLF and bare CR to LF on entry, in one pass, so all downstream code
   // (WrapEngine, RenderEngine, cursor arithmetic) only ever sees '\n'.
   def apply(in: String)(using balance: Balance): Rope =
-    build(in.replace("\r\n", "\n").replace("\r", "\n"))
+    build(normalizeLineEndings(in))
+
+  private def normalizeLineEndings(in: String): String =
+    if !in.exists(c => c == '\r' || c == '\n') then in
+    else
+      @tailrec
+      def loop(index: Int, acc: StringBuilder): String =
+        if index >= in.length then acc.toString
+        else
+          val char = in.charAt(index)
+          if char == '\r' then
+            acc.append('\n')
+            val skipsFollowingLf = index + 1 < in.length && in.charAt(index + 1) == '\n'
+            loop(if skipsFollowingLf then index + 2 else index + 1, acc)
+          else loop(index + 1, acc.append(char))
+
+      loop(0, new StringBuilder(in.length))
 
   /** Rebuilds a rope over leaf strings that are already in hand.
     *

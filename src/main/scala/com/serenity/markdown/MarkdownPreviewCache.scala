@@ -10,6 +10,18 @@ import com.serenity.ui.theme.Theme
 /** Bounded render caches backing [[MarkdownDocumentPreview]], split out so the rendering logic itself isn't buried
   * under cache bookkeeping. Every cache here is a plain size-bounded LRU (`LinkedHashMap` in access-order mode), keyed
   * on a fingerprint of its input rather than the input itself, so repeated renders of unchanged content are free.
+  *
+  * `LinkedHashMap` + `synchronized` rather than `Ref[IO, ...]`: every reader/writer of these maps
+  * (`MarkdownDocumentPreview.renderHtmlFragment`/`renderImage`/`renderInlineImage`) is a plain synchronous `def`
+  * called from the renderer's paint path (`RendererFloatingPanels`, `TuiRuntime`), not from inside an IO fiber, so a
+  * `Ref`-backed cache would just have every call site force its `IO` via `unsafeRunSync` right back into the
+  * synchronous signature these callers need -- hiding a plain mutable map behind an effect type nothing here ever
+  * suspends on. This is the same tradeoff already settled for
+  * [[com.serenity.ui.renderer.RendererFrameState.BoundedRefCache]] (#1431/#1434) and `ThemeManager`'s highlight/lex
+  * caches (#1412/#1431/#1434). Unlike those two `AtomicReference`-backed caches, each map here is mutated in place
+  * rather than swapped by reference (there is no immutable snapshot to compare-and-set between), so `synchronized`
+  * around each `get`/`put` is the direct equivalent for a mutable `LinkedHashMap` -- the critical sections are short,
+  * so contention is not a concern in this rendering hot path.
   */
 private[markdown] object MarkdownPreviewCache:
 
