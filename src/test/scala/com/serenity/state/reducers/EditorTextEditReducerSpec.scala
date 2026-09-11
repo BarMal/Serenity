@@ -1,7 +1,7 @@
 package com.serenity.state.reducers
 
 import com.serenity.keystroke.events.*
-import com.serenity.rope.{Balance, Rope}
+import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
@@ -9,8 +9,8 @@ import org.scalatest.matchers.should.Matchers
 
 /** Dedicated coverage for `EditorTextEditReducer` (#1442), focused on behavior specific to this module rather than
   * re-asserting the multi-cursor/multi-selection dispatch already covered end-to-end by `EditorEventReducerSpec`:
-  * `ReverseTabKey`'s per-line unindent rule (`unindentLine`), and the "nothing to do" cases that must leave the buffer
-  * and undo stack untouched rather than recording a no-op edit.
+  * `ReverseTabKey`'s per-line unindent rule (`unindentLine`), the "nothing to do" cases that must leave the undo
+  * stack untouched, and the selection-takes-precedence rule the four deletion events share.
   */
 class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
@@ -20,7 +20,8 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
   private val paneId   = PaneId(0)
 
   private def stateWith(text: String, cursor: CursorPosition, selection: Option[Selection] = None): AppState =
-    val buffer = Buffer.fromString(bufferId, text).copy(editing = EditingState(cursors = List(cursor), selection = selection))
+    val buffer =
+      Buffer.fromString(bufferId, text).copy(editing = EditingState(cursors = List(cursor), selection = selection))
     AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
 
   private def bufferAfter(event: TextEntryEvent, state: AppState): Buffer =
@@ -101,20 +102,35 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
     after.editing.cursors shouldBe List(CursorPosition(0, 2))
   }
 
-  "DeleteWordBackward without a selection" should "clear any stale selection state alongside deleting the word" in {
+  /** All four deletion events share one selection arm (`deleteSelectedRanges`) ahead of their own without-a-selection
+    * logic -- an active selection means "delete the selection", never "also delete a word/character on top of it".
+    */
+  "DeleteWordBackward with an active selection" should "delete the selection rather than a word before it" in {
     val before = stateWith(
       "alpha beta",
       CursorPosition(0, 10),
-      selection = Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
+      selection = Some(Selection(CursorPosition(0, 8), CursorPosition(0, 10)))
     )
 
     val after = bufferAfter(DeleteWordBackward, before)
-    after.document.content.collect() shouldBe "alpha "
+    after.document.content.collect() shouldBe "alpha be"
     after.editing.selection shouldBe None
-    after.editing.selections shouldBe Nil
   }
 
-  "An event this reducer does not own" should "leave the buffer untouched" in {
-    val before = stateWith("abc", CursorPosition(0, 1))
+  "DeleteWordForward with an active selection" should "delete the selection rather than a word after it" in {
+    val before = stateWith(
+      "alpha beta",
+      CursorPosition(0, 0),
+      selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 2)))
+    )
 
-    EditorTextEditReducer.reduce(MoveRight, EditorCursorSupport.contextFor(paneId, before, before.persisted.buffers(bufferId)).value)
+    val after = bufferAfter(DeleteWordForward, before)
+    after.document.content.collect() shouldBe "pha beta"
+    after.editing.selection shouldBe None
+  }
+
+  "DeleteWordBackward without a selection" should "leave the buffer untouched at the start of the document" in {
+    val before = stateWith("alpha", CursorPosition(0, 0))
+
+    bufferAfter(DeleteWordBackward, before).document.content.collect() shouldBe "alpha"
+  }
