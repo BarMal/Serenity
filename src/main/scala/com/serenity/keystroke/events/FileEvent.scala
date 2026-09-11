@@ -2,7 +2,6 @@ package com.serenity.keystroke.events
 
 import java.nio.file.Path
 
-/** Events related to file operations */
 sealed trait FileEvent
 
 case object OpenFile                    extends FileEvent
