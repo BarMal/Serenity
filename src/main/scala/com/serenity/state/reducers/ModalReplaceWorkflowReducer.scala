@@ -14,26 +14,28 @@ private[reducers] object ModalReplaceWorkflowReducer:
 
   def reduce(event: ModalInputEvent, currentState: AppState): ReducerResult =
     event match
-      case ModalDismiss                    => ReducerResult.noEffects(dismissToPane(currentState))
-      case ModalInsertChar(char)           => handleInsertChar(currentState, char)
-      case ModalDeleteBackward             => handleDeleteBackward(currentState)
-      case ModalDeleteForward              => handleDeleteForward(currentState)
-      case ModalDeleteWordBackward         => handleDeleteWordBackward(currentState)
-      case ModalDeleteWordForward          => handleDeleteWordForward(currentState)
-      case ModalNextField                  => handleNextField(currentState)
-      case ModalPreviousField              => handlePreviousField(currentState)
-      case ModalNavigate(Direction.Left)   => handleNavigateLeft(currentState)
-      case ModalNavigate(Direction.Right)  => handleNavigateRight(currentState)
-      case ModalNavigate(Direction.Up)     => handleNavigateUp(currentState)
-      case ModalNavigate(Direction.Down)   => handleNavigateDown(currentState)
-      case ModalSubmit                     => handleSubmit(currentState)
-      case ModalClick(focusId, actionId)   => handleClick(currentState, focusId, actionId)
-      case _                               => ReducerResult.noEffects(currentState)
+      case ModalDismiss                   => ReducerResult.noEffects(dismissToPane(currentState))
+      case ModalInsertChar(char)          => handleInsertChar(currentState, char)
+      case ModalDeleteBackward            => handleDeleteBackward(currentState)
+      case ModalDeleteForward             => handleDeleteForward(currentState)
+      case ModalDeleteWordBackward        => handleDeleteWordBackward(currentState)
+      case ModalDeleteWordForward         => handleDeleteWordForward(currentState)
+      case ModalNextField                 => handleNextField(currentState)
+      case ModalPreviousField             => handlePreviousField(currentState)
+      case ModalNavigate(Direction.Left)  => handleNavigateLeft(currentState)
+      case ModalNavigate(Direction.Right) => handleNavigateRight(currentState)
+      case ModalNavigate(Direction.Up)    => handleNavigateUp(currentState)
+      case ModalNavigate(Direction.Down)  => handleNavigateDown(currentState)
+      case ModalSubmit                    => handleSubmit(currentState)
+      case ModalClick(focusId, actionId)  => handleClick(currentState, focusId, actionId)
+      case _                              => ReducerResult.noEffects(currentState)
 
   /** The common shape shared by every field/scope/action-editing branch: apply `f` to the active workflow and refresh
     * its replace preview.
     */
-  private def withWorkflowUpdate(currentState: AppState)(f: ReplaceWorkflowState => ReplaceWorkflowState): ReducerResult =
+  private def withWorkflowUpdate(
+    currentState: AppState
+  )(f: ReplaceWorkflowState => ReplaceWorkflowState): ReducerResult =
     currentModal(currentState) match
       case Some((id, Modal.ReplaceWorkflow(workflow))) =>
         ReducerResult.noEffects(updateReplaceWorkflow(currentState, id, f(workflow)))
