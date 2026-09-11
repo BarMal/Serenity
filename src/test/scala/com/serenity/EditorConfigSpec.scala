@@ -30,7 +30,6 @@ class EditorConfigSpec extends AnyFlatSpec with Matchers:
         "character_animation"             -> "character.animation.preset",
         "character_animation_duration_ms" -> "character.animation.duration_ms",
         "font_code_family"                -> "font.code.family",
-        "font_size"                       -> "font.code.size and font.text.size",
         "font_ui_ligatures"               -> "font.ui.ligatures"
       )
     )

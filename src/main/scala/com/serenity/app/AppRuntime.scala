@@ -13,11 +13,11 @@ import com.serenity.config.{AppConfig, CursorMode, MotionFamily, RenderFpsTarget
 import com.serenity.diagnostics.Trace
 import com.serenity.input.*
 import com.serenity.keystroke.KeyboardFidelityTier
-import com.serenity.keystroke.events.{Event, UnhandledEvent}
+import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
 import com.serenity.state.manager.*
-import com.serenity.state.models.{AppState, BufferId, Damage, Focus}
+import com.serenity.state.models.{AppState, BufferId, Damage}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import com.serenity.ui.theme.ColorFormat.withAlpha
@@ -303,7 +303,9 @@ object AppRuntime:
     superviseLoop("input loop", stateManager.runtimeLifecycle.forceQuit)(
       inputHandler.eventStream
         .evalTap(event =>
-          stateManager.getCurrentState.flatMap(s => logSelectiveEvents(event, s.persisted.focus, logger))
+          stateManager.getCurrentState.flatMap(s =>
+            AppRuntimeLogging.logSelectiveEvents(event, s.persisted.focus, logger)
+          )
         )
         .through(inputFunnel)
         .interruptWhen(quitSignal)
@@ -720,44 +722,6 @@ object AppRuntime:
     paintDamage == Damage.Nothing &&
       state.runtime.windowSitter.isActive &&
       !needsFullContentRender(state, bufferAnimations)
-
-  private def logSelectiveEvents(
-    event: Event,
-    currentFocus: Focus,
-    logger: Logger[IO]
-  ): IO[Unit] =
-    event match
-      case unhandled: UnhandledEvent[?] if !isSystemEvent(unhandled) =>
-        logger.warn(s"[UNHANDLED] $event")
-      case _: UnhandledEvent[?] =>
-        logger.debug(s"[SYSTEM] $event")
-      case _ if shouldLogFocusChange(event) =>
-        logger.debug(s"[FOCUS] Event: $event, Focus: $currentFocus")
-      case _ => IO.unit
-
-  private def shouldLogFocusChange(event: Event): Boolean =
-    event match
-      case com.serenity.keystroke.events.MoveUp         => false
-      case com.serenity.keystroke.events.MoveDown       => false
-      case com.serenity.keystroke.events.MoveLeft       => false
-      case com.serenity.keystroke.events.MoveRight      => false
-      case com.serenity.keystroke.events.InsertChar(_)  => false
-      case com.serenity.keystroke.events.DeleteBackward => false
-      case com.serenity.keystroke.events.DeleteForward  => false
-      case _                                            => true
-
-  private def isSystemEvent(event: UnhandledEvent[?]): Boolean =
-    import com.serenity.keystroke.InputKey
-    event.info.keyType match
-      case InputKey.EOF     => false
-      case InputKey.Unknown => true
-      case InputKey.Character =>
-        event.info.character.exists { char =>
-          char.toInt == 0 ||
-          char.toInt == 4 ||
-          char.toInt == 26
-        }
-      case _ => false
 
   private[serenity] def describeStateForDiagnostics(state: AppState): String =
     val viewport   = state.runtime.viewportSize.map(size => s"${size.width}x${size.height}").getOrElse("unknown")

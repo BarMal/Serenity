@@ -421,97 +421,112 @@ object CommandRunnerReducer:
             val page = surface.current
             runner.focusedSubmenuItems.lift(runner.settingsSurfaceSelectedIndex) match
               case Some(item: CommandSurfaceItem.InputItem) if page.editingItemId.isEmpty && item.acceptsBindingText =>
-                ReducerResult.noEffects(
-                  replaceRunner(
-                    state,
-                    r =>
-                      r.beginSubmenuRecording(item.id).copy(statusMessage = Some("Press a key or shortcut to assign"))
-                  )
-                )
+                beginBindingCapture(state, item)
               case Some(_: CommandSurfaceItem.InputItem) if page.editingItemId.isEmpty =>
                 ReducerResult.noEffects(state)
               case Some(item: CommandSurfaceItem.InputItem)
                   if page.recording.flatMap(_.pendingGlobalHotkeyConflict).nonEmpty =>
-                page.recording.flatMap(_.pendingGlobalHotkeyConflict).fold(ReducerResult.noEffects(state)) {
-                  case (action, binding) =>
-                    ReducerResult(
-                      state = replaceRunner(
-                        state,
-                        r => r.clearSubmenuEditingAndRecording.copy(statusMessage = None)
-                      ),
-                      effects = List(
-                        AppEffect.ExecuteCommand(
-                          Command.typed(
-                            item.id,
-                            item.label,
-                            CommandIntent.Keybindings(KeybindingsIntent.ResolveGlobalHotkeyConflict(action, binding)),
-                            item.category
-                          )
-                        )
-                      )
-                    )
-                }
+                resolveGlobalHotkeyConflict(state, item, page)
               case Some(item: CommandSurfaceItem.InputItem)
                   if page.recording.flatMap(_.pendingFocusedKeymapConflict).nonEmpty =>
-                page.recording.flatMap(_.pendingFocusedKeymapConflict).fold(ReducerResult.noEffects(state)) {
-                  case (itemId, binding) =>
-                    ReducerResult(
-                      state = replaceRunner(
-                        state,
-                        r => r.clearSubmenuEditingAndRecording.copy(statusMessage = None)
-                      ),
-                      effects = List(
-                        AppEffect.ExecuteCommand(
-                          Command.typed(
-                            item.id,
-                            item.label,
-                            CommandIntent.Keybindings(KeybindingsIntent.ResolveFocusedKeymapConflict(itemId, binding)),
-                            item.category
-                          )
-                        )
-                      )
-                    )
-                }
+                resolveFocusedKeymapConflict(state, item, page)
               case Some(item: CommandSurfaceItem.InputItem) =>
-                item.parse(page.draftText) match
-                  case Some(intent) =>
-                    ReducerResult(
-                      state = replaceRunner(
-                        state,
-                        r => r.clearSubmenuEditingAndRecording.copy(statusMessage = None)
-                      ),
-                      effects =
-                        List(AppEffect.ExecuteCommand(Command.typed(item.id, item.label, intent, item.category)))
-                    )
-                  case None =>
-                    ReducerResult.noEffects(
-                      replaceRunner(
-                        state,
-                        _.copy(statusMessage = Some(invalidInputMessage(item, page.draftText)))
-                      )
-                    )
+                submitSubmenuInputValue(state, item, page)
               case Some(option: CommandSurfaceItem.OptionItem) =>
-                option.selectedIntent match
-                  case Some(intent) =>
-                    ReducerResult(
-                      state = state,
-                      effects =
-                        List(AppEffect.ExecuteCommand(Command.typed(option.id, option.label, intent, option.category)))
-                    )
-                  case None =>
-                    ReducerResult.noEffects(state)
+                submitSubmenuOption(state, option)
               case Some(CommandSurfaceItem.CommandItem(command)) =>
-                // #1298: a command marked `keepMenuOpenOnSubmit` (the info bar segment movers) leaves the submenu
-                // open at its current position, exactly like the `OptionItem` cycle case just above -- only an
-                // ordinary command still closes the whole overlay.
-                ReducerResult(
-                  state = if command.keepMenuOpenOnSubmit then state else deactivate(state),
-                  effects = List(AppEffect.ExecuteCommand(command))
-                )
+                submitSubmenuCommand(state, command)
               case Some(_: CommandSurfaceItem.GroupItem) =>
                 ReducerResult.noEffects(replaceRunner(state, _.enterSelectedSubmenuGroup))
               case _ =>
                 ReducerResult.noEffects(state)
+
+  private def beginBindingCapture(state: AppState, item: CommandSurfaceItem.InputItem): ReducerResult =
+    ReducerResult.noEffects(
+      replaceRunner(
+        state,
+        r => r.beginSubmenuRecording(item.id).copy(statusMessage = Some("Press a key or shortcut to assign"))
+      )
+    )
+
+  private def resolveGlobalHotkeyConflict(
+    state: AppState,
+    item: CommandSurfaceItem.InputItem,
+    page: SettingsPage
+  ): ReducerResult =
+    page.recording.flatMap(_.pendingGlobalHotkeyConflict).fold(ReducerResult.noEffects(state)) {
+      case (action, binding) =>
+        ReducerResult(
+          state = replaceRunner(state, r => r.clearSubmenuEditingAndRecording.copy(statusMessage = None)),
+          effects = List(
+            AppEffect.ExecuteCommand(
+              Command.typed(
+                item.id,
+                item.label,
+                CommandIntent.Keybindings(KeybindingsIntent.ResolveGlobalHotkeyConflict(action, binding)),
+                item.category
+              )
+            )
+          )
+        )
+    }
+
+  private def resolveFocusedKeymapConflict(
+    state: AppState,
+    item: CommandSurfaceItem.InputItem,
+    page: SettingsPage
+  ): ReducerResult =
+    page.recording.flatMap(_.pendingFocusedKeymapConflict).fold(ReducerResult.noEffects(state)) {
+      case (itemId, binding) =>
+        ReducerResult(
+          state = replaceRunner(state, r => r.clearSubmenuEditingAndRecording.copy(statusMessage = None)),
+          effects = List(
+            AppEffect.ExecuteCommand(
+              Command.typed(
+                item.id,
+                item.label,
+                CommandIntent.Keybindings(KeybindingsIntent.ResolveFocusedKeymapConflict(itemId, binding)),
+                item.category
+              )
+            )
+          )
+        )
+    }
+
+  private def submitSubmenuInputValue(
+    state: AppState,
+    item: CommandSurfaceItem.InputItem,
+    page: SettingsPage
+  ): ReducerResult =
+    item.parse(page.draftText) match
+      case Some(intent) =>
+        ReducerResult(
+          state = replaceRunner(state, r => r.clearSubmenuEditingAndRecording.copy(statusMessage = None)),
+          effects = List(AppEffect.ExecuteCommand(Command.typed(item.id, item.label, intent, item.category)))
+        )
+      case None =>
+        ReducerResult.noEffects(
+          replaceRunner(state, _.copy(statusMessage = Some(invalidInputMessage(item, page.draftText))))
+        )
+
+  private def submitSubmenuOption(state: AppState, option: CommandSurfaceItem.OptionItem): ReducerResult =
+    option.selectedIntent match
+      case Some(intent) =>
+        ReducerResult(
+          state = state,
+          effects = List(AppEffect.ExecuteCommand(Command.typed(option.id, option.label, intent, option.category)))
+        )
+      case None =>
+        ReducerResult.noEffects(state)
+
+  // #1298: a command marked `keepMenuOpenOnSubmit` (the info bar segment movers) leaves the submenu open at its
+  // current position, exactly like `submitSubmenuOption`'s cycle case above -- only an ordinary command still
+  // closes the whole overlay.
+  private def submitSubmenuCommand(state: AppState, command: Command): ReducerResult =
+    ReducerResult(
+      state = if command.keepMenuOpenOnSubmit then state else deactivate(state),
+      effects = List(AppEffect.ExecuteCommand(command))
+    )
 
   private def invalidInputMessage(item: CommandSurfaceItem.InputItem, text: String): String =
     val value = if text.trim.isEmpty then "<empty>" else text

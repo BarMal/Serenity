@@ -303,34 +303,7 @@ object ContextualToolbar:
     val currentFontSize  = style.fontSize.getOrElse(state.persisted.config.editorConfig.fontConfig.textFontSize)
     val currentColor     = normalizedColor(style.color)
     val currentColorText = currentColor.getOrElse("#202020")
-    val familyOptions = normalizedFontFamilies(currentFamily).map(family =>
-      CommandOption(family, CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily(family)))
-    )
-    val familyIndex = familyOptions.indexWhere(_.label.equalsIgnoreCase(currentFamily)) match
-      case -1    => 0
-      case index => index
-    val colorOptions = normalizedColorOptions(currentColor).map {
-      case (label, color) =>
-        CommandOption(label, CommandIntent.RichText(RichTextIntent.SetRichTextColor(color)))
-    }
-    val colorIndex =
-      colorOptions.indexWhere(
-        _.intent == CommandIntent.RichText(RichTextIntent.SetRichTextColor(currentColorText))
-      ) match
-        case -1    => 0
-        case index => index
-    val paragraphRole = paragraph.map(_.role).getOrElse(ParagraphRole.Body)
-    val paragraphRoleOptions =
-      CommandOption("Body", CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Body))) ::
-        (1 to 6).toList.map(level =>
-          CommandOption(
-            s"H$level",
-            CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Heading(level)))
-          )
-        )
-    val paragraphRoleIndex = paragraphRole match
-      case ParagraphRole.Body           => 0
-      case ParagraphRole.Heading(level) => level.max(1).min(paragraphRoleOptions.length - 1)
+    val paragraphRole    = paragraph.map(_.role).getOrElse(ParagraphRole.Body)
 
     List(
       ContextualToolbarItem.Button(
@@ -353,7 +326,50 @@ object ContextualToolbar:
         "underline",
         "\ue765",
         selected = style.marks.contains(InlineMark.Underline)
-      ),
+      )
+    ) ++ fontFamilyItems(currentFamily, currentFontSize)
+      ++ colorItems(currentColor, currentColorText)
+      ++ paragraphRoleItems(paragraphRole)
+      ++ List(
+        ContextualToolbarItem.Button(
+          "align-left",
+          "Left",
+          "align-left",
+          "\ue236",
+          selected = paragraph.exists(_.alignment == ParagraphAlignment.Left)
+        ),
+        ContextualToolbarItem.Button(
+          "align-center",
+          "Center",
+          "align-center",
+          "\ue234",
+          selected = paragraph.exists(_.alignment == ParagraphAlignment.Center)
+        ),
+        ContextualToolbarItem.Button(
+          "align-right",
+          "Right",
+          "align-right",
+          "\ue237",
+          selected = paragraph.exists(_.alignment == ParagraphAlignment.Right)
+        ),
+        ContextualToolbarItem.Button(
+          "align-justify",
+          "Justify",
+          "align-justify",
+          "\ue235",
+          selected = paragraph.exists(_.alignment == ParagraphAlignment.Justify)
+        )
+      )
+
+  private def fontFamilyItems(currentFamily: String, currentFontSize: Float): List[ContextualToolbarItem] =
+    val familyOptions = normalizedFontFamilies(currentFamily).map(family =>
+      CommandOption(family, CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily(family)))
+    )
+    val familyIndex = familyOptions.indexWhere(_.label.equalsIgnoreCase(currentFamily)) match
+      case -1    => 0
+      case index => index
+
+    List(
       ContextualToolbarItem.Dropdown(
         id = "font-family",
         label = "Font",
@@ -397,7 +413,22 @@ object ContextualToolbar:
               .map(commandIntentArg => CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(commandIntentArg))),
           category = CommandCategory.Edit
         )
-      ),
+      )
+    )
+
+  private def colorItems(currentColor: Option[String], currentColorText: String): List[ContextualToolbarItem] =
+    val colorOptions = normalizedColorOptions(currentColor).map {
+      case (label, color) =>
+        CommandOption(label, CommandIntent.RichText(RichTextIntent.SetRichTextColor(color)))
+    }
+    val colorIndex =
+      colorOptions.indexWhere(
+        _.intent == CommandIntent.RichText(RichTextIntent.SetRichTextColor(currentColorText))
+      ) match
+        case -1    => 0
+        case index => index
+
+    List(
       ContextualToolbarItem.Dropdown(
         id = "color",
         label = "Color",
@@ -424,7 +455,23 @@ object ContextualToolbar:
           category = CommandCategory.Edit,
           acceptsFreeText = true
         )
-      ),
+      )
+    )
+
+  private def paragraphRoleItems(paragraphRole: ParagraphRole): List[ContextualToolbarItem] =
+    val paragraphRoleOptions =
+      CommandOption("Body", CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Body))) ::
+        (1 to 6).toList.map(level =>
+          CommandOption(
+            s"H$level",
+            CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Heading(level)))
+          )
+        )
+    val paragraphRoleIndex = paragraphRole match
+      case ParagraphRole.Body           => 0
+      case ParagraphRole.Heading(level) => level.max(1).min(paragraphRoleOptions.length - 1)
+
+    List(
       ContextualToolbarItem.Dropdown(
         id = "paragraph-role",
         label = "Role",
@@ -436,34 +483,6 @@ object ContextualToolbar:
           selectedIndex = paragraphRoleIndex,
           category = CommandCategory.Edit
         )
-      ),
-      ContextualToolbarItem.Button(
-        "align-left",
-        "Left",
-        "align-left",
-        "\ue236",
-        selected = paragraph.exists(_.alignment == ParagraphAlignment.Left)
-      ),
-      ContextualToolbarItem.Button(
-        "align-center",
-        "Center",
-        "align-center",
-        "\ue234",
-        selected = paragraph.exists(_.alignment == ParagraphAlignment.Center)
-      ),
-      ContextualToolbarItem.Button(
-        "align-right",
-        "Right",
-        "align-right",
-        "\ue237",
-        selected = paragraph.exists(_.alignment == ParagraphAlignment.Right)
-      ),
-      ContextualToolbarItem.Button(
-        "align-justify",
-        "Justify",
-        "align-justify",
-        "\ue235",
-        selected = paragraph.exists(_.alignment == ParagraphAlignment.Justify)
       )
     )
 

@@ -206,14 +206,3 @@ final case class ConfigField[A](
           ,
           value => restore.getOrElse(set)(config, value)
         )
-
-/** A key that is only ever read.
-  *
-  * Some spellings set more than one field (`font.size` sets both the code and the text size) or were replaced by a
-  * different shape entirely. They stay readable so old files keep working, but nothing writes them, so they have no
-  * lens and no session-state form.
-  */
-final case class LegacyConfigKey(
-    spellings: Set[String],
-    read: (AppConfig, String) => Option[AppConfig]
-)

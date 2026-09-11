@@ -21,7 +21,7 @@ object ConfigKeySchema:
   val deprecatedKeys: Map[String, String] =
     ConfigRegistry.fields.flatMap { field =>
       field.aliases.filterNot(currentKeys.contains).map(_ -> field.key)
-    }.toMap ++ ConfigGroups.deprecatedKeys ++ ConfigLegacyKeys.replacements
+    }.toMap ++ ConfigGroups.deprecatedKeys
 
   def deprecatedReplacement(key: String): Option[String] =
     deprecatedKeys.get(key)
@@ -30,6 +30,5 @@ object ConfigKeySchema:
     currentKeys.contains(key) ||
       deprecatedKeys.contains(key) ||
       ConfigRegistry.allKeys.contains(key) ||
-      ConfigLegacyKeys.handles(key) ||
       ConfigGroups.handles(key) ||
       dynamicPrefixes.exists(key.startsWith)

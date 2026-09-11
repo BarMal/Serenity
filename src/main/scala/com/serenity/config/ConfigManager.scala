@@ -86,7 +86,6 @@ object ConfigManager:
       ConfigRegistry
         .find(key)
         .flatMap(field => field.readValue(config, raw))
-        .orElse(ConfigLegacyKeys.find(key).flatMap(_.read(config, value)))
         .getOrElse(key match
           case "character.animation" | "character.animation.preset" | "character_animation" =>
             value.trim.toLowerCase match
@@ -129,24 +128,6 @@ object ConfigManager:
               .getOrElse(config)
           case "editor.minimum_pane_width" | "editor.minimum.pane.width" | "editor_minimum_pane_width" =>
             value.trim.toIntOption.map(config.withMinimumPaneWidth).getOrElse(config)
-          case "font.size" | "font_size" =>
-            value.trim.toFloatOption
-              .map(size =>
-                config.withFontConfig(
-                  config.editorConfig.fontConfig
-                    .copy(fontSize = clampFontSize(size), textFontSize = clampFontSize(size))
-                )
-              )
-              .getOrElse(config)
-          case "font.ligatures" | "font_ligatures" =>
-            value.trim.toLowerCase match
-              case "true" | "on" | "enabled" =>
-                config.withFontConfig(config.editorConfig.fontConfig.copy(enableLigatures = true, textLigatures = true))
-              case "false" | "off" | "disabled" =>
-                config
-                  .withFontConfig(config.editorConfig.fontConfig.copy(enableLigatures = false, textLigatures = false))
-              case _ =>
-                config
           case key if SurfaceConfigSchemaKeys.handles(key) =>
             SurfaceConfigSchemaParser.parse(config, key, value).getOrElse(config)
           case lspKey if lspKey.startsWith("lsp.") =>
@@ -455,10 +436,6 @@ object ConfigManager:
             case "character.animation.duration_ms" | "character.animation.duration.ms" |
                 "character_animation_duration_ms" | "character.animation.steps" | "character_animation_steps" =>
               value.trim.toIntOption.forall(_ <= 0)
-            case "font.size" | "font_size" =>
-              value.trim.toFloatOption.isEmpty
-            case "font.ligatures" | "font_ligatures" =>
-              parseBoolean(value).isEmpty
             case key if SurfaceConfigSchemaKeys.handles(key) =>
               SurfaceConfigSchemaParser.invalidValue(key, value)
             case key if key.startsWith("hotkey.") || key.startsWith("keymap.") =>
@@ -473,9 +450,6 @@ object ConfigManager:
               false
 
     Option.when(invalid)(InvalidConfigEntry(key, value, "Invalid value for supported config key"))
-
-  private def clampFontSize(size: Float): Float =
-    size.max(8.0f).min(48.0f)
 
   /** A config that carries a text scale but never says which mode it is in means manual scaling -- that is what the
     * multiplier was for before `font.scale.mode` existed. A config that does say is taken at its word, including when
