@@ -966,6 +966,41 @@ class ConfigManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
     loaded.surfaceConfig.effectiveMotionBaseline shouldBe MotionPreset.Expressive
   }
 
+  it should "never let a motion family's enabled flag contradict its transition kind" in {
+    // `enabled = true` on a family whose transition kind is otherwise Disabled must not resurrect a contradictory
+    // "enabled but Disabled" family: enabled is derived from transitionKind, so there is nothing else for it to turn
+    // on.
+    val enabledOnly = Files.createTempFile("serenity-motion-enabled-only", ".conf")
+    Files.writeString(
+      enabledOnly,
+      """ui.motion.family.editor_text.transition = off
+        |ui.motion.family.editor_text.enabled = true
+        |""".stripMargin
+    )
+    val loadedEnabledOnly = ConfigManager.loadConfig(Some(enabledOnly.toString))
+    val editorFamily = loadedEnabledOnly.surfaceConfig.motionConfiguration
+      .getOrElse(fail("Expected authoritative motion configuration"))
+      .families(MotionFamily.EditorText)
+    editorFamily.transitionKind shouldBe TransitionKind.Disabled
+    editorFamily.enabled shouldBe false
+
+    // Setting enabled = false must actually disable the family (drive transitionKind to Disabled), not merely be
+    // ignored while transitionKind stays on.
+    val disabledOverride = Files.createTempFile("serenity-motion-disabled-override", ".conf")
+    Files.writeString(
+      disabledOverride,
+      """ui.motion.family.editor_text.transition = typed
+        |ui.motion.family.editor_text.enabled = false
+        |""".stripMargin
+    )
+    val loadedDisabledOverride = ConfigManager.loadConfig(Some(disabledOverride.toString))
+    val disabledEditorFamily = loadedDisabledOverride.surfaceConfig.motionConfiguration
+      .getOrElse(fail("Expected authoritative motion configuration"))
+      .families(MotionFamily.EditorText)
+    disabledEditorFamily.transitionKind shouldBe TransitionKind.Disabled
+    disabledEditorFamily.enabled shouldBe false
+  }
+
   it should "preserve distinct legacy panel transitions when migrating to the authoritative hierarchy" in {
     val legacy = AppConfig.default
       .withPanelOpenTransitionKind(Some(TransitionKind.DirectionalSweep))

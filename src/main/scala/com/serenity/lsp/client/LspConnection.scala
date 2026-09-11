@@ -18,18 +18,19 @@ class LspConnection private (
     val languageId: LanguageId,
     sendQueue: Queue[IO, Option[Json]],
     idRef: Ref[IO, Long],
-    pendingRef: Ref[IO, Map[Long, Deferred[IO, Either[Throwable, Json]]]],
+    pendingRef: Ref[IO, Map[RequestId, Deferred[IO, Either[Throwable, Json]]]],
     notifQueue: Queue[IO, Option[Json]],
     requestTimeout: FiniteDuration,
     logger: Logger[IO]
 ):
 
-  def sendRequest(method: String, params: Json): IO[Json] =
+  def sendRequest(method: LspMethod, params: Json): IO[Json] =
     sendRequest(method, params, requestTimeout)
 
-  def sendRequest(method: String, params: Json, timeout: FiniteDuration): IO[Json] =
+  def sendRequest(method: LspMethod, params: Json, timeout: FiniteDuration): IO[Json] =
     for
-      id       <- idRef.updateAndGet(_ + 1)
+      rawId    <- idRef.updateAndGet(_ + 1)
+      id        = RequestId(rawId)
       deferred <- Deferred[IO, Either[Throwable, Json]]
       _        <- pendingRef.update(_ + (id -> deferred))
       result <-
@@ -54,7 +55,7 @@ class LspConnection private (
           .onError(_ => cleanup)
     yield result
 
-  def sendNotification(method: String, params: Json): IO[Unit] =
+  def sendNotification(method: LspMethod, params: Json): IO[Unit] =
     sendQueue.offer(Some(LspProtocol.notification(method, params))).void
 
   def processIncoming(onDiagnostics: (String, List[Diagnostic]) => IO[Unit]): IO[Unit] =
