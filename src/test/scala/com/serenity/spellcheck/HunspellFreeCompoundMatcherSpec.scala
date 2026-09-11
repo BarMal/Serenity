@@ -193,4 +193,171 @@ class HunspellFreeCompoundMatcherSpec extends AnyFlatSpec with Matchers:
     if length <= 0 then List("")
     else lettersOfLength(alphabet, length - 1).flatMap(prefix => alphabet.map(char => prefix + char))
 
+  // CHECKCOMPOUND*/SIMPLIFIEDTRIPLE/CHECKCOMPOUNDPATTERN (issue #1198, PR 2 of 2): a post-hoc boundary-validation
+  // filter over the segmentation(s) the DP above finds. Fixtures below are verified verbatim against hunspell's own
+  // tests/checkcompound{case,dup,rep,triple,pattern,pattern2,pattern3}.{aff,dic,good,wrong} and
+  // tests/simplifiedtriple.{aff,dic,good,wrong}, transcribed here into ASCII-only dictionaries where the upstream
+  // fixture used accented Hungarian text, to keep this suite encoding-independent while preserving the exact
+  // mechanism under test.
+
+  private def matches(
+    word: String,
+    vocabulary: Map[String, Set[String]],
+    checkRules: CompoundCheckRules,
+    compoundMin: Int = 1,
+    standaloneWords: Set[String] = Set.empty,
+    replacements: Map[String, List[String]] = Map.empty
+  ): Boolean =
+    HunspellFreeCompoundMatcher.matches(
+      word,
+      CompoundTrie.build(vocabulary),
+      GeneralFlags,
+      compoundMin,
+      compoundWordMax = None,
+      checkRules,
+      vocabulary,
+      standaloneWords,
+      replacements
+    )
+
+  // Verified against hunspell's own tests/checkcompoundcase.{aff,dic,wrong}: COMPOUNDFLAG A, dictionary
+  // foo/A Bar/A BAZ/A. "fooBar"/"BAZBar"/"BAZfoo" are in checkcompoundcase.wrong -- an upper-case letter on either
+  // side of a compound boundary is forbidden.
+  "matches with CHECKCOMPOUNDCASE" should "forbid an upper-case letter at a compound boundary" in {
+    val vocabulary = Map("foo" -> Set("A"), "Bar" -> Set("A"), "BAZ" -> Set("A"))
+    val rules      = CompoundCheckRules.empty.copy(checkCase = true)
+
+    matches("fooBar", vocabulary, rules) shouldBe false
+    matches("BAZBar", vocabulary, rules) shouldBe false
+    matches("BAZfoo", vocabulary, rules) shouldBe false
+  }
+
+  it should "accept a compound with no case transition at the boundary" in {
+    val vocabulary = Map("foo" -> Set("A"), "bar" -> Set("A"))
+    val rules      = CompoundCheckRules.empty.copy(checkCase = true)
+
+    matches("foobar", vocabulary, rules) shouldBe true
+  }
+
+  // Verified against hunspell's own tests/checkcompounddup.{aff,dic,wrong}-style usage (real .aff files use this
+  // directive to forbid e.g. "foofoo"): CHECKCOMPOUNDDUP forbids two adjacent identical compound members.
+  "matches with CHECKCOMPOUNDDUP" should "forbid two adjacent identical compound members" in {
+    val vocabulary = Map("foo" -> Set("A"), "bar" -> Set("A"))
+    val rules      = CompoundCheckRules.empty.copy(checkDup = true)
+
+    matches("foofoo", vocabulary, rules) shouldBe false
+    matches("foobar", vocabulary, rules) shouldBe true
+  }
+
+  it should "allow the same word twice when not adjacent" in {
+    val vocabulary = Map("foo" -> Set("A"), "bar" -> Set("A"))
+    val rules      = CompoundCheckRules.empty.copy(checkDup = true)
+
+    matches("foobarfoo", vocabulary, rules) shouldBe true
+  }
+
+  // Verified against the *mechanism* of hunspell's own tests/checkcompoundrep.{aff,dic,good,wrong} (Hungarian
+  // "szerviz" example -- szer+viz forbidden via REP i->y because the REP-substituted compound spelling matches the
+  // standalone dictionary word "szerviz" -- transcribed to ASCII here to keep this suite encoding-independent):
+  // CHECKCOMPOUNDREP forbids a compound whenever substituting a REP table entry into the two-member boundary text
+  // reconstructs a real standalone dictionary word.
+  "matches with CHECKCOMPOUNDREP" should "forbid a compound whose REP substitution matches a standalone word" in {
+    // szer/A + wiz/A concatenates to "szerwiz"; REP w->v turns it into the standalone word "szerviz".
+    val vocabulary   = Map("szer" -> Set("A"), "wiz" -> Set("A"))
+    val standalone   = Set("szerviz")
+    val replacements = Map("w" -> List("v"))
+    val rules        = CompoundCheckRules.empty.copy(checkRep = true)
+
+    matches("szerwiz", vocabulary, rules, standaloneWords = standalone, replacements = replacements) shouldBe false
+  }
+
+  it should "accept a compound whose REP substitution does not match any standalone word" in {
+    val vocabulary   = Map("viz" -> Set("A"), "szer" -> Set("A"))
+    val standalone   = Set("szerviz")
+    val replacements = Map("w" -> List("v"))
+    val rules        = CompoundCheckRules.empty.copy(checkRep = true)
+
+    matches("vizszer", vocabulary, rules, standaloneWords = standalone, replacements = replacements) shouldBe true
+  }
+
+  // Verified verbatim against hunspell's own tests/checkcompoundtriple.{aff,dic,good,wrong}: COMPOUNDFLAG A,
+  // dictionary foo/A opera/A eel/A bare/A. "fooopera" ("oo"+"o") and "bareeel" ("e"+"ee") are in .wrong;
+  // "operafoo"/"eelbare" are in .good.
+  "matches with CHECKCOMPOUNDTRIPLE" should "forbid a triple-letter run spanning the compound boundary" in {
+    val vocabulary = Map("foo" -> Set("A"), "opera" -> Set("A"), "eel" -> Set("A"), "bare" -> Set("A"))
+    val rules      = CompoundCheckRules.empty.copy(checkTriple = true)
+
+    matches("fooopera", vocabulary, rules) shouldBe false
+    matches("bareeel", vocabulary, rules) shouldBe false
+    matches("operafoo", vocabulary, rules) shouldBe true
+    matches("eelbare", vocabulary, rules) shouldBe true
+  }
+
+  // Verified verbatim against hunspell's own tests/simplifiedtriple.{aff,dic,good,wrong}: COMPOUNDFLAG A,
+  // COMPOUNDMIN 2, dictionary glass/A sko/A. "glasssko" (unreduced, literal triple) is in .wrong; "glassko" (one
+  // "s" elided) is in .good.
+  "matches with CHECKCOMPOUNDTRIPLE and SIMPLIFIEDTRIPLE" should
+    "still forbid the literal, unreduced triple-letter spelling" in {
+      val vocabulary = Map("glass" -> Set("A"), "sko" -> Set("A"))
+      val rules      = CompoundCheckRules.empty.copy(checkTriple = true, simplifiedTriple = true)
+
+      matches("glasssko", vocabulary, rules, compoundMin = 2) shouldBe false
+    }
+
+  it should "accept the simplified (one letter elided) spelling of the same compound" in {
+    val vocabulary = Map("glass" -> Set("A"), "sko" -> Set("A"))
+    val rules      = CompoundCheckRules.empty.copy(checkTriple = true, simplifiedTriple = true)
+
+    matches("glassko", vocabulary, rules, compoundMin = 2) shouldBe true
+  }
+
+  it should "not accept the simplified spelling when SIMPLIFIEDTRIPLE is not also declared" in {
+    val vocabulary = Map("glass" -> Set("A"), "sko" -> Set("A"))
+    val rules      = CompoundCheckRules.empty.copy(checkTriple = true, simplifiedTriple = false)
+
+    matches("glassko", vocabulary, rules, compoundMin = 2) shouldBe false
+  }
+
+  // Verified verbatim against hunspell's own tests/checkcompoundpattern2.{aff,dic,good,wrong}:
+  // "CHECKCOMPOUNDPATTERN o b z", dictionary foo/A bar/A. "foobar" (literal "o"+"b" boundary) is in .wrong;
+  // "fozar" (the "ob" boundary elided and replaced by "z") is in .good.
+  "matches with CHECKCOMPOUNDPATTERN" should "forbid a literal boundary matching endchars/beginchars" in {
+    val vocabulary = Map("foo" -> Set("A"), "bar" -> Set("A"))
+    val pattern =
+      CheckCompoundPattern(endChars = "o", endFlag = None, beginChars = "b", beginFlag = None, replacement = Some("z"))
+    val rules = CompoundCheckRules.empty.copy(patterns = List(pattern))
+
+    matches("foobar", vocabulary, rules) shouldBe false
+  }
+
+  it should "accept the replacement-elided spelling of the same forbidden boundary" in {
+    val vocabulary = Map("foo" -> Set("A"), "bar" -> Set("A"))
+    val pattern =
+      CheckCompoundPattern(endChars = "o", endFlag = None, beginChars = "b", beginFlag = None, replacement = Some("z"))
+    val rules = CompoundCheckRules.empty.copy(patterns = List(pattern))
+
+    matches("fozar", vocabulary, rules) shouldBe true
+  }
+
+  // Verified verbatim against hunspell's own tests/checkcompoundpattern3.{aff,dic,good,wrong}:
+  // "CHECKCOMPOUNDPATTERN o/X b/Y z", dictionary foo/A boo/AX bar/A ban/AY. "booban" (literal) is in .wrong;
+  // "bozan" (elided/replaced) is in .good; "boobar" (endchars matches but bar lacks the Y flag, so the pattern does
+  // not apply at all) is in .good.
+  "matches with flag-conditioned CHECKCOMPOUNDPATTERN" should "forbid only when both flags are present" in {
+    val vocabulary =
+      Map("foo" -> Set("A"), "boo" -> Set("A", "X"), "bar" -> Set("A"), "ban" -> Set("A", "Y"))
+    val pattern = CheckCompoundPattern(
+      endChars = "o",
+      endFlag = Some("X"),
+      beginChars = "b",
+      beginFlag = Some("Y"),
+      replacement = Some("z")
+    )
+    val rules = CompoundCheckRules.empty.copy(patterns = List(pattern))
+
+    matches("booban", vocabulary, rules) shouldBe false
+    matches("bozan", vocabulary, rules) shouldBe true
+    matches("boobar", vocabulary, rules) shouldBe true
+  }
+
 end HunspellFreeCompoundMatcherSpec

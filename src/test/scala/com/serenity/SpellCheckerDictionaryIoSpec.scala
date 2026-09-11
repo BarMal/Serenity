@@ -116,16 +116,17 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   }
 
   "SpellChecker Hunspell affix support" should "explicitly report unsupported affix directives instead of silently ignoring them" in {
-    // CHECKCOMPOUNDDUP and CHECKCOMPOUNDCASE (issue #1198) remain unimplemented -- the CHECKCOMPOUND* validation
-    // family is deferred to a follow-up issue; see the PR description for why free-form COMPOUNDFLAG compounding
-    // (implemented below) and the CHECKCOMPOUND* filters were split into separate PRs.
+    // COMPOUNDSYLLABLE/SYLLABLENUM (issue #1198) remain unimplemented -- both are Hungarian-specific
+    // syllable-counting compounding limits needing a per-language vowel-counting heuristic no real fixture surveyed
+    // for #1198 exercises with enough confidence to implement; see the PR description for the full reasoning. Every
+    // other CHECKCOMPOUND*/SIMPLIFIEDTRIPLE/CHECKCOMPOUNDPATTERN/ONLYINCOMPOUND directive is implemented (below).
     val (dictionary, _) = writeHunspellDictionary(
       "serenity-unsupported-affix",
       List("hello/A"),
       List(
         "SET UTF-8",
-        "CHECKCOMPOUNDDUP",
-        "CHECKCOMPOUNDCASE"
+        "COMPOUNDSYLLABLE 6 aeiou",
+        "SYLLABLENUM I"
       )
     )
     val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
@@ -134,8 +135,8 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
 
     diagnostics.map(_.code) should contain(Some("dictionary-load-failed"))
     val failureMessages = diagnostics.filter(_.code.contains("dictionary-load-failed")).map(_.message)
-    failureMessages.exists(_.contains("CHECKCOMPOUNDDUP")) shouldBe true
-    failureMessages.exists(_.contains("CHECKCOMPOUNDCASE")) shouldBe true
+    failureMessages.exists(_.contains("COMPOUNDSYLLABLE")) shouldBe true
+    failureMessages.exists(_.contains("SYLLABLENUM")) shouldBe true
     diagnostics.map(_.message) should contain("Possible spelling issue: wurld")
   }
 
@@ -425,4 +426,152 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
     // flag R) -- neither mechanism alone can segment it, so it must still be rejected.
     diagnostics.map(_.message) shouldBe List("Possible spelling issue: bargarten")
   }
+
+  // CHECKCOMPOUND*/SIMPLIFIEDTRIPLE/CHECKCOMPOUNDPATTERN/ONLYINCOMPOUND (issue #1198, PR 2 of 2): end-to-end
+  // coverage layered on top of the free-form COMPOUNDFLAG mechanism above, confirming these directives are parsed
+  // from a real `.aff` file, no longer reported as unsupported, and actually reach `SpellChecker.check`.
+
+  // Verified against hunspell's own tests/checkcompoundcase.{aff,dic,wrong}.
+  "SpellChecker CHECKCOMPOUNDCASE support" should "reject an upper-case letter at a compound boundary" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-checkcompoundcase",
+      List("foo/A", "Bar/A"),
+      List("SET UTF-8", "COMPOUNDMIN 1", "COMPOUNDFLAG A", "CHECKCOMPOUNDCASE")
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("fooBar", config)
+
+    diagnostics.map(_.code) should not contain Some("dictionary-load-failed")
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: fooBar")
+  }
+
+  "SpellChecker CHECKCOMPOUNDDUP support" should "reject a compound made of the same word repeated" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-checkcompounddup",
+      List("foo/A", "bar/A"),
+      List("SET UTF-8", "COMPOUNDMIN 1", "COMPOUNDFLAG A", "CHECKCOMPOUNDDUP")
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("foofoo foobar", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: foofoo")
+  }
+
+  // Verified against the mechanism of hunspell's own tests/checkcompoundrep.{aff,dic,good,wrong} (Hungarian
+  // "szerviz" example), reusing the existing REP table support from issue #1188.
+  "SpellChecker CHECKCOMPOUNDREP support" should
+    "reject a compound whose REP-substituted spelling matches a standalone dictionary word" in {
+      val (dictionary, _) = writeHunspellDictionary(
+        "serenity-checkcompoundrep",
+        List("szer/A", "wiz/A", "szerviz"),
+        List("SET UTF-8", "COMPOUNDMIN 1", "COMPOUNDFLAG A", "CHECKCOMPOUNDREP", "REP 1", "REP w v")
+      )
+      val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+      val diagnostics = SpellChecker.check("szerwiz", config)
+
+      diagnostics.map(_.message) shouldBe List("Possible spelling issue: szerwiz")
+    }
+
+  // Verified verbatim against hunspell's own tests/checkcompoundtriple.{aff,dic,good,wrong}.
+  "SpellChecker CHECKCOMPOUNDTRIPLE support" should "reject a triple-letter run spanning the compound boundary" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-checkcompoundtriple",
+      List("foo/A", "opera/A"),
+      List("SET UTF-8", "COMPOUNDMIN 1", "COMPOUNDFLAG A", "CHECKCOMPOUNDTRIPLE")
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("fooopera operafoo", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: fooopera")
+  }
+
+  // Verified verbatim against hunspell's own tests/simplifiedtriple.{aff,dic,good,wrong}: "glasssko" (unreduced) is
+  // forbidden, "glassko" (one letter elided) is accepted.
+  "SpellChecker SIMPLIFIEDTRIPLE support" should
+    "accept the simplified spelling of a triple-letter compound boundary while still rejecting the literal one" in {
+      val (dictionary, _) = writeHunspellDictionary(
+        "serenity-simplifiedtriple",
+        List("glass/A", "sko/A"),
+        List("SET UTF-8", "COMPOUNDMIN 2", "COMPOUNDFLAG A", "CHECKCOMPOUNDTRIPLE", "SIMPLIFIEDTRIPLE")
+      )
+      val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+      val diagnostics = SpellChecker.check("glasssko glassko", config)
+
+      diagnostics.map(_.message) shouldBe List("Possible spelling issue: glasssko")
+    }
+
+  // Verified verbatim against hunspell's own tests/checkcompoundpattern2.{aff,dic,good,wrong}: "CHECKCOMPOUNDPATTERN
+  // o b z" forbids the literal "foobar" but accepts its replacement-elided spelling "fozar".
+  "SpellChecker CHECKCOMPOUNDPATTERN support" should
+    "reject a literal forbidden compound boundary while accepting its replacement-elided spelling" in {
+      val (dictionary, _) = writeHunspellDictionary(
+        "serenity-checkcompoundpattern",
+        List("foo/A", "bar/A"),
+        List(
+          "SET UTF-8",
+          "COMPOUNDMIN 1",
+          "COMPOUNDFLAG A",
+          "CHECKCOMPOUNDPATTERN 1",
+          "CHECKCOMPOUNDPATTERN o b z"
+        )
+      )
+      val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+      val diagnostics = SpellChecker.check("foobar fozar", config)
+
+      diagnostics.map(_.message) shouldBe List("Possible spelling issue: foobar")
+    }
+
+  // Verified verbatim against hunspell's own tests/checkcompoundpattern3.{aff,dic,good,wrong}: flag-conditioned
+  // "CHECKCOMPOUNDPATTERN o/X b/Y z" forbids "booban" but not "boobar" (bar lacks the required Y flag).
+  it should "apply a flag-conditioned CHECKCOMPOUNDPATTERN rule only when both flags are present" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-checkcompoundpattern-flags",
+      List("boo/AX", "bar/A", "ban/AY"),
+      List(
+        "SET UTF-8",
+        "COMPOUNDMIN 1",
+        "COMPOUNDFLAG A",
+        "CHECKCOMPOUNDPATTERN 1",
+        "CHECKCOMPOUNDPATTERN o/X b/Y z"
+      )
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val diagnostics = SpellChecker.check("booban boobar bozan", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: booban")
+  }
+
+  // Verified verbatim against hunspell's own tests/onlyincompound.{aff,dic,good,wrong}: a root flagged
+  // ONLYINCOMPOUND is compound-member-only -- its bare form and its own affixed forms are rejected standalone, but
+  // it (and forms built from it) may still appear as a compound member.
+  "SpellChecker ONLYINCOMPOUND support" should
+    "reject the bare and affixed forms of an ONLYINCOMPOUND-flagged root standalone while allowing it as a compound member" in {
+      val (dictionary, _) = writeHunspellDictionary(
+        "serenity-onlyincompound",
+        List("foo/A", "pseudo/OAB"),
+        List(
+          "SET UTF-8",
+          "COMPOUNDMIN 1",
+          "COMPOUNDFLAG A",
+          "ONLYINCOMPOUND O",
+          "SFX B Y 1",
+          "SFX B 0 s ."
+        )
+      )
+      val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+      val diagnostics = SpellChecker.check("pseudo pseudos pseudofoo foopseudo", config)
+
+      diagnostics.map(_.message) shouldBe List(
+        "Possible spelling issue: pseudo",
+        "Possible spelling issue: pseudos"
+      )
+    }
 end SpellCheckerDictionaryIoSpec
