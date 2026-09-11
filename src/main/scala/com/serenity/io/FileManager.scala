@@ -14,6 +14,23 @@ import com.serenity.richtext.{
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
 
+/** Failures `FileManager` raises for its own file-open/save workflow, distinct from [[LossyRichTextOverwriteException]]
+  * (a richtext-package concern about a specific re-import losing content, not about format support in general).
+  */
+sealed abstract class FileManagerError(message: String) extends RuntimeException(message)
+
+object FileManagerError:
+  /** Raised by `saveBuffer(buffer)` when the buffer has never been saved to a path. */
+  final case class NoFilePath() extends FileManagerError("Buffer has no file path - use Save As")
+
+  /** Raised when opening a file whose format's `DocumentFormatCapabilities.canOpen` is false. */
+  final case class UnsupportedForOpen(fileType: FileType)
+      extends FileManagerError(s"Unsupported document format for open: ${fileType.displayName}")
+
+  /** Raised when saving to a path whose format's `DocumentFormatCapabilities.canSave` is false. */
+  final case class UnsupportedForSave(fileType: FileType)
+      extends FileManagerError(s"Unsupported document format for save: ${fileType.displayName}")
+
 class FileManager(using balance: Balance):
 
   def loadFile(path: Path, bufferId: BufferId): IO[Buffer] =
@@ -29,14 +46,14 @@ class FileManager(using balance: Balance):
           .readWithFidelity(path)
           .map(imported => bufferFromRichText(bufferId, path, imported.document, Some(imported.fidelity)))
       case _ =>
-        ensureSupported(path, _.canOpen, "open") >>
+        ensureSupported(path, _.canOpen, FileManagerError.UnsupportedForOpen.apply) >>
           FileUtils.readFileContent(path).map(content => bufferFromContent(bufferId, path, content))
 
   def saveBuffer(buffer: Buffer, path: Path): IO[Buffer] =
     preventLossyOverwrite(buffer, path) >> (FileUtils.detectFileType(path) match
       case FileType.Markdown =>
         for
-          _ <- ensureSupported(path, _.canSave, "save")
+          _ <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
           _ <- FileUtils.writeFileContent(path, markdownContentForSave(buffer))
         yield savedBuffer(buffer, path, None)
       case FileType.RichText =>
@@ -50,7 +67,7 @@ class FileManager(using balance: Balance):
         com.serenity.richtext.DocxDocumentCodec.write(document, path).as(savedBuffer(buffer, path, Some(document)))
       case _ =>
         for
-          _ <- ensureSupported(path, _.canSave, "save")
+          _ <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
           _ <- FileUtils.writeFileContent(path, buffer.document.content.collect())
         yield savedBuffer(buffer, path, None))
 
@@ -58,7 +75,7 @@ class FileManager(using balance: Balance):
   def saveBuffer(buffer: Buffer): IO[Buffer] =
     buffer.document.filePath match
       case Some(path) => saveBuffer(buffer, path)
-      case None       => IO.raiseError(new RuntimeException("Buffer has no file path - use Save As"))
+      case None       => IO.raiseError(FileManagerError.NoFilePath())
 
   def listDirectory(directory: Path): IO[List[FileEntry]] = FileBrowser.listDirectory(directory)
 
@@ -154,10 +171,8 @@ class FileManager(using balance: Balance):
   private def ensureSupported(
     path: Path,
     operationSupported: DocumentFormatCapabilities => Boolean,
-    operationName: String
+    error: FileType => FileManagerError
   ): IO[Unit] =
     val fileType     = FileUtils.detectFileType(path)
     val capabilities = DocumentFormat.capabilities(fileType)
-    IO.unlessA(operationSupported(capabilities))(
-      IO.raiseError(new RuntimeException(s"Unsupported document format for $operationName: ${fileType.displayName}"))
-    )
+    IO.unlessA(operationSupported(capabilities))(IO.raiseError(error(fileType)))

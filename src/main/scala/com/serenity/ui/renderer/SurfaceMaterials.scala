@@ -11,7 +11,7 @@ object SurfaceMaterials:
     config.surfaceConfig.materialPreset match
       case MaterialPreset.Solid   => 1.0f
       case MaterialPreset.Clear   => 0.28f
-      case MaterialPreset.Frosted => theme.panel.alpha.toFloat
+      case MaterialPreset.Frosted => theme.panel.alpha.value.toFloat
       case MaterialPreset.Crystal => 0.78f
       case MaterialPreset.Custom  => alphaForBackground(config.surfaceConfig.backgroundStyle, theme)
 
@@ -40,8 +40,8 @@ object SurfaceMaterials:
     style match
       case BackgroundStyle.Solid       => 1.0f
       case BackgroundStyle.Transparent => 0.28f
-      case BackgroundStyle.Frosted     => theme.panel.alpha.toFloat
-      case BackgroundStyle.GlassLike   => math.min(theme.panel.alpha.toFloat, 0.82f)
+      case BackgroundStyle.Frosted     => theme.panel.alpha.value.toFloat
+      case BackgroundStyle.GlassLike   => math.min(theme.panel.alpha.value.toFloat, 0.82f)
 
   private def blurForBackground(style: BackgroundStyle, blurRadius: Float): Float =
     style match

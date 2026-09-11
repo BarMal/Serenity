@@ -382,23 +382,31 @@ object CommandSurfaceItem:
         val wrappedIndex = if rawIndex < 0 then options.length + rawIndex else rawIndex
         copy(selectedIndex = wrappedIndex)
 
+  /** What kind of text an [[InputItem]] accepts -- previously encoded as three independent booleans
+    * (`isDecimal`/`acceptsBindingText`/`acceptsFreeText`) that were really a single priority-ordered choice, since no
+    * call site ever set more than one of them.
+    */
+  enum InputKind:
+    case Numeric(decimal: Boolean)
+    case Binding
+    case FreeText
+
   final case class InputItem(
       id: String,
       label: String,
       hint: String,
       currentValue: String,
-      isDecimal: Boolean,
+      kind: InputKind,
       parse: String => Option[CommandIntent],
-      category: CommandCategory,
-      acceptsBindingText: Boolean = false,
-      acceptsFreeText: Boolean = false
+      category: CommandCategory
   ) extends CommandSurfaceItem:
     override lazy val searchText: String = s"$label $hint"
 
     def accepts(currentText: String, char: Char): Boolean =
-      if acceptsFreeText then !char.isControl
-      else if acceptsBindingText then char.isLetterOrDigit || char == '+' || char == '-' || char == '_'
-      else char.isDigit || (char == '.' && isDecimal && !currentText.contains('.'))
+      kind match
+        case InputKind.FreeText         => !char.isControl
+        case InputKind.Binding          => char.isLetterOrDigit || char == '+' || char == '-' || char == '_'
+        case InputKind.Numeric(decimal) => char.isDigit || (char == '.' && decimal && !currentText.contains('.'))
 
     def isOutOfBounds(text: String): Boolean =
       text.nonEmpty && parse(text).isEmpty

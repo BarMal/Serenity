@@ -67,7 +67,7 @@ final case class ThemeColor(
     foreground: Color,
     background: Color,
     style: TextStyle = TextStyle.normal,
-    alpha: Double = 1.0
+    alpha: NormalizedAlpha = NormalizedAlpha.Opaque
 )
 
 /** Semantic status treatments kept distinct from selection, focus, and regular text roles. */

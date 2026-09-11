@@ -22,17 +22,29 @@ final case class SessionState(
     // Keyed by `AppMode.configKey` rather than the enum itself: circe's semi-automatic derivation needs an explicit
     // KeyEncoder/KeyDecoder for a non-string map key, and this reuses the string form the config file already has.
     recentFilesByMode: Map[String, List[String]] = Map.empty,
-    schemaVersion: Int = 2
+    schemaVersion: SessionState.SchemaVersion = SessionState.CurrentSchemaVersion
 )
 
 object SessionState:
+
+  /** The persisted session file's own schema version -- distinct from [[com.serenity.config.ConfigVersion]], which
+    * versions the separate config file format.
+    */
+  opaque type SchemaVersion = Int
+
+  object SchemaVersion:
+    def apply(value: Int): SchemaVersion = value
+
+    extension (version: SchemaVersion)
+      def value: Int = version
+      def <=(other: SchemaVersion): Boolean = version <= other
 
   /** Schema version 2 adds workspace trees, docked panel snapshots, and maximised-node identity. A version-1 session's
     * `editorPanes` array order (or, if present, its legacy `paneOrder` key -- see `SessionJsonCodecs`) seeds a simple
     * left-to-right split tree at restore time. Invalid version-2 trees fall back to that same seed while preserving
     * buffers and supported panel content.
     */
-  val CurrentSchemaVersion: Int = 2
+  val CurrentSchemaVersion: SchemaVersion = SchemaVersion(2)
 
   def fromAppState(appState: AppState, persistUnsaved: Boolean = true): SessionState =
     SessionState(

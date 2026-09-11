@@ -200,6 +200,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
       val result = fileManager.loadFile(docFile, BufferId(99)).attempt.unsafeRunSync()
 
+      result shouldBe Left(FileManagerError.UnsupportedForOpen(FileType.WordDocument))
       result.left.map(_.getMessage) shouldBe Left(
         "Unsupported document format for open: Legacy Word Document (.doc, unsupported)"
       )
@@ -214,11 +215,19 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
     try
       val result = fileManager.saveBuffer(buffer, docFile).attempt.unsafeRunSync()
 
+      result shouldBe Left(FileManagerError.UnsupportedForSave(FileType.WordDocument))
       result.left.map(_.getMessage) shouldBe Left(
         "Unsupported document format for save: Legacy Word Document (.doc, unsupported)"
       )
       Files.exists(docFile) shouldBe false
     finally Files.deleteIfExists(docFile.getParent)
+  }
+
+  it should "raise a distinguishable error when saving a buffer that has never been saved to a path" in {
+    val fileManager = new FileManager()
+    val buffer      = Buffer.fromString(BufferId(99), "unsaved")
+
+    fileManager.saveBuffer(buffer).attempt.unsafeRunSync() shouldBe Left(FileManagerError.NoFilePath())
   }
 
   it should "open RTF files as editable plain text with rich document metadata" in {

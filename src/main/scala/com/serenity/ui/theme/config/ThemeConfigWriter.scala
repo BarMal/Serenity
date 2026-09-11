@@ -5,7 +5,7 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import com.serenity.io.AtomicFileWriter
-import com.serenity.ui.theme.{ColorFormat, SyntaxElement, Theme, ThemeColor}
+import com.serenity.ui.theme.{ColorFormat, NormalizedAlpha, SyntaxElement, Theme, ThemeColor}
 
 object ThemeConfigWriter:
 
@@ -99,7 +99,7 @@ $mandatorySyntaxLines
     UiTokenConfig(
       foreground = hex(color.foreground),
       background = hex(color.background),
-      alpha = Option.when(color.alpha != 1.0)(color.alpha),
+      alpha = Option.when(color.alpha != NormalizedAlpha.Opaque)(color.alpha.value),
       style = StyleConfig(color.style.isBold, color.style.isItalic, color.style.isUnderlined)
     )
 

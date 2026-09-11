@@ -25,21 +25,26 @@ enum MotionFamily(val configKey: String):
   case PinnedPanels    extends MotionFamily("pinned_panels")
   case UiTransitions   extends MotionFamily("ui_transitions")
 
-/** Motion policy for one family before accessibility policy is applied. */
+/** Motion policy for one family before accessibility policy is applied.
+  *
+  * `enabled` is derived from `transitionKind` rather than stored: the two could otherwise disagree (`enabled = true`
+  * with `transitionKind = Disabled`, or vice versa), which every read site below treats as meaning "disabled" anyway.
+  * Deriving it removes that contradiction entirely instead of validating against it.
+  */
 final case class MotionFamilyConfig(
-    enabled: Boolean,
     transitionKind: TransitionKind,
     animation: Option[AnimationConfig],
     speedScale: Double,
     transitionOverrides: Map[TransitionScope, TransitionKind] = Map.empty
 ):
 
+  def enabled: Boolean = transitionKind != TransitionKind.Disabled
+
   def normalized: MotionFamilyConfig =
     copy(speedScale = MotionConfig.clampSpeedScale(speedScale))
 
   def disabled: MotionFamilyConfig =
     copy(
-      enabled = false,
       transitionKind = TransitionKind.Disabled,
       animation = None,
       speedScale = 0.0,
@@ -50,7 +55,7 @@ final case class MotionFamilyConfig(
     transitionOverrides.getOrElse(scope, transitionKind)
 
 object MotionFamilyConfig:
-  val disabled: MotionFamilyConfig = MotionFamilyConfig(false, TransitionKind.Disabled, None, 0.0)
+  val disabled: MotionFamilyConfig = MotionFamilyConfig(TransitionKind.Disabled, None, 0.0)
 
 /** Fully resolved policy consumed by runtime animation paths. */
 final case class EffectiveMotionConfig(families: Map[MotionFamily, MotionFamilyConfig]):

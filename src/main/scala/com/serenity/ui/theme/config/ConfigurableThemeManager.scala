@@ -60,7 +60,7 @@ object ConfigurableThemeManager:
         isItalic = config.style.italic,
         isUnderlined = config.style.underline
       ),
-      alpha = config.alpha.getOrElse(1.0)
+      alpha = NormalizedAlpha(config.alpha.getOrElse(1.0))
     )
 
   private def convertSyntaxColors(
