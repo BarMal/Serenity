@@ -6,7 +6,13 @@ import java.nio.file.attribute.FileTime
 
 import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.rope.{Balance, Rope}
-import com.serenity.spellcheck.{DictionaryCache, DictionaryContext, DictionaryLoader, SpellChecker}
+import com.serenity.spellcheck.{
+  CompoundCandidateIndex,
+  DictionaryCache,
+  DictionaryContext,
+  DictionaryLoader,
+  SpellChecker
+}
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -257,6 +263,37 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
     val diagnostics = SpellChecker.check("abc aac cba", config)
 
     diagnostics.map(_.message) shouldBe List("Possible spelling issue: cba")
+  }
+
+  // Issue #1445: `DictionaryLoader.loadSnapshot` must build `compoundCandidateIndex` once, at load time, from the same
+  // `compoundWordFlags` it merges -- not leave `HunspellCompoundMatcher.matches` to rebuild it on every check. This
+  // asserts the wiring directly against the loader's own output rather than only through `SpellChecker.check`'s
+  // accept/reject behaviour, which would pass even if the index were (again) rebuilt per call.
+  it should "build compoundCandidateIndex once at dictionary load, from the same compoundWordFlags it merges" in {
+    val (dictionary, _) = writeHunspellDictionary(
+      "serenity-compoundrule-candidate-index",
+      List("a/A", "b/B", "c/C"),
+      List(
+        "SET UTF-8",
+        "COMPOUNDMIN 1",
+        "COMPOUNDRULE 1",
+        "COMPOUNDRULE A*B*C*"
+      )
+    )
+    val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+
+    val context = DictionaryLoader.loadSnapshot(config).context
+
+    context.compoundCandidateIndex shouldBe CompoundCandidateIndex.build(context.compoundWordFlags)
+    context.compoundCandidateIndex.buckets should not be empty
+  }
+
+  it should "leave compoundCandidateIndex empty when no dictionary declares COMPOUNDRULE" in {
+    val config = SpellCheckConfig(enabled = true)
+
+    val context = DictionaryLoader.loadSnapshot(config).context
+
+    context.compoundCandidateIndex shouldBe CompoundCandidateIndex.empty
   }
 
   // Real-shaped fixture: German-style noun compounding via "zero-or-more flag-A words followed by one flag-B

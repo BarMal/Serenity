@@ -15,6 +15,18 @@ import org.typelevel.log4cats.Logger
   * metric is derived from its font -- so publishing them independently would let a reader observe a new font beside a
   * stale metric and lay text out at the wrong advance. Callers that read more than one value should take [[snapshot]]
   * once and read from it, rather than calling several accessors in turn.
+  *
+  * `AtomicReference` rather than `Ref[IO, Snapshot]`: [[snapshot]] and the per-field accessors below it are called
+  * synchronously from the Swing paint path (`Main.paintFullFrame`/`paintCursorFrame`, both plain `Unit`-returning
+  * methods invoked from inside an already-suspended `IO` at the outermost render boundary) and from the input handler's
+  * metrics callback (`() => displayState.uiMetrics` in `Main.runGui`) -- neither runs inside an IO fiber of its own, so
+  * a `Ref`-backed read would just force its `IO` via `unsafeRunSync` right back into these synchronous signatures,
+  * hiding a plain volatile read behind an effect type nothing here ever suspends on. This is the same reasoning already
+  * settled for [[com.serenity.ui.renderer.RendererFrameState.BoundedRefCache]] (#1431/#1434) and `ThemeManager`'s
+  * highlight/lex caches (#1412/#1431/#1434). [[update]] is the one place this state actually changes, and it already
+  * stays in `IO` end to end (`RuntimeDisplayState.load` composes `FontLoader`'s `IO`s, and the `current.set` publishing
+  * the result is itself wrapped in `IO`) -- so the single `unsafeRunSync`-shaped compromise those other modules had to
+  * accept for their writes doesn't even arise here; only the reads are synchronous.
   */
 final class RuntimeDisplayState private (
     current: AtomicReference[RuntimeDisplayState.Snapshot]

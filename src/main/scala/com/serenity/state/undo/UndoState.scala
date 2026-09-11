@@ -162,8 +162,12 @@ final case class UndoState(
   def pushRedo(entry: HistoryEntry): UndoState =
     copy(redoStack = boundedPush(entry, redoStack))
 
+  // Only reallocates the tail of `stack` when it has actually reached the cap -- the common case (well under
+  // `maxUndoDepth`, whose default is 1000) is a plain O(1) cons instead of a `take` that copies the whole stack
+  // on every push regardless of how far below the cap it is.
   private def boundedPush(entry: HistoryEntry, stack: List[HistoryEntry]): List[HistoryEntry] =
-    entry :: stack.take(effectiveMaxUndoDepth - 1)
+    if stack.lengthIs < effectiveMaxUndoDepth then entry :: stack
+    else entry :: stack.take(effectiveMaxUndoDepth - 1)
 
   private def effectiveMaxUndoDepth: Int =
     math.max(1, maxUndoDepth)

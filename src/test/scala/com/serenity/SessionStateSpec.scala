@@ -92,7 +92,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     restoredState.persisted.buffers(buffer.id).document.isDirty.shouldBe(true)
   }
 
-  it should "discard dirty buffer content when persistUnsavedBuffers is false" in {
+  it should "preserve dirty buffer content even when persistUnsavedBuffers is false" in {
     val tempFile = Files.createTempFile("session-state-no-persist", ".txt")
     Files.writeString(tempFile, "saved on disk")
 
@@ -114,11 +114,11 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val sessionState  = SessionState.fromAppState(appState, persistUnsaved = false)
     val sessionBuffer = sessionState.buffers.find(_.id == buffer.id.value).get
 
-    sessionBuffer.unsavedContent shouldBe None
+    sessionBuffer.unsavedContent shouldBe Some("unsaved in memory")
     sessionBuffer.isDirty shouldBe true
   }
 
-  it should "preserve clean buffer content when persistUnsavedBuffers is false" in {
+  it should "rely on the on-disk file for clean buffer content when persistUnsavedBuffers is false" in {
     val tempFile = Files.createTempFile("session-state-clean-persist", ".txt")
     Files.writeString(tempFile, "saved on disk")
 
@@ -139,7 +139,7 @@ class SessionStateSpec extends AnyFlatSpec with Matchers:
     val sessionState  = SessionState.fromAppState(appState, persistUnsaved = false)
     val sessionBuffer = sessionState.buffers.find(_.id == buffer.id.value).get
 
-    sessionBuffer.unsavedContent shouldBe Some("saved on disk")
+    sessionBuffer.unsavedContent shouldBe None
     sessionBuffer.isDirty shouldBe false
   }
 

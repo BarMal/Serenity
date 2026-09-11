@@ -179,7 +179,7 @@ object SpellChecker:
     HunspellCompoundMatcher.matches(
       normalized,
       dictionary.compoundRules,
-      dictionary.compoundWordFlags,
+      dictionary.compoundCandidateIndex,
       dictionary.compoundMin
     ) ||
     // Free-form COMPOUNDFLAG compounding (#1198) is a second, independent mechanism a dictionary may declare

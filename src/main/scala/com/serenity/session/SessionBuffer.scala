@@ -5,8 +5,6 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
 import com.serenity.state.models.*
 
-/** Persistent representation of a buffer
-  */
 final case class SessionBuffer(
     id: Int,
     filePath: Option[String], // Use String instead of Path for JSON serialization
@@ -66,8 +64,10 @@ object SessionBuffer:
       isNewEmpty = buffer.document.isNewEmpty,
       cursors = buffer.editing.cursors.map(SessionCursorPosition.fromCursorPosition),
       viewport = SessionViewport.fromViewport(buffer.viewport),
+      // Clean, file-backed buffers rely on the on-disk file (see toBufferIO's disk-read fallback) --
+      // only a buffer with actual unsaved content needs its text re-serialized into session JSON.
       unsavedContent =
-        if persistUnsaved || (!buffer.document.isDirty && !buffer.document.isNewEmpty) then Some(text)
+        if persistUnsaved || buffer.hasUnsavedChanges then Some(text)
         else None,
       richTextDocument = buffer.richText.richTextDocument.filter(_.matchesPlainText(text)),
       richTextFidelity = buffer.richText.richTextFidelity,

@@ -154,6 +154,12 @@ object DictionaryLoader:
       else normalized.languages.flatMap(language => BuiltInDictionaries.getOrElse(language, Set.empty)).toSet
 
     val compoundWordFlags = mergeCompoundWordFlags(externalResults.map(_.compoundWordFlags))
+    val compoundRules     = externalResults.flatMap(_.compoundRules).distinct
+    // Built once here, not per `HunspellCompoundMatcher.matches` call (issue #1445) -- mirroring `compoundFlagTrie`
+    // below for the free-form COMPOUNDFLAG path. Skipped (kept empty) when no dictionary declares COMPOUNDRULE, since
+    // `matches` short-circuits on an empty `compoundRules` before ever consulting the index.
+    val compoundCandidateIndex =
+      if compoundRules.isEmpty then CompoundCandidateIndex.empty else CompoundCandidateIndex.build(compoundWordFlags)
     // First-declared wins (issue #1198): unlike COMPOUNDMIN/COMPOUNDRULE, these flag letters are meaningful only
     // relative to the one dictionary that declared them (its own FLAG-mode alphabet), so merging across multiple
     // dictionaries that each declare their own free-form compounding is not well-defined in general -- the common
@@ -178,9 +184,10 @@ object DictionaryLoader:
       failures = failures.distinct,
       iconv = externalResults.flatMap(_.iconv).distinct,
       oconv = externalResults.flatMap(_.oconv).distinct,
-      compoundRules = externalResults.flatMap(_.compoundRules).distinct,
+      compoundRules = compoundRules,
       compoundMin = externalResults.map(_.compoundMin).foldLeft(3)(math.min),
       compoundWordFlags = compoundWordFlags,
+      compoundCandidateIndex = compoundCandidateIndex,
       compoundFlag = compoundFlag,
       compoundBeginFlag = compoundBeginFlag,
       compoundMiddleFlag = compoundMiddleFlag,

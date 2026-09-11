@@ -33,7 +33,6 @@ enum FileType:
 
 object FileType:
 
-  /** Detect file type from path extension */
   def fromPath(path: Path): FileType =
     val fileName = path.getFileName.toString.toLowerCase
     fileName.lastIndexOf('.') match
@@ -42,7 +41,6 @@ object FileType:
         val extension = fileName.substring(dotIndex + 1)
         fromExtension(extension)
 
-  /** Detect file type from extension string */
   def fromExtension(extension: String): FileType =
     extension.toLowerCase match
       case "scala" | "sc"       => FileType.Scala
@@ -70,7 +68,6 @@ object FileType:
       case "sh" | "bash"        => FileType.Shell
       case _                    => FileType.Unknown
 
-  /** Get display name for file type */
   def displayName(fileType: FileType): String = fileType match
     case FileType.Scala      => "Scala"
     case FileType.Java       => "Java"

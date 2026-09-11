@@ -18,6 +18,12 @@ import com.serenity.config.SpellCheckDictionaryFingerprint
   * dictionary word's flags keyed by its `DictionaryWord.normalize`d text -- the shape `HunspellCompoundMatcher.matches`
   * needs to recognize an unmatched word as a valid compound without re-reading the filesystem.
   *
+  * `compoundCandidateIndex` (issue #1445) is `compoundWordFlags` bucketed by first character for `matches`'s candidate
+  * lookups -- built once here by `DictionaryLoader.loadSnapshot`, mirroring `compoundFlagTrie` below, so
+  * `HunspellCompoundMatcher.matches` never rebuilds it per check (it previously did, on every call, which
+  * `SpellChecker.isAccepted` makes once per unrecognized word in a document). Empty on every dictionary that declares
+  * no COMPOUNDRULE.
+  *
   * `compoundFlag`/`compoundBeginFlag`/`compoundMiddleFlag`/`compoundEndFlag`/`compoundWordMax`/`compoundFlagTrie`
   * (issue #1198) back Hunspell's free-form COMPOUNDFLAG compounding: the (first-declared, across merged dictionaries)
   * flag letters marking a word eligible as a general or positionally-restricted compound member, the merged
@@ -41,6 +47,7 @@ final case class DictionaryContext(
     compoundRules: List[String] = Nil,
     compoundMin: Int = 3,
     compoundWordFlags: Map[String, Set[String]] = Map.empty,
+    compoundCandidateIndex: CompoundCandidateIndex = CompoundCandidateIndex.empty,
     compoundFlag: Option[String] = None,
     compoundBeginFlag: Option[String] = None,
     compoundMiddleFlag: Option[String] = None,

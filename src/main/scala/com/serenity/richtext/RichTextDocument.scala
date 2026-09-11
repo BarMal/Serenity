@@ -6,7 +6,6 @@ enum InlineMark:
   case Italic
   case Underline
 
-/** Paragraph-level horizontal alignment. */
 enum ParagraphAlignment:
   case Left
   case Center
@@ -28,19 +27,15 @@ final case class RichTextStyle(
   def withMark(mark: InlineMark): RichTextStyle =
     copy(marks = marks + mark)
 
-  /** Return this style without the given inline mark. */
   def withoutMark(mark: InlineMark): RichTextStyle =
     copy(marks = marks - mark)
 
-  /** Return this style with the given font family metadata. */
   def withFontFamily(family: String): RichTextStyle =
     copy(fontFamily = Some(family.trim).filter(_.nonEmpty))
 
-  /** Return this style with the given font size metadata. */
   def withFontSize(size: Float): RichTextStyle =
     copy(fontSize = Some(size.max(1.0f)))
 
-  /** Return this style with the given text colour metadata. */
   def withColor(color: String): RichTextStyle =
     copy(color = Some(color.trim).filter(_.nonEmpty))
 

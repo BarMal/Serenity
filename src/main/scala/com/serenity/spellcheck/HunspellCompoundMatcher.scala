@@ -5,6 +5,27 @@ private[spellcheck] enum CompoundQuantifier:
 
 final private[spellcheck] case class CompoundToken(flag: String, quantifier: CompoundQuantifier)
 
+/** Every compound-flagged dictionary word bucketed by its first character, so a candidate lookup narrows its scan to
+  * words that could plausibly match rather than re-walking the whole dictionary. Built once per dictionary load by
+  * `DictionaryLoader.loadSnapshot` and stored alongside `DictionaryContext.compoundWordFlags` for the same lifetime --
+  * mirroring how `CompoundTrie` is built once for the free-form COMPOUNDFLAG path -- rather than rebuilt on every
+  * `HunspellCompoundMatcher.matches` call (issue #1445; the per-call rebuild issue #1415 had already flagged as a cost
+  * worth watching, since `SpellChecker.isAccepted` invokes `matches` for every unrecognized word in a document).
+  */
+final case class CompoundCandidateIndex(buckets: Map[Char, Vector[(String, Set[String])]])
+
+object CompoundCandidateIndex:
+
+  val empty: CompoundCandidateIndex = CompoundCandidateIndex(Map.empty)
+
+  def build(compoundWordFlags: Map[String, Set[String]]): CompoundCandidateIndex =
+    CompoundCandidateIndex(
+      compoundWordFlags.iterator
+        .filter { case (word, _) => word.nonEmpty }
+        .toVector
+        .groupBy { case (word, _) => word.head }
+    )
+
 /** Hunspell COMPOUNDRULE matching (issue #1187): parses a dictionary's COMPOUNDRULE pattern strings into flag/
   * quantifier tokens and matches candidate compound words against them, segmenting the candidate into dictionary words
   * carrying the flags each token requires.
@@ -18,26 +39,13 @@ private[spellcheck] object HunspellCompoundMatcher:
   def matches(
     word: String,
     compoundRules: List[String],
-    compoundWordFlags: Map[String, Set[String]],
+    candidateIndex: CompoundCandidateIndex,
     compoundMin: Int
   ): Boolean =
-    compoundRules.nonEmpty && {
-      val index = buildCandidateIndex(compoundWordFlags)
-      compoundRules.exists(pattern => compoundMatches(tokenizeCompoundPattern(pattern), word, index, compoundMin))
-    }
-
-  /** Every dictionary word bucketed by its first character, built once per [[matches]] call and threaded through the
-    * recursive matchers below instead of the raw map -- so the (potentially many) candidate lookups a single `matches`
-    * call performs each narrow their scan to words that could plausibly match, rather than re-walking the whole
-    * dictionary per lookup (issue #1415).
-    */
-  private def buildCandidateIndex(
-    compoundWordFlags: Map[String, Set[String]]
-  ): Map[Char, Vector[(String, Set[String])]] =
-    compoundWordFlags.iterator
-      .filter { case (word, _) => word.nonEmpty }
-      .toVector
-      .groupBy { case (word, _) => word.head }
+    compoundRules.nonEmpty &&
+      compoundRules.exists(pattern =>
+        compoundMatches(tokenizeCompoundPattern(pattern), word, candidateIndex, compoundMin)
+      )
 
   /** Parses one COMPOUNDRULE pattern into flag/quantifier tokens. A flag is either a single character (Simple flag
     * mode) or a parenthesized group (`(XX)`/`(1234)`, mandatory for Long/Num flag modes per hunspell(5): "With long and
@@ -72,12 +80,12 @@ private[spellcheck] object HunspellCompoundMatcher:
   private def compoundMemberCandidates(
     flag: String,
     remaining: String,
-    index: Map[Char, Vector[(String, Set[String])]],
+    index: CompoundCandidateIndex,
     compoundMin: Int
   ): List[String] =
     if remaining.isEmpty then Nil
     else
-      index
+      index.buckets
         .getOrElse(remaining.head, Vector.empty)
         .iterator
         .collect {
@@ -94,7 +102,7 @@ private[spellcheck] object HunspellCompoundMatcher:
   private def compoundMatches(
     tokens: List[CompoundToken],
     remaining: String,
-    index: Map[Char, Vector[(String, Set[String])]],
+    index: CompoundCandidateIndex,
     compoundMin: Int
   ): Boolean =
     tokens match
@@ -115,7 +123,7 @@ private[spellcheck] object HunspellCompoundMatcher:
     token: CompoundToken,
     rest: List[CompoundToken],
     remaining: String,
-    index: Map[Char, Vector[(String, Set[String])]],
+    index: CompoundCandidateIndex,
     compoundMin: Int
   ): Boolean =
     compoundMatches(rest, remaining, index, compoundMin) ||

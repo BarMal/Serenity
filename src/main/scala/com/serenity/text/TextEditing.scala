@@ -14,9 +14,15 @@ object TextEditing:
     val boundary = previousWordBoundary(text, text.length)
     text.substring(0, boundary) + text.substring(text.length)
 
+  /** Every real call site passes the full field text with no separate cursor position -- these are single-line fields
+    * (goto-line, find/replace, command palette search, file-dialog filename/path) whose cursor is implicitly pinned to
+    * the end, mirroring how the sibling single-character `deleteForwardFromActiveField` is a no-op for the same fields.
+    * There is nothing after an end-pinned cursor to delete, so this is correctly a no-op today; it exists for symmetry
+    * with `deleteWordBackward` and to be ready if a field ever gains real interior-cursor tracking.
+    */
   def deleteWordForward(text: String): String =
     val boundary = nextWordBoundary(text, text.length)
-    text.substring(0, text.length) + text.substring(boundary)
+    text.substring(0, boundary) + text.substring(text.length)
 
   def previousWordBoundary(text: String, cursor: Int): Int =
     previousWordBoundary(StringCharacterSource(text), cursor)

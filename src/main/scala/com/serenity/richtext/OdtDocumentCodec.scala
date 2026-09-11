@@ -40,7 +40,6 @@ object OdtDocumentCodec:
       paragraphStyles: Map[String, ParagraphAlignment]
   )
 
-  /** Read an ODT file into Serenity's native rich text model. */
   def read(path: Path): IO[RichTextDocument] =
     IO.blocking(readBytes(RichTextArchive.readFile(path, "ODT")))
 
@@ -48,11 +47,9 @@ object OdtDocumentCodec:
   def readWithFidelity(path: Path): IO[RichTextImport] =
     IO.blocking(readBytesWithFidelity(RichTextArchive.readFile(path, "ODT")))
 
-  /** Write Serenity's native rich text model to an ODT file. */
   def write(document: RichTextDocument, path: Path): IO[Unit] =
     AtomicFileWriter.writeBytes(path, writeBytes(document))
 
-  /** Decode ODT bytes into Serenity's native rich text model. */
   def readBytes(bytes: Array[Byte]): RichTextDocument =
     try
       val content = RichTextArchive.zipEntry(bytes, "content.xml", "ODT").getOrElse {
@@ -90,7 +87,6 @@ object OdtDocumentCodec:
     val unsupportedEntries = RichTextArchive.entryNames(bytes, "ODT") -- SupportedArchiveEntries
     RichTextImport(document, RichTextFidelity(unsupportedElements, unsupportedEntries))
 
-  /** Encode Serenity's native rich text model as ODT bytes. */
   def writeBytes(document: RichTextDocument): Array[Byte] =
     val output = ByteArrayOutputStream()
     val zip    = ZipOutputStream(output, StandardCharsets.UTF_8)

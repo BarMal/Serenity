@@ -6,9 +6,10 @@ import com.serenity.state.models.BufferId
 import com.serenity.state.reducers.AnimationEffect
 
 /** Interprets `AnimationEffect`s into the buffer-animation side table. `Buffer` carries no animation state (`#1001`) --
-  * this is where the presentation layer that actually owns `AnimationState` applies a reducer-computed change. Not yet
-  * wired to any reducer emission site or read by any painter; landed here so the side table has a real, exercised owner
-  * before either side is migrated onto it.
+  * this is where the presentation layer that actually owns `AnimationState` applies a reducer-computed change. Wired
+  * into the live effect-dispatch loop in `StateManagerEffectHandlers`, fed by `EditorEditSupport`'s
+  * `animationRemapEffects`/`animationMergeEffects`; the resulting state is read back via
+  * `StateManager.getBufferAnimations`.
   */
 final private[manager] class AnimationEffectHandler(bufferAnimationsRef: Ref[IO, Map[BufferId, AnimationState]]):
 

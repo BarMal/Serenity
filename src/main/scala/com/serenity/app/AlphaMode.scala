@@ -14,16 +14,11 @@ import com.serenity.config.AppConfig
   */
 object AlphaMode:
 
-  /** Overlays the alpha profile onto an already-loaded config, turning on every currently-gated experimental prototype
-    * flag. Every other setting passes through unchanged.
-    */
   def overlay(config: AppConfig): AppConfig =
     config.withCommandRunnerCursorPeekEnabled(true)
 
-  /** Whether alpha mode should activate for this launch. */
   def isRequested(launchOptions: LaunchOptions): Boolean =
     launchOptions.alpha
 
-  /** Applies the alpha overlay when requested by the CLI flag, otherwise returns `config` unchanged. */
   def applyIfRequested(config: AppConfig, launchOptions: LaunchOptions): AppConfig =
     if isRequested(launchOptions) then overlay(config) else config

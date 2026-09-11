@@ -25,6 +25,12 @@ class TextEditingSpec extends AnyFlatSpec with Matchers:
     TextEditing.nextWordBoundary("hello, world", 7) shouldBe 12
   }
 
+  it should "leave text unchanged, since every real caller's cursor is implicitly pinned to the end" in {
+    TextEditing.deleteWordForward("hello world") shouldBe "hello world"
+    TextEditing.deleteWordForward("hello, world") shouldBe "hello, world"
+    TextEditing.deleteWordForward("") shouldBe ""
+  }
+
   it should "step over surrogate-pair emoji as one grapheme" in {
     val text = "a🙂b"
 

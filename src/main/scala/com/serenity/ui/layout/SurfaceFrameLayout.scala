@@ -27,7 +27,6 @@ final case class LogicalPixelRect(x: Double, y: Double, width: Double, height: D
     val bottom = math.min(this.bottom, other.bottom)
     Option.when(right > left && bottom > top)(LogicalPixelRect(left, top, right - left, bottom - top))
 
-  /** Translate this rectangle without changing its size. */
   def translated(deltaX: Double, deltaY: Double): LogicalPixelRect =
     copy(x = x + deltaX, y = y + deltaY)
 

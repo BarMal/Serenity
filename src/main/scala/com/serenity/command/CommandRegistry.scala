@@ -4,7 +4,6 @@ import com.serenity.command.CommandSurfaceItem.CommandItem
 import com.serenity.lsp.config.LanguageId
 import com.serenity.ui.presets.UiPreset
 
-/** Registry of all available commands */
 class CommandRegistry(private val commands: List[Command]):
 
   private val searcher = new CommandSearcher(commands)
@@ -18,10 +17,8 @@ class CommandRegistry(private val commands: List[Command]):
       category -> categoryCommands
     }.toMap
 
-  /** Get all registered commands */
   def getAllCommands: List[Command] = commands
 
-  /** Search commands by term */
   def searchCommands(term: String, maxResults: Int = 5): List[Command] =
     searcher.search(term, maxResults)
 
@@ -72,7 +69,6 @@ class CommandRegistry(private val commands: List[Command]):
 
 object CommandRegistry:
 
-  /** Create registry with custom commands */
   def apply(commands: List[Command]): CommandRegistry = new CommandRegistry(commands)
 
   /** Registry with default commands. The command list is static, so this is built once and reused. */

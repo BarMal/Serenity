@@ -26,15 +26,12 @@ object RtfDocumentCodec:
     */
   private val HeadingFontSizeBoost: Map[Int, Float] = Map(1 -> 12f, 2 -> 8f, 3 -> 6f, 4 -> 4f, 5 -> 2f, 6 -> 1f)
 
-  /** Read an RTF file into Serenity's native rich text model. */
   def read(path: Path): IO[RichTextDocument] =
     IO.blocking(readBytes(Files.readAllBytes(path)))
 
-  /** Write Serenity's native rich text model to an RTF file. */
   def write(document: RichTextDocument, path: Path): IO[Unit] =
     AtomicFileWriter.writeBytes(path, writeBytes(document))
 
-  /** Decode RTF bytes into Serenity's native rich text model. */
   def readBytes(bytes: Array[Byte]): RichTextDocument =
     val styledDocument = SwingText.DefaultStyledDocument()
     val input          = ByteArrayInputStream(markInlineLineBreaks(bytes))

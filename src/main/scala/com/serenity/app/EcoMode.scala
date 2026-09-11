@@ -32,8 +32,6 @@ object EcoMode:
   def isRequested(launchOptions: LaunchOptions, env: Map[String, String] = sys.env): Boolean =
     launchOptions.eco || env.get(EnvVar).contains("1")
 
-  /** Applies the eco overlay when requested by the CLI flag or the environment, otherwise returns `config` unchanged.
-    */
   def applyIfRequested(
     config: AppConfig,
     launchOptions: LaunchOptions,

@@ -44,7 +44,6 @@ object DocxDocumentCodec:
     "sectPr"
   )
 
-  /** Read a DOCX file into Serenity's native rich text model. */
   def read(path: Path): IO[RichTextDocument] =
     IO.blocking(readBytes(RichTextArchive.readFile(path, "DOCX")))
 
@@ -52,11 +51,9 @@ object DocxDocumentCodec:
   def readWithFidelity(path: Path): IO[RichTextImport] =
     IO.blocking(readBytesWithFidelity(RichTextArchive.readFile(path, "DOCX")))
 
-  /** Write Serenity's native rich text model to a DOCX file. */
   def write(document: RichTextDocument, path: Path): IO[Unit] =
     AtomicFileWriter.writeBytes(path, writeBytes(document))
 
-  /** Decode DOCX bytes into Serenity's native rich text model. */
   def readBytes(bytes: Array[Byte]): RichTextDocument =
     try
       val content = RichTextArchive.zipEntry(bytes, "word/document.xml", "DOCX").getOrElse {
@@ -93,7 +90,6 @@ object DocxDocumentCodec:
     val unsupportedEntries = RichTextArchive.entryNames(bytes, "DOCX") -- SupportedArchiveEntries
     RichTextImport(document, RichTextFidelity(unsupportedElements, unsupportedEntries))
 
-  /** Encode Serenity's native rich text model as DOCX bytes. */
   def writeBytes(document: RichTextDocument): Array[Byte] =
     val output = ByteArrayOutputStream()
     val zip    = ZipOutputStream(output, StandardCharsets.UTF_8)

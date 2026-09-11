@@ -358,6 +358,11 @@ class SessionManager(
   private def canonicalSessionFileName(sessionId: SessionId): String =
     if sessionId == defaultSessionId then defaultSessionFileName else s"${sessionId.value}.json"
 
+  // The per-segment symlink walk below is O(path depth); left as-is rather than short-circuited for shallow
+  // paths because session file names are one segment in practice (`canonicalSessionFileName` only ever emits
+  // "<uuid>.json" or the fixed default name) -- so the loop already costs a single `Files.isSymbolicLink` call
+  // per save/read, and there is no deep-path case in real use worth special-casing at the risk of weakening the
+  // traversal defense for a hand-crafted `sessionFileName`.
   private def safeSessionPath(sessionFileName: String): Option[Path] =
     val portableName = sessionFileName.replace('\\', '/')
     Try {

@@ -130,10 +130,12 @@ object ArchitectureChecks {
         "# lines/hits unless the same diff adds a '# paydown: <why, issue link>' comment line (see #1413).",
         "# Columns: path <TAB> detail <TAB> measured"
       )
+    // The header above documents the paydown-comment rule, but the check itself isn't done here: the
+    // requirement that baseline growth carry a "# paydown: <why, issue link>" line is enforced by the
+    // "Require justification for baseline growth" step in .github/workflows/ci.yml.
     IO.write(file, (header ++ violations.map(_.render)).mkString("", "\n", "\n"))
   }
 
-  /** Returns the failure report, or None when the ratchet holds. */
   def check(base: File, baselineFile: File): Option[String] = {
     val baseline = readBaseline(baselineFile)
     val current = collect(base)

@@ -8,10 +8,8 @@ final case class ElementTransitionCells(
   /** Combine all element cells when a transition kind does not need separate frame/content phases. */
   def all: Map[CharacterKey, CellAnimation] = frame ++ content
 
-/** Lowers semantic element transition plans into existing character animation state. */
 object ElementTransitionLowerer:
 
-  /** Build active character animations for a semantic transition plan. */
   def lower(
     plan: ElementTransitionPlan,
     cells: ElementTransitionCells,

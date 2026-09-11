@@ -15,7 +15,6 @@ import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
 import org.typelevel.log4cats.Logger
 
-/** Runtime-owned services used while interpreting command effects. */
 private[manager] trait EffectRuntimePort:
   def stateRef: Ref[IO, AppState]
   def themeNamesRef: Ref[IO, List[String]]
@@ -35,7 +34,6 @@ private[manager] trait EffectRuntimePort:
   def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)
 
-/** Editor capability calls used by command effects. */
 private[manager] trait EffectEditorPort:
   def updateState(update: AppState => AppState): IO[Unit]
   def enqueueEvent(event: Event): IO[Unit]
@@ -43,7 +41,6 @@ private[manager] trait EffectEditorPort:
   def scheduleDocumentAnalysis(): IO[Unit]
   def scheduleFindSearch(request: FindSearchRequest): IO[Unit]
 
-/** Surface capability calls used by command effects. */
 private[manager] trait EffectSurfacePort:
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit]
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit]
@@ -55,21 +52,18 @@ private[manager] trait EffectSurfacePort:
   def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit]
   def recordUndoBoundary(entry: HistoryEntry, groupable: Boolean): IO[Unit]
 
-/** File infrastructure used by command effects. */
 private[manager] trait EffectFilePort:
   def fileDialog: Option[com.serenity.io.FileDialog]
   def fileManager: FileManager
   def saveExistingBuffer(bufferId: BufferId): IO[Unit]
   def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit]
 
-/** Session persistence operations used by command effects. */
 private[manager] trait EffectSessionPort:
   def sessionPersistence: SessionPersistence
   def saveSession(): IO[Unit]
   def loadSession(): IO[Option[AppState]]
   def clearSession(): IO[Unit]
 
-/** Modal file workflow operations used by command effects. */
 private[manager] trait EffectModalWorkflowPort:
   def clearCloseActions(state: AppState): AppState
   def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]

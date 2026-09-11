@@ -1,6 +1,5 @@
 package com.serenity.keystroke.events
 
-/** Events related to theme management */
 sealed trait ThemeEvent
 
 final case class SwitchTheme(themeName: String) extends ThemeEvent

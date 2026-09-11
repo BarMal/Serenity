@@ -21,7 +21,7 @@ object LspManager:
   final private case class ManagedConnection(connection: LspConnection, release: IO[Unit])
 
   private enum RequestKind:
-    case Hover, Definition
+    case Hover, Definition, Completion
 
   final private case class RequestKey(uri: String, kind: RequestKind)
   final private case class RequestContext(version: Int, anchor: CursorPosition)
@@ -37,6 +37,16 @@ object LspManager:
     /** Drop any cached resolution for a document that's closing, so a later reopen re-resolves the workspace root
       * instead of reusing a stale one. No-op by default -- only the real, cache-backed provider needs to do anything
       * here.
+      *
+      * Deliberately eager rather than tied to a config-change event (#1469): there is no config-reload effect in this
+      * pipeline today -- `LspUserConfig` is fixed for the lifetime of a `run`/`runWithProvider` call -- so a resolution
+      * can only actually go stale here because the *workspace root* for this uri changes between closes (a multi-root
+      * workspace, or the project being reopened from a different root), not because server availability on PATH changes
+      * mid-session. Eviction on close is cheap insurance against that: the cost of a false negative (skip
+      * re-resolution, misroute requests to the wrong workspace's server) is worse than the cost of redoing a
+      * PATH/filesystem walk the next time this uri is reopened, which is the uncommon case, not the hot path. If this
+      * ever shows up as a real cost (e.g. rapid tab close/reopen against a slow filesystem), the fix is to key eviction
+      * off an explicit config/workspace-change signal instead of every `FileClosed`, not to drop eviction altogether.
       */
     def evictResolution(@unused languageId: LanguageId, @unused fileUri: String): IO[Unit] = IO.unit
 
@@ -164,20 +174,30 @@ object LspManager:
         }
 
       case LspEffect.CompletionRequested(uri, languageId, line, character, anchor) =>
-        ensureConnection(connectionsRef, languageId, uri, applyEvent, logger, connectionProvider).flatMap {
-          case Some((_, conn)) =>
-            Trace
-              .timed(s"lsp.completion.$uri")(
-                conn.sendRequest("textDocument/completion", LspProtocol.completionParams(uri, line, character))
-              )
-              .flatMap(response =>
-                LspProtocol
-                  .parseCompletionItems(response)
-                  .fold(IO.unit)(items => applyEvent(LspEvent.LspCompletionReceived(items, anchor)))
-              )
-              .handleErrorWith(ex => logger.error(ex)(s"[LSP] completion failed: $uri"))
-          case None =>
-            applyEvent(LspEvent.LspHoverReceived(s"No LSP server available for ${languageId.displayName}", anchor))
+        startRequest(
+          RequestKind.Completion,
+          uri,
+          languageId,
+          anchor,
+          connectionsRef,
+          documentVersions,
+          requestContexts,
+          requestFibers,
+          supervisor,
+          applyEvent,
+          logger,
+          connectionProvider
+        ) { (conn, _) =>
+          Trace
+            .timed(s"lsp.completion.$uri")(
+              conn.sendRequest("textDocument/completion", LspProtocol.completionParams(uri, line, character))
+            )
+            .flatMap(response =>
+              LspProtocol
+                .parseCompletionItems(response)
+                .fold(IO.unit)(items => applyEvent(LspEvent.LspCompletionReceived(items, anchor)))
+            )
+            .handleErrorWith(ex => logger.error(ex)(s"[LSP] completion failed: $uri"))
         }
 
       case LspEffect.DefinitionRequested(uri, languageId, line, character, anchor, symbol) =>
@@ -237,6 +257,16 @@ object LspManager:
         // `$/cancelRequest` it triggers reaches the wire first. Racing the two (start the new fiber, cancel the old
         // one alongside it) leaves the order of those two queue offers to fiber scheduling, and the new caller has
         // no way to tell the resulting message apart from the request it is waiting for.
+        //
+        // Hover-only is intentional, not an oversight (#1450): hover requests are re-issued continuously as the
+        // cursor moves within the same document version, so without eager cancellation a fast mouse can pile up
+        // many concurrent hover round-trips against the server. Definition requests are one-shot, user-invoked
+        // actions (an explicit "go to definition"); a second one for the same `key` before the first resolves is
+        // rare, and when it does happen the stale result is still discarded correctly -- `requestContexts.update`
+        // above already overwrote this key's context with the new anchor, so `isCurrent` for the first fiber's
+        // response will find a context mismatch and no-op it (see `isCurrent`). Cancelling it too would only save
+        // one redundant network round-trip in an uncommon case, at the cost of the same complexity hover already
+        // carries here, so the asymmetry is left as-is.
         (if kind == RequestKind.Hover then
            requestFibers.modify(fibers => (fibers - key, fibers.get(key))).flatMap(_.traverse_(_.cancel))
          else IO.unit) >>
