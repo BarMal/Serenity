@@ -5,11 +5,13 @@
 # lines/hits unless the same diff adds a '# paydown: <why, issue link>' comment line (see #1413).
 # Columns: path <TAB> detail <TAB> measured
 # paydown: CommandRunnerReducer.scala grew by 1 line replacing InputItem's three booleans with an
-# InputKind ADT; ConfigManagerSpec.scala and FileHandlingSpec.scala grew adding regression tests
-# for the MotionFamilyConfig contradiction fix, ConfigManager's logged-catch fix, and the new
-# FileManagerError cases -- all from the type-modeling audit's bug fixes, not architectural drift.
+# InputKind ADT; ConfigManager.scala's parseConfig grew fixing a HOCON key-ordering bug in the
+# MotionFamilyConfig enabled/transitionKind contradiction fix (entries must be partitioned so every
+# ".enabled" key is processed last); ConfigManagerSpec.scala and FileHandlingSpec.scala grew adding
+# regression tests for that fix, the ConfigManager logged-catch fix, and the new FileManagerError
+# cases -- all from the type-modeling audit's bug fixes, not architectural drift.
 main/scala/com/serenity/app/AppRuntime.scala	file length	757
-main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	114
+main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	119
 main/scala/com/serenity/config/ConfigRegistry.scala	file length	680
 main/scala/com/serenity/rope/Rope.scala	file length	616
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	file length	671
