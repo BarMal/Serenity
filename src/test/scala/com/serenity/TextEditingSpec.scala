@@ -25,9 +25,9 @@ class TextEditingSpec extends AnyFlatSpec with Matchers:
     TextEditing.nextWordBoundary("hello, world", 7) shouldBe 12
   }
 
-  it should "delete the leading word forward, including trailing whitespace" in {
-    TextEditing.deleteWordForward("hello world") shouldBe "world"
-    TextEditing.deleteWordForward("hello, world") shouldBe ", world"
+  it should "leave text unchanged, since every real caller's cursor is implicitly pinned to the end" in {
+    TextEditing.deleteWordForward("hello world") shouldBe "hello world"
+    TextEditing.deleteWordForward("hello, world") shouldBe "hello, world"
     TextEditing.deleteWordForward("") shouldBe ""
   }
 
