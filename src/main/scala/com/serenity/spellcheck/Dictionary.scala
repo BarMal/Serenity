@@ -17,6 +17,14 @@ import com.serenity.config.SpellCheckDictionaryFingerprint
   * `COMPOUNDRULE` pattern strings, the merged `COMPOUNDMIN` (minimum compound-member length, default 3), and every
   * dictionary word's flags keyed by its `DictionaryWord.normalize`d text -- the shape `HunspellCompoundMatcher.matches`
   * needs to recognize an unmatched word as a valid compound without re-reading the filesystem.
+  *
+  * `compoundFlag`/`compoundBeginFlag`/`compoundMiddleFlag`/`compoundEndFlag`/`compoundWordMax`/`compoundFlagTrie`
+  * (issue #1198) back Hunspell's free-form COMPOUNDFLAG compounding: the (first-declared, across merged dictionaries)
+  * flag letters marking a word eligible as a general or positionally-restricted compound member, the merged
+  * `COMPOUNDWORDMAX` (`None` means hunspell's documented default of unlimited), and a trie over every word carrying any
+  * of those flags -- built once here by `DictionaryLoader.loadSnapshot` so `HunspellFreeCompoundMatcher.matches` never
+  * rebuilds it per check. Empty/`None` on every dictionary that declares no free-form compounding, in which case
+  * `HunspellFreeCompoundMatcher.matches` returns `false` immediately.
   */
 final case class DictionaryContext(
     words: Set[String],
@@ -26,7 +34,13 @@ final case class DictionaryContext(
     oconv: List[(String, String)] = Nil,
     compoundRules: List[String] = Nil,
     compoundMin: Int = 3,
-    compoundWordFlags: Map[String, Set[String]] = Map.empty
+    compoundWordFlags: Map[String, Set[String]] = Map.empty,
+    compoundFlag: Option[String] = None,
+    compoundBeginFlag: Option[String] = None,
+    compoundMiddleFlag: Option[String] = None,
+    compoundEndFlag: Option[String] = None,
+    compoundWordMax: Option[Int] = None,
+    compoundFlagTrie: CompoundTrie = CompoundTrie.empty
 )
 
 /** The result of one explicit dictionary-discovery pass: the loaded words/replacements/failures plus the on-disk

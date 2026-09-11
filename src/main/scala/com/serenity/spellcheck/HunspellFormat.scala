@@ -35,7 +35,12 @@ final private[spellcheck] case class HunspellAffixRules(
     oconv: List[(String, String)],
     compoundRules: List[String],
     compoundMin: Int,
-    circumfixFlag: Option[String]
+    circumfixFlag: Option[String],
+    compoundFlag: Option[String],
+    compoundBeginFlag: Option[String],
+    compoundMiddleFlag: Option[String],
+    compoundEndFlag: Option[String],
+    compoundWordMax: Option[Int]
 )
 
 private[spellcheck] object HunspellAffixRules:
@@ -52,6 +57,11 @@ private[spellcheck] object HunspellAffixRules:
       Nil,
       Nil,
       3,
+      None,
+      None,
+      None,
+      None,
+      None,
       None
     )
 
@@ -72,25 +82,22 @@ final private[spellcheck] case class HunspellEntry(word: String, flags: Set[Stri
   */
 private[spellcheck] object HunspellFormat:
 
-  /** Directives from the Hunspell affix format that this handwritten parser does not implement (the free-form
-    * COMPOUNDFLAG compounding mechanism, morphological generation, and similar). Rather than silently ignoring them --
-    * which would mis-flag words that rely on them -- their presence is surfaced as an explicit dictionary-load
-    * diagnostic. See the PR description for why this project carries a partial parser instead of a dependency on
-    * Lucene's Hunspell implementation.
+  /** Directives from the Hunspell affix format that this handwritten parser does not implement (morphological
+    * generation, compound-validity filters, and similar). Rather than silently ignoring them -- which would mis-flag
+    * words that rely on them -- their presence is surfaced as an explicit dictionary-load diagnostic. See the PR
+    * description for why this project carries a partial parser instead of a dependency on Lucene's Hunspell
+    * implementation.
     *
-    * ICONV/OCONV and NEEDAFFIX (issue #1182), and COMPOUNDRULE/COMPOUNDMIN and CIRCUMFIX (issue #1187), are implemented
-    * and intentionally absent from this set -- see `parseConversionTable`/`parseNeedAffixFlag` and
-    * `parseCompoundRules`/`parseCompoundMin`/`parseCircumfixFlag`. COMPOUNDFLAG/COMPOUNDBEGIN/COMPOUNDMIDDLE/
-    * COMPOUNDLAST (Hunspell's free-form dictionary word-segmentation compounding, as opposed to COMPOUNDRULE's explicit
-    * flag grammar) and the CHECKCOMPOUND family (plus SIMPLIFIEDTRIPLE) validation directives remain unsupported and
-    * are deferred to a follow-up issue -- see the PR description for why.
+    * ICONV/OCONV and NEEDAFFIX (issue #1182); COMPOUNDRULE/COMPOUNDMIN and CIRCUMFIX (issue #1187); and
+    * COMPOUNDFLAG/COMPOUNDBEGIN/COMPOUNDMIDDLE/COMPOUNDEND (accepting the older COMPOUNDLAST spelling as an alias) and
+    * COMPOUNDWORDMAX -- Hunspell's free-form dictionary word-segmentation compounding, as opposed to COMPOUNDRULE's
+    * explicit flag grammar (issue #1198) -- are implemented and intentionally absent from this set: see
+    * `parseConversionTable`/`parseNeedAffixFlag`, `parseCompoundRules`/`parseCompoundMin`/`parseCircumfixFlag`, and
+    * `parseCompoundFlag`/`parseCompoundBeginFlag`/`parseCompoundMiddleFlag`/`parseCompoundEndFlag`/
+    * `parseCompoundWordMax`. The CHECKCOMPOUND family (plus SIMPLIFIEDTRIPLE), COMPOUNDSYLLABLE, SYLLABLENUM, and
+    * ONLYINCOMPOUND remain unsupported and are deferred to a follow-up issue -- see the PR description for why.
     */
   private val UnsupportedAffixDirectives = Set(
-    "COMPOUNDFLAG",
-    "COMPOUNDBEGIN",
-    "COMPOUNDMIDDLE",
-    "COMPOUNDLAST",
-    "COMPOUNDWORDMAX",
     "COMPOUNDSYLLABLE",
     "SYLLABLENUM",
     "ONLYINCOMPOUND",
@@ -115,17 +122,23 @@ private[spellcheck] object HunspellFormat:
   )
 
   def parseAffixRules(lines: List[String]): HunspellAffixRules =
-    val flagMode      = parseFlagMode(lines)
-    val flagAliases   = parseFlagAliases(lines, flagMode)
-    val prefixRules   = parsePrefixOrSuffixRules(lines, "PFX", flagMode)
-    val suffixRules   = parsePrefixOrSuffixRules(lines, "SFX", flagMode)
-    val replacements  = parseReplacements(lines)
-    val needAffixFlag = parseNeedAffixFlag(lines)
-    val iconv         = parseConversionTable(lines, "ICONV")
-    val oconv         = parseConversionTable(lines, "OCONV")
-    val compoundRules = parseCompoundRules(lines)
-    val compoundMin   = parseCompoundMin(lines)
-    val circumfixFlag = parseCircumfixFlag(lines)
+    val flagMode           = parseFlagMode(lines)
+    val flagAliases        = parseFlagAliases(lines, flagMode)
+    val prefixRules        = parsePrefixOrSuffixRules(lines, "PFX", flagMode)
+    val suffixRules        = parsePrefixOrSuffixRules(lines, "SFX", flagMode)
+    val replacements       = parseReplacements(lines)
+    val needAffixFlag      = parseNeedAffixFlag(lines)
+    val iconv              = parseConversionTable(lines, "ICONV")
+    val oconv              = parseConversionTable(lines, "OCONV")
+    val compoundRules      = parseCompoundRules(lines)
+    val compoundMin        = parseCompoundMin(lines)
+    val circumfixFlag      = parseCircumfixFlag(lines)
+    val compoundFlag       = parseSingleValueDirective(lines, "COMPOUNDFLAG")
+    val compoundBeginFlag  = parseSingleValueDirective(lines, "COMPOUNDBEGIN")
+    val compoundMiddleFlag = parseSingleValueDirective(lines, "COMPOUNDMIDDLE")
+    val compoundEndFlag =
+      parseSingleValueDirective(lines, "COMPOUNDEND").orElse(parseSingleValueDirective(lines, "COMPOUNDLAST"))
+    val compoundWordMax = parseCompoundWordMax(lines)
     HunspellAffixRules(
       flagMode,
       flagAliases,
@@ -137,7 +150,12 @@ private[spellcheck] object HunspellFormat:
       oconv,
       compoundRules,
       compoundMin,
-      circumfixFlag
+      circumfixFlag,
+      compoundFlag,
+      compoundBeginFlag,
+      compoundMiddleFlag,
+      compoundEndFlag,
+      compoundWordMax
     )
 
   def unsupportedAffixDirectives(lines: List[String], affixPath: Path): List[String] =
@@ -381,6 +399,27 @@ private[spellcheck] object HunspellFormat:
         case "COMPOUNDRULE" :: pattern :: Nil if !pattern.forall(_.isDigit) => Some(pattern)
         case _                                                              => None
     }
+
+  /** `COMPOUNDFLAG`/`COMPOUNDBEGIN`/`COMPOUNDMIDDLE`/`COMPOUNDEND` (hunspell(5), issue #1198): each names a single flag
+    * letter (in whatever representation the file's FLAG mode uses) that marks a dictionary word eligible as a free-form
+    * compound member -- `COMPOUNDFLAG` anywhere in the compound, the other three only at the position their name says.
+    * Verified against hunspell's own `tests/compoundflag.aff` (`COMPOUNDFLAG A`) and `tests/germancompounding.aff`
+    * (`COMPOUNDBEGIN U` / `COMPOUNDMIDDLE V` / `COMPOUNDEND W`).
+    */
+  private def parseSingleValueDirective(lines: List[String], directive: String): Option[String] =
+    lines
+      .collectFirst { case line if line.startsWith(s"$directive ") => line.stripPrefix(s"$directive ").trim }
+      .filter(_.nonEmpty)
+
+  /** `COMPOUNDWORDMAX <num>` (hunspell(5)): the maximum number of dictionary words a free-form COMPOUNDFLAG compound
+    * may segment into. Absent (`None`) means hunspell's documented default of unlimited -- naturally bounded in
+    * practice by `word.length / compoundMin`, but `HunspellFreeCompoundMatcher` enforces it as an actual limit rather
+    * than leaving it implicit, per issue #1198.
+    */
+  private def parseCompoundWordMax(lines: List[String]): Option[Int] =
+    lines.collectFirst {
+      case line if line.startsWith("COMPOUNDWORDMAX ") => line.stripPrefix("COMPOUNDWORDMAX ").trim.toIntOption
+    }.flatten
 
   private def zeroAsEmpty(value: String): String =
     if value == "0" then "" else value
