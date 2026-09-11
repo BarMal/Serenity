@@ -242,9 +242,7 @@ object AppConfigMotionOps:
 
     def withEditorInsertionTransitionKind(kind: TransitionKind): AppConfig =
       appConfig.updateAuthoritativeMotion(_.copy(editorInsertionTransitionKind = kind)) { configuration =>
-        updateMotionFamily(configuration, MotionFamily.EditorText)(
-          _.copy(enabled = kind != TransitionKind.Disabled, transitionKind = kind)
-        )
+        updateMotionFamily(configuration, MotionFamily.EditorText)(_.copy(transitionKind = kind))
       }
 
     def withCommandRunnerTransitionKind(kind: Option[TransitionKind]): AppConfig =

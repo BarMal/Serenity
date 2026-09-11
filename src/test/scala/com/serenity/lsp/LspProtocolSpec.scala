@@ -4,7 +4,15 @@ import java.nio.charset.StandardCharsets
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.lsp.client.{LspFramer, LspProtocol}
+import com.serenity.lsp.client.{
+  DocumentUri,
+  JsonRpcMessage,
+  LspFramer,
+  LspMethod,
+  LspProtocol,
+  RequestId,
+  WorkspaceRootUri
+}
 import com.serenity.lsp.model.{DiagnosticSeverity, LspPosition, LspRange}
 import io.circe.Json
 import io.circe.syntax.*
@@ -135,18 +143,36 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     incompleteBody.getMessage should include("truncated body")
   }
 
-  "LspProtocol" should "identify responses and notifications correctly" in {
-    val response     = Json.obj("jsonrpc" -> "2.0".asJson, "id" -> 1.asJson, "result" -> Json.obj())
+  "LspProtocol.classify" should "classify responses, error responses, notifications, and unrecognized messages" in {
+    val response = Json.obj("jsonrpc" -> "2.0".asJson, "id" -> 1.asJson, "result" -> Json.obj("ok" -> true.asJson))
+    val errorResponse = Json.obj(
+      "jsonrpc" -> "2.0".asJson,
+      "id"      -> 9.asJson,
+      "error"   -> Json.obj("code" -> (-32601).asJson, "message" -> "Method not found".asJson)
+    )
     val notification = Json.obj("jsonrpc" -> "2.0".asJson, "method" -> "initialized".asJson, "params" -> Json.obj())
     val request =
       Json.obj("jsonrpc" -> "2.0".asJson, "id" -> 2.asJson, "method" -> "test".asJson, "params" -> Json.obj())
 
-    LspProtocol.isResponse(response) shouldBe true
-    LspProtocol.isNotification(response) shouldBe false
-    LspProtocol.isNotification(notification) shouldBe true
-    LspProtocol.isResponse(notification) shouldBe false
-    LspProtocol.isResponse(request) shouldBe false
-    LspProtocol.isNotification(request) shouldBe false
+    LspProtocol.classify(response) shouldBe JsonRpcMessage.Response(RequestId(1), Json.obj("ok" -> true.asJson))
+    LspProtocol.classify(errorResponse) shouldBe JsonRpcMessage.ResponseError(RequestId(9), -32601, "Method not found")
+    LspProtocol.classify(notification) shouldBe JsonRpcMessage.Notification(LspMethod("initialized"), Json.obj())
+    LspProtocol.classify(request) shouldBe a[JsonRpcMessage.Malformed]
+  }
+
+  it should "surface a JSON-RPC error response instead of silently treating it as an absent result" in {
+    val errorResponse = Json.obj(
+      "jsonrpc" -> "2.0".asJson,
+      "id"      -> 4.asJson,
+      "error"   -> Json.obj("code" -> (-32602).asJson, "message" -> "Invalid params".asJson)
+    )
+
+    LspProtocol.classify(errorResponse) match
+      case JsonRpcMessage.ResponseError(id, code, message) =>
+        id shouldBe RequestId(4)
+        code shouldBe -32602
+        message shouldBe "Invalid params"
+      case other => fail(s"Expected a ResponseError, got $other")
   }
 
   it should "parse publishDiagnostics notifications" in {
