@@ -48,9 +48,10 @@ object TextHotkeyConverters:
           // rather than a plain `.toMap` so that, on the rare conflicting binding, the first one encountered in
           // `bindings` wins -- matching `collectFirst`'s original first-match-wins behavior -- instead of `.toMap`'s
           // last-write-wins.
-          val lookup = bindings.foldLeft(Map.empty[HotkeyTrigger, Event]) { case (acc, (trigger, event)) =>
-            if acc.contains(trigger) then acc else acc + (trigger -> event)
+          val lookup = bindings.foldLeft(Map.empty[HotkeyTrigger, Event]) {
+            case (acc, (trigger, event)) =>
+              if acc.contains(trigger) then acc else acc + (trigger -> event)
           }
 
-          Function.unlift(lookup.get)
+          Function.unlift(info => lookup.get(HotkeyTrigger(info.keyType, info.character, info.modifiers)))
       )

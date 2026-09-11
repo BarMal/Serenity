@@ -17,8 +17,8 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 /** Property-based coverage for undo/redo (#1472), complementing `UndoRedoSpec`'s hand-picked scenarios.
   *
   * Scoped to a single buffer and a single cursor: `UndoState.pushUndo`/`pushRedo` and `HistoryEntry.BufferEdit`'s
-  * `restore` make no assumption about cursor count, but a generator that also spreads edits across multiple cursors
-  * or panes would mostly be asserting `EditorTextEditReducer`'s multi-cursor edit semantics rather than the undo/redo
+  * `restore` make no assumption about cursor count, but a generator that also spreads edits across multiple cursors or
+  * panes would mostly be asserting `EditorTextEditReducer`'s multi-cursor edit semantics rather than the undo/redo
   * round-trip itself. `UndoRedoSpec` already covers the multi-cursor cases by hand.
   */
 class UndoRedoPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Matchers:
@@ -58,14 +58,15 @@ class UndoRedoPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks wit
       .map(_.document.content.collect())
       .getOrElse("")
 
-  property("undoing every applied edit restores the original content, and redoing every undo restores the edited content") {
+  property(
+    "undoing every applied edit restores the original content, and redoing every undo restores the edited content"
+  ) {
     forAll(genStartingContent, genEdits) { (startingContent, edits) =>
       val stateManager = freshStateManager()
       val bufferId     = stateManager.bufferManager.createBuffer(startingContent, None).unsafeRunSync()
       val paneId       = stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
       stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-      if startingContent.nonEmpty then
-        stateManager.setCursorPosition(paneId, 0, startingContent.length).unsafeRunSync()
+      if startingContent.nonEmpty then stateManager.setCursorPosition(paneId, 0, startingContent.length).unsafeRunSync()
 
       edits.foreach(event => stateManager.applyEvent(event).unsafeRunSync())
       val editedContent = contentOf(stateManager, bufferId)
@@ -86,8 +87,7 @@ class UndoRedoPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks wit
       val bufferId     = stateManager.bufferManager.createBuffer(startingContent, None).unsafeRunSync()
       val paneId       = stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
       stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-      if startingContent.nonEmpty then
-        stateManager.setCursorPosition(paneId, 0, startingContent.length).unsafeRunSync()
+      if startingContent.nonEmpty then stateManager.setCursorPosition(paneId, 0, startingContent.length).unsafeRunSync()
 
       edits.foreach(event => stateManager.applyEvent(event).unsafeRunSync())
       val editedContent = contentOf(stateManager, bufferId)

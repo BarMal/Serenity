@@ -109,11 +109,11 @@ private[manager] object MouseTargetLayoutKey:
 
   /** `AtomicReference`-backed single-slot memo of the last [[MouseTargetLayoutKey]] computed, keyed on the
     * [[FastPathInputs]] it was computed from. `from` is called synchronously from mouse-hit-testing
-    * (`ContextualToolbarHitTesting`, `CommandRunnerMouseHitTesting`, `MouseHitTestGeometry`, `PinnedPanelMouseHitTesting`,
-    * `EditorContextMenuHitTesting`) and from the renderer's own scene preparation (`AuthoritativeUiScene.forState`
-    * below) -- none of these run inside an IO fiber, so a `Ref[IO, ...]` here would need forcing via `unsafeRunSync`
-    * right back into a synchronous `def` at every call site, hiding a plain compare-and-set behind an effect type
-    * nothing here ever suspends on. This is the same reasoning already applied to
+    * (`ContextualToolbarHitTesting`, `CommandRunnerMouseHitTesting`, `MouseHitTestGeometry`,
+    * `PinnedPanelMouseHitTesting`, `EditorContextMenuHitTesting`) and from the renderer's own scene preparation
+    * (`AuthoritativeUiScene.forState` below) -- none of these run inside an IO fiber, so a `Ref[IO, ...]` here would
+    * need forcing via `unsafeRunSync` right back into a synchronous `def` at every call site, hiding a plain
+    * compare-and-set behind an effect type nothing here ever suspends on. This is the same reasoning already applied to
     * [[com.serenity.ui.renderer.RendererFrameState.BoundedRefCache]] (#1431/#1434) and to `ThemeManager`'s
     * highlight/lex caches (#1412/#1431/#1434): `AtomicReference` gives the same lock-free CAS semantics those modules
     * settled on, without threading `IO` through the entire mouse-targeting/rendering call graph.
@@ -217,16 +217,16 @@ private[serenity] object AuthoritativeUiScene:
   )
 
   /** Bounded, `LinkedHashMap`(access-order) + `synchronized`-backed cache of the prepared scene, shared by rendering
-    * and mouse targeting. `forState` below is called synchronously from the render entry points
-    * (`RendererEntryPoints`, `RendererCursorOverlay`) and from every mouse-hit-testing call site (see [[forState]]'s
-    * doc comment) -- none of them run inside an IO fiber, so this follows the same
-    * `Ref[IO, ...]`-was-tried-and-reverted reasoning as [[com.serenity.ui.renderer.RendererFrameState.BoundedRefCache]]
-    * (#1431/#1434) and `ThemeManager`'s highlight/lex caches (#1412/#1431/#1434): a synchronous API here would just
-    * force any `Ref[IO, ...]` back out via `unsafeRunSync` at every call site, hiding a plain mutable map behind an
-    * effect type nothing here ever suspends on. `synchronized` (rather than a lock-free CAS loop) is fine here because
-    * unlike those two modules this cache's whole value -- a `LinkedHashMap` in access-order mode -- is itself mutable
-    * and non-swappable-by-reference, so there is no immutable snapshot to CAS between; the critical sections are
-    * short (a `get` or a `put`), so contention is not a concern in the paint/hit-testing hot path this serves.
+    * and mouse targeting. `forState` below is called synchronously from the render entry points (`RendererEntryPoints`,
+    * `RendererCursorOverlay`) and from every mouse-hit-testing call site (see [[forState]]'s doc comment) -- none of
+    * them run inside an IO fiber, so this follows the same `Ref[IO, ...]`-was-tried-and-reverted reasoning as
+    * [[com.serenity.ui.renderer.RendererFrameState.BoundedRefCache]] (#1431/#1434) and `ThemeManager`'s highlight/lex
+    * caches (#1412/#1431/#1434): a synchronous API here would just force any `Ref[IO, ...]` back out via
+    * `unsafeRunSync` at every call site, hiding a plain mutable map behind an effect type nothing here ever suspends
+    * on. `synchronized` (rather than a lock-free CAS loop) is fine here because unlike those two modules this cache's
+    * whole value -- a `LinkedHashMap` in access-order mode -- is itself mutable and non-swappable-by-reference, so
+    * there is no immutable snapshot to CAS between; the critical sections are short (a `get` or a `put`), so contention
+    * is not a concern in the paint/hit-testing hot path this serves.
     *
     * 64 is a conservative round number, not a measured bound: it comfortably covers every geometry/font/cell-metrics
     * combination a single window session realistically cycles through (a handful of panes times a handful of

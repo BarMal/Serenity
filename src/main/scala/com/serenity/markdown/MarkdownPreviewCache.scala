@@ -12,8 +12,8 @@ import com.serenity.ui.theme.Theme
   * on a fingerprint of its input rather than the input itself, so repeated renders of unchanged content are free.
   *
   * `LinkedHashMap` + `synchronized` rather than `Ref[IO, ...]`: every reader/writer of these maps
-  * (`MarkdownDocumentPreview.renderHtmlFragment`/`renderImage`/`renderInlineImage`) is a plain synchronous `def`
-  * called from the renderer's paint path (`RendererFloatingPanels`, `TuiRuntime`), not from inside an IO fiber, so a
+  * (`MarkdownDocumentPreview.renderHtmlFragment`/`renderImage`/`renderInlineImage`) is a plain synchronous `def` called
+  * from the renderer's paint path (`RendererFloatingPanels`, `TuiRuntime`), not from inside an IO fiber, so a
   * `Ref`-backed cache would just have every call site force its `IO` via `unsafeRunSync` right back into the
   * synchronous signature these callers need -- hiding a plain mutable map behind an effect type nothing here ever
   * suspends on. This is the same tradeoff already settled for

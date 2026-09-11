@@ -6,7 +6,13 @@ import java.nio.file.attribute.FileTime
 
 import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.rope.{Balance, Rope}
-import com.serenity.spellcheck.{CompoundCandidateIndex, DictionaryCache, DictionaryContext, DictionaryLoader, SpellChecker}
+import com.serenity.spellcheck.{
+  CompoundCandidateIndex,
+  DictionaryCache,
+  DictionaryContext,
+  DictionaryLoader,
+  SpellChecker
+}
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

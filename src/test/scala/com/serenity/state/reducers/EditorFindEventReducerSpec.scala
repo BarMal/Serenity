@@ -7,8 +7,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Dedicated coverage for `EditorFindEventReducer` (#1442), focused on behavior not already exercised by
-  * `EditorEventReducerSpec`'s extensive `OpenFind`/`FindNext` coverage: `OpenReplace` (untested anywhere at the
-  * reducer level), and `FindNext`'s no-op paths when there is nothing to advance to.
+  * `EditorEventReducerSpec`'s extensive `OpenFind`/`FindNext` coverage: `OpenReplace` (untested anywhere at the reducer
+  * level), and `FindNext`'s no-op paths when there is nothing to advance to.
   */
 class EditorFindEventReducerSpec extends AnyFlatSpec with Matchers:
 
@@ -27,7 +27,9 @@ class EditorFindEventReducerSpec extends AnyFlatSpec with Matchers:
     val after        = EditorEventReducer.reduce(OpenReplace, paneId, before).state
     val modalSurface = after.modalSurface
 
-    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(ReplaceWorkflowState())))
+    modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(ReplaceWorkflowState()))
+    )
     after.persisted.focus shouldBe Focus.Surface(modalSurface.get.id)
   }
 

@@ -38,16 +38,15 @@ object LspManager:
       * instead of reusing a stale one. No-op by default -- only the real, cache-backed provider needs to do anything
       * here.
       *
-      * Deliberately eager rather than tied to a config-change event (#1469): there is no config-reload effect in
-      * this pipeline today -- `LspUserConfig` is fixed for the lifetime of a `run`/`runWithProvider` call -- so a
-      * resolution can only actually go stale here because the *workspace root* for this uri changes between closes
-      * (a multi-root workspace, or the project being reopened from a different root), not because server
-      * availability on PATH changes mid-session. Eviction on close is cheap insurance against that: the cost of a
-      * false negative (skip re-resolution, misroute requests to the wrong workspace's server) is worse than the
-      * cost of redoing a PATH/filesystem walk the next time this uri is reopened, which is the uncommon case, not
-      * the hot path. If this ever shows up as a real cost (e.g. rapid tab close/reopen against a slow filesystem),
-      * the fix is to key eviction off an explicit config/workspace-change signal instead of every `FileClosed`, not
-      * to drop eviction altogether.
+      * Deliberately eager rather than tied to a config-change event (#1469): there is no config-reload effect in this
+      * pipeline today -- `LspUserConfig` is fixed for the lifetime of a `run`/`runWithProvider` call -- so a resolution
+      * can only actually go stale here because the *workspace root* for this uri changes between closes (a multi-root
+      * workspace, or the project being reopened from a different root), not because server availability on PATH changes
+      * mid-session. Eviction on close is cheap insurance against that: the cost of a false negative (skip
+      * re-resolution, misroute requests to the wrong workspace's server) is worse than the cost of redoing a
+      * PATH/filesystem walk the next time this uri is reopened, which is the uncommon case, not the hot path. If this
+      * ever shows up as a real cost (e.g. rapid tab close/reopen against a slow filesystem), the fix is to key eviction
+      * off an explicit config/workspace-change signal instead of every `FileClosed`, not to drop eviction altogether.
       */
     def evictResolution(@unused languageId: LanguageId, @unused fileUri: String): IO[Unit] = IO.unit
 

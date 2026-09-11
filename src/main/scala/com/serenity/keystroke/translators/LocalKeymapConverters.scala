@@ -17,8 +17,9 @@ object LocalKeymapConverters:
     // plain `.toMap` so that, on the rare conflicting binding (two actions sharing a trigger), the first one
     // encountered in `flattened` wins -- matching `collectFirst`'s original first-match-wins behavior -- instead of
     // `.toMap`'s last-write-wins.
-    val lookup = flattened.foldLeft(Map.empty[HotkeyTrigger, E]) { case (acc, (trigger, event)) =>
-      if acc.contains(trigger) then acc else acc + (trigger -> event)
+    val lookup = flattened.foldLeft(Map.empty[HotkeyTrigger, E]) {
+      case (acc, (trigger, event)) =>
+        if acc.contains(trigger) then acc else acc + (trigger -> event)
     }
 
-    Function.unlift(lookup.get)
+    Function.unlift(info => lookup.get(HotkeyTrigger(info.keyType, info.character, info.modifiers)))

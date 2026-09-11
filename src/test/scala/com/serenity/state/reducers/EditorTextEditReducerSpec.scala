@@ -9,8 +9,8 @@ import org.scalatest.matchers.should.Matchers
 
 /** Dedicated coverage for `EditorTextEditReducer` (#1442), focused on behavior specific to this module rather than
   * re-asserting the multi-cursor/multi-selection dispatch already covered end-to-end by `EditorEventReducerSpec`:
-  * `ReverseTabKey`'s per-line unindent rule (`unindentLine`), the "nothing to do" cases that must leave the undo
-  * stack untouched, and the selection-takes-precedence rule the four deletion events share.
+  * `ReverseTabKey`'s per-line unindent rule (`unindentLine`), the "nothing to do" cases that must leave the undo stack
+  * untouched, and the selection-takes-precedence rule the four deletion events share.
   */
 class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionValues:
 

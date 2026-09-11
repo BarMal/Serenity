@@ -13,8 +13,8 @@ object CompoundTrieNode:
   * `DictionaryContext.compoundWordFlags` for the same lifetime. `HunspellFreeCompoundMatcher`'s DP walks it
   * character-by-character from each candidate position to find every valid compound member starting there in
   * `O(matched length)` with shared-prefix traversal, replacing a per-lookup hash-bucket-and-`startsWith` scan (the
-  * approach `CompoundCandidateIndex` uses for COMPOUNDRULE -- which, per #1445, is now itself built once per
-  * dictionary load rather than rebuilt per call, as #1415 had already flagged it should be).
+  * approach `CompoundCandidateIndex` uses for COMPOUNDRULE -- which, per #1445, is now itself built once per dictionary
+  * load rather than rebuilt per call, as #1415 had already flagged it should be).
   */
 final case class CompoundTrie(root: CompoundTrieNode)
 

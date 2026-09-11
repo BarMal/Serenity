@@ -4,14 +4,14 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Regression coverage for #1415/#1445: `compoundMemberCandidates` must no longer linear-scan the whole merged
-  * dictionary for every candidate segment, and `matches` must no longer rebuild `CompoundCandidateIndex` on every
-  * call -- `DictionaryLoader.loadSnapshot` builds it once per dictionary load (mirroring `CompoundTrie` for the
-  * free-form COMPOUNDFLAG path) and `matches`'s signature now only accepts the already-built index, so a caller has no
-  * way to hand it the raw `compoundWordFlags` map for it to rebuild internally. These tests exercise `matches` (the
-  * object's only public entry point) directly against a synthetic tens-of-thousands-word dictionary, so a regression
-  * back to a full scan shows up as this suite taking noticeably longer -- timings are logged for manual before/after
-  * comparison per `docs/performance-benchmarks.md`'s convention, not hard-asserted, since wall-clock assertions are
-  * unreliable on shared CI hardware.
+  * dictionary for every candidate segment, and `matches` must no longer rebuild `CompoundCandidateIndex` on every call
+  * -- `DictionaryLoader.loadSnapshot` builds it once per dictionary load (mirroring `CompoundTrie` for the free-form
+  * COMPOUNDFLAG path) and `matches`'s signature now only accepts the already-built index, so a caller has no way to
+  * hand it the raw `compoundWordFlags` map for it to rebuild internally. These tests exercise `matches` (the object's
+  * only public entry point) directly against a synthetic tens-of-thousands-word dictionary, so a regression back to a
+  * full scan shows up as this suite taking noticeably longer -- timings are logged for manual before/after comparison
+  * per `docs/performance-benchmarks.md`'s convention, not hard-asserted, since wall-clock assertions are unreliable on
+  * shared CI hardware.
   */
 class HunspellCompoundMatcherSpec extends AnyFlatSpec with Matchers:
 
@@ -28,7 +28,7 @@ class HunspellCompoundMatcherSpec extends AnyFlatSpec with Matchers:
 
   "matches" should "accept a compound word whose members carry the required flags" in {
     val dictionary = largeDictionary(entriesPerLetter = 2000) ++ Map("foo" -> Set("A"), "bar" -> Set("B"))
-    val index       = CompoundCandidateIndex.build(dictionary)
+    val index      = CompoundCandidateIndex.build(dictionary)
 
     val start = System.nanoTime()
     val accepted = HunspellCompoundMatcher.matches(
@@ -130,10 +130,8 @@ class HunspellCompoundMatcherSpec extends AnyFlatSpec with Matchers:
     val index      = CompoundCandidateIndex.build(dictionary)
     val words      = List.fill(500)("foobar")
 
-    val start = System.nanoTime()
-    val results = words.map { word =>
-      HunspellCompoundMatcher.matches(word, List("AB"), index, CompoundMin)
-    }
+    val start         = System.nanoTime()
+    val results       = words.map(word => HunspellCompoundMatcher.matches(word, List("AB"), index, CompoundMin))
     val elapsedMillis = (System.nanoTime() - start) / 1000000L
     info(s"checked ${words.size} words against a ${dictionary.size}-entry dictionary in ${elapsedMillis}ms")
 

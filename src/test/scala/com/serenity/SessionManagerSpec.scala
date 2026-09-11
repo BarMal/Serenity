@@ -338,9 +338,9 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val program = for
-      loaded <- sessionManager.loadSession()
-    yield loaded shouldBe None
+    val program =
+      for loaded <- sessionManager.loadSession()
+      yield loaded shouldBe None
 
     program.unsafeRunSync()
   }
