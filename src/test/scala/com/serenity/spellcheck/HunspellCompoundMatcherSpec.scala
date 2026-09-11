@@ -3,11 +3,15 @@ package com.serenity.spellcheck
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Regression coverage for #1415: `compoundMemberCandidates` must no longer linear-scan the whole merged dictionary for
-  * every candidate segment. These tests exercise `matches` (the object's only public entry point) directly against a
-  * synthetic tens-of-thousands-word dictionary, so a regression back to a full scan shows up as this suite taking
-  * noticeably longer -- timings are logged for manual before/after comparison per `docs/performance-benchmarks.md`'s
-  * convention, not hard-asserted, since wall-clock assertions are unreliable on shared CI hardware.
+/** Regression coverage for #1415/#1445: `compoundMemberCandidates` must no longer linear-scan the whole merged
+  * dictionary for every candidate segment, and `matches` must no longer rebuild `CompoundCandidateIndex` on every
+  * call -- `DictionaryLoader.loadSnapshot` builds it once per dictionary load (mirroring `CompoundTrie` for the
+  * free-form COMPOUNDFLAG path) and `matches`'s signature now only accepts the already-built index, so a caller has no
+  * way to hand it the raw `compoundWordFlags` map for it to rebuild internally. These tests exercise `matches` (the
+  * object's only public entry point) directly against a synthetic tens-of-thousands-word dictionary, so a regression
+  * back to a full scan shows up as this suite taking noticeably longer -- timings are logged for manual before/after
+  * comparison per `docs/performance-benchmarks.md`'s convention, not hard-asserted, since wall-clock assertions are
+  * unreliable on shared CI hardware.
   */
 class HunspellCompoundMatcherSpec extends AnyFlatSpec with Matchers:
 
@@ -24,12 +28,13 @@ class HunspellCompoundMatcherSpec extends AnyFlatSpec with Matchers:
 
   "matches" should "accept a compound word whose members carry the required flags" in {
     val dictionary = largeDictionary(entriesPerLetter = 2000) ++ Map("foo" -> Set("A"), "bar" -> Set("B"))
+    val index       = CompoundCandidateIndex.build(dictionary)
 
     val start = System.nanoTime()
     val accepted = HunspellCompoundMatcher.matches(
       word = "foobar",
       compoundRules = List("AB"),
-      compoundWordFlags = dictionary,
+      candidateIndex = index,
       compoundMin = CompoundMin
     )
     val elapsedMillis = (System.nanoTime() - start) / 1000000L
@@ -44,7 +49,7 @@ class HunspellCompoundMatcherSpec extends AnyFlatSpec with Matchers:
     val accepted = HunspellCompoundMatcher.matches(
       word = "foobaz",
       compoundRules = List("AB"),
-      compoundWordFlags = dictionary,
+      candidateIndex = CompoundCandidateIndex.build(dictionary),
       compoundMin = CompoundMin
     )
 
@@ -57,7 +62,7 @@ class HunspellCompoundMatcherSpec extends AnyFlatSpec with Matchers:
     val accepted = HunspellCompoundMatcher.matches(
       word = "foobar",
       compoundRules = List("AB"),
-      compoundWordFlags = dictionary,
+      candidateIndex = CompoundCandidateIndex.build(dictionary),
       compoundMin = CompoundMin
     )
 
@@ -71,18 +76,18 @@ class HunspellCompoundMatcherSpec extends AnyFlatSpec with Matchers:
     val accepted = HunspellCompoundMatcher.matches(
       word = "unununder",
       compoundRules = List("P*S"),
-      compoundWordFlags = dictionary,
+      candidateIndex = CompoundCandidateIndex.build(dictionary),
       compoundMin = CompoundMin
     )
 
     accepted shouldBe true
   }
 
-  it should "return false when there are no compound rules, without inspecting the dictionary" in {
+  it should "return false when there are no compound rules, without inspecting the index" in {
     HunspellCompoundMatcher.matches(
       word = "foobar",
       compoundRules = Nil,
-      compoundWordFlags = largeDictionary(entriesPerLetter = 100),
+      candidateIndex = CompoundCandidateIndex.build(largeDictionary(entriesPerLetter = 100)),
       compoundMin = CompoundMin
     ) shouldBe false
   }
@@ -95,11 +100,12 @@ class HunspellCompoundMatcherSpec extends AnyFlatSpec with Matchers:
     val large = largeDictionary(entriesPerLetter = 20000) ++ Map("foo" -> Set("A"), "bar" -> Set("B"))
 
     def timed(dictionary: Map[String, Set[String]]): Long =
+      val index = CompoundCandidateIndex.build(dictionary)
       val start = System.nanoTime()
       HunspellCompoundMatcher.matches(
         word = "foobar",
         compoundRules = List("AB"),
-        compoundWordFlags = dictionary,
+        candidateIndex = index,
         compoundMin = CompoundMin
       ) shouldBe true
       (System.nanoTime() - start) / 1000L
@@ -112,6 +118,26 @@ class HunspellCompoundMatcherSpec extends AnyFlatSpec with Matchers:
     val smallMicros = timed(small)
     val largeMicros = timed(large)
     info(s"small (${small.size} entries) took ${smallMicros}us, large (${large.size} entries) took ${largeMicros}us")
+  }
+
+  // The perf regression #1445 fixes: with the index built once and reused, checking many words against the same
+  // large dictionary costs roughly `wordCount` index builds' worth of work total (one, up front), not `wordCount`
+  // full rebuilds -- exactly the shape `SpellChecker.isAccepted` exercises it in, once per unrecognized word in a
+  // document. `matches`'s signature (it takes a `CompoundCandidateIndex`, never the raw `compoundWordFlags` map) makes
+  // a per-call rebuild structurally impossible for any caller going through this entry point.
+  it should "check many words against one large dictionary in time proportional to the word count, not word count times dictionary size" in {
+    val dictionary = largeDictionary(entriesPerLetter = 20000) ++ Map("foo" -> Set("A"), "bar" -> Set("B"))
+    val index      = CompoundCandidateIndex.build(dictionary)
+    val words      = List.fill(500)("foobar")
+
+    val start = System.nanoTime()
+    val results = words.map { word =>
+      HunspellCompoundMatcher.matches(word, List("AB"), index, CompoundMin)
+    }
+    val elapsedMillis = (System.nanoTime() - start) / 1000000L
+    info(s"checked ${words.size} words against a ${dictionary.size}-entry dictionary in ${elapsedMillis}ms")
+
+    results.distinct shouldBe List(true)
   }
 
 end HunspellCompoundMatcherSpec

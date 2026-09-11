@@ -58,6 +58,15 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   final private case class QueuedMovement(slot: MovementSlot) extends QueuedInput
   private case object QueuedShutdown                          extends QueuedInput
 
+  /** Lock-free queue plus the compare-and-set fields below stand in for `Ref[IO, A]`/an FS2 queue at the one boundary
+    * where they can't apply: every AWT listener registered further down (`KeyAdapter`, `MouseAdapter`,
+    * `MouseMotionAdapter`, the wheel listener) fires synchronously on Swing's Event Dispatch Thread, entirely outside
+    * any `F`/`IO` fiber -- there is no running effect to `Ref.update` inside, and forcing an `IO` from the EDT to reach
+    * one would block repaints and further input on that update completing. `enqueue`/`enqueueMovement`/
+    * `enqueueNonMovement`/`awaitEnqueues` are therefore plain CAS loops over `java.util.concurrent` primitives, called
+    * directly from the EDT; `keyStrokeInfoStream`/`eventStream`/`shutdown` -- the only `F[_]`-effectful members here --
+    * only ever drain this queue from the outside, and that is where `IO` resumes (issue #1452).
+    */
   private val inputQueue         = new ConcurrentLinkedQueue[QueuedInput]()
   private val inputAvailable     = new Semaphore(0)
   private val latestMovement     = new AtomicReference[Option[MovementSlot]](None)
@@ -106,6 +115,12 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     inputQueue.offer(input)
     inputAvailable.release()
 
+  /** Waits out any `enqueue` call the EDT is mid-way through when `shutdown` runs, so `shutdown` never offers
+    * `QueuedShutdown` while a straggling enqueue could still land behind it. Left as a tight spin rather than a
+    * sleep-based backoff: the window it waits on is just the handful of CAS/queue operations inside `enqueue`, so it
+    * clears in well under a microsecond in practice, and `Thread.sleep`'s coarser granularity (millisecond-scale even
+    * for the shortest sleep) would only add latency to every `shutdown` call for no corresponding benefit.
+    */
   @annotation.tailrec
   private def awaitEnqueues(): Unit =
     if enqueuesInFlight.get() != 0 then

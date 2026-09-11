@@ -54,9 +54,10 @@ lazy val root = (project in file("."))
     // Main sources only: tests legitimately use throw/null/partial access to build failure fixtures,
     // mirroring how Test / scalacOptions already relaxes the -W flags above.
     //
-    // Errors are the enforced set. Anything needing a migration first stays a warning until the
-    // violations are cleared, then moves up. The plugin is CrossVersion.full, so a Scala upgrade needs
-    // a matching WartRemover release -- 3.6.1 publishes for 3.8.4.
+    // Errors are the enforced set. Anything needing a migration first would stay a warning until the
+    // violations are cleared, then move up -- but there is currently nothing in wartremoverWarnings, since
+    // the last staged batch (#1449) has been promoted below. The plugin is CrossVersion.full, so a Scala
+    // upgrade needs a matching WartRemover release -- 3.6.1 publishes for 3.8.4.
     Compile / wartremoverErrors ++= Seq(
       // Type-level closure: case classes are final, and nobody re-opens a sealed hierarchy by
       // extending one of its cases with a non-final class.

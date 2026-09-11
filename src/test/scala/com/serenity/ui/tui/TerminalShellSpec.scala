@@ -9,8 +9,10 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.jline.terminal.Terminal
 import org.jline.terminal.impl.DumbTerminal
+import org.scalatest.concurrent.Eventually
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.time.{Milliseconds, Seconds, Span}
 
 /** Covers #1107's `TerminalShell`: entering/leaving raw mode and the alternate screen around a `Resource[IO, _]`
   * acquire/release, resize propagation via `checkResize`/`registerResizeCallback`, and terminal-state restoration on
@@ -21,7 +23,10 @@ import org.scalatest.matchers.should.Matchers
   * capability strings (`smcup`/`rmcup`/`civis`/`cnorm`) are real, so the raw-mode and alternate-screen escapes this
   * spec asserts on are the actual bytes a real terminal would receive.
   */
-class TerminalShellSpec extends AnyFlatSpec with Matchers:
+class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
+
+  implicit override val patienceConfig: PatienceConfig =
+    PatienceConfig(timeout = Span(5, Seconds), interval = Span(5, Milliseconds))
 
   private val esc          = 0x1b.toChar.toString
   private val enterCaMode  = s"$esc[?1049h"
@@ -243,14 +248,8 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers:
     * scan (see [[liveTerminal]]'s doc).
     */
   private def replyAfterModifyOtherKeysQuery(harness: LiveHarness, reply: Array[Byte]): Unit =
-    @annotation.tailrec
-    def awaitQueryWritten(): Unit =
-      if !harness.written.contains(xtqFmtKeysQuery) then
-        Thread.sleep(1)
-        awaitQueryWritten()
-
     val sender = new Thread(() =>
-      awaitQueryWritten()
+      eventually(harness.written should include(xtqFmtKeysQuery))
       harness.send(reply)
     )
     sender.setDaemon(true)
