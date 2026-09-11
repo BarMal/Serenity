@@ -3,8 +3,8 @@ package com.serenity.ui.renderer
 import java.awt.*
 import java.awt.image.*
 
-/** Scanline and glow post-processing, operating directly on a [[Java2DRenderSurface]]'s backing `BufferedImage` via
-  * raw `Graphics2D`/pixel-array operations. Split out of `Java2DRenderSurface` purely to keep that class within the
+/** Scanline and glow post-processing, operating directly on a [[Java2DRenderSurface]]'s backing `BufferedImage` via raw
+  * `Graphics2D`/pixel-array operations. Split out of `Java2DRenderSurface` purely to keep that class within the
   * architecture line-count ratchet; every method here is stateless and takes the target `image` as a parameter,
   * reaching into `Java2DRenderSurface`'s companion helpers (`defaultRenderingHints`, `compatibleDestImage`) since both
   * live in the same `com.serenity.ui.renderer` package.

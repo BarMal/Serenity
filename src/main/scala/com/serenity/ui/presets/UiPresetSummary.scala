@@ -2,7 +2,7 @@ package com.serenity.ui.presets
 
 import com.serenity.animation.TransitionKind
 import com.serenity.config.*
-import com.serenity.state.models.*
+import com.serenity.ui.layout.{SessionPanelContent, SessionPinnedPanel}
 
 /** Preview/summary string generation used to display a [[UiPreset]] in the UI. */
 private[presets] object UiPresetSummary:

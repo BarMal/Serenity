@@ -4,8 +4,8 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.text.TextEditing
 
-/** Goto-line modal input -- appending/deleting digits in the line-number field and jumping to the submitted line.
-  * Split out of `ModalEventReducer`'s per-modal-type dispatch when that file grew past its 600-line target.
+/** Goto-line modal input -- appending/deleting digits in the line-number field and jumping to the submitted line. Split
+  * out of `ModalEventReducer`'s per-modal-type dispatch when that file grew past its 600-line target.
   */
 private[reducers] object ModalGotoLineReducer:
   import ModalEventReducer.{currentModal, dismissToPane, updateModal}

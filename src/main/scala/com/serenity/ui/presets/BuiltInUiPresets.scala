@@ -4,6 +4,7 @@ import java.awt.Font
 
 import com.serenity.animation.TransitionKind
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.{withEditorInsertionTransitionKind, withMotionPreset}
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme

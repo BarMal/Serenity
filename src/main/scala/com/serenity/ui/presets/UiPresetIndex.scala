@@ -1,7 +1,7 @@
 package com.serenity.ui.presets
 
-import java.nio.charset.StandardCharsets
 import java.nio.channels.FileChannel
+import java.nio.charset.StandardCharsets
 import java.nio.file.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock

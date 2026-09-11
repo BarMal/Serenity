@@ -5,8 +5,8 @@ import com.serenity.state.models.*
 
 /** File-workflow modal input (Open/SaveAs) -- editing the active field, cycling suggestions and save formats, and
   * submitting or creating missing directories. Split out of `ModalEventReducer`'s per-modal-type dispatch when that
-  * file grew past its 600-line target; `reduceFileWorkflow` itself was decomposed into one private helper per
-  * sub-event branch to bring it under the method-length target.
+  * file grew past its 600-line target; `reduceFileWorkflow` itself was decomposed into one private helper per sub-event
+  * branch to bring it under the method-length target.
   */
 private[reducers] object ModalFileWorkflowReducer:
   import ModalEventReducer.{currentModal, dismissToPane, updateModal}

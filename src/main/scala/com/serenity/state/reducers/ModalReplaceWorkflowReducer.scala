@@ -6,8 +6,8 @@ import com.serenity.state.models.*
 
 /** Replace-workflow modal input -- editing the find/replace fields, cycling the action and scope, and previewing the
   * match count for the selected scope. Split out of `ModalEventReducer`'s per-modal-type dispatch when that file grew
-  * past its 600-line target; `reduceReplaceWorkflow` itself was decomposed into one private helper per sub-event
-  * branch to bring it under the method-length target.
+  * past its 600-line target; `reduceReplaceWorkflow` itself was decomposed into one private helper per sub-event branch
+  * to bring it under the method-length target.
   */
 private[reducers] object ModalReplaceWorkflowReducer:
   import ModalEventReducer.{currentModal, dismissToPane, updateModal}

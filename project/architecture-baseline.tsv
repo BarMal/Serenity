@@ -4,31 +4,19 @@
 # Growth must be justified: CI fails a PR that grows this file's entry count or total measured
 # lines/hits unless the same diff adds a '# paydown: <why, issue link>' comment line (see #1413).
 # Columns: path <TAB> detail <TAB> measured
-# paydown: Rope.scala grew past 600 lines fixing the two-pass line-ending normalization into a
-# single-pass tailrec scan (#1457); SpellCheckerDictionaryIoSpec.scala grew past 600 lines adding
-# coverage for the hoisted compound-candidate-index wiring (#1445) -- both are the direct product
-# of audit-driven bug/perf fixes, not architectural drift.
-main/scala/com/serenity/app/AppRuntime.scala	file length	793
-main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	133
+main/scala/com/serenity/app/AppRuntime.scala	file length	757
+main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	114
 main/scala/com/serenity/config/ConfigRegistry.scala	file length	680
 main/scala/com/serenity/rope/Rope.scala	file length	616
-main/scala/com/serenity/state/models/ContextualToolbarState.scala	method proseItems	173
-main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	file length	655
-main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	method submitSubmenu	104
-main/scala/com/serenity/state/reducers/ModalEventReducer.scala	file length	654
-main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceFileWorkflow	131
-main/scala/com/serenity/state/reducers/ModalEventReducer.scala	method reduceReplaceWorkflow	119
-main/scala/com/serenity/ui/presets/UiPreset.scala	file length	851
+main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	file length	670
 main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	615
-main/scala/com/serenity/ui/renderer/Java2DRenderSurface.scala	file length	734
-main/scala/com/serenity/ui/renderer/Java2DRenderSurface.scala	method applyGlow	90
-main/scala/com/serenity/ui/theme/ThemeManager.scala	method highlightMarkdownLine	89
+main/scala/com/serenity/ui/renderer/Java2DPostProcessingEffects.scala	method applyGlow	90
 test/scala/com/serenity/AppRuntimeSpec.scala	file length	1603
 test/scala/com/serenity/CommandRunnerCoreCommandsSpec.scala	file length	1859
 test/scala/com/serenity/CommandRunnerFloatingRenderingSpec.scala	file length	754
 test/scala/com/serenity/CommandRunnerReducerSpec.scala	file length	1514
 test/scala/com/serenity/CommandRunnerSpec.scala	file length	1121
-test/scala/com/serenity/ConfigManagerSpec.scala	file length	1416
+test/scala/com/serenity/ConfigManagerSpec.scala	file length	1397
 test/scala/com/serenity/ContextualToolbarSpec.scala	file length	1283
 test/scala/com/serenity/EditorBehaviorSpec.scala	file length	603
 test/scala/com/serenity/EditorEventReducerSpec.scala	file length	2296

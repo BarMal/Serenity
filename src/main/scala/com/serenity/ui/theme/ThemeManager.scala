@@ -254,7 +254,7 @@ object ThemeManager:
     line match
       case headingPattern(marker, content) =>
         StyledText(marker, TextStyle.bold, markerColor.foreground, theme.background) ::
-          withInlineMarkdownStyling(content, theme, TextStyle.bold, headingColor.foreground)
+          withInlineMarkdownStyling(content, theme, TextStyle.bold, Some(headingColor.foreground))
       case unorderedListPattern(marker, content) =>
         StyledText(marker, TextStyle.bold, markerColor.foreground, theme.background) ::
           withInlineMarkdownStyling(content, theme)
@@ -263,7 +263,7 @@ object ThemeManager:
           withInlineMarkdownStyling(content, theme)
       case blockQuotePattern(marker, content) =>
         StyledText(marker, TextStyle.italic, theme.muted, theme.background) ::
-          withInlineMarkdownStyling(content, theme, TextStyle.italic, theme.muted)
+          withInlineMarkdownStyling(content, theme, TextStyle.italic, Some(theme.muted))
       case _ =>
         withInlineMarkdownStyling(line, theme)
 
@@ -271,12 +271,13 @@ object ThemeManager:
     text: String,
     theme: Theme,
     baseStyle: TextStyle = TextStyle.normal,
-    defaultForeground: java.awt.Color = theme.foreground
+    foregroundOverride: Option[java.awt.Color] = None
   ): List[StyledText] =
-    val markerColor     = theme.colorFor(SyntaxElement.Delimiter)
-    val inlineCodeColor = theme.colorFor(SyntaxElement.String)
-    val linkTextColor   = theme.colorFor(SyntaxElement.Keyword)
-    val linkUrlColor    = theme.colorFor(SyntaxElement.String)
+    val defaultForeground = foregroundOverride.getOrElse(theme.foreground)
+    val markerColor       = theme.colorFor(SyntaxElement.Delimiter)
+    val inlineCodeColor   = theme.colorFor(SyntaxElement.String)
+    val linkTextColor     = theme.colorFor(SyntaxElement.Keyword)
+    val linkUrlColor      = theme.colorFor(SyntaxElement.String)
 
     def plainSegment(cursor: Int, until: Int): List[StyledText] =
       if until > cursor then
