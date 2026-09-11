@@ -5,7 +5,6 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.models.AppState
 import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer, Reducer}
 
-/** Component that handles command runner overlay functionality */
 class CommandRunnerComponent(
     registry: CommandRegistry = CommandRegistry.default
 ) extends TypedFocusedComponent[CommandRunnerEvent]:

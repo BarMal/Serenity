@@ -24,16 +24,13 @@ import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
-/** Applies editor and system events to application state. */
 trait EventApplier:
   def applyEvent(event: Event): IO[Unit]
 
-/** Reads the current immutable application state. */
 trait StateReader:
   def getCurrentState: IO[AppState]
   def getBufferAnimations: IO[Map[BufferId, AnimationState]]
 
-/** Applies an atomic transformation to application state. */
 trait StateUpdater:
   def updateState(update: AppState => AppState): IO[Unit]
   def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit]

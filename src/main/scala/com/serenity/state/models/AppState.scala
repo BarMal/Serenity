@@ -38,7 +38,6 @@ final case class AppState(
         bufferId -> (() => index)
     }.toMap
 
-  /** Convenience accessor for syntax highlighting setting */
   def syntaxHighlightingEnabled: Boolean = persisted.config.languageToolsConfig.syntaxHighlightingEnabled
   def isValid: Boolean                   = AppStateValidation.validationErrors(this).isEmpty
 
@@ -347,14 +346,12 @@ final case class AppState(
           .getOrElse(Focus.EditorPane(PaneId(0)))
         copy(persisted = persisted.copy(focus = fallback))
 
-  /** Get the currently focused buffer ID, if any */
   def focusedBufferId: Option[BufferId] =
     persisted.focus match
       case Focus.EditorPane(paneId) =>
         persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId)
       case _ => None
 
-  /** Get the next buffer ID in navigation order */
   def nextBufferInOrder(currentBufferId: BufferId): Option[BufferId] =
     if persisted.bufferOrder.isEmpty then None
     else
@@ -364,7 +361,6 @@ final case class AppState(
         val nextIndex = (currentIndex + 1) % persisted.bufferOrder.size
         Some(persisted.bufferOrder(nextIndex))
 
-  /** Get the previous buffer ID in navigation order */
   def previousBufferInOrder(currentBufferId: BufferId): Option[BufferId] =
     if persisted.bufferOrder.isEmpty then None
     else

@@ -9,12 +9,13 @@ import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
 
 /** Computes what a transition between two `AppState`s damaged, so the render loop doesn't have to rediscover it by
-  * diffing frames -- the wake-up decision this drives is wired in by `#998` (`AppRuntime.inputEventPhase`). `#999` is
-  * migrating `RendererFramePlanner.planFrame`'s own `ChromeKey`/`dirtyRowsAgainst` machinery onto this same signal for
-  * the paint-scope decision, which is why this producer also reports dimensions `#998`'s wake-up decision alone never
-  * needed -- cursor and selection movement, comment/diagnostic annotations, and language reclassification -- each of
-  * those already invalidates pixels today via `Renderer`'s own `PaneRowKey`/`PaneContentKey` structural comparison, so
-  * this producer has to cover them before `planFrame` can safely trust `Damage` instead of that comparison. See
+  * diffing frames -- the wake-up decision this drives is wired in by `#998` (`AppRuntime.inputEventPhase`). `#999`
+  * migrated `RendererFramePlanner.planFrame`'s paint-scope decision onto this same signal, retiring its old
+  * `ChromeKey`/`dirtyRowsAgainst` machinery, which is why this producer also reports dimensions `#998`'s wake-up
+  * decision alone never needed -- cursor and selection movement, comment/diagnostic annotations, and language
+  * reclassification -- each of those used to invalidate pixels via `Renderer`'s own retired `PaneRowKey`/
+  * `PaneContentKey` structural comparison, so this producer covers them now that `planFrame` runs entirely on
+  * `Damage`/`RendererFrameState` instead of that comparison. See
   * `CursorViewport.ensureVisibleCursors`'s doc comment for why per-reducer-branch emission was rejected in favour of
   * this boundary-pass pattern.
   *
@@ -199,8 +200,8 @@ object DamageProducer:
     else Damage.BufferRows(bufferId, (0 until after.document.content.lineCount).toSet)
 
   /** Character-reveal (and other per-cell) animation ticks report exactly the rows whose cells changed, read off
-    * `AnimationState.animations`'s `CharacterKey`s -- the same map `PaneRowKey.animations` (the renderer package) reads
-    * today to decide row reuse, so this is a direct structural read rather than a coarsening.
+    * `AnimationState.animations`'s `CharacterKey`s -- a direct structural read rather than a coarsening, feeding the
+    * same `Damage`-based row-reuse bookkeeping `RendererFrameState` now keeps (replacing the retired `PaneRowKey`).
     */
   private def animationDamage(bufferId: BufferId, before: AnimationState, after: AnimationState): Damage =
     if before == after then Damage.Nothing

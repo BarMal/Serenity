@@ -17,9 +17,9 @@ object ModifierTapState:
 
 /** Shell-agnostic double-tap-modifier detector: a bare press-release-press of the same modifier within [[WindowMillis]]
   * emits that modifier's bare [[com.serenity.keystroke.KeyStrokeInfo]] (`ctrl+ctrl`-style hotkey bindings). Ported out
-  * of `SwingInputHandler.translateModifierPressed`/`translateModifierReleased` (`SwingInputHandler.scala:288-317`) so
-  * `TerminalInputHandler` can drive the identical state machine over kitty-protocol bare-modifier press/release events,
-  * instead of duplicating the 200ms-window logic.
+  * of `SwingInputHandler.translateModifierPressed`/`translateModifierReleased` so `TerminalInputHandler` can drive the
+  * identical state machine over kitty-protocol bare-modifier press/release events, instead of duplicating the
+  * 200ms-window logic.
   *
   * Pure state-transition functions rather than a mutable class: `SwingInputHandler` wraps this over an
   * `AtomicReference` (matching its existing style for that handler), `TerminalInputHandler` over a `Ref[IO, _]`.
@@ -33,9 +33,9 @@ object ModifierTapState:
   */
 object ModifierTapDetector:
 
-  /** How long a release is allowed to wait for the second press before the pending tap expires. Mirrors
-    * `SwingInputHandler.doubleTapWindowMillis` (`SwingInputHandler.scala:65`) exactly, so `ctrl+ctrl` bindings behave
-    * identically in both input modes.
+  /** How long a release is allowed to wait for the second press before the pending tap expires. `SwingInputHandler`
+    * delegates to this constant rather than keeping its own copy, so `ctrl+ctrl` bindings behave identically in both
+    * input modes.
     */
   val WindowMillis: Long = 200L
 
@@ -71,7 +71,7 @@ object ModifierTapDetector:
         ModifierTapState(Some(tap.copy(released = true)))
       case _ => state
 
-  /** Any non-modifier key press cancels a pending tap, matching `SwingInputHandler.translatePressed`'s unconditional
-    * `pendingModifierTap.set(None)` (`SwingInputHandler.scala:241`) before dispatching a real key.
+  /** Any non-modifier key press cancels a pending tap, called from `SwingInputHandler.translatePressed` before
+    * dispatching a real key.
     */
   def otherKeyPressed(@unused state: ModifierTapState): ModifierTapState = ModifierTapState.empty

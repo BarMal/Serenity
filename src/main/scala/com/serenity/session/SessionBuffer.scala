@@ -5,8 +5,6 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
 import com.serenity.state.models.*
 
-/** Persistent representation of a buffer
-  */
 final case class SessionBuffer(
     id: Int,
     filePath: Option[String], // Use String instead of Path for JSON serialization

@@ -16,7 +16,6 @@ import com.serenity.state.models.{Buffer, BufferId}
 
 class FileManager(using balance: Balance):
 
-  /** Load file into a new buffer */
   def loadFile(path: Path, bufferId: BufferId): IO[Buffer] =
     FileUtils.detectFileType(path) match
       case FileType.RichText =>
@@ -33,7 +32,6 @@ class FileManager(using balance: Balance):
         ensureSupported(path, _.canOpen, "open") >>
           FileUtils.readFileContent(path).map(content => bufferFromContent(bufferId, path, content))
 
-  /** Save buffer to file */
   def saveBuffer(buffer: Buffer, path: Path): IO[Buffer] =
     preventLossyOverwrite(buffer, path) >> (FileUtils.detectFileType(path) match
       case FileType.Markdown =>
@@ -62,7 +60,6 @@ class FileManager(using balance: Balance):
       case Some(path) => saveBuffer(buffer, path)
       case None       => IO.raiseError(new RuntimeException("Buffer has no file path - use Save As"))
 
-  /** List files and directories in `directory`. */
   def listDirectory(directory: Path): IO[List[FileEntry]] = FileBrowser.listDirectory(directory)
 
   private def bufferFromContent(bufferId: BufferId, path: Path, content: String): Buffer =

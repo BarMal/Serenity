@@ -131,7 +131,6 @@ final case class CommandRunner(
       val wrappedIndex = if newIndex < 0 then itemCount + newIndex else newIndex
       withRootSelectedIndex(wrappedIndex).syncEditMode
 
-  /** Get currently selected command */
   def selectedCommand: Option[Command] =
     selectedItem.collect { case CommandSurfaceItem.CommandItem(command) => command }
 

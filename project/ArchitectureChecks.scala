@@ -133,7 +133,6 @@ object ArchitectureChecks {
     IO.write(file, (header ++ violations.map(_.render)).mkString("", "\n", "\n"))
   }
 
-  /** Returns the failure report, or None when the ratchet holds. */
   def check(base: File, baselineFile: File): Option[String] = {
     val baseline = readBaseline(baselineFile)
     val current = collect(base)

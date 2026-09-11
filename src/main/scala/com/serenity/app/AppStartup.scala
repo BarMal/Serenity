@@ -138,7 +138,6 @@ object AppStartup:
         )
       )
 
-  /** Resolve the theme to use for startup before a saved session is restored. */
   def startupTheme(
     sessionStartupInfo: SessionStartupInfo,
     themeManager: AppThemeManager,
@@ -149,7 +148,6 @@ object AppStartup:
       theme          <- themeManager.initializeWithTheme(savedThemeName.getOrElse(fallbackThemeName))
     yield theme
 
-  /** Initialize the application state for first render using the active theme and current viewport size. */
   def initializeState(
     stateManager: StateManager,
     sessionStartupInfo: SessionStartupInfo,

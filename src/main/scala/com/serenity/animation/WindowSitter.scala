@@ -50,7 +50,6 @@ final case class WindowSitter(
   /** Whether the sitter should continue receiving animation ticks. */
   def isActive: Boolean = activeTicks > 0
 
-  /** Current decorative glyph. */
   def glyph: String = frames.lift(frameIndex).getOrElse(frames.headOption.getOrElse("·"))
 
   /** React to printable input, using the interval since the previous character as activity intensity. */

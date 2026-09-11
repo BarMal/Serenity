@@ -5,9 +5,9 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Covers the shell-agnostic double-tap detector ported from `SwingInputHandler`'s inline
-  * `pendingModifierTap`/`doubleTapWindowMillis` logic (`SwingInputHandler.scala:63-65,288-317`), including the
-  * `bf5de9e0` regression ("tap requires release"): a second press of the same modifier without an intervening release
-  * must never fire, no matter how quickly it follows the first.
+  * `pendingModifierTap`/`doubleTapWindowMillis` logic, including the `bf5de9e0` regression ("tap requires release"): a
+  * second press of the same modifier without an intervening release must never fire, no matter how quickly it follows
+  * the first.
   */
 class ModifierTapDetectorSpec extends AnyFlatSpec with Matchers:
 

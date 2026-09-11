@@ -51,7 +51,6 @@ private[command] trait CommandRunnerLifecycle:
       CommandRunnerSettingsItems.normalizedUiPresetPreviews(previews)
     ).syncEditMode.normalizeSubmenuEditMode
 
-  /** Deactivate the command runner */
   def deactivate: CommandRunner =
     copy(
       isActive = false,

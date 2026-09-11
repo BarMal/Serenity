@@ -34,8 +34,6 @@ object SessionState:
     */
   val CurrentSchemaVersion: Int = 2
 
-  /** Convert AppState to SessionState for persistence
-    */
   def fromAppState(appState: AppState, persistUnsaved: Boolean = true): SessionState =
     SessionState(
       buffers = orderedBuffers(appState).map(SessionBuffer.fromBuffer(_, persistUnsaved)),
@@ -58,10 +56,7 @@ object SessionState:
 
     (orderedIds ++ missingIds).flatMap(appState.persisted.buffers.get)
 
-  /** Convert SessionState back to AppState for restoration
-    */
   def toAppState(sessionState: SessionState, theme: Theme)(using balance: com.serenity.rope.Balance): AppState =
-    // Convert session buffers back to app buffers
     val bufferMap = sessionState.buffers.map { sessionBuffer =>
       val buffer = SessionBuffer.toBuffer(sessionBuffer)
       BufferId(sessionBuffer.id) -> buffer

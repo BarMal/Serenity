@@ -3,8 +3,6 @@ package com.serenity.session
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{Layout, SessionDockedPanel, SessionWorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 
-/** Persistent layout information
-  */
 final case class SessionLayout(
     editorPanes: List[SessionEditorPane],
     activeEditorPaneId: Option[Int],
@@ -18,8 +16,6 @@ final case class SessionEditorPane(
     bufferId: Option[Int]
 )
 
-/** Persistent focus state
-  */
 enum SessionFocus:
   case EditorPane(paneId: Int)
   // Note: We don't persist Surface focus as UI surfaces are not persistent

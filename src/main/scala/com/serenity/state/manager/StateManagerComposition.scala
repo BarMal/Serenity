@@ -79,11 +79,11 @@ private[manager] class StateManagerComposition(
       runtimeLspQueue
     )
 
-  // Stateless facade over stateRef/bufferAnimationsRef -- shared by `editor` and `events`, which
-  // otherwise would each build their own copy from the same refs. `editor` used to reach it through
-  // `events` instead (the only forward edge in the effects -> workflow -> editor -> events -> effects
-  // cycle this used to close); extracting it here removed that edge. What's left below is a DAG, not
-  // a cycle -- `effects` has no dependency on `events` at all (#1389), so building it in dependency
+  // Stateless facade over stateRef/bufferAnimationsRef, reused by `editor` (`events` builds its own
+  // separate instance from the same refs in `StateManagerEventPipeline`). `editor` used to reach it
+  // through `events` instead (the only forward edge in the effects -> workflow -> editor -> events ->
+  // effects cycle this used to close); extracting it here removed that edge. What's left below is a DAG,
+  // not a cycle -- `effects` has no dependency on `events` at all (#1389), so building it in dependency
   // order needs correct `val` placement, not a `lazy val` or deferred `def` port.
   private val animations = new AnimationChoreography(new AnimationChoreographyPort:
     val stateRef            = runtimeStateRef
