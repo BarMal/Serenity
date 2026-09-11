@@ -4,6 +4,9 @@
 # Growth must be justified: CI fails a PR that grows this file's entry count or total measured
 # lines/hits unless the same diff adds a '# paydown: <why, issue link>' comment line (see #1413).
 # Columns: path <TAB> detail <TAB> measured
+# paydown: ConfigRegistry.scala/ConfigManagerSpec.scala grew registering the new
+# render.frame_state_cache_capacity setting (#1433) -- ordinary new-setting registration, not
+# architectural drift.
 main/scala/com/serenity/app/AppRuntime.scala	file length	793
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	133
 main/scala/com/serenity/config/ConfigRegistry.scala	file length	680
