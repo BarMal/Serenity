@@ -20,7 +20,12 @@ final private[spellcheck] case class DictionaryLoadResult(
     oconv: List[(String, String)],
     compoundRules: List[String],
     compoundMin: Int,
-    compoundWordFlags: Map[String, Set[String]]
+    compoundWordFlags: Map[String, Set[String]],
+    compoundFlag: Option[String],
+    compoundBeginFlag: Option[String],
+    compoundMiddleFlag: Option[String],
+    compoundEndFlag: Option[String],
+    compoundWordMax: Option[Int]
 )
 
 /** One entry per normalized dictionary path, holding only the most recently loaded version of that dictionary. A path
@@ -147,6 +152,24 @@ object DictionaryLoader:
       if normalized.dictionaryPaths.nonEmpty && externalWords.nonEmpty then Set.empty[String]
       else normalized.languages.flatMap(language => BuiltInDictionaries.getOrElse(language, Set.empty)).toSet
 
+    val compoundWordFlags = mergeCompoundWordFlags(externalResults.map(_.compoundWordFlags))
+    // First-declared wins (issue #1198): unlike COMPOUNDMIN/COMPOUNDRULE, these flag letters are meaningful only
+    // relative to the one dictionary that declared them (its own FLAG-mode alphabet), so merging across multiple
+    // dictionaries that each declare their own free-form compounding is not well-defined in general -- the common
+    // case (and the one real .aff/.dic pairs surveyed in #1198's investigation) is a single dictionary source per
+    // configured language.
+    val compoundFlag       = externalResults.flatMap(_.compoundFlag).headOption
+    val compoundBeginFlag  = externalResults.flatMap(_.compoundBeginFlag).headOption
+    val compoundMiddleFlag = externalResults.flatMap(_.compoundMiddleFlag).headOption
+    val compoundEndFlag    = externalResults.flatMap(_.compoundEndFlag).headOption
+    val compoundWordMax = externalResults.flatMap(_.compoundWordMax) match
+      case Nil          => None
+      case head :: tail => Some(tail.foldLeft(head)(math.min))
+    val compoundRoleFlags = List(compoundFlag, compoundBeginFlag, compoundMiddleFlag, compoundEndFlag).flatten.toSet
+    val compoundFlagTrie =
+      if compoundRoleFlags.isEmpty then CompoundTrie.empty
+      else CompoundTrie.build(compoundWordFlags.filter { case (_, flags) => flags.exists(compoundRoleFlags.contains) })
+
     val context = DictionaryContext(
       words = (externalWords ++ fallbackWords ++ normalized.additionalWords).map(DictionaryWord.normalize),
       replacements = externalReplacements,
@@ -155,7 +178,13 @@ object DictionaryLoader:
       oconv = externalResults.flatMap(_.oconv).distinct,
       compoundRules = externalResults.flatMap(_.compoundRules).distinct,
       compoundMin = externalResults.map(_.compoundMin).foldLeft(3)(math.min),
-      compoundWordFlags = mergeCompoundWordFlags(externalResults.map(_.compoundWordFlags))
+      compoundWordFlags = compoundWordFlags,
+      compoundFlag = compoundFlag,
+      compoundBeginFlag = compoundBeginFlag,
+      compoundMiddleFlag = compoundMiddleFlag,
+      compoundEndFlag = compoundEndFlag,
+      compoundWordMax = compoundWordMax,
+      compoundFlagTrie = compoundFlagTrie
     )
     DictionarySnapshot(context, SpellCheckConfig.discoverDictionaryFingerprints(normalized))
 
@@ -187,11 +216,14 @@ object DictionaryLoader:
           .map(DictionaryWord.normalize)
           .toSet
 
-        // COMPOUNDRULE (#1187) matches compound candidates against dictionary entries' own flags, keyed by their
-        // normalized text -- computed only when the affix file actually declares compounding, since it is otherwise
-        // unused.
+        // COMPOUNDRULE (#1187) and free-form COMPOUNDFLAG (#1198) both match compound candidates against dictionary
+        // entries' own flags, keyed by their normalized text -- computed only when the affix file actually declares
+        // one of these compounding mechanisms, since it is otherwise unused.
+        val declaresFreeFormCompounding =
+          affixRules.compoundFlag.isDefined || affixRules.compoundBeginFlag.isDefined ||
+            affixRules.compoundMiddleFlag.isDefined || affixRules.compoundEndFlag.isDefined
         val compoundWordFlags =
-          if affixRules.compoundRules.isEmpty then Map.empty[String, Set[String]]
+          if affixRules.compoundRules.isEmpty && !declaresFreeFormCompounding then Map.empty[String, Set[String]]
           else entries.groupMapReduce(entry => DictionaryWord.normalize(entry.word))(_.flags)(_ ++ _)
 
         DictionaryLoadResult(
@@ -202,14 +234,19 @@ object DictionaryLoader:
           affixRules.oconv,
           affixRules.compoundRules,
           affixRules.compoundMin,
-          compoundWordFlags
+          compoundWordFlags,
+          affixRules.compoundFlag,
+          affixRules.compoundBeginFlag,
+          affixRules.compoundMiddleFlag,
+          affixRules.compoundEndFlag,
+          affixRules.compoundWordMax
         )
       catch
         case NonFatal(error) =>
           failedLoad(s"Could not load dictionary $path: ${error.getMessage}")
 
   private def failedLoad(failure: String): DictionaryLoadResult =
-    DictionaryLoadResult(Set.empty, Map.empty, List(failure), Nil, Nil, Nil, 3, Map.empty)
+    DictionaryLoadResult(Set.empty, Map.empty, List(failure), Nil, Nil, Nil, 3, Map.empty, None, None, None, None, None)
 
   private def affixPathFor(dictionaryPath: Path): Option[Path] =
     SpellCheckConfig
