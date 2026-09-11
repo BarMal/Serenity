@@ -38,7 +38,7 @@ object ConfigManager:
     if Files.exists(path) then
       try parseConfigResult(path)
       catch
-        case error: Exception =>
+        case NonFatal(error) =>
           logger.error(s"[CONFIG] Failed to load config from $path, using defaults", error)
           ConfigLoadResult(AppConfig.default, ConfigMigrationReport.empty)
     else ConfigLoadResult(AppConfig.default, ConfigMigrationReport.empty)
@@ -198,12 +198,18 @@ object ConfigManager:
 
   def saveConfig(config: AppConfig, configPath: Path): Boolean =
     renderedConfig(config).fold(
-      _ => false,
+      problem => {
+        logger.error(s"[CONFIG] Failed to save config to $configPath: $problem")
+        false
+      },
       text =>
         try
           AtomicFileWriter.writeBytesBlocking(configPath, text.getBytes(StandardCharsets.UTF_8))
           true
-        catch case _: Exception => false
+        catch
+          case NonFatal(error) =>
+            logger.error(s"[CONFIG] Failed to save config to $configPath", error)
+            false
     )
 
   /** The config text to write, refused if it is not something this module could read back.

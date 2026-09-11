@@ -385,47 +385,40 @@ final private[manager] class StateManagerEffectHandlers(
     IO.blocking(FileUtils.isReadableFile(path)).flatMap {
       case false => logger.debug(s"[FILE] DirectLoad: file not readable: $path")
       case true =>
-        stateRef
-          .modify { state =>
-            val bufferId = state.runtime.nextBufferId
-            (state.copy(runtime = state.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))), bufferId)
-          }
-          .flatMap(bufferId => fileManager.loadFile(path, bufferId))
-          .flatMap { loadedBuffer =>
+        val load =
+          for
+            bufferId <- stateRef.modify { state =>
+              val bufferId = state.runtime.nextBufferId
+              (state.copy(runtime = state.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))), bufferId)
+            }
+            loadedBuffer <- fileManager.loadFile(path, bufferId)
             // Structural mutation (adds a buffer, reorders bufferOrder, reassigns pane focus): routed through the
             // checked commit so a drifted `nextBufferId` (see #858) can't silently duplicate a bufferOrder entry or
             // overwrite a live buffer instead of being rejected.
-            stateRef.get.flatMap { state =>
-              val newBufferId = loadedBuffer.id
-              val stateWithBuffer = state.copy(persisted =
-                state.persisted.copy(buffers = state.persisted.buffers + (newBufferId -> loadedBuffer))
-              )
-              val updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
-              val rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
-              val focused      = EditorState.focusBuffer(rebalanced, newBufferId)
-              val resized =
-                focused.runtime.viewportSize
-                  .map(viewportSize =>
-                    com.serenity.ui.layout.LayoutEngine.syncViewportDimensions(focused, viewportSize)
-                  )
-                  .getOrElse(focused)
-              validateAndUpdateState(resized, state).as(loadedBuffer)
-            }
-          }
-          .flatTap { loadedBuffer =>
-            loadedBuffer.document.language match
+            state <- stateRef.get
+            newBufferId = loadedBuffer.id
+            stateWithBuffer = state.copy(persisted =
+              state.persisted.copy(buffers = state.persisted.buffers + (newBufferId -> loadedBuffer))
+            )
+            updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
+            rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
+            focused      = EditorState.focusBuffer(rebalanced, newBufferId)
+            resized =
+              focused.runtime.viewportSize
+                .map(viewportSize => com.serenity.ui.layout.LayoutEngine.syncViewportDimensions(focused, viewportSize))
+                .getOrElse(focused)
+            _ <- validateAndUpdateState(resized, state)
+            _ <- loadedBuffer.document.language match
               case Some(languageId) =>
                 val uri  = path.toUri.toString
                 val text = loadedBuffer.document.content.collect()
-                stateRef.get.flatMap { state =>
-                  if state.persisted.config.appMode == AppMode.Code then
+                stateRef.get.flatMap { currentState =>
+                  if currentState.persisted.config.appMode == AppMode.Code then
                     lspQueue.enqueue(LspEffect.FileOpened(uri, languageId, text))
                   else IO.unit
                 }
               case None => IO.unit
-          }
-          .flatTap(_ =>
-            stateRef.update(s =>
+            _ <- stateRef.update(s =>
               s.copy(persisted =
                 s.persisted.copy(
                   recentFiles = trackRecentFile(s.persisted.recentFiles, path),
@@ -434,9 +427,9 @@ final private[manager] class StateManagerEffectHandlers(
                 )
               )
             )
-          )
-          .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to load file at $path"))
-          .void
+          yield ()
+
+        load.handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to load file at $path")).void
     }
 
   private[manager] def saveBufferEffect(bufferId: BufferId): IO[Unit] =

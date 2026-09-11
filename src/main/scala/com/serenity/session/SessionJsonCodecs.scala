@@ -7,8 +7,8 @@ import com.serenity.ui.layout.{SessionDockedPanel, SessionWorkspaceNode}
 import io.circe.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 
-given Encoder[SessionState.SchemaVersion] = Encoder.encodeInt.contramap(_.value)
-given Decoder[SessionState.SchemaVersion] = Decoder.decodeInt.map(SessionState.SchemaVersion.apply)
+given Encoder[SchemaVersion] = Encoder.encodeInt.contramap(_.value)
+given Decoder[SchemaVersion] = Decoder.decodeInt.map(SchemaVersion.apply)
 
 given Encoder[SessionState] = deriveEncoder
 
@@ -123,7 +123,7 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
 
 given Decoder[SessionState] = Decoder.instance { cursor =>
   for
-    schemaVersion <- cursor.getOrElse[SessionState.SchemaVersion]("schemaVersion")(SessionState.SchemaVersion(1))
+    schemaVersion <- cursor.getOrElse[SchemaVersion]("schemaVersion")(SchemaVersion(1))
     _ <- Either.cond(
       schemaVersion <= SessionState.CurrentSchemaVersion,
       (),
