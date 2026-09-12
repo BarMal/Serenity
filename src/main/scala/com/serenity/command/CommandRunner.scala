@@ -258,19 +258,29 @@ final case class CommandRunner(
   def submenuGroup(groupId: String): Option[CommandSurfaceItem.GroupItem] =
     findGroup(groupId, settingsGroups)
 
-  private def findGroup(
+  /** `visited` guards against a settings-group definition that (accidentally) nests a group under itself: `groups`
+    * (and everything already recursed past to reach them) is threaded through so a repeated group id is never
+    * descended into twice, which would otherwise recurse without bound (issue #1454). `settingsGroups` is generated
+    * from static definitions and is presumably acyclic by construction -- this isn't a currently-reachable bug -- but
+    * nothing enforced that invariant, so a future addition that nests a group under itself would previously
+    * stack-overflow rather than simply fail to find a match past the cycle.
+    */
+  private[command] def findGroup(
     groupId: String,
-    groups: List[CommandSurfaceItem.GroupItem]
+    groups: List[CommandSurfaceItem.GroupItem],
+    visited: Set[String] = Set.empty
   ): Option[CommandSurfaceItem.GroupItem] =
     groups
       .collectFirst { case group if group.id == groupId => group }
-      .orElse(
+      .orElse {
+        val nextVisited = visited ++ groups.map(_.id)
         groups
           .flatMap(_.children.collect { case group: CommandSurfaceItem.GroupItem => group })
+          .filterNot(child => nextVisited.contains(child.id))
           .view
-          .flatMap(group => findGroup(groupId, List(group)))
+          .flatMap(group => findGroup(groupId, List(group), nextVisited))
           .headOption
-      )
+      }
 
   private def preferredAncestorGroupIds(groupId: String): List[String] =
     groupPaths(groupId, settingsGroups)
@@ -310,17 +320,20 @@ final case class CommandRunner(
       case editing: SettingsPage.Editing =>
         filteredPageItems(editing, submenuItems(editing.groupId)).indexWhere(_.id == editing.itemId).max(0)
 
-  private def groupPaths(
+  /** As [[findGroup]]'s `visited` parameter, guarding this traversal against a self-nested group the same way. */
+  private[command] def groupPaths(
     groupId: String,
-    groups: List[CommandSurfaceItem.GroupItem]
+    groups: List[CommandSurfaceItem.GroupItem],
+    visited: Set[String] = Set.empty
   ): List[List[String]] =
+    val nextVisited = visited ++ groups.map(_.id)
     groups.flatMap { group =>
       val current = Option.when(group.id == groupId)(List(group.id)).toList
       val childGroups = group.children.collect {
-        case child: CommandSurfaceItem.GroupItem =>
+        case child: CommandSurfaceItem.GroupItem if !nextVisited.contains(child.id) =>
           child
       }
-      current ++ groupPaths(groupId, childGroups).map(group.id :: _)
+      current ++ groupPaths(groupId, childGroups, nextVisited).map(group.id :: _)
     }
 
   def focusedSubmenuItems: List[CommandSurfaceItem] =
