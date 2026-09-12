@@ -88,12 +88,61 @@ object LspProtocol:
               "snippetSupport"      -> false.asJson,
               "documentationFormat" -> Json.arr("markdown".asJson, "plaintext".asJson)
             )
+          ),
+          "semanticTokens" -> Json.obj(
+            "requests"       -> Json.obj("full" -> true.asJson),
+            "tokenTypes"     -> ClientSemanticTokenTypes.asJson,
+            "tokenModifiers" -> ClientSemanticTokenModifiers.asJson,
+            "formats"        -> Json.arr("relative".asJson)
           )
         )
       )
     )
 
   def initializedParams: Json = Json.obj()
+
+  /** The client's own requested legend (LSP 3.17 §3.17.7.4) -- the *server's* legend, returned in its `initialize`
+    * result, is what [[parseSemanticTokens]] must decode against, since a server is free to use its own ordering
+    * rather than echo this one back.
+    */
+  val ClientSemanticTokenTypes: List[String] = List(
+    "namespace",
+    "type",
+    "class",
+    "enum",
+    "interface",
+    "struct",
+    "typeParameter",
+    "parameter",
+    "variable",
+    "property",
+    "enumMember",
+    "event",
+    "function",
+    "method",
+    "macro",
+    "keyword",
+    "modifier",
+    "comment",
+    "string",
+    "number",
+    "regexp",
+    "operator",
+    "decorator"
+  )
+
+  val ClientSemanticTokenModifiers: List[String] = List(
+    "declaration",
+    "definition",
+    "readonly",
+    "static",
+    "deprecated",
+    "abstract",
+    "async",
+    "modification",
+    "documentation",
+    "defaultLibrary"
+  )
 
   // ── TextDocument ────────────────────────────────────────────────────────────
 

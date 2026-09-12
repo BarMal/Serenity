@@ -13,7 +13,7 @@ import com.serenity.lsp.client.{
   RequestId,
   WorkspaceRootUri
 }
-import com.serenity.lsp.model.{DiagnosticSeverity, LspPosition, LspRange}
+import com.serenity.lsp.model.{DiagnosticSeverity, LspPosition, LspRange, SemanticToken, SemanticTokensLegend}
 import io.circe.Json
 import io.circe.syntax.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -339,4 +339,99 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
       )
     )
     LspProtocol.parseRange(missingEndCharacter.hcursor) shouldBe None
+  }
+
+  // ── SemanticTokens (issue #859 / #1177) ──────────────────────────────────────
+
+  it should "declare a semanticTokens client capability with a full-request legend" in {
+    val params  = LspProtocol.initializeParams(12345, WorkspaceRootUri("file:///workspace"))
+    val semTok  = params.hcursor.downField("capabilities").downField("textDocument").downField("semanticTokens")
+    semTok.downField("requests").downField("full").as[Boolean].toOption shouldBe Some(true)
+    semTok.downField("tokenTypes").as[List[String]].toOption shouldBe Some(LspProtocol.ClientSemanticTokenTypes)
+    semTok.downField("tokenModifiers").as[List[String]].toOption shouldBe Some(LspProtocol.ClientSemanticTokenModifiers)
+  }
+
+  it should "build semanticTokens/full params from the document uri" in {
+    val params = LspProtocol.semanticTokensParams(DocumentUri("file:///foo/Bar.scala"))
+    params.hcursor.downField("textDocument").downField("uri").as[String].toOption shouldBe Some("file:///foo/Bar.scala")
+  }
+
+  it should "parse the server's semantic tokens legend from its initialize result" in {
+    val initializeResult = Json.obj(
+      "capabilities" -> Json.obj(
+        "semanticTokensProvider" -> Json.obj(
+          "legend" -> Json.obj(
+            "tokenTypes"     -> Json.arr("keyword".asJson, "string".asJson),
+            "tokenModifiers" -> Json.arr("readonly".asJson)
+          ),
+          "full" -> true.asJson
+        )
+      )
+    )
+
+    LspProtocol.parseSemanticTokensLegend(initializeResult) shouldBe
+      Some(SemanticTokensLegend(List("keyword", "string"), List("readonly")))
+    LspProtocol.supportsSemanticTokens(initializeResult) shouldBe true
+  }
+
+  it should "report no semantic tokens support when the server omits the capability" in {
+    val initializeResult = Json.obj("capabilities" -> Json.obj("hoverProvider" -> true.asJson))
+
+    LspProtocol.parseSemanticTokensLegend(initializeResult) shouldBe None
+    LspProtocol.supportsSemanticTokens(initializeResult) shouldBe false
+  }
+
+  it should "decode delta-encoded semantic tokens data into absolute positions using the legend" in {
+    val legend = SemanticTokensLegend(
+      tokenTypes = List("keyword", "string", "comment"),
+      tokenModifiers = List("declaration", "readonly")
+    )
+    // Token 1: line 0, char 0, length 3, type "keyword" (index 0), modifiers none (bitset 0)
+    // Token 2: same line (deltaLine 0), so char is relative to token 1's start: +4 -> char 4, length 5, type
+    //   "string" (index 1), modifiers {declaration, readonly} (bits 0 and 1 set -> 0b11 = 3)
+    // Token 3: next line (deltaLine 2 -> line 2), char is absolute on the new line: 1, length 10, type "comment"
+    //   (index 2), modifiers none
+    val data = List(
+      0, 0, 3, 0, 0,
+      0, 4, 5, 1, 3,
+      2, 1, 10, 2, 0
+    )
+    val result = Json.obj("data" -> data.map(_.asJson).asJson)
+
+    LspProtocol.parseSemanticTokens(result, legend) shouldBe Some(
+      List(
+        SemanticToken(line = 0, startCharacter = 0, length = 3, tokenType = "keyword", tokenModifiers = Set.empty),
+        SemanticToken(
+          line = 0,
+          startCharacter = 4,
+          length = 5,
+          tokenType = "string",
+          tokenModifiers = Set("declaration", "readonly")
+        ),
+        SemanticToken(line = 2, startCharacter = 1, length = 10, tokenType = "comment", tokenModifiers = Set.empty)
+      )
+    )
+  }
+
+  it should "decode an empty semantic tokens data array as no tokens" in {
+    val legend = SemanticTokensLegend(List("keyword"), Nil)
+    val result = Json.obj("data" -> Json.arr())
+
+    LspProtocol.parseSemanticTokens(result, legend) shouldBe Some(Nil)
+  }
+
+  it should "return None when a semantic tokens result has no data field" in {
+    val legend = SemanticTokensLegend(List("keyword"), Nil)
+    LspProtocol.parseSemanticTokens(Json.obj(), legend) shouldBe None
+  }
+
+  it should "skip a token whose type index falls outside the legend rather than fail the whole decode" in {
+    val legend = SemanticTokensLegend(List("keyword"), Nil)
+    // First token has an out-of-range type index (5); second is valid.
+    val data   = List(0, 0, 3, 5, 0, 0, 4, 2, 0, 0)
+    val result = Json.obj("data" -> data.map(_.asJson).asJson)
+
+    LspProtocol.parseSemanticTokens(result, legend) shouldBe Some(
+      List(SemanticToken(line = 0, startCharacter = 4, length = 2, tokenType = "keyword", tokenModifiers = Set.empty))
+    )
   }
