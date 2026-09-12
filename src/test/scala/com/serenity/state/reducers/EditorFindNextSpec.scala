@@ -260,7 +260,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
     val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.persisted.buffers(bufferId)
     val cursor       = buffer.editing.cursors.head
-    val font         = com.serenity.ui.fonts.FontLoader.previewTextFont(updatedState.persisted.config.editorConfig.fontConfig)
+    val font = com.serenity.ui.fonts.FontLoader.previewTextFont(updatedState.persisted.config.editorConfig.fontConfig)
     val wrapPx =
       TextLayoutSnapshot.gridWrapWidthPx(
         buffer.viewport.visibleColumns,
