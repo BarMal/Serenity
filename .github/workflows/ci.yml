@@ -126,3 +126,82 @@ jobs:
 
       - name: Run tests
         run: sbt -v clean test
+
+  perf:
+    name: Performance benchmarks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: sbt
+
+      - name: Set up sbt launcher
+        uses: sbt/setup-sbt@v1
+
+      # The benchmark suite builds a real `SwingWindow` (`PerformanceBenchmarks.main`'s `SwingWindow.resource`), which
+      # needs a display even though nothing is ever shown on screen -- a runner with no X server at all raises
+      # `HeadlessException` constructing it, so this job needs a virtual one.
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      # `PerformanceBenchmarks` (src/test/scala/com/serenity/perf) is a manual `main`-method runner, not a ScalaTest
+      # suite -- `sbt test` never touches it. Running it here and archiving its CSV is issue #1453's "at minimum
+      # periodically run and archive the CSV output for trend tracking"; the regression check below is its "or wire a
+      # subset into CI with a regression threshold" half.
+      - name: Run performance benchmarks
+        run: xvfb-run -a sbt -v "Test/runMain com.serenity.perf.PerformanceBenchmarks" | tee perf-results-raw.txt
+
+      - name: Extract benchmark CSV from sbt output
+        shell: bash
+        run: |
+          set -euo pipefail
+          # sbt prefixes every line of runMain's stdout with "[info] "; strip that back off, then keep from the
+          # benchmark suite's own title line onward so any earlier sbt log noise is excluded.
+          sed -n '/^\[info\] Serenity performance benchmarks$/,$p' perf-results-raw.txt | sed 's/^\[info\] //' \
+            > perf-results.csv
+          if [ ! -s perf-results.csv ]; then
+            echo "::error::No benchmark output found in sbt's runMain log -- see perf-results-raw.txt"
+            exit 1
+          fi
+
+      # A baseline from the *previous* run on this same runner type -- not a value committed to the repo, since an
+      # absolute millisecond figure only means anything measured on comparable hardware. Restored (never saved) on a
+      # pull request, so a PR is compared against master's last recorded numbers without a PR run ever overwriting
+      # them; saved only on a push to master, so the baseline only ever advances from a trusted, merged state.
+      - name: Restore previous benchmark baseline
+        id: restore-baseline
+        uses: actions/cache/restore@v4
+        with:
+          path: perf-baseline.csv
+          key: perf-baseline-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            perf-baseline-${{ runner.os }}-
+
+      - name: Check for a performance regression
+        run: python3 scripts/check_perf_regression.py perf-baseline.csv perf-results.csv --threshold 3.0
+
+      - name: Archive benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-benchmark-results
+          path: perf-results.csv
+          retention-days: 90
+
+      - name: Update benchmark baseline
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: cp perf-results.csv perf-baseline.csv
+
+      - name: Save benchmark baseline
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: actions/cache/save@v4
+        with:
+          path: perf-baseline.csv
+          key: perf-baseline-${{ runner.os }}-${{ github.run_id }}
