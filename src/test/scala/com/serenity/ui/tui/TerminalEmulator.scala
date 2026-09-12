@@ -29,6 +29,8 @@ final case class TerminalEmulator(
     pen: TerminalEmulator.Pen,
     privateModes: Set[Int],
     osc52Payloads: Vector[String],
+    title: Option[String],
+    notifications: Vector[String],
     pending: String
 ):
   import TerminalEmulator.*
@@ -108,6 +110,8 @@ object TerminalEmulator:
       pen = Pen(fg, bg, TextStyle.normal),
       privateModes = Set.empty,
       osc52Payloads = Vector.empty,
+      title = None,
+      notifications = Vector.empty,
       pending = ""
     )
 
@@ -122,7 +126,14 @@ object TerminalEmulator:
       next: Int
   )
 
-  final private case class Interp(cursor: Cursor, pen: Pen, modes: Set[Int], payloads: Vector[String])
+  final private case class Interp(
+      cursor: Cursor,
+      pen: Pen,
+      modes: Set[Int],
+      payloads: Vector[String],
+      title: Option[String],
+      notifications: Vector[String]
+  )
 
   private def interpret(start: TerminalEmulator, ansi: String): TerminalEmulator =
     val width  = start.frame.width
@@ -165,6 +176,12 @@ object TerminalEmulator:
             case _ => clearRange(rowStart, rowStart + width, state.pen)
       state
 
+    def applyOsc(state: Interp, body: String): Interp =
+      body.split(";", 2).toVector match
+        case Vector(("0" | "2"), text) => state.copy(title = Some(text))
+        case Vector("9", text)         => state.copy(notifications = state.notifications :+ text)
+        case _                         => state.copy(payloads = state.payloads ++ osc52Payload(body))
+
     def applyCsi(state: Interp, csi: Csi): Interp =
       (csi.prefix, csi.intermediates, csi.finalByte) match
         case (None, "", 'H') | (None, "", 'f') =>
@@ -186,7 +203,7 @@ object TerminalEmulator:
               case None      => (index, state)
           case Esc if index + 1 < ansi.length && ansi(index + 1) == ']' =>
             scanOsc(ansi, index + 2) match
-              case Some((body, next)) => loop(next, state.copy(payloads = state.payloads ++ osc52Payload(body)))
+              case Some((body, next)) => loop(next, applyOsc(state, body))
               case None               => (index, state)
           case Esc if index + 1 < ansi.length => loop(index + 2, state)
           case Esc                            => (index, state)
@@ -204,7 +221,10 @@ object TerminalEmulator:
             loop(index + Character.charCount(codePoint), printCodePoint(state, codePoint))
 
     val (consumedTo, finalState) =
-      loop(0, Interp(start.cursor, start.pen, start.privateModes, start.osc52Payloads))
+      loop(
+        0,
+        Interp(start.cursor, start.pen, start.privateModes, start.osc52Payloads, start.title, start.notifications)
+      )
 
     TerminalEmulator(
       frame = TerminalFrame(width, height, grid.map(_.toVector).toVector),
@@ -212,6 +232,8 @@ object TerminalEmulator:
       pen = finalState.pen,
       privateModes = finalState.modes,
       osc52Payloads = finalState.payloads,
+      title = finalState.title,
+      notifications = finalState.notifications,
       pending = ansi.substring(consumedTo)
     )
 
