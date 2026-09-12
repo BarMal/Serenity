@@ -8,7 +8,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, SurfaceConfig}
 import com.serenity.rope.Balance
-import com.serenity.session.{SessionId, SessionIndex, SessionManager, SessionMetadata}
+import com.serenity.session.{PendingSessionWrite, SessionId, SessionIndex, SessionManager, SessionMetadata}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.theme.config.AppThemeManager
@@ -72,6 +72,17 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       createdAtEpochMillis = 1L,
       updatedAtEpochMillis = 1L
     )
+
+  private def pendingFile(sessionRoot: Path): Path =
+    sessionRoot.resolve("session-write.pending.json")
+
+  private def writePending(sessionRoot: Path, pending: PendingSessionWrite): Unit =
+    Files.writeString(pendingFile(sessionRoot), _root_.io.circe.syntax.EncoderOps(pending).asJson.spaces2)
+
+  private def quarantinedPendingFiles(sessionRoot: Path): List[Path] =
+    val stream = Files.list(sessionRoot)
+    try stream.filter(_.getFileName.toString.startsWith("session-write.pending.json.corrupt-")).iterator.asScala.toList
+    finally stream.close()
 
   private def cleanFileStateWithText(diskText: String): IO[AppState] =
     IO.blocking {
@@ -361,6 +372,85 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     yield
       loaded.map(_.persisted.buffers.values.head.document.content.toString) shouldBe Some("valid")
       sessions.map(_.sessionFileName) should not contain "orphan.json"
+
+    program.unsafeRunSync()
+  }
+
+  it should "replay a pending session write left behind by a crash between recording it and applying it" in {
+    val sessionRoot       = Files.createTempDirectory("session-manager-pending-write")
+    val sessionManager    = createManagerAt(sessionRoot)
+    val sessionsDirectory = sessionRoot.resolve("sessions")
+
+    val program = for
+      // A real, well-formed session-file body to reuse as the pending write's content -- what matters
+      // here is that recovery writes it out verbatim, not how a SessionState serializes.
+      _              <- sessionManager.saveSession(stateWithText("first"))
+      recoveredBytes <- IO.blocking(Files.readString(currentSessionFile(sessionRoot)))
+      _ <- IO.blocking {
+        Files.createDirectories(sessionsDirectory)
+        writePending(
+          sessionRoot,
+          PendingSessionWrite(
+            writes = Map("recovered.json" -> recoveredBytes),
+            deletes = Nil,
+            indexJson = _root_.io.circe.syntax.EncoderOps(
+              SessionIndex(List(metadata("recovered", "recovered.json")), Some(SessionId("recovered")))
+            ).asJson.spaces2
+          )
+        )
+      }
+      loaded   <- sessionManager.loadSession()
+      sessions <- sessionManager.listSessions()
+    yield
+      loaded.map(_.persisted.buffers.values.head.document.content.toString) shouldBe Some("first")
+      sessions.map(_.id.value) shouldBe List("recovered")
+      Files.exists(pendingFile(sessionRoot)) shouldBe false
+      Files.exists(sessionsDirectory.resolve("recovered.json")) shouldBe true
+
+    program.unsafeRunSync()
+  }
+
+  it should "replay a pending session delete left behind by a crash between recording it and applying it" in {
+    val sessionRoot    = Files.createTempDirectory("session-manager-pending-delete")
+    val sessionManager = createManagerAt(sessionRoot)
+
+    val program = for
+      sessionId <- sessionManager.saveSessionAs("To delete", stateWithText("gone"))
+      before    <- sessionManager.listSessions()
+      sessionFileName = before.find(_.id == sessionId).value.sessionFileName
+      _ <- IO.blocking {
+        writePending(
+          sessionRoot,
+          PendingSessionWrite(
+            writes = Map.empty,
+            deletes = List(sessionFileName),
+            indexJson = _root_.io.circe.syntax.EncoderOps(SessionIndex.empty).asJson.spaces2
+          )
+        )
+      }
+      sessions <- sessionManager.listSessions()
+    yield
+      sessions shouldBe Nil
+      Files.exists(pendingFile(sessionRoot)) shouldBe false
+      Files.exists(sessionRoot.resolve("sessions").resolve(sessionFileName)) shouldBe false
+
+    program.unsafeRunSync()
+  }
+
+  it should "quarantine an unreadable pending session write and keep operating normally" in {
+    val sessionRoot    = Files.createTempDirectory("session-manager-corrupt-pending")
+    val sessionManager = createManagerAt(sessionRoot)
+    Files.writeString(pendingFile(sessionRoot), "{ not valid pending json")
+
+    val program = for
+      sessions <- sessionManager.listSessions()
+      _        <- sessionManager.saveSession(stateWithText("after recovery"))
+      loaded   <- sessionManager.loadSession()
+    yield
+      sessions shouldBe Nil
+      loaded.map(_.persisted.buffers.values.head.document.content.toString) shouldBe Some("after recovery")
+      Files.exists(pendingFile(sessionRoot)) shouldBe false
+      quarantinedPendingFiles(sessionRoot) should not be empty
 
     program.unsafeRunSync()
   }

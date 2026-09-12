@@ -24,6 +24,7 @@ class SessionManager(
 ):
 
   private val indexFile: Path         = sessionRoot.resolve("session-index.json")
+  private val pendingFile: Path       = sessionRoot.resolve("session-write.pending.json")
   private val sessionsDirectory: Path = sessionRoot.resolve("sessions")
   private val defaultSessionId        = SessionId("current")
   private val defaultSessionName      = "Last Session"
@@ -55,10 +56,13 @@ class SessionManager(
           )
         )
       canonicalMetadata = metadata.copy(sessionFileName = canonicalSessionFileName(sessionId))
-      _ <- writeSessionFile(canonicalMetadata.sessionFileName, appState, persistUnsavedBuffers)
       updatedMetadata = canonicalMetadata.copy(updatedAtEpochMillis = now)
       updatedIndex    = upsertSession(index, updatedMetadata).copy(currentSessionId = Some(updatedMetadata.id))
-      _ <- writeIndex(updatedIndex)
+      _ <- commitTransaction(
+        writes = Map(canonicalMetadata.sessionFileName -> sessionStateJson(appState, persistUnsavedBuffers)),
+        deletes = Nil,
+        indexJson = encodeIndex(updatedIndex)
+      )
       _ <- logger.info(s"[SESSION] Session saved successfully (${updatedMetadata.displayName})")
     yield ()
 
@@ -77,11 +81,14 @@ class SessionManager(
         lastOpenedAtEpochMillis = Some(now)
       )
       index <- readIndex()
-      _     <- writeSessionFile(metadata.sessionFileName, appState)
       withNew = upsertSession(index, metadata)
-      pruned <- pruneHistory(withNew)
+      (pruned, toDelete) = pruneHistory(withNew)
       updatedIndex = pruned.copy(currentSessionId = Some(sessionId))
-      _ <- writeIndex(updatedIndex)
+      _ <- commitTransaction(
+        writes = Map(metadata.sessionFileName -> sessionStateJson(appState, policy.persistUnsavedBuffers)),
+        deletes = toDelete,
+        indexJson = encodeIndex(updatedIndex)
+      )
       _ <- logger.info(s"[SESSION] Named session saved (${metadata.displayName})")
     yield sessionId
 
@@ -139,8 +146,7 @@ class SessionManager(
     for
       index <- readIndex()
       sessionFileNames = index.sessions.filter(_.id == sessionId).map(_.sessionFileName)
-      _ <- sessionFileNames.traverse_(deleteSessionFile)
-      _ <- writeIndex(index.remove(sessionId))
+      _ <- commitTransaction(writes = Map.empty, deletes = sessionFileNames, indexJson = encodeIndex(index.remove(sessionId)))
       _ <- logger.info(s"[SESSION] Session deleted (${sessionId.value})")
     yield ()
 
@@ -240,7 +246,7 @@ class SessionManager(
     }
 
   private def readIndex(): IO[SessionIndex] =
-    IO.blocking(Files.exists(indexFile)).flatMap {
+    recoverPendingTransaction() >> IO.blocking(Files.exists(indexFile)).flatMap {
       case false => IO.pure(SessionIndex.empty)
       case true =>
         readUtf8(indexFile)
@@ -326,27 +332,120 @@ class SessionManager(
     }
 
   private def writeIndex(index: SessionIndex): IO[Unit] =
-    writeUtf8(indexFile, _root_.io.circe.syntax.EncoderOps(index).asJson.spaces2)
+    writeUtf8(indexFile, encodeIndex(index))
 
-  private def writeSessionFile(
-    sessionFileName: String,
-    appState: AppState,
-    persistUnsavedBuffers: Boolean = policy.persistUnsavedBuffers
-  ): IO[Unit] =
+  private def encodeIndex(index: SessionIndex): String =
+    _root_.io.circe.syntax.EncoderOps(index).asJson.spaces2
+
+  private def sessionStateJson(appState: AppState, persistUnsavedBuffers: Boolean): String =
     val sessionState = SessionState.fromAppState(appState, persistUnsaved = persistUnsavedBuffers)
-    IO.blocking(safeSessionPath(sessionFileName)).flatMap {
-      case None => IO.raiseError(new IllegalArgumentException(s"Unsafe session path: $sessionFileName"))
-      case Some(sessionFile) =>
-        writeUtf8(sessionFile, _root_.io.circe.syntax.EncoderOps(sessionState).asJson.spaces2)
+    _root_.io.circe.syntax.EncoderOps(sessionState).asJson.spaces2
+
+  /** Durably record, then apply, one session-file-and-index change as a unit.
+    *
+    * `writeSessionFile`/`writeIndex` (and, for a delete, removing a session file then rewriting the
+    * index) used to run as two independent `AtomicFileWriter` writes with nothing tying them
+    * together, so a crash between them could leave the session file and the index inconsistent with
+    * each other. Recording the change here first -- as a single atomically-written
+    * [[PendingSessionWrite]] -- means a crash before this point leaves the old, consistent state
+    * untouched, and a crash after it leaves a description that `recoverPendingTransaction` replays
+    * (idempotently) the next time this `SessionManager` is used, so the pair always ends up applied
+    * together.
+    *
+    * Write targets are validated up front and the whole commit is refused if any is unsafe, matching
+    * the previous `writeSessionFile` behaviour; delete targets that resolve to no safe path are
+    * silently skipped, matching the previous `deleteSessionFile` behaviour.
+    */
+  private def commitTransaction(writes: Map[String, String], deletes: List[String], indexJson: String): IO[Unit] =
+    for
+      resolvedWrites  <- resolveWritePaths(writes)
+      resolvedDeletes <- resolveSafePaths(deletes)
+      _               <- writeUtf8(pendingFile, encodePending(PendingSessionWrite(writes, deletes, indexJson)))
+      _               <- applyTransaction(resolvedWrites, resolvedDeletes, indexJson)
+      _               <- IO.blocking(Files.deleteIfExists(pendingFile)).void
+    yield ()
+
+  private def applyTransaction(writes: List[(Path, String)], deletes: List[Path], indexJson: String): IO[Unit] =
+    for
+      _ <- writes.traverse_((path, json) => writeUtf8(path, json))
+      _ <- deletes.traverse_(deletePathQuietly)
+      _ <- writeUtf8(indexFile, indexJson)
+    yield ()
+
+  private def deletePathQuietly(path: Path): IO[Unit] =
+    IO.blocking {
+      if Files.exists(path) then Files.delete(path)
+    }.handleErrorWith(error => logger.error(error)(s"[SESSION] Failed to delete session file $path"))
+
+  /** Resolve write targets, refusing the whole transaction if any is unsafe. */
+  private def resolveWritePaths(writes: Map[String, String]): IO[List[(Path, String)]] =
+    writes.toList.traverse { case (sessionFileName, json) =>
+      IO.blocking(safeSessionPath(sessionFileName)).flatMap {
+        case Some(path) => IO.pure(path -> json)
+        case None       => IO.raiseError(new IllegalArgumentException(s"Unsafe session path: $sessionFileName"))
+      }
     }
 
-  private def deleteSessionFile(sessionFileName: String): IO[Unit] =
-    IO.blocking(safeSessionPath(sessionFileName)).flatMap {
-      case None => IO.unit
-      case Some(sessionFile) =>
-        IO.blocking {
-          if Files.exists(sessionFile) then Files.delete(sessionFile)
-        }.handleErrorWith(error => logger.error(error)(s"[SESSION] Failed to delete session file $sessionFile"))
+  /** Resolve targets, silently dropping any that resolve to no safe path. */
+  private def resolveSafePaths(sessionFileNames: List[String]): IO[List[Path]] =
+    sessionFileNames.traverse(name => IO.blocking(safeSessionPath(name))).map(_.flatten)
+
+  /** Resolve write targets during replay, silently dropping any that resolve to no safe path. */
+  private def resolveSafeWritePaths(writes: Map[String, String]): IO[List[(Path, String)]] =
+    writes.toList
+      .traverse { case (name, json) => IO.blocking(safeSessionPath(name)).map(_.map(_ -> json)) }
+      .map(_.flatten)
+
+  private def encodePending(pending: PendingSessionWrite): String =
+    _root_.io.circe.syntax.EncoderOps(pending).asJson.spaces2
+
+  /** Finish a transaction left behind by a crash between recording it and completing it.
+    *
+    * Best-effort: a pending file that fails to decode is quarantined (mirroring
+    * `recoverCorruptIndex`/`recoverFailedSessionFile`) rather than raised, so a corrupt marker can
+    * never block every future session operation.
+    */
+  private def recoverPendingTransaction(): IO[Unit] =
+    IO.blocking(Files.exists(pendingFile)).flatMap {
+      case false => IO.unit
+      case true =>
+        readUtf8(pendingFile)
+          .flatMap(jsonString => IO.fromEither(_root_.io.circe.parser.decode[PendingSessionWrite](jsonString)))
+          .flatMap { pending =>
+            for
+              resolvedWrites  <- resolveSafeWritePaths(pending.writes)
+              resolvedDeletes <- resolveSafePaths(pending.deletes)
+              _               <- applyTransaction(resolvedWrites, resolvedDeletes, pending.indexJson)
+              _               <- IO.blocking(Files.deleteIfExists(pendingFile)).void
+              _ <- logger.info(s"[SESSION] Replayed an interrupted session write from $pendingFile")
+            yield ()
+          }
+          .handleErrorWith(error =>
+            quarantinePendingFile.attempt.flatMap {
+              case Right(Some(quarantineFile)) =>
+                logger.error(error)(
+                  s"[SESSION] Failed to replay pending session write at $pendingFile; copied to $quarantineFile"
+                )
+              case Right(None) =>
+                logger.error(error)(
+                  s"[SESSION] Failed to replay pending session write at $pendingFile; no file was available to copy"
+                )
+              case Left(quarantineError) =>
+                logger.error(quarantineError)(s"[SESSION] Failed to copy corrupt pending session write at $pendingFile") >>
+                  logger.error(error)(s"[SESSION] Failed to replay pending session write at $pendingFile")
+            }
+          )
+    }
+
+  private def quarantinePendingFile: IO[Option[Path]] =
+    IO.blocking(Files.exists(pendingFile)).flatMap {
+      case false => IO.pure(None)
+      case true =>
+        currentTimeMillis().flatMap { now =>
+          val quarantineFile = pendingFile.resolveSibling(s"${pendingFile.getFileName}.corrupt-$now")
+          IO.blocking(Files.copy(pendingFile, quarantineFile, StandardCopyOption.REPLACE_EXISTING)) >>
+            IO.blocking(Files.deleteIfExists(pendingFile)).as(Some(quarantineFile))
+        }
     }
 
   private def writeUtf8(path: Path, value: String): IO[Unit] =
@@ -387,19 +486,24 @@ class SessionManager(
 
     index.copy(sessions = updatedSessions)
 
-  private def pruneHistory(index: SessionIndex): IO[SessionIndex] =
+  /** Which sessions history should drop over `maxSessionHistory`, and the index with them removed.
+    *
+    * Pure so the caller can fold the result into the same [[commitTransaction]] as the session-file
+    * write it is pruning alongside, rather than deleting files and writing the index as two separate
+    * steps.
+    */
+  private def pruneHistory(index: SessionIndex): (SessionIndex, List[String]) =
     val namedSessions = index.sessions.filterNot(_.id == defaultSessionId)
     val excess        = namedSessions.size - policy.maxSessionHistory
-    if excess <= 0 then IO.pure(index)
+    if excess <= 0 then (index, Nil)
     else
       val toPrune = namedSessions.sortBy(_.updatedAtEpochMillis).take(excess)
-      toPrune.traverse_(s => deleteSessionFile(s.sessionFileName)).map { _ =>
-        val pruned = toPrune.map(_.id).toSet
-        index.copy(
-          sessions = index.sessions.filterNot(s => pruned.contains(s.id)),
-          currentSessionId = index.currentSessionId.filterNot(pruned.contains)
-        )
-      }
+      val pruned  = toPrune.map(_.id).toSet
+      val prunedIndex = index.copy(
+        sessions = index.sessions.filterNot(s => pruned.contains(s.id)),
+        currentSessionId = index.currentSessionId.filterNot(pruned.contains)
+      )
+      (prunedIndex, toPrune.map(_.sessionFileName))
 
   private def currentTimeMillis(): IO[Long] =
     IO.realTime.map(_.toMillis)
