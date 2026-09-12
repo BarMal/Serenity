@@ -163,8 +163,12 @@ jobs:
         run: |
           set -euo pipefail
           # sbt prefixes every line of runMain's stdout with "[info] "; strip that back off, then keep from the
-          # benchmark suite's own title line onward so any earlier sbt log noise is excluded.
-          sed -n '/^\[info\] Serenity performance benchmarks$/,$p' perf-results-raw.txt | sed 's/^\[info\] //' \
+          # benchmark suite's own title line onward so any earlier sbt log noise is excluded. `sbt -v` also emits ANSI
+          # colour escapes around/inside that prefix (e.g. "\e[0m[\e[0minfo\e[0m] \e[0mSerenity ..."), which breaks a
+          # plain `[info] ` match -- strip those escapes first.
+          sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' perf-results-raw.txt \
+            | sed -n '/^\[info\] Serenity performance benchmarks$/,$p' \
+            | sed 's/^\[info\] //' \
             > perf-results.csv
           if [ ! -s perf-results.csv ]; then
             echo "::error::No benchmark output found in sbt's runMain log -- see perf-results-raw.txt"
