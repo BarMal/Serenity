@@ -14,10 +14,18 @@ import com.serenity.ui.layout.Symbol
 final private[manager] class StateManagerNavigationEffects(
     stateRef: Ref[IO, AppState],
     bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]],
-    logger: org.typelevel.log4cats.Logger[IO]
+    logger: org.typelevel.log4cats.Logger[IO],
+    validateAndUpdateState: (AppState, AppState) => IO[Unit]
 ):
 
   private def updateState(update: AppState => AppState): IO[Unit] = stateRef.update(update)
+
+  /** Commits `update` through the checked validation path rather than a bare `stateRef.update` -- every call site
+    * below moves a cursor, bookmark, or comment position, which `AppStateValidation`'s document-position invariants
+    * govern (#858, #1183).
+    */
+  private def validatedUpdateState(update: AppState => AppState): IO[Unit] =
+    stateRef.get.flatMap(current => validateAndUpdateState(update(current), current))
 
   private[manager] def interpretComments(intent: CommentsIntent, state: AppState): IO[Unit] =
     intent match
@@ -121,7 +129,7 @@ final private[manager] class StateManagerNavigationEffects(
       } match
       case Some((before, after)) if before != after =>
         val sweep = navigationSweep(before, after)
-        stateRef.modify { current =>
+        stateRef.get.flatMap { current =>
           val movedBase = moveToNavigationPoint(current, after)
           val moved = movedBase.copy(runtime =
             movedBase.runtime.copy(navigation =
@@ -131,9 +139,10 @@ final private[manager] class StateManagerNavigationEffects(
               )
             )
           )
-          val animationUpdate = applyNavigationAnimationUpdate(animationUpdateForNavigationTarget(moved, after, sweep))
-          (onTargetResolved.fold(moved)(_(moved)), animationUpdate)
-        }.flatten
+          val finalState = onTargetResolved.fold(moved)(_(moved))
+          validateAndUpdateState(finalState, current) >>
+            applyNavigationAnimationUpdate(animationUpdateForNavigationTarget(moved, after, sweep))
+        }
       case Some(_) =>
         onTargetResolved match
           case Some(transform) => updateState(transform)
@@ -203,38 +212,40 @@ final private[manager] class StateManagerNavigationEffects(
     (moved, applyNavigationAnimationUpdate(animationUpdateForNavigationTarget(moved, target, sweep)))
 
   private def navigateHistoryBack(): IO[Unit] =
-    stateRef.modify { current =>
+    stateRef.get.flatMap { current =>
       current.runtime.navigation.backStack match
         case target :: remaining =>
           currentNavigationPoint(current) match
             case Some(point) =>
-              updateNavigationHistory(
+              val (moved, animate) = updateNavigationHistory(
                 current,
                 target,
                 remaining,
                 pushNavigationPoint(point, current.runtime.navigation.forwardStack),
                 navigationSweep(point, target)
               )
-            case None => (current, IO.unit)
-        case Nil => (current, IO.unit)
-    }.flatten
+              validateAndUpdateState(moved, current) >> animate
+            case None => IO.unit
+        case Nil => IO.unit
+    }
 
   private def navigateHistoryForward(): IO[Unit] =
-    stateRef.modify { current =>
+    stateRef.get.flatMap { current =>
       current.runtime.navigation.forwardStack match
         case target :: remaining =>
           currentNavigationPoint(current) match
             case Some(point) =>
-              updateNavigationHistory(
+              val (moved, animate) = updateNavigationHistory(
                 current,
                 target,
                 pushNavigationPoint(point, current.runtime.navigation.backStack),
                 remaining,
                 navigationSweep(point, target)
               )
-            case None => (current, IO.unit)
-        case Nil => (current, IO.unit)
-    }.flatten
+              validateAndUpdateState(moved, current) >> animate
+            case None => IO.unit
+        case Nil => IO.unit
+    }
 
   private def currentNavigationPoint(state: AppState): Option[NavigationPoint] =
     activeEditorBuffer(state).flatMap {
@@ -279,7 +290,7 @@ final private[manager] class StateManagerNavigationEffects(
     activeEditorBuffer(state) match
       case Some((_, buffer)) =>
         val cursor = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
-        updateState { current =>
+        validatedUpdateState { current =>
           current.persisted.buffers.get(buffer.id) match
             case Some(currentBuffer) =>
               val bookmarks =
@@ -310,7 +321,7 @@ final private[manager] class StateManagerNavigationEffects(
           .getOrElse(normalizedCursor -> normalizedCursor)
         val commentText = Option(text.trim).filter(_.nonEmpty).getOrElse("Comment")
         val comment     = DocumentComment(range._1, range._2, commentText)
-        updateState: current =>
+        validatedUpdateState: current =>
           current.persisted.buffers.get(buffer.id) match
             case Some(currentBuffer) =>
               val existingCommentAtCursor =
@@ -359,7 +370,7 @@ final private[manager] class StateManagerNavigationEffects(
     activeEditorBuffer(state) match
       case Some((_, buffer)) =>
         val cursor = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
-        updateState: current =>
+        validatedUpdateState: current =>
           current.persisted.buffers.get(buffer.id) match
             case Some(currentBuffer) =>
               val comments = currentBuffer.annotations.documentComments.filterNot(_.contains(cursor))

@@ -54,7 +54,13 @@ final private[manager] class StateManagerWorkflowCapability(
   )
 
   private val replaceWorkflow =
-    new StateManagerReplaceWorkflow(stateRef, undoRef, activeEditorBufferId, updateReplaceWorkflowSurface)
+    new StateManagerReplaceWorkflow(
+      stateRef,
+      undoRef,
+      activeEditorBufferId,
+      updateReplaceWorkflowSurface,
+      validateAndUpdateState
+    )
 
   private def saveBufferEffect(bufferId: BufferId): IO[Unit] =
     filePersistence.saveExistingBuffer(bufferId).handleErrorWith {

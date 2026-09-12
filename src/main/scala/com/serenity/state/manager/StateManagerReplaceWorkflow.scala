@@ -10,7 +10,8 @@ final private[manager] class StateManagerReplaceWorkflow(
     stateRef: Ref[IO, AppState],
     undoRef: Ref[IO, UndoState],
     activeEditorBufferId: AppState => Option[BufferId],
-    updateReplaceWorkflowSurface: (SurfaceId, ReplaceWorkflowState) => IO[Unit]
+    updateReplaceWorkflowSurface: (SurfaceId, ReplaceWorkflowState) => IO[Unit],
+    validateAndUpdateState: (AppState, AppState) => IO[Unit]
 )(using balance: Balance):
 
   private[manager] def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
@@ -87,17 +88,18 @@ final private[manager] class StateManagerReplaceWorkflow(
                     ),
                     findState = updatedFindState
                   )
-                  recordWorkflowUndo(state, bufferId, buffer) >> stateRef.update { current =>
-                    val updatedState = current.copy(
+                  recordWorkflowUndo(state, bufferId, buffer) >> stateRef.get.flatMap { current =>
+                    val withReplacement = current.copy(
                       persisted =
                         current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer)),
                       runtime =
                         current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(_.id == surfaceId))
                     )
-                    current.persisted.layout.activeEditorPaneId match
+                    val updatedState = current.persisted.layout.activeEditorPaneId match
                       case Some(paneId) =>
-                        updatedState.copy(persisted = updatedState.persisted.copy(focus = Focus.EditorPane(paneId)))
-                      case None => updatedState
+                        withReplacement.copy(persisted = withReplacement.persisted.copy(focus = Focus.EditorPane(paneId)))
+                      case None => withReplacement
+                    validateAndUpdateState(updatedState, current)
                   }
           case None =>
             updateReplaceWorkflowSurface(
@@ -193,9 +195,12 @@ final private[manager] class StateManagerReplaceWorkflow(
       ),
       findState = updatedFindState
     )
-    recordWorkflowUndo(state, bufferId, buffer) >> stateRef.update { current =>
-      current.copy(persisted =
-        current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer))
+    recordWorkflowUndo(state, bufferId, buffer) >> stateRef.get.flatMap { current =>
+      validateAndUpdateState(
+        current.copy(persisted =
+          current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer))
+        ),
+        current
       )
     } >> updateReplaceWorkflowSurface(
       surfaceId,

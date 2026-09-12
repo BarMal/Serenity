@@ -88,7 +88,8 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
         config => persisted.update(_ :+ config),
         (state, _) => state,
         previews.update(_ + 1),
-        (position, path) => loads.update(_ :+ (position -> path))
+        (position, path) => loads.update(_ :+ (position -> path)),
+        (newState, fallbackState) => stateRef.set(AppStateValidation.validated(newState).getOrElse(fallbackState))
       )
     )
 
