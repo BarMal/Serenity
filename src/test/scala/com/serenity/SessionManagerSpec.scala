@@ -12,12 +12,13 @@ import com.serenity.session.{PendingSessionWrite, SessionId, SessionIndex, Sessi
 import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.theme.config.AppThemeManager
+import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class SessionManagerSpec extends AnyFlatSpec with Matchers:
+class SessionManagerSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
