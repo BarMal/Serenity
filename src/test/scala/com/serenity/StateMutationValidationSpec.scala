@@ -205,15 +205,14 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
   }
 
   /** #1183's remaining audit: `ViewIntent.SplitPaneHorizontal`/`SplitPaneVertical`/`ClosePane`/`NextTab`/`PreviousTab`
-    * committed via bare `stateRef.update` calls in `StateManagerPanelEffects`. `EditorState.splitFocusedPane` assigns
-    * the new pane the raw `runtime.nextPaneId` counter value with no check that it doesn't already name a live pane;
-    * if that counter has drifted to collide with the pane being split (the same class of drift #1181 already found
-    * happening by hand in test fixtures for `nextBufferId`), the split silently overwrites the live pane's
-    * `editorPanes` entry and asks `WorkspaceTree.split` to introduce a second tree node for the same pane ID --
-    * destroying the original pane's place in the layout instead of adding a sibling. Routing the commit through
-    * `validateAndUpdateState` rejects that outcome and leaves the original, unsplit layout in place.
+    * committed via bare `stateRef.update` calls in `StateManagerPanelEffects`. `WorkspaceTree.split` already refuses a
+    * `newPaneId` that collides with a live pane (returning `None`), and `EditorState.splitFocusedPane` already no-ops
+    * on that `None` rather than partially applying the split -- so this drifted-`nextPaneId` precondition was never a
+    * reachable corruption, with or without this routing. This is a defense-in-depth regression test: it pins down that
+    * a bare `stateRef.update` call site can never regress that pre-existing guarantee, now that the commit is also
+    * checked by `validateAndUpdateState`.
     */
-  "Splitting the focused pane" should "not silently overwrite it when nextPaneId has drifted to collide with it" in {
+  "Splitting the focused pane" should "leave the layout unchanged when nextPaneId has drifted to collide with it" in {
     val stateManager = createStateManager()
     val before       = stateManager.getCurrentState.unsafeRunSync()
     val focusedPaneId = before.persisted.layout.activeEditorPaneId
