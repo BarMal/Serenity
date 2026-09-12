@@ -127,10 +127,19 @@ class MockRenderSurface(
       foreground: Color,
       background: Color,
       font: Option[Font],
-      clipGlyphToRun: Boolean
+      clipGlyphToRun: Boolean,
+      activeStyle: TextStyle
   )
 
   private val drawRunPxCallsBuffer = scala.collection.mutable.ListBuffer.empty[DrawRunPxCall]
+
+  /** The `TextStyle` a real `Java2DRenderSurface` would currently be painting with: whatever `enableStyle` last set,
+    * or `TextStyle.normal` once `disableStyle` has reverted to the base (unstyled) font -- mirroring
+    * `Java2DRenderSurface.disableStyle`'s unconditional `g.setFont(baseFontRef.get())`, which drops back to no style
+    * override regardless of which style was passed in. Recorded onto every [[DrawRunPxCall]] so a test can assert two
+    * draws of the same range resolved the same style, the way #1482 did not.
+    */
+  private val currentStyle = AtomicReference[TextStyle](TextStyle.normal)
 
   override def drawRunPx(
     xPx: Float,
@@ -151,7 +160,8 @@ class MockRenderSurface(
       currentFg.get(),
       currentBg.get(),
       currentFont.get(),
-      clipGlyphToRun
+      clipGlyphToRun,
+      currentStyle.get()
     )
     val metrics =
       currentFont
@@ -273,8 +283,13 @@ class MockRenderSurface(
   def putStringPixelYCalls: List[PutStringPixelYCall]    = putStringPixelYCallsBuffer.toList
   def pixelTranslationCalls: List[PixelTranslationCall]  = pixelTranslationCallsBuffer.toList
 
-  def enableStyle(style: TextStyle): Unit  = styleCallsBuffer += StyleCall("enable", style)
-  def disableStyle(style: TextStyle): Unit = styleCallsBuffer += StyleCall("disable", style)
+  def enableStyle(style: TextStyle): Unit =
+    styleCallsBuffer += StyleCall("enable", style)
+    currentStyle.set(style)
+
+  def disableStyle(style: TextStyle): Unit =
+    styleCallsBuffer += StyleCall("disable", style)
+    currentStyle.set(TextStyle.normal)
   def hideCursor(): Unit                   = ()
   def viewportWidth: Int                   = width
   def viewportHeight: Int                  = height
@@ -316,6 +331,7 @@ class MockRenderSurface(
     alphaCallsBuffer.clear()
     drawRunPxCallsBuffer.clear()
     styleCallsBuffer.clear()
+    currentStyle.set(TextStyle.normal)
     for y <- 0 until height; x <- 0 until width do
       chars(y)(x) = ' '
       fgs(y)(x) = Color.WHITE
