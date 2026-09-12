@@ -15,9 +15,16 @@ object TerminalAnsiDiff:
   private val ClearScreen = s"$Esc[2J"
   private val CursorHome  = s"$Esc[H"
 
-  def emit(previous: Option[TerminalFrame], next: TerminalFrame): String =
+  /** `dirtyRows`, when given, is trusted as the complete set of rows that could have changed -- rows outside it are
+    * never scanned at all, rather than re-derived or double-checked. `None` (every call site before #1464, and every
+    * caller with no such record available) preserves the original full-frame scan. `TerminalRenderSurface.flush`
+    * passes `TerminalScreenBuffer.consumeDirtyRows()`, the one source that actually covers every paint path -- see
+    * its own doc comment for why the renderer's pane-scoped `FramePlan.dirtyRowsByPane` can't safely serve here
+    * instead.
+    */
+  def emit(previous: Option[TerminalFrame], next: TerminalFrame, dirtyRows: Option[Set[Int]] = None): String =
     previous match
-      case Some(prev) if prev.width == next.width && prev.height == next.height => emitDiff(prev, next)
+      case Some(prev) if prev.width == next.width && prev.height == next.height => emitDiff(prev, next, dirtyRows)
       case _                                                                    => emitFull(next)
 
   private def emitFull(frame: TerminalFrame): String =
@@ -27,9 +34,10 @@ object TerminalAnsiDiff:
     val _          = if hadContent then sb.append(Reset) else sb
     sb.toString
 
-  private def emitDiff(previous: TerminalFrame, next: TerminalFrame): String =
-    val sb = new StringBuilder
-    val rowRuns = (0 until next.height).flatMap { y =>
+  private def emitDiff(previous: TerminalFrame, next: TerminalFrame, dirtyRows: Option[Set[Int]]): String =
+    val sb            = new StringBuilder
+    val candidateRows = dirtyRows.getOrElse((0 until next.height).toSet).toSeq.sorted
+    val rowRuns = candidateRows.flatMap { y =>
       val changedCols = (0 until next.width).filter(x => next(x, y) != previous(x, y))
       runsOf(changedCols).map(run => y -> run)
     }
