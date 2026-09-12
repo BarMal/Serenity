@@ -78,3 +78,28 @@ class CommandRunnerSearchFuzzyMruSpec extends AnyFlatSpec with Matchers:
 
     used.filteredCommands.indexOf(commandB) should be < used.filteredCommands.indexOf(commandA)
   }
+
+  // issue #1049: opening to a raw registry-order list showed an arbitrary top rather than anything personalized.
+  "CommandRunner.visibleItems" should "show a recently used command first on an empty (just-opened) query" in {
+    val commandA = testCommand("test-alpha-widget", "Alpha Widget")
+    val commandB = testCommand("test-beta-widget", "Beta Widget")
+    given registry: CommandRegistry = CommandRegistry(List(commandA, commandB))
+
+    val runner = CommandRunner.empty
+      .activate(registry, com.serenity.config.AppConfig.default)
+      .recordCommandUsage(commandB.name)
+
+    runner.visibleItems.collect { case CommandSurfaceItem.CommandItem(command) => command.name } shouldBe
+      List(commandB.name, commandA.name)
+  }
+
+  it should "leave never-used commands in their original registry order on an empty query" in {
+    val commandA = testCommand("test-alpha-widget", "Alpha Widget")
+    val commandB = testCommand("test-beta-widget", "Beta Widget")
+    given registry: CommandRegistry = CommandRegistry(List(commandA, commandB))
+
+    val runner = CommandRunner.empty.activate(registry, com.serenity.config.AppConfig.default)
+
+    runner.visibleItems.collect { case CommandSurfaceItem.CommandItem(command) => command.name } shouldBe
+      List(commandA.name, commandB.name)
+  }

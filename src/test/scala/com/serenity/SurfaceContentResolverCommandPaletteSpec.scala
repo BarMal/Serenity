@@ -71,6 +71,23 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
     resolved.footer shouldBe None
   }
 
+  // issue #1049: a query matching nothing used to fall through to a silent empty list (no rows, no footer, no key
+  // hint) -- indistinguishable from the palette not having caught up with the keystroke yet.
+  it should "render an explicit empty state for a query that matches no commands" in {
+    val registry = CommandRegistry.default
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .updateSearchTerm("zzzznotacommand")(using registry)
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(runner),
+      LayoutRect(0, 0, 80, 10),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.rows.map(_.plainText) shouldBe List("No matching commands")
+  }
+
   it should "render command runner status messages in the command palette footer" in {
     val registry = CommandRegistry.default
     val runner = CommandRunner.empty
