@@ -303,5 +303,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
     TuiRuntime.keyboardFidelityTier(
       TerminalShell.KeyboardProtocolTier.Win32Input
     ) shouldBe KeyboardFidelityTier.ModifyOtherKeys
-    TuiRuntime.keyboardFidelityTier(TerminalShell.KeyboardProtocolTier.Legacy) shouldBe KeyboardFidelityTier.ModifyOtherKeys
+    TuiRuntime.keyboardFidelityTier(
+      TerminalShell.KeyboardProtocolTier.Legacy
+    ) shouldBe KeyboardFidelityTier.ModifyOtherKeys
   }

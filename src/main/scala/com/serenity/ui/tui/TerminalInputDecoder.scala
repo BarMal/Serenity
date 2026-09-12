@@ -65,11 +65,11 @@ object TerminalInputDecoder:
     */
   final case class DecodeResult(tokens: List[DecodedToken], remainder: Array[Byte])
 
-  private val Esc: Byte       = 0x1b
-  private val Csi: Byte       = '['.toByte
-  private val Ss3: Byte       = 'O'.toByte
-  private val Tilde: Byte     = '~'.toByte
-  private val CsiU: Byte      = 'u'.toByte
+  private val Esc: Byte        = 0x1b
+  private val Csi: Byte        = '['.toByte
+  private val Ss3: Byte        = 'O'.toByte
+  private val Tilde: Byte      = '~'.toByte
+  private val CsiU: Byte       = 'u'.toByte
   private val Underscore: Byte = '_'.toByte
 
   /** Terminal focus reporting (`CSI ?1004h`): the terminal sends a bare `CSI I` on focus-in and `CSI O` on focus-out --
@@ -398,15 +398,21 @@ object TerminalInputDecoder:
       code.toChar
     )
 
-  /** Decodes a Windows `win32-input-mode` key-event record (`CSI Vk;Sc;Uc;Kd;Cs;Rc _`, #1320): `TerminalShell`'s
-    * final, Windows-only negotiation fallback, carrying the raw Win32 console `KEY_EVENT_RECORD` fields verbatim --
-    * unlike every other CSI form this decoder handles, it is the terminal's *only* key-reporting format once enabled,
-    * so it must cover ordinary characters and named keys alike, not just the one collision (Ctrl+Backspace) this
-    * issue was filed over.
+  /** Decodes a Windows `win32-input-mode` key-event record (`CSI Vk;Sc;Uc;Kd;Cs;Rc _`, #1320): `TerminalShell`'s final,
+    * Windows-only negotiation fallback, carrying the raw Win32 console `KEY_EVENT_RECORD` fields verbatim -- unlike
+    * every other CSI form this decoder handles, it is the terminal's *only* key-reporting format once enabled, so it
+    * must cover ordinary characters and named keys alike, not just the one collision (Ctrl+Backspace) this issue was
+    * filed over.
     *
     * `Sc` (scan code) is read and discarded -- nothing here needs it, `Vk` and `Cs` already carry the key identity and
     * modifier state a scan code would only duplicate. A record with any field missing or non-numeric decodes to
     * nothing, the same defensive default [[decodeSgrMouse]] uses for its own malformed-params case.
+    *
+    * Caution, here be imagine dragons: every branch below is built from the documented wire shape
+    * (github.com/microsoft/terminal#8343) and secondary sources for the Win32 console constants it carries, not from a
+    * live Windows Terminal/ConPTY session -- this codebase has no way to open one. That applies to this whole decoding
+    * path, not only the bare-modifier gap called out on `KeyboardProtocolTier.Win32Input`'s own doc; see [[win32Char]]
+    * for one further consequence of it that only surfaced on closer reading of real `KEY_EVENT_RECORD` semantics.
     */
   private def decodeWin32Input(params: String): List[DecodedToken] =
     params.split(";", -1) match
@@ -417,7 +423,7 @@ object TerminalInputDecoder:
             else
               val modifiers = win32Modifiers(cs)
               win32Key(vk, uc, modifiers) match
-                case None                     => Nil
+                case None => Nil
                 case Some((key, ch, mappedMods)) =>
                   List.fill(math.max(rc, 1))(DecodedToken.Key(KeyStrokeInfo(key, ch, mappedMods)))
           case _ => Nil
@@ -439,32 +445,32 @@ object TerminalInputDecoder:
   private def win32Key(vk: Int, uc: Int, modifiers: Set[Modifier]): Option[(InputKey, Option[Char], Set[Modifier])] =
     namedWin32Key(vk, modifiers).orElse(win32Char(uc, modifiers))
 
-  /** Winuser.h's virtual-key constants for the keys `SwingInputHandler`/the other TUI decode paths already give a
-    * named [[InputKey]] -- stable, undocumented-to-change values dating to Win32's original release, verified against
-    * multiple independent secondary sources (Microsoft Learn's own virtual-key-codes page was unreachable through
-    * this environment's egress proxy at write time, same class of gap `TerminalShell`'s xterm `ctlseqs.txt` note
-    * documents). Ctrl+letter is recovered from `Vk` rather than `Uc`: the OS's own translation collapses Ctrl+A into
-    * the control code `0x01` in `Uc`, the same ambiguity the legacy byte protocol has, but `Vk` for a letter key is
-    * always its unshifted key identity (`0x41`-`0x5A`) regardless of modifiers, so this is the one case a real
-    * modifier state can be recovered even though `Uc` alone couldn't have given it.
+  /** Winuser.h's virtual-key constants for the keys `SwingInputHandler`/the other TUI decode paths already give a named
+    * [[InputKey]] -- stable, undocumented-to-change values dating to Win32's original release, verified against
+    * multiple independent secondary sources (Microsoft Learn's own virtual-key-codes page was unreachable through this
+    * environment's egress proxy at write time, same class of gap `TerminalShell`'s xterm `ctlseqs.txt` note documents).
+    * Ctrl+letter is recovered from `Vk` rather than `Uc`: the OS's own translation collapses Ctrl+A into the control
+    * code `0x01` in `Uc`, the same ambiguity the legacy byte protocol has, but `Vk` for a letter key is always its
+    * unshifted key identity (`0x41`-`0x5A`) regardless of modifiers, so this is the one case a real modifier state can
+    * be recovered even though `Uc` alone couldn't have given it.
     */
   private def namedWin32Key(vk: Int, modifiers: Set[Modifier]): Option[(InputKey, Option[Char], Set[Modifier])] =
     vk match
-      case 0x08                                    => Some((InputKey.Backspace, None, modifiers))
+      case 0x08                                       => Some((InputKey.Backspace, None, modifiers))
       case 0x09 if modifiers.contains(Modifier.Shift) => Some((InputKey.ReverseTab, None, modifiers - Modifier.Shift))
-      case 0x09                                    => Some((InputKey.Tab, None, modifiers))
-      case 0x0d                                    => Some((InputKey.Enter, None, modifiers))
-      case 0x1b                                    => Some((InputKey.Escape, None, modifiers))
-      case 0x21                                    => Some((InputKey.PageUp, None, modifiers))
-      case 0x22                                    => Some((InputKey.PageDown, None, modifiers))
-      case 0x23                                    => Some((InputKey.End, None, modifiers))
-      case 0x24                                    => Some((InputKey.Home, None, modifiers))
-      case 0x25                                    => Some((InputKey.ArrowLeft, None, modifiers))
-      case 0x26                                    => Some((InputKey.ArrowUp, None, modifiers))
-      case 0x27                                    => Some((InputKey.ArrowRight, None, modifiers))
-      case 0x28                                    => Some((InputKey.ArrowDown, None, modifiers))
-      case 0x2e                                    => Some((InputKey.Delete, None, modifiers))
-      case f if f >= 0x70 && f <= 0x7b             => Some((win32FunctionKey(f), None, modifiers))
+      case 0x09                                       => Some((InputKey.Tab, None, modifiers))
+      case 0x0d                                       => Some((InputKey.Enter, None, modifiers))
+      case 0x1b                                       => Some((InputKey.Escape, None, modifiers))
+      case 0x21                                       => Some((InputKey.PageUp, None, modifiers))
+      case 0x22                                       => Some((InputKey.PageDown, None, modifiers))
+      case 0x23                                       => Some((InputKey.End, None, modifiers))
+      case 0x24                                       => Some((InputKey.Home, None, modifiers))
+      case 0x25                                       => Some((InputKey.ArrowLeft, None, modifiers))
+      case 0x26                                       => Some((InputKey.ArrowUp, None, modifiers))
+      case 0x27                                       => Some((InputKey.ArrowRight, None, modifiers))
+      case 0x28                                       => Some((InputKey.ArrowDown, None, modifiers))
+      case 0x2e                                       => Some((InputKey.Delete, None, modifiers))
+      case f if f >= 0x70 && f <= 0x7b                => Some((win32FunctionKey(f), None, modifiers))
       case letter if letter >= 0x41 && letter <= 0x5a && modifiers.contains(Modifier.Ctrl) =>
         Some((InputKey.Character, Some(('a' + (letter - 0x41)).toChar), modifiers))
       case _ => None
@@ -485,11 +491,21 @@ object TerminalInputDecoder:
       case _    => InputKey.F12 // 0x7b, the only remaining case in this range.
 
   /** A record whose `Vk` has no named mapping falls here: an ordinary printable character, taken from `Uc` (the OS's
-    * own keyboard-layout translation, so shift-produced characters like `A` or `!` already arrive correct). `Shift`
-    * is dropped from the reported modifiers -- it is already baked into `Uc`, same convention [[decodeUtf8Char]] and
+    * own keyboard-layout translation, so shift-produced characters like `A` or `!` already arrive correct). `Shift` is
+    * dropped from the reported modifiers -- it is already baked into `Uc`, same convention [[decodeUtf8Char]] and
     * [[decodePlain]] follow for every other printable-character path in this decoder. A record whose `Uc` is a Ctrl
     * control code with no named `Vk` mapping (any Ctrl combo other than Ctrl+letter) has no keystroke to report here,
     * matching [[decodePlain]]'s own "unrepresentable control byte: dropped" precedent.
+    *
+    * Caution, here be imagine dragons: on a real Win32 console, Alt typically zeroes `Uc` on the `KEY_EVENT_RECORD`
+    * (Microsoft Learn's key-event-record-str; not independently reachable through this environment's egress proxy, so
+    * this is inferred from secondary sources, not confirmed against a live session -- see `decodeWin32Input`'s own
+    * caveat). A zeroed `Uc` fails the `uc >= 0x20` guard below and this method returns `None` regardless of the `Alt`
+    * modifier, and `namedWin32Key` has no fallback for a plain-letter `Vk` outside its Ctrl+letter case -- so an
+    * Alt+letter combo most likely decodes to nothing under win32-input-mode, an undocumented gap unlike the
+    * bare-modifier double-tap one `KeyboardProtocolTier.Win32Input`'s doc already calls out. Flagged as a known
+    * limitation pending verification against a real Windows Terminal session; not fixed here since the right fallback
+    * (report it Uc-less, the way `namedWin32Key`'s Ctrl+letter case does?) needs that verification first.
     */
   private def win32Char(uc: Int, modifiers: Set[Modifier]): Option[(InputKey, Option[Char], Set[Modifier])] =
     if modifiers.contains(Modifier.Ctrl) then None

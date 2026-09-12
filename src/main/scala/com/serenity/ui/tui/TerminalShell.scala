@@ -139,25 +139,31 @@ object TerminalShell:
     /** Windows `win32-input-mode` (`CSI ?9001h`, #1320): the terminal switches to reporting raw Win32 console
       * `KEY_EVENT_RECORD` fields (`CSI Vk;Sc;Uc;Kd;Cs;Rc _`, decoded by [[TerminalInputDecoder]]'s `decodeWin32Input`)
       * instead of any VT key-encoding scheme at all, carrying full, unambiguous modifier state for every key --
-      * including the collision this issue was filed over, Ctrl+Backspace vs. plain Backspace, which the legacy VT
-      * byte protocol cannot distinguish on any terminal. [[negotiateKeyboardProtocol]] only reaches for this once
-      * neither [[Kitty]] nor [[ModifyOtherKeys]] confirmed -- reported live on Windows Terminal against a build that
-      * answered neither query (issue #1320's own evidence) -- and only on Windows ([[isWindows]]): win32-input-mode is
-      * a Windows/ConPTY-specific control this codebase has no reason to push at a Unix pty, unlike [[Kitty]]/
+      * including the collision this issue was filed over, Ctrl+Backspace vs. plain Backspace, which the legacy VT byte
+      * protocol cannot distinguish on any terminal. [[negotiateKeyboardProtocol]] only reaches for this once neither
+      * [[Kitty]] nor [[ModifyOtherKeys]] confirmed -- reported live on Windows Terminal against a build that answered
+      * neither query (issue #1320's own evidence) -- and only on Windows ([[isWindows]]): win32-input-mode is a
+      * Windows/ConPTY-specific control this codebase has no reason to push at a Unix pty, unlike [[Kitty]]/
       * [[ModifyOtherKeys]], which unsupported terminals ignore harmlessly as documented DECSET/DECRST no-ops (see
-      * `TerminalRenderSurface`'s #1172 doc) -- win32-input-mode has no such universal guarantee off Windows. Unlike
-      * the other two tiers, enabling it is not itself confirmed by a query/response: ConPTY has supported it since
+      * `TerminalRenderSurface`'s #1172 doc) -- win32-input-mode has no such universal guarantee off Windows. Unlike the
+      * other two tiers, enabling it is not itself confirmed by a query/response: ConPTY has supported it since
       * introducing the mode (tracked at github.com/microsoft/terminal#8343) with no negotiation handshake of its own,
       * so a terminal that ignores `CSI ?9001h` outright is indistinguishable from one that honors it until real input
       * arrives -- accepted as this tier's own known limitation, the same class of gap the kitty/modifyOtherKeys
       * ladder's tmux caveat documents.
+      *
+      * Caution, here be imagine dragons: this tier, and `TerminalInputDecoder.decodeWin32Input` which decodes it, are
+      * built entirely from the documented wire format and secondary sources for the Win32 console constants involved --
+      * none of it has been exercised against a real Windows Terminal/ConPTY session. The bare-modifier gap above is one
+      * known consequence of that; `TerminalInputDecoder.win32Char`'s own doc records a second, independent one
+      * (Alt+letter likely decoding to nothing, since Alt typically zeroes `Uc` on a real console).
       */
     case Win32Input
 
     /** Neither negotiation confirmed, and either not running on Windows or [[Win32Input]] was also not applicable:
-      * `TerminalInputDecoder` decodes everything as legacy bytes. Today's uncontested fallback off Windows; on
-      * Windows, [[negotiateKeyboardProtocol]] tries [[Win32Input]] first and only lands here if that path itself were
-      * ever disabled.
+      * `TerminalInputDecoder` decodes everything as legacy bytes. Today's uncontested fallback off Windows; on Windows,
+      * [[negotiateKeyboardProtocol]] tries [[Win32Input]] first and only lands here if that path itself were ever
+      * disabled.
       */
     case Legacy
 

@@ -501,7 +501,9 @@ class TerminalInputDecoderSpec extends AnyFlatSpec with Matchers:
   it should "decode a win32-input-mode plain printable character record from its Uc field" in {
     decodeAll(win32(vk = 0x41, uc = 'a'.toInt, kd = 1, cs = 0)) shouldBe List(tok(InputKey.Character, Some('a')))
     // Shift is already baked into Uc by the OS translation (uppercase 'A'), so it must not also appear as a modifier.
-    decodeAll(win32(vk = 0x41, uc = 'A'.toInt, kd = 1, cs = Win32Shift)) shouldBe List(tok(InputKey.Character, Some('A')))
+    decodeAll(win32(vk = 0x41, uc = 'A'.toInt, kd = 1, cs = Win32Shift)) shouldBe List(
+      tok(InputKey.Character, Some('A'))
+    )
   }
 
   it should "decode a win32-input-mode Ctrl+letter record as Character with Ctrl, from Vk rather than the control-code Uc" in {

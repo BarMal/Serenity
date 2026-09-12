@@ -135,13 +135,13 @@ object TuiRuntime:
     * `TerminalShell.KeyboardProtocolTier` is this method's only caller outside `ui.tui`, kept from leaking into
     * `AppState`/`CommandRunner` themselves so neither depends on the terminal-negotiation package.
     *
-    * `Legacy` and `Win32Input` (#1320) both fold into [[KeyboardFidelityTier.ModifyOtherKeys]] rather than a
-    * dedicated case: `Win32Input` decodes ordinary combos (including, notably, Ctrl+Backspace) with full modifier
-    * fidelity, same as a confirmed `ModifyOtherKeys` terminal, but reports no bare-modifier press/release event of its
-    * own (`TerminalInputDecoder.decodeWin32Input`'s doc), so it belongs at the same fidelity tier for exactly the
-    * reason `Legacy` does -- `KeyboardFidelityTier` (and the recording-time warning built on it,
-    * `CommandRunnerReducer`) only distinguishes "bare-modifier bindings work" from "they don't", and widening
-    * `KeyboardFidelityTier` itself is out of scope here.
+    * `Legacy` and `Win32Input` (#1320) both fold into [[KeyboardFidelityTier.ModifyOtherKeys]] rather than a dedicated
+    * case: `Win32Input` decodes ordinary combos (including, notably, Ctrl+Backspace) with full modifier fidelity, same
+    * as a confirmed `ModifyOtherKeys` terminal, but reports no bare-modifier press/release event of its own
+    * (`TerminalInputDecoder.decodeWin32Input`'s doc), so it belongs at the same fidelity tier for exactly the reason
+    * `Legacy` does -- `KeyboardFidelityTier` (and the recording-time warning built on it, `CommandRunnerReducer`) only
+    * distinguishes "bare-modifier bindings work" from "they don't", and widening `KeyboardFidelityTier` itself is out
+    * of scope here.
     */
   private[tui] def keyboardFidelityTier(tier: TerminalShell.KeyboardProtocolTier): KeyboardFidelityTier =
     tier match
