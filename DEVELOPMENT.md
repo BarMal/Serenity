@@ -66,7 +66,7 @@ To take a deliberate exception, annotate the declaration and say why:
 
 ```scala
 @SuppressWarnings(Array("org.wartremover.warts.FinalCaseClass"))
-case class Leaf(...)   // subclassed by RopeSpec to prove search never materialises the rope
+case class Leaf(...)   // subclassed by RopeMetadataAndTraversalSpec to prove search never materialises the rope
 ```
 
 **Property and law testing** covers the contracts examples cannot. Most suites are example-based and

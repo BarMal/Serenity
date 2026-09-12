@@ -5,7 +5,7 @@ import com.serenity.config.AppConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Dedicated unit coverage for `CommandPaletteContentResolver` (issue #1421). `SurfaceContentResolverSpec` covers most
+/** Dedicated unit coverage for `CommandPaletteContentResolver` (issue #1421). `SurfaceContentResolverCommandPaletteSpec` covers most
   * of this behavior indirectly through `SurfaceContentResolver.resolve`, but never names this object directly. Lives in
   * this package because the resolver is `private[layout]`.
   */
@@ -90,7 +90,7 @@ class CommandPaletteContentResolverSpec extends AnyFlatSpec with Matchers:
     )
 
     // `updateSearchTerm` also searches the app-wide settings tree unconditionally, independent of the small
-    // registry passed here (see `SurfaceContentResolverSpec`'s "render root search text..." comment on the same
+    // registry passed here (see `SurfaceContentResolverCommandPaletteSpec`'s "render root search text..." comment on the same
     // behavior), so other unrelated rows can legitimately appear alongside the command match this test targets, and
     // `bindingFor` can attach a real default hotkey (e.g. "ctrl+o") looked up by intent -- so this only pins the
     // category tag and description this resolver is responsible for, not the full row text.

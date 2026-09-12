@@ -4,7 +4,7 @@ import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Dedicated unit coverage for `ModalWorkflowContentResolver` (issue #1421). `SurfaceContentResolverSpec` covers the
+/** Dedicated unit coverage for `ModalWorkflowContentResolver` (issue #1421). `SurfaceContentResolverModalWorkflowSpec` covers the
   * find/replace/file-workflow/close-workflow branches through `SurfaceContentResolver.resolve`, but never the fallback
   * `modalLines` path -- `Modal.GotoLine` and `Modal.Custom` never appear there at all. Lives in this package because
   * the resolver is `private[layout]`.
