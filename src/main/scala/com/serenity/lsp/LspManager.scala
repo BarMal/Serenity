@@ -21,7 +21,7 @@ object LspManager:
   final private case class ManagedConnection(connection: LspConnection, release: IO[Unit])
 
   private enum RequestKind:
-    case Hover, Definition, Completion
+    case Hover, Definition, Completion, SemanticTokens
 
   final private case class RequestKey(uri: DocumentUri, kind: RequestKind)
   final private case class RequestContext(version: Int, anchor: CursorPosition)
@@ -240,6 +240,42 @@ object LspManager:
               }
             )
             .handleErrorWith(ex => logger.error(ex)(s"[LSP] definition failed: $rawUri"))
+        }
+
+      case LspEffect.SemanticTokensRequested(rawUri, languageId) =>
+        val uri = DocumentUri(rawUri)
+        startRequest(
+          RequestKind.SemanticTokens,
+          uri,
+          languageId,
+          // Semantic tokens apply to the whole document, not a cursor position -- `anchor` here is never read back
+          // out of `context` by the request lambda below, unlike hover/definition.
+          anchor = CursorPosition(0, 0),
+          connectionsRef,
+          documentVersions,
+          requestContexts,
+          requestFibers,
+          supervisor,
+          applyEvent,
+          logger,
+          connectionProvider
+        ) { (conn, context) =>
+          Trace
+            .timed(s"lsp.semanticTokens.$rawUri")(
+              conn.semanticTokensLegend.flatMap {
+                case None => IO.unit // server never declared semanticTokensProvider during its handshake
+                case Some(legend) =>
+                  conn
+                    .sendRequest(LspMethod("textDocument/semanticTokens/full"), LspProtocol.semanticTokensParams(uri))
+                    .flatMap(response =>
+                      LspProtocol.parseSemanticTokens(response, legend).fold(IO.unit) { tokens =>
+                        isCurrent(RequestKey(uri, RequestKind.SemanticTokens), context, documentVersions, requestContexts)
+                          .ifM(applyEvent(LspEvent.LspSemanticTokensReceived(rawUri, tokens)), IO.unit)
+                      }
+                    )
+              }
+            )
+            .handleErrorWith(ex => logger.error(ex)(s"[LSP] semanticTokens failed: $rawUri"))
         }
 
   private def startRequest(
