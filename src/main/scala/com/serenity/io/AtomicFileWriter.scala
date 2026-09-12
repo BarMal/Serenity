@@ -70,7 +70,7 @@ object AtomicFileWriter:
     val directory = Option(target.getParent).getOrElse(target)
 
     // This is the synchronous boundary both writeBytes (via IO.blocking, which converts a thrown
-    // exception into a failed IO) and ConfigManager.saveConfig (plain try/catch) rely on -- so it must
+    // exception into a failed IO) and ConfigManagerTestSupport.saveConfig (plain try/catch) rely on -- so it must
     // keep raising on failure. Try#get raises for us instead of a literal `throw`, and Try already only
     // catches NonFatal, matching the two catch clauses this replaces.
     Try {
