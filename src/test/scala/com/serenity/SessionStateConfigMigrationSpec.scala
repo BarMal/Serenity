@@ -249,6 +249,7 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.get.config.surfaceConfig.visualLineCursorNavigation shouldBe
       AppConfig.default.surfaceConfig.visualLineCursorNavigation
   }
+
   it should "default interfaceDensity to Comfortable when loading older JSON without the field" in {
     val originalJson = SessionState
       .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
@@ -265,6 +266,7 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
     decoded.isRight shouldBe true
     decoded.toOption.get.config.interfaceDensity shouldBe InterfaceDensity.Comfortable
   }
+
   it should "default UI element gap to zero when loading older JSON without the field" in {
     val originalJson = SessionState
       .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
@@ -281,6 +283,7 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
     decoded.isRight shouldBe true
     decoded.toOption.get.config.uiElementGap shouldBe 0
   }
+
   it should "default UI corner radius to the existing panel radius when loading older JSON without the field" in {
     val originalJson = SessionState
       .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))

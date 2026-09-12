@@ -195,6 +195,7 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
     decoded.config.editorConfig.characterAnimation.map(_.steps) shouldBe
       AnimationConfig.quick.map(_.steps)
   }
+
   it should "round-trip visualLineCursorNavigation disabled" in {
     val original = SessionState.fromAppState(
       AppState.initial.copy(persisted =
@@ -206,6 +207,7 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
 
     decoded.toOption.map(_.config.surfaceConfig.visualLineCursorNavigation) shouldBe Some(false)
   }
+
   it should "round-trip native-themed window chrome" in {
     val original = SessionState.fromAppState(
       AppState.initial.copy(persisted =
@@ -217,6 +219,7 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
 
     decoded.toOption.map(_.config.windowChromeMode) shouldBe Some(WindowChromeMode.NativeThemed)
   }
+
   it should "round-trip automatic window chrome" in {
     val original = SessionState.fromAppState(
       AppState.initial.copy(persisted =
@@ -226,6 +229,7 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
 
     original.asJson.as[SessionState].toOption.map(_.config.windowChromeMode) shouldBe Some(WindowChromeMode.Auto)
   }
+
   it should "round trip decimal floating-surface spacing" in {
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(

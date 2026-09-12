@@ -4,7 +4,7 @@ import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer}
+import com.serenity.state.reducers.CommandRunnerReducer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

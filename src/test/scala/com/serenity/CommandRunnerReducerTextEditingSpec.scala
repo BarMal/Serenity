@@ -5,7 +5,7 @@ import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer}
+import com.serenity.state.reducers.CommandRunnerReducer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -16,6 +16,7 @@ import org.scalatest.matchers.should.Matchers
 class CommandRunnerReducerTextEditingSpec extends AnyFlatSpec with Matchers:
 
   extension (runner: CommandRunner)
+    private def activeSubmenuGroupId: Option[String]    = runner.activeSettingsSurface.map(_.current.groupId)
     private def activeSubmenuSearchTerm: Option[String] = runner.activeSettingsSurface.map(_.current.searchTerm)
     private def activeSubmenuEditingItemId: Option[String] =
       runner.activeSettingsSurface.flatMap(_.current.editingItemId)
@@ -233,7 +234,7 @@ class CommandRunnerReducerTextEditingSpec extends AnyFlatSpec with Matchers:
     val runner         = runnerFrom(afterBackspace.state)
 
     runner.activeSubmenuSearchTerm shouldBe Some("ja")
-    runner.activeSubmenuEditingItemId shouldBe None
+    runner.activeSubmenuGroupId shouldBe Some("settings-cursor")
   }
 
   it should "paste clipboard text into a selected submenu input item" in {

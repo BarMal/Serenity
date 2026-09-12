@@ -320,6 +320,7 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
     restoredBuffer.document.content.toString shouldBe "plain bold"
     restoredBuffer.richText.richTextDocument shouldBe Some(richDocument)
   }
+
   it should "preserve distinct find state per buffer through round trip" in {
     val file1 = Files.createTempFile("session-find-buffer-1", ".txt")
     val file2 = Files.createTempFile("session-find-buffer-2", ".txt")

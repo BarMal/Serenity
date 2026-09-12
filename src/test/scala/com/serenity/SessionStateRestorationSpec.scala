@@ -81,6 +81,7 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
         )
       )
     }
+
   it should "migrate schema-v1 flat pane layouts into an equivalent (horizontal) workspace tree" in {
     val pane0 = PaneId(0)
     val pane1 = PaneId(1)
@@ -245,6 +246,7 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
     restored.persisted.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(PaneId(0)))
     restored.isValid shouldBe true
   }
+
   it should "ignore a legacy UI preset draft field when restoring a session" in {
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
