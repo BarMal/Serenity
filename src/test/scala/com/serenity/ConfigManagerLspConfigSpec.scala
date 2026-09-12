@@ -53,7 +53,7 @@ class ConfigManagerLspConfigSpec extends AnyFlatSpec with Matchers with OptionVa
     )
     val written = ConfigManager.configToString(config)
     Files.writeString(configFile, written)
-    ConfigManager
+    ConfigManagerTestSupport
       .loadConfig(Some(configFile.toString))
       .languageToolsConfig
       .lspUserConfig
