@@ -109,13 +109,19 @@ class MockRenderSurface(
         bgs(y)(px) = currentBg.get()
     }
 
+  final case class FillRectCall(x: Int, y: Int, w: Int, h: Int, char: Char, foreground: Color, background: Color)
+  private val fillRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[FillRectCall]
+
   def fillRect(x: Int, y: Int, w: Int, h: Int, char: Char): Unit =
+    fillRectCallsBuffer += FillRectCall(x, y, w, h, char, currentFg.get(), currentBg.get())
     for dy <- 0 until h; dx <- 0 until w do
       val px = x + dx
       val py = y + dy
       if py >= 0 && py < height && px >= 0 && px < width then
         chars(py)(px) = char
         bgs(py)(px) = currentBg.get()
+
+  def fillRectCalls: List[FillRectCall] = fillRectCallsBuffer.toList
 
   final case class DrawRunPxCall(
       xPx: Float,
@@ -316,6 +322,7 @@ class MockRenderSurface(
     alphaCallsBuffer.clear()
     drawRunPxCallsBuffer.clear()
     styleCallsBuffer.clear()
+    fillRectCallsBuffer.clear()
     for y <- 0 until height; x <- 0 until width do
       chars(y)(x) = ' '
       fgs(y)(x) = Color.WHITE
