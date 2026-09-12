@@ -21,7 +21,6 @@ test/scala/com/serenity/AppRuntimeSpec.scala	file length	1603
 test/scala/com/serenity/CommandRunnerCoreCommandsSpec.scala	file length	1859
 test/scala/com/serenity/CommandRunnerFloatingRenderingSpec.scala	file length	754
 test/scala/com/serenity/CommandRunnerReducerSpec.scala	file length	1514
-test/scala/com/serenity/CommandRunnerSpec.scala	file length	1121
 test/scala/com/serenity/ConfigManagerSpec.scala	file length	1479
 test/scala/com/serenity/ContextualToolbarSpec.scala	file length	1283
 test/scala/com/serenity/EditorBehaviorSpec.scala	file length	603
