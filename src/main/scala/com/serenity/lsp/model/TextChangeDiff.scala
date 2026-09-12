@@ -1,5 +1,7 @@
 package com.serenity.lsp.model
 
+import scala.annotation.tailrec
+
 /** Computes the minimal single-range edit between two full document snapshots, for LSP incremental sync
   * (`TextDocumentContentChangeEvent`). Only the before/after text is available at the call site (the buffer layer
   * hands `LspManager` a full new snapshot, not the edit operation itself), so the change is inferred as the smallest
@@ -13,21 +15,30 @@ object TextChangeDiff:
   def diff(oldText: String, newText: String): Change =
     val maxCommon = math.min(oldText.length, newText.length)
 
-    var prefixLen = 0
-    while prefixLen < maxCommon && oldText(prefixLen) == newText(prefixLen) do prefixLen += 1
-    // A high surrogate at the last common position means its low surrogate half was excluded from the
-    // common prefix (it either didn't match or fell outside maxCommon) -- back off one unit so the pair
-    // stays together in the changed middle instead of splitting.
-    while prefixLen > 0 && Character.isHighSurrogate(oldText(prefixLen - 1)) do prefixLen -= 1
+    @tailrec def commonPrefixLength(len: Int): Int =
+      if len < maxCommon && oldText(len) == newText(len) then commonPrefixLength(len + 1) else len
 
+    // A high surrogate at the last common position means its low surrogate half was excluded from the common
+    // prefix (it either didn't match or fell outside maxCommon) -- back off one unit so the pair stays together
+    // in the changed middle instead of splitting.
+    @tailrec def dropTrailingHighSurrogate(len: Int): Int =
+      if len > 0 && Character.isHighSurrogate(oldText(len - 1)) then dropTrailingHighSurrogate(len - 1) else len
+
+    val prefixLen = dropTrailingHighSurrogate(commonPrefixLength(0))
     val maxSuffix = maxCommon - prefixLen
-    var suffixLen = 0
-    while suffixLen < maxSuffix &&
-      oldText(oldText.length - 1 - suffixLen) == newText(newText.length - 1 - suffixLen)
-    do suffixLen += 1
-    // Symmetric case: a low surrogate at the start of the common suffix means its high surrogate half
-    // was excluded -- back off one unit so the pair stays together in the changed middle.
-    while suffixLen > 0 && Character.isLowSurrogate(oldText(oldText.length - suffixLen)) do suffixLen -= 1
+
+    @tailrec def commonSuffixLength(len: Int): Int =
+      if len < maxSuffix && oldText(oldText.length - 1 - len) == newText(newText.length - 1 - len)
+      then commonSuffixLength(len + 1)
+      else len
+
+    // Symmetric case: a low surrogate at the start of the common suffix means its high surrogate half was
+    // excluded -- back off one unit so the pair stays together in the changed middle.
+    @tailrec def dropLeadingLowSurrogate(len: Int): Int =
+      if len > 0 && Character.isLowSurrogate(oldText(oldText.length - len)) then dropLeadingLowSurrogate(len - 1)
+      else len
+
+    val suffixLen = dropLeadingLowSurrogate(commonSuffixLength(0))
 
     val oldEnd = oldText.length - suffixLen
     val newEnd = newText.length - suffixLen
@@ -42,12 +53,8 @@ object TextChangeDiff:
     * exactly what indexing a Scala `String` (UTF-16 `Char`s) by offset already gives.
     */
   private def positionAt(text: String, offset: Int): LspPosition =
-    var line       = 0
-    var lineStart  = 0
-    var i          = 0
-    while i < offset do
-      if text(i) == '\n' then
-        line += 1
-        lineStart = i + 1
-      i += 1
-    LspPosition(line, offset - lineStart)
+    @tailrec def loop(i: Int, line: Int, lineStart: Int): LspPosition =
+      if i >= offset then LspPosition(line, offset - lineStart)
+      else if text(i) == '\n' then loop(i + 1, line + 1, i + 1)
+      else loop(i + 1, line, lineStart)
+    loop(0, 0, 0)
