@@ -83,6 +83,11 @@ class TuiAccessibilityBridgeSpec extends AnyFlatSpec with Matchers:
     val (written, write) = writer()
     val bridge           = new TuiAccessibilityBridge(write)
 
+    // A fresh bridge's `previousTitle` starts unset, so its very first `publish` always (re)writes the title even
+    // when nothing is focused -- establish that baseline first so this test measures only the notifications.
+    bridge.publish(AccessibilitySnapshot(Nil, Nil))
+    written.clear()
+
     bridge.publish(
       AccessibilitySnapshot(Nil, List(AccessibilityAnnouncement("Saved"), AccessibilityAnnouncement("2 matches")))
     )
