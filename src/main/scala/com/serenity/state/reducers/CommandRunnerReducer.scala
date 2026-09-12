@@ -98,7 +98,8 @@ object CommandRunnerReducer:
   private def submitRootEditingItem(state: AppState, runner: CommandRunner, itemId: String): ReducerResult =
     runner.inputItems.find(_.id == itemId) match
       case Some(item) =>
-        item.parse(runner.editingText) match
+        // issue #1056: typing "default" resets the row to its default value, one action.
+        item.parseOrDefault(runner.editingText) match
           case Some(intent) =>
             val cmd = Command.typed(itemId, item.label, intent, CommandCategory.Settings)
             ReducerResult(
@@ -319,16 +320,35 @@ object CommandRunnerReducer:
 
   private def adjustSubmenuOption(delta: Int, state: AppState): ReducerResult =
     currentRunner(state) match
+      case None =>
+        ReducerResult.noEffects(state)
+      // issue #1056: a numeric setting steps by one increment on Left/Right inside a settings submenu too, mirroring
+      // the root-level palette (`cycleRootOption`). Handled before touching `optionSelections`, unlike the OptionItem
+      // fallback below, since an InputItem has no index of its own to look up post-adjustment.
       case Some(runner) =>
-        val updatedRunner = runner.adjustSelectedSubmenuOption(delta)
-        val effects = submenuSelectedOption(updatedRunner)
-          .flatMap(_.selectedIntent)
-          .toList
-          .map(intent =>
-            AppEffect.ExecuteCommand(Command.typed(intent.toString, intent.toString, intent, CommandCategory.Settings))
-          )
-        ReducerResult(replaceRunner(state, _ => updatedRunner), effects)
-      case None => ReducerResult.noEffects(state)
+        submenuSelectedItem(runner) match
+          case Some(input: CommandSurfaceItem.InputItem) =>
+            input.steppedIntent(delta) match
+              case Some(intent) =>
+                ReducerResult(
+                  state,
+                  List(AppEffect.ExecuteCommand(Command.typed(input.id, input.label, intent, input.category)))
+                )
+              case None =>
+                ReducerResult.noEffects(state)
+          case _ =>
+            val updatedRunner = runner.adjustSelectedSubmenuOption(delta)
+            val effects = submenuSelectedOption(updatedRunner)
+              .flatMap(_.selectedIntent)
+              .toList
+              .map(intent =>
+                AppEffect
+                  .ExecuteCommand(Command.typed(intent.toString, intent.toString, intent, CommandCategory.Settings))
+              )
+            ReducerResult(replaceRunner(state, _ => updatedRunner), effects)
+
+  private def submenuSelectedItem(runner: CommandRunner): Option[CommandSurfaceItem] =
+    runner.activeSettingsSurface.flatMap(_ => runner.focusedSubmenuItems.lift(runner.settingsSurfaceSelectedIndex))
 
   private def cycleRootOption(delta: Int, state: AppState): ReducerResult =
     currentRunner(state) match
@@ -341,6 +361,17 @@ object CommandRunnerReducer:
             val effects =
               List(AppEffect.ExecuteCommand(Command.typed(option.id, option.label, nextIntent, option.category)))
             ReducerResult(replaceRunner(state, _ => updatedRunner), effects)
+          // issue #1056: a numeric setting steps by one increment on Left/Right, same gesture as an enum's
+          // inline cycle above -- no typing needed, clamped to whatever range the item's own `parse` enforces.
+          case Some(input: CommandSurfaceItem.InputItem) =>
+            input.steppedIntent(delta) match
+              case Some(intent) =>
+                ReducerResult(
+                  state,
+                  List(AppEffect.ExecuteCommand(Command.typed(input.id, input.label, intent, input.category)))
+                )
+              case None =>
+                ReducerResult.noEffects(state)
           case _ =>
             ReducerResult.noEffects(state)
       case _ =>
@@ -499,7 +530,8 @@ object CommandRunnerReducer:
     item: CommandSurfaceItem.InputItem,
     page: SettingsPage
   ): ReducerResult =
-    item.parse(page.draftText) match
+    // issue #1056: typing "default" resets the row to its default value, one action.
+    item.parseOrDefault(page.draftText) match
       case Some(intent) =>
         ReducerResult(
           state = replaceRunner(state, r => r.clearSubmenuEditingAndRecording.copy(statusMessage = None)),

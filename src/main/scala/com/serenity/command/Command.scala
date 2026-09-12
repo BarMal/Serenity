@@ -398,20 +398,62 @@ object CommandSurfaceItem:
       currentValue: String,
       kind: InputKind,
       parse: String => Option[CommandIntent],
-      category: CommandCategory
+      category: CommandCategory,
+      // issue #1056: the row's default value, formatted exactly like `currentValue` (`None` where no meaningful
+      // default exists -- a transient, selection-scoped value like rich-text formatting, or a name/binding with no
+      // single "default" to speak of). Where set, it both renders (`SurfaceContentResolver`) and drives one-key
+      // reset: typing the literal "default" (case-insensitive, mirroring the existing keybinding-reset convention)
+      // resets the row instead of being parsed as a value (`parseOrDefault`).
+      defaultValue: Option[String] = None
   ) extends CommandSurfaceItem:
     override lazy val searchText: String = s"$label $hint"
 
     def accepts(currentText: String, char: Char): Boolean =
       kind match
-        case InputKind.FreeText         => !char.isControl
-        case InputKind.Binding          => char.isLetterOrDigit || char == '+' || char == '-' || char == '_'
-        case InputKind.Numeric(decimal) => char.isDigit || (char == '.' && decimal && !currentText.contains('.'))
+        case InputKind.FreeText => !char.isControl
+        case InputKind.Binding  => char.isLetterOrDigit || char == '+' || char == '-' || char == '_'
+        case InputKind.Numeric(decimal) =>
+          char.isDigit || (char == '.' && decimal && !currentText.contains('.')) ||
+            // issue #1056: typing "default" resets to the default value (`parseOrDefault`) -- accepted here only
+            // while it stays a prefix of that literal word, so ordinary numeric entry is unaffected.
+            InputItem.isDefaultSentinelPrefix(currentText + char)
 
     def isOutOfBounds(text: String): Boolean =
-      text.nonEmpty && parse(text).isEmpty
+      // issue #1056: typing "default" (or a prefix of it, mid-keystroke) is never shown as an error -- it is either
+      // still becoming the reset sentinel, or, once complete, `parseOrDefault` will accept it as one.
+      text.nonEmpty && !(defaultValue.nonEmpty && InputItem.isDefaultSentinelPrefix(text)) && parse(text).isEmpty
 
     def withCurrentValue(v: String): InputItem = copy(currentValue = v)
+
+    /** Reset-to-default sentinel: typing the word "default" resets the row instead of being parsed as a literal
+      * value, the same convention keybinding rows already accept. Falls back to ordinary `parse` when there is no
+      * default to reset to, so an item with `defaultValue = None` behaves exactly as before.
+      */
+    def parseOrDefault(text: String): Option[CommandIntent] =
+      if text.trim.equalsIgnoreCase("default") then defaultValue.flatMap(parse) else parse(text)
+
+    /** issue #1056: step a numeric setting by one increment without typing, clamped to whatever range this item's
+      * own `parse` already enforces -- stepping past the enforced bound simply parses to `None` (a no-op) rather
+      * than needing a second, separately-maintained copy of each field's min/max. `direction` is `+1`/`-1`;
+      * non-numeric kinds (and rich-text's font size, which has no live value to step from) return `None`.
+      */
+    def steppedIntent(direction: Int): Option[CommandIntent] =
+      kind match
+        case InputKind.Numeric(decimal) =>
+          val step = if decimal then InputItem.DecimalStep else InputItem.IntegerStep
+          currentValue.toDoubleOption.flatMap { value =>
+            val nextValue = value + (direction * step)
+            val nextText  = if decimal then f"$nextValue%.2f" else math.round(nextValue).toString
+            parse(nextText)
+          }
+        case InputKind.Binding | InputKind.FreeText => None
+
+  object InputItem:
+    private val DecimalStep = 0.1
+    private val IntegerStep = 1.0
+
+    private[command] def isDefaultSentinelPrefix(text: String): Boolean =
+      text.nonEmpty && "default".startsWith(text.toLowerCase)
 
   /** A direct search target for a setting leaf, independent of its rendered label. */
   final case class SettingSearchItem(
