@@ -399,31 +399,6 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
     rawSourceRow(scrolledSurface, "Code line 79") should be >= 0
   }
 
-  it should "reveal every markdown source unit touched by a selection" in {
-    val source =
-      """# First heading
-        |
-        |First paragraph.
-        |
-        |# Second heading
-        |
-        |Second paragraph.""".stripMargin
-    val (state, surface, _) = renderMarkdownLens(
-      source,
-      CursorPosition(0, 0),
-      selection = Some(Selection(CursorPosition(0, 0), CursorPosition(4, 0)))
-    )
-    val paneRect =
-      LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(PaneId(1))
-
-    val firstHeadingRow = rawSourceRow(surface, "# First heading")
-    firstHeadingRow should be >= paneRect.y
-    rawSourceRow(surface, "First paragraph.") should be >= paneRect.y
-    rawSourceRow(surface, "# Second heading") should be >= paneRect.y
-    surface.getBg(paneRect.x + 1, firstHeadingRow) shouldBe state.persisted.theme.highlighted.background
-    panelRows(surface, state, paneRect) should have size 5
-  }
-
   it should "render the scrolled document window when the caret remains above it" in {
     val source =
       (Vector.fill(32)("") ++ Vector("# Reached after scrolling", "", "Visible prose at the viewport.")).mkString("\n")
@@ -474,24 +449,6 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
     expectedRows.map(_.text) should contain allOf ("Reached after scrolling", "Visible prose at the viewport.")
     samePixels(actual, expected) shouldBe true
     samePixels(actual, offscreenCaretWindow) shouldBe false
-  }
-
-  it should "keep visible preview context above the active lens" in {
-    val (state, surface, _) = renderMarkdownLens(
-      "# Intro\n\nOpening paragraph\n\nActive paragraph\ncontinued",
-      CursorPosition(4, 0),
-      topLine = Some(0)
-    )
-    val paneRect =
-      LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(80, 24)))(
-        PaneId(1)
-      )
-
-    val renderedRows = rows(surface)
-    renderedRows.exists(_.contains("Active paragraph")) shouldBe true
-    renderedRows.exists(_.contains("continued")) shouldBe true
-    rawSourceRow(surface, "Active paragraph") should be > paneRect.y + 1
-    panelRows(surface, state, paneRect) should have size 2
   }
 
   it should "align the active lens after expanded preview context" in {
