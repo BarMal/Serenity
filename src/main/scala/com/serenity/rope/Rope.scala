@@ -369,10 +369,10 @@ sealed trait Rope(using balance: Balance):
 
 /** Deliberately not `final`, unlike every other case class in the codebase.
   *
-  * `RopeSpec` subclasses this to override `collect()` and `index()` with assertion-throwing versions, proving that
-  * search and sequential traversal never materialise the whole rope or walk it character by character. That is the
-  * representation-invariance coverage `docs/coding-standards.md` requires, and it needs a real subclass -- a stub
-  * cannot observe which methods the rope chose to call.
+  * `RopeMetadataAndTraversalSpec` subclasses this to override `collect()` and `index()` with assertion-throwing
+  * versions, proving that search and sequential traversal never materialise the whole rope or walk it character by
+  * character. That is the representation-invariance coverage `docs/coding-standards.md` requires, and it needs a real
+  * subclass -- a stub cannot observe which methods the rope chose to call.
   *
   * Kept in this file (rather than its own `Leaf.scala`, as before `Rope` was sealed) because `sealed` in Scala requires
   * every direct subtype to be defined in the same source file as the sealed type itself.

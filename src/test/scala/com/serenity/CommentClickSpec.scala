@@ -51,7 +51,7 @@ class CommentClickSpec extends AnyFlatSpec with Matchers:
     bufferId
 
   /** The point that clicks buffer column `column` on line 0, following the same `paneRect.x + column`, `paneRect.y + 1`
-    * convention `MouseClickSpec`'s word/line-selection specs use.
+    * convention `MouseClickSelectionSpec`'s word/line-selection specs use.
     */
   private def bufferColumnPoint(sm: StateManager, column: Int): (Int, Int) =
     val state    = sm.getCurrentState.unsafeRunSync()

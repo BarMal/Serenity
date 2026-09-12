@@ -88,7 +88,7 @@ lazy val root = (project in file("."))
     // enforce it. Contained mutation is already governed by DisableSyntax.noVars.
     // Tests are exempt, the same way Test / scalacOptions already drops the -W flags above. Test code
     // legitimately uses casts, throws and partial access to build failure fixtures and to assert on
-    // representation invariants -- RopeSpec, for instance, subclasses Leaf to prove that search never
+    // representation invariants -- RopeMetadataAndTraversalSpec, for instance, subclasses Leaf to prove that search never
     // materialises the whole rope.
     //
     // Scoping wartremoverErrors to Compile is not enough: the plugin contributes its traversers at a

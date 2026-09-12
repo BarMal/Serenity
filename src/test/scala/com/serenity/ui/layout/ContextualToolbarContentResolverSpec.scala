@@ -7,10 +7,10 @@ import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Dedicated unit coverage for `ContextualToolbarContentResolver` (issue #1421). `SurfaceContentResolverSpec` covers
-  * some of this indirectly through `SurfaceContentResolver.resolveContextualToolbar`, but never the dropdown/input
-  * detail-row branches, and never names this object directly. Lives in this package because the resolver is
-  * `private[layout]`.
+/** Dedicated unit coverage for `ContextualToolbarContentResolver` (issue #1421).
+  * `SurfaceContentResolverContextualToolbarSpec` covers some of this indirectly through
+  * `SurfaceContentResolver.resolveContextualToolbar`, but never the dropdown/input detail-row branches, and never names
+  * this object directly. Lives in this package because the resolver is `private[layout]`.
   */
 class ContextualToolbarContentResolverSpec extends AnyFlatSpec with Matchers:
 

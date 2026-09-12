@@ -7,10 +7,10 @@ import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Dedicated unit coverage for `PanelContentResolver` (issue #1421) -- `SurfaceContentResolverSpec` exercises some of
-  * this behavior indirectly through `SurfaceContentResolver.resolve`, but never names this object, and never reaches
-  * every `SurfaceLayoutKind` branch each method here switches on. Lives in this package because the resolver is
-  * `private[layout]`.
+/** Dedicated unit coverage for `PanelContentResolver` (issue #1421) -- the `SurfaceContentResolver*Spec` family
+  * exercises some of this behavior indirectly through `SurfaceContentResolver.resolve`, but never names this object,
+  * and never reaches every `SurfaceLayoutKind` branch each method here switches on. Lives in this package because the
+  * resolver is `private[layout]`.
   */
 class PanelContentResolverSpec extends AnyFlatSpec with Matchers:
 

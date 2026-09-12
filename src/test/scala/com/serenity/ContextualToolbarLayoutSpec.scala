@@ -12,7 +12,8 @@ import org.scalatest.matchers.should.Matchers
 
 /** Cell-space geometry and hit-testing: row wrapping, compact-width balancing, cell widths/padding, and pixel-click to
   * [[ContextualToolbarHit]] resolution. Behaviour tests that exercise focus/detail state and toolbar interaction end to
-  * end live in [[ContextualToolbarSpec]].
+  * end live in [[ContextualToolbarPlacementSpec]], [[ContextualToolbarDetailSpec]], [[ContextualToolbarMouseSpec]], and
+  * [[ContextualToolbarDisplaySpec]].
   */
 class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with ContextualToolbarTestSupport:
 

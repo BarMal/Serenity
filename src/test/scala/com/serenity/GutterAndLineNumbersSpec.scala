@@ -471,7 +471,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
   }
 
   // #1295: the pinned-bottom cursor info bar bypasses TextOverlayRenderer entirely (it paints straight into the
-  // gutter row), so its colour override needs its own guard here -- TextOverlayRendererSpec only covers the
+  // gutter row), so its colour override needs its own guard here -- TextOverlayRendererLayoutSpec only covers the
   // floating placement's render path.
   it should "override the pinned cursor info bar's colours when configured" in {
     val foreground = new Color(0x11, 0x22, 0x33)
