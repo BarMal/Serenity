@@ -1,5 +1,7 @@
 package com.serenity.state.models
 
+import java.util.concurrent.atomic.AtomicReference
+
 import com.serenity.animation.WindowSitter
 import com.serenity.config.*
 import com.serenity.markdown.MarkdownBlockLens
@@ -11,32 +13,49 @@ final case class AppState(
     runtime: Runtime = Runtime()
 ):
 
-  /** Lazily indexes annotations for this immutable state snapshot. A new state snapshot gets a fresh index, while
-    * repeated render plans for the same scene reuse the existing one.
-    */
-  lazy val annotationIndexByBuffer: Map[BufferId, () => AnnotationLineIndex] =
-    persisted.buffers.iterator.map {
-      case (bufferId, buffer) =>
-        lazy val index =
+  // Per-buffer, not a whole-workspace wrapper map: a fresh `AppState` snapshot is produced on essentially every edit
+  // (#1456), so a caller reaching for one buffer's index must not pay an O(buffers) map-build to get there, even
+  // though the actual index computation below was already deferred. Each snapshot still gets its own fresh cache, and
+  // repeated lookups against the same snapshot -- e.g. several render passes over one scene -- reuse the computed
+  // index instead of recomputing it.
+  private val annotationIndexCache: AtomicReference[Map[BufferId, AnnotationLineIndex]] =
+    new AtomicReference(Map.empty)
+
+  private val markdownFenceIndexCache: AtomicReference[Map[BufferId, MarkdownBlockLens.FenceRangeIndex]] =
+    new AtomicReference(Map.empty)
+
+  /** `bufferId`'s annotation index, computed (and cached) only for that buffer -- see `annotationIndexCache`. */
+  def annotationIndex(bufferId: BufferId): Option[AnnotationLineIndex] =
+    persisted.buffers.get(bufferId).map { buffer =>
+      annotationIndexCache.get().get(bufferId) match
+        case Some(cached) => cached
+        case None =>
           val diagnostics =
             runtime.diagnosticsState.diagnostics.getOrElse(
               com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer),
               Nil
             )
-          AnnotationLineIndex(
+          val computed = AnnotationLineIndex(
             buffer.annotations.documentComments.toVector,
             diagnostics.groupMap(_.range.start.line)(identity)
           )
-        bufferId -> (() => index)
-    }.toMap
+          val _ = annotationIndexCache.updateAndGet(_.updated(bufferId, computed))
+          computed
+    }
 
-  lazy val markdownFenceIndexByBuffer: Map[BufferId, () => MarkdownBlockLens.FenceRangeIndex] =
-    persisted.buffers.iterator.map {
-      case (bufferId, buffer) =>
-        lazy val index =
-          MarkdownBlockLens.fenceRangeIndex(buffer.document.content.lineCount, buffer.document.content.getLine)
-        bufferId -> (() => index)
-    }.toMap
+  /** `bufferId`'s markdown fence-range index, computed (and cached) only for that buffer -- see
+    * `markdownFenceIndexCache`.
+    */
+  def markdownFenceIndex(bufferId: BufferId): Option[MarkdownBlockLens.FenceRangeIndex] =
+    persisted.buffers.get(bufferId).map { buffer =>
+      markdownFenceIndexCache.get().get(bufferId) match
+        case Some(cached) => cached
+        case None =>
+          val computed =
+            MarkdownBlockLens.fenceRangeIndex(buffer.document.content.lineCount, buffer.document.content.getLine)
+          val _ = markdownFenceIndexCache.updateAndGet(_.updated(bufferId, computed))
+          computed
+    }
 
   def syntaxHighlightingEnabled: Boolean = persisted.config.languageToolsConfig.syntaxHighlightingEnabled
   def isValid: Boolean                   = AppStateValidation.validationErrors(this).isEmpty
