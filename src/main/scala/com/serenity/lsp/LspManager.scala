@@ -121,7 +121,19 @@ object LspManager:
                     LspMethod("textDocument/didOpen"),
                     LspProtocol.didOpenParams(uri, languageId.id, 1, text)
                   )
-                  .handleErrorWith(ex => logger.error(ex)(s"[LSP] didOpen failed: $rawUri"))
+                  .handleErrorWith(ex => logger.error(ex)(s"[LSP] didOpen failed: $rawUri")) >>
+                requestSemanticTokens(
+                  rawUri,
+                  languageId,
+                  connectionsRef,
+                  documentVersions,
+                  requestContexts,
+                  requestFibers,
+                  supervisor,
+                  applyEvent,
+                  logger,
+                  connectionProvider
+                )
             case None =>
               logger.debug(s"[LSP] No server for ${languageId.id}, skipping didOpen")
           }
@@ -134,7 +146,19 @@ object LspManager:
             case Some(managed) =>
               managed.connection
                 .sendNotification(LspMethod("textDocument/didChange"), LspProtocol.didChangeParams(uri, version, text))
-                .handleErrorWith(ex => logger.error(ex)(s"[LSP] didChange failed: $rawUri"))
+                .handleErrorWith(ex => logger.error(ex)(s"[LSP] didChange failed: $rawUri")) >>
+                requestSemanticTokens(
+                  rawUri,
+                  languageId,
+                  connectionsRef,
+                  documentVersions,
+                  requestContexts,
+                  requestFibers,
+                  supervisor,
+                  applyEvent,
+                  logger,
+                  connectionProvider
+                )
             case None => IO.unit
           }
 
@@ -243,14 +267,9 @@ object LspManager:
         }
 
       case LspEffect.SemanticTokensRequested(rawUri, languageId) =>
-        val uri = DocumentUri(rawUri)
-        startRequest(
-          RequestKind.SemanticTokens,
-          uri,
+        requestSemanticTokens(
+          rawUri,
           languageId,
-          // Semantic tokens apply to the whole document, not a cursor position -- `anchor` here is never read back
-          // out of `context` by the request lambda below, unlike hover/definition.
-          anchor = CursorPosition(0, 0),
           connectionsRef,
           documentVersions,
           requestContexts,
@@ -259,24 +278,62 @@ object LspManager:
           applyEvent,
           logger,
           connectionProvider
-        ) { (conn, context) =>
-          Trace
-            .timed(s"lsp.semanticTokens.$rawUri")(
-              conn.semanticTokensLegend.flatMap {
-                case None => IO.unit // server never declared semanticTokensProvider during its handshake
-                case Some(legend) =>
-                  conn
-                    .sendRequest(LspMethod("textDocument/semanticTokens/full"), LspProtocol.semanticTokensParams(uri))
-                    .flatMap(response =>
-                      LspProtocol.parseSemanticTokens(response, legend).fold(IO.unit) { tokens =>
-                        isCurrent(RequestKey(uri, RequestKind.SemanticTokens), context, documentVersions, requestContexts)
-                          .ifM(applyEvent(LspEvent.LspSemanticTokensReceived(rawUri, tokens)), IO.unit)
-                      }
-                    )
-              }
-            )
-            .handleErrorWith(ex => logger.error(ex)(s"[LSP] semanticTokens failed: $rawUri"))
-        }
+        )
+
+  /** Requests `textDocument/semanticTokens/full` for `rawUri` if its connection's server declared the capability
+    * during its handshake, decodes the response against the legend it captured then, and emits
+    * [[LspEvent.LspSemanticTokensReceived]] -- discarding a stale response exactly like [[RequestKind.Definition]]'s
+    * `isCurrent` check. Shared by the [[LspEffect.SemanticTokensRequested]] effect and the automatic re-request this
+    * manager makes on every `FileOpened`/`FileChanged` (issue #859/#1177's rendering slice needs semantic tokens
+    * refreshed on every edit, not only when something explicitly asks for them).
+    */
+  private def requestSemanticTokens(
+    rawUri: String,
+    languageId: LanguageId,
+    connectionsRef: Ref[IO, Map[ConnectionIdentity, ManagedConnection]],
+    documentVersions: Ref[IO, Map[DocumentUri, Int]],
+    requestContexts: Ref[IO, Map[RequestKey, RequestContext]],
+    requestFibers: Ref[IO, Map[RequestKey, cats.effect.Fiber[IO, Throwable, Unit]]],
+    supervisor: Supervisor[IO],
+    applyEvent: Event => IO[Unit],
+    logger: Logger[IO],
+    connectionProvider: ConnectionProvider
+  ): IO[Unit] =
+    given Logger[IO] = logger
+    val uri          = DocumentUri(rawUri)
+    startRequest(
+      RequestKind.SemanticTokens,
+      uri,
+      languageId,
+      // Semantic tokens apply to the whole document, not a cursor position -- `anchor` here is never read back out
+      // of `context` by the request lambda below, unlike hover/definition.
+      anchor = CursorPosition(0, 0),
+      connectionsRef,
+      documentVersions,
+      requestContexts,
+      requestFibers,
+      supervisor,
+      applyEvent,
+      logger,
+      connectionProvider
+    ) { (conn, context) =>
+      Trace
+        .timed(s"lsp.semanticTokens.$rawUri")(
+          conn.semanticTokensLegend.flatMap {
+            case None => IO.unit // server never declared semanticTokensProvider during its handshake
+            case Some(legend) =>
+              conn
+                .sendRequest(LspMethod("textDocument/semanticTokens/full"), LspProtocol.semanticTokensParams(uri))
+                .flatMap(response =>
+                  LspProtocol.parseSemanticTokens(response, legend).fold(IO.unit) { tokens =>
+                    isCurrent(RequestKey(uri, RequestKind.SemanticTokens), context, documentVersions, requestContexts)
+                      .ifM(applyEvent(LspEvent.LspSemanticTokensReceived(rawUri, tokens)), IO.unit)
+                  }
+                )
+          }
+        )
+        .handleErrorWith(ex => logger.error(ex)(s"[LSP] semanticTokens failed: $rawUri"))
+    }
 
   private def startRequest(
     kind: RequestKind,

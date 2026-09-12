@@ -321,7 +321,12 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
             _                    <- effects.offer(None)
             _                    <- managerFiber.joinWithNever
             attemptedConnections <- connected.get
-          yield attemptedConnections shouldBe List(firstUri, secondUri)
+          yield
+            // Each open resolves twice -- once for the didOpen itself, once more for the automatic semantic-tokens
+            // request FileOpened now also triggers -- but both resolutions land on the one connection already
+            // registered for that workspace (LspResolutionCache makes the second a cheap hit in production); what
+            // this test actually covers is that the two *workspaces* stay on separate connections.
+            attemptedConnections.distinct shouldBe List(firstUri, secondUri)
         }
     yield result
 
@@ -541,6 +546,58 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
             )
             events <- manager.events.get
             _ = events shouldBe Nil
+            _ <- manager.stop
+          yield succeed
+        }
+    )
+
+  it should "automatically request semantic tokens after a successful didOpen when the server supports them" in
+    runVirtual(
+      harness
+        .use { manager =>
+          for
+            _ <- manager.connection.recordSemanticTokensLegend(Some(SemanticTokensLegend(List("keyword"), Nil)))
+            _ <- open(manager) // consumes the didOpen message
+            request <- takeMessage(manager.connection)
+            _ = request.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/semanticTokens/full")
+            _ <- manager.stop
+          yield succeed
+        }
+    )
+
+  it should "not request semantic tokens after didOpen when the server never declared the capability" in
+    runVirtual(
+      harness
+        .use { manager =>
+          for
+            _ <- open(manager) // no recordSemanticTokensLegend call -- the connection's legend stays None
+            _ <- noMessage(manager.connection)
+            _ <- manager.stop
+          yield succeed
+        }
+    )
+
+  it should "automatically request semantic tokens after a successful didChange when the server supports them" in
+    runVirtual(
+      harness
+        .use { manager =>
+          for
+            _ <- manager.connection.recordSemanticTokensLegend(Some(SemanticTokensLegend(List("keyword"), Nil)))
+            _ <- open(manager)
+            openTokensRequest <- takeMessage(manager.connection) // the didOpen-triggered semanticTokens request
+            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
+            // The didOpen-triggered request above is still tracked as in-flight (nothing prunes a completed fiber's
+            // entry proactively), so FileChanged's invalidateDocument cancels it first -- the same cancel-before-
+            // continuing behavior "should send document changes while a hover response is pending" already covers
+            // for hover, now also reachable through semantic tokens.
+            cancel <- takeMessage(manager.connection)
+            _ = cancel.hcursor.downField("method").as[String].toOption shouldBe Some("$/cancelRequest")
+            _ = cancel.hcursor.downField("params").downField("id").as[Long].toOption shouldBe
+              openTokensRequest.hcursor.downField("id").as[Long].toOption
+            change <- takeMessage(manager.connection)
+            _ = change.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didChange")
+            request <- takeMessage(manager.connection)
+            _ = request.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/semanticTokens/full")
             _ <- manager.stop
           yield succeed
         }

@@ -3,6 +3,7 @@ package com.serenity
 import com.serenity.animation.AnimationState
 import com.serenity.keystroke.events.ToggleSyntaxHighlighting
 import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.model.SemanticToken
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent}
 import com.serenity.state.models.*
@@ -178,7 +179,8 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
       Theme.default,
       AnimationState.empty,
       syntaxHighlightingEnabled = true,
-      language = Some(LanguageId.Scala)
+      language = Some(LanguageId.Scala),
+      semanticTokens = Some(List(SemanticToken(line = 0, startCharacter = 0, length = 2, tokenType = "keyword", tokenModifiers = Set.empty)))
     )
 
     surface.styleCalls should contain(surface.StyleCall("enable", com.serenity.ui.theme.TextStyle.bold))

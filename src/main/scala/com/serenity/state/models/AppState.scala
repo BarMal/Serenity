@@ -2,6 +2,7 @@ package com.serenity.state.models
 
 import com.serenity.animation.WindowSitter
 import com.serenity.config.*
+import com.serenity.lsp.model.SemanticToken
 import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.text.TextStatistics
 import com.serenity.ui.layout.{Layout, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
@@ -27,6 +28,20 @@ final case class AppState(
             buffer.annotations.documentComments.toVector,
             diagnostics.groupMap(_.range.start.line)(identity)
           )
+        bufferId -> (() => index)
+    }.toMap
+
+  /** This buffer's semantic tokens, grouped by line, or `None` when this document has no entry in
+    * `runtime.semanticTokensState` at all -- distinct from `Some(Map.empty)`, which would mean "LSP connected, this
+    * document just has no tokens yet on any visible line." The renderer uses the `None` case to show a visible
+    * "syntax highlighting unavailable" indicator instead of silently rendering plain text (issue #859/#1177).
+    */
+  lazy val semanticTokensIndexByBuffer: Map[BufferId, () => Option[Map[Int, List[SemanticToken]]]] =
+    persisted.buffers.iterator.map {
+      case (bufferId, buffer) =>
+        lazy val index = runtime.semanticTokensState.byUri
+          .get(com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer))
+          .map(_.groupBy(_.line))
         bufferId -> (() => index)
     }.toMap
 
