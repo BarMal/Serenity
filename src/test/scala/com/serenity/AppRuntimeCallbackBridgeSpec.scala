@@ -12,9 +12,8 @@ import com.serenity.state.manager.{StateManager, StateUpdater}
 import com.serenity.state.models.{AppState, BufferId}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.LoggerFactory
+import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 class AppRuntimeCallbackBridgeSpec extends AnyFlatSpec with Matchers:
 
