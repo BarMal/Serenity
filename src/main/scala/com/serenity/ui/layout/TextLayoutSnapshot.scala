@@ -1,9 +1,12 @@
 package com.serenity.ui.layout
 
+import com.ibm.icu.text.BreakIterator
+
 import java.awt.font.*
 import java.awt.image.BufferedImage
 import java.awt.{Font, RenderingHints}
 import java.text.AttributedString
+import java.util.Locale
 
 import com.serenity.richtext.{ParagraphAlignment, RichTextDocument}
 import com.serenity.state.models.{
@@ -370,11 +373,21 @@ object TextLayoutSnapshot:
 
     loop(initialLimit)
 
+  /** Where to break `text` once `fittingLength` characters have used up the available pixel width: the last legal
+    * UAX#14 line-break boundary at or before `fittingLength`, per `BreakIterator.getLineInstance` -- covering
+    * no-break spaces (never a break point, unlike a bare whitespace scan would risk) and CJK text (breakable between
+    * most adjacent ideographs with no whitespace at all, unlike the old ad hoc implementation this replaces, which
+    * only ever looked for a preceding whitespace character). Falls back to a forced break at `fittingLength` when no
+    * such boundary exists ahead of it (a single word/run too long to fit at all), same as the old implementation's
+    * fallback.
+    */
   private def wordBoundarySegmentLength(text: String, fittingLength: Int): Int =
     if fittingLength >= text.length then text.length
     else
-      val lastWhitespace = text.lastIndexWhere(_.isWhitespace, fittingLength - 1)
-      if lastWhitespace > 0 then lastWhitespace + 1 else fittingLength
+      val boundary = BreakIterator.getLineInstance(Locale.ROOT)
+      boundary.setText(text)
+      val candidate = boundary.preceding(fittingLength + 1)
+      if candidate > 0 then candidate else fittingLength
 
   private def shapeSegment(
     text: String,
