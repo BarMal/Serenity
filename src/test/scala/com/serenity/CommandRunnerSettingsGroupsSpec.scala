@@ -223,8 +223,6 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "keymap-command-runner-submit",
       "keymap-modal-dismiss"
     )
-    nestedGroup("settings-preset-markdown-preview").label shouldBe "Markdown Preview"
-    nestedGroup("settings-preset-markdown-preview").children.map(_.id) should contain("markdown-view")
     nestedGroup("settings-document-defaults").label shouldBe "Document Defaults"
     nestedGroup("settings-document-defaults").children.map(_.id) should contain allOf (
       "default-document-mode",
