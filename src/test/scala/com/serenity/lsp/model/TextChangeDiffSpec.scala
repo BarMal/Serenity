@@ -53,3 +53,44 @@ class TextChangeDiffSpec extends AnyFlatSpec with Matchers:
     change.rangeLength shouldBe 3
     change.text shouldBe "xyz"
   }
+
+  it should "not split a surrogate pair on the prefix boundary when two astral characters share a high surrogate" in {
+    // U+1F600 and U+1F601 both encode as high surrogate \uD83D, with low surrogates \uDE00/\uDE01 --
+    // a naive char-by-char prefix scan would match the shared high surrogate and stop one unit later,
+    // leaving a lone low surrogate as the "changed" text.
+    val change = TextChangeDiff.diff("a😀b", "a😁b")
+    change.range shouldBe LspRange(LspPosition(0, 1), LspPosition(0, 3))
+    change.rangeLength shouldBe 2
+    change.text shouldBe "😁"
+  }
+
+  it should "not split a surrogate pair on the suffix boundary when two astral characters share a low surrogate" in {
+    // Both pairs end in the low surrogate \uDE00 but start with different high surrogates -- a naive
+    // suffix scan would match the shared low surrogate and stop one unit early, leaving a lone low
+    // surrogate at the start of the common suffix.
+    val change = TextChangeDiff.diff("x😀y", "x🨀y")
+    change.range shouldBe LspRange(LspPosition(0, 1), LspPosition(0, 3))
+    change.rangeLength shouldBe 2
+    change.text shouldBe "🨀"
+  }
+
+  it should "describe an insertion immediately before a surrogate pair without touching the pair" in {
+    val change = TextChangeDiff.diff("😀", "X😀")
+    change.range shouldBe LspRange(LspPosition(0, 0), LspPosition(0, 0))
+    change.rangeLength shouldBe 0
+    change.text shouldBe "X"
+  }
+
+  it should "describe an insertion immediately after a surrogate pair without touching the pair" in {
+    val change = TextChangeDiff.diff("😀", "😀X")
+    change.range shouldBe LspRange(LspPosition(0, 2), LspPosition(0, 2))
+    change.rangeLength shouldBe 0
+    change.text shouldBe "X"
+  }
+
+  it should "describe a deletion spanning an entire surrogate pair in the middle of the document" in {
+    val change = TextChangeDiff.diff("hello😀world", "helloworld")
+    change.range shouldBe LspRange(LspPosition(0, 5), LspPosition(0, 7))
+    change.rangeLength shouldBe 2
+    change.text shouldBe ""
+  }

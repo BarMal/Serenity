@@ -15,12 +15,19 @@ object TextChangeDiff:
 
     var prefixLen = 0
     while prefixLen < maxCommon && oldText(prefixLen) == newText(prefixLen) do prefixLen += 1
+    // A high surrogate at the last common position means its low surrogate half was excluded from the
+    // common prefix (it either didn't match or fell outside maxCommon) -- back off one unit so the pair
+    // stays together in the changed middle instead of splitting.
+    while prefixLen > 0 && Character.isHighSurrogate(oldText(prefixLen - 1)) do prefixLen -= 1
 
     val maxSuffix = maxCommon - prefixLen
     var suffixLen = 0
     while suffixLen < maxSuffix &&
       oldText(oldText.length - 1 - suffixLen) == newText(newText.length - 1 - suffixLen)
     do suffixLen += 1
+    // Symmetric case: a low surrogate at the start of the common suffix means its high surrogate half
+    // was excluded -- back off one unit so the pair stays together in the changed middle.
+    while suffixLen > 0 && Character.isLowSurrogate(oldText(oldText.length - suffixLen)) do suffixLen -= 1
 
     val oldEnd = oldText.length - suffixLen
     val newEnd = newText.length - suffixLen

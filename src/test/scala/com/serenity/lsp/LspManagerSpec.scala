@@ -134,6 +134,28 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
         }
     )
 
+  it should "keep its previous-text mirror unchanged when a didChange notification fails to send" in
+    runVirtual(
+      harness
+        .use { manager =>
+          for
+            _ <- open(manager)
+            _ <- manager.connection.setSyncKind(TextDocumentSyncKind.Incremental)
+            _ <- manager.connection.failNextNotification
+            // This didChange fails to send (simulated) -- the server never saw "object Foo1", so the manager's
+            // documentTexts mirror must not advance to it, or the next diff below would be computed against text
+            // the server was never told about.
+            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo1", version = 2)))
+            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 3)))
+            change <- takeMessage(manager.connection)
+            contentChange = change.hcursor.downField("params").downField("contentChanges").downArray
+            _ = contentChange.downField("rangeLength").as[Int].toOption shouldBe Some(0)
+            _ = contentChange.downField("text").as[String].toOption shouldBe Some("2")
+            _ <- manager.stop
+          yield succeed
+        }
+    )
+
   it should "discard a definition response after its document version changes" in {
     val anchor = CursorPosition(0, 1)
     runVirtual(
