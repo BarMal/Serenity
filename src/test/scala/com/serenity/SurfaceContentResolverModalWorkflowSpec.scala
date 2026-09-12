@@ -206,8 +206,6 @@ class SurfaceContentResolverModalWorkflowSpec extends AnyFlatSpec with Matchers:
     floating.footer.map(_.plainText) shouldBe Some("3 matches will be replaced")
   }
 
-  // ── ThemePicker resolver ──────────────────────────────────────────────────
-
   it should "render find modals as focused query overlays" in {
     val floating = SurfaceContentResolver.resolve(
       SurfaceContent.ModalWorkflow(Modal.Find("needle", Nil, 0)),
