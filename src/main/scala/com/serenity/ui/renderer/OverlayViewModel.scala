@@ -257,6 +257,7 @@ object OverlayViewModel:
   private def isComposedContent(content: SurfaceContent): Boolean =
     content match
       case SurfaceContent.ModalWorkflow(_) => true
+      case SurfaceContent.ContextMenu(_)   => true
       case _                               => false
 
   private def collapsedContentView(content: com.serenity.state.models.SurfaceContent): ResolvedSurfaceContent =
@@ -292,6 +293,15 @@ object OverlayViewModel:
           rect,
           SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity),
           state.persisted.config.inputConfig.focusedKeymapConfig.modal.bindings
+        )
+      case SurfaceContent.ContextMenu(menu) =>
+        Some(
+          ContextMenuSurfaceComposition.forMenu(
+            menu,
+            rect,
+            state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+            SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity)
+          )
         )
       case _ => None
 
