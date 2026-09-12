@@ -148,7 +148,10 @@ object OverlayViewModel:
               itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity),
               verticalOffsetRows = verticalOffsetRows,
               surfaceId = Some(surface.id),
-              composition = compositionFor(content, rect, state)
+              // A collapsed (stacked-behind) surface renders `resolved`'s one-line summary (`collapsedContentView`),
+              // never the full composition -- composition painting always wins over `rows` when present, so it must
+              // not be set here while collapsed.
+              composition = if collapsed then None else compositionFor(content, rect, state)
             )
           }
         }
@@ -302,6 +305,16 @@ object OverlayViewModel:
             rect,
             state.persisted.config.effectiveCommandRunnerItemGapRows,
             SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity)
+          )
+        )
+      case SurfaceContent.CommandPalette(runner) =>
+        Some(
+          CommandRunnerSurfaceComposition.forRunner(
+            runner,
+            rect,
+            itemGapRowsFor(content, state),
+            SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity),
+            showKeyHintsFor(content, state)
           )
         )
       case _ => None

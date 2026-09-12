@@ -51,80 +51,105 @@ final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMou
     if surfaces.isEmpty then None
     else
       state.runtime.viewportSize.flatMap { viewportSize =>
-        val scene    = AuthoritativeUiScene.forState(state, viewportSize)
-        val layout   = scene.calculatedLayout
-        val contract = scene.editorContract
+        val scene = AuthoritativeUiScene.forState(state, viewportSize)
         surfaces.view
-          .flatMap(surface => commandRunnerSelectionForSurface(event, surface, layout, contract, state))
+          .flatMap(surface => commandRunnerSelectionForSurface(event, surface, scene, state))
           .headOption
       }
 
+  /** Resolves a hover/click against the open command palette (or its drilled-in settings group). The sub-cell
+    * fractional-pixel path (`event.pixelX`/`pixelY` defined -- `CommandRunnerMouseSpec`'s "fractional floating pixel
+    * offset" tests) is a distinct, already-tested feature this migration does not touch, so it still goes through
+    * `MouseHitTestGeometry.overlayItemIndex`/`FloatingSurfaceGeometry` unchanged. Every other (cell-coordinate) hit
+    * resolves through `CommandRunnerSurfaceComposition`'s own `hitAt` instead -- the same resolved plan the renderer
+    * paints from (issue #819, slice 2), so a row can no longer be painted at one position and hit-tested at another.
+    */
   private def commandRunnerSelectionForSurface(
     event: MouseInputEvent,
     surface: UiSurface,
+    scene: UiSceneSnapshot,
+    state: AppState
+  ): Option[CommandRunnerEvent] =
+    surface.content match
+      case SurfaceContent.CommandPalette(runner) if event.pixelX.isDefined && event.pixelY.isDefined =>
+        pixelCommandRunnerSelection(event, surface, runner, scene.calculatedLayout, scene.editorContract, state)
+      case SurfaceContent.CommandPalette(runner) =>
+        for
+          node <- scene.nodesInPaintOrder.find(_.id == SceneNodeId.Surface(surface.id))
+          hit <- CommandRunnerSurfaceComposition
+            .forRunner(
+              runner,
+              node.frameRect,
+              state.persisted.config.effectiveCommandRunnerItemGapRows,
+              SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity),
+              showKeyHints = state.persisted.config.surfaceConfig.commandRunnerShowKeyHints
+            )
+            .hitAt(event.col.toDouble, event.row.toDouble)
+          index <- CommandRunnerSurfaceComposition.absoluteIndexOf(hit.focusId)
+        yield runner.surface match
+          case CommandRunnerSurface.Settings(_, drilled) if drilled.nonEmpty => RunnerSelectSubmenuItem(index)
+          case _                                                             => RunnerSelectVisibleItem(index)
+      case _ =>
+        None
+
+  private def pixelCommandRunnerSelection(
+    event: MouseInputEvent,
+    surface: UiSurface,
+    runner: com.serenity.command.CommandRunner,
     layout: CalculatedLayout,
     contract: EditorLayoutContract,
     state: AppState
   ): Option[CommandRunnerEvent] =
     contract.overlayContentRect(surface.id).flatMap { contentRect =>
       val rowSlots = contract.overlayRowSlots(surface.id)
-      surface.content match
-        case SurfaceContent.CommandPalette(runner) =>
-          // Dispatch on `CommandRunnerSurface` (issue #931, Stage 2): a settings group drilled into from the
-          // palette's old Settings tab renders on this same surface too (issue #1059), so `Settings(_)` hit-tests
-          // the same way as the dedicated Settings surface -- against settingsSurfaceItems/
-          // settingsSurfaceSelectedIndex -- covering both entry points exactly as the two conditions this replaced
-          // did.
-          runner.surface match
-            case CommandRunnerSurface.Settings(_, drilled) =>
-              val items = runner.settingsSurfaceItems
-              MouseHitTestGeometry
-                .overlayItemIndex(
-                  event,
-                  state,
-                  layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
-                  contentRect,
-                  rowSlots,
-                  items.length,
-                  runner.settingsSurfaceSelectedIndex,
-                  hasHeader = true,
-                  hasFooter = true,
-                  reservedContentRows = groupPreviewRowCount(items, runner.settingsSurfaceSelectedIndex),
-                  itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
-                  itemTargetRows =
-                    SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
-                )
-                .map { index =>
-                  if drilled.nonEmpty then RunnerSelectSubmenuItem(index)
-                  else RunnerSelectVisibleItem(index)
-                }
-            case CommandRunnerSurface.Palette(_) =>
-              // Category tabs are retired (issue #931): the header is just the live search box now, nothing there
-              // to hit-test as a tab click.
-              val items = runner.visibleItems
-              MouseHitTestGeometry
-                .overlayItemIndex(
-                  event,
-                  state,
-                  layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
-                  contentRect,
-                  rowSlots,
-                  items.length,
-                  runner.selectedIndex,
-                  hasHeader = true,
-                  hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
-                  reservedContentRows = groupPreviewRowCount(items, runner.selectedIndex),
-                  itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
-                  itemTargetRows =
-                    SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
-                )
-                .map(RunnerSelectVisibleItem(_))
-        case _ =>
-          None
+      runner.surface match
+        case CommandRunnerSurface.Settings(_, drilled) =>
+          val items = runner.settingsSurfaceItems
+          MouseHitTestGeometry
+            .overlayItemIndex(
+              event,
+              state,
+              layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
+              contentRect,
+              rowSlots,
+              items.length,
+              runner.settingsSurfaceSelectedIndex,
+              hasHeader = true,
+              hasFooter = true,
+              reservedContentRows = groupPreviewRowCount(items, runner.settingsSurfaceSelectedIndex),
+              itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
+              itemTargetRows =
+                SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
+            )
+            .map { index =>
+              if drilled.nonEmpty then RunnerSelectSubmenuItem(index)
+              else RunnerSelectVisibleItem(index)
+            }
+        case CommandRunnerSurface.Palette(_) =>
+          val items = runner.visibleItems
+          MouseHitTestGeometry
+            .overlayItemIndex(
+              event,
+              state,
+              layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
+              contentRect,
+              rowSlots,
+              items.length,
+              runner.selectedIndex,
+              hasHeader = true,
+              hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
+              reservedContentRows = groupPreviewRowCount(items, runner.selectedIndex),
+              itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
+              itemTargetRows =
+                SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
+            )
+            .map(RunnerSelectVisibleItem(_))
     }
 
   /** How many rows `SurfaceContentResolver`'s capped, expand-in-place group preview reserves under the selected row
     * (issue #1059), so hit-testing lands on the right item despite those extra rows shifting everything after them.
+    * Only the pixel-mode fallback above still needs this -- `CommandRunnerSurfaceComposition` computes its own window
+    * and reservation internally, from the same inputs it paints with.
     */
   private def groupPreviewRowCount(items: List[CommandSurfaceItem], selectedIndex: Int): Int =
     val preview = SettingsSurfaceState.previewRows(items, selectedIndex)
