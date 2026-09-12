@@ -6,12 +6,13 @@ import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.CommandRunnerReducer
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** `CommandRunnerReducer`'s character-level text editing -- insert-char, delete/delete-word variants, and paste, at
-  * both the root search box and inside a submenu's search/input text -- split out of `CommandRunnerReducerSpec` to
-  * keep each file focused on one concern.
+  * both the root search box and inside a submenu's search/input text -- split out of `CommandRunnerReducerSpec` to keep
+  * each file focused on one concern.
   */
 class CommandRunnerReducerTextEditingSpec extends AnyFlatSpec with Matchers:
 

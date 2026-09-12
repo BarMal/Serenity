@@ -9,9 +9,9 @@ import com.serenity.ui.layout.TextLayoutSnapshot
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Coverage for opening find/goto-line from editor events and advancing `FindNext` through stored results --
-  * including seeding from existing find state, grapheme-safe match skipping, wrapped-line scrolling to a match, and
-  * invalidating stale results after an edit (extracted from the former monolithic `EditorEventReducerSpec`, #1442).
+/** Coverage for opening find/goto-line from editor events and advancing `FindNext` through stored results -- including
+  * seeding from existing find state, grapheme-safe match skipping, wrapped-line scrolling to a match, and invalidating
+  * stale results after an edit (extracted from the former monolithic `EditorEventReducerSpec`, #1442).
   * `EditorFindEventReducerSpec` covers `OpenReplace` and `FindNext`'s no-op paths, deliberately not duplicated here.
   */
 class EditorFindNextSpec extends AnyFlatSpec with Matchers:

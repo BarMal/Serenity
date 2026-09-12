@@ -7,7 +7,6 @@ import com.serenity.command.*
 import com.serenity.config.{AppMode, ToolbarDisplayMode}
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
-import com.serenity.richtext.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
@@ -17,8 +16,8 @@ import org.scalatest.matchers.should.Matchers
 
 /** How the toolbar's item set and glyphs are chosen and rendered: which items appear for the active buffer/app mode,
   * how the icon-only/text-only/icon-and-text display mode renders and reacts to preference changes, semantic
-  * formatting-group separators, and the bundled Material Icons Round glyph coverage. Placement/positioning is
-  * covered in [[ContextualToolbarPlacementSpec]], keyboard-driven focus and detail lifecycle in
+  * formatting-group separators, and the bundled Material Icons Round glyph coverage. Placement/positioning is covered
+  * in [[ContextualToolbarPlacementSpec]], keyboard-driven focus and detail lifecycle in
   * [[ContextualToolbarDetailSpec]], and mouse interaction in [[ContextualToolbarMouseSpec]].
   */
 class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with ContextualToolbarTestSupport:

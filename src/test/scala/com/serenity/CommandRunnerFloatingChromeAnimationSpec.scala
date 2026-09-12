@@ -75,6 +75,7 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
         )
       )
     )
+
   "RendererEntryPoints.render" should "fade the selected command highlight with the overlay row animation" in {
     val commands = List(
       Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)),

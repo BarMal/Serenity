@@ -10,7 +10,6 @@ import com.serenity.rope.Balance
 import com.serenity.session.given
 import com.serenity.session.SessionState
 import com.serenity.state.models.*
-import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

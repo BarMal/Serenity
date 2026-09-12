@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.command.*
 import com.serenity.config.*
+import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec

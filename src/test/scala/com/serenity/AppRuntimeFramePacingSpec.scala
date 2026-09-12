@@ -10,6 +10,7 @@ import cats.syntax.semigroup.*
 import com.serenity.animation.WindowSitter
 import com.serenity.app.AppRuntime
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.input.{InputRouter, SystemClipboard}
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.*

@@ -6,7 +6,7 @@ import _root_.io.circe.syntax.*
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.session.given
-import com.serenity.session.{SessionBuffer, SessionFindResult, SessionFindState, SessionState}
+import com.serenity.session.SessionState
 import com.serenity.state.models.*
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.theme.Theme

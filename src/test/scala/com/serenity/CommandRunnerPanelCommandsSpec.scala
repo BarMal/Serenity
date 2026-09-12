@@ -65,7 +65,6 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(Enter).unsafeRunSync()
 
-
   "Command runner" should "pin the explorer panel from the command runner" in {
     val stateManager     = createStateManager()
     val currentDirectory = FileUtils.getCurrentDirectory.unsafeRunSync()

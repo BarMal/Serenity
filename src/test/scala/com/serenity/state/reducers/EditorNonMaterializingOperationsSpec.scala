@@ -6,8 +6,8 @@ import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Cross-cutting coverage for a laziness guarantee that spans navigation, editing, and clipboard events alike: none
-  * of them may call `Rope.collect()` on the whole buffer. Each test seeds the buffer with `NonCollectingRope`, a test
+/** Cross-cutting coverage for a laziness guarantee that spans navigation, editing, and clipboard events alike: none of
+  * them may call `Rope.collect()` on the whole buffer. Each test seeds the buffer with `NonCollectingRope`, a test
   * double whose `collect()` throws, so any code path that accidentally materialises the full document fails loudly
   * rather than merely being slow (extracted from the former monolithic `EditorEventReducerSpec`, #1442).
   */

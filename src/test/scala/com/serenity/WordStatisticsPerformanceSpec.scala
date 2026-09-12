@@ -7,9 +7,9 @@ import org.scalatest.matchers.should.Matchers
 
 /** Perf coverage for #1203's acceptance criterion: no per-keystroke full-buffer rescan on a novel-length (~100k word)
   * buffer. `TextStatistics.of` only reads `Rope`'s own incrementally-maintained `wordCount`/`nonWhitespaceCount` fields
-  * (see `RopeMetadataAndTraversalSpec`'s "keep an edit's word-count update proportional to tree depth" for the structural guarantee that an
-  * edit only rebuilds the spine down to the touched leaf); this spec logs the real wall-clock cost of repeated
-  * single-character edits against such a buffer for human review, in the same spirit as
+  * (see `RopeMetadataAndTraversalSpec`'s "keep an edit's word-count update proportional to tree depth" for the
+  * structural guarantee that an edit only rebuilds the spine down to the touched leaf); this spec logs the real
+  * wall-clock cost of repeated single-character edits against such a buffer for human review, in the same spirit as
   * `StartupPageNavigationPerformanceSpec` -- see that spec's doc for why these timings aren't asserted on directly.
   */
 class WordStatisticsPerformanceSpec extends AnyFlatSpec with Matchers:

@@ -5,7 +5,14 @@ import java.awt.{Color, Font}
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, LayoutRect, OverlayRow, OverlayRowLayout, OverlaySegment, SurfaceContentRowKind}
+import com.serenity.ui.layout.{
+  CellMetrics,
+  LayoutRect,
+  OverlayRow,
+  OverlayRowLayout,
+  OverlaySegment,
+  SurfaceContentRowKind
+}
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec

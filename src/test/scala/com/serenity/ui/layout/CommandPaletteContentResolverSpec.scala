@@ -5,9 +5,10 @@ import com.serenity.config.AppConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Dedicated unit coverage for `CommandPaletteContentResolver` (issue #1421). `SurfaceContentResolverCommandPaletteSpec` covers most
-  * of this behavior indirectly through `SurfaceContentResolver.resolve`, but never names this object directly. Lives in
-  * this package because the resolver is `private[layout]`.
+/** Dedicated unit coverage for `CommandPaletteContentResolver` (issue #1421).
+  * `SurfaceContentResolverCommandPaletteSpec` covers most of this behavior indirectly through
+  * `SurfaceContentResolver.resolve`, but never names this object directly. Lives in this package because the resolver
+  * is `private[layout]`.
   */
 class CommandPaletteContentResolverSpec extends AnyFlatSpec with Matchers:
 

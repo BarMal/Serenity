@@ -58,7 +58,6 @@ class CommandRunnerFindReplaceCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(Enter).unsafeRunSync()
 
-
   "Command runner" should "open the goto-line modal for the goto-line command" in {
     val stateManager = createStateManager()
 

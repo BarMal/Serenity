@@ -7,10 +7,10 @@ import com.serenity.ui.theme.config.ThemeCreatorState
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Dedicated unit coverage for `PickerContentResolver` (issue #1421). `SurfaceContentResolverReferencePanelsSpec` covers the theme
-  * picker, file search, and context menu behavior indirectly through `SurfaceContentResolver.resolve`; this adds
-  * `resolveThemeCreator` coverage, entirely absent elsewhere, and pins each of the others by directly naming this
-  * object. Lives in this package because the resolver is `private[layout]`.
+/** Dedicated unit coverage for `PickerContentResolver` (issue #1421). `SurfaceContentResolverReferencePanelsSpec`
+  * covers the theme picker, file search, and context menu behavior indirectly through `SurfaceContentResolver.resolve`;
+  * this adds `resolveThemeCreator` coverage, entirely absent elsewhere, and pins each of the others by directly naming
+  * this object. Lives in this package because the resolver is `private[layout]`.
   */
 class PickerContentResolverSpec extends AnyFlatSpec with Matchers:
 

@@ -9,7 +9,8 @@ import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** LSP language server override configuration: command/args/enabled overrides and HOCON argument list round-tripping. */
+/** LSP language server override configuration: command/args/enabled overrides and HOCON argument list round-tripping.
+  */
 class ConfigManagerLspConfigSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "ConfigManager" should "load and write LSP language server overrides" in {

@@ -60,7 +60,6 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(Enter).unsafeRunSync()
 
-
   "Command runner" should "toggle a cursor-attached comment lens for the active comment" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)

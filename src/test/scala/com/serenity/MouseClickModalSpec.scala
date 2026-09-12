@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.*
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -437,4 +438,3 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
       .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(`itemIndex`), y) => y }
       .getOrElse(fail(s"Expected context menu item row $itemIndex"))
     (contentRect.x + 1, rowY)
-

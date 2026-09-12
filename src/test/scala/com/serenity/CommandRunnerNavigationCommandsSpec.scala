@@ -61,7 +61,6 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(Enter).unsafeRunSync()
 
-
   "Command runner" should "navigate between tabs through typed commands" in {
     val stateManager = createStateManager()
 

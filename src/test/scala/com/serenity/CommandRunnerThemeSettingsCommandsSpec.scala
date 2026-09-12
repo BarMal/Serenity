@@ -92,7 +92,6 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
 
     loop(attempts).unsafeRunSync()
 
-
   "Command runner" should "toggle between dark and light themes for the toggle-theme command" in {
     val stateManager = createStateManager()
     val initialState = stateManager.getCurrentState.unsafeRunSync()

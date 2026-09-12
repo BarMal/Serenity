@@ -1,23 +1,16 @@
 package com.serenity
 
-import java.awt.Font
-
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.*
-import com.serenity.config.{AppMode, ToolbarDisplayMode}
+import com.serenity.config.ToolbarDisplayMode
 import com.serenity.keystroke.events.*
-import com.serenity.lsp.config.LanguageId
-import com.serenity.richtext.*
 import com.serenity.state.models.*
-import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.RendererEntryPoints
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Where the contextual toolbar is anchored and how it follows the cursor/selection: initial placement below/above the
-  * caret, stacking with the command runner, tracking the caret as it moves, and staying hidden once its anchor
-  * scrolls out of view. Focus/detail lifecycle is covered in [[ContextualToolbarDetailSpec]], mouse interaction in
+  * caret, stacking with the command runner, tracking the caret as it moves, and staying hidden once its anchor scrolls
+  * out of view. Focus/detail lifecycle is covered in [[ContextualToolbarDetailSpec]], mouse interaction in
   * [[ContextualToolbarMouseSpec]], and display-mode/rendering behaviour in [[ContextualToolbarDisplaySpec]]. Pure
   * cell-space geometry (row wrapping, widths, hit-testing) is covered directly in [[ContextualToolbarLayoutSpec]].
   */

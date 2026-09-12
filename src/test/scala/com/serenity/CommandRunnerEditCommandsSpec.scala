@@ -58,7 +58,6 @@ class CommandRunnerEditCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(Enter).unsafeRunSync()
 
-
   "Command runner" should "execute clipboard and select-all editor commands" in {
     val stateManager = createStateManager()
     val bufferId     = stateManager.bufferManager.createBuffer("Hello World", None).unsafeRunSync()

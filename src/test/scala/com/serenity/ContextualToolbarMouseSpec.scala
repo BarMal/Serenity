@@ -3,23 +3,19 @@ package com.serenity
 import java.awt.Font
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.*
-import com.serenity.config.{AppMode, ToolbarDisplayMode}
+import com.serenity.config.ToolbarDisplayMode
 import com.serenity.keystroke.events.*
-import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
 import com.serenity.state.models.*
-import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.RendererEntryPoints
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Mouse-driven interaction with the toolbar: selecting and executing items on click (including fractional
-  * code-metric pixel offsets), opening dropdown/input details with a click and applying the chosen option or
-  * clicked-away value, and ignoring hover/click/drag on the group-separator gutters. Placement/positioning is
-  * covered in [[ContextualToolbarPlacementSpec]], keyboard-driven focus and detail lifecycle in
-  * [[ContextualToolbarDetailSpec]], and display-mode/rendering behaviour in [[ContextualToolbarDisplaySpec]].
+/** Mouse-driven interaction with the toolbar: selecting and executing items on click (including fractional code-metric
+  * pixel offsets), opening dropdown/input details with a click and applying the chosen option or clicked-away value,
+  * and ignoring hover/click/drag on the group-separator gutters. Placement/positioning is covered in
+  * [[ContextualToolbarPlacementSpec]], keyboard-driven focus and detail lifecycle in [[ContextualToolbarDetailSpec]],
+  * and display-mode/rendering behaviour in [[ContextualToolbarDisplaySpec]].
   */
 class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with ContextualToolbarTestSupport:
 

@@ -1,12 +1,15 @@
 package com.serenity
 
 import com.serenity.keystroke.events.*
+import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ModalEventReducer, WorkflowEffect}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class ModalFileWorkflowReducerSpec extends AnyFlatSpec with Matchers:
+
+  given Balance = Balance.default
 
   "ModalEventReducer" should "emit CreateFileWorkflowDirectories only for a save-as workflow with missing directories" in {
     val saveAsWithMissingDirs = ModalDialog(

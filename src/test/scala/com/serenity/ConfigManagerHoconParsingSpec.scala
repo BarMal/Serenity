@@ -9,8 +9,8 @@ import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** HOCON parsing edge cases: UTF-8 encoding, quoting/comments/substitutions/lists/commas, inline objects, legacy
-  * key fallback, and file-relative includes.
+/** HOCON parsing edge cases: UTF-8 encoding, quoting/comments/substitutions/lists/commas, inline objects, legacy key
+  * fallback, and file-relative includes.
   */
 class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with OptionValues:
 

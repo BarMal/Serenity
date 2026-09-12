@@ -74,7 +74,6 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
     buffer.viewport.visibleColumns shouldBe contentRect.width
     buffer.viewport.visibleLines shouldBe contentRect.height
 
-
   "Command runner" should "save, restore, and clear the current session from command runner commands" in {
     val sessionRoot  = Files.createTempDirectory("serenity-command-session")
     val stateManager = createStateManager(Some(sessionRoot))

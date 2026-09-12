@@ -11,8 +11,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** `CommandRunnerReducer`'s Up/Down/Left/Right navigation -- root-level movement, left/right option cycling inside a
-  * submenu, and the inline group-preview behavior -- split out of `CommandRunnerReducerSpec` to keep each file
-  * focused on one concern.
+  * submenu, and the inline group-preview behavior -- split out of `CommandRunnerReducerSpec` to keep each file focused
+  * on one concern.
   */
 class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
 

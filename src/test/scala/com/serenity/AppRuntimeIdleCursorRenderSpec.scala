@@ -8,12 +8,16 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.AppRuntime
 import com.serenity.config.CursorMode
+import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId, Damage}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
 
 class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
+
+  given Balance = Balance.default
 
   final private case class LogEntry(level: String, message: String, error: Option[Throwable])
 

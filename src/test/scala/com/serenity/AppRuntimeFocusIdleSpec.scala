@@ -8,6 +8,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.app.AppRuntime
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.input.InputHandler
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.*

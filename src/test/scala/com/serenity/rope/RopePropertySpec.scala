@@ -8,11 +8,11 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 /** Representation-invariance coverage for [[Rope]].
   *
-  * `docs/coding-standards.md` asks that rope behaviour be tested independently of tree shape. `RopeStructuralOperationsSpec`
-  * and `RopeMetadataAndTraversalSpec` cover
-  * behaviour against hand-built fixtures, which can only exercise the shapes someone thought to write down. These
-  * properties generate the shapes instead, and state every expectation in terms of the `String` the rope was built
-  * from, so they assert what the rope should do rather than restating how it does it.
+  * `docs/coding-standards.md` asks that rope behaviour be tested independently of tree shape.
+  * `RopeStructuralOperationsSpec` and `RopeMetadataAndTraversalSpec` cover behaviour against hand-built fixtures, which
+  * can only exercise the shapes someone thought to write down. These properties generate the shapes instead, and state
+  * every expectation in terms of the `String` the rope was built from, so they assert what the rope should do rather
+  * than restating how it does it.
   */
 class RopePropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Matchers:
 

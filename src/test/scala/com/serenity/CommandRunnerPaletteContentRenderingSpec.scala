@@ -74,6 +74,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
         )
       )
     )
+
   "RendererEntryPoints.render" should "paint a themed command runner with descriptions, selection highlight, and visible search cursor" in {
     val commands = List(
       Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)),

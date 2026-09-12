@@ -9,7 +9,8 @@ import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Font configuration (family/size/scale/ligatures) and cursor configuration (colour, mode, info bar) round-tripping. */
+/** Font configuration (family/size/scale/ligatures) and cursor configuration (colour, mode, info bar) round-tripping.
+  */
 class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "ConfigManager" should "load and write font configuration including UI font family" in {

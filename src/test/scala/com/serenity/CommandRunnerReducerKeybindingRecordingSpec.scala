@@ -6,11 +6,12 @@ import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, KeyboardFidelityTier, Modifier}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer}
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** `CommandRunnerReducer`'s keymap-binding recording flow (double-tap detection, expiry, and the bare-modifier
-  * fidelity warning) -- split out of `CommandRunnerReducerSpec` to keep each file focused on one concern.
+/** `CommandRunnerReducer`'s keymap-binding recording flow (double-tap detection, expiry, and the bare-modifier fidelity
+  * warning) -- split out of `CommandRunnerReducerSpec` to keep each file focused on one concern.
   */
 class CommandRunnerReducerKeybindingRecordingSpec extends AnyFlatSpec with Matchers:
 

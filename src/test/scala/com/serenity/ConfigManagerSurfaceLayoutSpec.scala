@@ -7,8 +7,8 @@ import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Surface layout and display settings: command runner spacing, render FPS, text area insets, cursor info bar
-  * alpha, word wrap, pane headers, focused text body, contextual toolbar, and viewport sizing.
+/** Surface layout and display settings: command runner spacing, render FPS, text area insets, cursor info bar alpha,
+  * word wrap, pane headers, focused text body, contextual toolbar, and viewport sizing.
   */
 class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with OptionValues:
 

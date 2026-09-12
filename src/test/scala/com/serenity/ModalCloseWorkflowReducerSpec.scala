@@ -1,12 +1,15 @@
 package com.serenity
 
 import com.serenity.keystroke.events.*
+import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ModalEventReducer, WorkflowEffect}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class ModalCloseWorkflowReducerSpec extends AnyFlatSpec with Matchers:
+
+  given Balance = Balance.default
 
   "ModalEventReducer" should "cycle close workflow choices and queue close workflow submission on enter" in {
     val initialWorkflow = CloseWorkflowState(

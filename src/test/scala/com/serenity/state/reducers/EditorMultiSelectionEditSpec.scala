@@ -8,8 +8,7 @@ import org.scalatest.matchers.should.Matchers
 
 /** Coverage for `EditorEventReducer` dispatching a single edit event against every active *selection* at once:
   * inserting, pasting, indenting/unindenting, and deleting (character and word) each replace or act on all selected
-  * ranges together, then clear every selection (extracted from the former monolithic `EditorEventReducerSpec`,
-  * #1442).
+  * ranges together, then clear every selection (extracted from the former monolithic `EditorEventReducerSpec`, #1442).
   */
 class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
 

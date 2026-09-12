@@ -5,7 +5,15 @@ import java.awt.Font
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.{BufferId, CloseScope, CloseWorkflowChoice, CloseWorkflowState}
-import com.serenity.ui.layout.{CellMetrics, LayoutRect, ModalSurfaceComposition, OverlayRow, OverlayRowLayout, OverlaySegment, SurfaceFrameLayout}
+import com.serenity.ui.layout.{
+  CellMetrics,
+  LayoutRect,
+  ModalSurfaceComposition,
+  OverlayRow,
+  OverlayRowLayout,
+  OverlaySegment,
+  SurfaceFrameLayout
+}
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec

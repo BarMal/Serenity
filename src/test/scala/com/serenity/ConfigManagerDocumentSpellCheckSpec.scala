@@ -7,8 +7,8 @@ import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Document mode and markdown view settings, plus spell-check and other language-tools configuration and its
-  * schema validation.
+/** Document mode and markdown view settings, plus spell-check and other language-tools configuration and its schema
+  * validation.
   */
 class ConfigManagerDocumentSpellCheckSpec extends AnyFlatSpec with Matchers with OptionValues:
 

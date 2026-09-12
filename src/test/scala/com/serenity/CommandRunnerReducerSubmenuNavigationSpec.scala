@@ -6,12 +6,13 @@ import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer}
+import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** `CommandRunnerReducer`'s settings-submenu entry/exit -- drilling into a group via submit or search, popping back
-  * out via dismiss, and breadcrumb/ancestry tracking -- split out of `CommandRunnerReducerSpec` to keep each file
-  * focused on one concern.
+/** `CommandRunnerReducer`'s settings-submenu entry/exit -- drilling into a group via submit or search, popping back out
+  * via dismiss, and breadcrumb/ancestry tracking -- split out of `CommandRunnerReducerSpec` to keep each file focused
+  * on one concern.
   */
 class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matchers:
 

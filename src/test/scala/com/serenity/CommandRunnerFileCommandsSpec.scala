@@ -69,7 +69,6 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(Enter).unsafeRunSync()
 
-
   "Command runner" should "create and focus a new empty buffer for the new command" in {
     val stateManager = createStateManager()
     val initialState = stateManager.getCurrentState.unsafeRunSync()

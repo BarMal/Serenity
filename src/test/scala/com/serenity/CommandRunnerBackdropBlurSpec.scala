@@ -74,6 +74,7 @@ class CommandRunnerBackdropBlurSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
+
   "RendererEntryPoints.render" should "request backdrop blur for the floating overlay using the configured blur radius" in {
     val commands       = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val preConfigState = stateWithRunner(Theme.light, "op", commands)

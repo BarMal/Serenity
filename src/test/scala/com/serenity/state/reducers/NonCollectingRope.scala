@@ -1,6 +1,6 @@
 package com.serenity.state.reducers
 
-import com.serenity.rope.{Leaf, Rope}
+import com.serenity.rope.{Balance, Leaf, Rope}
 
 // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Node` tree
 // while itself extending the still-open `Leaf` purely to satisfy the type system -- every method that matters for
@@ -8,7 +8,7 @@ import com.serenity.rope.{Leaf, Rope}
 //
 // Shared across the "without materialising the whole buffer" test groups in this package (document comment
 // tracking, and the broader non-materialising-operations coverage) so the same double isn't redefined per file.
-final class NonCollectingRope(delegate: Rope) extends Leaf(delegate.collect()):
+final class NonCollectingRope(delegate: Rope)(using Balance) extends Leaf(delegate.collect()):
   override def weight: Int =
     delegate.weight
 
@@ -52,4 +52,4 @@ final class NonCollectingRope(delegate: Rope) extends Leaf(delegate.collect()):
     throw AssertionError("navigation should not materialise the whole buffer")
 
 object NonCollectingRope:
-  def apply(delegate: Rope): NonCollectingRope = new NonCollectingRope(delegate)
+  def apply(delegate: Rope)(using Balance): NonCollectingRope = new NonCollectingRope(delegate)

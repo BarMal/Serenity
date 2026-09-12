@@ -4,7 +4,7 @@ import _root_.io.circe.Json
 import _root_.io.circe.syntax.*
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.animation.{AnimationConfig, TransitionKind}
+import com.serenity.animation.TransitionKind
 import com.serenity.rope.Balance
 import com.serenity.session.given
 import com.serenity.session.{SessionBuffer, SessionFindResult, SessionFindState, SessionState}

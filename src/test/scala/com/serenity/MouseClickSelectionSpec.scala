@@ -387,4 +387,3 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
     buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
     buffer.editing.selections shouldBe Nil
   }
-
