@@ -16,6 +16,15 @@ class TuiCommandPaletteSpec extends TuiSpec:
         runner.selectedIndex
     }
 
+  private def selectedItemIsCommand(screenState: com.serenity.state.models.AppState): Option[Boolean] =
+    screenState.commandRunnerSurface.map(_.content).collect {
+      case SurfaceContent.CommandPalette(runner) =>
+        runner.selectedItem.exists {
+          case _: com.serenity.command.CommandSurfaceItem.CommandItem => true
+          case _                                                      => false
+        }
+    }
+
   "Ctrl+P" should "open the palette over the document, with its search field and key hints" in runTui() {
     for
       _ <- openCommandPalette
@@ -37,7 +46,9 @@ class TuiCommandPaletteSpec extends TuiSpec:
       some <- screen
       _ <- verify("filtered") { screen =>
         screen.containsText("search: line") shouldBe true
-        screen.containsText("Line Numbers") shouldBe true
+        // issue #1048: direct command matches ("Go to Line", "Toggle Line ...") now rank above settings-group
+        // breadcrumb matches, so a line-related command is what actually shows for this query.
+        screen.containsText("Toggle Line") shouldBe true
       }
     yield
       // Filtering must actually reduce what is offered, not merely reorder it.
@@ -67,11 +78,10 @@ class TuiCommandPaletteSpec extends TuiSpec:
     yield
       selectedIndex(first) shouldBe Some(0)
       selectedIndex(second) shouldBe Some(1)
-      // The palette lists one group of matches at a time, so moving the selection swaps the whole listing rather
-      // than re-highlighting a row in place.
-      before.containsText("Editor View") shouldBe true
-      after.containsText("Editor View") shouldBe false
-      after.containsText("Keymap") shouldBe true
+      // issue #1048: direct command matches now rank above settings-group breadcrumbs, so both the first and
+      // second result for "line" are commands (e.g. "Go to Line", "Toggle Line Numbers"), not settings groups.
+      selectedItemIsCommand(first) shouldBe Some(true)
+      selectedItemIsCommand(second) shouldBe Some(true)
       // Whatever it repaints, it must not disturb the document underneath.
       after.changedRows(before) should not contain 0
       after.statusBar shouldBe before.statusBar
@@ -106,18 +116,22 @@ class TuiCommandPaletteSpec extends TuiSpec:
     }
 
   "a mouse click on a palette row" should "activate that row, the same as selecting it and pressing Enter" in
-    runTui() {
+    runTui(TuiEnvironment.withFile("gutter check")) {
       for
+        // issue #1048: "line" now ranks the "Toggle Line Numbers" command above settings-group breadcrumbs, so
+        // clicking it (rather than the "Editor View" breadcrumb this used to fall back to) is what exercises
+        // "a click activates the row the same as Enter would".
         _      <- searchCommands("line")
         listed <- screen
-        row    = listed.rowOf("Editor View").getOrElse(fail("expected a group row for the filtered query"))
-        column = listed.rowText(row).indexOf("Editor View")
-        _ <- click(column + 1, row)
-        _ <- verify("navigated into the group") { screen =>
-          screen.containsText("Editor View > Text Display") shouldBe true
-          screen.containsText("Line Numbers") shouldBe true
-        }
-      yield ()
+        row    = listed.rowOf("Toggle Line").getOrElse(fail("expected the Toggle Line Numbers command row"))
+        column = listed.rowText(row).indexOf("Toggle Line")
+        before <- screen
+        _      <- click(column + 1, row)
+        after  <- screen
+        _ <- verifyState("config")(current => current.persisted.config.surfaceConfig.showLineNumbers shouldBe false)
+      yield
+        before.rowText(1).stripTrailing shouldBe " 1 gutter check"
+        after.rowText(1).stripTrailing shouldBe "gutter check"
     }
 
   "reopening the palette" should "start from a clean search rather than the previous query" in runTui() {

@@ -50,5 +50,11 @@ final case class Runtime(
     // it cannot move the peek. Both clear together whenever `cursorPeekAnchor` does.
     cursorPeekSession: CursorPeekState = CursorPeekState.empty,
     cursorPeekAnchor: Option[CursorPosition] = None,
-    cursorPeekResolvedAnchor: Option[ScreenPosition] = None
+    cursorPeekResolvedAnchor: Option[ScreenPosition] = None,
+    // issue #1048: MRU (most-recently-used) command tracking, keyed by `Command.name` and valued by an incrementing
+    // recency generation (see `CommandRunner.recordCommandUsage`) -- lives here, not on the transient `CommandRunner`
+    // itself, specifically so it survives the palette closing and reopening (`CommandRunner.empty.activate(...)` is
+    // reconstructed fresh on every open) within the same running session. Not persisted across restarts, matching
+    // this whole case class's contract.
+    commandUsage: Map[String, Int] = Map.empty
 )

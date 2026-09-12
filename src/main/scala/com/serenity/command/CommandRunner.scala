@@ -35,7 +35,13 @@ final case class CommandRunner(
     fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system,
     // The cursor info bar segments' actual current order, refreshed alongside `optionSelections` in `activate`/
     // `updateInputItems` -- threaded into `settingsGroups` so its reorder commands reflect it (issue #1298).
-    cursorInfoBarSegments: List[CursorInfoBarSegment] = Nil
+    cursorInfoBarSegments: List[CursorInfoBarSegment] = Nil,
+    // issue #1048: MRU (most-recently-used) tracking for palette commands -- keyed by `Command.name`, valued by an
+    // incrementing "recency generation" (higher = used more recently), bumped by `recordCommandUsage` whenever a
+    // command executes from the palette. A generation counter rather than wall-clock time: recency-*ordering* is all
+    // ranking needs, and it keeps this pure and IO-free. In-session only (not persisted across restarts) -- issue
+    // #1049's empty-query "recents" view is expected to read this same map, not a separate one.
+    commandUsage: Map[String, Int] = Map.empty
 ) extends CommandRunnerSubmenuEditing
     with CommandRunnerLifecycle
     with CommandRunnerSettingsSearch:
@@ -115,7 +121,10 @@ final case class CommandRunner(
   def updateSearchTerm(term: String)(using registry: CommandRegistry): CommandRunner =
     val filtered =
       if term.isEmpty then registry.getAllCommands
-      else registry.searchCommands(term, maxResults = 50)
+      // issue #1048: `searchCommands` already ranks by fuzzy relevance; re-sorting (stably) by recency on top of
+      // that lets a recently-used command float above an equally (or less) relevant one without ever displacing a
+      // clearly stronger match, since a `sortBy` is stable across ties in `-commandUsage`.
+      else registry.searchCommands(term, maxResults = 50).sortBy(command => -commandUsage.getOrElse(command.name, 0))
     val updatedState = CommandPaletteState(term, 0, filtered)
     val updatedSurface = surface match
       case CommandRunnerSurface.Palette(_)     => CommandRunnerSurface.Palette(updatedState)
@@ -133,6 +142,14 @@ final case class CommandRunner(
 
   def selectedCommand: Option[Command] =
     selectedItem.collect { case CommandSurfaceItem.CommandItem(command) => command }
+
+  /** issue #1048: record a command's execution for MRU ranking -- the new generation is always one past every
+    * generation recorded so far, so the command just run is always the most recent regardless of how many others
+    * have run before it.
+    */
+  def recordCommandUsage(name: String): CommandRunner =
+    val nextGeneration = commandUsage.values.maxOption.getOrElse(0) + 1
+    copy(commandUsage = commandUsage + (name -> nextGeneration))
 
   lazy val settingsGroups: List[CommandSurfaceItem.GroupItem] =
     CommandRunnerSettingsGroups.build(
