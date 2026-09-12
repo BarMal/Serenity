@@ -15,7 +15,8 @@ import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Split out of `LspManagerSpec` to keep that file under the architecture ratchet's line-count target -- this covers
-  * only the `documentTexts` mirror's behavior when a didChange notification fails to send (see `LspManager.sendDidChange`).
+  * only the `documentTexts` mirror's behavior when a didChange notification fails to send (see
+  * `LspManager.sendDidChange`).
   */
 class LspManagerDidChangeMirrorSpec extends AnyFlatSpec with Matchers:
 
@@ -54,7 +55,12 @@ class LspManagerDidChangeMirrorSpec extends AnyFlatSpec with Matchers:
           )
       managerFiber <- Resource.make(
         LspManager
-          .runWithProvider(Stream.fromQueueNoneTerminated(effects), event => events.update(_ :+ event), logger, provider)
+          .runWithProvider(
+            Stream.fromQueueNoneTerminated(effects),
+            event => events.update(_ :+ event),
+            logger,
+            provider
+          )
           .start
       )(_.cancel)
     yield Harness(effects, connection, managerFiber)
@@ -81,8 +87,8 @@ class LspManagerDidChangeMirrorSpec extends AnyFlatSpec with Matchers:
             _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 3)))
             change <- takeMessage(manager.connection)
             contentChange = change.hcursor.downField("params").downField("contentChanges").downArray
-            _ = contentChange.downField("rangeLength").as[Int].toOption shouldBe Some(0)
-            _ = contentChange.downField("text").as[String].toOption shouldBe Some("2")
+            _             = contentChange.downField("rangeLength").as[Int].toOption shouldBe Some(0)
+            _             = contentChange.downField("text").as[String].toOption shouldBe Some("2")
             _ <- manager.stop
           yield succeed
         }

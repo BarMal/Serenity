@@ -534,9 +534,9 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
             change <- takeMessage(manager.connection)
             _ = change.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didChange")
             contentChange = change.hcursor.downField("params").downField("contentChanges").downArray
-            _ = contentChange.downField("range").succeeded shouldBe true
-            _ = contentChange.downField("rangeLength").as[Int].toOption shouldBe Some(0)
-            _ = contentChange.downField("text").as[String].toOption shouldBe Some("2")
+            _             = contentChange.downField("range").succeeded shouldBe true
+            _             = contentChange.downField("rangeLength").as[Int].toOption shouldBe Some(0)
+            _             = contentChange.downField("text").as[String].toOption shouldBe Some("2")
             _ <- manager.stop
           yield succeed
         }
@@ -551,8 +551,8 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
             _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
             change <- takeMessage(manager.connection)
             contentChange = change.hcursor.downField("params").downField("contentChanges").downArray
-            _ = contentChange.downField("range").succeeded shouldBe false
-            _ = contentChange.downField("text").as[String].toOption shouldBe Some("object Foo2")
+            _             = contentChange.downField("range").succeeded shouldBe false
+            _             = contentChange.downField("text").as[String].toOption shouldBe Some("object Foo2")
             _ <- manager.stop
           yield succeed
         }
@@ -574,8 +574,8 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
             )
             change <- takeMessage(manager.connection)
             contentChange = change.hcursor.downField("params").downField("contentChanges").downArray
-            _ = contentChange.downField("rangeLength").as[Int].toOption shouldBe Some(0)
-            _ = contentChange.downField("text").as[String].toOption shouldBe Some("2")
+            _             = contentChange.downField("rangeLength").as[Int].toOption shouldBe Some(0)
+            _             = contentChange.downField("text").as[String].toOption shouldBe Some("2")
             _ <- manager.stop
           yield succeed
         }

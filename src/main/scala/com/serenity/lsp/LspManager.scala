@@ -299,14 +299,14 @@ object LspManager:
     }
 
   /** Sends `didChange` using whatever sync kind the connection negotiated during `initialize` (#1468): a range-based
-    * diff against the document's previous text for `Incremental`, the existing full-text notification for `Full`,
-    * and nothing at all for `None` -- a server that opted out of document sync should not be sent notifications for
-    * it regardless of how expensive skipping them is.
+    * diff against the document's previous text for `Incremental`, the existing full-text notification for `Full`, and
+    * nothing at all for `None` -- a server that opted out of document sync should not be sent notifications for it
+    * regardless of how expensive skipping them is.
     *
     * Returns whether the caller's `documentTexts` mirror may now advance to `text`. Under `Incremental` sync that
-    * mirror is the base the next diff is computed against, so if the notification failed to send, the server never
-    * saw this version -- advancing the mirror anyway would compute the next diff against text the server doesn't
-    * have, permanently desyncing client and server state.
+    * mirror is the base the next diff is computed against, so if the notification failed to send, the server never saw
+    * this version -- advancing the mirror anyway would compute the next diff against text the server doesn't have,
+    * permanently desyncing client and server state.
     */
   private def sendDidChange(
     connection: LspConnection,

@@ -27,8 +27,8 @@ class LspConnection private (
 ):
 
   /** The server's negotiated `textDocumentSync` capability, read off the `initialize` response during the handshake
-    * (see `initHandshake`). Defaults to `Full` -- this client's behavior before that capability was read at all --
-    * for any connection that never runs the real handshake (e.g. one built directly via `create` in tests).
+    * (see `initHandshake`). Defaults to `Full` -- this client's behavior before that capability was read at all -- for
+    * any connection that never runs the real handshake (e.g. one built directly via `create` in tests).
     */
   def syncKind: IO[TextDocumentSyncKind] = syncKindRef.get
 
@@ -165,11 +165,11 @@ object LspConnection:
     requestTimeout: FiniteDuration = DefaultRequestTimeout
   ): IO[LspConnection] =
     for
-      sendQueue   <- Queue.bounded[IO, Option[Json]](256)
-      idRef       <- Ref.of[IO, Long](0L)
-      pendingRef  <- Ref.of[IO, Map[RequestId, Deferred[IO, Either[Throwable, Json]]]](Map.empty)
-      notifQueue  <- Queue.bounded[IO, Option[Json]](256)
-      syncKindRef <- Ref.of[IO, TextDocumentSyncKind](TextDocumentSyncKind.Full)
+      sendQueue               <- Queue.bounded[IO, Option[Json]](256)
+      idRef                   <- Ref.of[IO, Long](0L)
+      pendingRef              <- Ref.of[IO, Map[RequestId, Deferred[IO, Either[Throwable, Json]]]](Map.empty)
+      notifQueue              <- Queue.bounded[IO, Option[Json]](256)
+      syncKindRef             <- Ref.of[IO, TextDocumentSyncKind](TextDocumentSyncKind.Full)
       failNextNotificationRef <- Ref.of[IO, Boolean](false)
     yield new LspConnection(
       languageId,

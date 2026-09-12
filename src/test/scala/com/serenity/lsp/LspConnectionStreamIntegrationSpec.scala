@@ -93,13 +93,13 @@ class LspConnectionStreamIntegrationSpec extends AnyFlatSpec with Matchers:
 
   it should "default to full-text sync when the server's initialize response doesn't declare textDocumentSync" in
     connectionResource()
-      .use { (_, conn) => conn.syncKind.map(_ shouldBe TextDocumentSyncKind.Full) }
+      .use((_, conn) => conn.syncKind.map(_ shouldBe TextDocumentSyncKind.Full))
       .timeout(testTimeout)
       .unsafeRunSync()
 
   it should "negotiate incremental sync from the server's initialize response" in
     connectionResource(incrementalInitResult)
-      .use { (_, conn) => conn.syncKind.map(_ shouldBe TextDocumentSyncKind.Incremental) }
+      .use((_, conn) => conn.syncKind.map(_ shouldBe TextDocumentSyncKind.Incremental))
       .timeout(testTimeout)
       .unsafeRunSync()
 

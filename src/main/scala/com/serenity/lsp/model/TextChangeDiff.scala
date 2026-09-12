@@ -3,10 +3,10 @@ package com.serenity.lsp.model
 import scala.annotation.tailrec
 
 /** Computes the minimal single-range edit between two full document snapshots, for LSP incremental sync
-  * (`TextDocumentContentChangeEvent`). Only the before/after text is available at the call site (the buffer layer
-  * hands `LspManager` a full new snapshot, not the edit operation itself), so the change is inferred as the smallest
-  * span outside the snapshots' common prefix and suffix -- the same technique most LSP clients use when they only
-  * have whole-buffer text to diff. Applying `text` to `oldText` in place of `range` reconstructs `newText` exactly.
+  * (`TextDocumentContentChangeEvent`). Only the before/after text is available at the call site (the buffer layer hands
+  * `LspManager` a full new snapshot, not the edit operation itself), so the change is inferred as the smallest span
+  * outside the snapshots' common prefix and suffix -- the same technique most LSP clients use when they only have
+  * whole-buffer text to diff. Applying `text` to `oldText` in place of `range` reconstructs `newText` exactly.
   */
 object TextChangeDiff:
 
