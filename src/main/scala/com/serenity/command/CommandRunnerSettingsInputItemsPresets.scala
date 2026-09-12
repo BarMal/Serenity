@@ -1,6 +1,8 @@
 package com.serenity.command
 
-/** UI-preset management input items (save, apply, overwrite, duplicate, rename, delete, reset). Split out of
+/** UI-preset management input items that inherently need a typed name (a new preset name, or a "Source -> New" pair) --
+  * save-as-new, duplicate, rename. Apply/Overwrite/Delete/Reset act on one *existing* preset and are built as pickers
+  * instead (`CommandRunnerSettingsItems.presetActionOptionItem`, issue #1060). Split out of
   * `CommandRunnerSettingsInputItems.build` to keep both under the architecture size targets -- see that object's doc.
   */
 private[command] object CommandRunnerSettingsInputItemsPresets:
@@ -16,30 +18,6 @@ private[command] object CommandRunnerSettingsInputItemsPresets:
         CommandRunnerSettingsTextParsing
           .nonEmptyText(text)
           .map(commandIntentArg => CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew(commandIntentArg))),
-      category = CommandCategory.Settings
-    ),
-    CommandSurfaceItem.InputItem(
-      id = "ui-preset-apply",
-      label = "Apply Preset",
-      hint = "Preset name",
-      currentValue = "",
-      kind = CommandSurfaceItem.InputKind.FreeText,
-      parse = text =>
-        CommandRunnerSettingsTextParsing
-          .nonEmptyText(text)
-          .map(commandIntentArg => CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset(commandIntentArg))),
-      category = CommandCategory.Settings
-    ),
-    CommandSurfaceItem.InputItem(
-      id = "ui-preset-overwrite",
-      label = "Overwrite Preset",
-      hint = "Existing custom preset name",
-      currentValue = "",
-      kind = CommandSurfaceItem.InputKind.FreeText,
-      parse = text =>
-        CommandRunnerSettingsTextParsing
-          .nonEmptyText(text)
-          .map(commandIntentArg => CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset(commandIntentArg))),
       category = CommandCategory.Settings
     ),
     CommandSurfaceItem.InputItem(
@@ -71,28 +49,4 @@ private[command] object CommandRunnerSettingsInputItemsPresets:
         },
       category = CommandCategory.Settings
     ),
-    CommandSurfaceItem.InputItem(
-      id = "ui-preset-delete",
-      label = "Delete Preset",
-      hint = "Preset name",
-      currentValue = "",
-      kind = CommandSurfaceItem.InputKind.FreeText,
-      parse = text =>
-        CommandRunnerSettingsTextParsing
-          .nonEmptyText(text)
-          .map(commandIntentArg => CommandIntent.UiPresets(UiPresetsIntent.DeleteUiPreset(commandIntentArg))),
-      category = CommandCategory.Settings
-    ),
-    CommandSurfaceItem.InputItem(
-      id = "ui-preset-reset",
-      label = "Reset Preset",
-      hint = "Built-in preset name",
-      currentValue = "",
-      kind = CommandSurfaceItem.InputKind.FreeText,
-      parse = text =>
-        CommandRunnerSettingsTextParsing
-          .nonEmptyText(text)
-          .map(commandIntentArg => CommandIntent.UiPresets(UiPresetsIntent.ResetUiPreset(commandIntentArg))),
-      category = CommandCategory.Settings
-    )
   )

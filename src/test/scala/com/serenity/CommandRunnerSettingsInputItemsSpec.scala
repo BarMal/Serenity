@@ -85,9 +85,9 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
     inputById(items, "ui-preset-save-as-new").parse("Focus") shouldBe Some(
       CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Focus"))
     )
-    inputById(items, "ui-preset-overwrite").parse("Focus") shouldBe Some(
-      CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset("Focus"))
-    )
+    // issue #1060: "ui-preset-overwrite" is a picker (`CommandRunnerSettingsItems.presetActionOptionItem`) built
+    // directly in `CommandRunnerSettingsGroups`, not a typed InputItem from this flat builder.
+    items.map(_.id) should not contain "ui-preset-overwrite"
     inputById(items, "ui-preset-rename").parse("Focus -> Review") shouldBe
       Some(CommandIntent.UiPresets(UiPresetsIntent.RenameUiPreset("Focus", "Review")))
     inputById(items, "ui-preset-rename").parse("Focus") shouldBe None
