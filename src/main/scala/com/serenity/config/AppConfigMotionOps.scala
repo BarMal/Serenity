@@ -194,8 +194,18 @@ object AppConfigMotionOps:
     def withCommandRunnerVisibleRows(rows: Option[Int]): AppConfig =
       appConfig.withSurfaceConfig(appConfig.surfaceConfig.copy(commandRunnerVisibleRows = rows))
 
-    def withCommandRunnerItemGapRows(rows: Double): AppConfig =
+    def withCommandRunnerItemGapRows(rows: Option[Double]): AppConfig =
       appConfig.withSurfaceConfig(appConfig.surfaceConfig.copy(commandRunnerItemGapRows = rows))
+
+    /** issue #1046: the one place `commandRunnerItemGapRows` resolves against the current interface density -- an
+      * explicit override (from an old `command_runner.item_gap_rows` config value) wins; otherwise it falls back to
+      * that density's own [[InterfaceDensityMetrics.itemGapRows]], the same "one density control" every other command
+      * palette row-spacing/height knob already falls back to.
+      */
+    def effectiveCommandRunnerItemGapRows: Double =
+      appConfig.surfaceConfig.commandRunnerItemGapRows.getOrElse(
+        InterfaceDensityMetrics.forDensity(appConfig.interfaceDensity).itemGapRows
+      )
 
     def withCommandRunnerCursorGapRows(rows: Option[Double]): AppConfig =
       appConfig.withSurfaceConfig(appConfig.surfaceConfig.copy(commandRunnerCursorGapRows = rows))

@@ -191,7 +191,7 @@ enum MotionIntent:
   case SetCommandRunnerAnimation(animation: Option[AnimationConfig])
   case SetUiAnimation(animation: Option[AnimationConfig])
   case SetCommandRunnerVisibleRows(rows: Option[Int])
-  case SetCommandRunnerItemGapRows(rows: Double)
+  case SetCommandRunnerItemGapRows(rows: Option[Double])
   case SetCommandRunnerCursorGapRows(rows: Option[Double])
   case SetEditorInsertionTransitionKind(kind: TransitionKind)
   case SetCommandRunnerTransitionKind(kind: TransitionKind)

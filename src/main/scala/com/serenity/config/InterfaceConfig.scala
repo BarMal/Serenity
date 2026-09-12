@@ -25,7 +25,11 @@ final case class InterfaceDensityMetrics(
     overlayGapRows: Int,
     commandSurfaceMaxHeight: Int,
     commandSurfaceMinHeight: Int,
-    commandSurfaceVerticalPadding: Int
+    commandSurfaceVerticalPadding: Int,
+    // issue #1046: the command palette's per-item row spacing, unified onto the same one density control as
+    // `commandSurfaceMaxHeight`/`overlayGapRows` rather than a separate `command_runner.item_gap_rows` knob that
+    // defaulted to a flat 0.0 regardless of density.
+    itemGapRows: Double
 )
 
 object InterfaceDensityMetrics:
@@ -38,7 +42,8 @@ object InterfaceDensityMetrics:
           overlayGapRows = 0,
           commandSurfaceMaxHeight = 6,
           commandSurfaceMinHeight = 3,
-          commandSurfaceVerticalPadding = 2
+          commandSurfaceVerticalPadding = 2,
+          itemGapRows = 0.0
         )
       case InterfaceDensity.Comfortable =>
         InterfaceDensityMetrics(
@@ -46,7 +51,8 @@ object InterfaceDensityMetrics:
           overlayGapRows = 1,
           commandSurfaceMaxHeight = 10,
           commandSurfaceMinHeight = 6,
-          commandSurfaceVerticalPadding = 3
+          commandSurfaceVerticalPadding = 3,
+          itemGapRows = 0.0
         )
       case InterfaceDensity.Spacious =>
         InterfaceDensityMetrics(
@@ -54,7 +60,8 @@ object InterfaceDensityMetrics:
           overlayGapRows = 2,
           commandSurfaceMaxHeight = 12,
           commandSurfaceMinHeight = 8,
-          commandSurfaceVerticalPadding = 4
+          commandSurfaceVerticalPadding = 4,
+          itemGapRows = 1.0
         )
 
 final case class InterfaceConfig(

@@ -22,6 +22,28 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     SurfaceConfig(rendererFrameStateCacheCapacity = 128).normalized.rendererFrameStateCacheCapacity shouldBe 128
   }
 
+  // issue #1046: `commandRunnerItemGapRows` is now `Option[Double]`, falling back to interface density's own
+  // default (via `AppConfig.effectiveCommandRunnerItemGapRows`) rather than a flat 0.0 -- an explicit override still
+  // clamps to the configured bounds exactly as `commandRunnerCursorGapRows` already does, and `None` stays `None`.
+  it should "clamp an explicit commandRunnerItemGapRows override and leave an absent one as None" in {
+    SurfaceConfig(commandRunnerItemGapRows = Some(100.0)).normalized.commandRunnerItemGapRows shouldBe
+      Some(AppConfig.MaxCommandRunnerItemGapRows)
+    SurfaceConfig(commandRunnerItemGapRows = Some(-5.0)).normalized.commandRunnerItemGapRows shouldBe
+      Some(AppConfig.MinCommandRunnerItemGapRows)
+    SurfaceConfig(commandRunnerItemGapRows = None).normalized.commandRunnerItemGapRows shouldBe None
+  }
+
+  it should "fall back to interface density's item gap rows when no override is configured" in {
+    val config = AppConfig.default.withInterfaceDensity(InterfaceDensity.Spacious)
+
+    config.surfaceConfig.commandRunnerItemGapRows shouldBe None
+    config.effectiveCommandRunnerItemGapRows shouldBe
+      InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).itemGapRows
+
+    val overridden = config.withCommandRunnerItemGapRows(Some(4.0))
+    overridden.effectiveCommandRunnerItemGapRows shouldBe 4.0
+  }
+
   "SurfaceConfig" should "own the motion-hierarchy schema metadata" in {
     // #1406: material, post-processing, display, command-runner, text-area and viewport keys used to be duplicated
     // here too, but `ConfigRegistry` already owned parsing/validation/writing for every one of them end-to-end, so

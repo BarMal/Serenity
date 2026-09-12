@@ -3,6 +3,7 @@ package com.serenity
 import java.nio.file.Files
 
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -37,7 +38,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.surfaceConfig.commandRunnerItemGapRows shouldBe 1
+    config.surfaceConfig.commandRunnerItemGapRows shouldBe Some(1)
     config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(3)
     ConfigManager.configToString(config) should include("command_runner.item_gap_rows = 1")
     ConfigManager.configToString(config) should include("command_runner.cursor_gap_rows = 3")
@@ -55,12 +56,27 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.surfaceConfig.commandRunnerItemGapRows shouldBe 0.25
+    config.surfaceConfig.commandRunnerItemGapRows shouldBe Some(0.25)
     config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(0.5)
     config.uiElementGap shouldBe 0.75
     ConfigManager.configToString(config) should include("command_runner.item_gap_rows = 0.25")
     ConfigManager.configToString(config) should include("command_runner.cursor_gap_rows = 0.5")
     ConfigManager.configToString(config) should include("ui.element_gap = 0.75")
+  }
+
+  // issue #1046: item gap rows collapses onto the one "Interface Density" control -- with no explicit
+  // `command_runner.item_gap_rows` override in the config file, the effective spacing now follows density instead
+  // of a flat 0.0 regardless of density.
+  it should "derive command runner item gap rows from interface density when no override is configured" in {
+    val configFile = Files.createTempFile("serenity-command-density-spacing-config", ".conf")
+    Files.writeString(configFile, "interface.density = spacious\n")
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.surfaceConfig.commandRunnerItemGapRows shouldBe None
+    config.effectiveCommandRunnerItemGapRows shouldBe
+      InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).itemGapRows
+    ConfigManager.configToString(config) should include("command_runner.item_gap_rows = auto")
   }
 
   it should "load and write render FPS targets" in {

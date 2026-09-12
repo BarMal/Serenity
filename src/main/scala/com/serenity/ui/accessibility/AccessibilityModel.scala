@@ -1,6 +1,7 @@
 package com.serenity.ui.accessibility
 
 import com.serenity.command.CommandSurfaceItem
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.InterfaceDensity
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -178,7 +179,7 @@ object AccessibilitySnapshot:
       selectedIndex = runner.selectedIndex,
       hasHeader = true,
       hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
-      itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+      itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
       itemTargetRows = targetRows
     )
     val visibleItems = itemWindow.slice(items)
@@ -187,7 +188,7 @@ object AccessibilitySnapshot:
         visibleItems.size,
         hasHeader = true,
         hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
-        itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+        itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
         itemTargetRows = targetRows
       )
       .collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) => index -> y }
@@ -230,7 +231,7 @@ object AccessibilitySnapshot:
       menu.selectedIndex,
       hasHeader = true,
       hasFooter = menu.items.nonEmpty,
-      itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+      itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
       itemTargetRows = targetRows
     )
     val bounds = itemBounds(
@@ -238,7 +239,7 @@ object AccessibilitySnapshot:
       window.rowCount,
       hasHeader = true,
       hasFooter = menu.items.nonEmpty,
-      state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+      state.persisted.config.effectiveCommandRunnerItemGapRows,
       targetRows
     )
     window.slice(menu.items).zip(bounds).zipWithIndex.map {

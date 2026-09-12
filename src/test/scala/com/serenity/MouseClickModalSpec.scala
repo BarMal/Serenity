@@ -387,7 +387,9 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
     val bufferId = sm.bufferManager.createBuffer("hello\nworld", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState(state =>
-      state.copy(persisted = state.persisted.copy(config = state.persisted.config.withCommandRunnerItemGapRows(1)))
+      state.copy(persisted =
+        state.persisted.copy(config = state.persisted.config.withCommandRunnerItemGapRows(Some(1)))
+      )
     ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     sm.applyEvent(MouseClick(18, 2, button = MouseButton.Secondary)).unsafeRunSync()

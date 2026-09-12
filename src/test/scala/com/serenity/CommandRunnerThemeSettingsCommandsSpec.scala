@@ -231,7 +231,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-item-gap-rows",
           "Set command runner item gaps.",
-          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerItemGapRows(1))),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerItemGapRows(Some(1)))),
           CommandCategory.Settings
         )
       )
@@ -248,7 +248,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     val config = stateManager.getCurrentState.unsafeRunSync().persisted.config
-    config.surfaceConfig.commandRunnerItemGapRows shouldBe 1
+    config.surfaceConfig.commandRunnerItemGapRows shouldBe Some(1)
     config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(3)
   }
 

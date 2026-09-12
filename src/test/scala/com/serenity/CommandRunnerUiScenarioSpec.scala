@@ -48,7 +48,7 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "navigate nested settings, edit a decimal, and preserve configured row spacing" in {
-    val config = AppConfig.default.withCommandRunnerItemGapRows(1)
+    val config = AppConfig.default.withCommandRunnerItemGapRows(Some(1))
     val driver = UiScenarioDriver.create("command-runner-settings", initialConfig = config).unsafeRunSync()
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
     "blur radius".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())

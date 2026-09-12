@@ -1,5 +1,6 @@
 package com.serenity.ui.layout
 
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.InterfaceDensityMetrics
 import com.serenity.state.models.*
 
@@ -583,7 +584,7 @@ object EditorLayoutContract:
   private def itemGapRowsFor(content: SurfaceContent, state: AppState): Double =
     content match
       case SurfaceContent.CommandPalette(_) | SurfaceContent.ContextMenu(_) =>
-        state.persisted.config.surfaceConfig.commandRunnerItemGapRows
+        state.persisted.config.effectiveCommandRunnerItemGapRows
       case SurfaceContent.ContextualToolbar(_) =>
         state.persisted.config.uiElementGap
       case SurfaceContent.GhostOverlay(originalContent, _) =>

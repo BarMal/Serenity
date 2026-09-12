@@ -77,3 +77,11 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
     ConfigRegistry.rejects("ui.corner_radius", "14").shouldBe(false)
     ConfigRegistry.rejects("ui.outline.thickness", "").shouldBe(true)
   }
+
+  // issue #1046: command palette item spacing is now one of the metrics interface density itself governs, alongside
+  // command surface min/max height and the overlay gap, rather than a separate flat-default knob.
+  it should "scale command palette item gap rows with interface density" in {
+    InterfaceDensityMetrics.forDensity(InterfaceDensity.Compact).itemGapRows shouldBe 0.0
+    InterfaceDensityMetrics.forDensity(InterfaceDensity.Comfortable).itemGapRows shouldBe 0.0
+    InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).itemGapRows shouldBe 1.0
+  }

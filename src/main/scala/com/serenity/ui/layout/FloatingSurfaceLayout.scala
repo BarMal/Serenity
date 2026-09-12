@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
 import com.serenity.config.{AppConfig, InterfaceDensityMetrics}
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.state.models.*
 
 /** Rect, size and cursor-anchor resolution for a single floating surface -- both the live, cursor-tracking path and the
@@ -236,7 +237,7 @@ object FloatingSurfaceLayout:
             hasHeader = true,
             hasFooter = true,
             borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
-            itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+            itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
             itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
           )
         )
@@ -285,7 +286,7 @@ object FloatingSurfaceLayout:
           hasHeader = true,
           hasFooter = menu.items.nonEmpty,
           borderCells = SurfaceFrameLayout.borderCellsFor(content),
-          itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+          itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
           itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity)
         )
       case SurfaceContent.CommentLens(lens) =>

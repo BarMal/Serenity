@@ -137,6 +137,8 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "ui-shadows",
       "blur-radius"
     )
+    // issue #1046: command-runner visible-rows/item-gap-rows/cursor-gap-rows are no longer separate rows here --
+    // Interface Density above is the one control governing all three now.
     nestedGroup("settings-interface-layout").label shouldBe "Interface Layout"
     nestedGroup("settings-interface-layout").children.map(_.id) shouldBe List(
       "interface-density",
@@ -144,10 +146,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "command-runner-key-hints",
       "ui-element-gap",
       "ui-corner-radius",
-      "ui-outline-thickness",
-      "command-runner-visible-rows",
-      "command-runner-item-gap-rows",
-      "command-runner-cursor-gap-rows"
+      "ui-outline-thickness"
     )
     nestedGroup("settings-rendering").children.map(_.id) shouldBe
       List("render-fps", "render-damage-granularity")
@@ -309,25 +308,21 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "surface command runner visible rows as a typed interface setting" in {
+  // issue #1046: command-runner visible-rows/item-gap-rows/cursor-gap-rows are no longer separate settings rows --
+  // Interface Density is the one control that now governs command palette row height/spacing. The underlying config
+  // keys still parse as explicit overrides (`ConfigManagerSurfaceLayoutSpec`), they just aren't editable here.
+  it should "not surface command runner visible/item-gap/cursor-gap rows as separate interface settings" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withCommandRunnerVisibleRows(Some(9)))
 
     val interfaceGroup = groupByIdRecursive(runner.settingsGroups, "settings-interface-layout")
-    val input = interfaceGroup.children
-      .collectFirst { case item: CommandSurfaceItem.InputItem if item.id == "command-runner-visible-rows" => item }
-      .getOrElse(fail("missing command runner visible rows input"))
 
-    input.currentValue shouldBe "9"
-    input.parse("12") shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(Some(12))))
-    )
-    input.parse("auto") shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(None)))
-    )
-    input.parse("0") shouldBe None
+    val ids = interfaceGroup.children.map(_.id)
+    ids should not contain "command-runner-visible-rows"
+    ids should not contain "command-runner-item-gap-rows"
+    ids should not contain "command-runner-cursor-gap-rows"
   }
 
   it should "surface render FPS target as a rendering setting" in {

@@ -4,6 +4,7 @@ import java.awt.Font
 import java.util.LinkedHashMap
 
 import com.serenity.config.{AppConfig, CursorInfoBarPlacement, CursorInfoBarSegment, InterfaceDensity, TextAreaInsets}
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.RichTextDocument
 import com.serenity.rope.Rope
@@ -161,7 +162,7 @@ private[manager] object MouseTargetLayoutKey:
       cursorInfoBarSegments = state.persisted.config.cursorInfoBarSegments,
       cursorInfoBarPlacement = state.persisted.config.cursorInfoBarPlacement,
       commandRunnerVisibleRows = state.persisted.config.surfaceConfig.commandRunnerVisibleRows,
-      commandRunnerItemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+      commandRunnerItemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
       commandRunnerCursorGapRows = state.persisted.config.surfaceConfig.commandRunnerCursorGapRows,
       layoutState = state.persisted.layout,
       focus = state.persisted.focus,
