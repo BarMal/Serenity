@@ -135,17 +135,19 @@ object TuiRuntime:
     * `TerminalShell.KeyboardProtocolTier` is this method's only caller outside `ui.tui`, kept from leaking into
     * `AppState`/`CommandRunner` themselves so neither depends on the terminal-negotiation package.
     *
-    * `Legacy` folds into [[KeyboardFidelityTier.ModifyOtherKeys]] rather than a dedicated case: no CSI-u sequence of
-    * either shape ever arrives under `Legacy`, so it is strictly less capable than a confirmed `ModifyOtherKeys`
-    * terminal, but `KeyboardFidelityTier` (and the recording-time warning built on it, `CommandRunnerReducer`) only
-    * distinguishes "bare-modifier bindings work" from "they don't" -- ordinary combos not decoding either is a
-    * pre-existing gap this tier-confirmation follow-up doesn't newly introduce, and widening `KeyboardFidelityTier`
-    * itself is out of scope here.
+    * `Legacy` and `Win32Input` (#1320) both fold into [[KeyboardFidelityTier.ModifyOtherKeys]] rather than a
+    * dedicated case: `Win32Input` decodes ordinary combos (including, notably, Ctrl+Backspace) with full modifier
+    * fidelity, same as a confirmed `ModifyOtherKeys` terminal, but reports no bare-modifier press/release event of its
+    * own (`TerminalInputDecoder.decodeWin32Input`'s doc), so it belongs at the same fidelity tier for exactly the
+    * reason `Legacy` does -- `KeyboardFidelityTier` (and the recording-time warning built on it,
+    * `CommandRunnerReducer`) only distinguishes "bare-modifier bindings work" from "they don't", and widening
+    * `KeyboardFidelityTier` itself is out of scope here.
     */
   private[tui] def keyboardFidelityTier(tier: TerminalShell.KeyboardProtocolTier): KeyboardFidelityTier =
     tier match
       case TerminalShell.KeyboardProtocolTier.Kitty           => KeyboardFidelityTier.Full
       case TerminalShell.KeyboardProtocolTier.ModifyOtherKeys => KeyboardFidelityTier.ModifyOtherKeys
+      case TerminalShell.KeyboardProtocolTier.Win32Input      => KeyboardFidelityTier.ModifyOtherKeys
       case TerminalShell.KeyboardProtocolTier.Legacy          => KeyboardFidelityTier.ModifyOtherKeys
 
   /** Holds the one [[TerminalRenderSurface]] live for the current viewport size, rebuilding it (and so resetting its

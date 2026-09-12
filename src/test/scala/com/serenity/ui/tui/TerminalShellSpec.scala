@@ -385,6 +385,73 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
       countOccurrences(written, formatOtherKeysDisable) shouldBe 1
     }
 
+  // ===Windows `win32-input-mode` fallback (#1320): when neither the kitty nor the modifyOtherKeys negotiation
+  // confirms, and the shell is told it is running on Windows, one further fallback pushes `CSI ?9001h` and reports
+  // `Win32Input` rather than falling all the way to `Legacy` -- the case reported live on Windows Terminal, which
+  // answered neither query.===
+
+  private val win32InputModeEnable  = s"$esc[?9001h"
+  private val win32InputModeDisable = s"$esc[?9001l"
+
+  "acquiring the shell on Windows against a terminal that answers neither the kitty nor the modifyOtherKeys queries" should
+    "push win32-input-mode and report the Win32Input tier, rather than falling back to Legacy" in {
+      val harness = dumbTerminal()
+
+      val tier = TerminalShell
+        .forTerminal(harness.terminal, osName = "Windows 11")
+        .use(shell => IO(shell.keyboardProtocolTier))
+        .unsafeRunSync()
+
+      tier shouldBe TerminalShell.KeyboardProtocolTier.Win32Input
+      val written = harness.written
+      written should include(modifyOtherKeysDisable)
+      written should include(formatOtherKeysDisable)
+      written should include(win32InputModeEnable)
+    }
+
+  "acquiring the shell off Windows against a terminal that answers neither query" should
+    "still fall back to the Legacy tier and never push win32-input-mode" in {
+      val harness = dumbTerminal()
+
+      val tier = TerminalShell
+        .forTerminal(harness.terminal, osName = "Linux")
+        .use(shell => IO(shell.keyboardProtocolTier))
+        .unsafeRunSync()
+
+      tier shouldBe TerminalShell.KeyboardProtocolTier.Legacy
+      harness.written should not include win32InputModeEnable
+    }
+
+  "releasing a Win32Input-tier shell on clean quit" should "disable win32-input-mode" in {
+    val harness = dumbTerminal()
+
+    TerminalShell.forTerminal(harness.terminal, osName = "Windows 11").use(_ => IO.unit).unsafeRunSync()
+
+    harness.written should include(win32InputModeDisable)
+  }
+
+  "releasing a Win32Input-tier shell after an escaping IO.raiseError" should "still disable win32-input-mode" in {
+    val harness = dumbTerminal()
+    val boom    = new RuntimeException("boom")
+
+    TerminalShell
+      .forTerminal(harness.terminal, osName = "Windows 11")
+      .use(_ => IO.raiseError[Unit](boom))
+      .attempt
+      .unsafeRunSync()
+
+    harness.written should include(win32InputModeDisable)
+  }
+
+  "TerminalShell.isWindows" should "recognize common Windows os.name values and reject others" in {
+    TerminalShell.isWindows("Windows 11") shouldBe true
+    TerminalShell.isWindows("Windows 10") shouldBe true
+    TerminalShell.isWindows("windows 11") shouldBe true // case-insensitive, matching SwingWindowChromeSupport's forOs
+    TerminalShell.isWindows("Linux") shouldBe false
+    TerminalShell.isWindows("Mac OS X") shouldBe false
+    TerminalShell.isWindows("") shouldBe false
+  }
+
   private def countOccurrences(haystack: String, needle: String): Int =
     @annotation.tailrec
     def loop(from: Int, count: Int): Int =
