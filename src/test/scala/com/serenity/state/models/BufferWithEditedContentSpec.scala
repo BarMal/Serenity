@@ -9,7 +9,8 @@ import org.scalatest.matchers.should.Matchers
   * `EditorEventReducer`. It had already drifted before centralisation: `applyTrackedEdits` carried its recomputed
   * `richTextDocument` forward while `applyMergedDeletionEdits` silently dropped it (and left stale
   * `multiCursorVerticalStates` in place). This spec pins the corrected, uniform behaviour directly on `Buffer`; the
-  * accompanying `EditorEventReducerSpec` regression test proves the reducer's merged-deletion path also has it.
+  * accompanying `EditorDocumentCommentTrackingSpec` regression test proves the reducer's merged-deletion path also has
+  * it.
   */
 class BufferWithEditedContentSpec extends AnyFlatSpec with Matchers:
 

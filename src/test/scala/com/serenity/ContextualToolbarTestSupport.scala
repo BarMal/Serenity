@@ -9,7 +9,8 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import org.scalatest.matchers.should.Matchers
 
-/** Shared fixtures for [[ContextualToolbarSpec]] (state and interaction behaviour) and [[ContextualToolbarLayoutSpec]]
+/** Shared fixtures for [[ContextualToolbarPlacementSpec]], [[ContextualToolbarDetailSpec]], [[ContextualToolbarMouseSpec]],
+  * and [[ContextualToolbarDisplaySpec]] (state and interaction behaviour) and [[ContextualToolbarLayoutSpec]]
   * (cell-space geometry and hit-testing). Both drive the toolbar through a real `StateManager` because the item list
   * itself is state-derived; the split between the two specs is which half of
   * `ContextualToolbar`/`ContextualToolbarLayout` each test exercises directly.
