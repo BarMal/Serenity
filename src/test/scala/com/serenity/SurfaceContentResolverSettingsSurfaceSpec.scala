@@ -68,7 +68,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
         surface = CommandRunnerSurface.Settings(drilled =
           Some(
             SettingsSurfaceState(
-              SettingsPage.Group("settings-preset-fonts"),
+              SettingsPage.Group("settings-preset-prose-font"),
               List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
             )
           )
@@ -82,8 +82,8 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
     )
 
     val header = resolved.header.getOrElse(fail("Expected breadcrumb header"))
-    header.plainText shouldBe "Settings > UI Presets > Edit Preset: Writing > Fonts"
-    header.segments.map(_.text) shouldBe List("Settings >", "UI Presets >", "Edit Preset: Writing >", "Fonts")
+    header.plainText shouldBe "Settings > UI Presets > Edit Preset: Writing > Prose Font"
+    header.segments.map(_.text) shouldBe List("Settings >", "UI Presets >", "Edit Preset: Writing >", "Prose Font")
     header.segments.map(_.selected) shouldBe List(true, true, true, false)
   }
 
@@ -116,14 +116,48 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
     resolved.rows.find(_.selected).map(_.plainText) shouldBe Some("Document Writing")
   }
 
-  it should "resolve preset font submenu as grouped typography rows" in {
+  // issue #1058: "Fonts" (Editor/Code/UI Typography) is gone -- editing a preset's typography now drills straight
+  // into the same canonical Prose/Code/UI Font groups the top-level Typography settings use, each holding its own
+  // family picker, ligatures toggle, and size input directly, rather than one extra wrapping level per font family.
+  it should "resolve preset prose font submenu as the canonical font family, ligature, and size rows" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
         surface = CommandRunnerSurface.Settings(drilled =
           Some(
             SettingsSurfaceState(
-              SettingsPage.Group("settings-preset-fonts"),
+              SettingsPage.Group("settings-preset-prose-font"),
+              List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
+            )
+          )
+        )
+      )
+
+    val resolved = SurfaceContentResolver.resolve(
+      SurfaceContent.CommandPalette(runner),
+      LayoutRect(0, 0, 80, 20),
+      SurfaceRenderMode.Floating
+    )
+
+    resolved.rows.flatMap(_.segments.headOption.map(_.text)) should contain allOf (
+      "Text Font",
+      "Prose Ligatures",
+      "Prose Font Size"
+    )
+  }
+
+  // issue #1057: Theme Chooser/Creator/Toggle/Reload are one-shot actions with no preset-scoped value of their own,
+  // so they are ordinary CommandRegistry commands, not part of this settings subtree.
+  // issue #1058: "Theme & Surface > Surface Material" is gone -- editing a preset's surface appearance now drills
+  // straight into the same canonical Surface Appearance group the top-level Settings screen uses.
+  it should "resolve preset surface appearance submenu as the canonical surface appearance rows" in {
+    val runner = CommandRunner.empty
+      .activate(CommandRegistry.default, AppConfig.default)
+      .copy(
+        surface = CommandRunnerSurface.Settings(drilled =
+          Some(
+            SettingsSurfaceState(
+              SettingsPage.Group("settings-preset-surface-appearance"),
               List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
             )
           )
@@ -136,48 +170,19 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       SurfaceRenderMode.Floating
     )
 
-    val groupRows = resolved.rows.filter(_.leadingPadding == 0)
-    groupRows.map(_.plainText) shouldBe List("Editor Typography", "Code Typography", "UI Typography")
-    groupRows.map(_.segments.map(_.text)) shouldBe List(
-      List("Editor Typography", "Prose editor family, size, and ligatures"),
-      List("Code Typography", "Code editor family, size, and ligatures"),
-      List("UI Typography", "Interface family, size, and ligatures")
+    resolved.rows.flatMap(_.segments.headOption.map(_.text)) shouldBe List(
+      "Background Style",
+      "Material Preset",
+      "Post-processing",
+      "Menu & Panel Shadows",
+      "Blur Radius"
     )
-    resolved.footer.map(_.plainText) shouldBe Some("Navigate • Open • Back • Dismiss • 1/3")
   }
 
-  // issue #1057: this used to also show a "Theme Selection" row -- Theme Chooser/Creator/Toggle/Reload were one-shot
-  // actions with no preset-scoped value of their own, so they are ordinary CommandRegistry commands now, not part
-  // of this settings subtree; only Surface Material remains.
-  it should "resolve preset theme submenu as a single surface material row" in {
-    val runner = CommandRunner.empty
-      .activate(CommandRegistry.default, AppConfig.default)
-      .copy(
-        surface = CommandRunnerSurface.Settings(drilled =
-          Some(
-            SettingsSurfaceState(
-              SettingsPage.Group("settings-preset-theme"),
-              List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
-            )
-          )
-        )
-      )
-
-    val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
-      LayoutRect(0, 0, 80, 10),
-      SurfaceRenderMode.Floating
-    )
-
-    val groupRows = resolved.rows.filter(_.leadingPadding == 0)
-    groupRows.map(_.plainText) shouldBe List("Surface Material")
-    groupRows.map(_.segments.map(_.text)) shouldBe List(
-      List("Surface Material", "Background, material, and blur")
-    )
-    resolved.footer.map(_.plainText) shouldBe Some("Navigate • Open • Back • Dismiss • 1/1")
-  }
-
-  it should "resolve preset document defaults submenu as grouped document, preview, and spelling rows" in {
+  // issue #1058: "Document Defaults > New Documents/Markdown Preview/Spelling" is gone -- editing a preset's document
+  // defaults now drills straight into the same canonical Document Defaults group (default mode + Markdown view);
+  // Spelling is now its own sibling page (`settings-preset-spellcheck`), matching the top-level Document Writing tree.
+  it should "resolve preset document defaults submenu as the canonical document default rows" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
@@ -197,14 +202,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       SurfaceRenderMode.Floating
     )
 
-    val groupRows = resolved.rows.filter(_.leadingPadding == 0)
-    groupRows.map(_.plainText) shouldBe List("New Documents", "Markdown Preview", "Spelling")
-    groupRows.map(_.segments.map(_.text)) shouldBe List(
-      List("New Documents", "Default mode for new buffers"),
-      List("Markdown Preview", "Source, split preview, or inline lens"),
-      List("Spelling", "Enable, languages, dictionaries, accepted words")
-    )
-    resolved.footer.map(_.plainText) shouldBe Some("Navigate • Open • Back • Dismiss • 1/3")
+    resolved.rows.flatMap(_.segments.headOption.map(_.text)) shouldBe List("Default Document", "Markdown View")
   }
 
   it should "expand the selected preset group's own children inline as the capped group preview" in {
