@@ -112,3 +112,51 @@ class TextEditingSpec extends AnyFlatSpec with Matchers:
     TextEditing.nextGraphemeBoundary(text, 0) shouldBe 1
     TextEditing.previousGraphemeBoundary(text, 1) shouldBe 0
   }
+
+  // Dedicated specs for the segmentation classes #1277's ICU4J migration is meant to fix -- each of these is a case
+  // where a codepoint-class-only walk (the pre-migration hand-rolled implementation) cannot agree with real Unicode
+  // UAX#29 extended grapheme clusters, verified directly against ICU4J before writing these expectations.
+
+  it should "join a full Hangul syllable's jamo (choseong+jungseong+jongseong) into one grapheme cluster" in {
+    // U+1100 (choseong kiyeok) + U+1161 (jungseong a) + U+11A8 (jongseong kiyeok) -- none of GB6-GB8's jamo rules is
+    // expressible as "is this codepoint a combining mark", which is all a hand-rolled extender check can ask.
+    val text = "a각b"
+
+    TextEditing.nextGraphemeBoundary(text, 1) shouldBe 4
+    TextEditing.previousGraphemeBoundary(text, 4) shouldBe 1
+  }
+
+  it should "join a Devanagari consonant conjunct (क्ष) into one grapheme cluster" in {
+    // U+0915 (क) + U+094D (virama) + U+0937 (ष). Legacy (non-extended) grapheme-cluster rules split this in two;
+    // only extended grapheme clusters (UAX#29 as ICU4J implements it) join the whole conjunct.
+    val text = "aक्षb"
+
+    TextEditing.nextGraphemeBoundary(text, 1) shouldBe 4
+    TextEditing.previousGraphemeBoundary(text, 4) shouldBe 1
+  }
+
+  it should "join a regional-indicator flag pair into one grapheme cluster, not two" in {
+    val text = "a🇺🇸b" // US flag: two regional-indicator surrogate pairs
+
+    TextEditing.nextGraphemeBoundary(text, 1) shouldBe 5
+    TextEditing.previousGraphemeBoundary(text, 5) shouldBe 1
+  }
+
+  it should "join a ZWJ-joined family emoji sequence into one grapheme cluster" in {
+    val text = "a👩‍👩‍👧b" // woman-ZWJ-woman-ZWJ-girl, 8 UTF-16 code units
+
+    TextEditing.nextGraphemeBoundary(text, 1) shouldBe 9
+    TextEditing.previousGraphemeBoundary(text, 9) shouldBe 1
+  }
+
+  it should "not join a ZWJ onto a following non-pictographic character (unlike an unconditional forward ZWJ join)" in {
+    // Regression guard for the pre-migration bug the issue flagged: GB9 always attaches a ZWJ backward to whatever
+    // precedes it (pictographic or not), so "a" + ZWJ is legitimately one cluster either way -- but the *forward*
+    // join to what follows the ZWJ (GB11) is gated on Extended_Pictographic, and the old implementation joined
+    // forward across ANY codepoint with no such gate. Verified directly against ICU4J: boundaries here are
+    // {0, 2, 3}, i.e. "a"+ZWJ is one cluster and "b" is a separate one -- not all three merged into one.
+    val text = "a‍b"
+
+    TextEditing.nextGraphemeBoundary(text, 0) shouldBe 2
+    TextEditing.nextGraphemeBoundary(text, 2) shouldBe 3
+  }
