@@ -86,15 +86,7 @@ private[layout] object CommandPaletteContentResolver:
                 val groupLabel =
                   if runner.searchTerm.nonEmpty then runner.settingsGroupBreadcrumbLabels(group.id).mkString(" > ")
                   else group.label
-                OverlayRow(
-                  plainText = groupLabel,
-                  selected = selected,
-                  segments = List(
-                    OverlaySegment(groupLabel),
-                    OverlaySegment(group.hint.getOrElse(""), tone = OverlayTone.Normal)
-                  ).filterNot(_.text.isEmpty),
-                  layout = OverlayRowLayout.Columns
-                )
+                groupRow(groupLabel, group.hint, selected)
             if selected then row :: groupPreview else List(row)
         }
         // With the persistent row on, `footer` reverts to being purely the transient status-message slot -- the
@@ -172,13 +164,7 @@ private[layout] object CommandPaletteContentResolver:
               layout = OverlayRowLayout.Columns
             )
           case group: CommandSurfaceItem.GroupItem =>
-            OverlayRow(
-              plainText = group.label,
-              selected = selected,
-              segments =
-                List(OverlaySegment(group.label), OverlaySegment(group.hint.getOrElse(""))).filterNot(_.text.isEmpty),
-              layout = OverlayRowLayout.Columns
-            )
+            groupRow(group.label, group.hint, selected)
         if selected then row :: groupPreview else List(row)
     }
     val searchTerm     = runner.activeSettingsSurface.fold(runner.searchTerm)(_.current.searchTerm)
@@ -209,7 +195,7 @@ private[layout] object CommandPaletteContentResolver:
   /** Static key-hint text for the palette (issue #931, Stage 3) -- the palette's key semantics don't vary by selection
     * the way the settings surface's do, so unlike `settingsSurfaceKeyHintText` this needs no runner state.
     */
-  private def paletteKeyHintText: String =
+  private[layout] def paletteKeyHintText: String =
     "↑↓ navigate • Enter run • Esc dismiss"
 
   /** Key-hint text for whichever settings-surface state is actually active, matching the real reducer semantics
@@ -219,7 +205,7 @@ private[layout] object CommandPaletteContentResolver:
     *   - browsing a group's rows: arrow keys navigate, Enter opens/runs the selected row, Escape backs out one level,
     *     and Left/Right cycle an `OptionItem` row's value in place
     */
-  private def settingsSurfaceKeyHintText(runner: com.serenity.command.CommandRunner): String =
+  private[layout] def settingsSurfaceKeyHintText(runner: com.serenity.command.CommandRunner): String =
     runner.activeSettingsSurface.map(_.current) match
       case Some(editing: SettingsPage.Editing) if editing.recording.nonEmpty =>
         "Esc cancel"
@@ -233,7 +219,7 @@ private[layout] object CommandPaletteContentResolver:
     * (`TextOverlayRenderer`); `OverlayTone.Muted` de-emphasizes it. Never selectable -- purely derived display, no new
     * state.
     */
-  private def groupPreviewRows(preview: SettingsSurfaceState.PreviewRows): List[OverlayRow] =
+  private[layout] def groupPreviewRows(preview: SettingsSurfaceState.PreviewRows): List[OverlayRow] =
     val labelRows   = preview.rows.map(label => previewRow(label))
     val overflowRow = Option.when(preview.overflowCount > 0)(previewRow(s"+${preview.overflowCount} more"))
     labelRows ++ overflowRow.toList
@@ -245,7 +231,7 @@ private[layout] object CommandPaletteContentResolver:
       segments = List(OverlaySegment(label, tone = OverlayTone.Muted))
     )
 
-  private def settingsSurfaceSelectedAction(
+  private[layout] def settingsSurfaceSelectedAction(
     runner: com.serenity.command.CommandRunner,
     selectedItem: Option[CommandSurfaceItem]
   ): String =
@@ -257,7 +243,7 @@ private[layout] object CommandPaletteContentResolver:
       case Some(_: CommandSurfaceItem.CommandItem) => "Run"
       case None                                    => "Select"
 
-  private def commandPaletteFooter(runner: com.serenity.command.CommandRunner, itemCount: Int): String =
+  private[layout] def commandPaletteFooter(runner: com.serenity.command.CommandRunner, itemCount: Int): String =
     val submitAction = runner.selectedItem match
       case Some(_: CommandSurfaceItem.GroupItem) | Some(_: CommandSurfaceItem.SettingSearchItem) => "Enter open"
       case _                                                                                     => "Enter run"
@@ -265,7 +251,7 @@ private[layout] object CommandPaletteContentResolver:
     List("↑↓ navigate", submitAction, "Esc dismiss", s"${runner.selectedIndex + 1}/$itemCount")
       .mkString(" • ")
 
-  private def breadcrumbHeader(labels: List[String], searchTerm: Option[String]): OverlayRow =
+  private[layout] def breadcrumbHeader(labels: List[String], searchTerm: Option[String]): OverlayRow =
     val safeLabels = labels.filter(_.nonEmpty) match
       case Nil      => List("submenu")
       case nonEmpty => nonEmpty
@@ -289,7 +275,7 @@ private[layout] object CommandPaletteContentResolver:
   // issue #931: the tab-row renderer this fed (`categoryTabs`) is retired along with the category-switcher UI
   // itself. `categoryLabel` survives -- it now only labels a search result's quiet inline category tag
   // (`commandRow`'s `prefix`), not a clickable/switchable tab.
-  private def categoryLabel(category: CommandCategory): String =
+  private[layout] def categoryLabel(category: CommandCategory): String =
     category match
       case CommandCategory.All      => "All"
       case CommandCategory.File     => "File"
@@ -298,7 +284,7 @@ private[layout] object CommandPaletteContentResolver:
       case CommandCategory.Project  => "Project"
       case CommandCategory.Settings => "Settings"
 
-  private def commandRow(
+  private[layout] def commandRow(
     command: com.serenity.command.Command,
     selected: Boolean,
     prefix: String = "",
@@ -324,7 +310,7 @@ private[layout] object CommandPaletteContentResolver:
         Some(family)
       case _ => None
 
-  private def settingSearchRow(item: CommandSurfaceItem.SettingSearchItem, selected: Boolean): OverlayRow =
+  private[layout] def settingSearchRow(item: CommandSurfaceItem.SettingSearchItem, selected: Boolean): OverlayRow =
     OverlayRow(
       plainText = item.label,
       selected = selected,
@@ -337,7 +323,18 @@ private[layout] object CommandPaletteContentResolver:
       layout = OverlayRowLayout.Columns
     )
 
-  private def optionRow(option: CommandSurfaceItem.OptionItem, selected: Boolean): OverlayRow =
+  /** Renders a `GroupItem` row -- shared by the palette (whose label is a breadcrumb once a search is active) and
+    * the settings surface (whose label is always the plain group name).
+    */
+  private[layout] def groupRow(label: String, hint: Option[String], selected: Boolean): OverlayRow =
+    OverlayRow(
+      plainText = label,
+      selected = selected,
+      segments = List(OverlaySegment(label), OverlaySegment(hint.getOrElse(""))).filterNot(_.text.isEmpty),
+      layout = OverlayRowLayout.Columns
+    )
+
+  private[layout] def optionRow(option: CommandSurfaceItem.OptionItem, selected: Boolean): OverlayRow =
     val selectedHint = option.selectedHint.getOrElse("")
 
     OverlayRow(

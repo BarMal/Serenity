@@ -68,6 +68,7 @@ enum SurfacePaintLayout:
   case Plain
   case Split
   case Inline
+  case Columns
 
 /** One clipped paint box. Interactive boxes carry the same identity and rectangle as their hit region. */
 final case class SurfacePaintBox(
