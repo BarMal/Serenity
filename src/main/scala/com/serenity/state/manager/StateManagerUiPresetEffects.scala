@@ -153,7 +153,7 @@ final private[manager] class StateManagerUiPresetEffects(
       // live session) is rejected instead of silently corrupting the running state.
       _             <- validateAndUpdateState(restored, current)
       appliedConfig <- stateRef.get.map(_.persisted.config)
-      _ <- persistConfigFile(appliedConfig)
+      _             <- persistConfigFile(appliedConfig)
       _ <- onFontConfigChanged(appliedConfig.editorConfig.fontConfig)
         .handleErrorWith(error => logger.error(error)("[PRESET] Failed to apply preset font config"))
       _ <- reloadPresetDirectories(preset)

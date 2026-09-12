@@ -97,9 +97,9 @@ final private[manager] class StateManagerViewportCapability(
               // `targetLine` is derived from a click row against the minimap's rendering of the buffer at resolve
               // time; if the document has since shrunk (a concurrent edit/undo racing the click), it can land past
               // the buffer's current line count, so it is clamped here rather than trusted as already in-bounds.
-              val clampedLine  = math.max(0, math.min(targetLine, math.max(0, buffer.document.content.lineCount - 1)))
-              val halfVisible  = buffer.viewport.visibleLines / 2
-              val newTopLine   = math.max(0, clampedLine - halfVisible)
+              val clampedLine = math.max(0, math.min(targetLine, math.max(0, buffer.document.content.lineCount - 1)))
+              val halfVisible = buffer.viewport.visibleLines / 2
+              val newTopLine  = math.max(0, clampedLine - halfVisible)
               val updatedBuffer = buffer.copy(
                 editing = buffer.editing.copy(cursors = List(CursorPosition(clampedLine, 0))),
                 viewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)

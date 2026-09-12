@@ -20,9 +20,9 @@ final private[manager] class StateManagerNavigationEffects(
 
   private def updateState(update: AppState => AppState): IO[Unit] = stateRef.update(update)
 
-  /** Commits `update` through the checked validation path rather than a bare `stateRef.update` -- every call site
-    * below moves a cursor, bookmark, or comment position, which `AppStateValidation`'s document-position invariants
-    * govern (#858, #1183).
+  /** Commits `update` through the checked validation path rather than a bare `stateRef.update` -- every call site below
+    * moves a cursor, bookmark, or comment position, which `AppStateValidation`'s document-position invariants govern
+    * (#858, #1183).
     */
   private def validatedUpdateState(update: AppState => AppState): IO[Unit] =
     stateRef.get.flatMap(current => validateAndUpdateState(update(current), current))

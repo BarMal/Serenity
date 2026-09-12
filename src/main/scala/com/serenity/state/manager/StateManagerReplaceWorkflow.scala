@@ -97,7 +97,9 @@ final private[manager] class StateManagerReplaceWorkflow(
                     )
                     val updatedState = current.persisted.layout.activeEditorPaneId match
                       case Some(paneId) =>
-                        withReplacement.copy(persisted = withReplacement.persisted.copy(focus = Focus.EditorPane(paneId)))
+                        withReplacement.copy(persisted =
+                          withReplacement.persisted.copy(focus = Focus.EditorPane(paneId))
+                        )
                       case None => withReplacement
                     validateAndUpdateState(updatedState, current)
                   }
