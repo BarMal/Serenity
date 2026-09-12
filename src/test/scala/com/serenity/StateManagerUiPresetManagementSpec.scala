@@ -3,8 +3,8 @@ package com.serenity
 import java.awt.Font
 import java.nio.file.{Files, Path}
 
-import cats.effect.unsafe.implicits.global
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.keystroke.events.ToggleCommandRunner

@@ -7,8 +7,8 @@ import scala.concurrent.duration.*
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.AppRuntime
-import com.serenity.config.CursorMode
 import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.CursorMode
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId, Damage}
 import org.scalatest.flatspec.AnyFlatSpec

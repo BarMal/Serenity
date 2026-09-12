@@ -4,12 +4,15 @@
 # Growth must be justified: CI fails a PR that grows this file's entry count or total measured
 # lines/hits unless the same diff adds a '# paydown: <why, issue link>' comment line (see #1413).
 # Columns: path <TAB> detail <TAB> measured
-# paydown: CommandRunnerReducer.scala grew by 1 line replacing InputItem's three booleans with an
-# InputKind ADT; ConfigManager.scala's parseConfig grew fixing a HOCON key-ordering bug in the
-# MotionFamilyConfig enabled/transitionKind contradiction fix (entries must be partitioned so every
-# ".enabled" key is processed last); ConfigManagerSpec.scala and FileHandlingSpec.scala grew adding
-# regression tests for that fix, the ConfigManager logged-catch fix, and the new FileManagerError
-# cases -- all from the type-modeling audit's bug fixes, not architectural drift.
+# #1477 ratchet-limit audit: every remaining entry below was individually reviewed and judged legitimate rather than
+# split further. The 7 main-source entries carry declarative/exhaustive complexity that splitting would obscure
+# (ConfigManager.parseConfig, ConfigRegistry, CommandRunnerReducer) or were already reduced as far as reasonable in
+# earlier passes (AppRuntime, Rope, CharacterRenderer, Java2DPostProcessingEffects.applyGlow). The remaining test files
+# are all under ~1.25x the 600-line target and follow this codebase's established "flat integration spec" convention --
+# each exercises one cohesive scenario end-to-end rather than several independent concerns, so splitting by theme (the
+# approach used for every test file at or above that threshold in this same audit) would fragment a single scenario
+# rather than separate distinct ones. perf/PerformanceBenchmarks.scala and TerminalEmulator.interpret are the same
+# "declarative table"/"exhaustive match" category already accepted for ConfigRegistry.
 main/scala/com/serenity/app/AppRuntime.scala	file length	757
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	119
 main/scala/com/serenity/config/ConfigRegistry.scala	file length	680
@@ -17,35 +20,19 @@ main/scala/com/serenity/rope/Rope.scala	file length	616
 main/scala/com/serenity/state/reducers/CommandRunnerReducer.scala	file length	671
 main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	615
 main/scala/com/serenity/ui/renderer/Java2DPostProcessingEffects.scala	method applyGlow	90
-test/scala/com/serenity/AppRuntimeSpec.scala	file length	1603
-test/scala/com/serenity/CommandRunnerCoreCommandsSpec.scala	file length	1859
-test/scala/com/serenity/CommandRunnerFloatingRenderingSpec.scala	file length	754
-test/scala/com/serenity/CommandRunnerReducerSpec.scala	file length	1514
-test/scala/com/serenity/ConfigManagerSpec.scala	file length	1479
-test/scala/com/serenity/ContextualToolbarSpec.scala	file length	1283
 test/scala/com/serenity/EditorBehaviorSpec.scala	file length	603
-test/scala/com/serenity/EditorEventReducerSpec.scala	file length	2296
 test/scala/com/serenity/FileHandlingSpec.scala	file length	634
 test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	639
 test/scala/com/serenity/GutterAndLineNumbersSpec.scala	file length	638
-test/scala/com/serenity/LayoutContractSpec.scala	file length	932
 test/scala/com/serenity/LayoutEngineSpec.scala	file length	716
 test/scala/com/serenity/LineWrappingSpec.scala	file length	747
 test/scala/com/serenity/MarkdownDocumentPreviewSpec.scala	file length	745
-test/scala/com/serenity/ModalEventReducerSpec.scala	file length	1125
-test/scala/com/serenity/MouseClickSpec.scala	file length	1055
 test/scala/com/serenity/RendererSnapshotReuseSpec.scala	file length	618
 test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	694
 test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	728
-test/scala/com/serenity/SessionStateSpec.scala	file length	1497
 test/scala/com/serenity/SpellCheckerDictionaryIoSpec.scala	file length	614
-test/scala/com/serenity/StateManagerElementTransitionSettingsSpec.scala	file length	817
-test/scala/com/serenity/SurfaceContentResolverSpec.scala	file length	1254
-test/scala/com/serenity/TextOverlayRendererSpec.scala	file length	806
 test/scala/com/serenity/UiPresetSpec.scala	file length	705
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	750
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	320
-test/scala/com/serenity/rope/RopeSpec.scala	file length	785
-test/scala/com/serenity/state/manager/DamageProducerSpec.scala	file length	902
 test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	663
 test/scala/com/serenity/ui/tui/TerminalEmulator.scala	method interpret	91

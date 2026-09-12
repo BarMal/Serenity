@@ -8,8 +8,8 @@ import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.rope.Balance
-import com.serenity.session.given
 import com.serenity.session.SessionState
+import com.serenity.session.given
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

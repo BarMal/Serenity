@@ -7,8 +7,8 @@ import _root_.io.circe.syntax.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.config.*
 import com.serenity.rope.Balance
-import com.serenity.session.given
 import com.serenity.session.SessionState
+import com.serenity.session.given
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

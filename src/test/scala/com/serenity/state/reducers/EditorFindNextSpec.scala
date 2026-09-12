@@ -4,7 +4,6 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
-import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.TextLayoutSnapshot
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -261,7 +260,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
     val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.persisted.buffers(bufferId)
     val cursor       = buffer.editing.cursors.head
-    val font         = FontLoader.previewTextFont(updatedState.persisted.config.editorConfig.fontConfig)
+    val font         = com.serenity.ui.fonts.FontLoader.previewTextFont(updatedState.persisted.config.editorConfig.fontConfig)
     val wrapPx =
       TextLayoutSnapshot.gridWrapWidthPx(
         buffer.viewport.visibleColumns,
