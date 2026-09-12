@@ -406,3 +406,11 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
     (0 until surface.height)
       .find(row => surface.getRow(row).contains(source))
       .getOrElse(fail(s"Expected raw source row for: $source"))
+
+  private def panelRows(surface: MockRenderSurface, state: AppState, paneRect: LayoutRect): Vector[Int] =
+    (paneRect.y until paneRect.bottom)
+      .filter(row =>
+        (paneRect.x until paneRect.right)
+          .exists(column => surface.getBg(column, row) == state.persisted.theme.panel.background)
+      )
+      .toVector

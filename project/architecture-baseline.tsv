@@ -35,14 +35,12 @@ test/scala/com/serenity/LineWrappingSpec.scala	file length	747
 test/scala/com/serenity/MarkdownDocumentPreviewSpec.scala	file length	745
 test/scala/com/serenity/ModalEventReducerSpec.scala	file length	1125
 test/scala/com/serenity/MouseClickSpec.scala	file length	1055
-test/scala/com/serenity/RendererMarkdownLensSpec.scala	file length	889
 test/scala/com/serenity/RendererSnapshotReuseSpec.scala	file length	618
 test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	694
 test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	728
 test/scala/com/serenity/SessionStateSpec.scala	file length	1497
 test/scala/com/serenity/SpellCheckerDictionaryIoSpec.scala	file length	614
 test/scala/com/serenity/StateManagerElementTransitionSettingsSpec.scala	file length	817
-test/scala/com/serenity/StateManagerUiPresetSpec.scala	file length	1054
 test/scala/com/serenity/SurfaceContentResolverSpec.scala	file length	1254
 test/scala/com/serenity/TextOverlayRendererSpec.scala	file length	806
 test/scala/com/serenity/UiPresetSpec.scala	file length	705

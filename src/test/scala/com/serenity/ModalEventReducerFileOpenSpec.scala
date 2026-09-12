@@ -7,8 +7,8 @@ import com.serenity.state.reducers.{AppEffect, ModalEventReducer, WorkflowEffect
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Reducer-level coverage for the open dialog's directory-browser Tab behavior (#1289), kept out of
-  * `ModalEventReducerSpec` so that already-oversized file does not grow past its architecture-check baseline.
+/** Reducer-level coverage for the open dialog's directory-browser Tab behavior (#1289), kept separate from the
+  * `ModalFileWorkflowReducerSpec`/`ModalFindReducerSpec`/etc. family covering the rest of `ModalEventReducer`.
   */
 class ModalEventReducerFileOpenSpec extends AnyFlatSpec with Matchers:
 

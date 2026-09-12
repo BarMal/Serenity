@@ -5,8 +5,8 @@ import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** `runtime.modalStack` (#814) coverage for [[DamageProducer]] -- kept separate from `DamageProducerSpec` so that
-  * already-oversized file does not grow past its architecture-check baseline.
+/** `runtime.modalStack` (#814) coverage for [[DamageProducer]] -- kept separate from `DamageProducerStateChangesSpec`/
+  * `DamageProducerEditCoverageSpec` covering the rest of `DamageProducer`.
   */
 class ModalStackDamageProducerSpec extends AnyFlatSpec with Matchers:
 
