@@ -1,5 +1,10 @@
 package com.serenity.text
 
+import java.text.CharacterIterator
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+
+import com.ibm.icu.text.BreakIterator
+
 object TextEditing:
 
   /** Minimal indexed character access for word-boundary scanning without requiring a String. */
@@ -58,10 +63,15 @@ object TextEditing:
   def previousGraphemeBoundary(text: String, cursor: Int): Int =
     previousGraphemeBoundary(StringCharacterSource(text), cursor)
 
+  /** Rewinds to the grapheme-cluster boundary before `cursor`, per Unicode UAX#29 extended grapheme clusters
+    * (`BreakIterator.getCharacterInstance`) -- correctly joining Hangul jamo, Indic conjuncts, ZWJ-joined emoji
+    * sequences (gated on Extended_Pictographic, unlike a bare unconditional ZWJ join) and regional-indicator flag
+    * pairs, none of which a codepoint-class-only walk can get right on its own (#1277).
+    */
   def previousGraphemeBoundary(source: CharacterSource, cursor: Int): Int =
     val idx = clamp(cursor, source.length)
     if idx <= 0 then 0
-    else rewindGraphemeStart(source, previousCodePointStart(source, idx))
+    else graphemeBreakIterator(source).preceding(idx)
 
   def nextGraphemeBoundary(text: String, cursor: Int): Int =
     nextGraphemeBoundary(StringCharacterSource(text), cursor)
@@ -69,7 +79,7 @@ object TextEditing:
   def nextGraphemeBoundary(source: CharacterSource, cursor: Int): Int =
     val idx = clamp(cursor, source.length)
     if idx >= source.length then source.length
-    else consumeGraphemeEnd(source, nextCodePointEnd(source, idx))
+    else graphemeBreakIterator(source).following(idx)
 
   def graphemeBoundaryBeforeOrAt(text: String, cursor: Int): Int =
     graphemeBoundaryBeforeOrAt(StringCharacterSource(text), cursor)
@@ -118,81 +128,33 @@ object TextEditing:
         case _ =>
           CharacterClass.Punctuation
 
-  private def isSurrogatePair(high: Char, low: Char): Boolean =
-    Character.isHighSurrogate(high) && Character.isLowSurrogate(low)
+  /** One `BreakIterator.getCharacterInstance` per thread, paired with the `CharacterSource` it was last `setText` onto.
+    * `BreakIterator` is stateful and not thread-safe, so a single shared instance isn't safe -- hence `ThreadLocal` --
+    * but constructing `getCharacterInstance()` itself is expensive enough (cloning the rule engine) that doing it on
+    * every grapheme-boundary query measurably regressed find/replace over large documents. `preceding` and `following`
+    * are meant to be called repeatedly against one `setText` per ICU4J's own usage pattern, so the paired source
+    * (compared by reference, not content -- `graphemeBoundaryBeforeOrAt`/`AfterOrAt` and a caller scanning many matches
+    * over one document, e.g. `FindSearch.results`, reuse the exact same `CharacterSource` instance across calls) lets
+    * repeat calls against the same source skip `setText` entirely.
+    */
+  final private class BreakIteratorCache:
+    val iterator: BreakIterator                             = BreakIterator.getCharacterInstance()
+    private val lastSource: AtomicReference[Option[AnyRef]] = new AtomicReference(None)
 
-  private def codePointAt(source: CharacterSource, index: Int): Int =
-    val first = source.charAt(index)
-    if index + 1 < source.length && isSurrogatePair(first, source.charAt(index + 1)) then
-      Character.toCodePoint(first, source.charAt(index + 1))
-    else first.toInt
+    def forSource(source: CharacterSource): BreakIterator =
+      val previous = lastSource.getAndSet(Some(source))
+      if !previous.exists(_.eq(source)) then iterator.setText(CharacterSourceIterator(source))
+      iterator
 
-  private def previousCodePointStart(source: CharacterSource, idx: Int): Int =
-    if idx >= 2 && isSurrogatePair(source.charAt(idx - 2), source.charAt(idx - 1)) then idx - 2
-    else math.max(0, idx - 1)
+  private val threadLocalBreakIterator: ThreadLocal[BreakIteratorCache] =
+    ThreadLocal.withInitial(() => BreakIteratorCache())
 
-  private def nextCodePointEnd(source: CharacterSource, idx: Int): Int =
-    if idx + 1 < source.length && isSurrogatePair(source.charAt(idx), source.charAt(idx + 1)) then idx + 2
-    else math.min(source.length, idx + 1)
-
-  @annotation.tailrec
-  private def rewindGraphemeStart(source: CharacterSource, idx: Int): Int =
-    val previous =
-      if idx > 0 then
-        val previousStart = previousCodePointStart(source, idx)
-        Option.when(codePointAt(source, previousStart) == ZeroWidthJoiner && previousStart > 0) {
-          previousCodePointStart(source, previousStart)
-        }
-      else None
-
-    val currentCodePoint = codePointAt(source, idx)
-    if idx > 0 && isGraphemeExtender(currentCodePoint) then
-      rewindGraphemeStart(source, previousCodePointStart(source, idx))
-    else if isRegionalIndicator(currentCodePoint) && hasOddRegionalIndicatorRunBefore(source, idx) then
-      rewindGraphemeStart(source, previousCodePointStart(source, idx))
-    else
-      previous match
-        case Some(joinedStart) => rewindGraphemeStart(source, joinedStart)
-        case None              => idx
-
-  @annotation.tailrec
-  private def consumeGraphemeEnd(source: CharacterSource, idx: Int): Int =
-    if idx >= source.length then source.length
-    else
-      val codePoint = codePointAt(source, idx)
-      if isGraphemeExtender(codePoint) then consumeGraphemeEnd(source, nextCodePointEnd(source, idx))
-      else if isRegionalIndicator(codePoint) && hasOddRegionalIndicatorRunBefore(source, idx) then
-        consumeGraphemeEnd(source, nextCodePointEnd(source, idx))
-      else if codePoint == ZeroWidthJoiner && nextCodePointEnd(source, idx) < source.length then
-        consumeGraphemeEnd(source, nextCodePointEnd(source, nextCodePointEnd(source, idx)))
-      else idx
-
-  private val ZeroWidthJoiner        = 0x200d
-  private val EmojiModifierStart     = 0x1f3fb
-  private val EmojiModifierEnd       = 0x1f3ff
-  private val RegionalIndicatorStart = 0x1f1e6
-  private val RegionalIndicatorEnd   = 0x1f1ff
-
-  private def isGraphemeExtender(codePoint: Int): Boolean =
-    isEmojiModifier(codePoint) ||
-      (Character.getType(codePoint) match
-        case Character.NON_SPACING_MARK | Character.COMBINING_SPACING_MARK | Character.ENCLOSING_MARK => true
-        case _                                                                                        => false)
-
-  private def isEmojiModifier(codePoint: Int): Boolean =
-    codePoint >= EmojiModifierStart && codePoint <= EmojiModifierEnd
-
-  private def isRegionalIndicator(codePoint: Int): Boolean =
-    codePoint >= RegionalIndicatorStart && codePoint <= RegionalIndicatorEnd
-
-  @annotation.tailrec
-  private def hasOddRegionalIndicatorRunBefore(source: CharacterSource, idx: Int, count: Int = 0): Boolean =
-    if idx <= 0 then count % 2 == 1
-    else
-      val previousStart = previousCodePointStart(source, idx)
-      if isRegionalIndicator(codePointAt(source, previousStart)) then
-        hasOddRegionalIndicatorRunBefore(source, previousStart, count + 1)
-      else count % 2 == 1
+  /** `source` adapted through [[CharacterSourceIterator]] rather than a materialised `String` -- confirmed against
+    * `RopeCharacterSource` (#1277 step 3 spike) to work directly against a rope-backed source, so a large line's
+    * grapheme scan never copies the whole line into a `String`.
+    */
+  private def graphemeBreakIterator(source: CharacterSource): BreakIterator =
+    threadLocalBreakIterator.get().forSource(source)
 
   @annotation.tailrec
   private def scanBackwardClassStart(source: CharacterSource, idx: Int, targetClass: CharacterClass): Int =
@@ -212,3 +174,55 @@ object TextEditing:
 
     override def charAt(index: Int): Char =
       text.charAt(index)
+
+  /** Adapts a `CharacterSource` to `java.text.CharacterIterator` so ICU4J's `BreakIterator` can walk it directly -- a
+    * rope included -- without ever materialising a `String` (#1277 step 3). The current position is genuinely mutable
+    * state intrinsic to `CharacterIterator`'s contract (`first`/`next`/`setIndex` etc. all move and return from one
+    * cursor), so it is held in an `AtomicInteger` rather than a `var`, per this file's no-`var` convention.
+    */
+  final private class CharacterSourceIterator(source: CharacterSource) extends CharacterIterator:
+    private val position = AtomicInteger(0)
+
+    private def charOrDone(index: Int): Char =
+      if index < 0 || index >= source.length then CharacterIterator.DONE else source.charAt(index)
+
+    override def first(): Char =
+      position.set(0)
+      charOrDone(0)
+
+    override def last(): Char =
+      val lastIndex = math.max(0, source.length - 1)
+      position.set(lastIndex)
+      if source.length == 0 then CharacterIterator.DONE else charOrDone(lastIndex)
+
+    override def current(): Char =
+      charOrDone(position.get())
+
+    override def next(): Char =
+      val advanced = position.incrementAndGet()
+      if advanced >= source.length then
+        position.set(source.length)
+        CharacterIterator.DONE
+      else charOrDone(advanced)
+
+    override def previous(): Char =
+      if position.get() <= 0 then CharacterIterator.DONE
+      else charOrDone(position.decrementAndGet())
+
+    override def setIndex(index: Int): Char =
+      position.set(index)
+      charOrDone(index)
+
+    override def getBeginIndex: Int =
+      0
+
+    override def getEndIndex: Int =
+      source.length
+
+    override def getIndex: Int =
+      position.get()
+
+    override def clone(): AnyRef =
+      val copy = CharacterSourceIterator(source)
+      copy.position.set(position.get())
+      copy
