@@ -140,8 +140,8 @@ object HistoryEntry:
 /** Full undo/redo state, held separately from AppState in StateManager. Never persisted to disk — always starts fresh.
   */
 final case class UndoState(
-    undoStack: List[HistoryEntry] = Nil,
-    redoStack: List[HistoryEntry] = Nil,
+    undoStack: Vector[HistoryEntry] = Vector.empty,
+    redoStack: Vector[HistoryEntry] = Vector.empty,
     pendingGroup: Option[HistoryEntry.BufferEdit] = None,
     maxUndoDepth: Int = UndoState.DefaultMaxUndoDepth
 ):
@@ -151,23 +151,25 @@ final case class UndoState(
       case None        => this
       case Some(entry) => pushUndo(entry, clearRedo = false).copy(pendingGroup = None)
 
-  def clearRedo: UndoState = copy(redoStack = Nil)
+  def clearRedo: UndoState = copy(redoStack = Vector.empty)
 
   def pushUndo(entry: HistoryEntry, clearRedo: Boolean = true): UndoState =
     copy(
       undoStack = boundedPush(entry, undoStack),
-      redoStack = if clearRedo then Nil else redoStack
+      redoStack = if clearRedo then Vector.empty else redoStack
     )
 
   def pushRedo(entry: HistoryEntry): UndoState =
     copy(redoStack = boundedPush(entry, redoStack))
 
-  // Only reallocates the tail of `stack` when it has actually reached the cap -- the common case (well under
-  // `maxUndoDepth`, whose default is 1000) is a plain O(1) cons instead of a `take` that copies the whole stack
-  // on every push regardless of how far below the cap it is.
-  private def boundedPush(entry: HistoryEntry, stack: List[HistoryEntry]): List[HistoryEntry] =
-    if stack.lengthIs < effectiveMaxUndoDepth then entry :: stack
-    else entry :: stack.take(effectiveMaxUndoDepth - 1)
+  // `Vector` keeps this O(1) amortized on every push, not just below the cap: prepending (`+:`) and dropping the
+  // oldest entry off the far end (`init`) are both effectively-constant-time operations on a `Vector`, unlike a
+  // `List`, which has no cheap way to drop its last element. The prior fix only avoided the O(maxUndoDepth) `take`
+  // copy while under the cap; every push once the stack reached the cap -- the steady state for any session longer
+  // than `maxUndoDepth` edits -- still paid it in full (#1455).
+  private def boundedPush(entry: HistoryEntry, stack: Vector[HistoryEntry]): Vector[HistoryEntry] =
+    val pushed = entry +: stack
+    if pushed.lengthIs <= effectiveMaxUndoDepth then pushed else pushed.init
 
   private def effectiveMaxUndoDepth: Int =
     math.max(1, maxUndoDepth)
