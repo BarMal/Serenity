@@ -79,6 +79,32 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
     ConfigManager.configToString(config) should include("command_runner.item_gap_rows = auto")
   }
 
+  // issue #1046 (review follow-up): `command_runner.visible_rows`/`command_runner.cursor_gap_rows` complete the
+  // same density unification the test above covers for item gap rows.
+  it should "derive command runner visible rows from interface density when no override is configured" in {
+    val configFile = Files.createTempFile("serenity-command-density-rows-config", ".conf")
+    Files.writeString(configFile, "interface.density = spacious\n")
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.surfaceConfig.commandRunnerVisibleRows shouldBe None
+    config.effectiveCommandRunnerVisibleRows shouldBe
+      InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).visibleRows
+    ConfigManager.configToString(config) should include("command_runner.visible_rows = auto")
+  }
+
+  it should "derive command runner cursor gap rows from interface density when no override is configured" in {
+    val configFile = Files.createTempFile("serenity-command-density-cursor-gap-config", ".conf")
+    Files.writeString(configFile, "interface.density = spacious\n")
+
+    val config = ConfigManager.loadConfig(Some(configFile.toString))
+
+    config.surfaceConfig.commandRunnerCursorGapRows shouldBe None
+    config.effectiveCommandRunnerCursorGapRows shouldBe
+      InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).overlayGapRows.toDouble
+    ConfigManager.configToString(config) should include("command_runner.cursor_gap_rows = auto")
+  }
+
   it should "load and write render FPS targets" in {
     val configFile = Files.createTempFile("serenity-render-fps-config", ".conf")
     Files.writeString(

@@ -194,6 +194,17 @@ object AppConfigMotionOps:
     def withCommandRunnerVisibleRows(rows: Option[Int]): AppConfig =
       appConfig.withSurfaceConfig(appConfig.surfaceConfig.copy(commandRunnerVisibleRows = rows))
 
+    /** issue #1046 (review follow-up): the one place `commandRunnerVisibleRows` resolves against the current interface
+      * density -- mirrors [[effectiveCommandRunnerItemGapRows]] below. An explicit override (from an old
+      * `command_runner.visible_rows` config value) wins; otherwise it falls back to that density's own
+      * [[InterfaceDensityMetrics.visibleRows]], the same "one density control" every other command palette
+      * row-spacing/height knob already falls back to.
+      */
+    def effectiveCommandRunnerVisibleRows: Int =
+      appConfig.surfaceConfig.commandRunnerVisibleRows.getOrElse(
+        InterfaceDensityMetrics.forDensity(appConfig.interfaceDensity).visibleRows
+      )
+
     def withCommandRunnerItemGapRows(rows: Option[Double]): AppConfig =
       appConfig.withSurfaceConfig(appConfig.surfaceConfig.copy(commandRunnerItemGapRows = rows))
 
@@ -209,6 +220,20 @@ object AppConfigMotionOps:
 
     def withCommandRunnerCursorGapRows(rows: Option[Double]): AppConfig =
       appConfig.withSurfaceConfig(appConfig.surfaceConfig.copy(commandRunnerCursorGapRows = rows))
+
+    /** issue #1046 (review follow-up): the one place `commandRunnerCursorGapRows` resolves -- mirrors
+      * [[effectiveCommandRunnerItemGapRows]]/[[effectiveCommandRunnerVisibleRows]] above. An explicit override wins;
+      * otherwise this falls back to the same chain [[com.serenity.ui.layout.FloatingSurfaceLayout]] already used pre-PR
+      * for the command palette's cursor gap -- a general `uiElementGap` override (`ui.element_gap`) takes priority over
+      * the density-derived [[InterfaceDensityMetrics.overlayGapRows]] default -- so this is not a behavior change, only
+      * a named accessor for logic that used to live only in that layout code.
+      */
+    def effectiveCommandRunnerCursorGapRows: Double =
+      appConfig.surfaceConfig.commandRunnerCursorGapRows.getOrElse(
+        Option
+          .when(appConfig.uiElementGap > 0.0)(appConfig.uiElementGap)
+          .getOrElse(InterfaceDensityMetrics.forDensity(appConfig.interfaceDensity).overlayGapRows.toDouble)
+      )
 
     def withRenderFpsTarget(target: RenderFpsTarget): AppConfig =
       appConfig.withSurfaceConfig(appConfig.surfaceConfig.copy(renderFpsTarget = target))

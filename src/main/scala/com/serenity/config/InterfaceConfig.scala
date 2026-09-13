@@ -29,7 +29,15 @@ final case class InterfaceDensityMetrics(
     // issue #1046: the command palette's per-item row spacing, unified onto the same one density control as
     // `commandSurfaceMaxHeight`/`overlayGapRows` rather than a separate `command_runner.item_gap_rows` knob that
     // defaulted to a flat 0.0 regardless of density.
-    itemGapRows: Double
+    itemGapRows: Double,
+    // issue #1046 (review follow-up): the command palette's default visible-row count, completing the same
+    // density unification for `command_runner.visible_rows` -- an explicit override still wins (via
+    // `AppConfig.effectiveCommandRunnerVisibleRows`), but an absent one now derives `commandSurfaceMaxHeight`
+    // through the same `SurfaceFrameLayout.frameHeightForItemRows` formula an explicit row count already used,
+    // rather than that fixed height being the only path available. Chosen to reproduce `commandSurfaceMaxHeight`
+    // exactly at each density (verified in `InterfaceConfigSpec`), so this is not a behavior change for existing
+    // configs.
+    visibleRows: Int
 )
 
 object InterfaceDensityMetrics:
@@ -43,7 +51,8 @@ object InterfaceDensityMetrics:
           commandSurfaceMaxHeight = 6,
           commandSurfaceMinHeight = 3,
           commandSurfaceVerticalPadding = 2,
-          itemGapRows = 0.0
+          itemGapRows = 0.0,
+          visibleRows = 2
         )
       case InterfaceDensity.Comfortable =>
         InterfaceDensityMetrics(
@@ -52,7 +61,8 @@ object InterfaceDensityMetrics:
           commandSurfaceMaxHeight = 10,
           commandSurfaceMinHeight = 6,
           commandSurfaceVerticalPadding = 3,
-          itemGapRows = 0.0
+          itemGapRows = 0.0,
+          visibleRows = 3
         )
       case InterfaceDensity.Spacious =>
         InterfaceDensityMetrics(
@@ -61,7 +71,8 @@ object InterfaceDensityMetrics:
           commandSurfaceMaxHeight = 12,
           commandSurfaceMinHeight = 8,
           commandSurfaceVerticalPadding = 4,
-          itemGapRows = 1.0
+          itemGapRows = 1.0,
+          visibleRows = 3
         )
 
 final case class InterfaceConfig(

@@ -44,6 +44,39 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     overridden.effectiveCommandRunnerItemGapRows shouldBe 4.0
   }
 
+  // issue #1046 (review follow-up): `commandRunnerVisibleRows`/`commandRunnerCursorGapRows` complete the same
+  // density unification `effectiveCommandRunnerItemGapRows` already covers above.
+  it should "fall back to interface density's visible row count when no override is configured" in {
+    val config = AppConfig.default.withInterfaceDensity(InterfaceDensity.Spacious)
+
+    config.surfaceConfig.commandRunnerVisibleRows shouldBe None
+    config.effectiveCommandRunnerVisibleRows shouldBe
+      InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).visibleRows
+
+    val overridden = config.withCommandRunnerVisibleRows(Some(7))
+    overridden.effectiveCommandRunnerVisibleRows shouldBe 7
+  }
+
+  it should "fall back to interface density's overlay gap for the command palette's cursor gap when no override or UI element gap is configured" in {
+    val config = AppConfig.default.withInterfaceDensity(InterfaceDensity.Spacious)
+
+    config.surfaceConfig.commandRunnerCursorGapRows shouldBe None
+    config.effectiveCommandRunnerCursorGapRows shouldBe
+      InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).overlayGapRows.toDouble
+
+    val overridden = config.withCommandRunnerCursorGapRows(Some(4.0))
+    overridden.effectiveCommandRunnerCursorGapRows shouldBe 4.0
+  }
+
+  it should "prefer an explicit UI element gap over interface density's overlay gap for the command palette's cursor gap" in {
+    val config = AppConfig.default
+      .withInterfaceDensity(InterfaceDensity.Compact)
+      .withUiElementGap(3.5)
+
+    config.surfaceConfig.commandRunnerCursorGapRows shouldBe None
+    config.effectiveCommandRunnerCursorGapRows shouldBe 3.5
+  }
+
   "SurfaceConfig" should "own the motion-hierarchy schema metadata" in {
     // #1406: material, post-processing, display, command-runner, text-area and viewport keys used to be duplicated
     // here too, but `ConfigRegistry` already owned parsing/validation/writing for every one of them end-to-end, so
