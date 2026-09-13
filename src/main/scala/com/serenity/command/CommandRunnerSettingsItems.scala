@@ -14,9 +14,9 @@ import com.serenity.ui.presets.UiPreset
   */
 object CommandRunnerSettingsItems:
 
-  /** The built-in and saved-custom preset options shared by every preset picker (`ui-preset-select`, and the
-    * issue #1060 conversion of Apply/Overwrite/Delete/Reset from typed names onto the same carousel), keyed by
-    * `presetIntent` so each picker's options carry its own `UiPresetsIntent`.
+  /** The built-in and saved-custom preset options shared by every preset picker (`ui-preset-select`, and the issue
+    * #1060 conversion of Apply/Overwrite/Delete/Reset from typed names onto the same carousel), keyed by `presetIntent`
+    * so each picker's options carry its own `UiPresetsIntent`.
     */
   private def presetCommandOptions(
     previews: List[UiPreset.Preview],
@@ -36,7 +36,7 @@ object CommandRunnerSettingsItems:
     optionSelections: Map[String, Int] = Map.empty
   ): CommandSurfaceItem.OptionItem =
     val (builtInOptions, customOptions) = presetCommandOptions(previews, UiPresetsIntent.ApplyUiPreset(_))
-    val options = builtInOptions ++ customOptions
+    val options                         = builtInOptions ++ customOptions
     val selectedIndex =
       optionSelections
         .get("ui-preset-custom")
@@ -210,8 +210,8 @@ object CommandRunnerSettingsItems:
       hint = "Used in prose buffers"
     )
 
-  /** issue #1060: rich-text selection font family used to be typed free text, the only font family in the settings
-    * tree that wasn't a picker; unlike `codeFontGroupItem`/`textFontGroupItem`/`uiFontGroupItem` it has no persisted
+  /** issue #1060: rich-text selection font family used to be typed free text, the only font family in the settings tree
+    * that wasn't a picker; unlike `codeFontGroupItem`/`textFontGroupItem`/`uiFontGroupItem` it has no persisted
     * `AppConfig` value of its own to read a current selection back from (it formats whatever text is selected, not a
     * standing document default), so -- exactly as the free-text version's always-blank `currentValue` did -- there is
     * no meaningful "current" family to preselect; it opens on the first available family.
@@ -225,8 +225,7 @@ object CommandRunnerSettingsItems:
       label = "Selection Font Family",
       selectedIndex = optionSelections.getOrElse("rich-text-font-family", 0),
       families = availableFamilies,
-      intent =
-        commandIntentArg => CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily(commandIntentArg)),
+      intent = commandIntentArg => CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily(commandIntentArg)),
       hint = "Applied to the current selection"
     )
 

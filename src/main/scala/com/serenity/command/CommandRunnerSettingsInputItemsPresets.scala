@@ -48,5 +48,5 @@ private[command] object CommandRunnerSettingsInputItemsPresets:
             CommandIntent.UiPresets(UiPresetsIntent.RenameUiPreset(sourceName, targetName))
         },
       category = CommandCategory.Settings
-    ),
+    )
   )
