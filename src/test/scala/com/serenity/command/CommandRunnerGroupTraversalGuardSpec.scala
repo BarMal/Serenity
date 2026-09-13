@@ -5,21 +5,21 @@ import org.scalatest.matchers.should.Matchers
 
 /** Coverage for issue #1454: `CommandRunner.findGroup`/`groupPaths` recurse into `group.children` with no depth/
   * seen-set guard. Not currently reachable in production -- `settingsGroups` is generated from static definitions,
-  * presumably acyclic by construction -- but nothing enforces that invariant, so a future settings-group addition
-  * that accidentally nests a group under itself would previously stack-overflow rather than fail gracefully.
+  * presumably acyclic by construction -- but nothing enforces that invariant, so a future settings-group addition that
+  * accidentally nests a group under itself would previously stack-overflow rather than fail gracefully.
   *
   * These specs exercise `findGroup`/`groupPaths` directly (both `private[command]`, exactly so this suite can reach
-  * them without routing a synthetic group tree through all of `CommandRunner`'s public surface) against a
-  * hand-built self-nested `GroupItem` -- a group of id `"self"` whose sole child is again `"self"`, repeated to a
-  * depth that would overflow the JVM's default stack under the old unguarded recursion.
+  * them without routing a synthetic group tree through all of `CommandRunner`'s public surface) against a hand-built
+  * self-nested `GroupItem` -- a group of id `"self"` whose sole child is again `"self"`, repeated to a depth that would
+  * overflow the JVM's default stack under the old unguarded recursion.
   */
 class CommandRunnerGroupTraversalGuardSpec extends AnyFlatSpec with Matchers:
 
   private val runner = CommandRunner.empty
 
   /** A group literally nested under itself `depth` times -- id `"self"` at every level, terminating in a `Nil`-
-    * children leaf still labelled `"self"`. This is exactly the "accidentally nests a group under itself" shape
-    * the issue describes: a real (not merely deep) self-reference by id, built as a finite immutable tree since
+    * children leaf still labelled `"self"`. This is exactly the "accidentally nests a group under itself" shape the
+    * issue describes: a real (not merely deep) self-reference by id, built as a finite immutable tree since
     * `GroupItem.children` is a strict `List`.
     */
   private def selfNestedGroup(depth: Int): CommandSurfaceItem.GroupItem =
@@ -32,15 +32,15 @@ class CommandRunnerGroupTraversalGuardSpec extends AnyFlatSpec with Matchers:
     }
 
   /** Large enough that the old unguarded `findGroup`/`groupPaths` (each level pays several stack frames across
-    * `collectFirst`/`orElse`/`flatMap`/`view`/`flatMap`) would exhaust the default JVM thread stack; small enough
-    * that a guarded traversal -- which stops recursing into an already-visited group id -- returns effectively
-    * immediately regardless of depth.
+    * `collectFirst`/`orElse`/`flatMap`/`view`/`flatMap`) would exhaust the default JVM thread stack; small enough that
+    * a guarded traversal -- which stops recursing into an already-visited group id -- returns effectively immediately
+    * regardless of depth.
     */
   private val overflowingDepth = 500_000
 
-  /** A genuine two-node cycle -- id `"a"` nested under id `"b"` nested under id `"a"`, alternating to `depth`
-    * levels -- rather than a single group nested under itself. Reproduces the guard against the exact shape the
-    * review called out: "a longer cycle A -> B -> A", not just a self-nested single id.
+  /** A genuine two-node cycle -- id `"a"` nested under id `"b"` nested under id `"a"`, alternating to `depth` levels --
+    * rather than a single group nested under itself. Reproduces the guard against the exact shape the review called
+    * out: "a longer cycle A -> B -> A", not just a self-nested single id.
     */
   private def alternatingCycle(depth: Int): CommandSurfaceItem.GroupItem =
     val leaf = CommandSurfaceItem.GroupItem("a", "A", Nil, CommandCategory.Settings)
@@ -85,7 +85,8 @@ class CommandRunnerGroupTraversalGuardSpec extends AnyFlatSpec with Matchers:
     val target = CommandSurfaceItem.GroupItem("target", "Target", Nil, CommandCategory.Settings)
     val dup    = CommandSurfaceItem.GroupItem("dup", "Dup", List(target), CommandCategory.Settings)
     val groupA = CommandSurfaceItem.GroupItem("group-a", "Group A", List(dup), CommandCategory.Settings)
-    val groupB = CommandSurfaceItem.GroupItem("dup", "Unrelated sibling sharing id 'dup'", Nil, CommandCategory.Settings)
+    val groupB =
+      CommandSurfaceItem.GroupItem("dup", "Unrelated sibling sharing id 'dup'", Nil, CommandCategory.Settings)
 
     runner.findGroup("target", List(groupA, groupB)) shouldBe Some(target)
   }
@@ -122,14 +123,15 @@ class CommandRunnerGroupTraversalGuardSpec extends AnyFlatSpec with Matchers:
     val target = CommandSurfaceItem.GroupItem("target", "Target", Nil, CommandCategory.Settings)
     val dup    = CommandSurfaceItem.GroupItem("dup", "Dup", List(target), CommandCategory.Settings)
     val groupA = CommandSurfaceItem.GroupItem("group-a", "Group A", List(dup), CommandCategory.Settings)
-    val groupB = CommandSurfaceItem.GroupItem("dup", "Unrelated sibling sharing id 'dup'", Nil, CommandCategory.Settings)
+    val groupB =
+      CommandSurfaceItem.GroupItem("dup", "Unrelated sibling sharing id 'dup'", Nil, CommandCategory.Settings)
 
     runner.groupPaths("target", List(groupA, groupB)) shouldBe List(List("group-a", "dup", "target"))
   }
 
-  /** The production `settingsGroups` tree itself: a standing invariant test that it is (and stays) acyclic, so a
-    * future settings-group addition that accidentally nests a group under itself is caught here rather than only
-    * being tolerated at runtime by the defensive guard above.
+  /** The production `settingsGroups` tree itself: a standing invariant test that it is (and stays) acyclic, so a future
+    * settings-group addition that accidentally nests a group under itself is caught here rather than only being
+    * tolerated at runtime by the defensive guard above.
     */
   "CommandRunner.empty.settingsGroups" should "be acyclic -- no group id appears within its own subtree" in {
     def assertAcyclic(groups: List[CommandSurfaceItem.GroupItem], ancestry: List[String]): Unit =
@@ -145,10 +147,10 @@ class CommandRunnerGroupTraversalGuardSpec extends AnyFlatSpec with Matchers:
   }
 
   /** Regression coverage for the "once-real self-referential-parent bug" this issue's title references (see
-    * `CommandRunner.exitSubmenuToPreview`'s doc comment and `CommandRunnerFocusSpec`'s "close the command runner
-    * fully via repeated Escapes" test, which already encodes the fixed Escape count): reading the parent id
-    * straight off `surface.ancestors.headOption` rather than a separately tracked `parentGroupId` field means a
-    * top-level (ancestor-less) settings page can never compute a self-referential parent, by construction.
+    * `CommandRunner.exitSubmenuToPreview`'s doc comment and `CommandRunnerFocusSpec`'s "close the command runner fully
+    * via repeated Escapes" test, which already encodes the fixed Escape count): reading the parent id straight off
+    * `surface.ancestors.headOption` rather than a separately tracked `parentGroupId` field means a top-level
+    * (ancestor-less) settings page can never compute a self-referential parent, by construction.
     */
   it should "never compute exitSubmenuToPreview's parent id as the page's own id" in {
     val registry          = CommandRegistry.default

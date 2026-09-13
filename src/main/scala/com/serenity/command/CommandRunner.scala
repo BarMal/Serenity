@@ -261,8 +261,8 @@ final case class CommandRunner(
   /** `visited` guards against a settings-group definition that (accidentally) nests a group under itself: it carries
     * only the ids on the current ancestor path (each group's own id is added exactly when descending into *its own*
     * children), so a repeated group id is never descended into twice along the same branch, which would otherwise
-    * recurse without bound (issue #1454). It must not be seeded from a whole level's sibling ids -- doing so would
-    * make an unrelated sibling's id (at any level, including the top-level `settingsGroups` entries) look like an
+    * recurse without bound (issue #1454). It must not be seeded from a whole level's sibling ids -- doing so would make
+    * an unrelated sibling's id (at any level, including the top-level `settingsGroups` entries) look like an
     * already-visited ancestor purely because it happens to collide with some other group's id, silently pruning a
     * genuine, non-cyclic match as a false "cycle" (caught in review on PR #1500). `settingsGroups` is generated from
     * static definitions and is presumably acyclic by construction -- this isn't a currently-reachable bug -- but
