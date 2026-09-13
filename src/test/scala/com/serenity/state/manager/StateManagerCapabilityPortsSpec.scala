@@ -16,16 +16,16 @@ import org.typelevel.log4cats.noop.NoOpLogger
 
 /** Dedicated coverage for `StateManagerCapabilityPorts` (#1442): the file is almost entirely capability-port trait
   * signatures with no logic of their own to test, but [[EffectRuntimePort]] carries one real default method,
-  * `trackRecentFile` -- de-duplicating and bounding a most-recently-used file list -- shared with the identical
-  * private helper in [[StateManagerFilePersistence]]. This suite pins that shared behavior down directly against a
-  * minimal `EffectRuntimePort` implementation, independent of any concrete port's other dependencies.
+  * `trackRecentFile` -- de-duplicating and bounding a most-recently-used file list -- shared with the identical private
+  * helper in [[StateManagerFilePersistence]]. This suite pins that shared behavior down directly against a minimal
+  * `EffectRuntimePort` implementation, independent of any concrete port's other dependencies.
   */
 class StateManagerCapabilityPortsSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  /** The minimal `EffectRuntimePort` needed to reach its one default method -- every other member is a throwaway
-    * value, never exercised by these tests.
+  /** The minimal `EffectRuntimePort` needed to reach its one default method -- every other member is a throwaway value,
+    * never exercised by these tests.
     */
   private val port: EffectRuntimePort = new EffectRuntimePort:
     val stateRef                = Ref.of[IO, AppState](AppState.initial).unsafeRunSync()
@@ -39,10 +39,11 @@ class StateManagerCapabilityPortsSpec extends AnyFlatSpec with Matchers:
     val onFontConfigChanged     = (_: com.serenity.ui.fonts.FontLoader.FontConfig) => IO.unit
     val deviceTextScaleProvider = IO.pure(1.0)
     val configPersistencePath   = None
-    val uiPresetStore           = UiPresetStore(Paths.get(System.getProperty("java.io.tmpdir"), "capability-ports-spec.json"))
-    val windowSizeProvider      = IO.pure(Option.empty[PreferredWindowSize])
-    val bufferAnimationsRef     = Ref.of[IO, Map[BufferId, com.serenity.animation.AnimationState]](Map.empty).unsafeRunSync()
-    val markdownPreviewWindow   = com.serenity.ui.tui.MarkdownPreviewWindowAvailability.Unavailable
+    val uiPresetStore = UiPresetStore(Paths.get(System.getProperty("java.io.tmpdir"), "capability-ports-spec.json"))
+    val windowSizeProvider = IO.pure(Option.empty[PreferredWindowSize])
+    val bufferAnimationsRef =
+      Ref.of[IO, Map[BufferId, com.serenity.animation.AnimationState]](Map.empty).unsafeRunSync()
+    val markdownPreviewWindow = com.serenity.ui.tui.MarkdownPreviewWindowAvailability.Unavailable
 
   private def path(name: String): Path = Paths.get(name)
 
@@ -69,5 +70,5 @@ class StateManagerCapabilityPortsSpec extends AnyFlatSpec with Matchers:
 
     updated should have size 20
     updated.head shouldBe path("new.txt")
-    updated should not contain path(s"file-20.txt")
+    updated should not contain path("file-20.txt")
   }

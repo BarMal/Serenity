@@ -8,10 +8,10 @@ import com.serenity.state.undo.{HistoryEntry, UndoState}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Exercises [[StateManagerReplaceWorkflow]] on its own (#1442), without a composed `StateManager`: the active
-  * editor buffer lookup and the "tell the surface what to show" callback are plain closures, so each branch
-  * (no active buffer, empty find text, no matches, a scope error, an actual replacement) can be checked directly
-  * rather than only end-to-end via `ReplaceWorkflowStateManagerSpec`.
+/** Exercises [[StateManagerReplaceWorkflow]] on its own (#1442), without a composed `StateManager`: the active editor
+  * buffer lookup and the "tell the surface what to show" callback are plain closures, so each branch (no active buffer,
+  * empty find text, no matches, a scope error, an actual replacement) can be checked directly rather than only
+  * end-to-end via `ReplaceWorkflowStateManagerSpec`.
   */
 class StateManagerReplaceWorkflowSpec extends AnyFlatSpec with Matchers:
 
@@ -44,13 +44,14 @@ class StateManagerReplaceWorkflowSpec extends AnyFlatSpec with Matchers:
       val surfaceUpdates: Ref[IO, List[ReplaceWorkflowState]],
       val workflow: StateManagerReplaceWorkflow
   ):
-    def currentState: AppState               = stateRef.get.unsafeRunSync()
-    def lastSurfaceUpdate: ReplaceWorkflowState = surfaceUpdates.get.unsafeRunSync().lastOption.getOrElse(fail("no surface update recorded"))
+    def currentState: AppState = stateRef.get.unsafeRunSync()
+    def lastSurfaceUpdate: ReplaceWorkflowState =
+      surfaceUpdates.get.unsafeRunSync().lastOption.getOrElse(fail("no surface update recorded"))
 
   private def harness(initialState: AppState): Harness =
-    val stateRefVar   = Ref.of[IO, AppState](initialState).unsafeRunSync()
-    val undoRefVar    = Ref.of[IO, UndoState](UndoState()).unsafeRunSync()
-    val updatesVar    = Ref.of[IO, List[ReplaceWorkflowState]](Nil).unsafeRunSync()
+    val stateRefVar = Ref.of[IO, AppState](initialState).unsafeRunSync()
+    val undoRefVar  = Ref.of[IO, UndoState](UndoState()).unsafeRunSync()
+    val updatesVar  = Ref.of[IO, List[ReplaceWorkflowState]](Nil).unsafeRunSync()
     def activeEditorBufferId(state: AppState): Option[BufferId] =
       state.persisted.layout.activeEditorPaneId.flatMap(state.persisted.layout.editorPanes.get).flatMap(_.bufferId)
     def updateSurface(id: SurfaceId, updated: ReplaceWorkflowState): IO[Unit] =
@@ -111,7 +112,11 @@ class StateManagerReplaceWorkflowSpec extends AnyFlatSpec with Matchers:
 
   "ReplaceAll" should "replace every match, dismiss the surface, and record an undo entry" in {
     val before = stateWith(
-      ReplaceWorkflowState(findText = "cat", replacementText = "dog", selectedAction = ReplaceWorkflowAction.ReplaceAll),
+      ReplaceWorkflowState(
+        findText = "cat",
+        replacementText = "dog",
+        selectedAction = ReplaceWorkflowAction.ReplaceAll
+      ),
       "cat sat, cat ran"
     )
     val h = harness(before)
@@ -126,7 +131,11 @@ class StateManagerReplaceWorkflowSpec extends AnyFlatSpec with Matchers:
 
   it should "move focus to the active editor pane after replacing" in {
     val before = stateWith(
-      ReplaceWorkflowState(findText = "cat", replacementText = "dog", selectedAction = ReplaceWorkflowAction.ReplaceAll),
+      ReplaceWorkflowState(
+        findText = "cat",
+        replacementText = "dog",
+        selectedAction = ReplaceWorkflowAction.ReplaceAll
+      ),
       "cat"
     )
     val h = harness(before)
@@ -138,7 +147,11 @@ class StateManagerReplaceWorkflowSpec extends AnyFlatSpec with Matchers:
 
   "ReplaceNext" should "replace only the first match at or after the cursor and keep the surface open" in {
     val before = stateWith(
-      ReplaceWorkflowState(findText = "cat", replacementText = "dog", selectedAction = ReplaceWorkflowAction.ReplaceNext),
+      ReplaceWorkflowState(
+        findText = "cat",
+        replacementText = "dog",
+        selectedAction = ReplaceWorkflowAction.ReplaceNext
+      ),
       "cat sat, cat ran"
     )
     val h = harness(before)
@@ -152,7 +165,11 @@ class StateManagerReplaceWorkflowSpec extends AnyFlatSpec with Matchers:
 
   it should "record an undo entry for the single replacement" in {
     val before = stateWith(
-      ReplaceWorkflowState(findText = "cat", replacementText = "dog", selectedAction = ReplaceWorkflowAction.ReplaceNext),
+      ReplaceWorkflowState(
+        findText = "cat",
+        replacementText = "dog",
+        selectedAction = ReplaceWorkflowAction.ReplaceNext
+      ),
       "cat sat"
     )
     val h = harness(before)

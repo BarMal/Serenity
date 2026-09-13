@@ -49,24 +49,30 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
       lspQueue.stream.take(1).compile.last.timeout(within).handleError(_ => None).unsafeRunSync()
 
   private def harness(initialState: AppState): Harness =
-    val stateRefVar   = Ref.of[IO, AppState](initialState).unsafeRunSync()
-    val sessionRoot   = Files.createTempDirectory("file-persistence-spec")
-    val triggersVar   = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
-    val lspQueueVar   = LspEffectQueue.create.unsafeRunSync()
+    val stateRefVar        = Ref.of[IO, AppState](initialState).unsafeRunSync()
+    val sessionRoot        = Files.createTempDirectory("file-persistence-spec")
+    val triggersVar        = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
+    val lspQueueVar        = LspEffectQueue.create.unsafeRunSync()
     val sessionPersistence = new RecordingSessionPersistence(triggersVar, sessionRoot)
 
     new Harness(
       stateRefVar,
       triggersVar,
       lspQueueVar,
-      new StateManagerFilePersistence(stateRefVar, new FileManager(), sessionPersistence, NoOpLogger.impl[IO], lspQueueVar)
+      new StateManagerFilePersistence(
+        stateRefVar,
+        new FileManager(),
+        sessionPersistence,
+        NoOpLogger.impl[IO],
+        lspQueueVar
+      )
     )
 
   private def stateWithBuffer(buffer: Buffer): AppState =
     AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(buffer.id -> buffer)))
 
   "saveExistingBuffer" should "write the buffer's content to its existing file path and update state with the saved buffer" in {
-    val path   = Files.createTempFile("existing", ".txt")
+    val path = Files.createTempFile("existing", ".txt")
     Files.writeString(path, "old content")
     val bufferId = BufferId(1)
     val buffer = Buffer
@@ -84,7 +90,9 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
     val path     = Files.createTempFile("existing", ".txt")
     val bufferId = BufferId(1)
     val buffer =
-      Buffer.fromString(bufferId, "x").copy(document = Buffer.fromString(bufferId, "x").document.copy(filePath = Some(path)))
+      Buffer
+        .fromString(bufferId, "x")
+        .copy(document = Buffer.fromString(bufferId, "x").document.copy(filePath = Some(path)))
     val h = harness(stateWithBuffer(buffer))
 
     h.persistence.saveExistingBuffer(bufferId).unsafeRunSync()
@@ -167,9 +175,7 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val buffer = Buffer
       .fromString(bufferId, "fn main() {}")
-      .copy(document =
-        Buffer.fromString(bufferId, "fn main() {}").document.copy(language = Some(LanguageId.Rust))
-      )
+      .copy(document = Buffer.fromString(bufferId, "fn main() {}").document.copy(language = Some(LanguageId.Rust)))
     val state = stateWithBuffer(buffer).copy(persisted =
       stateWithBuffer(buffer).persisted.copy(config = AppConfig.default.withAppMode(AppMode.Code))
     )
@@ -187,9 +193,7 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val buffer = Buffer
       .fromString(bufferId, "fn main() {}")
-      .copy(document =
-        Buffer.fromString(bufferId, "fn main() {}").document.copy(language = Some(LanguageId.Rust))
-      )
+      .copy(document = Buffer.fromString(bufferId, "fn main() {}").document.copy(language = Some(LanguageId.Rust)))
     val state = stateWithBuffer(buffer).copy(persisted =
       stateWithBuffer(buffer).persisted.copy(config = AppConfig.default.withAppMode(AppMode.Prose))
     )
