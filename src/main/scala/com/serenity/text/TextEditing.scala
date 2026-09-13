@@ -128,13 +128,21 @@ object TextEditing:
         case _ =>
           CharacterClass.Punctuation
 
-  /** A fresh `BreakIterator.getCharacterInstance` over `source`, adapted through [[CharacterSourceIterator]] rather
-    * than a materialised `String` -- confirmed against `RopeCharacterSource` (#1277 step 3 spike) to work directly
-    * against a rope-backed source, so a large line's grapheme scan never copies the whole line into a `String`.
-    * `BreakIterator` is stateful and not thread-safe, so this builds a new instance per call rather than sharing one.
+  /** One `BreakIterator.getCharacterInstance` per thread, reused across calls via `setText` rather than constructed
+    * fresh each time. `BreakIterator` is stateful and not thread-safe, so a single shared instance isn't safe -- hence
+    * `ThreadLocal` -- but constructing `getCharacterInstance()` itself is expensive enough (cloning the rule engine)
+    * that doing it on every grapheme-boundary query measurably regressed find/replace over large documents, which
+    * resolves thousands of matches by calling `isWholeGraphemeRange` (and so this) per match.
+    */
+  private val threadLocalBreakIterator: ThreadLocal[BreakIterator] =
+    ThreadLocal.withInitial(() => BreakIterator.getCharacterInstance())
+
+  /** `source` adapted through [[CharacterSourceIterator]] rather than a materialised `String` -- confirmed against
+    * `RopeCharacterSource` (#1277 step 3 spike) to work directly against a rope-backed source, so a large line's
+    * grapheme scan never copies the whole line into a `String`.
     */
   private def graphemeBreakIterator(source: CharacterSource): BreakIterator =
-    val boundary = BreakIterator.getCharacterInstance()
+    val boundary = threadLocalBreakIterator.get()
     boundary.setText(CharacterSourceIterator(source))
     boundary
 
