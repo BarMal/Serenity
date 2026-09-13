@@ -269,7 +269,12 @@ object LspManager:
                     .sendRequest(LspMethod("textDocument/semanticTokens/full"), LspProtocol.semanticTokensParams(uri))
                     .flatMap(response =>
                       LspProtocol.parseSemanticTokens(response, legend).fold(IO.unit) { tokens =>
-                        isCurrent(RequestKey(uri, RequestKind.SemanticTokens), context, documentVersions, requestContexts)
+                        isCurrent(
+                          RequestKey(uri, RequestKind.SemanticTokens),
+                          context,
+                          documentVersions,
+                          requestContexts
+                        )
                           .ifM(applyEvent(LspEvent.LspSemanticTokensReceived(rawUri, tokens)), IO.unit)
                       }
                     )

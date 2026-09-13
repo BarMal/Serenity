@@ -480,11 +480,13 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       harness
         .use { manager =>
           for
-            _ <- open(manager)
-            _ <- manager.connection.recordSemanticTokensLegend(Some(legend))
-            _ <- manager.effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
+            _       <- open(manager)
+            _       <- manager.connection.recordSemanticTokensLegend(Some(legend))
+            _       <- manager.effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
             request <- takeMessage(manager.connection)
-            _ = request.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/semanticTokens/full")
+            _ = request.hcursor.downField("method").as[String].toOption shouldBe Some(
+              "textDocument/semanticTokens/full"
+            )
             _ = request.hcursor
               .downField("params")
               .downField("textDocument")
@@ -500,7 +502,13 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
               LspEvent.LspSemanticTokensReceived(
                 uri,
                 List(
-                  SemanticToken(line = 0, startCharacter = 0, length = 3, tokenType = "keyword", tokenModifiers = Set.empty)
+                  SemanticToken(
+                    line = 0,
+                    startCharacter = 0,
+                    length = 3,
+                    tokenType = "keyword",
+                    tokenModifiers = Set.empty
+                  )
                 )
               )
             )
@@ -530,9 +538,9 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       harness
         .use { manager =>
           for
-            _ <- open(manager)
-            _ <- manager.connection.recordSemanticTokensLegend(Some(SemanticTokensLegend(List("keyword"), Nil)))
-            _ <- manager.effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
+            _       <- open(manager)
+            _       <- manager.connection.recordSemanticTokensLegend(Some(SemanticTokensLegend(List("keyword"), Nil)))
+            _       <- manager.effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
             request <- takeMessage(manager.connection)
             _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
             _ <- takeMessage(manager.connection)

@@ -107,8 +107,8 @@ class LspConnection private (
     pendingRef.get.map(_.size)
 
   /** The server's semantic tokens legend, captured off its `initialize` result during the handshake (see
-    * [[LspConnection.initHandshake]]) -- `None` when the server never declared `semanticTokensProvider`, or (in
-    * tests) when nothing has recorded one yet.
+    * [[LspConnection.initHandshake]]) -- `None` when the server never declared `semanticTokensProvider`, or (in tests)
+    * when nothing has recorded one yet.
     */
   private[lsp] def semanticTokensLegend: IO[Option[SemanticTokensLegend]] =
     legendRef.get

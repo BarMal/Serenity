@@ -2,9 +2,8 @@ package com.serenity.lsp
 
 import scala.concurrent.duration.*
 
-import cats.effect.Resource
 import cats.effect.unsafe.implicits.global
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 import com.serenity.lsp.client.{LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.SemanticTokensLegend
