@@ -131,7 +131,8 @@ private[manager] class StateManagerComposition(
     runtimeStateRef,
     runtimeLspQueue,
     runtimeBufferAnimationsRef,
-    animations
+    animations,
+    operations
   )
 
   private val workflow = new StateManagerWorkflowCapability(

@@ -9,6 +9,7 @@ import com.serenity.keystroke.events.{Enter, TabKey}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -233,3 +234,133 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
     after.persisted.layout.editorPanes shouldBe panesBefore
     after.persisted.layout.workspaceTree shouldBe before.persisted.layout.workspaceTree
   }
+
+  /** Audit of #1183/#1499: `createBuffer`, `createNewEmptyBuffer`, `updateBuffer`, `createPane` and `switchToPane`
+    * (`StateManagerEditorCapability.scala`) still commit via bare `stateRef.modify`/`stateRef.update`, bypassing
+    * `validateAndUpdateState` entirely -- unlike the close-workflow family and the viewport/panel call sites above,
+    * which #1183/#1499 already routed through it. `StateManagerEventPipeline`'s dismiss-last-pane branch
+    * (`createBuffer("")` then `createPane(Some(bufferId))`) calls straight through this unchecked path, so it's
+    * reachable from the same "some earlier unchecked mutation left the state mid-drift" scenarios the specs above
+    * already exercise.
+    */
+  "StateManager.bufferManager.createBuffer" should
+    "not commit a duplicate buffer-order entry when nextBufferId has drifted" in {
+      val stateManager = createStateManager()
+      corruptNextBufferIdToCollideWithLiveBuffer(stateManager)
+
+      val before = stateManager.getCurrentState.unsafeRunSync()
+      stateManager.bufferManager.createBuffer("fresh content", None).unsafeRunSync()
+      val after = stateManager.getCurrentState.unsafeRunSync()
+
+      after.isValid shouldBe true
+      after.persisted.bufferOrder should contain theSameElementsAs after.persisted.bufferOrder.distinct
+      after.persisted.buffers(BufferId(0)).document.filePath shouldBe before.persisted
+        .buffers(BufferId(0))
+        .document
+        .filePath
+    }
+
+  "StateManager.bufferManager.createNewEmptyBuffer" should
+    "not commit a duplicate buffer-order entry when nextBufferId has drifted" in {
+      val stateManager = createStateManager()
+      corruptNextBufferIdToCollideWithLiveBuffer(stateManager)
+
+      val before = stateManager.getCurrentState.unsafeRunSync()
+      stateManager.bufferManager.createNewEmptyBuffer.unsafeRunSync()
+      val after = stateManager.getCurrentState.unsafeRunSync()
+
+      after.isValid shouldBe true
+      after.persisted.bufferOrder should contain theSameElementsAs after.persisted.bufferOrder.distinct
+      after.persisted.buffers(BufferId(0)).document.filePath shouldBe before.persisted
+        .buffers(BufferId(0))
+        .document
+        .filePath
+    }
+
+  /** `updateBuffer` replaces `document.content` without ever re-checking the buffer's existing cursors against the
+    * new line count, so a cursor left on a now-removed line survives the edit as an out-of-bounds position -- the
+    * exact invariant `AppStateValidation.documentPositionErrors` exists to catch.
+    */
+  "StateManager.bufferManager.updateBuffer" should
+    "not commit a cursor left out-of-bounds by content that shrank under it" in {
+      val stateManager = createStateManager()
+      val bufferId     = stateManager.bufferManager.createBuffer("line one\nline two", None).unsafeRunSync()
+      stateManager
+        .updateState { state =>
+          val buffer = state.persisted.buffers(bufferId)
+          state.copy(persisted =
+            state.persisted.copy(buffers =
+              state.persisted.buffers.updated(
+                bufferId,
+                buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(1, 0))))
+              )
+            )
+          )
+        }
+        .unsafeRunSync()
+      val before = stateManager.getCurrentState.unsafeRunSync()
+
+      stateManager.bufferManager.updateBuffer(bufferId, "only one line").unsafeRunSync()
+      val after = stateManager.getCurrentState.unsafeRunSync()
+
+      after.isValid shouldBe true
+      AppStateValidation.validationErrors(after) shouldBe empty
+      after.persisted.buffers(bufferId).editing.cursors shouldBe before.persisted.buffers(bufferId).editing.cursors
+    }
+
+  /** `createPane` builds an `EditorPane.withBuffer(paneId, id)` from whatever `BufferId` its caller passes, with no
+    * check that the buffer actually exists -- directly violating the "Pane references non-existent buffer" invariant
+    * `AppStateValidation` enforces, and reachable with no drifted precondition at all.
+    */
+  "StateManager.paneManager.createPane" should
+    "not commit a pane referencing a buffer that was never created" in {
+      val stateManager  = createStateManager()
+      val phantomBuffer = BufferId(9999)
+
+      val before = stateManager.getCurrentState.unsafeRunSync()
+      stateManager.paneManager.createPane(Some(phantomBuffer)).unsafeRunSync()
+      val after = stateManager.getCurrentState.unsafeRunSync()
+
+      after.isValid shouldBe true
+      AppStateValidation.validationErrors(after) shouldBe empty
+      after.persisted.layout.editorPanes.values.foreach { pane =>
+        pane.bufferId.foreach(bufferId => after.persisted.buffers should contain key bufferId)
+      }
+      after.persisted.layout.editorPanes.keySet shouldBe before.persisted.layout.editorPanes.keySet
+    }
+
+  /** `switchToPane` only checks that `paneId` is a live key in `persisted.layout.editorPanes` before pointing focus at
+    * it -- it never checks that the pane is still reachable from the workspace tree, so a pane that has drifted out of
+    * the tree (the same class of drift the close-all spec above already proves happens) is still accepted, committing
+    * a `Focus.EditorPane` that `AppStateValidation` flags as "outside workspace tree".
+    */
+  "StateManager.paneManager.switchToPane" should
+    "not move focus onto a pane that has drifted out of the workspace tree" in {
+      val stateManager = createStateManager()
+      val secondBuffer = stateManager.bufferManager.createBuffer("second", None).unsafeRunSync()
+      val secondPane   = stateManager.paneManager.createPane(Some(secondBuffer)).unsafeRunSync()
+      stateManager.paneManager.switchToPane(PaneId(0)).unsafeRunSync()
+
+      // Drift: `secondPane` is dropped from the workspace tree but left dangling in `editorPanes`, simulating some
+      // other unchecked mutation path having desynced the two (mirroring the close-all spec's buffer-order drift).
+      stateManager
+        .updateState { state =>
+          state.copy(persisted =
+            state.persisted.copy(layout =
+              state.persisted.layout.copy(workspaceTree =
+                Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
+              )
+            )
+          )
+        }
+        .unsafeRunSync()
+      val before = stateManager.getCurrentState.unsafeRunSync()
+      AppStateValidation.validationErrors(before) should not be empty
+
+      stateManager.paneManager.switchToPane(secondPane).unsafeRunSync()
+      val after = stateManager.getCurrentState.unsafeRunSync()
+
+      after.persisted.focus shouldBe before.persisted.focus
+      after.persisted.layout.activeEditorPaneId shouldBe before.persisted.layout.activeEditorPaneId
+      AppStateValidation.validationErrors(after) shouldBe AppStateValidation.validationErrors(before)
+    }
