@@ -27,7 +27,7 @@ final private[manager] class UndoRecording(port: UndoRecordingPort):
           val sameGroup =
             undo.pendingGroup.exists(g => g.bufferId == bufferEdit.bufferId && g.paneId == bufferEdit.paneId)
           if sameGroup then undo.clearRedo
-          else undo.flushPendingGroup.copy(pendingGroup = Some(bufferEdit), redoStack = Nil)
+          else undo.flushPendingGroup.copy(pendingGroup = Some(bufferEdit), redoStack = Vector.empty)
         case _ =>
           undo.flushPendingGroup.pushUndo(entry)
     }
@@ -35,17 +35,19 @@ final private[manager] class UndoRecording(port: UndoRecordingPort):
   def applyUndo(@annotation.unused prevState: AppState): IO[Unit] =
     undoRef.get.flatMap { undo =>
       val flushed = undo.flushPendingGroup
-      flushed.undoStack match
-        case Nil => IO.unit
-        case entry :: rest =>
+      flushed.undoStack.headOption match
+        case None => IO.unit
+        case Some(entry) =>
+          val rest = flushed.undoStack.drop(1)
           restoreAndPush(entry, state => flushed.copy(undoStack = rest).pushRedo(state))
     }
 
   def applyRedo(@annotation.unused prevState: AppState): IO[Unit] =
     undoRef.get.flatMap { undo =>
-      undo.redoStack match
-        case Nil => IO.unit
-        case entry :: rest =>
+      undo.redoStack.headOption match
+        case None => IO.unit
+        case Some(entry) =>
+          val rest = undo.redoStack.drop(1)
           restoreAndPush(entry, inverse => undo.copy(redoStack = rest).pushUndo(inverse, clearRedo = false))
     }
 
