@@ -1,6 +1,7 @@
 package com.serenity.io
 
 import java.nio.charset.StandardCharsets
+import java.nio.file.attribute.DosFileAttributeView
 import java.nio.file.{AtomicMoveNotSupportedException, Files, Path, StandardCopyOption}
 
 import scala.util.control.NonFatal
@@ -39,11 +40,20 @@ object AtomicFileWriter:
     // restrictive permissions. Reads only that attribute, not `source`'s content: `Files.copy(..., COPY_ATTRIBUTES)`
     // -- this method's previous implementation -- copies the whole file to carry attributes over, only for that
     // content to be overwritten a moment later by `write` (#1444's second, wasted read of `source`, on top of
-    // `DocumentStorage.saveLocal`'s own read for its revision hash). Non-POSIX filesystems have no permission bits
-    // to carry over here, so this is a no-op there rather than falling back to the old whole-file copy.
+    // `DocumentStorage.saveLocal`'s own read for its revision hash). Non-POSIX filesystems (Windows NTFS/FAT) have
+    // no POSIX permission bits, so `getPosixFilePermissions` throws `UnsupportedOperationException` there; fall
+    // back to carrying over DOS attributes (read-only/hidden/archive/system) instead, which the old
+    // `Files.copy(..., COPY_ATTRIBUTES)` preserved on Windows -- still attribute-only, never touching content.
     def copyAttributes(source: Path, target: Path): Path =
       try Files.setPosixFilePermissions(target, Files.getPosixFilePermissions(source))
-      catch case _: UnsupportedOperationException => target
+      catch
+        case _: UnsupportedOperationException =>
+          (
+            Option(Files.getFileAttributeView(source, classOf[DosFileAttributeView])),
+            Option(Files.getFileAttributeView(target, classOf[DosFileAttributeView]))
+          ) match
+            case (Some(sourceView), Some(targetView)) => copyDosAttributes(sourceView, targetView)
+            case _                                    => ()
       target
 
     def write(path: Path, bytes: Array[Byte]): Path = Files.write(path, bytes)
@@ -61,6 +71,17 @@ object AtomicFileWriter:
     * overloads below.
     */
   private[serenity] def defaultFileSystem: AtomicFileSystem = JdkFileSystem
+
+  /** Carries DOS attribute flags from `source` to `target` -- the non-POSIX fallback `copyAttributes` uses on Windows
+    * filesystems. Exposed at the same visibility as `defaultFileSystem` so it can be tested directly against fakes,
+    * independent of any real NTFS/FAT filesystem.
+    */
+  private[serenity] def copyDosAttributes(source: DosFileAttributeView, target: DosFileAttributeView): Unit =
+    val attributes = source.readAttributes()
+    target.setReadOnly(attributes.isReadOnly)
+    target.setHidden(attributes.isHidden)
+    target.setArchive(attributes.isArchive)
+    target.setSystem(attributes.isSystem)
 
   /** Atomically replace `path` with UTF-8 text, falling back when atomic moves are unsupported. */
   def writeString(path: Path, content: String): IO[Unit] =
