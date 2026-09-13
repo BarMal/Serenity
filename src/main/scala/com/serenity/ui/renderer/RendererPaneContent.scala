@@ -114,7 +114,7 @@ object RendererPaneContent:
             context,
             snap,
             markdownLensFrame,
-            annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty, None)),
+            annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty, SemanticTokensAvailability.Pending)),
             dirtyRows
           )
         }
@@ -288,8 +288,13 @@ object RendererPaneContent:
           then
             val lineTheme      = state.persisted.theme
             val styledSegments = visualLineStyledSegments(visualLine, lineTheme, snapshot, activeBodyLines)
-            val lineSemanticTokens =
-              annotations.semanticTokensByLine.map(_.getOrElse(visualLine.bufferLine, Nil))
+            // `Pending` renders as `Some(Nil)`, not `None` -- a request still in flight (or one not yet sent) must
+            // not flash the muted "unavailable" style a confirmed `Unavailable` gets; it renders exactly like a
+            // connected document whose visible lines just don't have tokens yet.
+            val lineSemanticTokens = annotations.semanticTokensAvailability match
+              case SemanticTokensAvailability.Available(byLine) => Some(byLine.getOrElse(visualLine.bufferLine, Nil))
+              case SemanticTokensAvailability.Pending           => Some(Nil)
+              case SemanticTokensAvailability.Unavailable       => None
             if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
               CharacterRenderer.renderMeasuredLineWithAnimation(
                 context.surface,

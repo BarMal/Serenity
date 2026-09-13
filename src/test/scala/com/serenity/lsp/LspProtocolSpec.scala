@@ -344,8 +344,8 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
   // ── SemanticTokens (issue #859 / #1177) ──────────────────────────────────────
 
   it should "declare a semanticTokens client capability with a full-request legend" in {
-    val params  = LspProtocol.initializeParams(12345, WorkspaceRootUri("file:///workspace"))
-    val semTok  = params.hcursor.downField("capabilities").downField("textDocument").downField("semanticTokens")
+    val params = LspProtocol.initializeParams(12345, WorkspaceRootUri("file:///workspace"))
+    val semTok = params.hcursor.downField("capabilities").downField("textDocument").downField("semanticTokens")
     semTok.downField("requests").downField("full").as[Boolean].toOption shouldBe Some(true)
     semTok.downField("tokenTypes").as[List[String]].toOption shouldBe Some(LspProtocol.ClientSemanticTokenTypes)
     semTok.downField("tokenModifiers").as[List[String]].toOption shouldBe Some(LspProtocol.ClientSemanticTokenModifiers)
@@ -392,9 +392,7 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     // Token 3: next line (deltaLine 2 -> line 2), char is absolute on the new line: 1, length 10, type "comment"
     //   (index 2), modifiers none
     val data = List(
-      0, 0, 3, 0, 0,
-      0, 4, 5, 1, 3,
-      2, 1, 10, 2, 0
+      0, 0, 3, 0, 0, 0, 4, 5, 1, 3, 2, 1, 10, 2, 0
     )
     val result = Json.obj("data" -> data.map(_.asJson).asJson)
 

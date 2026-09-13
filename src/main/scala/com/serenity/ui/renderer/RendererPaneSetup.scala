@@ -30,10 +30,10 @@ final case class PaneFrameRecord(
 final case class BufferRenderAnnotations(
     commentsByLine: Map[Int, List[DocumentComment]],
     diagnosticsByLine: Map[Int, List[com.serenity.lsp.model.Diagnostic]],
-    // `None` means this document has no LSP semantic tokens at all (no connected server, or none received yet) --
-    // distinct from `Some(Map.empty)`, "connected, but this document's tokens don't cover any visible line yet". See
-    // AppState.semanticTokensIndexByBuffer.
-    semanticTokensByLine: Option[Map[Int, List[com.serenity.lsp.model.SemanticToken]]]
+    // See `SemanticTokensAvailability` for what each case means -- `Pending` (a request may still be in flight) is
+    // deliberately distinct from `Unavailable` (confirmed no server/capability). AppState.semanticTokensIndexByBuffer
+    // is where this is derived.
+    semanticTokensAvailability: SemanticTokensAvailability
 )
 
 /** Answers "what does each pane's content look like this frame": the per-frame [[EditorPaneRenderPlan]] (buffer layout
@@ -95,8 +95,9 @@ object RendererPaneSetup:
             state.annotationIndexByBuffer.get(bufferId).map(_()).getOrElse(AnnotationLineIndex(Vector.empty, Map.empty))
           val commentsByLine    = cached.commentsByLine(visibleLines)
           val diagnosticsByLine = visibleAnnotationLines(visibleLines, cached.diagnosticsByLine)
-          val semanticTokensByLine = state.semanticTokensIndexByBuffer.get(bufferId).flatMap(_())
-          bufferId -> BufferRenderAnnotations(commentsByLine, diagnosticsByLine, semanticTokensByLine)
+          val semanticTokensAvailability =
+            state.semanticTokensIndexByBuffer.get(bufferId).map(_()).getOrElse(SemanticTokensAvailability.Pending)
+          bufferId -> BufferRenderAnnotations(commentsByLine, diagnosticsByLine, semanticTokensAvailability)
         }
       }
       .toMap

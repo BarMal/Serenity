@@ -51,12 +51,12 @@ object ThemeManager:
   /** Apply syntax highlighting to a line of text, memoized by (line, theme, language, this line's semantic tokens).
     *
     * LSP `textDocument/semanticTokens` is the only token source (issues #859/#1177 replaced the previous handwritten,
-    * Scala-shaped regex tokenizer entirely, rather than keeping it as a fallback): `semanticTokens` is `Some` with
-    * this line's tokens (however many that is, including zero) when the document's connected language server has
-    * supplied them, or `None` when it hasn't -- no server connected yet, the server doesn't support semantic tokens,
-    * or a request is still in flight. `None` renders a visibly distinct "unavailable" style rather than silently
-    * falling back to plain text, so a user isn't left wondering whether highlighting is simply absent for this line
-    * or genuinely can't be provided right now.
+    * Scala-shaped regex tokenizer entirely, rather than keeping it as a fallback): `semanticTokens` is `Some` with this
+    * line's tokens (however many that is, including zero) when the document's connected language server has supplied
+    * them, or `None` when it hasn't -- no server connected yet, the server doesn't support semantic tokens, or a
+    * request is still in flight. `None` renders a visibly distinct "unavailable" style rather than silently falling
+    * back to plain text, so a user isn't left wondering whether highlighting is simply absent for this line or
+    * genuinely can't be provided right now.
     */
   def highlightLine(
     line: String,
@@ -113,18 +113,18 @@ object ThemeManager:
           val end   = (token.startCharacter + token.length).min(line.length)
           if start >= end then loop(cursor, rest, acc)
           else
-            val withGap  = if start > cursor then normalRun(line.substring(cursor, start)) :: acc else acc
-            val element  = SyntaxElement.fromLspTokenType(token.tokenType)
-            val color    = theme.colorFor(element)
-            val styled   = StyledText(line.substring(start, end), color.style, color.foreground, color.background)
+            val withGap = if start > cursor then normalRun(line.substring(cursor, start)) :: acc else acc
+            val element = SyntaxElement.fromLspTokenType(token.tokenType)
+            val color   = theme.colorFor(element)
+            val styled  = StyledText(line.substring(start, end), color.style, color.foreground, color.background)
             loop(end, rest, styled :: withGap)
 
     if line.isEmpty then List(normalRun(""))
     else loop(0, sorted, Nil)
 
   /** The visible "no syntax highlighting available" treatment for a language-bearing line with no semantic tokens
-    * (issue #859/#1177): distinct from both real highlighting and the plain-text rendering an undeclared language
-    * gets, so a user can tell "nothing to highlight" apart from "highlighting isn't available right now."
+    * (issue #859/#1177): distinct from both real highlighting and the plain-text rendering an undeclared language gets,
+    * so a user can tell "nothing to highlight" apart from "highlighting isn't available right now."
     */
   private def renderUnavailable(line: String, theme: Theme): List[StyledText] =
     List(StyledText(line, TextStyle.italic, theme.muted, theme.background))

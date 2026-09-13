@@ -180,7 +180,9 @@ class RenderingFixesSpec extends AnyFlatSpec with Matchers:
       AnimationState.empty,
       syntaxHighlightingEnabled = true,
       language = Some(LanguageId.Scala),
-      semanticTokens = Some(List(SemanticToken(line = 0, startCharacter = 0, length = 2, tokenType = "keyword", tokenModifiers = Set.empty)))
+      semanticTokens = Some(
+        List(SemanticToken(line = 0, startCharacter = 0, length = 2, tokenType = "keyword", tokenModifiers = Set.empty))
+      )
     )
 
     surface.styleCalls should contain(surface.StyleCall("enable", com.serenity.ui.theme.TextStyle.bold))

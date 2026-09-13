@@ -44,7 +44,22 @@ object SystemEventReducer:
         ReducerResult.noEffects(
           state.copy(runtime =
             state.runtime.copy(semanticTokensState =
-              state.runtime.semanticTokensState.copy(byUri = state.runtime.semanticTokensState.byUri + (uri -> tokens))
+              state.runtime.semanticTokensState.copy(
+                byUri = state.runtime.semanticTokensState.byUri + (uri -> tokens),
+                unavailableUris = state.runtime.semanticTokensState.unavailableUris - uri
+              )
+            )
+          )
+        )
+
+      case LspEvent.LspSemanticTokensUnavailable(uri) =>
+        ReducerResult.noEffects(
+          state.copy(runtime =
+            state.runtime.copy(semanticTokensState =
+              state.runtime.semanticTokensState.copy(
+                byUri = state.runtime.semanticTokensState.byUri - uri,
+                unavailableUris = state.runtime.semanticTokensState.unavailableUris + uri
+              )
             )
           )
         )

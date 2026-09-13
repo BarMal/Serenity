@@ -6,8 +6,8 @@ import com.serenity.ui.theme.{SyntaxElement, Theme, ThemeManager}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Contract tests for issue #859/#1177: LSP `textDocument/semanticTokens` is the only syntax-coloring mechanism for
-  * any declared language (the handwritten, Scala-shaped regex tokenizer this replaced is gone -- see
+/** Contract tests for issue #859/#1177: LSP `textDocument/semanticTokens` is the only syntax-coloring mechanism for any
+  * declared language (the handwritten, Scala-shaped regex tokenizer this replaced is gone -- see
   * `LspManagerSemanticTokensRenderingSpec`/`LspProtocolSpec` for the request/decode side). A line renders with real
   * per-language tokens when they've been supplied, a visibly distinct "unavailable" style when the document has none
   * yet, and unstyled plain text only when no language is declared at all.
@@ -17,7 +17,13 @@ class LanguageAwareHighlightingSpec extends AnyFlatSpec with Matchers:
   private val theme = Theme.dark
 
   private def token(startCharacter: Int, length: Int, tokenType: String): SemanticToken =
-    SemanticToken(line = 0, startCharacter = startCharacter, length = length, tokenType = tokenType, tokenModifiers = Set.empty)
+    SemanticToken(
+      line = 0,
+      startCharacter = startCharacter,
+      length = length,
+      tokenType = tokenType,
+      tokenModifiers = Set.empty
+    )
 
   "highlightLine" should "color a JavaScript identifier by its real semantic token type, not a Scala keyword table" in {
     // `trait` is a plain identifier in JavaScript -- no Scala-shaped rule should treat it as a keyword, and the only
@@ -32,7 +38,8 @@ class LanguageAwareHighlightingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render a visibly distinct 'unavailable' style when a declared language has no semantic tokens" in {
-    val styled = ThemeManager.highlightLine("def foo(): return True", theme, Some(LanguageId.Python), semanticTokens = None)
+    val styled =
+      ThemeManager.highlightLine("def foo(): return True", theme, Some(LanguageId.Python), semanticTokens = None)
 
     styled shouldBe List(
       com.serenity.ui.theme.StyledText(

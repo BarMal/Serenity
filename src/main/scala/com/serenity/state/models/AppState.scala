@@ -2,7 +2,6 @@ package com.serenity.state.models
 
 import com.serenity.animation.WindowSitter
 import com.serenity.config.*
-import com.serenity.lsp.model.SemanticToken
 import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.text.TextStatistics
 import com.serenity.ui.layout.{Layout, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
@@ -31,18 +30,22 @@ final case class AppState(
         bufferId -> (() => index)
     }.toMap
 
-  /** This buffer's semantic tokens, grouped by line, or `None` when this document has no entry in
-    * `runtime.semanticTokensState` at all -- distinct from `Some(Map.empty)`, which would mean "LSP connected, this
-    * document just has no tokens yet on any visible line." The renderer uses the `None` case to show a visible
-    * "syntax highlighting unavailable" indicator instead of silently rendering plain text (issue #859/#1177).
+  /** This buffer's semantic-tokens status -- see [[SemanticTokensAvailability]] for what each case means and how the
+    * renderer treats it. `Pending` (no entry in `runtime.semanticTokensState` at all yet) is deliberately distinct from
+    * `Unavailable` (confirmed via `unavailableUris`): a request still in flight must not render the same muted style as
+    * a confirmed absence (issue #859/#1177 rendering-slice review finding).
     */
-  lazy val semanticTokensIndexByBuffer: Map[BufferId, () => Option[Map[Int, List[SemanticToken]]]] =
+  lazy val semanticTokensIndexByBuffer: Map[BufferId, () => SemanticTokensAvailability] =
     persisted.buffers.iterator.map {
       case (bufferId, buffer) =>
-        lazy val index = runtime.semanticTokensState.byUri
-          .get(com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer))
-          .map(_.groupBy(_.line))
-        bufferId -> (() => index)
+        lazy val uri = com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer)
+        lazy val availability =
+          runtime.semanticTokensState.byUri.get(uri) match
+            case Some(tokens) => SemanticTokensAvailability.Available(tokens.groupBy(_.line))
+            case None =>
+              if runtime.semanticTokensState.unavailableUris.contains(uri) then SemanticTokensAvailability.Unavailable
+              else SemanticTokensAvailability.Pending
+        bufferId -> (() => availability)
     }.toMap
 
   lazy val markdownFenceIndexByBuffer: Map[BufferId, () => MarkdownBlockLens.FenceRangeIndex] =

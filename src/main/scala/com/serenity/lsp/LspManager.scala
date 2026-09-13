@@ -135,7 +135,11 @@ object LspManager:
                   connectionProvider
                 )
             case None =>
-              logger.debug(s"[LSP] No server for ${languageId.id}, skipping didOpen")
+              // No server for this language at all -- distinct from a request still in flight, so the renderer
+              // shows the confirmed "unavailable" style rather than staying stuck in the neutral loading state
+              // forever (issue #859/#1177 rendering-slice review finding).
+              logger.debug(s"[LSP] No server for ${languageId.id}, skipping didOpen") >>
+                applyEvent(LspEvent.LspSemanticTokensUnavailable(rawUri))
           }
 
       case LspEffect.FileChanged(rawUri, languageId, text, version) =>
@@ -159,7 +163,7 @@ object LspManager:
                   logger,
                   connectionProvider
                 )
-            case None => IO.unit
+            case None => applyEvent(LspEvent.LspSemanticTokensUnavailable(rawUri))
           }
 
       case LspEffect.FileClosed(rawUri, languageId) =>
@@ -280,12 +284,21 @@ object LspManager:
           connectionProvider
         )
 
-  /** Requests `textDocument/semanticTokens/full` for `rawUri` if its connection's server declared the capability
-    * during its handshake, decodes the response against the legend it captured then, and emits
+  /** Requests `textDocument/semanticTokens/full` for `rawUri` if its connection's server declared the capability during
+    * its handshake, decodes the response against the legend it captured then, and emits
     * [[LspEvent.LspSemanticTokensReceived]] -- discarding a stale response exactly like [[RequestKind.Definition]]'s
     * `isCurrent` check. Shared by the [[LspEffect.SemanticTokensRequested]] effect and the automatic re-request this
     * manager makes on every `FileOpened`/`FileChanged` (issue #859/#1177's rendering slice needs semantic tokens
     * refreshed on every edit, not only when something explicitly asks for them).
+    *
+    * Checks for a connection itself, ahead of [[startRequest]], rather than only relying on that shared helper's own
+    * "no connection" branch: that branch always emits a generic [[LspEvent.LspHoverReceived]] regardless of which
+    * [[RequestKind]] asked (a pre-existing wart, out of scope to fix for every request kind here) -- which would
+    * otherwise be the only signal this manager ever gives for "no server for this language," misrouted as a hover
+    * message no hover UI is showing. Emitting [[LspEvent.LspSemanticTokensUnavailable]] here instead is what lets
+    * [[AppState.semanticTokensIndexByBuffer]] tell that confirmed case apart from a request still in flight against a
+    * connection that does exist (issue #859/#1177 rendering-slice review finding: collapsing both onto the same signal
+    * flashed the muted "unavailable" style on every file open, even against a fully working, connected server).
     */
   private def requestSemanticTokens(
     rawUri: String,
@@ -301,38 +314,48 @@ object LspManager:
   ): IO[Unit] =
     given Logger[IO] = logger
     val uri          = DocumentUri(rawUri)
-    startRequest(
-      RequestKind.SemanticTokens,
-      uri,
-      languageId,
-      // Semantic tokens apply to the whole document, not a cursor position -- `anchor` here is never read back out
-      // of `context` by the request lambda below, unlike hover/definition.
-      anchor = CursorPosition(0, 0),
-      connectionsRef,
-      documentVersions,
-      requestContexts,
-      requestFibers,
-      supervisor,
-      applyEvent,
-      logger,
-      connectionProvider
-    ) { (conn, context) =>
-      Trace
-        .timed(s"lsp.semanticTokens.$rawUri")(
-          conn.semanticTokensLegend.flatMap {
-            case None => IO.unit // server never declared semanticTokensProvider during its handshake
-            case Some(legend) =>
-              conn
-                .sendRequest(LspMethod("textDocument/semanticTokens/full"), LspProtocol.semanticTokensParams(uri))
-                .flatMap(response =>
-                  LspProtocol.parseSemanticTokens(response, legend).fold(IO.unit) { tokens =>
-                    isCurrent(RequestKey(uri, RequestKind.SemanticTokens), context, documentVersions, requestContexts)
-                      .ifM(applyEvent(LspEvent.LspSemanticTokensReceived(rawUri, tokens)), IO.unit)
-                  }
-                )
-          }
-        )
-        .handleErrorWith(ex => logger.error(ex)(s"[LSP] semanticTokens failed: $rawUri"))
+    ensureConnection(connectionsRef, languageId, uri, applyEvent, logger, connectionProvider).flatMap {
+      case None =>
+        applyEvent(LspEvent.LspSemanticTokensUnavailable(rawUri))
+      case Some(_) =>
+        startRequest(
+          RequestKind.SemanticTokens,
+          uri,
+          languageId,
+          // Semantic tokens apply to the whole document, not a cursor position -- `anchor` here is never read back
+          // out of `context` by the request lambda below, unlike hover/definition.
+          anchor = CursorPosition(0, 0),
+          connectionsRef,
+          documentVersions,
+          requestContexts,
+          requestFibers,
+          supervisor,
+          applyEvent,
+          logger,
+          connectionProvider
+        ) { (conn, context) =>
+          Trace
+            .timed(s"lsp.semanticTokens.$rawUri")(
+              conn.semanticTokensLegend.flatMap {
+                case None => IO.unit // server never declared semanticTokensProvider during its handshake
+                case Some(legend) =>
+                  conn
+                    .sendRequest(LspMethod("textDocument/semanticTokens/full"), LspProtocol.semanticTokensParams(uri))
+                    .flatMap(response =>
+                      LspProtocol.parseSemanticTokens(response, legend).fold(IO.unit) { tokens =>
+                        isCurrent(
+                          RequestKey(uri, RequestKind.SemanticTokens),
+                          context,
+                          documentVersions,
+                          requestContexts
+                        )
+                          .ifM(applyEvent(LspEvent.LspSemanticTokensReceived(rawUri, tokens)), IO.unit)
+                      }
+                    )
+              }
+            )
+            .handleErrorWith(ex => logger.error(ex)(s"[LSP] semanticTokens failed: $rawUri"))
+        }
     }
 
   private def startRequest(

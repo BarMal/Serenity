@@ -485,11 +485,13 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       harness
         .use { manager =>
           for
-            _ <- open(manager)
-            _ <- manager.connection.recordSemanticTokensLegend(Some(legend))
-            _ <- manager.effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
+            _       <- open(manager)
+            _       <- manager.connection.recordSemanticTokensLegend(Some(legend))
+            _       <- manager.effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
             request <- takeMessage(manager.connection)
-            _ = request.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/semanticTokens/full")
+            _ = request.hcursor.downField("method").as[String].toOption shouldBe Some(
+              "textDocument/semanticTokens/full"
+            )
             _ = request.hcursor
               .downField("params")
               .downField("textDocument")
@@ -505,7 +507,13 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
               LspEvent.LspSemanticTokensReceived(
                 uri,
                 List(
-                  SemanticToken(line = 0, startCharacter = 0, length = 3, tokenType = "keyword", tokenModifiers = Set.empty)
+                  SemanticToken(
+                    line = 0,
+                    startCharacter = 0,
+                    length = 3,
+                    tokenType = "keyword",
+                    tokenModifiers = Set.empty
+                  )
                 )
               )
             )
@@ -535,9 +543,9 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       harness
         .use { manager =>
           for
-            _ <- open(manager)
-            _ <- manager.connection.recordSemanticTokensLegend(Some(SemanticTokensLegend(List("keyword"), Nil)))
-            _ <- manager.effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
+            _       <- open(manager)
+            _       <- manager.connection.recordSemanticTokensLegend(Some(SemanticTokensLegend(List("keyword"), Nil)))
+            _       <- manager.effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
             request <- takeMessage(manager.connection)
             _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
             _ <- takeMessage(manager.connection)
@@ -556,10 +564,12 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       harness
         .use { manager =>
           for
-            _ <- manager.connection.recordSemanticTokensLegend(Some(SemanticTokensLegend(List("keyword"), Nil)))
-            _ <- open(manager) // consumes the didOpen message
+            _       <- manager.connection.recordSemanticTokensLegend(Some(SemanticTokensLegend(List("keyword"), Nil)))
+            _       <- open(manager) // consumes the didOpen message
             request <- takeMessage(manager.connection)
-            _ = request.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/semanticTokens/full")
+            _ = request.hcursor.downField("method").as[String].toOption shouldBe Some(
+              "textDocument/semanticTokens/full"
+            )
             _ <- manager.stop
           yield succeed
         }
@@ -597,11 +607,127 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
             change <- takeMessage(manager.connection)
             _ = change.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didChange")
             request <- takeMessage(manager.connection)
-            _ = request.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/semanticTokens/full")
+            _ = request.hcursor.downField("method").as[String].toOption shouldBe Some(
+              "textDocument/semanticTokens/full"
+            )
             _ <- manager.stop
           yield succeed
         }
     )
+
+  it should "not emit any semantic tokens event while a request to a connected, capable server is still pending" in
+    runVirtual(
+      harness
+        .use { manager =>
+          for
+            _ <- manager.connection.recordSemanticTokensLegend(
+              Some(SemanticTokensLegend(tokenTypes = List("keyword"), tokenModifiers = Nil))
+            )
+            _       <- open(manager)
+            request <- takeMessage(manager.connection)
+            _ = request.hcursor.downField("method").as[String].toOption shouldBe Some(
+              "textDocument/semanticTokens/full"
+            )
+            // The request is on the wire but nothing has answered it yet -- this is exactly the round-trip window
+            // the #859/#1177 rendering-slice review flagged: no event at all must reach the reducer here, so
+            // AppState.semanticTokensIndexByBuffer stays Pending (not Unavailable) for the length of it.
+            eventsWhilePending <- manager.events.get
+            _ = eventsWhilePending shouldBe Nil
+            _ <- manager.connection.handleIncomingJson(
+              response(requestId(request), Json.obj("data" -> List(0, 0, 3, 0, 0).map(_.asJson).asJson))
+            )
+            _              <- manager.eventApplied.get
+            eventsOnAnswer <- manager.events.get
+            _ = eventsOnAnswer shouldBe List(
+              LspEvent.LspSemanticTokensReceived(
+                uri,
+                List(
+                  SemanticToken(
+                    line = 0,
+                    startCharacter = 0,
+                    length = 3,
+                    tokenType = "keyword",
+                    tokenModifiers = Set.empty
+                  )
+                )
+              )
+            )
+            _ <- manager.stop
+          yield succeed
+        }
+    )
+
+  it should "emit LspSemanticTokensUnavailable, not a hover message, when no server exists for this document's language" in {
+    val program = for
+      effects <- Queue.unbounded[IO, Option[LspEffect]]
+      events  <- Ref.of[IO, List[Event]](Nil)
+      applied <- Deferred[IO, Unit]
+      provider = new LspManager.ConnectionProvider:
+        def resolve(
+          languageId: LanguageId,
+          fileUri: DocumentUri,
+          onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+        ): IO[Option[LspManager.ResolvedConnection]] = IO.pure(None)
+      result <- Resource
+        .make(
+          LspManager
+            .runWithProvider(
+              Stream.fromQueueNoneTerminated(effects),
+              event => events.update(_ :+ event) >> applied.complete(()).void,
+              logger,
+              provider
+            )
+            .start
+        )(_.cancel)
+        .use { managerFiber =>
+          for
+            _    <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo")))
+            _    <- applied.get
+            seen <- events.get
+            _    <- effects.offer(None)
+            _    <- managerFiber.joinWithNever
+          yield seen shouldBe List(LspEvent.LspSemanticTokensUnavailable(uri))
+        }
+    yield result
+
+    runVirtual(program)
+  }
+
+  it should "emit LspSemanticTokensUnavailable for a directly-requested SemanticTokensRequested effect with no connection" in {
+    val program = for
+      effects <- Queue.unbounded[IO, Option[LspEffect]]
+      events  <- Ref.of[IO, List[Event]](Nil)
+      applied <- Deferred[IO, Unit]
+      provider = new LspManager.ConnectionProvider:
+        def resolve(
+          languageId: LanguageId,
+          fileUri: DocumentUri,
+          onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+        ): IO[Option[LspManager.ResolvedConnection]] = IO.pure(None)
+      result <- Resource
+        .make(
+          LspManager
+            .runWithProvider(
+              Stream.fromQueueNoneTerminated(effects),
+              event => events.update(_ :+ event) >> applied.complete(()).void,
+              logger,
+              provider
+            )
+            .start
+        )(_.cancel)
+        .use { managerFiber =>
+          for
+            _    <- effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
+            _    <- applied.get
+            seen <- events.get
+            _    <- effects.offer(None)
+            _    <- managerFiber.joinWithNever
+          yield seen shouldBe List(LspEvent.LspSemanticTokensUnavailable(uri))
+        }
+    yield result
+
+    runVirtual(program)
+  }
 
   it should "separate connections when a workspace resolves different server configurations" in {
     val firstUri       = "file:///workspace/Foo.scala"

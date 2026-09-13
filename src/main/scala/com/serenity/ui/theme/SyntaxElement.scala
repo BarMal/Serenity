@@ -23,12 +23,12 @@ object SyntaxElement:
     */
   def fromLspTokenType(tokenType: String): SyntaxElement =
     tokenType match
-      case "keyword" | "modifier"                                                              => Keyword
-      case "string" | "regexp"                                                                  => String
-      case "comment"                                                                            => Comment
-      case "number"                                                                              => Number
-      case "operator"                                                                           => Operator
-      case "namespace" | "class" | "enum" | "interface" | "struct" | "typeParameter" | "type"    => Type
+      case "keyword" | "modifier"                                                             => Keyword
+      case "string" | "regexp"                                                                => String
+      case "comment"                                                                          => Comment
+      case "number"                                                                           => Number
+      case "operator"                                                                         => Operator
+      case "namespace" | "class" | "enum" | "interface" | "struct" | "typeParameter" | "type" => Type
       case "parameter" | "variable" | "property" | "enumMember" | "function" | "method" | "macro" | "event" |
           "decorator" | "label" =>
         Identifier

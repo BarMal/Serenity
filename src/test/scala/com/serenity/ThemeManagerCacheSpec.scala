@@ -12,15 +12,17 @@ import org.scalatest.matchers.should.Matchers
 
 /** Covers the `Ref`-backed replacement for `ThemeManager`'s `LinkedHashMap`+`synchronized` highlight cache (issue
   * #1412): repeated calls still hit the memoized result, concurrent callers don't corrupt it, and pushing past the
-  * bounded cache size doesn't lose correctness for the most recently computed entries. The cache key now includes
-  * this line's semantic tokens (issue #859/#1177) rather than a lexical state, so these cases exercise that shape.
+  * bounded cache size doesn't lose correctness for the most recently computed entries. The cache key now includes this
+  * line's semantic tokens (issue #859/#1177) rather than a lexical state, so these cases exercise that shape.
   */
 class ThemeManagerCacheSpec extends AnyFlatSpec with Matchers:
 
   private val theme = Theme.dark
 
   private def keywordToken(length: Int): List[SemanticToken] =
-    List(SemanticToken(line = 0, startCharacter = 0, length = length, tokenType = "keyword", tokenModifiers = Set.empty))
+    List(
+      SemanticToken(line = 0, startCharacter = 0, length = length, tokenType = "keyword", tokenModifiers = Set.empty)
+    )
 
   "highlightLine" should "return an equal, memoized result for a repeated call" in {
     val first  = ThemeManager.highlightLine("val x = 1", theme, Some(LanguageId.Scala), Some(keywordToken(3)))
