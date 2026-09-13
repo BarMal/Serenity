@@ -107,16 +107,12 @@ final private[manager] class StateManagerReplaceWorkflow(
     )
     recordWorkflowUndo(state, bufferId, buffer) >> stateRef.get.flatMap { current =>
       val withReplacement = current.copy(
-        persisted =
-          current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer)),
-        runtime =
-          current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(_.id == surfaceId))
+        persisted = current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer)),
+        runtime = current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(_.id == surfaceId))
       )
       val updatedState = current.persisted.layout.activeEditorPaneId match
         case Some(paneId) =>
-          withReplacement.copy(persisted =
-            withReplacement.persisted.copy(focus = Focus.EditorPane(paneId))
-          )
+          withReplacement.copy(persisted = withReplacement.persisted.copy(focus = Focus.EditorPane(paneId)))
         case None => withReplacement
       validateAndUpdateState(updatedState, current)
     }
