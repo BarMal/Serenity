@@ -277,9 +277,9 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
         .filePath
     }
 
-  /** `updateBuffer` replaces `document.content` without ever re-checking the buffer's existing cursors against the
-    * new line count, so a cursor left on a now-removed line survives the edit as an out-of-bounds position -- the
-    * exact invariant `AppStateValidation.documentPositionErrors` exists to catch.
+  /** `updateBuffer` replaces `document.content` without ever re-checking the buffer's existing cursors against the new
+    * line count, so a cursor left on a now-removed line survives the edit as an out-of-bounds position -- the exact
+    * invariant `AppStateValidation.documentPositionErrors` exists to catch.
     */
   "StateManager.bufferManager.updateBuffer" should
     "not commit a cursor left out-of-bounds by content that shrank under it" in {
@@ -331,8 +331,8 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
 
   /** `switchToPane` only checks that `paneId` is a live key in `persisted.layout.editorPanes` before pointing focus at
     * it -- it never checks that the pane is still reachable from the workspace tree, so a pane that has drifted out of
-    * the tree (the same class of drift the close-all spec above already proves happens) is still accepted, committing
-    * a `Focus.EditorPane` that `AppStateValidation` flags as "outside workspace tree".
+    * the tree (the same class of drift the close-all spec above already proves happens) is still accepted, committing a
+    * `Focus.EditorPane` that `AppStateValidation` flags as "outside workspace tree".
     */
   "StateManager.paneManager.switchToPane" should
     "not move focus onto a pane that has drifted out of the workspace tree" in {
@@ -347,9 +347,8 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
         .updateState { state =>
           state.copy(persisted =
             state.persisted.copy(layout =
-              state.persisted.layout.copy(workspaceTree =
-                Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
-              )
+              state.persisted.layout
+                .copy(workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)))))
             )
           )
         }
