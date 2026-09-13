@@ -3,9 +3,9 @@ package com.serenity.command
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** issue #1056: type-appropriate value editors -- numeric settings step without typing (within the same bounds
-  * `parse` already enforces) and every setting with a `defaultValue` can be reset in one action (typing the literal
-  * "default", mirroring the existing keybinding-reset convention).
+/** issue #1056: type-appropriate value editors -- numeric settings step without typing (within the same bounds `parse`
+  * already enforces) and every setting with a `defaultValue` can be reset in one action (typing the literal "default",
+  * mirroring the existing keybinding-reset convention).
   */
 class CommandSurfaceItemInputItemSpec extends AnyFlatSpec with Matchers:
 
@@ -98,6 +98,28 @@ class CommandSurfaceItemInputItemSpec extends AnyFlatSpec with Matchers:
 
   it should "fall back to ordinary parse when there is no default value" in {
     decimalItem("2.50", default = None).parseOrDefault("default") shouldBe None
+  }
+
+  it should "still honor an item's own literal-\"default\" handling in parse when there is no defaultValue" in {
+    // Mirrors CommandRunnerSettingsKeymapItems.parseBindingText: a keybinding row already treats the literal
+    // "default" (or "reset") as its own reset convention inside `parse`, entirely independent of `defaultValue` --
+    // parseOrDefault must not shadow that with a hard None just because defaultValue is unset.
+    val bindingItem = CommandSurfaceItem.InputItem(
+      id = "test-binding",
+      label = "Test Binding",
+      hint = "Binding or default",
+      currentValue = "ctrl+k",
+      kind = CommandSurfaceItem.InputKind.Binding,
+      parse = text =>
+        text.trim.toLowerCase match
+          case "default" | "reset" =>
+            Some(CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAnimationSteps(0))))
+          case _ => None,
+      category = CommandCategory.Settings
+    )
+    bindingItem.parseOrDefault("default") shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAnimationSteps(0)))
+    )
   }
 
   "isOutOfBounds" should "not flag the reset sentinel or its in-progress prefixes as an error" in {

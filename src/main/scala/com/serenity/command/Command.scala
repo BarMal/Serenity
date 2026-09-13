@@ -414,11 +414,11 @@ object CommandSurfaceItem:
         case InputKind.Binding  => char.isLetterOrDigit || char == '+' || char == '-' || char == '_'
         case InputKind.Numeric(decimal) =>
           char.isDigit || (char == '.' && decimal && !currentText.contains('.')) ||
-            // issue #1056: typing "default" resets to the default value (`parseOrDefault`) -- accepted here only
-            // while it stays a prefix of that literal word, so ordinary numeric entry is unaffected. Guarded by
-            // `defaultValue.nonEmpty` (matching `isOutOfBounds` below) so a field with no default -- e.g.
-            // rich-text-font-size -- doesn't accept 'd' as a keystroke only to have it flagged invalid immediately.
-            (defaultValue.nonEmpty && InputItem.isDefaultSentinelPrefix(currentText + char))
+          // issue #1056: typing "default" resets to the default value (`parseOrDefault`) -- accepted here only
+          // while it stays a prefix of that literal word, so ordinary numeric entry is unaffected. Guarded by
+          // `defaultValue.nonEmpty` (matching `isOutOfBounds` below) so a field with no default -- e.g.
+          // rich-text-font-size -- doesn't accept 'd' as a keystroke only to have it flagged invalid immediately.
+          (defaultValue.nonEmpty && InputItem.isDefaultSentinelPrefix(currentText + char))
 
     def isOutOfBounds(text: String): Boolean =
       // issue #1056: typing "default" (or a prefix of it, mid-keystroke) is never shown as an error -- it is either
@@ -427,17 +427,19 @@ object CommandSurfaceItem:
 
     def withCurrentValue(v: String): InputItem = copy(currentValue = v)
 
-    /** Reset-to-default sentinel: typing the word "default" resets the row instead of being parsed as a literal
-      * value, the same convention keybinding rows already accept. Falls back to ordinary `parse` when there is no
-      * default to reset to, so an item with `defaultValue = None` behaves exactly as before.
+    /** Reset-to-default sentinel: typing the word "default" resets the row instead of being parsed as a literal value,
+      * the same convention keybinding rows already accept. Falls back to ordinary `parse` when there is no
+      * `defaultValue` to reset to (or it doesn't itself parse), so an item with `defaultValue = None` behaves exactly
+      * as before -- including a keymap binding row, whose own `parse` already special-cases the literal "default" (and
+      * "reset") to reset that binding, entirely independent of this newer `defaultValue` mechanism.
       */
     def parseOrDefault(text: String): Option[CommandIntent] =
-      if text.trim.equalsIgnoreCase("default") then defaultValue.flatMap(parse) else parse(text)
+      if text.trim.equalsIgnoreCase("default") then defaultValue.flatMap(parse).orElse(parse(text)) else parse(text)
 
-    /** issue #1056: step a numeric setting by one increment without typing, clamped to whatever range this item's
-      * own `parse` already enforces -- stepping past the enforced bound simply parses to `None` (a no-op) rather
-      * than needing a second, separately-maintained copy of each field's min/max. `direction` is `+1`/`-1`;
-      * non-numeric kinds (and rich-text's font size, which has no live value to step from) return `None`.
+    /** issue #1056: step a numeric setting by one increment without typing, clamped to whatever range this item's own
+      * `parse` already enforces -- stepping past the enforced bound simply parses to `None` (a no-op) rather than
+      * needing a second, separately-maintained copy of each field's min/max. `direction` is `+1`/`-1`; non-numeric
+      * kinds (and rich-text's font size, which has no live value to step from) return `None`.
       */
     def steppedIntent(direction: Int): Option[CommandIntent] =
       kind match

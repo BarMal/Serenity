@@ -1,14 +1,11 @@
 package com.serenity.state.reducers
 
 import com.serenity.command.*
-import com.serenity.config.HotkeyTrigger
-import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.text.TextEditing
 
 object CommandRunnerReducer:
-  private val DoubleTapWindowMillis = 200L
 
   def reducer(registry: CommandRegistry): Reducer[CommandRunnerEvent] =
     Reducer.instance((event, state) => reduce(event, state, registry))
@@ -45,18 +42,20 @@ object CommandRunnerReducer:
 
   private def reduceActive(event: CommandRunnerEvent, state: AppState, registry: CommandRegistry): ReducerResult =
     event match
-      case RunnerDismiss                                   => reduceDismiss(state)
-      case RunnerSubmit                                    => reduceSubmit(state)
-      case RunnerInsertChar(char)                          => reduceInsertChar(char, state, registry)
-      case RunnerRecordBinding(info, recordedAtMillis)     => recordBinding(state, info, recordedAtMillis)
-      case RunnerBindingRecordingExpired(recordedAtMillis) => expireRecordedBinding(state, recordedAtMillis)
-      case RunnerDeleteBackward                            => reduceDeleteBackward(state, registry)
-      case RunnerDeleteForward                             => reduceDeleteForward(state)
-      case RunnerDeleteWordBackward                        => reduceDeleteWordBackward(state, registry)
-      case RunnerDeleteWordForward                         => reduceDeleteWordForward(state, registry)
-      case RunnerPaste                                     => reducePaste(state, registry)
-      case RunnerNavigate(Direction.Up)                    => reduceVerticalNavigate(-1, state)
-      case RunnerNavigate(Direction.Down)                  => reduceVerticalNavigate(1, state)
+      case RunnerDismiss          => reduceDismiss(state)
+      case RunnerSubmit           => reduceSubmit(state)
+      case RunnerInsertChar(char) => reduceInsertChar(char, state, registry)
+      case RunnerRecordBinding(info, recordedAtMillis) =>
+        CommandRunnerReducerKeyRecording.recordBinding(state, info, recordedAtMillis)
+      case RunnerBindingRecordingExpired(recordedAtMillis) =>
+        CommandRunnerReducerKeyRecording.expireRecordedBinding(state, recordedAtMillis)
+      case RunnerDeleteBackward           => reduceDeleteBackward(state, registry)
+      case RunnerDeleteForward            => reduceDeleteForward(state)
+      case RunnerDeleteWordBackward       => reduceDeleteWordBackward(state, registry)
+      case RunnerDeleteWordForward        => reduceDeleteWordForward(state, registry)
+      case RunnerPaste                    => reducePaste(state, registry)
+      case RunnerNavigate(Direction.Up)   => reduceVerticalNavigate(-1, state)
+      case RunnerNavigate(Direction.Down) => reduceVerticalNavigate(1, state)
       case RunnerSelectVisibleItem(index) =>
         ReducerResult.noEffects(replaceRunner(state, _.withSelectedVisibleIndex(index)))
       case RunnerSelectSubmenuItem(index) =>
@@ -65,7 +64,8 @@ object CommandRunnerReducer:
       case RunnerNavigate(Direction.Right) => reduceHorizontalNavigate(1, state)
 
   private def reduceDismiss(state: AppState): ReducerResult =
-    if submenuRecording(state) then ReducerResult.noEffects(clearSubmenuRecording(state))
+    if CommandRunnerReducerKeyRecording.submenuRecording(state) then
+      ReducerResult.noEffects(CommandRunnerReducerKeyRecording.clearSubmenuRecording(state))
     else if submenuEditing(state) then ReducerResult.noEffects(clearSubmenuEditMode(state))
     else if submenuSearching(state) then ReducerResult.noEffects(replaceRunner(state, _.updateSubmenuSearch("")))
     else if submenuHasFocus(state) then
@@ -386,7 +386,7 @@ object CommandRunnerReducer:
       )
       .popFocus
 
-  private def currentRunner(state: AppState): Option[CommandRunner] =
+  private[reducers] def currentRunner(state: AppState): Option[CommandRunner] =
     state.commandRunnerSurface.flatMap {
       _.content match
         case SurfaceContent.CommandPalette(runner) => Some(runner)
@@ -400,7 +400,7 @@ object CommandRunnerReducer:
     * carries `activeSettingsSurface` as its `Settings` payload verbatim), but names the type this stage introduces as
     * the seam these submenu-focus checks are really keyed on.
     */
-  private def activeSubmenu(state: AppState): Option[SettingsSurfaceState] =
+  private[reducers] def activeSubmenu(state: AppState): Option[SettingsSurfaceState] =
     currentRunner(state).flatMap(_.surface match
       case CommandRunnerSurface.Settings(_, drilled) => drilled
       case CommandRunnerSurface.Palette(_)           => None)
@@ -453,15 +453,15 @@ object CommandRunnerReducer:
             runner.focusedSubmenuItems.lift(runner.settingsSurfaceSelectedIndex) match
               case Some(item: CommandSurfaceItem.InputItem)
                   if page.editingItemId.isEmpty && item.kind == CommandSurfaceItem.InputKind.Binding =>
-                beginBindingCapture(state, item)
+                CommandRunnerReducerKeyRecording.beginBindingCapture(state, item)
               case Some(_: CommandSurfaceItem.InputItem) if page.editingItemId.isEmpty =>
                 ReducerResult.noEffects(state)
               case Some(item: CommandSurfaceItem.InputItem)
                   if page.recording.flatMap(_.pendingGlobalHotkeyConflict).nonEmpty =>
-                resolveGlobalHotkeyConflict(state, item, page)
+                CommandRunnerReducerKeyRecording.resolveGlobalHotkeyConflict(state, item, page)
               case Some(item: CommandSurfaceItem.InputItem)
                   if page.recording.flatMap(_.pendingFocusedKeymapConflict).nonEmpty =>
-                resolveFocusedKeymapConflict(state, item, page)
+                CommandRunnerReducerKeyRecording.resolveFocusedKeymapConflict(state, item, page)
               case Some(item: CommandSurfaceItem.InputItem) =>
                 submitSubmenuInputValue(state, item, page)
               case Some(option: CommandSurfaceItem.OptionItem) =>
@@ -472,58 +472,6 @@ object CommandRunnerReducer:
                 ReducerResult.noEffects(replaceRunner(state, _.enterSelectedSubmenuGroup))
               case _ =>
                 ReducerResult.noEffects(state)
-
-  private def beginBindingCapture(state: AppState, item: CommandSurfaceItem.InputItem): ReducerResult =
-    ReducerResult.noEffects(
-      replaceRunner(
-        state,
-        r => r.beginSubmenuRecording(item.id).copy(statusMessage = Some("Press a key or shortcut to assign"))
-      )
-    )
-
-  private def resolveGlobalHotkeyConflict(
-    state: AppState,
-    item: CommandSurfaceItem.InputItem,
-    page: SettingsPage
-  ): ReducerResult =
-    page.recording.flatMap(_.pendingGlobalHotkeyConflict).fold(ReducerResult.noEffects(state)) {
-      case (action, binding) =>
-        ReducerResult(
-          state = replaceRunner(state, r => r.clearSubmenuEditingAndRecording.copy(statusMessage = None)),
-          effects = List(
-            AppEffect.ExecuteCommand(
-              Command.typed(
-                item.id,
-                item.label,
-                CommandIntent.Keybindings(KeybindingsIntent.ResolveGlobalHotkeyConflict(action, binding)),
-                item.category
-              )
-            )
-          )
-        )
-    }
-
-  private def resolveFocusedKeymapConflict(
-    state: AppState,
-    item: CommandSurfaceItem.InputItem,
-    page: SettingsPage
-  ): ReducerResult =
-    page.recording.flatMap(_.pendingFocusedKeymapConflict).fold(ReducerResult.noEffects(state)) {
-      case (itemId, binding) =>
-        ReducerResult(
-          state = replaceRunner(state, r => r.clearSubmenuEditingAndRecording.copy(statusMessage = None)),
-          effects = List(
-            AppEffect.ExecuteCommand(
-              Command.typed(
-                item.id,
-                item.label,
-                CommandIntent.Keybindings(KeybindingsIntent.ResolveFocusedKeymapConflict(itemId, binding)),
-                item.category
-              )
-            )
-          )
-        )
-    }
 
   private def submitSubmenuInputValue(
     state: AppState,
@@ -561,130 +509,17 @@ object CommandRunnerReducer:
       effects = List(AppEffect.ExecuteCommand(command))
     )
 
-  private def invalidInputMessage(item: CommandSurfaceItem.InputItem, text: String): String =
+  private[reducers] def invalidInputMessage(item: CommandSurfaceItem.InputItem, text: String): String =
     val value = if text.trim.isEmpty then "<empty>" else text
     if item.kind == CommandSurfaceItem.InputKind.Binding then s"Invalid binding: $value"
     else s"Invalid value: $value"
-
-  private def recordBinding(
-    state: AppState,
-    info: com.serenity.keystroke.KeyStrokeInfo,
-    recordedAtMillis: Long
-  ): ReducerResult =
-    currentRunner(state) match
-      case None =>
-        ReducerResult.noEffects(state)
-      case Some(runner) =>
-        runner.activeSettingsSurface match
-          case None =>
-            ReducerResult.noEffects(state)
-          case Some(surface) =>
-            surface.current.recording match
-              case None =>
-                ReducerResult.noEffects(state)
-              case Some(recording) =>
-                runner.submenuItems(surface.current.groupId).find(_.id == recording.itemId) match
-                  case Some(item: CommandSurfaceItem.InputItem) =>
-                    recording.pendingRecordedBinding match
-                      case None =>
-                        ReducerResult(
-                          replaceRunner(
-                            state,
-                            current =>
-                              current
-                                .withPendingRecordedBinding(info, recordedAtMillis)
-                                .copy(statusMessage =
-                                  Some("Press the same key again within 200ms to record a double tap")
-                                )
-                          ),
-                          List(AppEffect.ScheduleCommandRunnerBindingExpiry(recordedAtMillis))
-                        )
-                      case Some((first, firstAt))
-                          if recordedAtMillis >= firstAt &&
-                            recordedAtMillis - firstAt <= DoubleTapWindowMillis &&
-                            sameKeyStroke(first, info) =>
-                        assignRecordedBinding(state, item, first)
-                      case Some((first, _)) =>
-                        assignRecordedBinding(state, item, first)
-                  case _ => ReducerResult.noEffects(state)
-
-  private def expireRecordedBinding(state: AppState, recordedAtMillis: Long): ReducerResult =
-    currentRunner(state)
-      .flatMap { runner =>
-        runner.activeSettingsSurface.flatMap { surface =>
-          surface.current.recording.flatMap { recording =>
-            recording.pendingRecordedBinding match
-              case Some((first, pendingAt)) if pendingAt == recordedAtMillis =>
-                runner.submenuItems(surface.current.groupId).find(_.id == recording.itemId) match
-                  case Some(item: CommandSurfaceItem.InputItem) => Some(assignRecordedBinding(state, item, first))
-                  case _                                        => None
-              case _ => None
-          }
-        }
-      }
-      .getOrElse(ReducerResult.noEffects(state))
-
-  private def sameKeyStroke(
-    left: com.serenity.keystroke.KeyStrokeInfo,
-    right: com.serenity.keystroke.KeyStrokeInfo
-  ): Boolean =
-    left.keyType == right.keyType && left.character == right.character && left.modifiers == right.modifiers
-
-  private def assignRecordedBinding(
-    state: AppState,
-    item: CommandSurfaceItem.InputItem,
-    first: com.serenity.keystroke.KeyStrokeInfo
-  ): ReducerResult =
-    val trigger = HotkeyTrigger(first.keyType, first.character, first.modifiers)
-    val binding = trigger.render
-    item.parse(binding) match
-      case Some(intent) =>
-        ReducerResult(
-          state = replaceRunner(
-            state,
-            current =>
-              current.clearSubmenuEditingAndRecording
-                .copy(statusMessage = bareModifierFidelityWarning(current, trigger, binding))
-          ),
-          effects = List(AppEffect.ExecuteCommand(Command.typed(item.id, item.label, intent, item.category)))
-        )
-      case None =>
-        ReducerResult.noEffects(
-          replaceRunner(state, _.copy(statusMessage = Some(invalidInputMessage(item, binding))))
-        )
-
-  /** Issue #1194: a bare-modifier double tap (`ctrl+ctrl`, ...) has no representation in xterm's `modifyOtherKeys` wire
-    * format -- there is no bare press/release event for a lone modifier in that protocol, only in the kitty keyboard
-    * protocol's flags -- so recording one on a TUI session capped at [[KeyboardFidelityTier.ModifyOtherKeys]] would
-    * otherwise silently record a binding that can never fire. GUI mode and a kitty-tier TUI session are always
-    * [[KeyboardFidelityTier.Full]], so this never fires there.
-    */
-  private def bareModifierFidelityWarning(
-    runner: CommandRunner,
-    trigger: HotkeyTrigger,
-    binding: String
-  ): Option[String] =
-    Option.when(
-      runner.isTuiMode &&
-        runner.keyboardFidelityTier == KeyboardFidelityTier.ModifyOtherKeys &&
-        trigger.isBareModifierChord
-    )(
-      s"\"$binding\" recorded, but won't fire -- this terminal can't send a bare-modifier key event " +
-        "at its negotiated keyboard protocol tier"
-    )
-
-  private def submenuRecording(state: AppState): Boolean =
-    activeSubmenu(state).exists(_.current.recording.nonEmpty)
-
-  private def clearSubmenuRecording(state: AppState): AppState =
-    replaceRunner(state, runner => runner.clearSubmenuEditingAndRecording.copy(statusMessage = None))
 
   /** Settings navigation -- both the settings-tab-in-palette and the dedicated Settings surface -- renders entirely
     * through `SurfaceContentResolver.resolveSettingsSurface` on the one `CommandPalette` surface (issue #1059's "one
     * consistent settings experience"): capped group-preview rows expand in place in that single list instead of a
     * second floating surface, so every runner update just rebuilds the one surface and reasserts focus on it.
     */
-  private def replaceRunner(state: AppState, update: CommandRunner => CommandRunner): AppState =
+  private[reducers] def replaceRunner(state: AppState, update: CommandRunner => CommandRunner): AppState =
     state.commandRunnerSurface match
       case Some(surface) =>
         surface.content match
