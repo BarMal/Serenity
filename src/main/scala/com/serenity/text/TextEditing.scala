@@ -12,6 +12,15 @@ object TextEditing:
     def length: Int
     def charAt(index: Int): Char
 
+    /** What `BreakIteratorCache.forSource` compares (by reference) to decide whether the cached `BreakIterator`'s
+      * `setText` can be skipped. Defaults to the source itself, which is correct for a source callers reuse the same
+      * instance of across calls (e.g. `RopeCharacterSource`). A wrapper type reconstructed fresh on every call --
+      * `StringCharacterSource`, built anew by every `String`-based convenience overload in this file -- overrides this
+      * to return the identity it actually wraps, so a caller looping the `String` overload over one unchanged `String`
+      * (`TextLayoutSnapshot.graphemeBoundaryOffsets`, `CharacterRenderer.computeGraphemeSpans`) still gets cache hits.
+      */
+    def identityAnchor: AnyRef = this
+
   private enum CharacterClass:
     case Whitespace, Word, Punctuation
 
@@ -128,22 +137,29 @@ object TextEditing:
         case _ =>
           CharacterClass.Punctuation
 
-  /** One `BreakIterator.getCharacterInstance` per thread, paired with the `CharacterSource` it was last `setText` onto.
-    * `BreakIterator` is stateful and not thread-safe, so a single shared instance isn't safe -- hence `ThreadLocal` --
-    * but constructing `getCharacterInstance()` itself is expensive enough (cloning the rule engine) that doing it on
-    * every grapheme-boundary query measurably regressed find/replace over large documents. `preceding` and `following`
-    * are meant to be called repeatedly against one `setText` per ICU4J's own usage pattern, so the paired source
-    * (compared by reference, not content -- `graphemeBoundaryBeforeOrAt`/`AfterOrAt` and a caller scanning many matches
-    * over one document, e.g. `FindSearch.results`, reuse the exact same `CharacterSource` instance across calls) lets
-    * repeat calls against the same source skip `setText` entirely.
+  /** One `BreakIterator.getCharacterInstance` per thread, paired with the identity anchor
+    * ([[CharacterSource.identityAnchor]]) of the `CharacterSource` it was last `setText` onto. `BreakIterator` is
+    * stateful and not thread-safe, so a single shared instance isn't safe -- hence `ThreadLocal` -- but constructing
+    * `getCharacterInstance()` itself is expensive enough (cloning the rule engine) that doing it on every
+    * grapheme-boundary query measurably regressed find/replace over large documents. `preceding` and `following` are
+    * meant to be called repeatedly against one `setText` per ICU4J's own usage pattern, so comparing by identity anchor
+    * rather than the `CharacterSource` instance itself (compared by reference, not content) lets repeat calls skip
+    * `setText` entirely both when a caller reuses the exact same `CharacterSource` instance across calls (e.g.
+    * `FindSearch.results` scanning many matches over one document) and when a caller instead loops the `String`-based
+    * overloads over one unchanged `String` (`TextLayoutSnapshot.graphemeBoundaryOffsets`,
+    * `CharacterRenderer.computeGraphemeSpans`), where a fresh `StringCharacterSource` wrapper is built every call but
+    * its `identityAnchor` -- the wrapped `String` -- is not.
     */
-  final private class BreakIteratorCache:
+  // `private[text]`, not fully `private`: `CharacterSourceIdentityAnchorSpec` (same package) instantiates this
+  // directly to whitebox-test the setText-skip decision against the real ICU4J `BreakIterator`.
+  final private[text] class BreakIteratorCache:
     val iterator: BreakIterator                             = BreakIterator.getCharacterInstance()
-    private val lastSource: AtomicReference[Option[AnyRef]] = new AtomicReference(None)
+    private val lastAnchor: AtomicReference[Option[AnyRef]] = new AtomicReference(None)
 
     def forSource(source: CharacterSource): BreakIterator =
-      val previous = lastSource.getAndSet(Some(source))
-      if !previous.exists(_.eq(source)) then iterator.setText(CharacterSourceIterator(source))
+      val anchor   = source.identityAnchor
+      val previous = lastAnchor.getAndSet(Some(anchor))
+      if !previous.exists(_.eq(anchor)) then iterator.setText(CharacterSourceIterator(source))
       iterator
 
   private val threadLocalBreakIterator: ThreadLocal[BreakIteratorCache] =
@@ -168,12 +184,17 @@ object TextEditing:
       scanForwardClassEnd(source, idx + 1, targetClass)
     else idx
 
-  final private case class StringCharacterSource(text: String) extends CharacterSource:
+  // `private[text]`, not fully `private`: `CharacterSourceIdentityAnchorSpec` (same package) instantiates this
+  // directly to whitebox-test the identity-anchor cache-skip mechanism against the real ICU4J `BreakIterator`.
+  final private[text] case class StringCharacterSource(text: String) extends CharacterSource:
     override def length: Int =
       text.length
 
     override def charAt(index: Int): Char =
       text.charAt(index)
+
+    override def identityAnchor: AnyRef =
+      text
 
   /** Adapts a `CharacterSource` to `java.text.CharacterIterator` so ICU4J's `BreakIterator` can walk it directly -- a
     * rope included -- without ever materialising a `String` (#1277 step 3). The current position is genuinely mutable
