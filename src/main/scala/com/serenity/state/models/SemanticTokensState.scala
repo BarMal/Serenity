@@ -7,7 +7,7 @@ import com.serenity.lsp.model.SemanticToken
   * receive one), plus which documents have been confirmed to have none coming (no server for this language at all, or a
   * connected server that never declared the capability). A URI absent from both `byUri` and `unavailableUris` is a
   * document whose request is still in flight (or hasn't been sent yet) -- distinct from `unavailableUris`, which is a
-  * confirmed negative answer. [[AppState.semanticTokensIndexByBuffer]] is where that three-way distinction is read back
+  * confirmed negative answer. [[AppState.semanticTokensAvailability]] is where that three-way distinction is read back
   * out as [[SemanticTokensAvailability]].
   */
 final case class SemanticTokensState(
@@ -16,7 +16,7 @@ final case class SemanticTokensState(
 )
 
 /** A document's semantic-tokens status, as read back out of [[SemanticTokensState]] via
-  * [[AppState.semanticTokensIndexByBuffer]]. Modeling this as three cases -- rather than the earlier
+  * [[AppState.semanticTokensAvailability]]. Modeling this as three cases -- rather than the earlier
   * `Option[List[SemanticToken]]`, where absence meant both "no answer yet" and "confirmed none" -- is what lets the
   * renderer tell "a request is still in flight, render this line as if it were plain (no alarming style yet)"
   * (`Pending`) apart from "confirmed there is nothing to show here" (`Unavailable`): collapsing them onto one signal

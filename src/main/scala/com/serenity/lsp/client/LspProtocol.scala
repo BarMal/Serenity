@@ -80,6 +80,7 @@ object LspProtocol:
       "rootUri"    -> rootUri.value.asJson,
       "capabilities" -> Json.obj(
         "textDocument" -> Json.obj(
+          "synchronization"    -> Json.obj("dynamicRegistration" -> false.asJson),
           "publishDiagnostics" -> Json.obj("relatedInformation" -> true.asJson),
           "hover"              -> Json.obj("contentFormat" -> Json.arr("markdown".asJson, "plaintext".asJson)),
           "definition"         -> Json.obj("linkSupport" -> false.asJson),
@@ -164,6 +165,41 @@ object LspProtocol:
       "textDocument"   -> Json.obj("uri" -> uri.value.asJson, "version" -> version.asJson),
       "contentChanges" -> Json.arr(Json.obj("text" -> text.asJson))
     )
+
+  /** Sends a single range-based `TextDocumentContentChangeEvent` (see [[TextChangeDiff]]) when the server negotiated
+    * `Incremental` sync, falling back to the existing full-text form (`text` with no `range`) for every other kind --
+    * `Full` because that is what the server asked for, and `None` defensively, since callers are expected not to send
+    * `didChange` at all in that case (see `LspManager`).
+    */
+  def didChangeParams(
+    uri: DocumentUri,
+    version: Int,
+    previousText: String,
+    newText: String,
+    syncKind: TextDocumentSyncKind
+  ): Json =
+    syncKind match
+      case TextDocumentSyncKind.Incremental => incrementalDidChangeParams(uri, version, previousText, newText)
+      case _                                => didChangeParams(uri, version, newText)
+
+  private def incrementalDidChangeParams(uri: DocumentUri, version: Int, previousText: String, newText: String): Json =
+    val change = TextChangeDiff.diff(previousText, newText)
+    Json.obj(
+      "textDocument" -> Json.obj("uri" -> uri.value.asJson, "version" -> version.asJson),
+      "contentChanges" -> Json.arr(
+        Json.obj(
+          "range"       -> rangeJson(change.range),
+          "rangeLength" -> change.rangeLength.asJson,
+          "text"        -> change.text.asJson
+        )
+      )
+    )
+
+  private def rangeJson(range: LspRange): Json =
+    Json.obj("start" -> positionJson(range.start), "end" -> positionJson(range.end))
+
+  private def positionJson(position: LspPosition): Json =
+    Json.obj("line" -> position.line.asJson, "character" -> position.character.asJson)
 
   def hoverParams(uri: DocumentUri, line: Int, character: Int): Json =
     textDocumentPositionParams(uri, line, character)

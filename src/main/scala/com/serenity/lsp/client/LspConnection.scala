@@ -8,7 +8,7 @@ import cats.effect.*
 import cats.effect.std.Queue
 import cats.syntax.all.*
 import com.serenity.lsp.config.{LanguageId, LspServerConfig}
-import com.serenity.lsp.model.{Diagnostic, SemanticTokensLegend}
+import com.serenity.lsp.model.{Diagnostic, SemanticTokensLegend, TextDocumentSyncKind}
 import fs2.Stream
 import fs2.io.readInputStream
 import io.circe.Json
@@ -22,8 +22,24 @@ class LspConnection private (
     notifQueue: Queue[IO, Option[Json]],
     legendRef: Ref[IO, Option[SemanticTokensLegend]],
     requestTimeout: FiniteDuration,
-    logger: Logger[IO]
+    logger: Logger[IO],
+    syncKindRef: Ref[IO, TextDocumentSyncKind],
+    failNextNotificationRef: Ref[IO, Boolean]
 ):
+
+  /** The server's negotiated `textDocumentSync` capability, read off the `initialize` response during the handshake
+    * (see `initHandshake`). Defaults to `Full` -- this client's behavior before that capability was read at all -- for
+    * any connection that never runs the real handshake (e.g. one built directly via `create` in tests).
+    */
+  def syncKind: IO[TextDocumentSyncKind] = syncKindRef.get
+
+  private[lsp] def setSyncKind(kind: TextDocumentSyncKind): IO[Unit] = syncKindRef.set(kind)
+
+  /** Test support: makes the next `sendNotification` fail instead of reaching the wire, to exercise callers' handling
+    * of a failed notification (e.g. `LspManager`'s didChange mirror) without a real transport failure. Consumed on
+    * first use.
+    */
+  private[lsp] def failNextNotification: IO[Unit] = failNextNotificationRef.set(true)
 
   def sendRequest(method: LspMethod, params: Json): IO[Json] =
     sendRequest(method, params, requestTimeout)
@@ -57,7 +73,10 @@ class LspConnection private (
     yield result
 
   def sendNotification(method: LspMethod, params: Json): IO[Unit] =
-    sendQueue.offer(Some(LspProtocol.notification(method, params))).void
+    failNextNotificationRef.getAndSet(false).flatMap {
+      case true  => IO.raiseError(new RuntimeException(s"Simulated notification failure for ${languageId.id}"))
+      case false => sendQueue.offer(Some(LspProtocol.notification(method, params))).void
+    }
 
   def processIncoming(onDiagnostics: (DocumentUri, List[Diagnostic]) => IO[Unit]): IO[Unit] =
     Stream
@@ -157,12 +176,25 @@ object LspConnection:
     requestTimeout: FiniteDuration = DefaultRequestTimeout
   ): IO[LspConnection] =
     for
-      sendQueue  <- Queue.bounded[IO, Option[Json]](256)
-      idRef      <- Ref.of[IO, Long](0L)
-      pendingRef <- Ref.of[IO, Map[RequestId, Deferred[IO, Either[Throwable, Json]]]](Map.empty)
-      notifQueue <- Queue.bounded[IO, Option[Json]](256)
-      legendRef  <- Ref.of[IO, Option[SemanticTokensLegend]](None)
-    yield new LspConnection(languageId, sendQueue, idRef, pendingRef, notifQueue, legendRef, requestTimeout, logger)
+      sendQueue               <- Queue.bounded[IO, Option[Json]](256)
+      idRef                   <- Ref.of[IO, Long](0L)
+      pendingRef              <- Ref.of[IO, Map[RequestId, Deferred[IO, Either[Throwable, Json]]]](Map.empty)
+      notifQueue              <- Queue.bounded[IO, Option[Json]](256)
+      legendRef               <- Ref.of[IO, Option[SemanticTokensLegend]](None)
+      syncKindRef             <- Ref.of[IO, TextDocumentSyncKind](TextDocumentSyncKind.Full)
+      failNextNotificationRef <- Ref.of[IO, Boolean](false)
+    yield new LspConnection(
+      languageId,
+      sendQueue,
+      idRef,
+      pendingRef,
+      notifQueue,
+      legendRef,
+      requestTimeout,
+      logger,
+      syncKindRef,
+      failNextNotificationRef
+    )
 
   // Package-visible entry point — accepts pre-opened streams; used by tests via MockLspServer.
   private[lsp] def connect(
@@ -236,6 +268,7 @@ object LspConnection:
         .sendRequest(LspMethod("initialize"), LspProtocol.initializeParams(pid, rootUri))
         .handleErrorWith(ex => logger.error(ex)("[LSP] initialize failed") >> IO.raiseError(ex))
       _ <- conn.recordSemanticTokensLegend(LspProtocol.parseSemanticTokensLegend(initializeResult))
+      _ <- conn.setSyncKind(TextDocumentSyncKind.fromInitializeResult(initializeResult))
       _ <- conn.sendNotification(LspMethod("initialized"), LspProtocol.initializedParams)
       _ <- logger.info(s"[LSP] Handshake complete: ${conn.languageId.id}")
     yield ()

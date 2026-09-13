@@ -164,3 +164,72 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
         pane.bufferId.foreach(bufferId => after.persisted.buffers should contain key bufferId)
       }
     }
+
+  /** #1183's remaining audit: `StateManagerViewportCapability.clickMinimap` committed via a bare `stateRef.update`,
+    * placing the cursor at the clicked minimap row with no bounds check. A minimap click is resolved against the
+    * document as rendered; if the buffer's content has since shrunk (a concurrent edit/undo racing the click), the
+    * clicked row can land past the buffer's current line count, producing an out-of-bounds cursor -- exactly the
+    * invariant `AppStateValidation.documentPositionErrors` polices. `clickMinimap` now clamps to bounds directly and
+    * commits through `validateAndUpdateState` as a second line of defense.
+    */
+  "Clicking the minimap" should "not place the cursor beyond the buffer's current line count" in {
+    val stateManager = createStateManager()
+    val paneId = stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .layout
+      .activeEditorPaneId
+      .getOrElse(fail("Expected an active editor pane in the initial state"))
+
+    // Shrink the focused buffer to a single line, simulating a concurrent edit that raced the minimap click.
+    stateManager
+      .updateState { state =>
+        state.copy(persisted =
+          state.persisted.copy(buffers =
+            state.persisted.buffers.view
+              .mapValues(b => b.copy(document = b.document.copy(content = com.serenity.rope.Rope("one line"))))
+              .toMap
+          )
+        )
+      }
+      .unsafeRunSync()
+
+    // Click far below the buffer's single remaining line, as a stale minimap rendering (from before the shrink)
+    // would still permit.
+    stateManager.scrollManager.clickMinimap(paneId, 500).unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    after.isValid shouldBe true
+    AppStateValidation.validationErrors(after) shouldBe empty
+    after.persisted.buffers.values.foreach(_.editing.cursors.foreach(_.line shouldBe 0))
+  }
+
+  /** #1183's remaining audit: `ViewIntent.SplitPaneHorizontal`/`SplitPaneVertical`/`ClosePane`/`NextTab`/`PreviousTab`
+    * committed via bare `stateRef.update` calls in `StateManagerPanelEffects`. `WorkspaceTree.split` already refuses a
+    * `newPaneId` that collides with a live pane (returning `None`), and `EditorState.splitFocusedPane` already no-ops
+    * on that `None` rather than partially applying the split -- so this drifted-`nextPaneId` precondition was never a
+    * reachable corruption, with or without this routing. This is a defense-in-depth regression test: it pins down that
+    * a bare `stateRef.update` call site can never regress that pre-existing guarantee, now that the commit is also
+    * checked by `validateAndUpdateState`.
+    */
+  "Splitting the focused pane" should "leave the layout unchanged when nextPaneId has drifted to collide with it" in {
+    val stateManager = createStateManager()
+    val before       = stateManager.getCurrentState.unsafeRunSync()
+    val focusedPaneId = before.persisted.layout.activeEditorPaneId
+      .getOrElse(fail("Expected an active editor pane in the initial state"))
+    val panesBefore = before.persisted.layout.editorPanes
+
+    // Drift: nextPaneId collides with the pane that is about to be split.
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(nextPaneId = focusedPaneId)))
+      .unsafeRunSync()
+
+    val splitCommand = CommandRegistry.default
+      .findCommand("split-pane-horizontal")
+      .getOrElse(fail("\"split-pane-horizontal\" command not registered in CommandRegistry.default"))
+    stateManager.commandExecutor.executeCommand(splitCommand).unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    after.persisted.layout.editorPanes shouldBe panesBefore
+    after.persisted.layout.workspaceTree shouldBe before.persisted.layout.workspaceTree
+  }

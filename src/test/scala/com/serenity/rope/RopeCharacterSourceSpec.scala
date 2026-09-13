@@ -1,5 +1,7 @@
 package com.serenity.rope
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -10,6 +12,27 @@ class RopeCharacterSourceSpec extends AnyFlatSpec with Matchers:
 
   // Small leaves force multi-node ropes for short strings, so boundary scans cross leaf/`Node` splits.
   given balance: Balance = Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 3)
+
+  // `Rope` is sealed, so this delegates to a real `Leaf`/`Node` tree while itself extending the still-open `Leaf`
+  // purely to satisfy the type system (the same shape `RendererSnapshotReuseSpec.NonCollectingRope` uses). It
+  // instruments `leafAt` -- the method `RopeCharacterSource.charAt` actually calls on every cache miss -- rather
+  // than `index`, which the current `charAt` never calls at all, so counting it would pass trivially whether or not
+  // caching exists. `leafAt` forwards to `delegate.leafAt` so the real multi-leaf tree still decides leaf
+  // boundaries; only the call count is observed here.
+  final private class CountingRope(delegate: Rope) extends Leaf(delegate.collect()):
+    val leafAtCalls = new AtomicInteger(0)
+
+    override def weight: Int = delegate.weight
+    override def height: Int = delegate.height
+
+    override def index(i: Int): Option[Char] = delegate.index(i)
+
+    override def splitAt(index: Int): Option[(Rope, Rope)] = delegate.splitAt(index)
+    override def rebalance: Rope                           = this
+
+    override def leafAt(index: Int): Option[(Int, String)] =
+      leafAtCalls.incrementAndGet()
+      delegate.leafAt(index)
 
   "RopeCharacterSource" should "expose the rope's weight as its length" in {
     RopeCharacterSource(Rope("hello world")).length shouldBe 11
@@ -24,6 +47,35 @@ class RopeCharacterSourceSpec extends AnyFlatSpec with Matchers:
 
   it should "fall back to the NUL sentinel for an out-of-range index rather than throwing" in {
     RopeCharacterSource(Rope("ab")).charAt(5) shouldBe '\u0000'
+  }
+
+  // #1458: charAt previously re-descended the rope from the root (`Rope.index`) on every call, making a boundary
+  // scan across k characters cost O(k log n) instead of the O(k) a chunk-aware iterator gives.
+  it should "read a run of characters without re-descending the rope from the root on every call" in {
+    val text     = "hello world"
+    val counting = new CountingRope(Rope(text))
+    val source   = RopeCharacterSource(counting)
+
+    text.indices.foreach(i => source.charAt(i) shouldBe text.charAt(i))
+
+    // Without caching, every one of the 11 `charAt` calls would miss and call `leafAt` itself; caching collapses
+    // that to one call per leaf, well under one per character.
+    counting.leafAtCalls.get() should be < text.length
+  }
+
+  it should "still cross a genuine chunk boundary correctly after caching the previous one" in {
+    val text     = "hello world" // leafChunkSize = 3 forces multiple real leaves
+    val counting = new CountingRope(Rope(text))
+    val source   = RopeCharacterSource(counting)
+
+    // Read forward across the whole string, then jump backward across a leaf boundary already cached -- both
+    // directions must still land on the same characters the rope itself holds, and the reverse pass must not cost
+    // one `leafAt` call per character either: `leafAt` returns the whole leaf, not just the position last read, so
+    // caching benefits a reversal through an already-visited leaf just as much as a forward run through a new one.
+    text.indices.foreach(i => source.charAt(i) shouldBe text.charAt(i))
+    val forwardCalls = counting.leafAtCalls.get()
+    text.indices.reverse.foreach(i => source.charAt(i) shouldBe text.charAt(i))
+    counting.leafAtCalls.get() should be < forwardCalls + text.length
   }
 
   "Rope word/grapheme extensions" should "match the String-based TextEditing results on a multi-leaf rope" in {

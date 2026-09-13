@@ -9,7 +9,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Covers the state-side half of issue #859/#1177's rendering slice: `LspSemanticTokensReceived`/
-  * `LspSemanticTokensUnavailable` reaching `runtime.semanticTokensState`, and `AppState.semanticTokensIndexByBuffer`
+  * `LspSemanticTokensUnavailable` reaching `runtime.semanticTokensState`, and `AppState.semanticTokensAvailability`
   * grouping received tokens by line and distinguishing all three of `Pending` (nothing confirmed yet -- a request may
   * be in flight), `Unavailable` (confirmed no server/capability), and `Available` (tokens received, however many). The
   * request/decode side is covered by `LspProtocolSpec`/`LspManagerSpec`; `ThemeManager`'s consumption of the per-line
@@ -50,8 +50,10 @@ class SemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
     result.state.runtime.semanticTokensState.byUri(defaultBufferUri) shouldBe newTokens
   }
 
-  "AppState.semanticTokensIndexByBuffer" should "be Pending for a document that has never received semantic tokens" in {
-    AppState.initial.semanticTokensIndexByBuffer(defaultBufferId)() shouldBe SemanticTokensAvailability.Pending
+  "AppState.semanticTokensAvailability" should "be Pending for a document that has never received semantic tokens" in {
+    AppState.initial
+      .semanticTokensAvailability(defaultBufferId)
+      .getOrElse(fail("expected an index for a buffer that exists")) shouldBe SemanticTokensAvailability.Pending
   }
 
   it should "group a document's tokens by line once received" in {
@@ -59,7 +61,9 @@ class SemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
     val result =
       SystemEventReducer.reduce(LspEvent.LspSemanticTokensReceived(defaultBufferUri, tokens), AppState.initial)
 
-    result.state.semanticTokensIndexByBuffer(defaultBufferId)() match
+    result.state
+      .semanticTokensAvailability(defaultBufferId)
+      .getOrElse(fail("expected an index for a buffer that exists")) match
       case SemanticTokensAvailability.Available(byLine) =>
         byLine.getOrElse(0, Nil) should contain theSameElementsAs List(tokens(0), tokens(1))
         byLine.getOrElse(1, Nil) shouldBe Nil
@@ -71,7 +75,9 @@ class SemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
     val result =
       SystemEventReducer.reduce(LspEvent.LspSemanticTokensReceived(defaultBufferUri, Nil), AppState.initial)
 
-    result.state.semanticTokensIndexByBuffer(defaultBufferId)() shouldBe SemanticTokensAvailability.Available(
+    result.state
+      .semanticTokensAvailability(defaultBufferId)
+      .getOrElse(fail("expected an index for a buffer that exists")) shouldBe SemanticTokensAvailability.Available(
       Map.empty
     )
   }
@@ -79,7 +85,9 @@ class SemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
   it should "report Unavailable, not Pending, once LspSemanticTokensUnavailable is applied" in {
     val result = SystemEventReducer.reduce(LspEvent.LspSemanticTokensUnavailable(defaultBufferUri), AppState.initial)
 
-    result.state.semanticTokensIndexByBuffer(defaultBufferId)() shouldBe SemanticTokensAvailability.Unavailable
+    result.state
+      .semanticTokensAvailability(defaultBufferId)
+      .getOrElse(fail("expected an index for a buffer that exists")) shouldBe SemanticTokensAvailability.Unavailable
   }
 
   it should "become Available again once tokens finally arrive for a document previously marked Unavailable" in {
@@ -90,7 +98,9 @@ class SemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
     val result = SystemEventReducer.reduce(LspEvent.LspSemanticTokensReceived(defaultBufferUri, tokens), unavailable)
 
     result.state.runtime.semanticTokensState.unavailableUris shouldNot contain(defaultBufferUri)
-    result.state.semanticTokensIndexByBuffer(defaultBufferId)() shouldBe SemanticTokensAvailability.Available(
+    result.state
+      .semanticTokensAvailability(defaultBufferId)
+      .getOrElse(fail("expected an index for a buffer that exists")) shouldBe SemanticTokensAvailability.Available(
       Map(0 -> tokens)
     )
   }

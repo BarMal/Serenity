@@ -31,7 +31,7 @@ final case class BufferRenderAnnotations(
     commentsByLine: Map[Int, List[DocumentComment]],
     diagnosticsByLine: Map[Int, List[com.serenity.lsp.model.Diagnostic]],
     // See `SemanticTokensAvailability` for what each case means -- `Pending` (a request may still be in flight) is
-    // deliberately distinct from `Unavailable` (confirmed no server/capability). AppState.semanticTokensIndexByBuffer
+    // deliberately distinct from `Unavailable` (confirmed no server/capability). AppState.semanticTokensAvailability
     // is where this is derived.
     semanticTokensAvailability: SemanticTokensAvailability
 )
@@ -90,13 +90,12 @@ object RendererPaneSetup:
       .distinct
       .flatMap { bufferId =>
         state.persisted.buffers.get(bufferId).map { _ =>
-          val visibleLines = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
-          val cached =
-            state.annotationIndexByBuffer.get(bufferId).map(_()).getOrElse(AnnotationLineIndex(Vector.empty, Map.empty))
-          val commentsByLine    = cached.commentsByLine(visibleLines)
+          val visibleLines   = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
+          val cached         = state.annotationIndex(bufferId).getOrElse(AnnotationLineIndex(Vector.empty, Map.empty))
+          val commentsByLine = cached.commentsByLine(visibleLines)
           val diagnosticsByLine = visibleAnnotationLines(visibleLines, cached.diagnosticsByLine)
           val semanticTokensAvailability =
-            state.semanticTokensIndexByBuffer.get(bufferId).map(_()).getOrElse(SemanticTokensAvailability.Pending)
+            state.semanticTokensAvailability(bufferId).getOrElse(SemanticTokensAvailability.Pending)
           bufferId -> BufferRenderAnnotations(commentsByLine, diagnosticsByLine, semanticTokensAvailability)
         }
       }

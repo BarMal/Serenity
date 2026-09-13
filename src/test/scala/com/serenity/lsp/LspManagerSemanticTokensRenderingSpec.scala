@@ -15,13 +15,12 @@ import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-/** `LspManager`'s semantic-tokens request/response wiring: sending `textDocument/semanticTokens/full` only when a
-  * connection's captured legend says the server supports it, discarding stale responses, the automatic re-request on
-  * `FileOpened`/`FileChanged`, and the three-way `Pending`/`Unavailable`/`Available` split this covers from the manager
-  * side (issue #859/#1177's rendering-slice review finding -- `AppState.semanticTokensIndexByBuffer` and
-  * `SystemEventReducer` are covered by `SemanticTokensRenderingSpec`). Split out of `LspManagerSpec` to keep both files
-  * under the architecture ratchet's file-length target, matching the name `LanguageAwareHighlightingSpec` already
-  * references for this test group.
+/** `LspManager`'s automatic semantic-tokens re-request on `FileOpened`/`FileChanged`, and the three-way
+  * `Pending`/`Unavailable`/`Available` split this manager-side wiring produces (issue #859/#1177's rendering-slice
+  * review finding -- `AppState.semanticTokensAvailability` and `SystemEventReducer` are covered by
+  * `SemanticTokensRenderingSpec`). The base `SemanticTokensRequested` effect's request/decode/discard-stale coverage
+  * lives in `LspManagerSemanticTokensSpec`; this file only adds what's new for the rendering slice, to avoid
+  * duplicating that coverage.
   */
 class LspManagerSemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
 
@@ -101,87 +100,7 @@ class LspManagerSemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
         IO(message.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didOpen"))
       }
 
-  "LspManager" should "send a semanticTokens/full request and emit the decoded tokens when the server supports it" in {
-    val legend = SemanticTokensLegend(tokenTypes = List("keyword"), tokenModifiers = Nil)
-    runVirtual(
-      harness
-        .use { manager =>
-          for
-            _       <- open(manager)
-            _       <- manager.connection.recordSemanticTokensLegend(Some(legend))
-            _       <- manager.effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
-            request <- takeMessage(manager.connection)
-            _ = request.hcursor.downField("method").as[String].toOption shouldBe Some(
-              "textDocument/semanticTokens/full"
-            )
-            _ = request.hcursor
-              .downField("params")
-              .downField("textDocument")
-              .downField("uri")
-              .as[String]
-              .toOption shouldBe Some(uri)
-            _ <- manager.connection.handleIncomingJson(
-              response(requestId(request), Json.obj("data" -> List(0, 0, 3, 0, 0).map(_.asJson).asJson))
-            )
-            _      <- manager.eventApplied.get
-            events <- manager.events.get
-            _ = events shouldBe List(
-              LspEvent.LspSemanticTokensReceived(
-                uri,
-                List(
-                  SemanticToken(
-                    line = 0,
-                    startCharacter = 0,
-                    length = 3,
-                    tokenType = "keyword",
-                    tokenModifiers = Set.empty
-                  )
-                )
-              )
-            )
-            _ <- manager.stop
-          yield succeed
-        }
-    )
-  }
-
-  it should "send no semanticTokens request when the server never declared the capability" in
-    runVirtual(
-      harness
-        .use { manager =>
-          for
-            _ <- open(manager)
-            // No `recordSemanticTokensLegend` call here -- the connection's legend stays `None`, exactly as it would
-            // for a real server that never declared `semanticTokensProvider` during its handshake.
-            _ <- manager.effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
-            _ <- noMessage(manager.connection)
-            _ <- manager.stop
-          yield succeed
-        }
-    )
-
-  it should "discard a semantic tokens response after its document version changes" in
-    runVirtual(
-      harness
-        .use { manager =>
-          for
-            _       <- open(manager)
-            _       <- manager.connection.recordSemanticTokensLegend(Some(SemanticTokensLegend(List("keyword"), Nil)))
-            _       <- manager.effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
-            request <- takeMessage(manager.connection)
-            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
-            _ <- takeMessage(manager.connection)
-            _ <- manager.connection.handleIncomingJson(
-              response(requestId(request), Json.obj("data" -> List(0, 0, 3, 0, 0).map(_.asJson).asJson))
-            )
-            events <- manager.events.get
-            _ = events shouldBe Nil
-            _ <- manager.stop
-          yield succeed
-        }
-    )
-
-  it should "automatically request semantic tokens after a successful didOpen when the server supports them" in
+  "LspManager" should "automatically request semantic tokens after a successful didOpen when the server supports them" in
     runVirtual(
       harness
         .use { manager =>
@@ -251,7 +170,7 @@ class LspManagerSemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
             )
             // The request is on the wire but nothing has answered it yet -- this is exactly the round-trip window
             // the #859/#1177 rendering-slice review flagged: no event at all must reach the reducer here, so
-            // AppState.semanticTokensIndexByBuffer stays Pending (not Unavailable) for the length of it.
+            // AppState.semanticTokensAvailability stays Pending (not Unavailable) for the length of it.
             eventsWhilePending <- manager.events.get
             _ = eventsWhilePending shouldBe Nil
             _ <- manager.connection.handleIncomingJson(

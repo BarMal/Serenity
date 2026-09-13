@@ -109,13 +109,19 @@ class MockRenderSurface(
         bgs(y)(px) = currentBg.get()
     }
 
+  final case class FillRectCall(x: Int, y: Int, w: Int, h: Int, char: Char, foreground: Color, background: Color)
+  private val fillRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[FillRectCall]
+
   def fillRect(x: Int, y: Int, w: Int, h: Int, char: Char): Unit =
+    fillRectCallsBuffer += FillRectCall(x, y, w, h, char, currentFg.get(), currentBg.get())
     for dy <- 0 until h; dx <- 0 until w do
       val px = x + dx
       val py = y + dy
       if py >= 0 && py < height && px >= 0 && px < width then
         chars(py)(px) = char
         bgs(py)(px) = currentBg.get()
+
+  def fillRectCalls: List[FillRectCall] = fillRectCallsBuffer.toList
 
   final case class DrawRunPxCall(
       xPx: Float,
@@ -127,10 +133,19 @@ class MockRenderSurface(
       foreground: Color,
       background: Color,
       font: Option[Font],
-      clipGlyphToRun: Boolean
+      clipGlyphToRun: Boolean,
+      activeStyle: TextStyle
   )
 
   private val drawRunPxCallsBuffer = scala.collection.mutable.ListBuffer.empty[DrawRunPxCall]
+
+  /** The `TextStyle` a real `Java2DRenderSurface` would currently be painting with: whatever `enableStyle` last set, or
+    * `TextStyle.normal` once `disableStyle` has reverted to the base (unstyled) font -- mirroring
+    * `Java2DRenderSurface.disableStyle`'s unconditional `g.setFont(baseFontRef.get())`, which drops back to no style
+    * override regardless of which style was passed in. Recorded onto every [[DrawRunPxCall]] so a test can assert two
+    * draws of the same range resolved the same style, the way #1482 did not.
+    */
+  private val currentStyle = AtomicReference[TextStyle](TextStyle.normal)
 
   override def drawRunPx(
     xPx: Float,
@@ -151,7 +166,8 @@ class MockRenderSurface(
       currentFg.get(),
       currentBg.get(),
       currentFont.get(),
-      clipGlyphToRun
+      clipGlyphToRun,
+      currentStyle.get()
     )
     val metrics =
       currentFont
@@ -273,13 +289,19 @@ class MockRenderSurface(
   def putStringPixelYCalls: List[PutStringPixelYCall]    = putStringPixelYCallsBuffer.toList
   def pixelTranslationCalls: List[PixelTranslationCall]  = pixelTranslationCallsBuffer.toList
 
-  def enableStyle(style: TextStyle): Unit  = styleCallsBuffer += StyleCall("enable", style)
-  def disableStyle(style: TextStyle): Unit = styleCallsBuffer += StyleCall("disable", style)
-  def hideCursor(): Unit                   = ()
-  def viewportWidth: Int                   = width
-  def viewportHeight: Int                  = height
-  def flush(): Unit                        = ()
-  def styleCalls: List[StyleCall]          = styleCallsBuffer.toList
+  def enableStyle(style: TextStyle): Unit =
+    styleCallsBuffer += StyleCall("enable", style)
+    currentStyle.set(style)
+
+  def disableStyle(style: TextStyle): Unit =
+    styleCallsBuffer += StyleCall("disable", style)
+    currentStyle.set(TextStyle.normal)
+
+  def hideCursor(): Unit          = ()
+  def viewportWidth: Int          = width
+  def viewportHeight: Int         = height
+  def flush(): Unit               = ()
+  def styleCalls: List[StyleCall] = styleCallsBuffer.toList
 
   def getChar(x: Int, y: Int): Char =
     if y >= 0 && y < height && x >= 0 && x < width then chars(y)(x) else ' '
@@ -316,6 +338,8 @@ class MockRenderSurface(
     alphaCallsBuffer.clear()
     drawRunPxCallsBuffer.clear()
     styleCallsBuffer.clear()
+    fillRectCallsBuffer.clear()
+    currentStyle.set(TextStyle.normal)
     for y <- 0 until height; x <- 0 until width do
       chars(y)(x) = ' '
       fgs(y)(x) = Color.WHITE

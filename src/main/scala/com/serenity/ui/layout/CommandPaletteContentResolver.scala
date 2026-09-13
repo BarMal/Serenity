@@ -365,14 +365,20 @@ private[layout] object CommandPaletteContentResolver:
     val isError     = editingText.exists(item.isOutOfBounds)
     val valueTone   = if isError then OverlayTone.Error else OverlayTone.Normal
     val cursorCol   = editingText.map(_ => s"${item.label}: ${item.hint} ".length + displayText.length)
+    // issue #1056: every row with a default shows it, so "default" (the reset sentinel `parseOrDefault` accepts)
+    // is discoverable without needing a changelog -- omitted for rows with no meaningful default (e.g. rich-text
+    // formatting, which has no persisted "current" to reset to either, per `InputItem.defaultValue`'s own doc).
+    val defaultSuffix = item.defaultValue.map(value => s" (default: $value)").getOrElse("")
+    val defaultSegments =
+      item.defaultValue.toList.map(value => OverlaySegment(s"(default: $value)", tone = OverlayTone.Muted))
     OverlayRow(
-      plainText = s"${item.label}: ${item.hint} $displayText",
+      plainText = s"${item.label}: ${item.hint} $displayText$defaultSuffix",
       selected = selected,
       cursorColumn = cursorCol,
       segments = List(
         OverlaySegment(item.label),
         OverlaySegment(item.hint, tone = OverlayTone.Normal),
         OverlaySegment(displayText, tone = valueTone, selected = editingText.isDefined)
-      ),
+      ) ++ defaultSegments,
       layout = OverlayRowLayout.Columns
     )

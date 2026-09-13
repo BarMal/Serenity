@@ -51,6 +51,28 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     writer.toString shouldBe ""
   }
 
+  // The PR's dirty-row tracking is claimed to capture damage from every paint path in one frame (chrome, panel,
+  // and a clipped modal layer), not just a single putString/fillRect call in isolation -- this exercises that
+  // combination end to end through `flush`, rather than leaving it as an untested description-only claim.
+  "flush" should "capture damage from multiple distinct paint calls -- chrome, panel, and a clipped modal -- in one frame" in {
+    val (rs, writer) = surface(width = 20, height = 6)
+    rs.setForegroundColor(Color.WHITE)
+    rs.setBackgroundColor(Color.BLACK)
+
+    rs.putString(0, 0, "TITLEBAR") // chrome
+    rs.fillRect(0, 2, 3, 2, '#')   // panel
+    rs.roundedRects.get.withRoundRectClip(2, 4, 6, 1, arcPx = 0) {
+      rs.putString(2, 4, "MODALTEXT") // modal, clipped to 6 columns wide
+    }
+    rs.flush()
+
+    val out = writer.toString
+    out should include("TITLEBAR")
+    out should include("#")
+    out should include("MODALT")
+    out should not include "MODALTEXT" // the clip drops "EXT", so the un-clipped full string never appears
+  }
+
   "persistentContentKey" should "be present, and stable across frames from the same surface" in {
     val (rs, _) = surface()
     rs.persistentContentKey shouldBe defined
