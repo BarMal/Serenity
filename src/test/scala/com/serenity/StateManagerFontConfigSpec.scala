@@ -6,7 +6,7 @@ import java.util.concurrent.atomic.AtomicReference
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandIntent, FontIntent, SettingsIntent}
-import com.serenity.config.ConfigManager
+import com.serenity.config.ConfigManagerTestSupport
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.ui.fonts.FontLoader
@@ -185,7 +185,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     List('1', '6').foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
 
-    val saved = ConfigManager.loadConfig(Some(configFile.toString))
+    val saved = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
     saved.editorConfig.fontConfig.codeFontSize shouldBe 16.0f
   }
 
@@ -205,6 +205,6 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     if FontLoader.availableUiFamilies.size > 1 then stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(Enter).unsafeRunSync()
 
-    val saved = ConfigManager.loadConfig(Some(configFile.toString))
+    val saved = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
     saved.editorConfig.fontConfig.uiFontFamily shouldBe expectedFont
   }

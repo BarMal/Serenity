@@ -97,6 +97,32 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
     finally Files.walk(directory).sorted(java.util.Comparator.reverseOrder()).forEach(Files.deleteIfExists)
   }
 
+  // #1444: DocumentStorage's revision-checked save path reads the target file once to hash it, then
+  // AtomicFileWriter's own copyAttributes re-read the whole file again purely to seed the temp file's attributes
+  // before it was immediately overwritten by the real content. copyAttributes must carry over permissions without
+  // duplicating the file's content.
+  it should "copy only attributes, not file content, so the target file is read once per save" in {
+    val directory = Files.createTempDirectory("serenity-copy-attrs-only")
+    val source    = directory.resolve("source.txt")
+    val target    = directory.resolve("target.txt")
+
+    try
+      assume(
+        Files.getFileStore(directory).supportsFileAttributeView(classOf[PosixFileAttributeView]),
+        "POSIX file attributes are unavailable"
+      )
+      val permissions = Set(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE)
+      Files.writeString(source, "original content that must not leak into target")
+      Files.setPosixFilePermissions(source, permissions.asJava)
+      Files.writeString(target, "") // the real temp file is empty at the point AtomicFileWriter seeds its attributes
+
+      AtomicFileWriter.defaultFileSystem.copyAttributes(source, target)
+
+      Files.getPosixFilePermissions(target).asScala.toSet shouldBe permissions
+      Files.readString(target) shouldBe "" // content copy would have overwritten this with the source's content
+    finally Files.walk(directory).sorted(java.util.Comparator.reverseOrder()).forEach(Files.deleteIfExists)
+  }
+
   it should "preserve an existing target and clean its temporary file when writing fails" in {
     val directory  = Files.createTempDirectory("serenity-atomic-failure")
     val target     = directory.resolve("document.txt")

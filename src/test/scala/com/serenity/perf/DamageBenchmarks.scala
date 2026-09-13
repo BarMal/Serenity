@@ -161,11 +161,15 @@ private[perf] object DamageBenchmarks:
       "scroll",
       s.scroll._1,
       s.scroll._2,
-      // A scroll changes no buffer content, only the viewport -- DamageProducer does not yet report viewport damage
-      // (a real gap, out of scope for this comparison), so both settings report Nothing and this scenario measures
-      // only the reference-identity fast path's cost, which is what #997 predicts ("both should be equivalent").
-      verifyRows = damage => assert(damage == Damage.Nothing),
-      verifyCells = damage => assert(damage == Damage.Nothing)
+      // A scroll changes no buffer *content*, but it does move `viewport.topLine` -- which both `viewportDamage`
+      // (added after this scenario's original "both report Nothing" comment was written; #1453's CI wiring, running
+      // this suite for the first time ever, caught the comment as stale) and the legacy gutter's visible line numbers
+      // (`gutterDamage`) key off. Both settings are still equivalent here, exactly as #997 predicts, just not equal to
+      // `Nothing`: every row of the buffer, plus the gutter's `Chrome` damage.
+      verifyRows = damage =>
+        assert(damage == Damage.Combined(Set(Damage.BufferRows(BufferId(1), (0 until 20_000).toSet), Damage.Chrome))),
+      verifyCells = damage =>
+        assert(damage == Damage.Combined(Set(Damage.BufferRows(BufferId(1), (0 until 20_000).toSet), Damage.Chrome)))
     )
 
 end DamageBenchmarks

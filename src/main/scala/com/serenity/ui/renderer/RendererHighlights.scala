@@ -21,45 +21,26 @@ object RendererHighlights:
     lineTopPx: Int,
     theme: Theme,
     context: RenderContext,
-    snapshot: TextLayoutSnapshot
+    snapshot: TextLayoutSnapshot,
+    styledSegments: Option[List[StyledText]] = None
   ): Unit =
     buffer.allSelections.foreach { selection =>
       columnsForRange(selection.start, selection.end, visualLine, markPoint = false).foreach {
         case (selectionStart, selectionEnd) =>
-          if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
-            val localStart = selectionStart - visualLine.startColumn
-            val localEnd   = selectionEnd - visualLine.startColumn
-            if localStart >= 0 && localStart < localEnd && localEnd <= visualLine.text.length then
-              val selectedText = visualLine.text.substring(localStart, localEnd)
-              val lineOriginPx = context.cellMetrics.toPixelX(rect.x).toFloat
-              val startXPx     = lineOriginPx + visualLine.xForColumn(selectionStart).getOrElse(visualLine.widthPx)
-              val endXPx       = lineOriginPx + visualLine.xForColumn(selectionEnd).getOrElse(visualLine.widthPx)
-              RendererCursorGlyphs.measuredRunWidthWithin(rect, context, startXPx, endXPx).foreach { widthPx =>
-                surface.setForegroundColor(theme.highlighted.foreground)
-                surface.setBackgroundColor(theme.highlighted.background)
-                surface.text.drawRunPx(
-                  startXPx,
-                  lineTopPx,
-                  widthPx,
-                  snapshot.lineHeightPx,
-                  snapshot.ascentPx,
-                  selectedText,
-                  clipGlyphToRun = true
-                )
-              }
-          else
-            (selectionStart until selectionEnd).foreach { bufferColumn =>
-              val relativeColumn = bufferColumn - visualLine.startColumn
-              val screenX = rect.x + RendererPaneContent.visualLineCellOffset(visualLine, context) + relativeColumn
-              if screenX >= rect.x && screenX < rect.right then
-                val charIndex = bufferColumn - visualLine.startColumn
-                val charToRender =
-                  if charIndex >= 0 && charIndex < visualLine.text.length then visualLine.text.charAt(charIndex)
-                  else ' '
-                surface.setForegroundColor(theme.highlighted.foreground)
-                surface.setBackgroundColor(theme.highlighted.background)
-                CharacterRenderer.renderChar(surface, screenX, screenY, charToRender)
-            }
+          renderTextRangeBackground(
+            surface,
+            visualLine,
+            rect,
+            screenY,
+            lineTopPx,
+            theme.highlighted.foreground,
+            theme.highlighted.background,
+            context,
+            snapshot,
+            selectionStart,
+            selectionEnd,
+            styledSegments
+          )
       }
     }
 
@@ -72,7 +53,8 @@ object RendererHighlights:
     lineTopPx: Int,
     theme: Theme,
     context: RenderContext,
-    snapshot: TextLayoutSnapshot
+    snapshot: TextLayoutSnapshot,
+    styledSegments: Option[List[StyledText]] = None
   ): Unit =
     comments.foreach { comment =>
       columnsForRange(comment.start, comment.end, visualLine, markPoint = true).foreach {
@@ -89,7 +71,8 @@ object RendererHighlights:
             context,
             snapshot,
             commentStart,
-            commentEnd
+            commentEnd,
+            styledSegments
           )
       }
     }
@@ -112,7 +95,8 @@ object RendererHighlights:
     lineTopPx: Int,
     theme: Theme,
     context: RenderContext,
-    snapshot: TextLayoutSnapshot
+    snapshot: TextLayoutSnapshot,
+    styledSegments: Option[List[StyledText]] = None
   ): Unit =
     lineDiagnostics.foreach { diagnostic =>
       val start = CursorPosition(diagnostic.range.start.line, diagnostic.range.start.character)
@@ -130,7 +114,8 @@ object RendererHighlights:
             context,
             snapshot,
             diagStart,
-            diagEnd
+            diagEnd,
+            styledSegments
           )
       }
     }
@@ -150,6 +135,34 @@ object RendererHighlights:
 
     Color(blendChannel(_.getRed), blendChannel(_.getGreen), blendChannel(_.getBlue))
 
+  /** `rangeStart`/`rangeEnd` (buffer columns) split into the contiguous sub-ranges that share one [[TextStyle]]
+    * according to `styledSegments` -- the same per-run style [[com.serenity.ui.renderer.CharacterRenderer]] painted the
+    * underlying glyphs with. A highlight overlay that skipped this and always painted with whatever style the surface
+    * happened to be left at (#1482) silently dropped the run's own font family/size/weight, so a redraw could come out
+    * a different size than the glyphs it was covering. `styledSegments` absent, or not covering the whole range, falls
+    * back to [[TextStyle.normal]] for the uncovered part -- the same default the underlying text itself falls back to.
+    */
+  private def styleRangesWithin(
+    styledSegments: Option[List[StyledText]],
+    localStart: Int,
+    localEnd: Int
+  ): List[(Int, Int, TextStyle)] =
+    @annotation.tailrec
+    def loop(segments: List[StyledText], offset: Int, acc: List[(Int, Int, TextStyle)]): List[(Int, Int, TextStyle)] =
+      segments match
+        case _ if offset >= localEnd => acc.reverse
+        case Nil                     => ((offset.max(localStart), localEnd, TextStyle.normal) :: acc).reverse
+        case segment :: rest =>
+          val segmentEnd = offset + segment.content.length
+          val chunkStart = math.max(localStart, offset)
+          val chunkEnd   = math.min(localEnd, segmentEnd)
+          val nextAcc    = if chunkStart < chunkEnd then (chunkStart, chunkEnd, segment.style) :: acc else acc
+          loop(rest, segmentEnd, nextAcc)
+
+    styledSegments match
+      case Some(segments) if segments.nonEmpty => loop(segments, 0, Nil)
+      case _                                   => List((localStart, localEnd, TextStyle.normal))
+
   private def renderTextRangeBackground(
     surface: RenderSurface,
     visualLine: TextVisualLine,
@@ -161,36 +174,45 @@ object RendererHighlights:
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
     rangeStart: Int,
-    rangeEnd: Int
+    rangeEnd: Int,
+    styledSegments: Option[List[StyledText]]
   ): Unit =
     if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
       val localStart = rangeStart - visualLine.startColumn
       val localEnd   = rangeEnd - visualLine.startColumn
       if localStart >= 0 && localStart < localEnd then
-        val rangeText =
-          if localStart < visualLine.text.length then
-            visualLine.text.substring(localStart, math.min(localEnd, visualLine.text.length))
-          else " "
         val lineOriginPx = context.cellMetrics.toPixelX(rect.x).toFloat
-        val startXPx     = lineOriginPx + visualLine.xForColumn(rangeStart).getOrElse(visualLine.widthPx)
-        val endXPx =
-          if rangeStart == rangeEnd - 1 && rangeStart >= visualLine.endColumn then
-            startXPx + context.cellMetrics.charWidth
-          else lineOriginPx + visualLine.xForColumn(rangeEnd).getOrElse(visualLine.widthPx)
-        val desiredWidthPx = math.max(context.cellMetrics.charWidth.toFloat, endXPx - startXPx)
-        RendererCursorGlyphs.measuredRunWidthWithin(rect, context, startXPx, startXPx + desiredWidthPx).foreach {
-          widthPx =>
-            surface.setForegroundColor(foreground)
-            surface.setBackgroundColor(background)
-            surface.text.drawRunPx(
-              startXPx,
-              lineTopPx,
-              widthPx,
-              snapshot.lineHeightPx,
-              snapshot.ascentPx,
-              rangeText,
-              clipGlyphToRun = true
-            )
+        styleRangesWithin(styledSegments, localStart, localEnd).foreach {
+          case (chunkStart, chunkEnd, style) =>
+            val chunkRangeStart = visualLine.startColumn + chunkStart
+            val chunkRangeEnd   = visualLine.startColumn + chunkEnd
+            val chunkText =
+              if chunkStart < visualLine.text.length then
+                visualLine.text.substring(chunkStart, math.min(chunkEnd, visualLine.text.length))
+              else " "
+            val startXPx = lineOriginPx + visualLine.xForColumn(chunkRangeStart).getOrElse(visualLine.widthPx)
+            val endXPx =
+              if chunkRangeStart == chunkRangeEnd - 1 && chunkRangeStart >= visualLine.endColumn then
+                startXPx + context.cellMetrics.charWidth
+              else lineOriginPx + visualLine.xForColumn(chunkRangeEnd).getOrElse(visualLine.widthPx)
+            val desiredWidthPx = math.max(context.cellMetrics.charWidth.toFloat, endXPx - startXPx)
+            RendererCursorGlyphs.measuredRunWidthWithin(rect, context, startXPx, startXPx + desiredWidthPx).foreach {
+              widthPx =>
+                surface.setForegroundColor(foreground)
+                surface.setBackgroundColor(background)
+                surface.enableStyle(style)
+                try
+                  surface.text.drawRunPx(
+                    startXPx,
+                    lineTopPx,
+                    widthPx,
+                    snapshot.lineHeightPx,
+                    snapshot.ascentPx,
+                    chunkText,
+                    clipGlyphToRun = true
+                  )
+                finally surface.disableStyle(style)
+            }
         }
     else
       (rangeStart until rangeEnd).foreach { bufferColumn =>

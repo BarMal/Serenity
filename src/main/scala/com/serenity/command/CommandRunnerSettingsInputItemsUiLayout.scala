@@ -24,7 +24,8 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
           .map(commandIntentArg =>
             CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiElementGap(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(CommandRunnerSettingsInputItems.formatDecimal(AppConfig.default.interfaceConfig.elementGap))
     ),
     CommandSurfaceItem.InputItem(
       id = "ui-corner-radius",
@@ -39,7 +40,8 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
             CommandIntent
               .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiCornerRadiusPx(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(AppConfig.default.interfaceConfig.cornerRadiusPx.toString)
     ),
     CommandSurfaceItem.InputItem(
       id = "ui-outline-thickness",
@@ -54,7 +56,8 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
             CommandIntent
               .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiOutlineThicknessPx(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(AppConfig.default.interfaceConfig.outlineThicknessPx.toString)
     )
   )
 

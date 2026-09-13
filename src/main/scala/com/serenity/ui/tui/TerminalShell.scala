@@ -129,17 +129,41 @@ object TerminalShell:
     * pushing the `modifyOtherKeys`/`formatOtherKeys` enable sequences, it sends `XTQMODKEYS`/`XTQFMTKEYS` and waits
     * (bounded by [[NegotiationDeadlineMillis]]) for xterm to echo back `Pv = 2` and `Pv = 1` respectively. Only then is
     * [[ModifyOtherKeys]] reported -- a terminal that never replies, or replies with different values, is
-    * indistinguishable from one that ignored the negotiation outright, and settles on [[Legacy]] instead, with the
-    * enable sequences explicitly reverted so no half-applied state lingers past negotiation.
+    * indistinguishable from one that ignored the negotiation outright, and falls through one more step (see
+    * [[Win32Input]]) before settling on [[Legacy]], with the enable sequences explicitly reverted so no half-applied
+    * state lingers past negotiation.
     */
   enum KeyboardProtocolTier:
     case Kitty, ModifyOtherKeys
 
-    /** Neither negotiation confirmed: the kitty `CSI ? u` query drew no matching response, and the
-      * `modifyOtherKeys`/`formatOtherKeys` enable sequences were not confirmed by `XTQMODKEYS`/`XTQFMTKEYS` either (no
-      * reply, or a reply reporting different values) -- so they were reverted rather than left assumed-active. Today's
-      * uncontested fallback: CSI-u sequences are never expected to arrive, and `TerminalInputDecoder` decodes
-      * everything as legacy bytes.
+    /** Windows `win32-input-mode` (`CSI ?9001h`, #1320): the terminal switches to reporting raw Win32 console
+      * `KEY_EVENT_RECORD` fields (`CSI Vk;Sc;Uc;Kd;Cs;Rc _`, decoded by [[TerminalInputDecoder]]'s `decodeWin32Input`)
+      * instead of any VT key-encoding scheme at all, carrying full, unambiguous modifier state for every key --
+      * including the collision this issue was filed over, Ctrl+Backspace vs. plain Backspace, which the legacy VT byte
+      * protocol cannot distinguish on any terminal. [[negotiateKeyboardProtocol]] only reaches for this once neither
+      * [[Kitty]] nor [[ModifyOtherKeys]] confirmed -- reported live on Windows Terminal against a build that answered
+      * neither query (issue #1320's own evidence) -- and only on Windows ([[isWindows]]): win32-input-mode is a
+      * Windows/ConPTY-specific control this codebase has no reason to push at a Unix pty, unlike [[Kitty]]/
+      * [[ModifyOtherKeys]], which unsupported terminals ignore harmlessly as documented DECSET/DECRST no-ops (see
+      * `TerminalRenderSurface`'s #1172 doc) -- win32-input-mode has no such universal guarantee off Windows. Unlike the
+      * other two tiers, enabling it is not itself confirmed by a query/response: ConPTY has supported it since
+      * introducing the mode (tracked at github.com/microsoft/terminal#8343) with no negotiation handshake of its own,
+      * so a terminal that ignores `CSI ?9001h` outright is indistinguishable from one that honors it until real input
+      * arrives -- accepted as this tier's own known limitation, the same class of gap the kitty/modifyOtherKeys
+      * ladder's tmux caveat documents.
+      *
+      * Caution, here be imagine dragons: this tier, and `TerminalInputDecoder.decodeWin32Input` which decodes it, are
+      * built entirely from the documented wire format and secondary sources for the Win32 console constants involved --
+      * none of it has been exercised against a real Windows Terminal/ConPTY session. The bare-modifier gap above is one
+      * known consequence of that; `TerminalInputDecoder.win32Char`'s own doc records a second, independent one
+      * (Alt+letter likely decoding to nothing, since Alt typically zeroes `Uc` on a real console).
+      */
+    case Win32Input
+
+    /** Neither negotiation confirmed, and either not running on Windows or [[Win32Input]] was also not applicable:
+      * `TerminalInputDecoder` decodes everything as legacy bytes. Today's uncontested fallback off Windows; on Windows,
+      * [[negotiateKeyboardProtocol]] tries [[Win32Input]] first and only lands here if that path itself were ever
+      * disabled.
       */
     case Legacy
 
@@ -172,6 +196,12 @@ object TerminalShell:
   private[tui] val FocusReportingEnable: String  = "[?1004h"
   private[tui] val FocusReportingDisable: String = "[?1004l"
 
+  /** Windows `win32-input-mode` (#1320, [[KeyboardProtocolTier.Win32Input]]'s doc): `CSI ?9001h`/`CSI ?9001l`, the
+    * DECSET/DECRST pair ConPTY defines for it (github.com/microsoft/terminal#8343).
+    */
+  private[tui] val Win32InputModeEnable: String  = "[?9001h"
+  private[tui] val Win32InputModeDisable: String = "[?9001l"
+
   /** Disables the four input modes [[TerminalInputHandler]] enables: bracketed paste (2004), SGR mouse encoding (1006),
     * any-event mouse tracking (1003), and button-event mouse tracking (1002). Mirrored in
     * [[TerminalInputHandler.shutdown]] so they are normally removed before [[TerminalShell.restore]] runs; also
@@ -196,19 +226,22 @@ object TerminalShell:
       .make(IO.blocking(TerminalBuilder.builder().system(true).nativeSignals(true).build()))(terminal =>
         IO.blocking(terminal.close()).attempt.void
       )
-      .flatMap(forTerminal)
+      .flatMap(forTerminal(_))
 
   /** Build a shell over an already-constructed [[Terminal]] -- the real system terminal in production, or a
     * streams-backed test terminal in specs -- entering raw mode / alternate screen / hidden cursor / negotiated
     * keyboard protocol on acquire and restoring them unconditionally on release. Does not close `terminal`; the caller
     * owns that (see [[resource]]).
     */
-  private[tui] def forTerminal(terminal: Terminal): Resource[IO, TerminalShell] =
+  private[tui] def forTerminal(
+    terminal: Terminal,
+    osName: String = System.getProperty("os.name", "")
+  ): Resource[IO, TerminalShell] =
     Dispatcher.parallel[IO].flatMap { dispatcher =>
-      Resource.make(acquire(terminal, dispatcher))(shell => IO.blocking(shell.restore()).attempt.void)
+      Resource.make(acquire(terminal, dispatcher, osName))(shell => IO.blocking(shell.restore()).attempt.void)
     }
 
-  private def acquire(terminal: Terminal, dispatcher: Dispatcher[IO]): IO[TerminalShell] =
+  private def acquire(terminal: Terminal, dispatcher: Dispatcher[IO], osName: String): IO[TerminalShell] =
     for
       quitDeferred <- Deferred[IO, Unit]
       shell <- IO.blocking {
@@ -217,13 +250,16 @@ object TerminalShell:
         val _                  = terminal.puts(Capability.cursor_invisible)
         terminal.writer().write(FocusReportingEnable)
         terminal.flush()
-        val (tier, prefix) = negotiateKeyboardProtocol(terminal)
+        val (tier, prefix) = negotiateKeyboardProtocol(terminal, osName)
         val shell          = new TerminalShell(terminal, originalAttributes, quitDeferred, dispatcher, tier, prefix)
         val _              = terminal.handle(Signal.WINCH, _ => shell.handleWinch())
         val _              = terminal.handle(Signal.INT, _ => shell.handleInt())
         shell
       }
     yield shell
+
+  private[tui] def isWindows(osName: String): Boolean =
+    osName.toLowerCase(java.util.Locale.ROOT).contains("windows")
 
   /** Runs the tiered negotiation ladder the #1109 issue calls for: query kitty support first (bounded by
     * [[NegotiationDeadlineMillis]] so an unsupporting terminal, which sends no response at all, can't stall startup);
@@ -244,13 +280,19 @@ object TerminalShell:
     * what the terminal underneath actually supports. Not verified against a real tmux session here -- flagged rather
     * than guessed at.
     *
+    * If neither confirms and `osName` (`System.getProperty("os.name", "")` by default -- overridable so specs can
+    * exercise this path without an actual Windows host) is Windows, one further fallback runs before settling on
+    * [[KeyboardProtocolTier.Legacy]]: push [[KeyboardProtocolTier.Win32Input]]'s `CSI ?9001h` (#1320). This has no
+    * query/response of its own to await (see that tier's doc), so it is pushed unconditionally rather than confirmed
+    * the way the first two tiers are.
+    *
     * @return
     *   the negotiated tier, plus any bytes read off the reader while probing that were not part of a matched response
     *   (see [[TerminalShell]]'s `pendingInputPrefix` doc) -- accumulated across both negotiation phases when both run,
     *   and always empty for a phase whose probe matched, since a matched response's bytes are legitimately consumed
     *   protocol traffic, not stray input.
     */
-  private def negotiateKeyboardProtocol(terminal: Terminal): (KeyboardProtocolTier, Array[Byte]) =
+  private def negotiateKeyboardProtocol(terminal: Terminal, osName: String): (KeyboardProtocolTier, Array[Byte]) =
     val writer = terminal.writer()
     writer.write(KittyQuery)
     writer.flush()
@@ -272,8 +314,10 @@ object TerminalShell:
       else
         writer.write(ModifyOtherKeysDisable)
         writer.write(FormatOtherKeysDisable)
+        if isWindows(osName) then writer.write(Win32InputModeEnable)
         writer.flush()
-        (KeyboardProtocolTier.Legacy, strayBytes)
+        val tier = if isWindows(osName) then KeyboardProtocolTier.Win32Input else KeyboardProtocolTier.Legacy
+        (tier, strayBytes)
 
   /** A minimal state machine over the expected `ESC [ ? digits u` response, bounded by an overall deadline so a
     * terminal that never responds can't hang startup. Every byte read is accumulated (re-encoded to UTF-8 via
@@ -376,6 +420,7 @@ object TerminalShell:
       case KeyboardProtocolTier.ModifyOtherKeys =>
         writer.write(ModifyOtherKeysDisable)
         writer.write(FormatOtherKeysDisable)
+      case KeyboardProtocolTier.Win32Input => writer.write(Win32InputModeDisable)
       // Already reverted at negotiation time when confirmation failed -- nothing left to disable on exit.
       case KeyboardProtocolTier.Legacy => ()
 

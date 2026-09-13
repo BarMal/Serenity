@@ -348,7 +348,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
     val activePanelsGroup = descendants(presetGroup)
       .collectFirst {
-        case item: CommandSurfaceItem.GroupItem if item.id == "settings-preset-active-panels" => item
+        case item: CommandSurfaceItem.GroupItem if item.id == "settings-preset-workspace-layout" => item
       }
       .getOrElse(fail("missing active panels group"))
     val commands = descendants(activePanelsGroup).collect {

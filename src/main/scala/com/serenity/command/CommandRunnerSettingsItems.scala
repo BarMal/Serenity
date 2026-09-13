@@ -14,26 +14,29 @@ import com.serenity.ui.presets.UiPreset
   */
 object CommandRunnerSettingsItems:
 
+  /** The built-in and saved-custom preset options shared by every preset picker (`ui-preset-select`, and the issue
+    * #1060 conversion of Apply/Overwrite/Delete/Reset from typed names onto the same carousel), keyed by `presetIntent`
+    * so each picker's options carry its own `UiPresetsIntent`.
+    */
+  private def presetCommandOptions(
+    previews: List[UiPreset.Preview],
+    presetIntent: String => UiPresetsIntent
+  ): (List[CommandOption], List[CommandOption]) =
+    val builtInOptions = UiPreset.builtIns.map { preset =>
+      val preview = UiPreset.Preview.fromPreset(preset)
+      CommandOption(preview.name, CommandIntent.UiPresets(presetIntent(preview.name)), hint = Some(preview.hint))
+    }
+    val customOptions = normalizedUiPresetPreviews(previews).map { preview =>
+      CommandOption(preview.name, CommandIntent.UiPresets(presetIntent(preview.name)), hint = Some(preview.hint))
+    }
+    (builtInOptions, customOptions)
+
   private[command] def uiPresetSelectOptionItem(
     previews: List[UiPreset.Preview],
     optionSelections: Map[String, Int] = Map.empty
   ): CommandSurfaceItem.OptionItem =
-    val builtInOptions = UiPreset.builtIns.map { preset =>
-      val preview = UiPreset.Preview.fromPreset(preset)
-      CommandOption(
-        preview.name,
-        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset(preview.name)),
-        hint = Some(preview.hint)
-      )
-    }
-    val customOptions = normalizedUiPresetPreviews(previews).map { preview =>
-      CommandOption(
-        preview.name,
-        CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset(preview.name)),
-        hint = Some(preview.hint)
-      )
-    }
-    val options = builtInOptions ++ customOptions
+    val (builtInOptions, customOptions) = presetCommandOptions(previews, UiPresetsIntent.ApplyUiPreset(_))
+    val options                         = builtInOptions ++ customOptions
     val selectedIndex =
       optionSelections
         .get("ui-preset-custom")
@@ -53,6 +56,35 @@ object CommandRunnerSettingsItems:
       selectedIndex = CommandRunnerSettingsOptionItemHelpers.boundedOptionIndex(selectedIndex, options),
       category = CommandCategory.Settings,
       hint = Some("Built-in and saved presets")
+    )
+
+  /** issue #1060: Apply/Overwrite/Delete/Reset used to require typing the target preset's exact name; they now pick
+    * from the same built-in-plus-saved catalog `ui-preset-select` already carousels through. Invalid combinations
+    * (overwriting or deleting a built-in, say) are unchanged -- `StateManagerUiPresetEffects` already rejects those
+    * with a status message rather than this picker needing to filter them out.
+    */
+  private[command] def presetActionOptionItem(
+    id: String,
+    label: String,
+    hint: String,
+    previews: List[UiPreset.Preview],
+    editingPresetName: Option[String],
+    presetIntent: String => UiPresetsIntent
+  ): CommandSurfaceItem.OptionItem =
+    val (builtInOptions, customOptions) = presetCommandOptions(previews, presetIntent)
+    val options                         = builtInOptions ++ customOptions
+    val selectedIndex = editingPresetName
+      .map(name => options.indexWhere(_.label == name))
+      .filter(_ >= 0)
+      .getOrElse(0)
+
+    CommandSurfaceItem.OptionItem(
+      id = id,
+      label = label,
+      options = options,
+      selectedIndex = CommandRunnerSettingsOptionItemHelpers.boundedOptionIndex(selectedIndex, options),
+      category = CommandCategory.Settings,
+      hint = Some(hint)
     )
 
   private[command] def markdownViewOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
@@ -176,6 +208,25 @@ object CommandRunnerSettingsItems:
       intent =
         commandIntentArg => CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextFontFamily(commandIntentArg))),
       hint = "Used in prose buffers"
+    )
+
+  /** issue #1060: rich-text selection font family used to be typed free text, the only font family in the settings tree
+    * that wasn't a picker; unlike `codeFontGroupItem`/`textFontGroupItem`/`uiFontGroupItem` it has no persisted
+    * `AppConfig` value of its own to read a current selection back from (it formats whatever text is selected, not a
+    * standing document default), so -- exactly as the free-text version's always-blank `currentValue` did -- there is
+    * no meaningful "current" family to preselect; it opens on the first available family.
+    */
+  private[command] def richTextFontGroupItem(
+    optionSelections: Map[String, Int],
+    availableFamilies: List[String] = FontLoader.availableTextFamilies
+  ): CommandSurfaceItem.GroupItem =
+    fontFamilyGroupItem(
+      id = "rich-text-font-family",
+      label = "Selection Font Family",
+      selectedIndex = optionSelections.getOrElse("rich-text-font-family", 0),
+      families = availableFamilies,
+      intent = commandIntentArg => CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily(commandIntentArg)),
+      hint = "Applied to the current selection"
     )
 
   private[command] def uiFontGroupItem(

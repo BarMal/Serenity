@@ -23,12 +23,12 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
       StandardCharsets.UTF_8
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
     config.editorConfig.fontConfig.textFontFamily shouldBe "Sérif"
 
     Files.delete(configFile)
 
-    ConfigManager.saveConfig(config, configFile) shouldBe true
+    ConfigManagerTestSupport.saveConfig(config, configFile) shouldBe true
     Files.readString(configFile, StandardCharsets.UTF_8) should include("font.text.family = Sérif")
   }
 
@@ -44,7 +44,7 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
         |""".stripMargin
     )
 
-    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+    val loaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     loaded.editorConfig.fontConfig.textFontFamily shouldBe "Text Font #1"
     loaded.editorConfig.fontConfig.uiFontFamily shouldBe "Text Font #1"
@@ -55,8 +55,8 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
     )
     loaded.languageToolsConfig.spellCheck.additionalWords shouldBe List("hello, world", "café")
 
-    ConfigManager.saveConfig(loaded, configFile) shouldBe true
-    val reloaded = ConfigManager.loadConfig(Some(configFile.toString))
+    ConfigManagerTestSupport.saveConfig(loaded, configFile) shouldBe true
+    val reloaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
     reloaded.editorConfig.fontConfig shouldBe loaded.editorConfig.fontConfig
     reloaded.languageToolsConfig.spellCheck shouldBe loaded.languageToolsConfig.spellCheck
   }
@@ -70,7 +70,7 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
         |""".stripMargin
     )
 
-    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+    val loaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     loaded.editorConfig.fontConfig.textFontFamily shouldBe "SansSerif"
     loaded.editorConfig.fontConfig.uiFontFamily shouldBe "SansSerif"
@@ -87,7 +87,7 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
         |""".stripMargin
     )
 
-    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+    val loaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     loaded.editorConfig.fontConfig.textFontFamily shouldBe "Nested Serif"
     loaded.editorConfig.fontConfig.uiFontFamily shouldBe "Nested Serif"
@@ -102,7 +102,7 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
         |""".stripMargin
     )
 
-    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+    val loaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     loaded.editorConfig.fontConfig.textFontFamily shouldBe "Inline Serif"
     loaded.editorConfig.fontConfig.uiFontFamily shouldBe "Inline Serif"
@@ -165,7 +165,7 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
         |""".stripMargin
     )
 
-    val loaded = ConfigManager.loadConfig(Some(root.toString))
+    val loaded = ConfigManagerTestSupport.loadConfig(Some(root.toString))
 
     loaded.editorConfig.fontConfig.textFontFamily shouldBe "Included Serif"
     loaded.editorConfig.fontConfig.uiFontFamily shouldBe "Included Serif"
