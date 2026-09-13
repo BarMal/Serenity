@@ -10,7 +10,7 @@ import com.serenity.text.TextEditing
   * `charAt` caches the one leaf chunk covering its most recent access. `TextEditing`'s word/grapheme boundary scanners
   * only ever step by one character at a time, forward or backward, so almost every call lands back in the cached chunk
   * (an O(1) `String#charAt`) instead of re-descending the rope from the root via `Rope.index` (#1458, where a
-  * k-character scan cost O(k log n)) -- only a genuine chunk crossing pays the O(log n) `chunksInRange` walk.
+  * k-character scan cost O(k log n)) -- only a genuine chunk crossing pays the O(log n) `leafAt` walk.
   */
 final case class RopeCharacterSource(rope: Rope) extends TextEditing.CharacterSource:
   // Plain `AtomicReference`, not `Ref[IO, _]`: `charAt` is a pure synchronous scan (no `IO`, no fiber ever shares
@@ -24,7 +24,7 @@ final case class RopeCharacterSource(rope: Rope) extends TextEditing.CharacterSo
       case Some((chunkOffset, chunk)) if index >= chunkOffset && index < chunkOffset + chunk.length =>
         chunk.charAt(index - chunkOffset)
       case _ =>
-        rope.chunksInRange(index, index + 1).nextOption() match
+        rope.leafAt(index) match
           case Some(entry @ (chunkOffset, chunk)) =>
             cachedChunk.set(Some(entry))
             chunk.charAt(index - chunkOffset)

@@ -152,7 +152,7 @@ sealed trait Rope(using balance: Balance):
     sb.toString
 
   /** Visit the leaf content intersecting a half-open rope range from left to right. */
-  private[rope] def chunksInRange(startIndex: Int, endIndex: Int): Iterator[(Int, String)] =
+  final private[rope] def chunksInRange(startIndex: Int, endIndex: Int): Iterator[(Int, String)] =
     val start = math.max(0, math.min(startIndex, weight))
     val end   = math.max(start, math.min(endIndex, weight))
 
@@ -175,6 +175,21 @@ sealed trait Rope(using balance: Balance):
 
         nextChunk(stack)
       }
+
+  /** The whole leaf covering `index`, with its own absolute offset -- unlike `chunksInRange`, this never clips to a
+    * caller-supplied window, so `RopeCharacterSource` can cache the entire leaf regardless of which direction the
+    * next access moves. `None` only for an `index` outside `[0, weight)`.
+    */
+  private[rope] def leafAt(index: Int): Option[(Int, String)] =
+    if index < 0 || index >= weight then None
+    else
+      @tailrec
+      def go(rope: Rope, baseOffset: Int): (Int, String) = rope match
+        case node: Node =>
+          if index < baseOffset + node.left.weight then go(node.left, baseOffset)
+          else go(node.right, baseOffset + node.left.weight)
+        case Leaf(value) => (baseOffset, value)
+      Some(go(this, 0))
 
   override def toString: String = collect()
 
