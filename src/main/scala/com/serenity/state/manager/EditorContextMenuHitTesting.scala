@@ -133,44 +133,70 @@ final private[manager] class EditorContextMenuHitTesting(port: EditorContextMenu
       .copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(isContextMenuSurface)))
       .popFocus
 
+  /** Resolves hover/click against the context menu's own `ResolvedSurfaceComposition` (issue #819, slice 2) -- the same
+    * composition `OverlayViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than a parallel
+    * `MouseHitTestGeometry.overlayItemIndex` row calculation. Mirrors `ModalMouseHitTesting.modalHitAt`.
+    */
   private def contextMenuSelectionAt(
     event: MouseInputEvent,
     state: AppState
   ): Option[(UiSurface, ContextMenu, Int)] =
+    for
+      (surface, menu, hit) <- contextMenuHitAt(event, state)
+      absoluteIndex        <- hit.focusId.value.stripPrefix("context-menu-item-").toIntOption
+    yield (surface, menu, absoluteIndex)
+
+  private def contextMenuHitAt(
+    event: MouseInputEvent,
+    state: AppState
+  ): Option[(UiSurface, ContextMenu, SurfaceHitRegion)] =
     for
       viewportSize <- state.runtime.viewportSize
       surface      <- state.contextMenuSurface
       menu <- surface.content match
         case SurfaceContent.ContextMenu(menu) => Some(menu)
         case _                                => None
-      scene    = AuthoritativeUiScene.forState(state, viewportSize)
-      layout   = scene.calculatedLayout
-      contract = scene.editorContract
-      contentRect <- contract.overlayContentRect(surface.id)
-      index <- MouseHitTestGeometry.overlayItemIndex(
-        event,
-        state,
-        layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
-        contentRect,
-        contract.overlayRowSlots(surface.id),
-        menu.items.length,
-        menu.selectedIndex,
-        hasHeader = true,
-        hasFooter = menu.items.nonEmpty,
-        itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
-        itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
-      )
-    yield (surface, menu, index)
+      node <- UiSceneSnapshot
+        .from(state, viewportSize)
+        .nodesInPaintOrder
+        .find(_.id == SceneNodeId.Surface(surface.id))
+      _ <- Option.when(node.frameRect.contains(event.col, event.row))(())
+      hit <- ContextMenuSurfaceComposition
+        .forMenu(
+          menu,
+          node.frameRect,
+          state.persisted.config.effectiveCommandRunnerItemGapRows,
+          SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
+        )
+        .hitAt(event.col.toDouble, event.row.toDouble)
+    yield (surface, menu, hit)
 
+  /** True for a click inside the menu's content rect that lands on no painted row at all -- neither an item nor the
+    * title/footer chrome rows -- so it should be swallowed rather than falling through to the editor underneath.
+    * Checked against every `paintBoxes` rect (not just `hitRegions`) because the title and footer rows are painted but
+    * intentionally not selectable, and a click on them is not a "gap" either.
+    */
   private def isContextMenuItemGap(event: MouseInputEvent, state: AppState): Boolean =
     (for
       viewportSize <- state.runtime.viewportSize
       surface      <- state.contextMenuSurface
-      scene    = AuthoritativeUiScene.forState(state, viewportSize)
-      contract = scene.editorContract
-      contentRect <- contract.overlayContentRect(surface.id)
+      menu <- surface.content match
+        case SurfaceContent.ContextMenu(menu) => Some(menu)
+        case _                                => None
+      node <- UiSceneSnapshot
+        .from(state, viewportSize)
+        .nodesInPaintOrder
+        .find(_.id == SceneNodeId.Surface(surface.id))
+      contentRect = SurfaceFrameLayout(node.frameRect).contentRect
+      composition = ContextMenuSurfaceComposition.forMenu(
+        menu,
+        node.frameRect,
+        state.persisted.config.effectiveCommandRunnerItemGapRows,
+        SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
+      )
     yield contentRect.contains(event.col, event.row) &&
-      !contract.overlayRowSlots(surface.id).exists(_.y == event.row)).getOrElse(false)
+      !composition.paintBoxes.exists(_.rect.contains(event.col.toDouble, event.row.toDouble)))
+      .getOrElse(false)
 
   private def editorContextMenu(targetFocus: Focus): Option[ContextMenu] =
     val registry = CommandRegistry.withToggleUI
