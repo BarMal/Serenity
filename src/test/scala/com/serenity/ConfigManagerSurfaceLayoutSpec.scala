@@ -73,9 +73,10 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.surfaceConfig.commandRunnerItemGapRows shouldBe None
-    config.effectiveCommandRunnerItemGapRows shouldBe
+    config.surfaceConfig.commandRunnerItemGapRows.shouldBe(None)
+    config.effectiveCommandRunnerItemGapRows.shouldBe(
       InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).itemGapRows
+    )
     ConfigManager.configToString(config) should include("command_runner.item_gap_rows = auto")
   }
 
@@ -87,9 +88,10 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.surfaceConfig.commandRunnerVisibleRows shouldBe None
-    config.effectiveCommandRunnerVisibleRows shouldBe
+    config.surfaceConfig.commandRunnerVisibleRows.shouldBe(None)
+    config.effectiveCommandRunnerVisibleRows.shouldBe(
       InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).visibleRows
+    )
     ConfigManager.configToString(config) should include("command_runner.visible_rows = auto")
   }
 
@@ -99,9 +101,10 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
 
     val config = ConfigManager.loadConfig(Some(configFile.toString))
 
-    config.surfaceConfig.commandRunnerCursorGapRows shouldBe None
-    config.effectiveCommandRunnerCursorGapRows shouldBe
+    config.surfaceConfig.commandRunnerCursorGapRows.shouldBe(None)
+    config.effectiveCommandRunnerCursorGapRows.shouldBe(
       InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).overlayGapRows.toDouble
+    )
     ConfigManager.configToString(config) should include("command_runner.cursor_gap_rows = auto")
   }
 

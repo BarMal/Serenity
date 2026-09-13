@@ -103,10 +103,13 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
         itemTargetRows = SurfaceFrameLayout.minimumTargetRows(density)
       )
 
-    defaultHeightFor(InterfaceDensity.Compact) shouldBe
+    defaultHeightFor(InterfaceDensity.Compact).shouldBe(
       InterfaceDensityMetrics.forDensity(InterfaceDensity.Compact).commandSurfaceMaxHeight
-    defaultHeightFor(InterfaceDensity.Comfortable) shouldBe
+    )
+    defaultHeightFor(InterfaceDensity.Comfortable).shouldBe(
       InterfaceDensityMetrics.forDensity(InterfaceDensity.Comfortable).commandSurfaceMaxHeight
-    defaultHeightFor(InterfaceDensity.Spacious) shouldBe
+    )
+    defaultHeightFor(InterfaceDensity.Spacious).shouldBe(
       InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).commandSurfaceMaxHeight
+    )
   }

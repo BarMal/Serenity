@@ -36,9 +36,10 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   it should "fall back to interface density's item gap rows when no override is configured" in {
     val config = AppConfig.default.withInterfaceDensity(InterfaceDensity.Spacious)
 
-    config.surfaceConfig.commandRunnerItemGapRows shouldBe None
-    config.effectiveCommandRunnerItemGapRows shouldBe
+    config.surfaceConfig.commandRunnerItemGapRows.shouldBe(None)
+    config.effectiveCommandRunnerItemGapRows.shouldBe(
       InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).itemGapRows
+    )
 
     val overridden = config.withCommandRunnerItemGapRows(Some(4.0))
     overridden.effectiveCommandRunnerItemGapRows shouldBe 4.0
@@ -49,9 +50,10 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   it should "fall back to interface density's visible row count when no override is configured" in {
     val config = AppConfig.default.withInterfaceDensity(InterfaceDensity.Spacious)
 
-    config.surfaceConfig.commandRunnerVisibleRows shouldBe None
-    config.effectiveCommandRunnerVisibleRows shouldBe
+    config.surfaceConfig.commandRunnerVisibleRows.shouldBe(None)
+    config.effectiveCommandRunnerVisibleRows.shouldBe(
       InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).visibleRows
+    )
 
     val overridden = config.withCommandRunnerVisibleRows(Some(7))
     overridden.effectiveCommandRunnerVisibleRows shouldBe 7
@@ -60,9 +62,10 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   it should "fall back to interface density's overlay gap for the command palette's cursor gap when no override or UI element gap is configured" in {
     val config = AppConfig.default.withInterfaceDensity(InterfaceDensity.Spacious)
 
-    config.surfaceConfig.commandRunnerCursorGapRows shouldBe None
-    config.effectiveCommandRunnerCursorGapRows shouldBe
+    config.surfaceConfig.commandRunnerCursorGapRows.shouldBe(None)
+    config.effectiveCommandRunnerCursorGapRows.shouldBe(
       InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).overlayGapRows.toDouble
+    )
 
     val overridden = config.withCommandRunnerCursorGapRows(Some(4.0))
     overridden.effectiveCommandRunnerCursorGapRows shouldBe 4.0
