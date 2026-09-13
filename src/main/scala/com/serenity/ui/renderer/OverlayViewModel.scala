@@ -1,6 +1,7 @@
 package com.serenity.ui.renderer
 
 import com.serenity.animation.AnimationState
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import org.slf4j.LoggerFactory
@@ -275,7 +276,7 @@ object OverlayViewModel:
       case com.serenity.state.models.SurfaceContent.CommandPalette(_) |
           com.serenity.state.models.SurfaceContent.CommandRunnerPeek(_) |
           com.serenity.state.models.SurfaceContent.ContextMenu(_) =>
-        state.persisted.config.surfaceConfig.commandRunnerItemGapRows
+        state.persisted.config.effectiveCommandRunnerItemGapRows
       case com.serenity.state.models.SurfaceContent.ContextualToolbar(_) =>
         state.persisted.config.uiElementGap
       case _ => 0

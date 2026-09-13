@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.config.*
+import com.serenity.ui.layout.SurfaceFrameLayout
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -76,4 +77,39 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
     ConfigRegistry.rejects("ui.element_gap", "wide").shouldBe(true)
     ConfigRegistry.rejects("ui.corner_radius", "14").shouldBe(false)
     ConfigRegistry.rejects("ui.outline.thickness", "").shouldBe(true)
+  }
+
+  // issue #1046: command palette item spacing is now one of the metrics interface density itself governs, alongside
+  // command surface min/max height and the overlay gap, rather than a separate flat-default knob.
+  it should "scale command palette item gap rows with interface density" in {
+    InterfaceDensityMetrics.forDensity(InterfaceDensity.Compact).itemGapRows shouldBe 0.0
+    InterfaceDensityMetrics.forDensity(InterfaceDensity.Comfortable).itemGapRows shouldBe 0.0
+    InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).itemGapRows shouldBe 1.0
+  }
+
+  // issue #1046 (review follow-up): `command_runner.visible_rows`'s density default completes the same
+  // unification -- these row counts were chosen to reproduce each density's own `commandSurfaceMaxHeight` exactly
+  // through `SurfaceFrameLayout.frameHeightForItemRows` (the same formula an explicit override already used), so a
+  // config that never set `command_runner.visible_rows` sees no change in the command palette's default height.
+  it should "derive each density's default visible-row count from its own command surface metrics" in {
+    def defaultHeightFor(density: InterfaceDensity): Int =
+      val metrics = InterfaceDensityMetrics.forDensity(density)
+      SurfaceFrameLayout.frameHeightForItemRows(
+        metrics.visibleRows,
+        hasHeader = true,
+        hasFooter = true,
+        borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
+        itemGapRows = metrics.itemGapRows,
+        itemTargetRows = SurfaceFrameLayout.minimumTargetRows(density)
+      )
+
+    defaultHeightFor(InterfaceDensity.Compact).shouldBe(
+      InterfaceDensityMetrics.forDensity(InterfaceDensity.Compact).commandSurfaceMaxHeight
+    )
+    defaultHeightFor(InterfaceDensity.Comfortable).shouldBe(
+      InterfaceDensityMetrics.forDensity(InterfaceDensity.Comfortable).commandSurfaceMaxHeight
+    )
+    defaultHeightFor(InterfaceDensity.Spacious).shouldBe(
+      InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).commandSurfaceMaxHeight
+    )
   }

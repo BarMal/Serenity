@@ -5,7 +5,6 @@ import com.serenity.command.{
   CommandRunnerSettingsInputItems,
   CommandSurfaceItem,
   KeybindingsIntent,
-  MotionIntent,
   PanelChromeIntent,
   SettingsIntent,
   SpellCheckIntent,
@@ -50,10 +49,9 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
       CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiOutlineThicknessPx(5)))
     )
     inputById(items, "ui-outline-thickness").parse("9") shouldBe None
-    inputById(items, "command-runner-visible-rows").currentValue shouldBe "9"
-    inputById(items, "command-runner-visible-rows").searchText.toLowerCase should include("visible commands")
-    inputById(items, "command-runner-visible-rows").parse("auto") shouldBe
-      Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(None))))
+    // issue #1046: "command-runner-visible-rows" (and the other two command-runner row/spacing inputs) is no longer
+    // built here -- Interface Density is the one control governing all three now.
+    items.map(_.id) should not contain "command-runner-visible-rows"
     inputById(items, "text-area-top").currentValue shouldBe "15.0"
     inputById(items, "text-area-top").parse("12.5") shouldBe Some(
       CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaTopInset(0.125)))

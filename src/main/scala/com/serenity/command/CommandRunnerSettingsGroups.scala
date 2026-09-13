@@ -169,13 +169,13 @@ object CommandRunnerSettingsGroups:
       children = List(interfaceDensityItem, windowChromeItem, commandRunnerKeyHintsItem) ++ inputItems.filter(item =>
         item.id == "ui-element-gap" ||
           item.id == "ui-corner-radius" ||
-          item.id == "ui-outline-thickness" ||
-          item.id == "command-runner-visible-rows" ||
-          item.id == "command-runner-item-gap-rows" ||
-          item.id == "command-runner-cursor-gap-rows"
+          item.id == "ui-outline-thickness"
       ),
       category = CommandCategory.Settings,
-      hint = Some("Density, spacing, window chrome, command rows, key hints")
+      // issue #1046: command-runner row count/spacing (visible rows, item gap, cursor gap) is no longer editable
+      // here as three separate knobs -- Interface Density above is the one control that governs all three; the
+      // underlying config keys still parse as explicit overrides for back-compat, they just aren't palette rows.
+      hint = Some("Density, spacing, window chrome, key hints")
     )
     val renderingGroup = CommandSurfaceItem.GroupItem(
       id = "settings-rendering",

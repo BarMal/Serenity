@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.awt.Font
 import java.util.LinkedHashMap
 
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, CursorInfoBarPlacement, CursorInfoBarSegment, InterfaceDensity, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.RichTextDocument
@@ -71,9 +72,9 @@ final private[manager] case class MouseTargetLayoutKey(
     showPaneHeaders: Boolean,
     cursorInfoBarSegments: List[CursorInfoBarSegment],
     cursorInfoBarPlacement: CursorInfoBarPlacement,
-    commandRunnerVisibleRows: Option[Int],
+    commandRunnerVisibleRows: Int,
     commandRunnerItemGapRows: Double,
-    commandRunnerCursorGapRows: Option[Double],
+    commandRunnerCursorGapRows: Double,
     layoutState: Layout,
     focus: Focus,
     focusPaneId: Option[PaneId],
@@ -160,9 +161,9 @@ private[manager] object MouseTargetLayoutKey:
       showPaneHeaders = state.persisted.config.surfaceConfig.showPaneHeaders,
       cursorInfoBarSegments = state.persisted.config.cursorInfoBarSegments,
       cursorInfoBarPlacement = state.persisted.config.cursorInfoBarPlacement,
-      commandRunnerVisibleRows = state.persisted.config.surfaceConfig.commandRunnerVisibleRows,
-      commandRunnerItemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
-      commandRunnerCursorGapRows = state.persisted.config.surfaceConfig.commandRunnerCursorGapRows,
+      commandRunnerVisibleRows = state.persisted.config.effectiveCommandRunnerVisibleRows,
+      commandRunnerItemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
+      commandRunnerCursorGapRows = state.persisted.config.effectiveCommandRunnerCursorGapRows,
       layoutState = state.persisted.layout,
       focus = state.persisted.focus,
       focusPaneId = state.persisted.focus match

@@ -401,9 +401,11 @@ object ConfigRegistry:
         .orAuto
     )(_.surfaceConfig.commandRunnerVisibleRows, (config, value) => config.withCommandRunnerVisibleRows(value)),
     field("command_runner.item_gap_rows", "command.runner.item.gap.rows", "command_runner_item_gap_rows")(
-      double.filtered(rows =>
-        rows >= AppConfig.MinCommandRunnerItemGapRows && rows <= AppConfig.MaxCommandRunnerItemGapRows
-      )
+      double
+        .filtered(rows =>
+          rows >= AppConfig.MinCommandRunnerItemGapRows && rows <= AppConfig.MaxCommandRunnerItemGapRows
+        )
+        .orAuto
     )(_.surfaceConfig.commandRunnerItemGapRows, (config, value) => config.withCommandRunnerItemGapRows(value)),
     field("command_runner.cursor_gap_rows", "command.runner.cursor.gap.rows", "command_runner_cursor_gap_rows")(
       double
