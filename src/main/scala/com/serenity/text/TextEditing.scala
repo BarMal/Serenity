@@ -1,9 +1,9 @@
 package com.serenity.text
 
-import com.ibm.icu.text.BreakIterator
-
 import java.text.CharacterIterator
 import java.util.concurrent.atomic.AtomicInteger
+
+import com.ibm.icu.text.BreakIterator
 
 object TextEditing:
 
@@ -157,10 +157,10 @@ object TextEditing:
     override def charAt(index: Int): Char =
       text.charAt(index)
 
-  /** Adapts a `CharacterSource` to `java.text.CharacterIterator` so ICU4J's `BreakIterator` can walk it directly --
-    * a rope included -- without ever materialising a `String` (#1277 step 3). The current position is genuinely
-    * mutable state intrinsic to `CharacterIterator`'s contract (`first`/`next`/`setIndex` etc. all move and return
-    * from one cursor), so it is held in an `AtomicInteger` rather than a `var`, per this file's no-`var` convention.
+  /** Adapts a `CharacterSource` to `java.text.CharacterIterator` so ICU4J's `BreakIterator` can walk it directly -- a
+    * rope included -- without ever materialising a `String` (#1277 step 3). The current position is genuinely mutable
+    * state intrinsic to `CharacterIterator`'s contract (`first`/`next`/`setIndex` etc. all move and return from one
+    * cursor), so it is held in an `AtomicInteger` rather than a `var`, per this file's no-`var` convention.
     */
   final private class CharacterSourceIterator(source: CharacterSource) extends CharacterIterator:
     private val position = AtomicInteger(0)
