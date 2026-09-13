@@ -7,6 +7,7 @@ import com.serenity.config.{AppConfig, DefaultDocumentMode, MarkdownViewMode}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.RichTextDocument
 import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
+import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.UiPreset
@@ -27,7 +28,7 @@ final private[manager] class StateManagerUiPresetEffects(
     openMarkdownPreview: IO[Unit],
     loadPinnedDirectoryEffect: (com.serenity.ui.layout.PanelPosition, java.nio.file.Path) => IO[Unit],
     validateAndUpdateState: (AppState, AppState) => IO[Unit]
-):
+)(using balance: com.serenity.rope.Balance):
 
   private[manager] def interpret(intent: UiPresetsIntent): IO[Unit] =
     intent match
@@ -140,9 +141,14 @@ final private[manager] class StateManagerUiPresetEffects(
   private def applyLoadedUiPreset(preset: UiPreset, isBuiltInWorkflow: Boolean, theme: Theme): IO[Unit] =
     for
       current <- stateRef.get
+      // From the splash there is no editor pane/buffer/tree to apply onto, so seed a fresh "New document" workspace
+      // first (dropping the splash) and apply the preset on top -- the same valid base a runtime preset-apply sees.
+      // The preset then docks its panels into a real tree, its document mode lands on a real empty buffer, and there
+      // is a focused buffer to type into (#1524 and its buffer-less-pane fallout).
+      base = seedEditorFromSplash(current)
       restoredPresetState =
-        if isBuiltInWorkflow then UiPreset.applyBuiltInWorkflowToState(preset, current, theme)
-        else UiPreset.applyToState(preset, current, theme)
+        if isBuiltInWorkflow then UiPreset.applyBuiltInWorkflowToState(preset, base, theme)
+        else UiPreset.applyToState(preset, base, theme)
       restoredDocumentState =
         applyPresetDocumentModeToActiveEmptyBuffer(restoredPresetState, preset.config.defaultDocumentMode)
       restoredOutlineState = hydratePresetSymbolPanels(restoredDocumentState)
@@ -162,6 +168,25 @@ final private[manager] class StateManagerUiPresetEffects(
         .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
         .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after preset apply failed"))
     yield ()
+
+  /** Choosing a workflow preset from the startup splash is a startup action that must leave the splash and land in a
+    * usable editor (#1524). The splash state has no editor pane, buffer, or workspace tree, so applying a preset onto
+    * it directly produced a buffer-less pane (or, for a preset that docks a panel but sets no editor-pane target like
+    * Code, a tree with no editor leaf that failed validation and silently reverted). Seeding a fresh "New document"
+    * workspace here -- dropping the splash -- gives the preset the same valid base a runtime apply sees. A no-op at
+    * runtime (no splash), leaving a settings-driven preset apply untouched.
+    */
+  private def seedEditorFromSplash(state: AppState): AppState =
+    if state.startPageSurface.isEmpty then state
+    else
+      val withoutStartPage = state.copy(runtime =
+        state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot { surface =>
+          surface.content match
+            case SurfaceContent.StartPage(_) => true
+            case _                           => false
+        })
+      )
+      EditorState.openNewTab(withoutStartPage)
 
   private def applyPresetDocumentModeToActiveEmptyBuffer(state: AppState, mode: DefaultDocumentMode): AppState =
     state.focusedBufferId.flatMap(state.persisted.buffers.get) match

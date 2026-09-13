@@ -195,11 +195,54 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       "/tmp/project/notes.scala"
     )
     plan.paintBoxes.find(_.actionId.contains(SurfaceActionId("file-suggestion-1"))).exists(_.selected) shouldBe true
-    plan.paintBoxes.flatMap(_.text) should contain allOf ("save-as", "Filename notes.scala", "Path /tmp/project")
+    plan.paintBoxes.flatMap(_.text) should contain allOf ("Save As", "Filename notes.scala", "Path /tmp/project")
     plan.paintBoxes
       .find(_.text.contains("Path /tmp/project"))
       .map(_.segments.exists(_.tone == OverlayTone.Error)) shouldBe Some(false)
     plan.paintBoxes.filter(_.focusId.nonEmpty).map(_.rect) shouldBe plan.hitRegions.map(_.rect)
+  }
+
+  it should "scroll the file suggestion window to keep the selected suggestion visible" in {
+    val suggestions =
+      (0 until 10).toList.map(index => FileWorkflowSuggestion(s"/tmp/project/file-$index.scala", isDirectory = false))
+    val workflow = FileWorkflowState(
+      mode = FileWorkflowMode.Open,
+      path = "/tmp/project",
+      activeField = FileWorkflowField.Path,
+      suggestions = suggestions,
+      selectedSuggestionIndex = 8
+    )
+
+    val plan          = planFor(Modal.FileWorkflow(workflow))
+    val suggestionIds = (0 until 10).map(index => SurfaceActionId(s"file-suggestion-$index")).toSet
+    val suggestionBoxes = plan.paintBoxes.filter(_.actionId.exists(suggestionIds.contains))
+
+    // The rendered window is bounded, but must contain the selected suggestion rather than a frozen top slice.
+    suggestionBoxes.size shouldBe 4
+    val selectedBox = suggestionBoxes
+      .find(_.actionId.contains(SurfaceActionId("file-suggestion-8")))
+      .getOrElse(fail("selected suggestion (index 8) must be within the rendered window"))
+    selectedBox.selected shouldBe true
+    selectedBox.text.exists(_.contains("file-8")) shouldBe true
+    // Off-window entries are not painted; action ids stay the global indices so mouse-click selection maps correctly.
+    suggestionBoxes.flatMap(_.actionId) should not contain SurfaceActionId("file-suggestion-0")
+  }
+
+  it should "omit the format row and human-case the heading for the open dialog" in {
+    val workflow = OpenFileWorkflowState(
+      path = "/tmp/project",
+      activeField = FileWorkflowField.Path,
+      suggestions = List(FileWorkflowSuggestion("/tmp/project/readme.md", isDirectory = false))
+    )
+
+    val plan  = planFor(Modal.FileWorkflow(workflow))
+    val texts = plan.paintBoxes.flatMap(_.text)
+
+    // Open has no format to choose -- the row is gone entirely, not shown as a dead label (#1527).
+    texts.exists(_.contains("Format")) shouldBe false
+    // Heading is human-cased, not the lowercase operation key.
+    texts should contain("Open")
+    texts should not contain "open"
   }
 
   it should "show the detected format next to the filename, and warn when it would lose rich formatting" in {
@@ -240,12 +283,11 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       .exists(_.selected) shouldBe false
   }
 
-  it should "keep the open workflow's format label plain and non-selectable" in {
+  it should "render no format row for the open workflow, which has no format to choose" in {
     val workflow = FileWorkflowState(mode = FileWorkflowMode.Open, filename = "notes.txt")
     val plan     = planFor(Modal.FileWorkflow(workflow))
 
-    plan.paintBoxes.flatMap(_.text) should contain("Format: Text")
-    plan.paintBoxes.find(_.text.contains("Format:")).flatMap(_.focusId) shouldBe None
+    plan.paintBoxes.flatMap(_.text).exists(_.contains("Format")) shouldBe false
     plan.hitRegions.map(_.semanticLabel) should not contain "Format"
   }
 

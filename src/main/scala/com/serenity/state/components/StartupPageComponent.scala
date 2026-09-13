@@ -26,6 +26,12 @@ class StartupPageComponent extends TypedFocusedComponent[StartupPageEvent]:
                 startPage.launchActions
                   .lift(index)
                   .fold(ComponentResult.noChange)(action => ComponentResult.executeCommand(action.command))
+              case StartupPageResume =>
+                startPage.resume.fold(ComponentResult.noChange)(hint => ComponentResult.executeCommand(hint.command))
+              case StartupPageShortcut(char) =>
+                startPage.workflows
+                  .find(_.shortcut.exists(_.toLower == char.toLower))
+                  .fold(ComponentResult.noChange)(action => ComponentResult.executeCommand(action.command))
               case StartupPageDismiss =>
                 ComponentResult.dismiss
           case _ => ComponentResult.noChange

@@ -400,7 +400,7 @@ final private[manager] class StateManagerConfigEffects(
         updateAppearanceConfig { config =>
           val current = config.cursorInfoBarSegments
           val updated =
-            if included then if current.contains(segment) then current else current :+ segment
+            if included then includeCursorInfoBarSegment(current, segment)
             else current.filterNot(_ == segment)
           config.withCursorInfoBarSegments(updated)
         }.void
@@ -414,6 +414,23 @@ final private[manager] class StateManagerConfigEffects(
         ).void
       case CursorIntent.SetCursorInfoBarPlacement(placement) =>
         updateAppearanceConfig(_.withCursorInfoBarPlacement(placement)).void
+
+  /** Adds `segment` at its slot in the canonical definition order (`CursorInfoBarSegment.values`) relative to the
+    * already-included segments, rather than appending to the end. So toggling a segment off then on restores its
+    * position instead of shunting it to the tail (#1533); existing segments keep their relative order, so a user's
+    * manual reordering via move-earlier/later is preserved. A no-op when the segment is already present.
+    */
+  private def includeCursorInfoBarSegment(
+    segments: List[CursorInfoBarSegment],
+    segment: CursorInfoBarSegment
+  ): List[CursorInfoBarSegment] =
+    if segments.contains(segment) then segments
+    else
+      val canonicalOrder                          = CursorInfoBarSegment.values.toList
+      def canonicalIndex(s: CursorInfoBarSegment) = canonicalOrder.indexOf(s)
+      segments.indexWhere(existing => canonicalIndex(existing) > canonicalIndex(segment)) match
+        case -1       => segments :+ segment
+        case insertAt => segments.patch(insertAt, List(segment), 0)
 
   private def moveCursorInfoBarSegment(
     segments: List[CursorInfoBarSegment],

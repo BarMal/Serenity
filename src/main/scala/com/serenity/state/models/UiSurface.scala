@@ -62,6 +62,11 @@ final case class StartupAction(
     val suffix = detail.fold("")(value => s"  $value")
     s"$prefix$label$suffix"
 
+/** The "quick resume last session" affordance: a keyboard hint (Tab) pinned to the bottom of the startup page, showing
+  * the previous session's identifier (its main file/dir name) so the user can recognise what they'd be resuming.
+  */
+final case class StartupResumeHint(identifier: String, command: Command)
+
 /** Pixel-space click target for an action rendered on the startup page. */
 final case class StartupActionBounds(index: Int, xPx: Int, yPx: Int, widthPx: Int, heightPx: Int):
   def contains(pixelX: Int, pixelY: Int): Boolean =
@@ -72,7 +77,12 @@ final case class StartupPage(
     options: List[String] = Nil,
     statusMessage: Option[String] = None,
     selectedIndex: Int = 0,
-    actions: List[StartupAction] = Nil
+    actions: List[StartupAction] = Nil,
+    // Workflow presets are not part of the navigable list -- they render as a keyboard-shortcut hint pinned to the
+    // bottom of the screen (activated by their `shortcut` letter), so they stay out of `launchActions`.
+    workflows: List[StartupAction] = Nil,
+    // Quick-resume (Tab) also lives in the bottom hint area rather than the navigable list, on its own line.
+    resume: Option[StartupResumeHint] = None
 ):
 
   private def legacyActions: List[StartupAction] =
@@ -115,7 +125,7 @@ final case class StartupPage(
   /** Zero-based render-line index for each launch action, including section spacing and headings. */
   def actionLineIndices: List[Int] =
     launchActions.zipWithIndex
-      .foldLeft((List.empty[Int], 3, Option.empty[StartupActionSection])) {
+      .foldLeft((List.empty[Int], 2, Option.empty[StartupActionSection])) {
         case ((indices, nextLine, previousSection), (action, _)) =>
           val sectionLines =
             if previousSection.exists(_ != action.section) then 2 else 0
@@ -158,14 +168,8 @@ final case class StartupPage(
     actionBounds(viewportSize, codeMetrics, uiMetrics).find(_.contains(pixelX, pixelY)).map(_.index)
 
   def renderLines: List[String] =
-    val actionLines = launchActions.zipWithIndex.foldLeft(List.empty[String]) {
-      case (lines, (action, index)) =>
-        val sectionHeader =
-          if index > 0 && launchActions(index - 1).section != action.section then List("", "Workflows")
-          else Nil
-        lines ++ sectionHeader :+ action.renderedLabel
-    }
-    val baseLines = List(title, "Choose a starting point", "") ++ actionLines
+    val actionLines = launchActions.map(_.renderedLabel)
+    val baseLines   = List(title, "") ++ actionLines
     statusMessage match
       case Some(message) => baseLines ++ List("", message, "", "↑↓ Navigate  •  Enter Select  •  Esc Close")
       case None          => baseLines ++ List("", "↑↓ Navigate  •  Enter Select  •  Esc Close")

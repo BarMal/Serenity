@@ -142,8 +142,9 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     finalState.startPageSurface.map(_.content) match
       case Some(SurfaceContent.StartPage(startPage)) =>
         startPage.title shouldBe "Welcome to Serenity"
-        startPage.actions.map(_.id) should contain allOf ("new-session", "open-file", "workflow-writing")
+        startPage.actions.map(_.id) should contain allOf ("new-session", "open-file")
         startPage.actions.map(_.id) should not contain "restore-session"
+        startPage.workflows.map(_.id) should contain("workflow-writing")
         startPage.statusMessage shouldBe Some("No previous session found")
       case other => fail(s"Expected StartPage surface content, got: $other")
   }

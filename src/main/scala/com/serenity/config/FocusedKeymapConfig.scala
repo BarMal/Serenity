@@ -524,9 +524,10 @@ private object KeymapCodecSupport:
     keyOf: A => String,
     defaults: Map[A, List[HotkeyTrigger]]
   ): Either[String, Map[A, List[HotkeyTrigger]]] =
-    val decoded = bindings.toList.map { (key, triggers) =>
-      values.find(action => keyOf(action) == key).map(_ -> triggers).toRight(s"Unknown keymap action: $key")
+    // Skip action keys this build doesn't recognize -- config written by another version (an action since renamed or
+    // removed, e.g. a `next_category` binding in an older saved preset) must not discard the whole keymap section and
+    // fall the user back to defaults. Recognized bindings are kept, merged onto defaults; unknown keys are dropped.
+    val recognized = bindings.toList.flatMap { (key, triggers) =>
+      values.find(action => keyOf(action) == key).map(_ -> triggers)
     }
-    decoded.collectFirst { case Left(error) => error } match
-      case Some(error) => Left(error)
-      case None        => Right(defaults ++ decoded.collect { case Right(entry) => entry }.toMap)
+    Right(defaults ++ recognized.toMap)

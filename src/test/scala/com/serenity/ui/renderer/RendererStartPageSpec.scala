@@ -137,9 +137,8 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
       val x = (viewportSize.width - line.length) / 2
       surface.getFg(x, row)
 
-    foregroundOfCenteredLine(rowOf(0), "Serenity") shouldBe theme.foreground           // title (line 0)
-    foregroundOfCenteredLine(rowOf(1), "Choose a starting point") shouldBe theme.muted // plain, non-option line
-    foregroundOfCenteredLine(rowOf(3), "One") shouldBe theme.foreground                // unselected option
+    foregroundOfCenteredLine(rowOf(0), "Serenity") shouldBe theme.foreground // title (line 0)
+    foregroundOfCenteredLine(rowOf(2), "One") shouldBe theme.foreground      // unselected option (line 2)
   }
 
   it should "skip render lines whose computed row falls at or past the caller-given viewport height" in {

@@ -84,8 +84,8 @@ class ModalWorkflowContentResolverSpec extends AnyFlatSpec with Matchers:
       SurfaceRenderMode.Pinned
     )
 
-    resolved.title shouldBe Some("open")
-    resolved.header.map(_.plainText) shouldBe Some("open")
+    resolved.title shouldBe Some("Open")
+    resolved.header.map(_.plainText) shouldBe Some("Open")
   }
 
   "resolveFileWorkflow (via resolve)" should "render a single empty path segment for an empty path" in {

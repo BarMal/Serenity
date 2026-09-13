@@ -80,7 +80,7 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
     java.nio.file.Files.deleteIfExists(selectedFile)
   }
 
-  it should "keep the session choice available when a workflow preset is chosen" in {
+  it should "dismiss the splash and enter the editor when a workflow preset is chosen" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
@@ -91,13 +91,44 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
         Theme.default,
         ViewportSize(80, 24)
       )
-      _     <- stateManager.applyEvent(MoveDown)
-      _     <- stateManager.applyEvent(MoveDown)
-      _     <- stateManager.applyEvent(Enter)
+      _     <- stateManager.applyEvent(InsertChar('w'))
       state <- stateManager.getCurrentState
     yield state
 
     val state = program.unsafeRunSync()
-    state.startPageSurface shouldBe defined
-    state.startPageSurface.map(_.content) should not be empty
+    // Choosing a workflow preset from the splash must transition into the editor -- like new/restore/open-recent -- not
+    // leave the (now stale) splash painted over the applied workspace, which looked like the option did nothing (#1524).
+    state.startPageSurface shouldBe empty
+    state.persisted.focus should matchPattern { case Focus.EditorPane(_) => }
+    // ...and it must land in a real, empty, editable buffer -- from the splash the preset otherwise produced a
+    // buffer-less pane, so the first keystroke had nowhere to go.
+    state.persisted.buffers should not be empty
+    val landedBuffer = state.persisted.layout.activeEditorPaneId
+      .flatMap(state.persisted.layout.editorPanes.get)
+      .flatMap(_.bufferId)
+      .flatMap(state.persisted.buffers.get)
+    landedBuffer.map(_.document.content.collect()) shouldBe Some("")
+  }
+
+  it should "enter the editor when the Code workflow preset is chosen, even though it has no editor-pane target" in {
+    given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+    val program = for
+      stateManager <- createStateManagerIO("StartupOptionsEndToEndSpec-code")
+      _ <- AppStartup.initializeState(
+        stateManager,
+        stateManager.sessionStartupInfo,
+        Theme.default,
+        ViewportSize(80, 24)
+      )
+      _     <- stateManager.applyEvent(InsertChar('c'))
+      state <- stateManager.getCurrentState
+    yield state
+
+    val state = program.unsafeRunSync()
+    // Code docks a directory tree and sets no targetEditorPaneCount, so from the splash it previously left no editor
+    // pane at all and the choice appeared to do nothing.
+    state.startPageSurface shouldBe empty
+    state.persisted.focus should matchPattern { case Focus.EditorPane(_) => }
+    state.persisted.buffers should not be empty
   }

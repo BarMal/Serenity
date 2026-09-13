@@ -188,6 +188,43 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     restoredWriting.pinnedSurfaces shouldBe Nil
   }
 
+  it should "disable spell-check when applying the Code or Compact workflow, leaving prose untouched" in {
+    val code    = UiPreset.builtIn("Code").getOrElse(fail("missing Code preset"))
+    val compact = UiPreset.builtIn("Compact").getOrElse(fail("missing Compact preset"))
+    val writing = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
+    val spellOn = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(config =
+        AppState.initial.persisted.config.withSpellCheck(
+          AppState.initial.persisted.config.languageToolsConfig.spellCheck.copy(enabled = true)
+        )
+      )
+    )
+
+    // Code workflows shouldn't spell-check (identifiers aren't prose, and there's no bundled dictionary yet #1175).
+    UiPreset
+      .applyBuiltInWorkflowToState(code, spellOn, Theme.dark)
+      .persisted
+      .config
+      .languageToolsConfig
+      .spellCheck
+      .enabled shouldBe false
+    UiPreset
+      .applyBuiltInWorkflowToState(compact, spellOn, Theme.dark)
+      .persisted
+      .config
+      .languageToolsConfig
+      .spellCheck
+      .enabled shouldBe false
+    // Prose keeps whatever the user configured -- spell-check is appropriate there.
+    UiPreset
+      .applyBuiltInWorkflowToState(writing, spellOn, Theme.dark)
+      .persisted
+      .config
+      .languageToolsConfig
+      .spellCheck
+      .enabled shouldBe true
+  }
+
   it should "include editor pane count targets in command runner previews" in {
     val preset = UiPreset(
       name = "Two Pane Drafting",

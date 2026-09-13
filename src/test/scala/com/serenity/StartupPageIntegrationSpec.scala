@@ -49,36 +49,19 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       startPage1 = state1.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       _          = startPage1.selectedIndex shouldBe 1
 
-      // Navigate down again
+      // Navigate down again wraps to the first option (only New/Open are navigable now; workflows and resume are hints)
       _      <- stateManager.applyEvent(MoveDown)
       state2 <- stateManager.getCurrentState
       startPage2 = state2.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _          = startPage2.selectedIndex shouldBe 2
+      _          = startPage2.selectedIndex shouldBe 0
 
-      // Navigate through the workflow actions.
-      _      <- stateManager.applyEvent(MoveDown)
+      // Navigate up wraps to the last option
+      _      <- stateManager.applyEvent(MoveUp)
       state3 <- stateManager.getCurrentState
       startPage3 = state3.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _          = startPage3.selectedIndex shouldBe 3
+      _          = startPage3.selectedIndex shouldBe 1
 
-      _      <- stateManager.applyEvent(MoveDown)
-      state4 <- stateManager.getCurrentState
-      startPage4 = state4.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _          = startPage4.selectedIndex shouldBe 4
-
-      // Navigate down once more (should wrap to the first option)
-      _      <- stateManager.applyEvent(MoveDown)
-      state5 <- stateManager.getCurrentState
-      startPage5 = state5.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _          = startPage5.selectedIndex shouldBe 0
-
-      // Navigate up (should wrap to last option)
-      _      <- stateManager.applyEvent(MoveUp)
-      state6 <- stateManager.getCurrentState
-      startPage6 = state6.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      _          = startPage6.selectedIndex shouldBe 4
-
-      // Reset to first option and select it (new session)
+      // Back to the first option and select it (new session)
       _          <- stateManager.applyEvent(MoveDown)
       _          <- stateManager.applyEvent(Enter)
       finalState <- stateManager.getCurrentState
@@ -134,14 +117,12 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       )
       _            = secondInitial.startPageSurface should be(defined)
       startPage    = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      restoreIndex = startPage.launchActions.indexWhere(_.id == "restore-session")
-      _ = withClue("\"Restore previous session\" action should be offered once a session exists on disk") {
-        restoreIndex should be >= 0
+      _ = withClue("Quick-resume must be offered once a session exists on disk") {
+        startPage.resume should be(defined)
       }
 
-      // Navigate to "Restore previous session" and press Enter, exactly as the user does.
-      _          <- (0 until restoreIndex).toList.traverse_(_ => secondManager.applyEvent(MoveDown))
-      _          <- secondManager.applyEvent(Enter)
+      // Quick-resume the previous session with Tab, exactly as the user does.
+      _ <- secondManager.applyEvent(TabKey)
       finalState <- secondManager.getCurrentState
 
       // A zero-buffer restore must never leave a blank, unusable screen: the startup page must be gone and at

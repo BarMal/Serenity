@@ -263,32 +263,43 @@ object ModalSurfaceComposition:
     val formatLabel = workflow.detectedFileType.displayName
     val formatValue =
       if workflow.wouldLoseFormatting then s"$formatLabel (will lose rich formatting)" else formatLabel
-    val format = workflow match
+    // Open has no format to choose, so it renders no Format row at all (#1527); only Save As shows it. Dropping the
+    // row (rather than a dead "Format:" label) also lets the suggestion list start one row higher on Open.
+    val formatRow = workflow match
       case saveAsWorkflow: SaveAsFileWorkflowState =>
         val formatSelected = saveAsWorkflow.activeField == FileWorkflowField.Format
-        inputBox(
-          "Format",
-          formatValue,
-          SurfaceFocusId("format"),
-          rowRect(bounds, 3, rowHeight),
-          selected = formatSelected,
-          cursorAtEnd = false,
-          segments = List(OverlaySegment("Format"), OverlaySegment(formatValue, selected = formatSelected)),
-          layout = SurfacePaintLayout.Split
+        List(
+          inputBox(
+            "Format",
+            formatValue,
+            SurfaceFocusId("format"),
+            rowRect(bounds, 3, rowHeight),
+            selected = formatSelected,
+            cursorAtEnd = false,
+            segments = List(OverlaySegment("Format"), OverlaySegment(formatValue, selected = formatSelected)),
+            layout = SurfacePaintLayout.Split
+          )
         )
-      case _: OpenFileWorkflowState =>
-        // Open has no format concept -- `activeField` can never be `Format` there (it's not in `cyclableFields`), but
-        // this stays a plain, non-selectable label rather than assuming that invariant.
-        textBox(s"Format: $formatValue", rowRect(bounds, 3, rowHeight))
-    val suggestions = workflow.suggestions.take(4).zipWithIndex.map {
-      case (suggestion, index) =>
-        val suffix = if suggestion.isDirectory then "/" else ""
+      case _: OpenFileWorkflowState => Nil
+    val suggestionBaseRow = 3 + formatRow.size
+    // Render a bounded window that follows the selection rather than a frozen top slice, so navigating past the
+    // visible cap keeps the highlighted suggestion on screen (#1526). Action/focus ids stay the *global* suggestion
+    // index -- `ModalFileWorkflowReducer` maps `file-suggestion-N` straight back into `workflow.suggestions(N)`.
+    val visibleCount = 4
+    val total        = workflow.suggestions.length
+    val windowStart =
+      if total <= visibleCount then 0
+      else math.min(math.max(0, workflow.selectedSuggestionIndex - visibleCount / 2), total - visibleCount)
+    val suggestions = workflow.suggestions.slice(windowStart, windowStart + visibleCount).zipWithIndex.map {
+      case (suggestion, displayIndex) =>
+        val globalIndex = windowStart + displayIndex
+        val suffix      = if suggestion.isDirectory then "/" else ""
         actionBox(
           suggestion.value + suffix,
-          SurfaceActionId(s"file-suggestion-$index"),
-          SurfaceFocusId(s"file-suggestion-$index"),
-          selected = index == workflow.selectedSuggestionIndex,
-          rowRect(bounds, index + 4, rowHeight)
+          SurfaceActionId(s"file-suggestion-$globalIndex"),
+          SurfaceFocusId(s"file-suggestion-$globalIndex"),
+          selected = globalIndex == workflow.selectedSuggestionIndex,
+          rowRect(bounds, displayIndex + suggestionBaseRow, rowHeight)
         )
     }
     val footer = workflow.statusMessage
@@ -296,12 +307,12 @@ object ModalSurfaceComposition:
         s"Create directories: ${workflow.missingPathSegments.mkString(" / ")}"
       })
       .toList
-      .map(message => textBox(message, rowRect(bounds, workflow.suggestions.take(4).size + 4, rowHeight)))
+      .map(message => textBox(message, rowRect(bounds, suggestions.size + suggestionBaseRow, rowHeight)))
     val keyHints = textBox(
       fileWorkflowKeyHints(workflow, modalBindings),
-      rowRect(bounds, workflow.suggestions.take(4).size + 5, rowHeight)
+      rowRect(bounds, suggestions.size + suggestionBaseRow + 1, rowHeight)
     )
-    plan(bounds, header :: filename :: path :: format :: suggestions ++ footer :+ keyHints)
+    plan(bounds, header :: filename :: path :: (formatRow ++ suggestions ++ footer :+ keyHints))
 
   /** Builds the file workflow's own current-action hint, in the same tone as `commandRunnerShowKeyHints` elsewhere in
     * this file: sourced live from `modalBindings` (the app's actual, currently-configured `Modal` keymap group) rather

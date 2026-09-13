@@ -90,14 +90,12 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
       )
       _            = secondInitial.startPageSurface should be(defined)
       startPage    = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      restoreIndex = startPage.launchActions.indexWhere(_.id == "restore-session")
-      _ = withClue("\"Restore previous session\" action should be offered once a session exists on disk") {
-        restoreIndex should be >= 0
+      _ = withClue("Quick-resume must be offered once a session exists on disk") {
+        startPage.resume should be(defined)
       }
 
-      // Navigate to "Restore previous session" and press Enter, exactly as the user does.
-      _          <- (0 until restoreIndex).toList.traverse_(_ => secondManager.applyEvent(MoveDown))
-      _          <- secondManager.applyEvent(Enter)
+      // Quick-resume the previous session with Tab, exactly as the user does.
+      _ <- secondManager.applyEvent(TabKey)
       finalState <- secondManager.getCurrentState
 
       // The editor should now be showing the restored content -- the startup page must be gone, not still sitting
@@ -153,9 +151,8 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
         keyboardFidelityTier = KeyboardFidelityTier.ModifyOtherKeys
       )
       startPage    = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
-      restoreIndex = startPage.launchActions.indexWhere(_.id == "restore-session")
-      _          <- (0 until restoreIndex).toList.traverse_(_ => secondManager.applyEvent(MoveDown))
-      _          <- secondManager.applyEvent(Enter)
+      _ = startPage.resume should be(defined)
+      _ <- secondManager.applyEvent(TabKey)
       finalState <- secondManager.getCurrentState
 
       _ = withClue("isTuiMode must survive session restore") {

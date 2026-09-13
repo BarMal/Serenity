@@ -150,6 +150,41 @@ object RendererStartPage:
             renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics)
     }
 
+    renderBottomHints(page, surface, viewportSize, theme, uiFont, cellMetrics, uiMetrics)
+
+  /** Keyboard-shortcut hints pinned to the bottom of the screen, outside the vertically-centered menu: the quick-resume
+    * line on its own row, with the workflow-preset shortcuts on the row below it.
+    */
+  private def renderBottomHints(
+    page: StartupPage,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    theme: Theme,
+    uiFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics
+  ): Unit =
+    val lineHeightPx     = math.max(cellMetrics.lineHeight, uiMetrics.lineHeight)
+    val viewportHeightPx = viewportSize.height * cellMetrics.lineHeight
+    val hintLines =
+      page.resume.map(hint => s"[Tab] Quick resume last session — ${hint.identifier}").toList ++
+        Option
+          .when(page.workflows.nonEmpty)(
+            page.workflows
+              .map(action => action.shortcut.fold(action.label)(key => s"[$key] ${action.label}"))
+              .mkString("   ")
+          )
+          .toList
+    hintLines.zipWithIndex.foreach {
+      case (line, index) =>
+        val rowsFromBottom = hintLines.size - index
+        val yPx            = viewportHeightPx - (rowsFromBottom * lineHeightPx)
+        if yPx >= 0 && yPx + lineHeightPx <= viewportHeightPx then
+          surface.setForegroundColor(theme.muted)
+          surface.setBackgroundColor(theme.background)
+          renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics)
+    }
+
   private def renderCenteredStartPageLine(
     surface: RenderSurface,
     line: String,

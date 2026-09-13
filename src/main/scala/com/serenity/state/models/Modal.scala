@@ -303,7 +303,7 @@ final case class OpenFileWorkflowState(
     statusMessage: Option[String] = None,
     bufferHasRichFormatting: Boolean = false
 ) extends FileWorkflowState:
-  val operationLabel: String               = "open"
+  val operationLabel: String               = "Open"
   val supportsFilenameSuggestions: Boolean = true
 
   // The open dialog is a directory browser: Tab/Shift-Tab stay on the Path field rather than cycling into a filename
@@ -342,7 +342,7 @@ final case class SaveAsFileWorkflowState(
     statusMessage: Option[String] = None,
     bufferHasRichFormatting: Boolean = false
 ) extends FileWorkflowState:
-  val operationLabel: String               = "save-as"
+  val operationLabel: String               = "Save As"
   val supportsFilenameSuggestions: Boolean = false
 
   override def cyclableFields: List[FileWorkflowField] =

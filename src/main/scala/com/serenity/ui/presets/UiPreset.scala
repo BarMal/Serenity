@@ -175,6 +175,7 @@ object UiPreset:
         patchWorkflowChrome(withTypography, source)
           .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
           .withSyntaxHighlighting(source.languageToolsConfig.syntaxHighlightingEnabled)
+          .withSpellCheck(base.languageToolsConfig.spellCheck.copy(enabled = false))
       case "compact" =>
         patchWorkflowChrome(
           withTypography,
@@ -184,6 +185,7 @@ object UiPreset:
         )
           .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
           .withSyntaxHighlighting(source.languageToolsConfig.syntaxHighlightingEnabled)
+          .withSpellCheck(base.languageToolsConfig.spellCheck.copy(enabled = false))
       case "review" =>
         patchWorkflowChrome(withTypography, source)
           .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))

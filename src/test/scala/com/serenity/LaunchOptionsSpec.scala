@@ -179,48 +179,72 @@ class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
     ) shouldBe true
   }
 
-  it should "default to the GUI path when a display is reachable via $DISPLAY" in {
+  it should "default to the GUI path when a display is reachable via $DISPLAY (Linux)" in {
     LaunchOptions.resolveTuiMode(
       LaunchOptions(),
       env = Map("DISPLAY" -> ":0"),
-      stdoutIsTty = true
+      stdoutIsTty = true,
+      osName = "Linux"
     ) shouldBe false
   }
 
-  it should "default to the GUI path when a display is reachable via $WAYLAND_DISPLAY" in {
+  it should "default to the GUI path when a display is reachable via $WAYLAND_DISPLAY (Linux)" in {
     LaunchOptions.resolveTuiMode(
       LaunchOptions(),
       env = Map("WAYLAND_DISPLAY" -> "wayland-0"),
-      stdoutIsTty = true
+      stdoutIsTty = true,
+      osName = "Linux"
     ) shouldBe false
   }
 
-  it should "default to the TUI path when no display is reachable and stdout is a real terminal" in {
+  it should "default to the TUI path when no display is reachable and stdout is a real terminal (Linux)" in {
     LaunchOptions.resolveTuiMode(
       LaunchOptions(),
       env = Map.empty,
-      stdoutIsTty = true
+      stdoutIsTty = true,
+      osName = "Linux"
     ) shouldBe true
   }
 
-  it should "default to the GUI path when no display is reachable but stdout is not a terminal" in {
+  it should "default to the GUI path when no display is reachable but stdout is not a terminal (Linux)" in {
     LaunchOptions.resolveTuiMode(
       LaunchOptions(),
       env = Map.empty,
-      stdoutIsTty = false
+      stdoutIsTty = false,
+      osName = "Linux"
     ) shouldBe false
   }
 
-  it should "treat blank DISPLAY/WAYLAND_DISPLAY values as unreachable" in {
+  it should "treat blank DISPLAY/WAYLAND_DISPLAY values as unreachable (Linux)" in {
     LaunchOptions.resolveTuiMode(
       LaunchOptions(),
       env = Map("DISPLAY" -> "", "WAYLAND_DISPLAY" -> ""),
-      stdoutIsTty = true
+      stdoutIsTty = true,
+      osName = "Linux"
     ) shouldBe true
   }
 
-  "LaunchOptions.detectTuiByDefault" should "be a pure function of env and stdout-tty-ness" in {
-    LaunchOptions.detectTuiByDefault(Map.empty, stdoutIsTty = true) shouldBe true
-    LaunchOptions.detectTuiByDefault(Map("DISPLAY" -> ":0"), stdoutIsTty = true) shouldBe false
-    LaunchOptions.detectTuiByDefault(Map.empty, stdoutIsTty = false) shouldBe false
+  it should "default to the GUI path on Windows regardless of X11/Wayland env vars" in {
+    LaunchOptions.resolveTuiMode(
+      LaunchOptions(),
+      env = Map.empty,
+      stdoutIsTty = true,
+      osName = "Windows 11"
+    ) shouldBe false
+  }
+
+  it should "default to the GUI path on macOS regardless of X11/Wayland env vars" in {
+    LaunchOptions.resolveTuiMode(
+      LaunchOptions(),
+      env = Map.empty,
+      stdoutIsTty = true,
+      osName = "Mac OS X"
+    ) shouldBe false
+  }
+
+  "LaunchOptions.detectTuiByDefault" should "be a pure function of env, stdout-tty-ness, and OS" in {
+    LaunchOptions.detectTuiByDefault(Map.empty, stdoutIsTty = true, osName = "Linux") shouldBe true
+    LaunchOptions.detectTuiByDefault(Map("DISPLAY" -> ":0"), stdoutIsTty = true, osName = "Linux") shouldBe false
+    LaunchOptions.detectTuiByDefault(Map.empty, stdoutIsTty = false, osName = "Linux") shouldBe false
+    LaunchOptions.detectTuiByDefault(Map.empty, stdoutIsTty = true, osName = "Windows 11") shouldBe false
   }

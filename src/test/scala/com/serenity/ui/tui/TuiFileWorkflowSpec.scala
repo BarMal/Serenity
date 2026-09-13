@@ -37,7 +37,7 @@ class TuiFileWorkflowSpec extends TuiSpec:
       for
         _ <- saveAs
         _ <- verify("save-as form") { screen =>
-          screen.containsText("save-as") shouldBe true
+          screen.containsText("Save As") shouldBe true
           screen.containsText("Filename") shouldBe true
           screen.containsText("Path") shouldBe true
           screen.containsText("Format") shouldBe true

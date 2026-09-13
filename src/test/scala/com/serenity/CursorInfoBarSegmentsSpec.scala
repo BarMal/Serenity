@@ -41,13 +41,27 @@ class CursorInfoBarSegmentsSpec extends AnyFlatSpec with Matchers:
     AppConfig.default.cursorInfoBarSegments shouldBe Nil
   }
 
-  "SetCursorInfoBarSegmentIncluded" should "append a segment to the end of the list" in {
+  "SetCursorInfoBarSegmentIncluded" should "order included segments by their canonical definition order, not toggle order" in {
     val sm = makeStateManager()
+    // Enabled in reverse of definition order (Position before Title); the list must still come back canonical.
     execute(sm, CursorIntent.SetCursorInfoBarSegmentIncluded(CursorInfoBarSegment.Position, included = true))
     execute(sm, CursorIntent.SetCursorInfoBarSegmentIncluded(CursorInfoBarSegment.Title, included = true))
 
     sm.getCurrentState.unsafeRunSync().persisted.config.cursorInfoBarSegments shouldBe
-      List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
+      List(CursorInfoBarSegment.Title, CursorInfoBarSegment.Position)
+  }
+
+  it should "restore a re-enabled segment to its canonical position rather than appending it (#1533)" in {
+    val sm = makeStateManager()
+    execute(sm, CursorIntent.SetCursorInfoBarSegmentIncluded(CursorInfoBarSegment.Title, included = true))
+    execute(sm, CursorIntent.SetCursorInfoBarSegmentIncluded(CursorInfoBarSegment.Position, included = true))
+    execute(sm, CursorIntent.SetCursorInfoBarSegmentIncluded(CursorInfoBarSegment.WordCount, included = true))
+    // Toggle a middle segment off, then back on -- it must return to the middle, not jump to the end.
+    execute(sm, CursorIntent.SetCursorInfoBarSegmentIncluded(CursorInfoBarSegment.Position, included = false))
+    execute(sm, CursorIntent.SetCursorInfoBarSegmentIncluded(CursorInfoBarSegment.Position, included = true))
+
+    sm.getCurrentState.unsafeRunSync().persisted.config.cursorInfoBarSegments shouldBe
+      List(CursorInfoBarSegment.Title, CursorInfoBarSegment.Position, CursorInfoBarSegment.WordCount)
   }
 
   it should "be idempotent when the segment is already included" in {
@@ -69,34 +83,35 @@ class CursorInfoBarSegmentsSpec extends AnyFlatSpec with Matchers:
       List(CursorInfoBarSegment.Title)
   }
 
+  // Enabling Title + Position yields the canonical order [Title, Position]; the reorder intents move away from it.
   "MoveCursorInfoBarSegmentEarlier" should "swap a segment with its predecessor" in {
     val sm = makeStateManager()
-    execute(sm, CursorIntent.SetCursorInfoBarSegmentIncluded(CursorInfoBarSegment.Position, included = true))
     execute(sm, CursorIntent.SetCursorInfoBarSegmentIncluded(CursorInfoBarSegment.Title, included = true))
-    execute(sm, CursorIntent.MoveCursorInfoBarSegmentEarlier(CursorInfoBarSegment.Title))
-
-    sm.getCurrentState.unsafeRunSync().persisted.config.cursorInfoBarSegments shouldBe
-      List(CursorInfoBarSegment.Title, CursorInfoBarSegment.Position)
-  }
-
-  it should "leave the list unchanged when the segment is already first" in {
-    val sm = makeStateManager()
     execute(sm, CursorIntent.SetCursorInfoBarSegmentIncluded(CursorInfoBarSegment.Position, included = true))
-    execute(sm, CursorIntent.SetCursorInfoBarSegmentIncluded(CursorInfoBarSegment.Title, included = true))
     execute(sm, CursorIntent.MoveCursorInfoBarSegmentEarlier(CursorInfoBarSegment.Position))
 
     sm.getCurrentState.unsafeRunSync().persisted.config.cursorInfoBarSegments shouldBe
       List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
   }
 
-  "MoveCursorInfoBarSegmentLater" should "swap a segment with its successor" in {
+  it should "leave the list unchanged when the segment is already first" in {
     val sm = makeStateManager()
-    execute(sm, CursorIntent.SetCursorInfoBarSegmentIncluded(CursorInfoBarSegment.Position, included = true))
     execute(sm, CursorIntent.SetCursorInfoBarSegmentIncluded(CursorInfoBarSegment.Title, included = true))
-    execute(sm, CursorIntent.MoveCursorInfoBarSegmentLater(CursorInfoBarSegment.Position))
+    execute(sm, CursorIntent.SetCursorInfoBarSegmentIncluded(CursorInfoBarSegment.Position, included = true))
+    execute(sm, CursorIntent.MoveCursorInfoBarSegmentEarlier(CursorInfoBarSegment.Title))
 
     sm.getCurrentState.unsafeRunSync().persisted.config.cursorInfoBarSegments shouldBe
       List(CursorInfoBarSegment.Title, CursorInfoBarSegment.Position)
+  }
+
+  "MoveCursorInfoBarSegmentLater" should "swap a segment with its successor" in {
+    val sm = makeStateManager()
+    execute(sm, CursorIntent.SetCursorInfoBarSegmentIncluded(CursorInfoBarSegment.Title, included = true))
+    execute(sm, CursorIntent.SetCursorInfoBarSegmentIncluded(CursorInfoBarSegment.Position, included = true))
+    execute(sm, CursorIntent.MoveCursorInfoBarSegmentLater(CursorInfoBarSegment.Title))
+
+    sm.getCurrentState.unsafeRunSync().persisted.config.cursorInfoBarSegments shouldBe
+      List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
   }
 
   "AppState.cursorInfoBarText" should "join included segments in the configured order" in {

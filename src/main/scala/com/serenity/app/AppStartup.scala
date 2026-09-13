@@ -20,7 +20,8 @@ object AppStartup:
   def createStartPage(
     sessionExists: Boolean,
     recentFiles: List[Path] = Nil,
-    configNotice: Option[String] = None
+    configNotice: Option[String] = None,
+    resumeIdentifier: Option[String] = None
   ): StartupPage =
     // A configuration that could not be read takes the status line: it is the more consequential of the two, and the
     // start page is on screen at exactly the moment it happened. Its only other report is a log line the TUI discards.
@@ -48,16 +49,14 @@ object AppStartup:
         Some("Enter")
       )
     )
-    val restoreAction = Option.when(sessionExists)(
-      StartupAction(
-        "restore-session",
-        "Restore previous session",
+    val resume = Option.when(sessionExists)(
+      StartupResumeHint(
+        resumeIdentifier.getOrElse("previous session"),
         Command.typed(
           "startup.restore-session",
           "Restore an existing session",
           CommandIntent.Session(SessionIntent.StartupRestoreSession)
-        ),
-        detail = Some("Enter")
+        )
       )
     )
     val recentActions = recentFiles
@@ -76,27 +75,46 @@ object AppStartup:
           detail = Some("Recent")
         )
       }
-    val workflowActions = List("Writing", "Code", "Compact").map { name =>
+    val workflowActions = List(("Writing", 'W'), ("Code", 'C'), ("Compact", 'M')).map { (name, key) =>
       StartupAction(
         s"workflow-${name.toLowerCase}",
-        s"Use $name workflow",
+        name,
         Command
           .typed(
             s"startup.workflow.${name.toLowerCase}",
             s"Use the $name workflow",
             CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset(name))
           ),
-        detail = Some("Enter"),
+        shortcut = Some(key),
         section = StartupActionSection.Workflow
       )
     }
-    val actions = primaryActions ++ restoreAction.toList ++ recentActions ++ workflowActions
+    val actions = primaryActions ++ recentActions
     StartupPage(
       "Welcome to Serenity",
       options = actions.map(_.renderedLabel),
       statusMessage = statusMessage,
-      actions = actions
+      actions = actions,
+      workflows = workflowActions,
+      resume = resume
     )
+
+  /** The previous session's main file name (active pane's buffer, else the first buffered file), for the quick-resume
+    * hint -- so the user recognises what Tab would resume. Falls back to a generic label for an empty/file-less session.
+    */
+  private def sessionResumeIdentifier(session: AppState): String =
+    val persisted = session.persisted
+    val activeFile = persisted.layout.activeEditorPaneId
+      .flatMap(persisted.layout.editorPanes.get)
+      .flatMap(_.bufferId)
+      .flatMap(persisted.buffers.get)
+      .flatMap(_.document.filePath)
+    val fallbackFile =
+      persisted.bufferOrder.flatMap(persisted.buffers.get).flatMap(_.document.filePath).headOption
+    activeFile
+      .orElse(fallbackFile)
+      .flatMap(path => Option(path.getFileName).map(_.toString))
+      .getOrElse("previous session")
 
   def startPageState(
     sessionService: SessionService,
@@ -110,11 +128,13 @@ object AppStartup:
   ): IO[AppState] =
     for
       sessionExists <- sessionStartupInfo.sessionExists
-      recentFiles   <- sessionService.loadSession.map(_.fold(Nil)(_.persisted.recentFiles))
+      loadedSession <- sessionService.loadSession
+      recentFiles = loadedSession.fold(List.empty[Path])(_.persisted.recentFiles)
       readableRecentFiles <- IO.blocking(
         recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path))
       )
-      startPage = createStartPage(sessionExists, readableRecentFiles, configNotice)
+      resumeIdentifier = loadedSession.map(sessionResumeIdentifier)
+      startPage        = createStartPage(sessionExists, readableRecentFiles, configNotice, resumeIdentifier)
     yield
       val startPageSurfaceId = SurfaceId("surface-0")
       val base               = AppState.empty(appConfig)

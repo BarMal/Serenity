@@ -106,7 +106,7 @@ class SurfaceContentResolverModalWorkflowSpec extends AnyFlatSpec with Matchers:
       SurfaceRenderMode.Floating
     )
 
-    floating.header.map(_.plainText) shouldBe Some("save-as")
+    floating.header.map(_.plainText) shouldBe Some("Save As")
     floating.rows should have size 4
 
     val filenameRow = floating.rows.head

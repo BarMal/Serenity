@@ -64,6 +64,12 @@ object TuiRuntime:
       case (terminalShell, previewWindowAvailability) =>
         for
           initialViewportSize <- terminalShell.viewportSize
+          // Diagnostic (#1320): which keyboard-protocol tier the terminal negotiated determines whether modified
+          // control keys like Ctrl+Backspace (word-delete) carry their modifier at all -- Legacy collapses them.
+          _ <- logger.info(
+            s"[TUI] Keyboard protocol tier: ${terminalShell.keyboardProtocolTier} " +
+              "(Ctrl+Backspace word-delete needs Kitty/ModifyOtherKeys/Win32Input; Legacy collapses it to plain Backspace)"
+          )
           surfaceHolder = new SurfaceHolder(terminalShell)
           systemClipboard <- buildClipboard(terminalShell, hasDisplay)
           // TerminalInputHandler decodes terminal focus reporting (CSI I/CSI O, #1171) and is only constructed once

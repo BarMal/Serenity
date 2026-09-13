@@ -87,6 +87,10 @@ final private[manager] case class MouseTargetLayoutKey(
       )
     ],
     uiSurfaces: List[SurfaceGeometryKey],
+    // The blocking modal layer (#814) lives outside `uiSurfaces`, so without it here two states that differ only in
+    // which dialog is open share a scene key -- reopening a dialog after dismissing one returns the first's cached
+    // scene, whose node references the now-gone surface id, and the renderer paints an empty frame (blank screen).
+    modalStack: List[ModalDialog],
     derivedCursorInfoBarSurface: Option[UiSurface],
     pinnedPanels: List[(SurfaceId, PanelPosition, Int)],
     lineNumberContent: List[(BufferId, RopeIdentity)]
@@ -105,7 +109,8 @@ private[manager] object MouseTargetLayoutKey:
       layout: Layout,
       focus: Focus,
       buffers: Map[BufferId, Buffer],
-      uiSurfaces: List[UiSurface]
+      uiSurfaces: List[UiSurface],
+      modalStack: List[ModalDialog]
   )
 
   /** `AtomicReference`-backed single-slot memo of the last [[MouseTargetLayoutKey]] computed, keyed on the
@@ -128,7 +133,8 @@ private[manager] object MouseTargetLayoutKey:
       previous.layout.eq(current.layout) &&
       (previous.focus == current.focus) &&
       previous.buffers.eq(current.buffers) &&
-      previous.uiSurfaces.eq(current.uiSurfaces)
+      previous.uiSurfaces.eq(current.uiSurfaces) &&
+      previous.modalStack.eq(current.modalStack)
 
   def from(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
     val inputs = FastPathInputs(
@@ -137,7 +143,8 @@ private[manager] object MouseTargetLayoutKey:
       state.persisted.layout,
       state.persisted.focus,
       state.persisted.buffers,
-      state.runtime.uiSurfaces
+      state.runtime.uiSurfaces,
+      state.runtime.modalStack
     )
     lastComputation.get() match
       case Some((previousInputs, previousResult)) if unchangedSince(previousInputs, inputs) =>
@@ -189,6 +196,7 @@ private[manager] object MouseTargetLayoutKey:
           )
       },
       uiSurfaces = state.runtime.uiSurfaces.map(SurfaceGeometryKey.from),
+      modalStack = state.runtime.modalStack,
       derivedCursorInfoBarSurface = state.cursorInfoBarSurface,
       pinnedPanels = state.persisted.layout.workspaceTree.toList.flatMap { tree =>
         tree.dockedSurfaceIds.flatMap { id =>

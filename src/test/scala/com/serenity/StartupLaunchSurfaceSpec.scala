@@ -33,9 +33,10 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
   "Startup launch surface" should "omit Restore when no session is available and keep its visible shortcuts executable" in {
     val page = AppStartup.createStartPage(sessionExists = false, recentFiles = Nil)
 
-    page.actions
-      .map(_.id) shouldBe List("new-session", "open-file", "workflow-writing", "workflow-code", "workflow-compact")
+    page.actions.map(_.id) shouldBe List("new-session", "open-file")
     page.actions.flatMap(_.shortcut) shouldBe List('1', '2')
+    page.workflows.map(_.id) shouldBe List("workflow-writing", "workflow-code", "workflow-compact")
+    page.workflows.flatMap(_.shortcut) shouldBe List('W', 'C', 'M')
 
     val result = StartupPageComponent().processEvent(InsertChar('2'), stateFor(page))
 
@@ -76,19 +77,34 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
     recents.map(_.label) should not contain missing.toAbsolutePath.toString
   }
 
-  it should "separate workflow presets from session actions in the rendered layout" in {
-    val page = AppStartup.createStartPage(sessionExists = false, recentFiles = Nil)
+  it should "keep workflow presets and quick-resume out of the navigable list, as bottom shortcut hints" in {
+    val page = AppStartup.createStartPage(sessionExists = true, recentFiles = Nil, resumeIdentifier = Some("notes.md"))
 
-    page.renderLines.slice(0, 7) shouldBe List(
-      "Welcome to Serenity",
-      "Choose a starting point",
-      "",
-      page.actions(0).renderedLabel,
-      page.actions(1).renderedLabel,
-      "",
-      "Workflows"
-    )
-    page.actionLineIndices shouldBe List(3, 4, 7, 8, 9)
+    page.launchActions.map(_.id) shouldBe List("new-session", "open-file")
+    page.renderLines should not contain "Workflows"
+    page.workflows.map(_.id) shouldBe List("workflow-writing", "workflow-code", "workflow-compact")
+    page.resume.map(_.identifier) shouldBe Some("notes.md")
+    page.actionLineIndices shouldBe List(2, 3)
+  }
+
+  it should "activate a workflow preset by its shortcut letter, case-insensitively" in {
+    val page   = AppStartup.createStartPage(sessionExists = false, recentFiles = Nil)
+    val result = StartupPageComponent().processEvent(InsertChar('c'), stateFor(page))
+
+    result should matchPattern {
+      case ComponentResult.ExecuteCommand(command)
+          if command.intent == CommandIntent.UiPresets(com.serenity.command.UiPresetsIntent.ApplyUiPreset("Code")) =>
+    }
+  }
+
+  it should "quick-resume the previous session with Tab" in {
+    val page   = AppStartup.createStartPage(sessionExists = true, recentFiles = Nil, resumeIdentifier = Some("notes.md"))
+    val result = StartupPageComponent().processEvent(TabKey, stateFor(page))
+
+    result should matchPattern {
+      case ComponentResult.ExecuteCommand(command)
+          if command.intent == CommandIntent.Session(SessionIntent.StartupRestoreSession) =>
+    }
   }
 
   it should "activate only the rendered launch action bounds with taller UI metrics" in {

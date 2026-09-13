@@ -68,17 +68,32 @@ object LaunchOptions:
   def resolveTuiMode(
     options: LaunchOptions,
     env: Map[String, String] = sys.env,
-    stdoutIsTty: Boolean = System.console() != null
+    stdoutIsTty: Boolean = System.console() != null,
+    osName: String = osNameProperty
   ): Boolean =
     if options.gui then false
     else if options.tui then true
-    else detectTuiByDefault(env, stdoutIsTty)
+    else detectTuiByDefault(env, stdoutIsTty, osName)
 
-  def detectTuiByDefault(env: Map[String, String], stdoutIsTty: Boolean): Boolean =
-    !isDisplayReachable(env) && stdoutIsTty
+  def detectTuiByDefault(
+    env: Map[String, String],
+    stdoutIsTty: Boolean,
+    osName: String = osNameProperty
+  ): Boolean =
+    !isDisplayReachable(env, osName) && stdoutIsTty
 
   /** Whether a display Serenity could put a Swing window on is reachable -- also used by the TUI clipboard strategy
-    * (#1111) to choose AWT reuse over a terminal-local fallback.
+    * (#1111) to choose AWT reuse over a terminal-local fallback. `$DISPLAY`/`$WAYLAND_DISPLAY` are X11/Wayland (Linux)
+    * signals only; on Windows and macOS a desktop display is always present, so their absence must not force the TUI --
+    * otherwise launching from any Windows console (PowerShell/cmd, where those vars are never set) drops into the
+    * terminal UI unexpectedly.
     */
-  def isDisplayReachable(env: Map[String, String]): Boolean =
-    env.get("DISPLAY").exists(_.nonEmpty) || env.get("WAYLAND_DISPLAY").exists(_.nonEmpty)
+  def isDisplayReachable(env: Map[String, String], osName: String = osNameProperty): Boolean =
+    if isDesktopDisplayOs(osName) then true
+    else env.get("DISPLAY").exists(_.nonEmpty) || env.get("WAYLAND_DISPLAY").exists(_.nonEmpty)
+
+  private def osNameProperty: String = sys.props.getOrElse("os.name", "")
+
+  private def isDesktopDisplayOs(osName: String): Boolean =
+    val normalized = osName.toLowerCase
+    normalized.contains("win") || normalized.contains("mac") || normalized.contains("darwin")

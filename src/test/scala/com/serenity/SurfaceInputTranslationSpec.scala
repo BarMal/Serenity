@@ -140,7 +140,9 @@ class SurfaceInputTranslationSpec extends AnyFlatSpec with Matchers:
         Enter           -> StartupPageSubmit,
         NewLine         -> StartupPageSubmit,
         Escape          -> StartupPageDismiss,
-        InsertChar('3') -> StartupPageSelect(2)
+        InsertChar('3') -> StartupPageSelect(2),
+        InsertChar('a') -> StartupPageShortcut('a'),
+        TabKey          -> StartupPageResume
       )
     )
 
