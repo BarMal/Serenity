@@ -99,7 +99,12 @@ object ContextMenuSurfaceComposition:
     )
 
   private def rowRect(bounds: LogicalPixelRect, row: Int): LogicalPixelRect =
-    LogicalPixelRect(bounds.x, bounds.y + row, bounds.width, math.min(1.0, math.max(0.0, bounds.bottom - bounds.y - row)))
+    LogicalPixelRect(
+      bounds.x,
+      bounds.y + row,
+      bounds.width,
+      math.min(1.0, math.max(0.0, bounds.bottom - bounds.y - row))
+    )
 
   private def logicalRect(x: Int, y: Int, width: Int, height: Int): LogicalPixelRect =
     LogicalPixelRect(x.toDouble, y.toDouble, width.toDouble, height.toDouble)

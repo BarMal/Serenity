@@ -133,8 +133,8 @@ final private[manager] class EditorContextMenuHitTesting(port: EditorContextMenu
       .copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(isContextMenuSurface)))
       .popFocus
 
-  /** Resolves hover/click against the context menu's own `ResolvedSurfaceComposition` (issue #819, slice 2) --
-    * the same composition `OverlayViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than a parallel
+  /** Resolves hover/click against the context menu's own `ResolvedSurfaceComposition` (issue #819, slice 2) -- the same
+    * composition `OverlayViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than a parallel
     * `MouseHitTestGeometry.overlayItemIndex` row calculation. Mirrors `ModalMouseHitTesting.modalHitAt`.
     */
   private def contextMenuSelectionAt(
@@ -173,8 +173,8 @@ final private[manager] class EditorContextMenuHitTesting(port: EditorContextMenu
 
   /** True for a click inside the menu's content rect that lands on no painted row at all -- neither an item nor the
     * title/footer chrome rows -- so it should be swallowed rather than falling through to the editor underneath.
-    * Checked against every `paintBoxes` rect (not just `hitRegions`) because the title and footer rows are painted
-    * but intentionally not selectable, and a click on them is not a "gap" either.
+    * Checked against every `paintBoxes` rect (not just `hitRegions`) because the title and footer rows are painted but
+    * intentionally not selectable, and a click on them is not a "gap" either.
     */
   private def isContextMenuItemGap(event: MouseInputEvent, state: AppState): Boolean =
     (for

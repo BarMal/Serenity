@@ -6,15 +6,16 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Coverage for `ContextMenuSurfaceComposition` (issue #819, slice 2): the editor's right-click context menu resolved
-  * into one paint/hit-test/focus plan, the same way `ModalSurfaceComposition` already does for blocking workflows.
-  * Both painting and hit-testing are derived from the same `SurfaceFrameLayout.contentRowSlotsFor` row positions the
+  * into one paint/hit-test/focus plan, the same way `ModalSurfaceComposition` already does for blocking workflows. Both
+  * painting and hit-testing are derived from the same `SurfaceFrameLayout.contentRowSlotsFor` row positions the
   * pre-migration renderer/hit-tester separately called, so the two can never disagree about where a row sits.
   */
 class ContextMenuSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
 
-  private val save   = Command.typed("save", "Save file", CommandIntent.File(FileIntent.SaveCurrentFile), label = "Save")
-  private val cut    = Command.typed("cut", "Cut", CommandIntent.Edit(com.serenity.command.EditIntent.Cut), label = "Cut")
-  private val copyIt = Command.typed("copy", "Copy", CommandIntent.Edit(com.serenity.command.EditIntent.Copy), label = "Copy")
+  private val save = Command.typed("save", "Save file", CommandIntent.File(FileIntent.SaveCurrentFile), label = "Save")
+  private val cut  = Command.typed("cut", "Cut", CommandIntent.Edit(com.serenity.command.EditIntent.Cut), label = "Cut")
+  private val copyIt =
+    Command.typed("copy", "Copy", CommandIntent.Edit(com.serenity.command.EditIntent.Copy), label = "Copy")
 
   private def menu(items: List[Command], selectedIndex: Int = 0): ContextMenu =
     ContextMenu(
@@ -34,7 +35,8 @@ class ContextMenuSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "paint one selectable ActionItem box per menu item, addressed and labelled by item index" in {
-    val resolved = ContextMenuSurfaceComposition.forMenu(menu(List(save, cut, copyIt), selectedIndex = 1), LayoutRect(0, 0, 28, 8))
+    val resolved =
+      ContextMenuSurfaceComposition.forMenu(menu(List(save, cut, copyIt), selectedIndex = 1), LayoutRect(0, 0, 28, 8))
 
     val itemBoxes = resolved.paintBoxes.filter(_.kind == SurfacePaintKind.ActionItem)
     itemBoxes.map(_.text) shouldBe List(Some("Save"), Some("Cut"), Some("Copy"))
@@ -85,7 +87,12 @@ class ContextMenuSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "windows a menu taller than its frame, keeping the selected item visible and its index absolute" in {
-    val items = (0 until 10).map(i => Command.typed(s"cmd-$i", s"Item $i", CommandIntent.Edit(com.serenity.command.EditIntent.Copy), label = s"Item $i")).toList
+    val items = (0 until 10)
+      .map(i =>
+        Command
+          .typed(s"cmd-$i", s"Item $i", CommandIntent.Edit(com.serenity.command.EditIntent.Copy), label = s"Item $i")
+      )
+      .toList
     val resolved = ContextMenuSurfaceComposition.forMenu(menu(items, selectedIndex = 9), LayoutRect(0, 0, 28, 8))
 
     val itemBoxes = resolved.paintBoxes.filter(_.kind == SurfacePaintKind.ActionItem)
@@ -102,7 +109,7 @@ class ContextMenuSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       itemTargetRows = 2
     )
 
-    val itemBoxes = resolved.paintBoxes.filter(_.kind == SurfacePaintKind.ActionItem)
+    val itemBoxes  = resolved.paintBoxes.filter(_.kind == SurfacePaintKind.ActionItem)
     val firstRowY  = itemBoxes.headOption.map(_.rect.y).getOrElse(fail("expected a first item row"))
     val secondRowY = itemBoxes.lift(1).map(_.rect.y).getOrElse(fail("expected a second item row"))
 
