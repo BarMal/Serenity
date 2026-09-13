@@ -109,22 +109,32 @@ final private[manager] class StateManagerEditorCapability(
   )
 
   private def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
-    stateRef.get.flatMap { state =>
-      val bufferId = state.runtime.nextBufferId
-      val buffer =
-        if content.isEmpty && filePath.isEmpty then Buffer.newEmpty(bufferId)(using balance)
-        else
-          val fresh = Buffer.fromString(bufferId, content)(using balance)
-          fresh.copy(document = fresh.document.copy(filePath = filePath))
-      val newState = state.copy(
-        persisted = state.persisted.copy(
-          buffers = state.persisted.buffers + (bufferId -> buffer),
-          bufferOrder = state.persisted.bufferOrder :+ bufferId
-        ),
-        runtime = state.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
-      )
-      validateAndUpdateState(newState, state).as(bufferId)
-    }
+    // Advancing `nextBufferId` can never by itself violate an invariant (it never touches `buffers`/`bufferOrder`),
+    // so it's split out as its own unchecked step -- the same shape `directLoadFileEffect` already uses. That means a
+    // drifted `nextBufferId` that collides with a live buffer id is consumed here before the structural add below is
+    // attempted, so a rejection falls back to a state that has already moved past the stale id instead of reverting
+    // straight back to the collision.
+    stateRef
+      .modify { state =>
+        val bufferId = state.runtime.nextBufferId
+        (state.copy(runtime = state.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))), bufferId)
+      }
+      .flatMap { bufferId =>
+        val buffer =
+          if content.isEmpty && filePath.isEmpty then Buffer.newEmpty(bufferId)(using balance)
+          else
+            val fresh = Buffer.fromString(bufferId, content)(using balance)
+            fresh.copy(document = fresh.document.copy(filePath = filePath))
+        stateRef.get.flatMap { state =>
+          val newState = state.copy(persisted =
+            state.persisted.copy(
+              buffers = state.persisted.buffers + (bufferId -> buffer),
+              bufferOrder = state.persisted.bufferOrder :+ bufferId
+            )
+          )
+          validateAndUpdateState(newState, state).as(bufferId)
+        }
+      }
 
   private def createNewEmptyBuffer(): IO[BufferId] =
     stateRef.get.flatMap { state =>
