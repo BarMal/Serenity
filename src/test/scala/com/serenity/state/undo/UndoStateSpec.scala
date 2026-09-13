@@ -5,11 +5,11 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** #1455 (steady-state follow-up): locks in `boundedPush`'s eviction contract independent of how it's implemented
-  * internally. The prior partial fix (see git history on `UndoState.scala`) only avoided the O(maxUndoDepth) copy
-  * below the cap -- every push once the stack is AT the cap (the steady state for any session longer than
-  * `maxUndoDepth` edits) still rebuilt the whole stack. These specs pin down the same bounded/ordering contract
-  * across many pushes at and beyond the cap, so a genuinely O(1)-amortized steady-state implementation can't
-  * accidentally change what gets kept or in what order.
+  * internally. The prior partial fix (see git history on `UndoState.scala`) only avoided the O(maxUndoDepth) copy below
+  * the cap -- every push once the stack is AT the cap (the steady state for any session longer than `maxUndoDepth`
+  * edits) still rebuilt the whole stack. These specs pin down the same bounded/ordering contract across many pushes at
+  * and beyond the cap, so a genuinely O(1)-amortized steady-state implementation can't accidentally change what gets
+  * kept or in what order.
   */
 class UndoStateSpec extends AnyFlatSpec with Matchers:
 

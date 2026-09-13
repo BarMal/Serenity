@@ -9,11 +9,11 @@ import org.scalatest.matchers.should.Matchers
 /** Deterministic regression guard for #1455's steady-state gap: below the cap, `boundedPush` was already a cheap cons
   * (the prior partial fix), but every push once the stack sits AT `maxUndoDepth` -- the steady state for any session
   * longer than that many edits -- still rebuilt the whole stack via `List.take`. A wall-clock assertion would catch
-  * this, but this repo has already tried that twice for other hot paths and both attempts produced false failures
-  * under CI load (see `CommandRunnerRenderPerformanceSpec`'s doc for the history); this instead measures bytes
-  * allocated per push via the JVM's per-thread allocation counter, the same technique `perf.BenchmarkRunner` uses to
-  * separate a real cost signal from scheduling noise. Allocation is deterministic and hardware-independent: it does
-  * not depend on how fast or how busy the CI runner is.
+  * this, but this repo has already tried that twice for other hot paths and both attempts produced false failures under
+  * CI load (see `CommandRunnerRenderPerformanceSpec`'s doc for the history); this instead measures bytes allocated per
+  * push via the JVM's per-thread allocation counter, the same technique `perf.BenchmarkRunner` uses to separate a real
+  * cost signal from scheduling noise. Allocation is deterministic and hardware-independent: it does not depend on how
+  * fast or how busy the CI runner is.
   */
 class UndoStatePerformanceSpec extends AnyFlatSpec with Matchers:
 
