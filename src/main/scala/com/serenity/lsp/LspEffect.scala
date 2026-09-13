@@ -18,3 +18,8 @@ enum LspEffect:
       anchor: CursorPosition,
       symbol: String
   )
+
+  /** Requests semantic tokens for the whole document, not a cursor position -- there is no line/character to give,
+    * unlike [[HoverRequested]]/[[CompletionRequested]]/[[DefinitionRequested]].
+    */
+  case SemanticTokensRequested(uri: String, languageId: LanguageId)

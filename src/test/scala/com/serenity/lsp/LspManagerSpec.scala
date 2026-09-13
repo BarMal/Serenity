@@ -525,6 +525,9 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
     runVirtual(program)
   }
 
+  // Semantic-tokens request/response coverage lives in LspManagerSemanticTokensSpec, split out to keep this file
+  // under the architecture ratchet's line-count target.
+
   it should "separate connections when a workspace resolves different server configurations" in {
     val firstUri       = "file:///workspace/Foo.scala"
     val secondUri      = "file:///workspace/Bar.scala"
