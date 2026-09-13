@@ -492,49 +492,39 @@ final case class CommandSearchResult(
   def name: String        = command.name
   def description: String = command.description
 
-/** Functional command searcher that filters and ranks commands */
+/** Functional command searcher that filters and ranks commands.
+  *
+  * issue #1048: relevance used to be token prefix/contains matching only (every query token had to exactly equal,
+  * prefix, or substring-match some whole token of name/label/description) with no fuzzy subsequence scoring -- so a
+  * query landing mid-word, or as a scattered subsequence, either failed to match at all or scored identically to a far
+  * weaker one. Ranking is now `CommandRunnerSearch.fuzzyScore` end to end (the same scorer settings search's
+  * strong-match promotion uses -- see `CommandRunnerSearch.isStrongCommandMatch`), weighted per field the same way the
+  * old token ladder was (name highest, then label, then description).
+  */
 class CommandSearcher(commands: List[Command]):
 
-  /** Search commands by name and description, returning top results */
+  /** Search commands by name and description, returning top results, ranked by fuzzy relevance. */
   def search(term: String, maxResults: Int = 5): List[Command] =
     if term.trim.isEmpty then commands.take(maxResults)
     else
-      val tokens = CommandSearcher.tokens(term)
-
       commands.zipWithIndex
         .flatMap {
           case (command, index) =>
-            calculateRelevance(command, tokens).map(relevance => (command, relevance, index))
+            CommandSearcher.relevance(command, term).map(relevance => (command, relevance, index))
         }
         .sortBy { case (_, relevance, index) => (-relevance, index) }
         .take(maxResults)
         .map(_._1)
 
-  /** Calculate relevance only when every token has a metadata match. */
-  private def calculateRelevance(command: Command, tokens: List[String]): Option[Double] =
-    val nameTokens        = CommandSearcher.tokens(command.name)
-    val labelTokens       = CommandSearcher.tokens(command.label)
-    val descriptionTokens = CommandSearcher.tokens(command.description)
-
-    tokens.foldLeft(Option(0.0)) { (score, token) =>
-      score.flatMap { total =>
-        CommandSearcher.tokenRelevance(token, nameTokens, labelTokens, descriptionTokens).map(total + _)
-      }
-    }
-
 object CommandSearcher:
-  private def tokens(value: String): List[String] =
-    Option(value).toList.flatMap(_.toLowerCase.split("[^\\p{Alnum}]+")).filter(_.nonEmpty)
 
-  private def tokenRelevance(
-    token: String,
-    nameTokens: List[String],
-    labelTokens: List[String],
-    descriptionTokens: List[String]
-  ): Option[Double] =
-    val fields = List(nameTokens -> 100.0, labelTokens -> 95.0, descriptionTokens -> 40.0)
-    fields.collectFirst {
-      case (fieldTokens, exactScore) if fieldTokens.contains(token)              => exactScore
-      case (fieldTokens, prefixScore) if fieldTokens.exists(_.startsWith(token)) => prefixScore - 20.0
-      case (fieldTokens, containsScore) if fieldTokens.exists(_.contains(token)) => containsScore - 40.0
-    }
+  /** The best fuzzy score across name/label/description, each weighted the way the old token ladder weighted them (name
+    * highest, then label, then description) -- `None` (no result at all) only when the term fuzzy-matches none of the
+    * three.
+    */
+  private def relevance(command: Command, term: String): Option[Double] =
+    List(
+      CommandRunnerSearch.fuzzyScore(term, command.name).map(_ * 1.0),
+      CommandRunnerSearch.fuzzyScore(term, command.label).map(_ * 0.95),
+      CommandRunnerSearch.fuzzyScore(term, command.description).map(_ * 0.4)
+    ).flatten.maxOption
