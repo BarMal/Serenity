@@ -8,6 +8,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Resource}
 import com.serenity.lsp.client.{LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.model.TextDocumentSyncKind
 import io.circe.Json
 import io.circe.parser.parse
 import org.scalatest.flatspec.AnyFlatSpec
@@ -39,11 +40,12 @@ class LspConnectionStreamIntegrationSpec extends AnyFlatSpec with Matchers:
       identity
     )
 
-  private val initResult = loadFixture("initialize_result.json")
+  private val initResult            = loadFixture("initialize_result.json")
+  private val incrementalInitResult = loadFixture("initialize_result_incremental_sync.json")
 
-  private def connectionResource(): Resource[IO, (MockLspServer, LspConnection)] =
+  private def connectionResource(initializeResult: Json = initResult): Resource[IO, (MockLspServer, LspConnection)] =
     for
-      server <- MockLspServer.resource(Map("initialize" -> initResult), logger)
+      server <- MockLspServer.resource(Map("initialize" -> initializeResult), logger)
       conn <- LspConnection.connect(
         LanguageId.Scala,
         server.clientIn,
@@ -86,6 +88,18 @@ class LspConnectionStreamIntegrationSpec extends AnyFlatSpec with Matchers:
           _         <- processor.joinWithNever.timeout(testTimeout)
         yield succeed
       }
+      .timeout(testTimeout)
+      .unsafeRunSync()
+
+  it should "default to full-text sync when the server's initialize response doesn't declare textDocumentSync" in
+    connectionResource()
+      .use((_, conn) => conn.syncKind.map(_ shouldBe TextDocumentSyncKind.Full))
+      .timeout(testTimeout)
+      .unsafeRunSync()
+
+  it should "negotiate incremental sync from the server's initialize response" in
+    connectionResource(incrementalInitResult)
+      .use((_, conn) => conn.syncKind.map(_ shouldBe TextDocumentSyncKind.Incremental))
       .timeout(testTimeout)
       .unsafeRunSync()
 

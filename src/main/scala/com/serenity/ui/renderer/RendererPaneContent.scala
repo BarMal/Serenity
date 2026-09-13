@@ -334,7 +334,8 @@ object RendererPaneContent:
               lineTopPx,
               state.persisted.theme,
               context,
-              snapshot
+              snapshot,
+              styledSegments
             )
 
             RendererHighlights.renderDiagnosticHighlights(
@@ -346,7 +347,8 @@ object RendererPaneContent:
               lineTopPx,
               state.persisted.theme,
               context,
-              snapshot
+              snapshot,
+              styledSegments
             )
 
             RendererHighlights.renderSelectionHighlights(
@@ -358,7 +360,8 @@ object RendererPaneContent:
               lineTopPx,
               state.persisted.theme,
               context,
-              snapshot
+              snapshot,
+              styledSegments
             )
 
             val stringEnd = visualLine.startColumn + visualLine.text.length

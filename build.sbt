@@ -168,7 +168,13 @@ lazy val root = (project in file("."))
     },
     Test / testOptions ++= Seq(
       Tests.Setup(() => System.setProperty("serenity.test.ephemeralSessions", "true")),
-      Tests.Cleanup(() => System.clearProperty("serenity.test.ephemeralSessions"))
+      Tests.Cleanup(() => System.clearProperty("serenity.test.ephemeralSessions")),
+      // Full stack traces on every failure (ScalaTest's default reporter otherwise truncates them). #1213's
+      // macOS-arm64/windows-x64 CI failures show only a bare "Failed tests:" summary line -- no assertion message, no
+      // stack trace, for either the failed or the canceled test alongside it -- which makes them undiagnosable from
+      // the log as things stand. This does not itself explain that failure; it exists so the next occurrence prints
+      // one.
+      Tests.Argument(TestFrameworks.ScalaTest, "-oF")
     ),
     // Real-OS-boundary specs (a genuine loopback socket, a genuine sun.misc.Signal.raise -- see
     // com.serenity.testkit.RealBoundaryTest's doc comment) are excluded from `sbt test`'s discovery of the whole
