@@ -38,6 +38,17 @@ class CommandRunnerGroupTraversalGuardSpec extends AnyFlatSpec with Matchers:
     */
   private val overflowingDepth = 500_000
 
+  /** A genuine two-node cycle -- id `"a"` nested under id `"b"` nested under id `"a"`, alternating to `depth`
+    * levels -- rather than a single group nested under itself. Reproduces the guard against the exact shape the
+    * review called out: "a longer cycle A -> B -> A", not just a self-nested single id.
+    */
+  private def alternatingCycle(depth: Int): CommandSurfaceItem.GroupItem =
+    val leaf = CommandSurfaceItem.GroupItem("a", "A", Nil, CommandCategory.Settings)
+    (1 to depth).foldLeft(leaf) { (child, level) =>
+      val id = if level % 2 == 0 then "a" else "b"
+      CommandSurfaceItem.GroupItem(id, id.toUpperCase, List(child), CommandCategory.Settings)
+    }
+
   "findGroup" should "not stack-overflow on a group self-nested to overflowing depth" in {
     val cyclic = List(selfNestedGroup(overflowingDepth))
 
@@ -60,6 +71,25 @@ class CommandRunnerGroupTraversalGuardSpec extends AnyFlatSpec with Matchers:
     runner.findGroup("missing", List(root)) shouldBe None
   }
 
+  it should "not stack-overflow on a genuine multi-node cycle (A -> B -> A -> ...)" in {
+    val cyclic = List(alternatingCycle(overflowingDepth))
+
+    noException should be thrownBy runner.findGroup("does-not-exist", cyclic)
+  }
+
+  it should "not falsely prune an unrelated top-level sibling's id when descending into a different group's children" in {
+    // Regression for the review finding on PR #1500: `nextVisited` must only ever carry ids on the *current*
+    // ancestor path. Seeding it from every sibling at a level (rather than just the group being descended into)
+    // would make `dup` (nested under `group-a`) look like an already-visited id purely because `group-b` -- an
+    // unrelated sibling -- happens to share that id, silently pruning `target` as a false "cycle".
+    val target = CommandSurfaceItem.GroupItem("target", "Target", Nil, CommandCategory.Settings)
+    val dup    = CommandSurfaceItem.GroupItem("dup", "Dup", List(target), CommandCategory.Settings)
+    val groupA = CommandSurfaceItem.GroupItem("group-a", "Group A", List(dup), CommandCategory.Settings)
+    val groupB = CommandSurfaceItem.GroupItem("dup", "Unrelated sibling sharing id 'dup'", Nil, CommandCategory.Settings)
+
+    runner.findGroup("target", List(groupA, groupB)) shouldBe Some(target)
+  }
+
   "groupPaths" should "not stack-overflow on a group self-nested to overflowing depth" in {
     val cyclic = List(selfNestedGroup(overflowingDepth))
 
@@ -79,6 +109,22 @@ class CommandRunnerGroupTraversalGuardSpec extends AnyFlatSpec with Matchers:
 
     runner.groupPaths("leaf", List(root)) shouldBe List(List("root", "middle", "leaf"))
     runner.groupPaths("missing", List(root)) shouldBe Nil
+  }
+
+  it should "not stack-overflow on a genuine multi-node cycle (A -> B -> A -> ...)" in {
+    val cyclic = List(alternatingCycle(overflowingDepth))
+
+    noException should be thrownBy runner.groupPaths("does-not-exist", cyclic)
+  }
+
+  it should "not falsely prune an unrelated top-level sibling's id when descending into a different group's children" in {
+    // Same regression as `findGroup`'s equivalent test above, but for the path-reporting traversal.
+    val target = CommandSurfaceItem.GroupItem("target", "Target", Nil, CommandCategory.Settings)
+    val dup    = CommandSurfaceItem.GroupItem("dup", "Dup", List(target), CommandCategory.Settings)
+    val groupA = CommandSurfaceItem.GroupItem("group-a", "Group A", List(dup), CommandCategory.Settings)
+    val groupB = CommandSurfaceItem.GroupItem("dup", "Unrelated sibling sharing id 'dup'", Nil, CommandCategory.Settings)
+
+    runner.groupPaths("target", List(groupA, groupB)) shouldBe List(List("group-a", "dup", "target"))
   }
 
   /** The production `settingsGroups` tree itself: a standing invariant test that it is (and stays) acyclic, so a
