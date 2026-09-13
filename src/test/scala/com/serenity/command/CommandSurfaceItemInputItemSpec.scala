@@ -131,3 +131,9 @@ class CommandSurfaceItemInputItemSpec extends AnyFlatSpec with Matchers:
     item.accepts("2", '5') shouldBe true
     item.accepts("2", '.') shouldBe true
   }
+
+  it should "reject the reset-sentinel prefix for a field with no default value (e.g. rich-text-font-size)" in {
+    val item = decimalItem("18.00", default = None)
+    item.accepts("", 'd') shouldBe false
+    item.accepts("d", 'e') shouldBe false
+  }

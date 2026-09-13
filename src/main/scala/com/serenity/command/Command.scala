@@ -415,8 +415,10 @@ object CommandSurfaceItem:
         case InputKind.Numeric(decimal) =>
           char.isDigit || (char == '.' && decimal && !currentText.contains('.')) ||
             // issue #1056: typing "default" resets to the default value (`parseOrDefault`) -- accepted here only
-            // while it stays a prefix of that literal word, so ordinary numeric entry is unaffected.
-            InputItem.isDefaultSentinelPrefix(currentText + char)
+            // while it stays a prefix of that literal word, so ordinary numeric entry is unaffected. Guarded by
+            // `defaultValue.nonEmpty` (matching `isOutOfBounds` below) so a field with no default -- e.g.
+            // rich-text-font-size -- doesn't accept 'd' as a keystroke only to have it flagged invalid immediately.
+            (defaultValue.nonEmpty && InputItem.isDefaultSentinelPrefix(currentText + char))
 
     def isOutOfBounds(text: String): Boolean =
       // issue #1056: typing "default" (or a prefix of it, mid-keystroke) is never shown as an error -- it is either
