@@ -73,7 +73,7 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
               )
             ),
             commandRunnerVisibleRows = Some(9),
-            commandRunnerItemGapRows = 1,
+            commandRunnerItemGapRows = Some(1),
             commandRunnerCursorGapRows = Some(3),
             renderFpsTarget = RenderFpsTarget.Fps120,
             showLineNumbers = false,
@@ -142,7 +142,7 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
     decoded.config.surfaceConfig.uiAnimation shouldBe AnimationConfig.subtle
     decoded.config.surfaceConfig.motionConfiguration shouldBe appState.persisted.config.surfaceConfig.motionConfiguration
     decoded.config.surfaceConfig.commandRunnerVisibleRows shouldBe Some(9)
-    decoded.config.surfaceConfig.commandRunnerItemGapRows shouldBe 1
+    decoded.config.surfaceConfig.commandRunnerItemGapRows shouldBe Some(1)
     decoded.config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(3)
     decoded.config.surfaceConfig.renderFpsTarget shouldBe RenderFpsTarget.Fps120
     decoded.config.cursorConfig shouldBe CursorConfig(
@@ -235,7 +235,7 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         config = AppConfig.default
           .withUiElementGap(0.75)
-          .withCommandRunnerItemGapRows(0.25)
+          .withCommandRunnerItemGapRows(Some(0.25))
           .withCommandRunnerCursorGapRows(Some(0.5))
       )
     )
@@ -243,6 +243,6 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
     val decoded = SessionState.fromAppState(state).asJson.as[SessionState].toOption.get
 
     decoded.config.uiElementGap shouldBe 0.75
-    decoded.config.surfaceConfig.commandRunnerItemGapRows shouldBe 0.25
+    decoded.config.surfaceConfig.commandRunnerItemGapRows shouldBe Some(0.25)
     decoded.config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(0.5)
   }

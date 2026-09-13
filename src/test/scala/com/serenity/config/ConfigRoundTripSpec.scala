@@ -81,7 +81,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withPostProcessingEffect(PostProcessingEffect.Scanlines)
     .withUiShadowsEnabled(false)
     .withCommandRunnerVisibleRows(Some(11))
-    .withCommandRunnerItemGapRows(1.5)
+    .withCommandRunnerItemGapRows(Some(1.5))
     .withCommandRunnerCursorGapRows(Some(2.0))
     .withCommandRunnerShowKeyHints(false)
     .withCommandRunnerCursorPeekEnabled(true)
