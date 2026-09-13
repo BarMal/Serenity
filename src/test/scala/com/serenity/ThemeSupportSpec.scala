@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.model.SemanticToken
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
@@ -39,23 +40,27 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
     theme.syntaxColors should contain key SyntaxElement.Number
   }
 
-  "ThemeManager" should "highlight Scala keywords and string literals" in {
+  "ThemeManager" should "highlight a Scala keyword and string literal from supplied semantic tokens" in {
     val theme = Theme.dark
+    val tokens = List(
+      SemanticToken(0, 0, 3, "keyword", Set.empty),
+      SemanticToken(0, 14, 7, "string", Set.empty)
+    )
 
-    val styled = ThemeManager.highlightLine("def hello() = \"world\"", theme, Some(LanguageId.Scala))
+    val styled = ThemeManager.highlightLine("def hello() = \"world\"", theme, Some(LanguageId.Scala), Some(tokens))
 
     styled should not be empty
     styled.exists(s => s.style == theme.colorFor(SyntaxElement.Keyword).style && s.content == "def") shouldBe true
     styled.exists(s => s.style == theme.colorFor(SyntaxElement.String).style && s.content == "\"world\"") shouldBe true
   }
 
-  it should "render unsupported languages as plain text instead of applying Scala keyword rules" in {
+  it should "render a language with no semantic tokens yet as a visibly distinct 'unavailable' style" in {
     val theme = Theme.dark
 
     val styled = ThemeManager.highlightLine("function hello() { return 'world'; }", theme, Some(LanguageId.JavaScript))
 
     styled shouldBe List(
-      StyledText("function hello() { return 'world'; }", TextStyle.normal, theme.foreground, theme.background)
+      StyledText("function hello() { return 'world'; }", TextStyle.italic, theme.muted, theme.background)
     )
   }
 

@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.collection.immutable.ListMap
 
 import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.model.SemanticToken
 
 object ThemeManager:
 
@@ -16,26 +17,22 @@ object ThemeManager:
   private val linkPattern          = raw"\[([^\]]+)\]\(([^)]+)\)".r
 
   private val MaxHighlightCacheEntries = 4096
-  private val MaxLexIndexCacheEntries  = 64
 
-  private type HighlightKey = (String, Theme, Option[LanguageId], LexState)
+  private type HighlightKey = (String, Theme, Option[LanguageId], Option[List[SemanticToken]])
 
-  /** Bounded, `AtomicReference`-backed replacement for the previous `LinkedHashMap` + `synchronized` highlight/lex
-    * caches (issue #1412). `highlightLine`/`lineStartStates` stay plain synchronous `def`s: both are called from deep
-    * inside the Java2D/terminal paint loop (`CharacterRenderer`, `RendererPaneContent`), which owns its own thread
-    * rather than running inside an IO fiber, so making them return `IO` would mean threading `IO` through the entire
-    * rendering call graph -- well beyond this package, and out of scope for this issue. This module was briefly
-    * `Ref[IO, ...]`-backed (#1431), with each accessor forcing that `IO` synchronously via `unsafeRunSync` right back
-    * out again to keep this synchronous API -- which just hid a plain in-memory compare-and-set behind an effect type
-    * nothing here ever suspended on, rather than pushing `IO` to an edge. [[casUpdate]] below is that same
-    * compare-and-set directly, with no `IO` to force (#1434). Eviction here is bounded-FIFO (oldest inserted, not
-    * oldest accessed) rather than the previous access-order LRU -- a deliberate simplification, since a `ListMap` has
-    * no cheap way to bump an existing key to "most recently used" without an extra write on every cache *hit* too.
+  /** Bounded, `AtomicReference`-backed replacement for the previous `LinkedHashMap` + `synchronized` highlight cache
+    * (issue #1412). `highlightLine` stays a plain synchronous `def`: it's called from deep inside the Java2D/terminal
+    * paint loop (`CharacterRenderer`, `RendererPaneContent`), which owns its own thread rather than running inside an
+    * IO fiber, so making it return `IO` would mean threading `IO` through the entire rendering call graph -- well
+    * beyond this package. This module was briefly `Ref[IO, ...]`-backed (#1431), with each accessor forcing that `IO`
+    * synchronously via `unsafeRunSync` right back out again to keep this synchronous API -- which just hid a plain
+    * in-memory compare-and-set behind an effect type nothing here ever suspended on, rather than pushing `IO` to an
+    * edge. [[casUpdate]] below is that same compare-and-set directly, with no `IO` to force (#1434). Eviction here is
+    * bounded-FIFO (oldest inserted, not oldest accessed) rather than an access-order LRU -- a deliberate
+    * simplification, since a `ListMap` has no cheap way to bump an existing key to "most recently used" without an
+    * extra write on every cache *hit* too.
     */
   private val highlightCacheRef: AtomicReference[ListMap[HighlightKey, List[StyledText]]] =
-    new AtomicReference(ListMap.empty)
-
-  private val lexIndexCacheRef: AtomicReference[ListMap[String, LexIndexEntry]] =
     new AtomicReference(ListMap.empty)
 
   /** Retries `f` against `ref`'s current value until its compare-and-set succeeds -- the plain-value equivalent of
@@ -51,30 +48,26 @@ object ThemeManager:
     val updated = (cache - key) + (key -> value)
     if updated.size <= maxEntries then updated else updated.drop(updated.size - maxEntries)
 
-  /** The subset of languages that get token-aware highlighting today. Every other language, including no declared
-    * language at all, renders as plain text rather than being coerced through Scala-shaped lexical rules -- see issue
-    * #859.
-    */
-  private def isTokenAware(language: Option[LanguageId]): Boolean =
-    language.contains(LanguageId.Scala)
-
-  /** Apply syntax highlighting to a line of text, memoized by (line, theme, language, incoming lexical state).
+  /** Apply syntax highlighting to a line of text, memoized by (line, theme, language, this line's semantic tokens).
     *
-    * `startState` is the lexical state carried in from the end of the previous line (an open block comment or
-    * triple-quoted string). Callers that need correct multiline behaviour across a document should derive it from
-    * [[lineStartStates]]; a bare call defaults to [[LexState.Default]], which is correct for any line that isn't
-    * continuing an unterminated comment or string.
+    * LSP `textDocument/semanticTokens` is the only token source (issues #859/#1177 replaced the previous handwritten,
+    * Scala-shaped regex tokenizer entirely, rather than keeping it as a fallback): `semanticTokens` is `Some` with this
+    * line's tokens (however many that is, including zero) when the document's connected language server has supplied
+    * them, or `None` when it hasn't -- no server connected yet, the server doesn't support semantic tokens, or a
+    * request is still in flight. `None` renders a visibly distinct "unavailable" style rather than silently falling
+    * back to plain text, so a user isn't left wondering whether highlighting is simply absent for this line or
+    * genuinely can't be provided right now.
     */
   def highlightLine(
     line: String,
     theme: Theme,
     language: Option[LanguageId] = None,
-    startState: LexState = LexState.Default
+    semanticTokens: Option[List[SemanticToken]] = None
   ): List[StyledText] =
-    val key    = (line, theme, language, startState)
+    val key    = (line, theme, language, semanticTokens)
     val cached = highlightCacheRef.get().get(key)
     cached.getOrElse {
-      val computed = computeHighlightLine(line, theme, language, startState)
+      val computed = computeHighlightLine(line, theme, language, semanticTokens)
       casUpdate(highlightCacheRef)(boundedPut(_, key, computed, MaxHighlightCacheEntries))
       computed
     }
@@ -83,166 +76,58 @@ object ThemeManager:
     line: String,
     theme: Theme,
     language: Option[LanguageId],
-    startState: LexState
+    semanticTokens: Option[List[SemanticToken]]
   ): List[StyledText] =
     language match
       case Some(LanguageId.Markdown) => highlightMarkdownLine(line, theme)
-      case _ if isTokenAware(language) =>
-        val (tokens, _) = tokenize(line, startState)
-        tokens.map {
-          case (text, element) =>
-            val themeColor = theme.colorFor(element)
-            StyledText(text, themeColor.style, themeColor.foreground, themeColor.background)
-        }
-      case _ =>
+      case Some(_) =>
+        semanticTokens match
+          case Some(tokens) => renderWithSemanticTokens(line, theme, tokens)
+          case None         => renderUnavailable(line, theme)
+      case None =>
         List(StyledText(line, TextStyle.normal, theme.foreground, theme.background))
 
-  /** The lexical state at the *start* of each line in `lines`, threading an open block comment or triple-quoted string
-    * forward from wherever it was opened. Languages without token-aware highlighting always start `Default`.
-    *
-    * Recomputation is incremental: `documentKey` identifies the document (callers pass something stable per buffer,
-    * e.g. its buffer id) so that on a repeat call for the same document, only lines from the first one that actually
-    * changed are re-scanned, and that re-scan stops as soon as the newly computed state re-converges with what was
-    * previously cached -- an edit only invalidates the region whose lexical state it could plausibly have changed.
+  /** Splits `line` into styled runs from `tokens` (this line's [[SemanticToken]]s, in any order, with
+    * `startCharacter`/`length` already relative to this line): each token's span gets its mapped
+    * [[SyntaxElement.fromLspTokenType]] color, and every gap between/around tokens renders as [[SyntaxElement.Normal]].
+    * A token whose reported span falls outside `line`'s bounds is clamped rather than trusted outright -- LSP servers
+    * are an external, occasionally inconsistent input, and a bad span should degrade to imprecise highlighting, not an
+    * exception or a corrupted line.
     */
-  def lineStartStates(
-    documentKey: String,
-    lines: IndexedSeq[String],
-    language: Option[LanguageId]
-  ): Vector[LexState] =
-    if !isTokenAware(language) then Vector.fill(lines.length)(LexState.Default)
-    else
-      val linesVec = lines.toVector
-      val previous = lexIndexCacheRef.get().get(documentKey)
-      val computed = previous match
-        case Some(entry) => incrementalStates(entry, linesVec)
-        case None        => fullStates(linesVec)
-      casUpdate(lexIndexCacheRef)(
-        boundedPut(_, documentKey, LexIndexEntry(linesVec, computed), MaxLexIndexCacheEntries)
-      )
-      computed
+  private def renderWithSemanticTokens(line: String, theme: Theme, tokens: List[SemanticToken]): List[StyledText] =
+    val normalColor = theme.colorFor(SyntaxElement.Normal)
+    def normalRun(text: String): StyledText =
+      StyledText(text, TextStyle.normal, normalColor.foreground, normalColor.background)
 
-  final private case class LexIndexEntry(lines: Vector[String], startStates: Vector[LexState])
+    val sorted = tokens
+      .filter(t => t.length > 0 && t.startCharacter < line.length && t.startCharacter + t.length > 0)
+      .sortBy(_.startCharacter)
 
-  private def fullStates(lines: Vector[String]): Vector[LexState] =
-    lines.scanLeft(LexState.Default)((state, line) => tokenize(line, state)._2).dropRight(1)
-
-  private def incrementalStates(entry: LexIndexEntry, lines: Vector[String]): Vector[LexState] =
-    if entry.lines.length != lines.length then fullStates(lines)
-    else
-      entry.lines.indices.find(i => entry.lines(i) != lines(i)) match
-        case None => entry.startStates
-        case Some(diffIndex) =>
-          val prefix = entry.startStates.take(diffIndex)
-
-          @annotation.tailrec
-          def recompute(i: Int, state: LexState, acc: Vector[LexState]): Vector[LexState] =
-            if i >= lines.length then acc
-            else
-              val endState = tokenize(lines(i), state)._2
-              val nextAcc  = acc :+ state
-              if i + 1 < lines.length && endState == entry.startStates(i + 1) then
-                nextAcc ++ entry.startStates.drop(i + 1)
-              else recompute(i + 1, endState, nextAcc)
-
-          recompute(diffIndex, entry.startStates(diffIndex), prefix)
-
-  /** Tokenize a single line, threading `startState` in and returning the state at the end of the line alongside the
-    * classified tokens. This is the only token source consumed by rendering for token-aware languages.
-    */
-  private def tokenize(content: String, startState: LexState): (List[(String, SyntaxElement)], LexState) =
     @annotation.tailrec
-    def loop(
-      remaining: String,
-      state: LexState,
-      acc: List[(String, SyntaxElement)]
-    ): (List[(String, SyntaxElement)], LexState) =
-      if remaining.isEmpty then (acc.reverse, state)
-      else
-        val (token, rest, nextState, element) = extractNextToken(remaining, state)
-        if token.isEmpty then (acc.reverse, state)
-        else loop(rest, nextState, (token, element) :: acc)
+    def loop(cursor: Int, remaining: List[SemanticToken], acc: List[StyledText]): List[StyledText] =
+      remaining match
+        case Nil =>
+          (if cursor < line.length then normalRun(line.substring(cursor)) :: acc else acc).reverse
+        case token :: rest =>
+          val start = token.startCharacter.max(cursor).max(0)
+          val end   = (token.startCharacter + token.length).min(line.length)
+          if start >= end then loop(cursor, rest, acc)
+          else
+            val withGap = if start > cursor then normalRun(line.substring(cursor, start)) :: acc else acc
+            val element = SyntaxElement.fromLspTokenType(token.tokenType)
+            val color   = theme.colorFor(element)
+            val styled  = StyledText(line.substring(start, end), color.style, color.foreground, color.background)
+            loop(end, rest, styled :: withGap)
 
-    loop(content, startState, Nil)
+    if line.isEmpty then List(normalRun(""))
+    else loop(0, sorted, Nil)
 
-  /** Extract the next token from `content` given the incoming lexical `state`, returning the token text, the remaining
-    * content, the state after the token, and the token's syntax element.
+  /** The visible "no syntax highlighting available" treatment for a language-bearing line with no semantic tokens
+    * (issue #859/#1177): distinct from both real highlighting and the plain-text rendering an undeclared language gets,
+    * so a user can tell "nothing to highlight" apart from "highlighting isn't available right now."
     */
-  private def extractNextToken(content: String, state: LexState): (String, String, LexState, SyntaxElement) =
-    state match
-      case LexState.InBlockComment =>
-        val endIndex = content.indexOf("*/")
-        if endIndex == -1 then (content, "", LexState.InBlockComment, SyntaxElement.Comment)
-        else
-          val token = content.substring(0, endIndex + 2)
-          (token, content.drop(token.length), LexState.Default, SyntaxElement.Comment)
-
-      case LexState.InTripleQuotedString =>
-        val endIndex = content.indexOf("\"\"\"")
-        if endIndex == -1 then (content, "", LexState.InTripleQuotedString, SyntaxElement.String)
-        else
-          val token = content.substring(0, endIndex + 3)
-          (token, content.drop(token.length), LexState.Default, SyntaxElement.String)
-
-      case LexState.Default =>
-        if content.isEmpty then ("", "", LexState.Default, SyntaxElement.Normal)
-        else
-          content.head match
-            case ' ' | '\t' | '\n' | '\r' =>
-              val whitespace = content.takeWhile(c => c == ' ' || c == '\t' || c == '\n' || c == '\r')
-              (whitespace, content.drop(whitespace.length), LexState.Default, SyntaxElement.Whitespace)
-
-            case '"' if content.startsWith("\"\"\"") =>
-              val closing = content.drop(3).indexOf("\"\"\"")
-              if closing == -1 then (content, "", LexState.InTripleQuotedString, SyntaxElement.String)
-              else
-                val token = content.substring(0, 3 + closing + 3)
-                (token, content.drop(token.length), LexState.Default, SyntaxElement.String)
-
-            case '"' =>
-              val closing = content.indexOf('"', 1)
-              if closing == -1 then (content, "", LexState.Default, SyntaxElement.String)
-              else
-                val token = content.substring(0, closing + 1)
-                (token, content.drop(token.length), LexState.Default, SyntaxElement.String)
-
-            case '\'' =>
-              val closing = content.indexOf('\'', 1)
-              if closing == -1 then (content, "", LexState.Default, SyntaxElement.String)
-              else
-                val token = content.substring(0, closing + 1)
-                (token, content.drop(token.length), LexState.Default, SyntaxElement.String)
-
-            case '/' if content.startsWith("//") =>
-              val newlineIndex = content.indexOf('\n')
-              val token        = if newlineIndex == -1 then content else content.substring(0, newlineIndex)
-              (token, content.drop(token.length), LexState.Default, SyntaxElement.Comment)
-
-            case '/' if content.startsWith("/*") =>
-              val endIndex = content.indexOf("*/", 2)
-              if endIndex == -1 then (content, "", LexState.InBlockComment, SyntaxElement.Comment)
-              else
-                val token = content.substring(0, endIndex + 2)
-                (token, content.drop(token.length), LexState.Default, SyntaxElement.Comment)
-
-            case c if c.isLetter || c == '_' =>
-              val identifier = content.takeWhile(c => c.isLetterOrDigit || c == '_')
-              (identifier, content.drop(identifier.length), LexState.Default, SyntaxElement.fromText(identifier))
-
-            case c if c.isDigit =>
-              val number =
-                content.takeWhile(c => c.isDigit || c == '.' || c == 'f' || c == 'F' || c == 'd' || c == 'D')
-              (number, content.drop(number.length), LexState.Default, SyntaxElement.fromText(number))
-
-            case c if "(){}[],;:.?".contains(c) =>
-              (c.toString, content.tail, LexState.Default, SyntaxElement.Delimiter)
-
-            case c if "+-*/%=<>!&|^~".contains(c) =>
-              val operator = content.takeWhile("+-*/%=<>!&|^~".contains(_))
-              (operator, content.drop(operator.length), LexState.Default, SyntaxElement.Operator)
-
-            case _ =>
-              (content.head.toString, content.tail, LexState.Default, SyntaxElement.Normal)
+  private def renderUnavailable(line: String, theme: Theme): List[StyledText] =
+    List(StyledText(line, TextStyle.italic, theme.muted, theme.background))
 
   private enum InlineTokenKind:
     case InlineCode, Link

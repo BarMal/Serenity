@@ -26,6 +26,7 @@ final case class Runtime(
     windowSitter: WindowSitter = WindowSitter.default,
     companionSprite: CompanionSpriteState = CompanionSpriteState(),
     diagnosticsState: DiagnosticsState = DiagnosticsState(),
+    semanticTokensState: SemanticTokensState = SemanticTokensState(),
     // Never persisted -- set once at startup from the launch mode (see AppRuntime.run/AppStartup.initializeState) so
     // settings-surface rendering can hide or annotate controls that are inert in cell space (post-processing effects,
     // typography) without threading AppConfig itself into the command runner.

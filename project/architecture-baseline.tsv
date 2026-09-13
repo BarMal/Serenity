@@ -23,11 +23,25 @@
 # field (issue #1046), so an unset override now round-trips as "auto" and falls back to interface density the
 # same way `command_runner.visible_rows`/`command_runner.cursor_gap_rows` already did -- not new debt, just
 # the last of the three command-runner spacing fields catching up to the other two's existing shape.
+# paydown: CharacterRenderer.scala's 615 -> 616 bump (#859/#1177 rendering slice, PR #1511/#1520) is
+# `lexStartState: LexState` becoming `semanticTokens: Option[List[SemanticToken]]` (one extra import line) --
+# the same file, same reasoning as the #1477 audit above, not new growth to re-justify.
+# paydown: LspManager.scala grew to 632 lines merging three stacked slices of #859/#1177 plus #1508's incremental-sync
+# work: RequestKind.SemanticTokens and its request/decode path (slices 1-2), sendDidChange's sync-kind dispatch and
+# documentTexts mirror (#1508), and this PR's own fix -- a kind-aware noServerEvent case plus the automatic
+# re-request on FileOpened/FileChanged emitting LspSemanticTokensUnavailable when no server exists, so a document's
+# semantic-tokens state doesn't flash "unavailable" for every open against a working server, nor stay stuck Pending
+# forever against no server at all (PR #1511/#1520 review finding). Each of these landed as its own reviewed PR;
+# together they cross the line for a file whose logic (per-request-kind dispatch, cancellation, staleness) is already
+# the same "one cohesive concern threaded through several kinds" shape accepted for ConfigRegistry above -- splitting
+# the request/response plumbing from the kind-dispatch table would separate two halves of one mechanism, not two
+# concerns.
 main/scala/com/serenity/app/AppRuntime.scala	file length	757
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	119
 main/scala/com/serenity/config/ConfigRegistry.scala	file length	682
+main/scala/com/serenity/lsp/LspManager.scala	file length	632
 main/scala/com/serenity/rope/Rope.scala	file length	631
-main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	615
+main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	616
 main/scala/com/serenity/ui/renderer/Java2DPostProcessingEffects.scala	method applyGlow	90
 test/scala/com/serenity/EditorBehaviorSpec.scala	file length	603
 test/scala/com/serenity/FileHandlingSpec.scala	file length	634
@@ -44,4 +58,4 @@ test/scala/com/serenity/UiPresetSpec.scala	file length	705
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	750
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	320
 test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	663
-test/scala/com/serenity/ui/tui/TerminalEmulator.scala	method interpret	91
+test/scala/com/serenity/ui/tui/TerminalEmulator.scala	method interpret	84

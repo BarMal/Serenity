@@ -9,3 +9,4 @@ enum LspEvent:
   case LspCompletionReceived(items: List[String], anchor: CursorPosition)
   case LspDefinitionReceived(symbol: String, uri: String, position: LspPosition, anchor: CursorPosition)
   case LspSemanticTokensReceived(uri: String, tokens: List[SemanticToken])
+  case LspSemanticTokensUnavailable(uri: String)

@@ -36,6 +36,9 @@ final case class AppState(
   private val markdownFenceIndexCache: AtomicReference[Map[BufferId, MarkdownBlockLens.FenceRangeIndex]] =
     new AtomicReference(Map.empty)
 
+  private val semanticTokensCache: AtomicReference[Map[BufferId, SemanticTokensAvailability]] =
+    new AtomicReference(Map.empty)
+
   /** `bufferId`'s annotation index, computed (and cached) only for that buffer -- see `annotationIndexCache`. */
   def annotationIndex(bufferId: BufferId): Option[AnnotationLineIndex] =
     persisted.buffers.get(bufferId).map { buffer =>
@@ -52,6 +55,27 @@ final case class AppState(
             diagnostics.groupMap(_.range.start.line)(identity)
           )
           val _ = annotationIndexCache.updateAndGet(_.updated(bufferId, computed))
+          computed
+    }
+
+  /** `bufferId`'s semantic-tokens status, computed (and cached) only for that buffer -- see `semanticTokensCache`. See
+    * [[SemanticTokensAvailability]] for what each case means and how the renderer treats it: `Pending` (no entry in
+    * `runtime.semanticTokensState` at all yet) is deliberately distinct from `Unavailable` (confirmed via
+    * `unavailableUris`) -- a request still in flight must not render the same muted style as a confirmed absence (issue
+    * #859/#1177 rendering-slice review finding).
+    */
+  def semanticTokensAvailability(bufferId: BufferId): Option[SemanticTokensAvailability] =
+    persisted.buffers.get(bufferId).map { buffer =>
+      semanticTokensCache.get().get(bufferId) match
+        case Some(cached) => cached
+        case None =>
+          val uri = com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer)
+          val computed = runtime.semanticTokensState.byUri.get(uri) match
+            case Some(tokens) => SemanticTokensAvailability.Available(tokens.groupBy(_.line))
+            case None =>
+              if runtime.semanticTokensState.unavailableUris.contains(uri) then SemanticTokensAvailability.Unavailable
+              else SemanticTokensAvailability.Pending
+          val _ = semanticTokensCache.updateAndGet(_.updated(bufferId, computed))
           computed
     }
 
