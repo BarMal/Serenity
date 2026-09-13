@@ -393,14 +393,14 @@ object AccessibilitySnapshot:
     item match
       case CommandSurfaceItem.CommandItem(command)                             => command.label
       case CommandSurfaceItem.OptionItem(_, label, _, _, _, _)                 => label
-      case CommandSurfaceItem.InputItem(_, label, _, _, _, _, _)               => label
+      case CommandSurfaceItem.InputItem(_, label, _, _, _, _, _, _)            => label
       case CommandSurfaceItem.SettingSearchItem(_, _, _, label, _, _, _, _, _) => label
       case CommandSurfaceItem.GroupItem(_, label, _, _, _)                     => label
 
   private def itemValue(item: CommandSurfaceItem): Option[String] =
     item match
       case option: CommandSurfaceItem.OptionItem                               => Some(option.selectedOption)
-      case CommandSurfaceItem.InputItem(_, _, _, currentValue, _, _, _)        => Some(currentValue)
+      case CommandSurfaceItem.InputItem(_, _, _, currentValue, _, _, _, _)     => Some(currentValue)
       case CommandSurfaceItem.SettingSearchItem(_, _, _, _, _, value, _, _, _) => value
       case _                                                                   => None
 
