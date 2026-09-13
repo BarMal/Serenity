@@ -379,10 +379,19 @@ object TextLayoutSnapshot:
     * looked for a preceding whitespace character). Falls back to a forced break at `fittingLength` when no such
     * boundary exists ahead of it (a single word/run too long to fit at all), same as the old implementation's fallback.
     */
+  /** One `BreakIterator.getLineInstance` per thread, reused across calls via `setText` rather than constructed fresh
+    * each time -- constructing a line-break instance is expensive enough (it clones a larger, locale-specific rule set
+    * than the character-break instance) that doing it once per wrapped visual line measurably slowed down documents
+    * with many lines (#1277). `BreakIterator` is stateful and not thread-safe, hence `ThreadLocal` rather than one
+    * shared instance.
+    */
+  private val threadLocalLineBreakIterator: ThreadLocal[BreakIterator] =
+    ThreadLocal.withInitial(() => BreakIterator.getLineInstance(Locale.ROOT))
+
   private def wordBoundarySegmentLength(text: String, fittingLength: Int): Int =
     if fittingLength >= text.length then text.length
     else
-      val boundary = BreakIterator.getLineInstance(Locale.ROOT)
+      val boundary = threadLocalLineBreakIterator.get()
       boundary.setText(text)
       val candidate = boundary.preceding(fittingLength + 1)
       if candidate > 0 then candidate else fittingLength
