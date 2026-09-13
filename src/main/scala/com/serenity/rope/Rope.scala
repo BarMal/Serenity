@@ -177,8 +177,8 @@ sealed trait Rope(using balance: Balance):
       }
 
   /** The whole leaf covering `index`, with its own absolute offset -- unlike `chunksInRange`, this never clips to a
-    * caller-supplied window, so `RopeCharacterSource` can cache the entire leaf regardless of which direction the
-    * next access moves. `None` only for an `index` outside `[0, weight)`.
+    * caller-supplied window, so `RopeCharacterSource` can cache the entire leaf regardless of which direction the next
+    * access moves. `None` only for an `index` outside `[0, weight)`.
     */
   private[rope] def leafAt(index: Int): Option[(Int, String)] =
     if index < 0 || index >= weight then None
