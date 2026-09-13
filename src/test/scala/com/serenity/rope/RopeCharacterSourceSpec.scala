@@ -18,8 +18,8 @@ class RopeCharacterSourceSpec extends AnyFlatSpec with Matchers:
   // instruments `chunksInRange` -- the method `RopeCharacterSource.charAt` actually calls on every cache miss --
   // rather than `index`, which the current `charAt` never calls at all, so counting it would pass trivially whether
   // or not caching exists. `chunksInRange` forwards to `delegate.chunksInRange` so the real multi-leaf tree still
-  // decides chunk boundaries; only the call count is observed here. (`chunksInRange` is no longer `final` on `Rope`
-  // for exactly this reason -- see its doc there.)
+  // decides chunk boundaries; only the call count is observed here. `chunksInRange` is no longer `final` on `Rope`
+  // for exactly this reason -- overriding it is the only seam available to observe cache hits/misses from outside.
   final private class CountingRope(delegate: Rope) extends Leaf(delegate.collect()):
     val chunksInRangeCalls = new AtomicInteger(0)
 

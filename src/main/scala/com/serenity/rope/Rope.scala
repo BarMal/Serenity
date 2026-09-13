@@ -151,11 +151,7 @@ sealed trait Rope(using balance: Balance):
     go(List(this))
     sb.toString
 
-  /** Visit the leaf content intersecting a half-open rope range from left to right.
-    *
-    * Not `final`: a test double in the same package needs to override this to count calls (there is no other seam
-    * to observe cache hits/misses through), so it delegates to a real `Rope` rather than reimplementing traversal.
-    */
+  /** Visit the leaf content intersecting a half-open rope range from left to right. */
   private[rope] def chunksInRange(startIndex: Int, endIndex: Int): Iterator[(Int, String)] =
     val start = math.max(0, math.min(startIndex, weight))
     val end   = math.max(start, math.min(endIndex, weight))
