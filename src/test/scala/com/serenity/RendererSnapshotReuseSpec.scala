@@ -287,10 +287,17 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       (System.nanoTime() - start) / 1000000L
     }
 
-    info(
-      "first-touch annotation+fence index lookup for one buffer among 20k -- " +
-        s"average: ${timings.sum / timings.length}ms, max: ${timings.max}ms"
-    )
+    val average = timings.sum / timings.length
+    info(s"first-touch annotation+fence index lookup for one buffer among 20k -- average: ${average}ms, max: ${timings.max}ms")
+
+    // A per-buffer lookup must stay independent of workspace size: this is the O(buffers) whole-workspace-map-rebuild
+    // regression #1456 fixed (rebuilding a 20k-entry wrapper map on every first touch, per snapshot) actually being
+    // caught, not just measured. These bounds are deliberately generous -- this shared/CI hardware is not a reliable
+    // stopwatch (see `CommandRunnerRenderPerformanceSpec`'s doc for prior flaky wall-clock assertions here) -- but an
+    // O(buffers) rebuild of two 20k-entry maps per lookup, 20 times over, is orders of magnitude past either bound;
+    // a real regression trips this even under heavy contention, while a correct O(1) lookup has ample headroom.
+    average should be < 500L
+    timings.max should be < 2000L
   }
 
   it should "render a plain large buffer without materialising the whole rope" in {

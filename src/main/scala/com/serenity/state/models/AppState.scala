@@ -18,6 +18,18 @@ final case class AppState(
   // though the actual index computation below was already deferred. Each snapshot still gets its own fresh cache, and
   // repeated lookups against the same snapshot -- e.g. several render passes over one scene -- reuse the computed
   // index instead of recomputing it.
+  //
+  // `AtomicReference` rather than `Ref[IO, Map[...]]`: both caches below are read and written synchronously from
+  // `annotationIndex`/`markdownFenceIndex`, which are called from the render path
+  // (`RendererPaneSetup.prepareEditorPaneRenderPlan`, `RendererPaneContent`, `RendererMarkdownLens.isInlineMarkdownLens`)
+  // -- plain, `Unit`/value-returning methods that run synchronously inside the renderer's own frame-preparation code,
+  // never inside an IO fiber of their own. A `Ref`-backed cache here would just force its `IO` via `unsafeRunSync`
+  // right back into these synchronous signatures at every call site, hiding a plain compare-and-set behind an effect
+  // type nothing here ever suspends on. This is the same tradeoff already settled for
+  // `com.serenity.ui.renderer.RendererFrameState.BoundedRefCache` and `com.serenity.state.manager.MouseTargetCache`'s
+  // `lastComputation` (#1431/#1434), `ThemeManager`'s highlight/lex caches (#1412/#1431/#1434), and
+  // `RuntimeDisplayState` (#1448) -- a lock-free CAS cache reached from synchronous, non-IO call sites, not an
+  // oversight of the "use `Ref[IO,A]`" rule.
   private val annotationIndexCache: AtomicReference[Map[BufferId, AnnotationLineIndex]] =
     new AtomicReference(Map.empty)
 
