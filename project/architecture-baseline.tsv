@@ -14,6 +14,11 @@
 # approach used for every test file at or above that threshold in this same audit) would fragment a single scenario
 # rather than separate distinct ones. perf/PerformanceBenchmarks.scala and TerminalEmulator.interpret are the same
 # "declarative table"/"exhaustive match" category already accepted for ConfigRegistry.
+# paydown: Rope.scala grew 616 -> 631 adding `leafAt` (#1458 follow-up): `chunksInRange`, the only existing seam,
+# clips its returned chunk to the caller's requested window, so `RopeCharacterSource.charAt`'s one-character query
+# never actually cached more than a single character -- the O(1) claim this file's own doc comment makes was not
+# true. `leafAt` returns the whole covering leaf unclipped so the cache is real; it needs to live here (not as a
+# free function) because a same-package test double must be able to override it to prove the fix.
 # paydown: ConfigRegistry.scala grew 680 -> 682 lines adding `.orAuto` to the `command_runner.item_gap_rows`
 # field (issue #1046), so an unset override now round-trips as "auto" and falls back to interface density the
 # same way `command_runner.visible_rows`/`command_runner.cursor_gap_rows` already did -- not new debt, just
@@ -21,7 +26,7 @@
 main/scala/com/serenity/app/AppRuntime.scala	file length	757
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	119
 main/scala/com/serenity/config/ConfigRegistry.scala	file length	682
-main/scala/com/serenity/rope/Rope.scala	file length	616
+main/scala/com/serenity/rope/Rope.scala	file length	631
 main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	615
 main/scala/com/serenity/ui/renderer/Java2DPostProcessingEffects.scala	method applyGlow	90
 test/scala/com/serenity/EditorBehaviorSpec.scala	file length	603
