@@ -475,7 +475,10 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "send a semanticTokens/full request and emit the decoded tokens when the server supports it" in {
-    val legend = SemanticTokensLegend(tokenTypes = List("keyword"), tokenModifiers = Nil)
+    val legend         = SemanticTokensLegend(tokenTypes = List("keyword"), tokenModifiers = Nil)
+    val expectedMethod = "textDocument/semanticTokens/full"
+    val expectedToken =
+      SemanticToken(line = 0, startCharacter = 0, length = 3, tokenType = "keyword", tokenModifiers = Set.empty)
     runVirtual(
       harness
         .use { manager =>
@@ -484,9 +487,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
             _       <- manager.connection.recordSemanticTokensLegend(Some(legend))
             _       <- manager.effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
             request <- takeMessage(manager.connection)
-            _ = request.hcursor.downField("method").as[String].toOption shouldBe Some(
-              "textDocument/semanticTokens/full"
-            )
+            _ = request.hcursor.downField("method").as[String].toOption shouldBe Some(expectedMethod)
             _ = request.hcursor
               .downField("params")
               .downField("textDocument")
@@ -498,20 +499,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
             )
             _      <- manager.eventApplied.get
             events <- manager.events.get
-            _ = events shouldBe List(
-              LspEvent.LspSemanticTokensReceived(
-                uri,
-                List(
-                  SemanticToken(
-                    line = 0,
-                    startCharacter = 0,
-                    length = 3,
-                    tokenType = "keyword",
-                    tokenModifiers = Set.empty
-                  )
-                )
-              )
-            )
+            _ = events shouldBe List(LspEvent.LspSemanticTokensReceived(uri, List(expectedToken)))
             _ <- manager.stop
           yield succeed
         }
