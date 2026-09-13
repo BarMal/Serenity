@@ -16,8 +16,8 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Split out of `LspManagerSpec` to keep that file under the architecture ratchet's line-count target -- this covers
   * `sendDidChange`'s dispatch between a range-based diff and a full-text notification based on the connection's
-  * negotiated sync kind (see `LspManager.sendDidChange`). The `documentTexts` mirror's own advance-on-failure
-  * behavior is covered separately in `LspManagerDidChangeMirrorSpec`.
+  * negotiated sync kind (see `LspManager.sendDidChange`). The `documentTexts` mirror's own advance-on-failure behavior
+  * is covered separately in `LspManagerDidChangeMirrorSpec`.
   */
 class LspManagerIncrementalSyncSpec extends AnyFlatSpec with Matchers:
 
