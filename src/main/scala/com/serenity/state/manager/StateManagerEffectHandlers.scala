@@ -109,7 +109,8 @@ final private[manager] class StateManagerEffectHandlers(
     showPeek
   )
 
-  private val navigationEffects = new StateManagerNavigationEffects(stateRef, bufferAnimationsRef, logger)
+  private val navigationEffects =
+    new StateManagerNavigationEffects(stateRef, bufferAnimationsRef, logger, validateAndUpdateState)
 
   private val panelEffects = new StateManagerPanelEffects(
     stateRef,
@@ -140,7 +141,8 @@ final private[manager] class StateManagerEffectHandlers(
     configEffects.persistConfigFile,
     configEffects.withUpdatedRunnerConfig,
     panelEffects.openMarkdownPreview,
-    panelEffects.loadPinnedDirectoryEffect
+    panelEffects.loadPinnedDirectoryEffect,
+    validateAndUpdateState
   )
 
   private val surfacePopupEffects = new StateManagerSurfacePopupEffects(

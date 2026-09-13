@@ -66,7 +66,13 @@ class StateManagerReplaceWorkflowSpec extends AnyFlatSpec with Matchers:
       stateRefVar,
       undoRefVar,
       updatesVar,
-      new StateManagerReplaceWorkflow(stateRefVar, undoRefVar, activeEditorBufferId, updateSurface)
+      new StateManagerReplaceWorkflow(
+        stateRefVar,
+        undoRefVar,
+        activeEditorBufferId,
+        updateSurface,
+        (newState, fallbackState) => stateRefVar.set(AppStateValidation.validated(newState).getOrElse(fallbackState))
+      )
     )
 
   "submitReplaceWorkflowEffect with no active buffer" should "report a status message and change nothing else" in {
