@@ -7,10 +7,10 @@ import com.serenity.text.TextEditing
 /** Adapts a [[Rope]] to `TextEditing.CharacterSource` so the word/grapheme-boundary scanners in `TextEditing` can
   * operate directly on rope content without materialising a `String`.
   *
-  * `charAt` caches the one leaf chunk covering its most recent access. `TextEditing`'s word/grapheme boundary
-  * scanners only ever step by one character at a time, forward or backward, so almost every call lands back in the
-  * cached chunk (an O(1) `String#charAt`) instead of re-descending the rope from the root via `Rope.index` (#1458,
-  * where a k-character scan cost O(k log n)) -- only a genuine chunk crossing pays the O(log n) `chunksInRange` walk.
+  * `charAt` caches the one leaf chunk covering its most recent access. `TextEditing`'s word/grapheme boundary scanners
+  * only ever step by one character at a time, forward or backward, so almost every call lands back in the cached chunk
+  * (an O(1) `String#charAt`) instead of re-descending the rope from the root via `Rope.index` (#1458, where a
+  * k-character scan cost O(k log n)) -- only a genuine chunk crossing pays the O(log n) `chunksInRange` walk.
   */
 final case class RopeCharacterSource(rope: Rope) extends TextEditing.CharacterSource:
   // Plain `AtomicReference`, not `Ref[IO, _]`: `charAt` is a pure synchronous scan (no `IO`, no fiber ever shares
