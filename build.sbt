@@ -253,3 +253,8 @@ libraryDependencies ++= Seq(
   "org.jline" % "jline-terminal"     % jlineVersion,
   "org.jline" % "jline-terminal-jni" % jlineVersion
 )
+
+// Unifies grapheme-cluster, line-break and East-Asian-Width segmentation on one versioned Unicode table (#1277),
+// replacing three independent hand-rolled approximations that could (and did, see #1271) disagree with each other.
+// Dependency only in this step -- see #1277 step 1 for the assembled-JAR size measurement that gated this addition.
+libraryDependencies += "com.ibm.icu" % "icu4j" % "78.3"
