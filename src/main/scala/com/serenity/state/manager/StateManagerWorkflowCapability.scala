@@ -376,16 +376,20 @@ final private[manager] class StateManagerWorkflowCapability(
             createDefaultStartupBuffer()
       }
 
+  // `createNewEmptyBuffer`/`createPane`/`switchToPane` each now commit through `validateAndUpdateState` in their own
+  // right, so clearing `uiSurfaces` (and with it the startup page's surface) has to wait until focus has already
+  // moved to the new pane -- doing it first, as this used to, left focus dangling on the just-removed surface for
+  // every step in between, which each of those steps' own validation now (correctly) rejects.
   private def createDefaultStartupBuffer(): IO[Unit] =
     stateRef.get.flatMap { before =>
-      updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List.empty))) >>
-        createNewEmptyBuffer().flatMap { bufferId =>
-          updateState(s => s.copy(persisted = s.persisted.copy(bufferOrder = s.persisted.bufferOrder :+ bufferId))) >>
-            createPane(Some(bufferId)).flatMap { paneId =>
-              switchToPane(paneId) >>
-                stateRef.get.flatMap(finalState => validateAndUpdateState(finalState, before))
-            }
-        }
+      createNewEmptyBuffer().flatMap { bufferId =>
+        updateState(s => s.copy(persisted = s.persisted.copy(bufferOrder = s.persisted.bufferOrder :+ bufferId))) >>
+          createPane(Some(bufferId)).flatMap { paneId =>
+            switchToPane(paneId) >>
+              updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List.empty))) >>
+              stateRef.get.flatMap(finalState => validateAndUpdateState(finalState, before))
+          }
+      }
     }
 
   private[manager] def createStartupSession(): IO[Unit] =

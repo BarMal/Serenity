@@ -17,6 +17,7 @@ final private[manager] class StateManagerEditorCapability(
     lspQueue: LspEffectQueue,
     bufferAnimationsRef: cats.effect.Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]],
     animations: AnimationChoreography,
+    operations: StateManagerOperationBoundary,
     // Seeds the companion sprite's pseudo-random idle-to-action rolls (see `CompanionSpriteState`'s transition
     // policy). A single mutable source threaded through every tick, same as a real hardware RNG would be -- the pure
     // transition logic itself never touches unseeded randomness directly, only what this IO-boundary constructor
@@ -25,6 +26,9 @@ final private[manager] class StateManagerEditorCapability(
 )(using balance: com.serenity.rope.Balance):
 
   def getCurrentState: IO[AppState] = stateRef.get
+
+  private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+    operations.validateAndUpdateState(newState, fallbackState)
 
   def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = bufferAnimationsRef.get
 
@@ -105,78 +109,92 @@ final private[manager] class StateManagerEditorCapability(
   )
 
   private def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
-    stateRef.modify { state =>
-      val bufferId = state.runtime.nextBufferId
-      val buffer =
-        if content.isEmpty && filePath.isEmpty then Buffer.newEmpty(bufferId)(using balance)
-        else
-          val fresh = Buffer.fromString(bufferId, content)(using balance)
-          fresh.copy(document = fresh.document.copy(filePath = filePath))
-      val newState = state.copy(
-        persisted = state.persisted.copy(
-          buffers = state.persisted.buffers + (bufferId -> buffer),
-          bufferOrder = state.persisted.bufferOrder :+ bufferId
-        ),
-        runtime = state.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
-      )
-      (newState, bufferId)
-    }
-
-  private def createNewEmptyBuffer(): IO[BufferId] =
-    stateRef.modify(state => EditorState.createNewEmptyBuffer(state)(using balance))
-
-  private def updateBuffer(bufferId: BufferId, content: String): IO[Unit] =
+    // Advancing `nextBufferId` can never by itself violate an invariant (it never touches `buffers`/`bufferOrder`),
+    // so it's split out as its own unchecked step -- the same shape `directLoadFileEffect` already uses. That means a
+    // drifted `nextBufferId` that collides with a live buffer id is consumed here before the structural add below is
+    // attempted, so a rejection falls back to a state that has already moved past the stale id instead of reverting
+    // straight back to the collision.
     stateRef
       .modify { state =>
-        state.persisted.buffers.get(bufferId) match
-          case Some(buffer) =>
-            val updatedBuffer = buffer.copy(
-              document = buffer.document.copy(
-                content = Rope(content)(using balance),
-                isDirty = true,
-                isNewEmpty = false
-              )
-            )
-            val lspTarget =
-              if buffer.document.content.collect() == content then None
-              else
-                for
-                  path       <- updatedBuffer.document.filePath
-                  languageId <- updatedBuffer.document.language
-                yield (path.toUri.toString, languageId, content)
-            (
-              state.copy(persisted =
-                state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
-              ),
-              lspTarget
-            )
-          case None => (state, None)
+        val bufferId = state.runtime.nextBufferId
+        (state.copy(runtime = state.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))), bufferId)
       }
-      .flatMap(_.fold(IO.unit) {
-        case (uri, languageId, text) =>
-          lspQueue.enqueueDocumentChange(uri, languageId, text)
-      })
+      .flatMap { bufferId =>
+        val buffer =
+          if content.isEmpty && filePath.isEmpty then Buffer.newEmpty(bufferId)(using balance)
+          else
+            val fresh = Buffer.fromString(bufferId, content)(using balance)
+            fresh.copy(document = fresh.document.copy(filePath = filePath))
+        stateRef.get.flatMap { state =>
+          val newState = state.copy(persisted =
+            state.persisted.copy(
+              buffers = state.persisted.buffers + (bufferId -> buffer),
+              bufferOrder = state.persisted.bufferOrder :+ bufferId
+            )
+          )
+          validateAndUpdateState(newState, state).as(bufferId)
+        }
+      }
+
+  private def createNewEmptyBuffer(): IO[BufferId] =
+    stateRef.get.flatMap { state =>
+      val (newState, bufferId) = EditorState.createNewEmptyBuffer(state)(using balance)
+      validateAndUpdateState(newState, state).as(bufferId)
+    }
+
+  private def updateBuffer(bufferId: BufferId, content: String): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      state.persisted.buffers.get(bufferId) match
+        case Some(buffer) =>
+          val updatedBuffer = buffer.copy(
+            document = buffer.document.copy(
+              content = Rope(content)(using balance),
+              isDirty = true,
+              isNewEmpty = false
+            )
+          )
+          val lspTarget =
+            if buffer.document.content.collect() == content then None
+            else
+              for
+                path       <- updatedBuffer.document.filePath
+                languageId <- updatedBuffer.document.language
+              yield (path.toUri.toString, languageId, content)
+          val newState = state.copy(persisted =
+            state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
+          )
+          validateAndUpdateState(newState, state) >> stateRef.get.flatMap { committed =>
+            if committed.persisted.buffers.get(bufferId).contains(updatedBuffer) then
+              lspTarget.fold(IO.unit) {
+                case (uri, languageId, text) => lspQueue.enqueueDocumentChange(uri, languageId, text)
+              }
+            else IO.unit
+          }
+        case None => IO.unit
+    }
 
   def createPane(bufferId: Option[BufferId] = None): IO[PaneId] =
-    stateRef.modify { state =>
-      insertPane(
+    stateRef.get.flatMap { state =>
+      val (newState, paneId) = insertPane(
         state,
         state.persisted.layout.orderedPaneIds.lastOption,
         bufferId,
         SplitAxis.Horizontal
       )
+      validateAndUpdateState(newState, state).as(paneId)
     }
 
   def switchToPane(paneId: PaneId): IO[Unit] =
-    stateRef.update { state =>
+    stateRef.get.flatMap { state =>
       if state.persisted.layout.editorPanes.contains(paneId) then
-        state.copy(
+        val newState = state.copy(
           persisted = state.persisted.copy(
             layout = state.persisted.layout.copy(activeEditorPaneId = Some(paneId)),
             focus = Focus.EditorPane(paneId)
           )
         )
-      else state
+        validateAndUpdateState(newState, state)
+      else IO.unit
     }
 
   def getTabOrder(): IO[List[PaneId]] =
