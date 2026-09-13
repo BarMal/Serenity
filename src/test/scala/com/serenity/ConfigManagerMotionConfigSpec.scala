@@ -25,7 +25,7 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
         |""".stripMargin
     )
 
-    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+    val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
     result.report.invalidEntries.map(_.key) should contain("ui.material")
     result.report.invalidEntries.map(_.key) should contain("ui.motion")
@@ -56,7 +56,7 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
     val serialized = ConfigManager.configToString(configured)
     Files.writeString(configFile, serialized)
 
-    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+    val loaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     serialized should not include "ui.motion.speed_scale ="
     serialized should not include "ui.motion.editor_text.speed_scale ="
@@ -88,7 +88,7 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
         |ui.motion.family.editor_text.enabled = true
         |""".stripMargin
     )
-    val loadedEnabledOnly = ConfigManager.loadConfig(Some(enabledOnly.toString))
+    val loadedEnabledOnly = ConfigManagerTestSupport.loadConfig(Some(enabledOnly.toString))
     val editorFamily = loadedEnabledOnly.surfaceConfig.motionConfiguration
       .getOrElse(fail("Expected authoritative motion configuration"))
       .families(MotionFamily.EditorText)
@@ -104,7 +104,7 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
         |ui.motion.family.editor_text.enabled = false
         |""".stripMargin
     )
-    val loadedDisabledOverride = ConfigManager.loadConfig(Some(disabledOverride.toString))
+    val loadedDisabledOverride = ConfigManagerTestSupport.loadConfig(Some(disabledOverride.toString))
     val disabledEditorFamily = loadedDisabledOverride.surfaceConfig.motionConfiguration
       .getOrElse(fail("Expected authoritative motion configuration"))
       .families(MotionFamily.EditorText)
@@ -120,7 +120,7 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
     val configFile = Files.createTempFile("serenity-panel-transition-migration", ".conf")
     Files.writeString(configFile, ConfigManager.configToString(migrated))
 
-    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+    val loaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     loaded.effectivePanelOpenTransitionKind shouldBe TransitionKind.DirectionalSweep
     loaded.effectivePanelCloseTransitionKind shouldBe TransitionKind.Disabled
@@ -148,7 +148,7 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
     val serialized = ConfigManager.configToString(configured)
     Files.writeString(configFile, serialized)
 
-    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+    val loaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     serialized should include("ui.motion.family.command_surfaces.animation.preset = custom")
     serialized should include("ui.motion.family.command_surfaces.animation.duration_ms = 320")
@@ -178,7 +178,7 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.materialPreset shouldBe MaterialPreset.Crystal
     config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
@@ -215,7 +215,7 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
     val configFile = Files.createTempFile("serenity-post-processing-config", ".conf")
     Files.writeString(configFile, "ui.post_processing = scanlines-glow\nui.shadows = false\n")
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.postProcessingEffect shouldBe PostProcessingEffect.ScanlinesAndGlow
     config.surfaceConfig.uiShadowsEnabled shouldBe false
@@ -237,7 +237,7 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
     val configFile = Files.createTempFile("serenity-custom-animation-config", ".conf")
     Files.writeString(configFile, written)
 
-    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+    val loaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     loaded.surfaceConfig.motionPreset shouldBe MotionPreset.Custom
     loaded.editorConfig.characterAnimation.value.durationMs shouldBe 320

@@ -109,3 +109,73 @@ class TerminalScreenBufferSpec extends AnyFlatSpec with Matchers:
     frame(0, 0) shouldBe TerminalCell.blank(Color.WHITE, Color.BLACK)
     frame(1, 0).text shouldBe "a"
   }
+
+  // The orphan repair (`blankIfContinuation`/`blankIfWideLeader`) funnels through `writeCell` itself rather than
+  // writing `grid` directly, so it is subject to the same active clip as every other write -- these two cases are
+  // the only way to observe that structurally, since both helpers are private.
+  it should "honor the active clip when repairing an orphaned wide-glyph continuation cell" in {
+    val buf = buffer()
+    buf.putString(0, 0, "中") // leader at (0,0), continuation at (1,0)
+
+    buf.withClip(0, 0, 1, 1) {
+      buf.putString(0, 0, "a") // overwrites the leader; the orphaned continuation at (1,0) is outside this clip
+    }
+
+    val frame = buf.snapshot
+    frame(0, 0).text shouldBe "a"
+    frame(1, 0).span shouldBe CellSpan.Continuation // left alone: repair must respect the clip too
+  }
+
+  it should "honor the active clip when repairing an orphaned wide-glyph leader cell" in {
+    val buf = buffer()
+    buf.putString(0, 0, "中") // leader at (0,0), continuation at (1,0)
+
+    buf.withClip(1, 0, 1, 1) {
+      buf.putString(1, 0, "a") // overwrites the continuation; the orphaned leader at (0,0) is outside this clip
+    }
+
+    val frame = buf.snapshot
+    frame(1, 0).text shouldBe "a"
+    frame(0, 0).span shouldBe CellSpan.Wide // left alone: repair must respect the clip too
+  }
+
+  // #1464: TerminalAnsiDiff.emitDiff rescanned every cell of every row to find what changed, duplicating a diff the
+  // renderer's own dirty-row bookkeeping (FramePlan/DirtyLineDiff) already does -- but that bookkeeping only covers
+  // editor pane content, not chrome/panels/modal, so it can't safely stand in as the dirty-row source for the whole
+  // screen. Every paint path (putString/fillRect, and the wide-glyph orphan repair) funnels through `writeCell`, so
+  // tracking rows actually written with a different value there gives a complete, always-correct dirty-row set.
+  "consumeDirtyRows" should "report only the rows a write actually changed, then reset" in {
+    val buf = buffer()
+    buf.putString(0, 2, "hi")
+
+    buf.consumeDirtyRows() shouldBe Set(2)
+    buf.consumeDirtyRows() shouldBe Set.empty
+  }
+
+  it should "not mark a row dirty when a write leaves its cells unchanged" in {
+    val buf = buffer()
+    buf.putString(0, 1, "x")
+    val _ = buf.consumeDirtyRows() // drain the write above
+
+    buf.putString(0, 1, "x") // identical content, same colours/style
+
+    buf.consumeDirtyRows() shouldBe Set.empty
+  }
+
+  it should "accumulate every row touched since the last call, across multiple writes" in {
+    val buf = buffer()
+    buf.putString(0, 0, "a")
+    buf.fillRect(2, 3, 1, 1, 'x')
+
+    buf.consumeDirtyRows() shouldBe Set(0, 3)
+  }
+
+  it should "mark a row dirty when overwriting one half of a wide glyph blanks its orphaned other half" in {
+    val buf = buffer()
+    buf.putString(0, 4, "中")
+    val _ = buf.consumeDirtyRows()
+
+    buf.putString(0, 4, "a") // orphans the continuation cell at column 1, blanked via a write outside putString's loop
+
+    buf.consumeDirtyRows() shouldBe Set(4)
+  }

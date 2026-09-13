@@ -21,31 +21,27 @@ import AppConfigMotionOps.*
 /** Manages loading and saving application configuration */
 object ConfigManager:
 
-  // `loadConfigResult`/`loadConfig` run synchronously, outside Cats Effect supervision, so they log the same way
-  // `CrashReporter` does rather than through the `Logger[IO]` the IO-based `loadConfigResultIO` path uses.
+  // `loadConfigIO`'s fallback-to-defaults path logs the same way `CrashReporter` does rather than through the
+  // `Logger[IO]` the structured `loadConfigResultIO` path uses.
   private val logger = LoggerFactory.getLogger("com.serenity.config.ConfigManager")
 
   val defaultConfigPath: Path =
     Paths.get(System.getProperty("user.home"), ".serenity", "config.conf")
 
-  /** Load configuration from file or return default */
-  def loadConfig(configPath: Option[String] = None): AppConfig =
-    loadConfigResult(configPath).config
-
-  /** Load configuration from file with migration/deprecation report or return defaults. */
-  def loadConfigResult(configPath: Option[String] = None): ConfigLoadResult =
-    val path = configPath.map(Paths.get(_)).getOrElse(defaultConfigPath)
-    if Files.exists(path) then
-      try parseConfigResult(path)
-      catch
-        case NonFatal(error) =>
-          logger.error(s"[CONFIG] Failed to load config from $path, using defaults", error)
-          ConfigLoadResult(AppConfig.default, ConfigMigrationReport.empty)
-    else ConfigLoadResult(AppConfig.default, ConfigMigrationReport.empty)
-
-  /** Load configuration from file on the Cats Effect blocking pool. */
+  /** Load configuration from file on the Cats Effect blocking pool, falling back to defaults on a missing or
+    * unparseable file.
+    */
   def loadConfigIO(configPath: Option[String] = None): IO[AppConfig] =
-    IO.blocking(loadConfig(configPath))
+    IO.blocking {
+      val path = configPath.map(Paths.get(_)).getOrElse(defaultConfigPath)
+      if Files.exists(path) then
+        try parseConfigResult(path).config
+        catch
+          case NonFatal(error) =>
+            logger.error(s"[CONFIG] Failed to load config from $path, using defaults", error)
+            AppConfig.default
+      else AppConfig.default
+    }
 
   /** Load configuration with migration/deprecation report on the Cats Effect blocking pool. */
   def loadConfigResultIO(configPath: Option[String] = None): IO[Either[ConfigError, ConfigLoadResult]] =
@@ -69,7 +65,7 @@ object ConfigManager:
             Left(ConfigError("load", path, s"Failed to load configuration: ${error.getMessage}", Some(error)))
     }
 
-  private def parseConfigResult(path: Path): ConfigLoadResult =
+  private[config] def parseConfigResult(path: Path): ConfigLoadResult =
     parseConfigResult(parseHoconFile(path))
 
   private def parseConfigResult(source: Config): ConfigLoadResult =
@@ -197,34 +193,16 @@ object ConfigManager:
   /** Generate configuration file content from AppConfig */
   def configToString(config: AppConfig): String = ConfigFileFormat.render(config)
 
-  /** Save configuration to file */
-  def saveConfig(config: AppConfig, configPath: String): Boolean =
-    saveConfig(config, Paths.get(configPath))
-
-  def saveConfig(config: AppConfig, configPath: Path): Boolean =
-    renderedConfig(config) match
-      case Left(problem) =>
-        logger.error(s"[CONFIG] Failed to save config to $configPath: $problem")
-        false
-      case Right(text) =>
-        try
-          AtomicFileWriter.writeBytesBlocking(configPath, text.getBytes(StandardCharsets.UTF_8))
-          true
-        catch
-          case NonFatal(error) =>
-            logger.error(s"[CONFIG] Failed to save config to $configPath", error)
-            false
-
   /** The config text to write, refused if it is not something this module could read back.
     *
-    * An unparseable file is worse than a failed save: `loadConfigResult` falls back to defaults for the whole file, so
-    * one bad value silently resets every other setting the user had. That is exactly what an unquoted comma in the
-    * cursor info bar's segment list used to do. Checking here keeps a formatting mistake in one setting from reaching
-    * the file at all, and leaves whatever the user already had in place. A setting the file would swallow rather than
-    * reject -- a key written at a path that also has children -- costs the user that one setting just as silently, so
-    * it is refused on the same terms.
+    * An unparseable file is worse than a failed save: loading falls back to defaults for the whole file, so one bad
+    * value silently resets every other setting the user had. That is exactly what an unquoted comma in the cursor info
+    * bar's segment list used to do. Checking here keeps a formatting mistake in one setting from reaching the file at
+    * all, and leaves whatever the user already had in place. A setting the file would swallow rather than reject -- a
+    * key written at a path that also has children -- costs the user that one setting just as silently, so it is refused
+    * on the same terms.
     */
-  private def renderedConfig(config: AppConfig): Either[String, String] =
+  private[config] def renderedConfig(config: AppConfig): Either[String, String] =
     ConfigFileFormat.unwritableSettings(config) match
       case Nil =>
         val text = ConfigFileFormat.render(config)

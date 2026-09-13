@@ -41,7 +41,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
           state.persisted.copy(config =
             state.persisted.config
               .withInterfaceDensity(InterfaceDensity.Compact)
-              .withCommandRunnerItemGapRows(1)
+              .withCommandRunnerItemGapRows(Some(1))
           )
         )
       )
@@ -94,7 +94,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
           state.persisted.copy(config =
             state.persisted.config
               .withCommandRunnerCursorGapRows(Some(0.5))
-              .withCommandRunnerItemGapRows(0.5)
+              .withCommandRunnerItemGapRows(Some(0.5))
           )
         )
       )
@@ -249,7 +249,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
         itemCount = runner.visibleItems.length,
         hasHeader = true,
         hasFooter = runner.visibleItems.nonEmpty || runner.statusMessage.nonEmpty,
-        itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+        itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
         itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
       )
       .translated(

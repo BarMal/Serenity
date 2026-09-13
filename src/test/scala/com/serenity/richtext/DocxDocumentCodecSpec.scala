@@ -8,10 +8,11 @@ import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
 
 import cats.effect.unsafe.implicits.global
 import com.sun.net.httpserver.HttpServer
+import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
+class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
 
   "DocxDocumentCodec" should "read inline marks and paragraph alignment from DOCX" in {
     val documentXml =
@@ -30,7 +31,7 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
         |  </w:body>
         |</w:document>""".stripMargin
 
-    val document  = DocxDocumentCodec.readBytes(docxBytes(documentXml))
+    val document  = DocxDocumentCodec.readBytes(docxBytes(documentXml)).value
     val paragraph = singleParagraph(document)
 
     paragraph.alignment shouldBe ParagraphAlignment.Center
@@ -53,7 +54,7 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val decoded   = DocxDocumentCodec.readBytes(DocxDocumentCodec.writeBytes(source))
+    val decoded   = DocxDocumentCodec.readBytes(DocxDocumentCodec.writeBytes(source)).value
     val paragraph = singleParagraph(decoded)
 
     paragraph.alignment shouldBe ParagraphAlignment.Right
@@ -74,7 +75,7 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
         |  </w:body>
         |</w:document>""".stripMargin
 
-    val paragraph = singleParagraph(DocxDocumentCodec.readBytes(docxBytes(documentXml)))
+    val paragraph = singleParagraph(DocxDocumentCodec.readBytes(docxBytes(documentXml)).value)
 
     paragraph.plainText shouldBe "Read the guide."
     marksForText(paragraph, "the guide") should contain(InlineMark.Bold)
@@ -95,7 +96,7 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val decoded   = DocxDocumentCodec.readBytes(DocxDocumentCodec.writeBytes(source))
+    val decoded   = DocxDocumentCodec.readBytes(DocxDocumentCodec.writeBytes(source)).value
     val paragraph = singleParagraph(decoded)
     val style     = paragraph.runs.head.style
 
@@ -110,7 +111,7 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
 
     val bytes       = DocxDocumentCodec.writeBytes(source)
     val documentXml = zipEntryText(bytes, "word/document.xml")
-    val decoded     = DocxDocumentCodec.readBytes(bytes)
+    val decoded     = DocxDocumentCodec.readBytes(bytes).value
 
     documentXml should include("<w:tab/>")
     documentXml should include("<w:br/>")
@@ -120,7 +121,7 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
   it should "report unsupported DOCX structures before a lossy save" in {
     val xml = fixture("docx-unsupported-table.xml")
 
-    val imported = DocxDocumentCodec.readBytesWithFidelity(docxBytes(xml))
+    val imported = DocxDocumentCodec.readBytesWithFidelity(docxBytes(xml)).value
 
     imported.document.plainText shouldBe "kept text"
     imported.fidelity.isLossless shouldBe false
@@ -141,7 +142,7 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fail safely when the DOCX document entry is missing" in {
-    val error = the[RichTextCodecException] thrownBy DocxDocumentCodec.readBytes(emptyZipBytes())
+    val error = DocxDocumentCodec.readBytes(emptyZipBytes()).left.value
 
     error.getMessage should include("missing word/document.xml")
   }
@@ -149,13 +150,13 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
   it should "fail safely when the DOCX document entry is oversized" in {
     val bytes = docxRawBytes("word/document.xml", Array.fill(RichTextArchive.MaxXmlEntryBytes + 1)(0.toByte))
 
-    val error = the[RichTextCodecException] thrownBy DocxDocumentCodec.readBytes(bytes)
+    val error = DocxDocumentCodec.readBytes(bytes).left.value
 
     error.getMessage should include("word/document.xml is too large")
   }
 
   it should "wrap malformed DOCX XML in a codec exception" in {
-    val error = the[RichTextCodecException] thrownBy DocxDocumentCodec.readBytes(docxBytes("<w:document>"))
+    val error = DocxDocumentCodec.readBytes(docxBytes("<w:document>")).left.value
 
     error.getMessage should include("DOCX document could not be decoded")
   }
@@ -169,7 +170,7 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
            |  <w:body><w:p><w:r><w:t>&external;</w:t></w:r></w:p></w:body>
            |</w:document>""".stripMargin
 
-      val error = the[RichTextCodecException] thrownBy DocxDocumentCodec.readBytes(docxBytes(xml))
+      val error = DocxDocumentCodec.readBytes(docxBytes(xml)).left.value
 
       error.getMessage should include("DOCX document could not be decoded")
       requests.get() shouldBe 0
@@ -184,7 +185,7 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
            |  <w:body><w:p><w:r><w:t>safe</w:t></w:r></w:p></w:body>
            |</w:document>""".stripMargin
 
-      val error = the[RichTextCodecException] thrownBy DocxDocumentCodec.readBytes(docxBytes(xml))
+      val error = DocxDocumentCodec.readBytes(docxBytes(xml)).left.value
 
       error.getMessage should include("DOCX document could not be decoded")
       requests.get() shouldBe 0
@@ -201,7 +202,7 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
            |  <w:body><w:p><w:r><w:t>safe</w:t></w:r></w:p></w:body>
            |</w:document>""".stripMargin
 
-      DocxDocumentCodec.readBytes(docxBytes(xml)).plainText shouldBe "safe"
+      DocxDocumentCodec.readBytes(docxBytes(xml)).value.plainText shouldBe "safe"
       requests.get() shouldBe 0
     }
 
@@ -217,7 +218,7 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers:
         |  <w:body><w:p><w:r><w:t>&c;</w:t></w:r></w:p></w:body>
         |</w:document>""".stripMargin
 
-    val error = the[RichTextCodecException] thrownBy DocxDocumentCodec.readBytes(docxBytes(xml))
+    val error = DocxDocumentCodec.readBytes(docxBytes(xml)).left.value
 
     error.getMessage should include("DOCX document could not be decoded")
   }

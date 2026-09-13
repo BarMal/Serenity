@@ -104,9 +104,10 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
     * preserving #1170's zero-idle-wakeup contract.
     */
   def flush(): Unit =
-    val next  = screenBuffer.snapshot
-    val ansi  = TerminalAnsiDiff.emit(previousFrameRef.getAndSet(Some(next)), next)
-    val caret = caretEscape(forceReassert = ansi.nonEmpty)
+    val next      = screenBuffer.snapshot
+    val dirtyRows = screenBuffer.consumeDirtyRows()
+    val ansi      = TerminalAnsiDiff.emit(previousFrameRef.getAndSet(Some(next)), next, Some(dirtyRows))
+    val caret     = caretEscape(forceReassert = ansi.nonEmpty)
     if ansi.nonEmpty || caret.nonEmpty then
       writer.write(TerminalRenderSurface.BeginSyncUpdate)
       writer.write(ansi)

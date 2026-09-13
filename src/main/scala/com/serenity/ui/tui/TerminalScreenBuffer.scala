@@ -22,6 +22,13 @@ final class TerminalScreenBuffer(val width: Int, val height: Int):
   private val grid: Array[Array[TerminalCell]] =
     Array.fill(height, width)(TerminalCell.blank(fgColorRef.get(), bgColorRef.get()))
 
+  // Rows actually changed (not just written to -- see `writeCell`) since the last `consumeDirtyRows` call. Every
+  // paint path (`putString`, `fillRect`, the wide-glyph orphan repair `writeCell` triggers) writes through here, so
+  // this is a complete, always-correct record of "what changed" for `TerminalAnsiDiff` to scan (#1464) -- unlike the
+  // renderer's own `FramePlan.dirtyRowsByPane`, which only ever covers editor pane content, never chrome, gutter,
+  // panels or the modal layer.
+  private val dirtyRows: java.util.BitSet = new java.util.BitSet(height)
+
   def setForegroundColor(color: Color): Unit = fgColorRef.set(color)
   def setBackgroundColor(color: Color): Unit = bgColorRef.set(color)
   def getForegroundColor: Color              = fgColorRef.get()
@@ -71,6 +78,15 @@ final class TerminalScreenBuffer(val width: Int, val height: Int):
 
   def snapshot: TerminalFrame = TerminalFrame(width, height, grid.map(_.toVector).toVector)
 
+  /** Rows written with a value different from what they already held, since the last call to this method -- then reset
+    * for the next one. See `dirtyRows`'s own doc for why this is the complete, correct source of "what changed" rather
+    * than a re-derived or partial one.
+    */
+  def consumeDirtyRows(): Set[Int] =
+    val touched = (0 until height).filter(dirtyRows.get).toSet
+    dirtyRows.clear()
+    touched
+
   private def inBounds(x: Int, y: Int): Boolean = x >= 0 && x < width && y >= 0 && y < height
 
   /** Overwrite one cell, then repair whichever half of a wide glyph the overwrite just orphaned: if the cell replaced
@@ -82,16 +98,19 @@ final class TerminalScreenBuffer(val width: Int, val height: Int):
     if inBounds(x, y) && clipRef.get().contains(x, y) then
       val previous = grid(y)(x)
       grid(y)(x) = cell
+      if previous != cell then dirtyRows.set(y)
       if previous.span == CellSpan.Wide && cell.span != CellSpan.Wide then blankIfContinuation(x + 1, y)
       if previous.span == CellSpan.Continuation && cell.span != CellSpan.Continuation then blankIfWideLeader(x - 1, y)
 
+  // Routed through `writeCell` itself -- rather than writing `grid` directly -- so there is exactly one funnel point
+  // for both dirty-row tracking and the active clip, instead of three hand-synchronized write sites.
   private def blankIfContinuation(x: Int, y: Int): Unit =
     if inBounds(x, y) && grid(y)(x).span == CellSpan.Continuation then
-      grid(y)(x) = TerminalCell.blank(fgColorRef.get(), bgColorRef.get())
+      writeCell(x, y, TerminalCell.blank(fgColorRef.get(), bgColorRef.get()))
 
   private def blankIfWideLeader(x: Int, y: Int): Unit =
     if inBounds(x, y) && grid(y)(x).span == CellSpan.Wide then
-      grid(y)(x) = TerminalCell.blank(fgColorRef.get(), bgColorRef.get())
+      writeCell(x, y, TerminalCell.blank(fgColorRef.get(), bgColorRef.get()))
 
 object TerminalScreenBuffer:
 

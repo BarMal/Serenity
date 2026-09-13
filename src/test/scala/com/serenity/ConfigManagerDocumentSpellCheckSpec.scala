@@ -21,7 +21,7 @@ class ConfigManagerDocumentSpellCheckSpec extends AnyFlatSpec with Matchers with
         |""".stripMargin
     )
 
-    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+    val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
     result.report.invalidEntries.map(_.key) should contain("syntax.highlighting")
     result.report.invalidEntries.map(_.key) should contain("spellcheck.enabled")
@@ -35,7 +35,7 @@ class ConfigManagerDocumentSpellCheckSpec extends AnyFlatSpec with Matchers with
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
     ConfigManager.configToString(config) should include("document.default_mode = markdown")
@@ -50,7 +50,7 @@ class ConfigManagerDocumentSpellCheckSpec extends AnyFlatSpec with Matchers with
         |""".stripMargin
     )
 
-    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+    val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
     result.report.invalidEntries.map(_.key) should contain("document.default_mode")
     result.report.invalidEntries.map(_.key) should contain("document.markdown_view")
@@ -64,7 +64,7 @@ class ConfigManagerDocumentSpellCheckSpec extends AnyFlatSpec with Matchers with
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
     ConfigManager.configToString(config) should include("document.markdown_view = inline-lens")
@@ -81,7 +81,7 @@ class ConfigManagerDocumentSpellCheckSpec extends AnyFlatSpec with Matchers with
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.languageToolsConfig.spellCheck.enabled shouldBe true
     config.languageToolsConfig.spellCheck.languages shouldBe List("en", "fr")

@@ -107,7 +107,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
-        config = AppConfig.default.withCommandRunnerItemGapRows(1),
+        config = AppConfig.default.withCommandRunnerItemGapRows(Some(1)),
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -201,7 +201,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         config = AppConfig.default
           .withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact)
-          .withCommandRunnerItemGapRows(1),
+          .withCommandRunnerItemGapRows(Some(1)),
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
