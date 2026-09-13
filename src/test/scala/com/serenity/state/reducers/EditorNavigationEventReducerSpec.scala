@@ -8,8 +8,8 @@ import org.scalatest.matchers.should.Matchers
 
 /** Dedicated coverage for `EditorNavigationEventReducer` (#1442): caret movement, paging, and select-all -- the family
   * that repositions cursors/selection without touching document content. Focuses on behavior specific to this module
-  * (multi-cursor collapsing, downstream affinity normalization, the `MoveToEndOfFile` single-cursor/multi-cursor
-  * split) rather than re-asserting dispatch already covered end-to-end elsewhere.
+  * (multi-cursor collapsing, downstream affinity normalization, the `MoveToEndOfFile` single-cursor/multi-cursor split)
+  * rather than re-asserting dispatch already covered end-to-end elsewhere.
   */
 class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
 
@@ -46,7 +46,11 @@ class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "collapse an active selection to its focus first, rather than moving both ends" in {
     val before =
-      stateWith("hello", List(CursorPosition(0, 3)), selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 3))))
+      stateWith(
+        "hello",
+        List(CursorPosition(0, 3)),
+        selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 3)))
+      )
 
     val after = bufferAfter(MoveRight, before)
     after.editing.selection shouldBe None

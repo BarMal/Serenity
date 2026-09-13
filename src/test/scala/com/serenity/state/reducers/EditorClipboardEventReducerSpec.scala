@@ -8,8 +8,8 @@ import org.scalatest.matchers.should.Matchers
 
 /** Dedicated coverage for `EditorClipboardEventReducer` (#1442): Copy/Cut/Paste, the family that reads or writes the
   * clipboard alongside the buffer. Each of the three independently computes a clipboard string alongside its buffer
-  * update; this suite exercises the with-selection and without-selection (whole-line) shape of each, plus
-  * multi-cursor paste and the "nothing on the clipboard" no-op.
+  * update; this suite exercises the with-selection and without-selection (whole-line) shape of each, plus multi-cursor
+  * paste and the "nothing on the clipboard" no-op.
   */
 class EditorClipboardEventReducerSpec extends AnyFlatSpec with Matchers:
 
@@ -111,7 +111,11 @@ class EditorClipboardEventReducerSpec extends AnyFlatSpec with Matchers:
 
   "Paste with multiple cursors" should "insert the clipboard text at every cursor independently" in {
     val before =
-      stateWith("a\nb\nc", List(CursorPosition(0, 1), CursorPosition(1, 1), CursorPosition(2, 1)), clipboard = Some("X"))
+      stateWith(
+        "a\nb\nc",
+        List(CursorPosition(0, 1), CursorPosition(1, 1), CursorPosition(2, 1)),
+        clipboard = Some("X")
+      )
 
     val after = bufferAfter(Paste, before)
     after.document.content.collect() shouldBe "aX\nbX\ncX"

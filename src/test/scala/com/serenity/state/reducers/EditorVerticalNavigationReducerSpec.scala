@@ -7,8 +7,8 @@ import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Dedicated coverage for `EditorVerticalNavigationReducer` (#1442): Up/Down and their selection-extending forms --
-  * the one editor reduction whose result depends on measured text geometry. Exercises the single-cursor, selection
+/** Dedicated coverage for `EditorVerticalNavigationReducer` (#1442): Up/Down and their selection-extending forms -- the
+  * one editor reduction whose result depends on measured text geometry. Exercises the single-cursor, selection
   * (extend), and multi-cursor paths this module dispatches between, plus its "no pane/buffer" no-op.
   */
 class EditorVerticalNavigationReducerSpec extends AnyFlatSpec with Matchers:
