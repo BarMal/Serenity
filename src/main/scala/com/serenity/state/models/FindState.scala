@@ -1,6 +1,6 @@
 package com.serenity.state.models
 
-import com.serenity.rope.Rope
+import com.serenity.rope.{Rope, RopeCharacterSource}
 import com.serenity.text.TextEditing
 
 final case class FindResult(line: Int, column: Int)
@@ -15,24 +15,22 @@ final case class FindSearchRequest(
 
 object FindSearch:
 
-  /** Finds whole-grapheme occurrences in deterministic document order. */
+  /** Finds whole-grapheme occurrences in deterministic document order.
+    *
+    * Uses `RopeCharacterSource`'s leaf-caching adapter rather than reading through `Rope.index` directly: the per-match
+    * grapheme-boundary check now scans through ICU4J's `BreakIterator` (#1277 step 3), which reads several neighbouring
+    * characters per boundary rather than one, so an uncached `O(log n)` re-descent per character turned into the
+    * dominant cost over a large document with many matches.
+    */
   def results(content: Rope, query: String): List[FindResult] =
     if query.isEmpty then Nil
     else
+      val source = RopeCharacterSource(content)
       content.searchAll(query).collect {
-        case offset if TextEditing.isWholeGraphemeRange(RopeCharacterSource(content), offset, offset + query.length) =>
+        case offset if TextEditing.isWholeGraphemeRange(source, offset, offset + query.length) =>
           val (line, column) = content.offsetToLineColumn(offset)
           FindResult(line, column)
       }
-
-  final private case class RopeCharacterSource(content: Rope) extends TextEditing.CharacterSource:
-    override def length: Int = content.weight
-
-    // TextEditing's scanners only ever call charAt within [0, length), so the fallback below is never
-    // actually exercised in practice. Same idiom as the other RopeCharacterSource implementations in this
-    // codebase (e.g. ModalEventReducer, StateManagerWorkflowCapability).
-    override def charAt(index: Int): Char =
-      content.index(index).getOrElse(' ')
 
 final case class FindResultSet private (
     query: String,
