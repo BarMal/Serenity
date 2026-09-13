@@ -1,9 +1,14 @@
 package com.serenity.ui.layout
 
-/** East-Asian-Width classification for the ranges that matter to a monospace terminal grid: CJK ideographs, Hangul,
-  * Japanese kana, fullwidth forms, and the common emoji blocks. Not a full Unicode East Asian Width table -- combining
-  * marks, the long tail of "Ambiguous" width codepoints, and the wide singletons scattered outside these blocks
-  * (U+231A, U+1F004, U+1F0CF and friends) are treated as narrow, matching what most terminal emulators default to.
+import com.ibm.icu.lang.{UCharacter, UProperty}
+
+/** East-Asian-Width classification for the codepoints that matter to a monospace terminal grid, backed by ICU4J's
+  * Unicode East Asian Width property (UAX#11) rather than a hand-rolled range table. `Wide` and `Fullwidth` count as
+  * two cells; `Narrow`, `Halfwidth`, `Neutral` and `Ambiguous` all count as one -- collapsing Ambiguous into narrow
+  * matches what most terminal emulators default to (#1277), and is the same choice the old hand-rolled table made for
+  * the codepoints it covered at all. Unlike that table, this also gets the wide singletons that sit outside the old
+  * table's blocks right (U+231A, U+1F004, U+1F0CF and friends), since the property covers every codepoint rather than a
+  * fixed list of ranges.
   *
   * This lives in the layout package, not the terminal one, because both ends of the grid have to agree on it:
   * `TerminalScreenBuffer` advances the cells it paints by this width, and `TextLayoutSnapshot` measures caret stops and
@@ -12,25 +17,10 @@ package com.serenity.ui.layout
   */
 object CharWidth:
 
-  private val wideRanges: Vector[(Int, Int)] = Vector(
-    0x1100  -> 0x115f,  // Hangul Jamo
-    0x2e80  -> 0x303e,  // CJK radicals, Kangxi, CJK symbols/punctuation
-    0x3041  -> 0x33ff,  // Hiragana .. CJK compatibility
-    0x3400  -> 0x4dbf,  // CJK unified ideographs extension A
-    0x4e00  -> 0x9fff,  // CJK unified ideographs
-    0xa000  -> 0xa4cf,  // Yi syllables/radicals
-    0xac00  -> 0xd7a3,  // Hangul syllables
-    0xf900  -> 0xfaff,  // CJK compatibility ideographs
-    0xfe30  -> 0xfe4f,  // CJK compatibility forms
-    0xff00  -> 0xff60,  // Fullwidth forms
-    0xffe0  -> 0xffe6,  // Fullwidth signs
-    0x1f300 -> 0x1f64f, // Misc symbols and pictographs, emoticons
-    0x1f680 -> 0x1f6ff, // Transport and map symbols
-    0x1f900 -> 0x1f9ff, // Supplemental symbols and pictographs
-    0x1fa70 -> 0x1faff, // Symbols and pictographs extended-A
-    0x20000 -> 0x3fffd  // CJK unified ideographs extension B and beyond
-  )
-
-  /** The number of terminal cells a codepoint occupies: 2 for the wide ranges above, 1 for everything else. */
+  /** The number of terminal cells a codepoint occupies: 2 for `Wide`/`Fullwidth` East Asian Width, 1 for everything
+    * else.
+    */
   def of(codePoint: Int): Int =
-    if wideRanges.exists { case (lo, hi) => codePoint >= lo && codePoint <= hi } then 2 else 1
+    UCharacter.getIntPropertyValue(codePoint, UProperty.EAST_ASIAN_WIDTH) match
+      case UCharacter.EastAsianWidth.WIDE | UCharacter.EastAsianWidth.FULLWIDTH => 2
+      case _                                                                    => 1
