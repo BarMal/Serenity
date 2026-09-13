@@ -4,6 +4,7 @@ import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.rope.Balance
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -222,8 +223,6 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "keymap-command-runner-submit",
       "keymap-modal-dismiss"
     )
-    nestedGroup("settings-preset-markdown-preview").label shouldBe "Markdown Preview"
-    nestedGroup("settings-preset-markdown-preview").children.map(_.id) should contain("markdown-view")
     nestedGroup("settings-document-defaults").label shouldBe "Document Defaults"
     nestedGroup("settings-document-defaults").children.map(_.id) should contain allOf (
       "default-document-mode",
@@ -394,17 +393,31 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
   it should "surface rich text inline style inputs in settings" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
+    // A deterministic catalog, not the host's installed fonts (see `CommandRunnerSettingsGroups.build`'s own doc).
+    val fontFamilies = FontLoader.FontFamilyCatalog(monospace = List("Mono"), text = List("Serif", "Sans"), ui = Nil)
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
+      .copy(fontFamilies = fontFamilies)
 
     val richTextGroup = groupByIdRecursive(runner.settingsGroups, "settings-rich-text")
-    val inputs        = richTextGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
 
-    inputs.map(_.id) shouldBe List("rich-text-font-family", "rich-text-font-size", "rich-text-color")
-    inputs.head.parse("Serif") shouldBe Some(CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily("Serif")))
-    inputs(1).parse("18") shouldBe Some(CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(18.0f)))
-    inputs(2).parse("#336699") shouldBe Some(CommandIntent.RichText(RichTextIntent.SetRichTextColor("#336699")))
-    inputs(2).parse("not-a-colour") shouldBe None
+    // issue #1060: font family is a picker now, matching code/prose/UI font family, not typed free text.
+    richTextGroup.children.map(_.id) shouldBe List("rich-text-font-family", "rich-text-font-size", "rich-text-color")
+    val fontFamilyGroup = richTextGroup.children
+      .collectFirst { case item: CommandSurfaceItem.GroupItem if item.id == "rich-text-font-family" => item }
+      .getOrElse(fail("missing rich text font family picker"))
+    fontFamilyGroup.label shouldBe "Selection Font Family"
+    fontFamilyGroup.children.collect { case CommandSurfaceItem.CommandItem(command) => command.intent } should
+      contain(CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily("Serif")))
+
+    val inputs = richTextGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
+    inputs.map(_.id) shouldBe List("rich-text-font-size", "rich-text-color")
+    // issue #1060: 8.0-48.0, matching code/prose/UI font size -- no longer a 1.0-144.0 outlier.
+    inputs.head.hint shouldBe "Points (8.0-48.0)"
+    inputs.head.parse("18") shouldBe Some(CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(18.0f)))
+    inputs.head.parse("144") shouldBe None
+    inputs(1).parse("#336699") shouldBe Some(CommandIntent.RichText(RichTextIntent.SetRichTextColor("#336699")))
+    inputs(1).parse("not-a-colour") shouldBe None
   }
 
   it should "surface spell-check settings as typed controls" in {

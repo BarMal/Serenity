@@ -34,8 +34,17 @@ object AtomicFileWriter:
 
     def exists(path: Path): Boolean = Files.exists(path)
 
+    // Carries `source`'s POSIX permissions onto the freshly-created (empty) `target` temp file, so the atomic move
+    // that later replaces `source` with it doesn't silently narrow the file down to the temp file's own default,
+    // restrictive permissions. Reads only that attribute, not `source`'s content: `Files.copy(..., COPY_ATTRIBUTES)`
+    // -- this method's previous implementation -- copies the whole file to carry attributes over, only for that
+    // content to be overwritten a moment later by `write` (#1444's second, wasted read of `source`, on top of
+    // `DocumentStorage.saveLocal`'s own read for its revision hash). Non-POSIX filesystems have no permission bits
+    // to carry over here, so this is a no-op there rather than falling back to the old whole-file copy.
     def copyAttributes(source: Path, target: Path): Path =
-      Files.copy(source, target, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
+      try Files.setPosixFilePermissions(target, Files.getPosixFilePermissions(source))
+      catch case _: UnsupportedOperationException => target
+      target
 
     def write(path: Path, bytes: Array[Byte]): Path = Files.write(path, bytes)
 
@@ -46,6 +55,12 @@ object AtomicFileWriter:
       Files.move(source, target, StandardCopyOption.REPLACE_EXISTING)
 
     def deleteIfExists(path: Path): Boolean = Files.deleteIfExists(path)
+
+  /** The real JDK-backed [[AtomicFileSystem]] every public `writeString`/`writeBytes` overload uses -- exposed only so
+    * tests can exercise its behavior (e.g. `copyAttributes`) directly, the same visibility as the `fileSystem`-taking
+    * overloads below.
+    */
+  private[serenity] def defaultFileSystem: AtomicFileSystem = JdkFileSystem
 
   /** Atomically replace `path` with UTF-8 text, falling back when atomic moves are unsupported. */
   def writeString(path: Path, content: String): IO[Unit] =
@@ -70,7 +85,7 @@ object AtomicFileWriter:
     val directory = Option(target.getParent).getOrElse(target)
 
     // This is the synchronous boundary both writeBytes (via IO.blocking, which converts a thrown
-    // exception into a failed IO) and ConfigManager.saveConfig (plain try/catch) rely on -- so it must
+    // exception into a failed IO) and ConfigManagerTestSupport.saveConfig (plain try/catch) rely on -- so it must
     // keep raising on failure. Try#get raises for us instead of a literal `throw`, and Try already only
     // catches NonFatal, matching the two catch clauses this replaces.
     Try {

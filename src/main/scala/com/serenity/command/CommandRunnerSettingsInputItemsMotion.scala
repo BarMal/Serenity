@@ -43,8 +43,10 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
       category = CommandCategory.Settings
     ),
     CommandSurfaceItem.InputItem(
+      // issue #1060: label used to say "Motion Speed Scale", disagreeing with both this key and the sibling
+      // "<Domain> Speed" labels below (Editor Text Speed, Command Runner Speed, Panel/UI Speed, Cursor Speed).
       id = "element-transition-speed-scale",
-      label = "Motion Speed Scale",
+      label = "Element Transition Speed",
       hint = "Scale (0.0-4.0)",
       currentValue = speedScaleValue,
       kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),

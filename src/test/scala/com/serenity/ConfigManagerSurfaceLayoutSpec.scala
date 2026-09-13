@@ -21,7 +21,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.commandRunnerVisibleRows shouldBe Some(9)
     ConfigManager.configToString(config) should include("command_runner.visible_rows = 9")
@@ -36,7 +36,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.commandRunnerItemGapRows shouldBe Some(1)
     config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(3)
@@ -54,7 +54,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.commandRunnerItemGapRows shouldBe Some(0.25)
     config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(0.5)
@@ -71,7 +71,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
     val configFile = Files.createTempFile("serenity-command-density-spacing-config", ".conf")
     Files.writeString(configFile, "interface.density = spacious\n")
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.commandRunnerItemGapRows.shouldBe(None)
     config.effectiveCommandRunnerItemGapRows.shouldBe(
@@ -86,7 +86,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
     val configFile = Files.createTempFile("serenity-command-density-rows-config", ".conf")
     Files.writeString(configFile, "interface.density = spacious\n")
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.commandRunnerVisibleRows.shouldBe(None)
     config.effectiveCommandRunnerVisibleRows.shouldBe(
@@ -99,7 +99,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
     val configFile = Files.createTempFile("serenity-command-density-cursor-gap-config", ".conf")
     Files.writeString(configFile, "interface.density = spacious\n")
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.commandRunnerCursorGapRows.shouldBe(None)
     config.effectiveCommandRunnerCursorGapRows.shouldBe(
@@ -116,7 +116,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.renderFpsTarget shouldBe RenderFpsTarget.Fps120
     ConfigManager.configToString(config) should include("render.fps = 120")
@@ -130,7 +130,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.renderFpsTarget shouldBe RenderFpsTarget.Uncapped
     ConfigManager.configToString(config) should include("render.fps = uncapped")
@@ -147,7 +147,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.textAreaInsets.left shouldBe 0.125 +- 0.0001
     config.surfaceConfig.textAreaInsets.right shouldBe 0.20 +- 0.0001
@@ -167,7 +167,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.rendererFrameStateCacheCapacity shouldBe 128
     ConfigManager.configToString(config) should include("render.frame_state_cache_capacity = 128")
@@ -181,7 +181,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.cursorInfoBarBackgroundAlpha shouldBe Some(0.5)
     ConfigManager.configToString(config) should include("display.cursor_info_bar_background_alpha = 0.5")
@@ -202,7 +202,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
         |""".stripMargin
     )
 
-    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+    val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
     result.config.surfaceConfig.cursorInfoBarBackgroundAlpha shouldBe None
     result.report.invalidEntries.map(_.key) should contain("display.cursor_info_bar_background_alpha")
@@ -216,7 +216,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.wordWrapEnabled shouldBe false
     ConfigManager.configToString(config) should include("display.word_wrap = false")
@@ -226,7 +226,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
     val configFile = Files.createTempFile("serenity-pane-header-config", ".conf")
     Files.writeString(configFile, "display.pane_headers = false\n")
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.showPaneHeaders shouldBe false
     ConfigManager.configToString(config) should include("display.pane_headers = false")
@@ -240,7 +240,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.focusedTextBodyEnabled shouldBe true
     ConfigManager.configToString(config) should include("display.focused_text_body = true")
@@ -254,7 +254,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.contextualToolbarDisplayMode shouldBe ToolbarDisplayMode.TextOnly
     ConfigManager.configToString(config) should include("display.contextual_toolbar_mode = text-only")
@@ -271,7 +271,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
         |""".stripMargin
     )
 
-    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+    val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
     result.report.invalidEntries.map(_.key) should contain("command_runner.visible_rows")
     result.report.invalidEntries.map(_.key) should contain("render.fps")
@@ -289,7 +289,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
         |""".stripMargin
     )
 
-    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+    val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
     result.report.invalidEntries.map(_.key) should contain("text_area.left.percent")
     result.report.invalidEntries.map(_.key) should contain("viewport.width.percent")
@@ -307,7 +307,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.viewportSizing.width.percent shouldBe 0.8
     config.surfaceConfig.viewportSizing.width.maxCells shouldBe None

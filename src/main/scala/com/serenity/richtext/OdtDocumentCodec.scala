@@ -41,16 +41,16 @@ object OdtDocumentCodec:
   )
 
   def read(path: Path): IO[RichTextDocument] =
-    IO.blocking(readBytes(RichTextArchive.readFile(path, "ODT")))
+    IO.blocking(RichTextArchive.readFile(path, "ODT")).flatMap(bytes => IO.fromEither(readBytes(bytes)))
 
   /** Read an ODT file and report structures that the native model cannot round-trip. */
   def readWithFidelity(path: Path): IO[RichTextImport] =
-    IO.blocking(readBytesWithFidelity(RichTextArchive.readFile(path, "ODT")))
+    IO.blocking(RichTextArchive.readFile(path, "ODT")).flatMap(bytes => IO.fromEither(readBytesWithFidelity(bytes)))
 
   def write(document: RichTextDocument, path: Path): IO[Unit] =
     AtomicFileWriter.writeBytes(path, writeBytes(document))
 
-  def readBytes(bytes: Array[Byte]): RichTextDocument =
+  def readBytes(bytes: Array[Byte]): Either[RichTextCodecException, RichTextDocument] =
     try
       val content = RichTextArchive.zipEntry(bytes, "content.xml", "ODT").getOrElse {
         throw RichTextCodecException("ODT archive is missing content.xml")
@@ -65,27 +65,34 @@ object OdtDocumentCodec:
         )
         .getOrElse(Nil)
 
-      RichTextDocument(
-        if paragraphs.nonEmpty then paragraphs
-        else List(RichTextParagraph.plain(""))
-      ).normalized
+      Right(
+        RichTextDocument(
+          if paragraphs.nonEmpty then paragraphs
+          else List(RichTextParagraph.plain(""))
+        ).normalized
+      )
     catch
-      case error: RichTextCodecException => throw error
-      case NonFatal(error)               => throw RichTextCodecException("ODT document could not be decoded", error)
+      case error: RichTextCodecException => Left(error)
+      case NonFatal(error)               => Left(RichTextCodecException("ODT document could not be decoded", error))
 
   /** Decode ODT bytes and report structures that the native model cannot round-trip. */
-  def readBytesWithFidelity(bytes: Array[Byte]): RichTextImport =
-    val document = readBytes(bytes)
-    val content  = RichTextArchive.zipEntry(bytes, "content.xml", "ODT").getOrElse(Array.emptyByteArray)
-    val xml      = parseXml(content)
-    val unsupportedElements =
-      (0 until xml.getElementsByTagName("*").getLength)
-        .map(xml.getElementsByTagName("*").item)
-        .collect { case element: Element => element.getLocalName }
-        .filterNot(SupportedElements.contains)
-        .toSet
-    val unsupportedEntries = RichTextArchive.entryNames(bytes, "ODT") -- SupportedArchiveEntries
-    RichTextImport(document, RichTextFidelity(unsupportedElements, unsupportedEntries))
+  def readBytesWithFidelity(bytes: Array[Byte]): Either[RichTextCodecException, RichTextImport] =
+    readBytes(bytes).flatMap { document =>
+      try
+        val content = RichTextArchive.zipEntry(bytes, "content.xml", "ODT").getOrElse(Array.emptyByteArray)
+        val xml     = parseXml(content)
+        val unsupportedElements =
+          (0 until xml.getElementsByTagName("*").getLength)
+            .map(xml.getElementsByTagName("*").item)
+            .collect { case element: Element => element.getLocalName }
+            .filterNot(SupportedElements.contains)
+            .toSet
+        val unsupportedEntries = RichTextArchive.entryNames(bytes, "ODT") -- SupportedArchiveEntries
+        Right(RichTextImport(document, RichTextFidelity(unsupportedElements, unsupportedEntries)))
+      catch
+        case error: RichTextCodecException => Left(error)
+        case NonFatal(error)               => Left(RichTextCodecException("ODT document could not be decoded", error))
+    }
 
   def writeBytes(document: RichTextDocument): Array[Byte] =
     val output = ByteArrayOutputStream()

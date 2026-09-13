@@ -219,7 +219,9 @@ object CommandRunnerSettingsGroups:
     val richTextGroup = CommandSurfaceItem.GroupItem(
       id = "settings-rich-text",
       label = "Rich Text",
-      children = inputItems.filter(_.id.startsWith("rich-text-")),
+      // issue #1060: font family is a picker now, matching code/prose/UI font family -- no longer typed free text.
+      children = List(CommandRunnerSettingsItems.richTextFontGroupItem(optionSelections, fontFamilies.text)) ++
+        inputItems.filter(_.id.startsWith("rich-text-")),
       category = CommandCategory.Settings,
       hint = Some("Selection family, size, colour")
     )
@@ -239,13 +241,6 @@ object CommandRunnerSettingsGroups:
       children = List(textScaleModeItem) ++ inputItems.filter(_.id == "text-scale"),
       category = CommandCategory.Settings,
       hint = Some("Adapt all text to display scale")
-    )
-    val markdownGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-markdown",
-      label = "Markdown",
-      children = List(markdownViewItem),
-      category = CommandCategory.Settings,
-      hint = Some("Source, split preview, or inline lens")
     )
     val documentDefaultsGroup = CommandSurfaceItem.GroupItem(
       id = "settings-document-defaults",
@@ -303,12 +298,42 @@ object CommandRunnerSettingsGroups:
       inputItems.filter(_.id.startsWith("ui-preset-")).map(withPresetInputContext(_, editingPreset))
     val createPresetItems = presetInputItems.filter(_.id == "ui-preset-save-as-new")
     val renamePresetItems = presetInputItems.filter(_.id == "ui-preset-rename")
-    val presetActionItems = presetInputItems.filter(item =>
-      item.id == "ui-preset-apply" ||
-        item.id == "ui-preset-overwrite" ||
-        item.id == "ui-preset-duplicate" ||
-        item.id == "ui-preset-delete" ||
-        item.id == "ui-preset-reset"
+    // issue #1060: Apply/Overwrite/Delete/Reset act on one *existing* preset, so they pick from the same built-in-
+    // plus-saved catalog `ui-preset-select` already carousels through, instead of requiring a typed exact name.
+    val presetActionItems = List(
+      CommandRunnerSettingsItems.presetActionOptionItem(
+        "ui-preset-apply",
+        "Apply Preset",
+        "Reapply this preset's settings",
+        uiPresetPreviews,
+        editingPreset,
+        UiPresetsIntent.ApplyUiPreset(_)
+      ),
+      CommandRunnerSettingsItems.presetActionOptionItem(
+        "ui-preset-overwrite",
+        "Overwrite Preset",
+        "Save the current workspace into this preset",
+        uiPresetPreviews,
+        editingPreset,
+        UiPresetsIntent.OverwriteUiPreset(_)
+      )
+    ) ++ presetInputItems.filter(_.id == "ui-preset-duplicate") ++ List(
+      CommandRunnerSettingsItems.presetActionOptionItem(
+        "ui-preset-delete",
+        "Delete Preset",
+        "Remove this preset",
+        uiPresetPreviews,
+        editingPreset,
+        UiPresetsIntent.DeleteUiPreset(_)
+      ),
+      CommandRunnerSettingsItems.presetActionOptionItem(
+        "ui-preset-reset",
+        "Reset Preset",
+        "Discard this preset's overrides",
+        uiPresetPreviews,
+        editingPreset,
+        UiPresetsIntent.ResetUiPreset(_)
+      )
     )
     val presetNameGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-name",
@@ -331,132 +356,26 @@ object CommandRunnerSettingsGroups:
       category = CommandCategory.Settings,
       hint = Some("Save the current workspace as a new preset")
     )
-    val activePanelsGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-active-panels",
-      label = "Active Panels",
-      children = workspaceLayoutGroup.children,
-      category = CommandCategory.Settings,
-      hint = Some("Choose pinned panels and panel actions")
+    // issue #1058: editing a preset used to walk a hand-maintained parallel tree of clone groups (Active Panels,
+    // Theme & Surface > Surface Material, Animations > Cursor/Text Entry/UI Surface Motion, Fonts > Editor/Code/UI
+    // Typography, Document Defaults > New Documents/Markdown Preview/Spelling) that re-sliced and re-labelled the
+    // exact same canonical items built above under new ids, several levels deeper than the equivalent top-level
+    // screen. Editing a preset already reads and writes the same live settings as the top-level Settings screens
+    // (see `presetEditContextName`/`CommandRunner.editingPresetName` -- explicit Apply/Overwrite/Reset actions are
+    // what move values between live config and a stored preset), so "scoped settings screens" means reusing those
+    // same canonical groups verbatim -- only their id is retagged (`settings-preset-*`) so they remain addressable
+    // as distinct pages from their top-level counterparts in the same navigation tree.
+    val presetScopedGroups = List(
+      workspaceLayoutGroup.copy(id = "settings-preset-workspace-layout"),
+      surfaceAppearanceGroup.copy(id = "settings-preset-surface-appearance"),
+      cursorGroup.copy(id = "settings-preset-cursor"),
+      animationGroup.copy(id = "settings-preset-animation"),
+      proseFontGroup.copy(id = "settings-preset-prose-font"),
+      codeFontGroup.copy(id = "settings-preset-code-font"),
+      uiFontGroup.copy(id = "settings-preset-ui-font"),
+      documentDefaultsGroup.copy(id = "settings-preset-document-defaults"),
+      spellCheckGroup.copy(id = "settings-preset-spellcheck")
     )
-    val presetCursorMotionGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-cursor-motion",
-      label = "Cursor Motion",
-      children = List(cursorModeItem) ++
-        inputItems.filter(_.id == "cursor-speed-scale") ++
-        cursorInfoBarItems ++ List(cursorInfoPlacement),
-      category = CommandCategory.Settings,
-      hint = Some("Cursor style, speed, and info placement")
-    )
-    val presetTextEntryMotionGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-text-entry-motion",
-      label = "Text Entry Motion",
-      children = List(editorTextItem) ++ inputItems.filter(item =>
-        item.id == "editor-text-speed-scale" || item.id == "element-transition-speed-scale"
-      ),
-      category = CommandCategory.Settings,
-      hint = Some("Editor text reveal and typing speed")
-    )
-    val presetUiSurfaceMotionGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-ui-surface-motion",
-      label = "UI Surface Motion",
-      children = List(
-        motionPresetItem,
-        panelOpenItem,
-        panelCloseItem,
-        commandRunnerReveal,
-        commandRunnerFade,
-        uiAnimationItem
-      ) ++ inputItems.filter(item =>
-        item.id == "animation-duration" ||
-          item.id == "animation-steps" ||
-          item.id == "command-runner-speed-scale" ||
-          item.id == "ui-speed-scale"
-      ),
-      category = CommandCategory.Settings,
-      hint = Some("Panels, command runner, overlays, and render cadence")
-    )
-    val presetAnimationsGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-animations",
-      label = "Animations",
-      children = List(presetCursorMotionGroup, presetTextEntryMotionGroup, presetUiSurfaceMotionGroup),
-      category = CommandCategory.Settings,
-      hint = Some("Cursor, text entry, and UI motion")
-    )
-    val presetEditorTypographyGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-editor-typography",
-      label = "Editor Typography",
-      children = proseFontGroup.children,
-      category = CommandCategory.Settings,
-      hint = Some("Prose editor family, size, and ligatures")
-    )
-    val presetCodeTypographyGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-code-typography",
-      label = "Code Typography",
-      children = codeFontGroup.children,
-      category = CommandCategory.Settings,
-      hint = Some("Code editor family, size, and ligatures")
-    )
-    val presetUiTypographyGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-ui-typography",
-      label = "UI Typography",
-      children = uiFontGroup.children,
-      category = CommandCategory.Settings,
-      hint = Some("Interface family, size, and ligatures")
-    )
-    val presetFontsGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-fonts",
-      label = "Fonts",
-      children = List(presetEditorTypographyGroup, presetCodeTypographyGroup, presetUiTypographyGroup),
-      category = CommandCategory.Settings,
-      hint = Some("Editor, code, and interface typography")
-    )
-    val presetNewDocumentsGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-new-documents",
-      label = "New Documents",
-      children = List(defaultDocumentItem),
-      category = CommandCategory.Settings,
-      hint = Some("Default mode for new buffers")
-    )
-    val presetMarkdownPreviewGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-markdown-preview",
-      label = "Markdown Preview",
-      children = markdownGroup.children,
-      category = CommandCategory.Settings,
-      hint = Some("Source, split preview, or inline lens")
-    )
-    val presetSpellingGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-spelling",
-      label = "Spelling",
-      children = spellCheckGroup.children,
-      category = CommandCategory.Settings,
-      hint = Some("Enable, languages, dictionaries, accepted words")
-    )
-    val presetDocumentDefaultsGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-document-defaults",
-      label = "Document Defaults",
-      children = List(presetNewDocumentsGroup, presetMarkdownPreviewGroup, presetSpellingGroup),
-      category = CommandCategory.Settings,
-      hint = Some("Default mode, Markdown view, spelling")
-    )
-    val presetSurfaceMaterialGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-surface-material",
-      label = "Surface Material",
-      children = surfaceAppearanceGroup.children,
-      category = CommandCategory.Settings,
-      hint = Some("Background, material, and blur")
-    )
-    // issue #1057: this used to also carry a "Theme Selection" child (Theme Chooser/Creator/Toggle/Reload) -- those
-    // are one-shot actions with no preset-scoped value of their own (choosing a theme is global, not per-preset), so
-    // they are ordinary CommandRegistry commands now, reachable only via the palette, not duplicated here.
-    val presetThemeGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-theme",
-      label = "Theme & Surface",
-      children = List(presetSurfaceMaterialGroup),
-      category = CommandCategory.Settings,
-      hint = Some("Material and background")
-    )
-    val presetEditingSections =
-      List(activePanelsGroup, presetThemeGroup, presetAnimationsGroup, presetFontsGroup, presetDocumentDefaultsGroup)
     val selectPresetGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-select",
       label = "Select Preset",
@@ -467,14 +386,14 @@ object CommandRunnerSettingsGroups:
     val createPresetGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-create",
       label = "Create New Preset",
-      children = createPresetNameGroup :: presetEditingSections,
+      children = createPresetNameGroup :: presetScopedGroups,
       category = CommandCategory.Settings,
       hint = Some("Start from current workspace settings")
     )
     val editPresetGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-edit",
       label = editingPreset.fold("Edit Preset")(name => s"Edit Preset: $name"),
-      children = List(presetNameGroup, presetActionsGroup) ++ presetEditingSections,
+      children = List(presetNameGroup, presetActionsGroup) ++ presetScopedGroups,
       category = CommandCategory.Settings,
       hint = Some(editingPreset.fold("Document, layout, typography, motion")(name => s"Editing $name"))
     )
@@ -568,6 +487,9 @@ object CommandRunnerSettingsGroups:
       )
       .orElse(UiPreset.builtIns.headOption.map(_.name))
 
+  // issue #1060: only Duplicate/Rename still take typed input (both need a new name, which can't be picked from an
+  // existing-preset list) -- Apply/Overwrite/Delete/Reset are pickers now (`presetActionOptionItem`), so they no
+  // longer take a prefill via `currentValue`.
   private def withPresetInputContext(
     item: CommandSurfaceItem.InputItem,
     presetName: Option[String]
@@ -575,8 +497,6 @@ object CommandRunnerSettingsGroups:
     presetName match
       case Some(name) =>
         item.id match
-          case "ui-preset-overwrite" | "ui-preset-apply" | "ui-preset-delete" | "ui-preset-reset" =>
-            item.copy(currentValue = name)
           case "ui-preset-duplicate" | "ui-preset-rename" =>
             item.copy(currentValue = s"$name -> ")
           case _ =>

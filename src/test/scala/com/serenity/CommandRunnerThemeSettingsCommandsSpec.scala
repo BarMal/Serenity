@@ -8,7 +8,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.config.{ConfigManager, SpellCheckConfig}
+import com.serenity.config.{ConfigManagerTestSupport, SpellCheckConfig}
 import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.*
 import com.serenity.spellcheck.SpellChecker
@@ -273,7 +273,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "apply-compact-preset", "apply-compact-preset")
 
     val updated   = stateManager.getCurrentState.unsafeRunSync().persisted.config
-    val persisted = ConfigManager.loadConfig(Some(configFile.toString))
+    val persisted = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     updated.surfaceConfig.showLineNumbers shouldBe true
     updated.surfaceConfig.showGutter shouldBe true
