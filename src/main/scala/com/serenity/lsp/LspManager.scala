@@ -24,12 +24,13 @@ object LspManager:
     case Hover, Definition, Completion
 
   final private case class RequestKey(uri: DocumentUri, kind: RequestKind)
+
   /** `anchor` is meaningful only for the cursor-anchored request kinds handled today (Hover, Completion, Definition).
     * #1507: a whole-document request kind (e.g. semantic tokens, tracked in the still-unmerged #1506) has no cursor
     * position to give here, so `startRequest`'s shared parameter shape will need reworking -- into an ADT
-    * distinguishing cursor-anchored from whole-document requests, or a separate dispatch path for whole-document
-    * ones -- once that request kind actually exists in this file. Not done speculatively here: there is nothing
-    * today to construct or test a whole-document case against.
+    * distinguishing cursor-anchored from whole-document requests, or a separate dispatch path for whole-document ones
+    * -- once that request kind actually exists in this file. Not done speculatively here: there is nothing today to
+    * construct or test a whole-document case against.
     */
   final private case class RequestContext(version: Int, anchor: CursorPosition)
 
@@ -296,12 +297,12 @@ object LspManager:
         }
     }
 
-  /** The "no result" event for each request kind when no server is available, matching what each kind already emits
-    * for a real, connected server's empty/absent result: Completion already emits `LspCompletionReceived(Nil, _)`
-    * for an empty item list (rendered as "No completions available." by `SystemEventReducer`), and Definition's
-    * "not found" case is already silently absorbed (no event) above in its own response handling -- there is no
-    * `LspEvent` shape for "no definition found". Hover is the one kind whose result is free-form text, so it alone
-    * gets an explanatory message here rather than staying silent.
+  /** The "no result" event for each request kind when no server is available, matching what each kind already emits for
+    * a real, connected server's empty/absent result: Completion already emits `LspCompletionReceived(Nil, _)` for an
+    * empty item list (rendered as "No completions available." by `SystemEventReducer`), and Definition's "not found"
+    * case is already silently absorbed (no event) above in its own response handling -- there is no `LspEvent` shape
+    * for "no definition found". Hover is the one kind whose result is free-form text, so it alone gets an explanatory
+    * message here rather than staying silent.
     */
   private def noServerEvent(kind: RequestKind, languageId: LanguageId, anchor: CursorPosition): Option[LspEvent] =
     kind match

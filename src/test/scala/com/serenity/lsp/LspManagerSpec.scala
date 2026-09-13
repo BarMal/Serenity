@@ -290,7 +290,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       harness(serverAvailable = false)
         .use { manager =>
           for
-            _ <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, anchor)))
+            _      <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, anchor)))
             _      <- manager.stop
             events <- manager.events.get
           yield events shouldBe List(
@@ -306,7 +306,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
       harness(serverAvailable = false)
         .use { manager =>
           for
-            _ <- manager.effects.offer(Some(LspEffect.CompletionRequested(uri, LanguageId.Scala, 0, 1, anchor)))
+            _      <- manager.effects.offer(Some(LspEffect.CompletionRequested(uri, LanguageId.Scala, 0, 1, anchor)))
             _      <- manager.stop
             events <- manager.events.get
           yield events shouldBe List(LspEvent.LspCompletionReceived(Nil, anchor))
