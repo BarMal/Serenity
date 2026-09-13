@@ -108,13 +108,18 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
     else
       pinnedCommentsMouseHitAt(click, state) match
         case Some((_, _, location)) =>
-          stateRef
-            .update(current => CommentRendering.openLensAtCursor(navigateActiveEditorToLocation(current, location)))
+          stateRef.get
+            .flatMap { current =>
+              val next = CommentRendering.openLensAtCursor(navigateActiveEditorToLocation(current, location))
+              validateAndUpdateState(next, current)
+            }
             .as(true)
         case None =>
           pinnedLocationMouseHitAt(click, state) match
             case Some(location) =>
-              stateRef.update(current => navigateActiveEditorToLocation(current, location)).as(true)
+              stateRef.get
+                .flatMap(current => validateAndUpdateState(navigateActiveEditorToLocation(current, location), current))
+                .as(true)
             case None =>
               IO.pure(false)
 

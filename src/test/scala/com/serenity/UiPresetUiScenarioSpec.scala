@@ -142,7 +142,9 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
 
     reopened.persisted.config.surfaceConfig.materialPreset shouldBe MaterialPreset.Solid
     store.find("Restart Draft").unsafeRunSync() shouldBe None
-    inputIds(runner.settingsGroups) should contain allOf ("ui-preset-save-as-new", "ui-preset-overwrite")
+    // issue #1060: "ui-preset-overwrite" is a picker (OptionItem) now, not a typed InputItem.
+    inputIds(runner.settingsGroups) should contain("ui-preset-save-as-new")
+    optionIds(runner.settingsGroups) should contain("ui-preset-overwrite")
     changed.evidence.layoutViolations shouldBe empty
     reopenedFrame.evidence.layoutViolations shouldBe empty
   }
@@ -171,4 +173,10 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     groups.flatMap { group =>
       group.children.collect { case input: com.serenity.command.CommandSurfaceItem.InputItem => input.id } ++
         inputIds(group.children.collect { case child: com.serenity.command.CommandSurfaceItem.GroupItem => child })
+    }
+
+  private def optionIds(groups: List[com.serenity.command.CommandSurfaceItem.GroupItem]): List[String] =
+    groups.flatMap { group =>
+      group.children.collect { case option: com.serenity.command.CommandSurfaceItem.OptionItem => option.id } ++
+        optionIds(group.children.collect { case child: com.serenity.command.CommandSurfaceItem.GroupItem => child })
     }

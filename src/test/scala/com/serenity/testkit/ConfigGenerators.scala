@@ -244,7 +244,9 @@ object ConfigGenerators:
       visibleRows <- Gen.option(
         Gen.choose(AppConfig.MinCommandRunnerVisibleRows, AppConfig.MaxCommandRunnerVisibleRows)
       )
-      itemGap <- double(AppConfig.MinCommandRunnerItemGapRows, AppConfig.MaxCommandRunnerItemGapRows)
+      itemGap <- Gen.option(
+        double(AppConfig.MinCommandRunnerItemGapRows, AppConfig.MaxCommandRunnerItemGapRows)
+      )
       cursorGap <- Gen.option(
         double(AppConfig.MinCommandRunnerCursorGapRows, AppConfig.MaxCommandRunnerCursorGapRows)
       )

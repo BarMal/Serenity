@@ -10,7 +10,10 @@ import com.serenity.state.models.*
   * capability record rather than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is
   * the only reason this needs an interface at all, and a record fakes trivially without one (#1017).
   */
-final private[manager] case class MouseHitTestingPort(stateRef: Ref[IO, AppState])
+final private[manager] case class MouseHitTestingPort(
+    stateRef: Ref[IO, AppState],
+    validateAndUpdateState: (AppState, AppState) => IO[Unit]
+)
 
 /** Routes primary/secondary mouse click, press, drag, and move events to the editor, the context menu, the contextual
   * toolbar, the command palette, pinned panels, and the startup page, in the same precedence order the pipeline
@@ -61,7 +64,12 @@ final private[manager] class MouseHitTesting(
                                       editorTargeting.resolveMouseTarget(click, state).flatMap {
                                         _.fold(contextMenu.dismissContextMenuIfOpen(state)) {
                                           (paneId, buffer, clickedCursor) =>
-                                            stateRef.update(applyEditorClick(_, click, paneId, buffer, clickedCursor))
+                                            stateRef.get.flatMap { current =>
+                                              validateAndUpdateState(
+                                                applyEditorClick(current, click, paneId, buffer, clickedCursor),
+                                                current
+                                              )
+                                            }
                                         }
                                       }
                                   }
@@ -150,8 +158,8 @@ final private[manager] class MouseHitTesting(
                   case false =>
                     editorTargeting.resolveMouseTarget(press, state).flatMap {
                       _.fold(IO.unit) { (paneId, buffer, pressedCursor) =>
-                        stateRef.update { s =>
-                          s.persisted.buffers.get(buffer.id) match
+                        stateRef.get.flatMap { s =>
+                          val nextState = s.persisted.buffers.get(buffer.id) match
                             case Some(current) =>
                               val selection =
                                 Option
@@ -180,6 +188,7 @@ final private[manager] class MouseHitTesting(
                                 )
                               )
                             case None => s
+                          validateAndUpdateState(nextState, s)
                         }
                       }
                     }
@@ -200,8 +209,8 @@ final private[manager] class MouseHitTesting(
               else
                 editorTargeting.resolveMouseTarget(drag, state).flatMap {
                   _.fold(IO.unit) { (paneId, buffer, draggedCursor) =>
-                    stateRef.update { s =>
-                      s.persisted.buffers.get(buffer.id) match
+                    stateRef.get.flatMap { s =>
+                      val nextState = s.persisted.buffers.get(buffer.id) match
                         case Some(current) =>
                           val anchor =
                             current.primarySelection
@@ -230,6 +239,7 @@ final private[manager] class MouseHitTesting(
                             )
                           )
                         case None => s
+                      validateAndUpdateState(nextState, s)
                     }
                   }
                 }

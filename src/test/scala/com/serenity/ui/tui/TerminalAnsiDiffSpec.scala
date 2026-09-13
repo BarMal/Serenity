@@ -83,6 +83,46 @@ class TerminalAnsiDiffSpec extends AnyFlatSpec with Matchers:
     output should not include ";49m"
   }
 
+  // #1464: emitDiff used to rescan every row of every frame looking for changes. It now accepts an optional hint of
+  // which rows could have changed (the terminal screen buffer's own dirty-row bookkeeping) and, when given one,
+  // trusts it rather than re-deriving it -- so a caller passing a narrower (or wrong) hint gets exactly what the
+  // hint said, even if the frames actually differ elsewhere. Omitting the hint (`None`, the default every existing
+  // caller and property test above uses) preserves the original full-frame scan.
+  "TerminalAnsiDiff.emit with a dirty-row hint" should "scan only the rows the hint names, ignoring changes outside it" in {
+    val previous = TerminalFrame.blank(3, 3)
+    val next = TerminalFrame(
+      3,
+      3,
+      Vector(
+        previous.cells(0),
+        previous.cells(1).updated(0, cell('y')),
+        previous.cells(2)
+      )
+    )
+
+    val scoped = TerminalAnsiDiff.emit(Some(previous), next, dirtyRows = Some(Set(0, 2)))
+
+    scoped shouldBe "" // the actual change is on row 1, outside the hinted set
+  }
+
+  it should "reproduce the same output as a full scan when the hint names every changed row" in {
+    val previous = TerminalFrame.blank(3, 3)
+    val next = TerminalFrame(
+      3,
+      3,
+      Vector(
+        previous.cells(0),
+        previous.cells(1).updated(0, cell('y')),
+        previous.cells(2).updated(2, cell('z'))
+      )
+    )
+
+    val full   = TerminalAnsiDiff.emit(Some(previous), next)
+    val scoped = TerminalAnsiDiff.emit(Some(previous), next, dirtyRows = Some(Set(1, 2)))
+
+    scoped shouldBe full
+  }
+
   it should "distinguish a transparent background from an opaque one with identical RGB when batching runs" in {
     val opaqueBlack      = Color.BLACK
     val transparentBlack = new Color(0, 0, 0, 0)

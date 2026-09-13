@@ -1,6 +1,7 @@
 package com.serenity.command
 
 import com.serenity.animation.WindowSitterConfig
+import com.serenity.config.AppConfig
 import com.serenity.ui.fonts.FontLoader
 
 /** Window-sitter behavior and font-size input items. Split out of `CommandRunnerSettingsInputItems.build` to keep both
@@ -39,7 +40,8 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
             CommandIntent
               .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterActiveTicks(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(AppConfig.default.windowSitterConfig.activeTicks.toString)
     ),
     CommandSurfaceItem.InputItem(
       id = "window-sitter-fast-active-ticks",
@@ -55,7 +57,8 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
               SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterFastActiveTicks(commandIntentArg))
             )
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(AppConfig.default.windowSitterConfig.fastActiveTicks.toString)
     ),
     CommandSurfaceItem.InputItem(
       id = "window-sitter-fast-threshold-ms",
@@ -71,7 +74,8 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
               SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterFastTypingThresholdMs(commandIntentArg))
             )
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(AppConfig.default.windowSitterConfig.fastTypingThresholdMs.toString)
     ),
     CommandSurfaceItem.InputItem(
       id = "wheel-scroll-lines",
@@ -86,7 +90,8 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
             CommandIntent
               .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWheelScrollLines(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(AppConfig.default.inputConfig.wheelScrollLines.toString)
     )
   )
 
@@ -108,7 +113,8 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
           .map(commandIntentArg =>
             CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetCodeFontSize(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(AppConfig.default.editorConfig.fontConfig.codeFontSize.toString)
     ),
     CommandSurfaceItem.InputItem(
       id = "text-font-size",
@@ -122,7 +128,8 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
           .map(commandIntentArg =>
             CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextFontSize(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(AppConfig.default.editorConfig.fontConfig.textFontSize.toString)
     ),
     CommandSurfaceItem.InputItem(
       id = "ui-font-size",
@@ -136,7 +143,8 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
           .map(commandIntentArg =>
             CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetUiFontSize(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(AppConfig.default.editorConfig.fontConfig.uiFontSize.toString)
     ),
     CommandSurfaceItem.InputItem(
       id = "text-scale",
@@ -153,6 +161,7 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
           .map(commandIntentArg =>
             CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextScaleMultiplier(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(f"${AppConfig.default.editorConfig.fontConfig.textScaleMultiplier}%.2f")
     )
   )

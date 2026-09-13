@@ -169,13 +169,13 @@ object CommandRunnerSettingsGroups:
       children = List(interfaceDensityItem, windowChromeItem, commandRunnerKeyHintsItem) ++ inputItems.filter(item =>
         item.id == "ui-element-gap" ||
           item.id == "ui-corner-radius" ||
-          item.id == "ui-outline-thickness" ||
-          item.id == "command-runner-visible-rows" ||
-          item.id == "command-runner-item-gap-rows" ||
-          item.id == "command-runner-cursor-gap-rows"
+          item.id == "ui-outline-thickness"
       ),
       category = CommandCategory.Settings,
-      hint = Some("Density, spacing, window chrome, command rows, key hints")
+      // issue #1046: command-runner row count/spacing (visible rows, item gap, cursor gap) is no longer editable
+      // here as three separate knobs -- Interface Density above is the one control that governs all three; the
+      // underlying config keys still parse as explicit overrides for back-compat, they just aren't palette rows.
+      hint = Some("Density, spacing, window chrome, key hints")
     )
     val renderingGroup = CommandSurfaceItem.GroupItem(
       id = "settings-rendering",
@@ -219,7 +219,9 @@ object CommandRunnerSettingsGroups:
     val richTextGroup = CommandSurfaceItem.GroupItem(
       id = "settings-rich-text",
       label = "Rich Text",
-      children = inputItems.filter(_.id.startsWith("rich-text-")),
+      // issue #1060: font family is a picker now, matching code/prose/UI font family -- no longer typed free text.
+      children = List(CommandRunnerSettingsItems.richTextFontGroupItem(optionSelections, fontFamilies.text)) ++
+        inputItems.filter(_.id.startsWith("rich-text-")),
       category = CommandCategory.Settings,
       hint = Some("Selection family, size, colour")
     )
@@ -296,12 +298,42 @@ object CommandRunnerSettingsGroups:
       inputItems.filter(_.id.startsWith("ui-preset-")).map(withPresetInputContext(_, editingPreset))
     val createPresetItems = presetInputItems.filter(_.id == "ui-preset-save-as-new")
     val renamePresetItems = presetInputItems.filter(_.id == "ui-preset-rename")
-    val presetActionItems = presetInputItems.filter(item =>
-      item.id == "ui-preset-apply" ||
-        item.id == "ui-preset-overwrite" ||
-        item.id == "ui-preset-duplicate" ||
-        item.id == "ui-preset-delete" ||
-        item.id == "ui-preset-reset"
+    // issue #1060: Apply/Overwrite/Delete/Reset act on one *existing* preset, so they pick from the same built-in-
+    // plus-saved catalog `ui-preset-select` already carousels through, instead of requiring a typed exact name.
+    val presetActionItems = List(
+      CommandRunnerSettingsItems.presetActionOptionItem(
+        "ui-preset-apply",
+        "Apply Preset",
+        "Reapply this preset's settings",
+        uiPresetPreviews,
+        editingPreset,
+        UiPresetsIntent.ApplyUiPreset(_)
+      ),
+      CommandRunnerSettingsItems.presetActionOptionItem(
+        "ui-preset-overwrite",
+        "Overwrite Preset",
+        "Save the current workspace into this preset",
+        uiPresetPreviews,
+        editingPreset,
+        UiPresetsIntent.OverwriteUiPreset(_)
+      )
+    ) ++ presetInputItems.filter(_.id == "ui-preset-duplicate") ++ List(
+      CommandRunnerSettingsItems.presetActionOptionItem(
+        "ui-preset-delete",
+        "Delete Preset",
+        "Remove this preset",
+        uiPresetPreviews,
+        editingPreset,
+        UiPresetsIntent.DeleteUiPreset(_)
+      ),
+      CommandRunnerSettingsItems.presetActionOptionItem(
+        "ui-preset-reset",
+        "Reset Preset",
+        "Discard this preset's overrides",
+        uiPresetPreviews,
+        editingPreset,
+        UiPresetsIntent.ResetUiPreset(_)
+      )
     )
     val presetNameGroup = CommandSurfaceItem.GroupItem(
       id = "settings-preset-name",
@@ -455,6 +487,9 @@ object CommandRunnerSettingsGroups:
       )
       .orElse(UiPreset.builtIns.headOption.map(_.name))
 
+  // issue #1060: only Duplicate/Rename still take typed input (both need a new name, which can't be picked from an
+  // existing-preset list) -- Apply/Overwrite/Delete/Reset are pickers now (`presetActionOptionItem`), so they no
+  // longer take a prefill via `currentValue`.
   private def withPresetInputContext(
     item: CommandSurfaceItem.InputItem,
     presetName: Option[String]
@@ -462,8 +497,6 @@ object CommandRunnerSettingsGroups:
     presetName match
       case Some(name) =>
         item.id match
-          case "ui-preset-overwrite" | "ui-preset-apply" | "ui-preset-delete" | "ui-preset-reset" =>
-            item.copy(currentValue = name)
           case "ui-preset-duplicate" | "ui-preset-rename" =>
             item.copy(currentValue = s"$name -> ")
           case _ =>

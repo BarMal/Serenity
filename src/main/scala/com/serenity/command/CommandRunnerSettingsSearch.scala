@@ -128,9 +128,21 @@ private[command] trait CommandRunnerSettingsSearch:
       searchTerm
     else ""
 
+  // issue #1060: a family-of-CommandItems picker (e.g. `code-font`, `rich-text-font-family`) is an inline value
+  // editor embedded in its parent settings row, not an independent navigable settings section -- it has no children
+  // of its own besides the option commands. Search should surface the real settings section that contains it (its
+  // parent group), not let it outrank sections it happens to sit ahead of purely by tree position -- adding
+  // `rich-text-font-family` as a search-matchable group in its own right, for instance, let it leapfrog "Prose Font"/
+  // "Code Font" for a bare "font" query solely because Document & Writing precedes Typography in the settings tree.
+  private[command] def isValuePickerGroup(group: CommandSurfaceItem.GroupItem): Boolean =
+    group.children.nonEmpty && group.children.forall {
+      case _: CommandSurfaceItem.CommandItem => true
+      case _                                 => false
+    }
+
   private[command] def allSettingsGroups: List[CommandSurfaceItem.GroupItem] =
     def loop(groups: List[CommandSurfaceItem.GroupItem]): List[CommandSurfaceItem.GroupItem] =
-      groups ++ groups.flatMap { group =>
+      groups.filterNot(isValuePickerGroup) ++ groups.flatMap { group =>
         loop(group.children.collect { case child: CommandSurfaceItem.GroupItem => child })
       }
 

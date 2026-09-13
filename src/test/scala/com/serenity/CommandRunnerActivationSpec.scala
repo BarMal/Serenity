@@ -107,6 +107,8 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
 
     runner.optionSelections.get("interface-density") shouldBe Some(0)
     runner.optionSelections.get("window-chrome") shouldBe Some(2)
+    // issue #1046: command-runner visible-rows/item-gap-rows/cursor-gap-rows are no longer separate rows here --
+    // Interface Density above is the one control governing all three now.
     settingsGroup(runner, "settings-interface-layout").map(_.children.map(_.id)) should contain(
       List(
         "interface-density",
@@ -114,10 +116,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         "command-runner-key-hints",
         "ui-element-gap",
         "ui-corner-radius",
-        "ui-outline-thickness",
-        "command-runner-visible-rows",
-        "command-runner-item-gap-rows",
-        "command-runner-cursor-gap-rows"
+        "ui-outline-thickness"
       )
     )
     settingsGroup(runner, "settings-interface-layout")

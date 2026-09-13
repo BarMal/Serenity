@@ -172,50 +172,60 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
     surfaceAppearance.label shouldBe "Surface Appearance"
     surfaceAppearance.children.map(_.id) should contain allOf ("background-style", "material-preset", "blur-radius")
 
+    // issue #1060: Apply/Overwrite/Delete/Reset now pick from the existing-preset catalog instead of requiring a
+    // typed exact name -- Duplicate/Rename/Save-As-New still need typed input since each needs a *new* name.
     val inputs = descendants(presetGroup).collect {
       case item: CommandSurfaceItem.InputItem if item.id.startsWith("ui-preset-") => item
     }
-    inputs.map(_.id) should contain allOf (
-      "ui-preset-save-as-new",
-      "ui-preset-apply",
-      "ui-preset-overwrite",
-      "ui-preset-duplicate",
-      "ui-preset-rename",
-      "ui-preset-delete",
-      "ui-preset-reset"
-    )
+    inputs.map(_.id) should contain allOf ("ui-preset-save-as-new", "ui-preset-duplicate", "ui-preset-rename")
+    inputs.map(_.id) should not contain "ui-preset-apply"
+    inputs.map(_.id) should not contain "ui-preset-overwrite"
+    inputs.map(_.id) should not contain "ui-preset-delete"
+    inputs.map(_.id) should not contain "ui-preset-reset"
+
     val saveAsNewInput = inputs.find(_.id == "ui-preset-save-as-new").getOrElse(fail("missing save-as-new input"))
-    val overwriteInput = inputs.find(_.id == "ui-preset-overwrite").getOrElse(fail("missing overwrite input"))
-    val applyInput     = inputs.find(_.id == "ui-preset-apply").getOrElse(fail("missing apply input"))
     val dupeInput      = inputs.find(_.id == "ui-preset-duplicate").getOrElse(fail("missing duplicate input"))
     val renameInput    = inputs.find(_.id == "ui-preset-rename").getOrElse(fail("missing rename input"))
-    val deleteInput    = inputs.find(_.id == "ui-preset-delete").getOrElse(fail("missing delete input"))
-    val resetInput     = inputs.find(_.id == "ui-preset-reset").getOrElse(fail("missing reset input"))
 
     saveAsNewInput.label shouldBe "Save As New Preset"
     saveAsNewInput.hint shouldBe "New preset name"
-    overwriteInput.currentValue shouldBe "Writing"
-    applyInput.currentValue shouldBe "Writing"
     dupeInput.currentValue shouldBe "Writing -> "
     renameInput.currentValue shouldBe "Writing -> "
-    deleteInput.currentValue shouldBe "Writing"
-    resetInput.currentValue shouldBe "Writing"
     saveAsNewInput.parse("Longform Writing") shouldBe Some(
       CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Longform Writing"))
     )
-    overwriteInput.parse("Writing") shouldBe Some(CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset("Writing")))
     dupeInput.parse("Writing -> My Writing") shouldBe Some(
       CommandIntent.UiPresets(UiPresetsIntent.DuplicateUiPreset("Writing", "My Writing"))
     )
     renameInput.parse("Draft -> Final") shouldBe Some(
       CommandIntent.UiPresets(UiPresetsIntent.RenameUiPreset("Draft", "Final"))
     )
-    deleteInput.parse("Old Preset") shouldBe Some(CommandIntent.UiPresets(UiPresetsIntent.DeleteUiPreset("Old Preset")))
-    resetInput.parse("Writing") shouldBe Some(CommandIntent.UiPresets(UiPresetsIntent.ResetUiPreset("Writing")))
     inputs.foreach { item =>
       item.accepts("", 'W') shouldBe true
       item.accepts("Work", ' ') shouldBe true
     }
+
+    val presetOptions = descendants(presetGroup).collect {
+      case item: CommandSurfaceItem.OptionItem
+          if List("ui-preset-apply", "ui-preset-overwrite", "ui-preset-delete", "ui-preset-reset").contains(item.id) =>
+        item
+    }
+    val applyOption     = presetOptions.find(_.id == "ui-preset-apply").getOrElse(fail("missing apply picker"))
+    val overwriteOption = presetOptions.find(_.id == "ui-preset-overwrite").getOrElse(fail("missing overwrite picker"))
+    val deleteOption    = presetOptions.find(_.id == "ui-preset-delete").getOrElse(fail("missing delete picker"))
+    val resetOption     = presetOptions.find(_.id == "ui-preset-reset").getOrElse(fail("missing reset picker"))
+
+    // Each defaults to the preset currently being edited ("Writing").
+    List(applyOption, overwriteOption, deleteOption, resetOption).foreach(_.selectedOption shouldBe "Writing")
+    applyOption.selectedIntent shouldBe Some(CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Writing")))
+    overwriteOption.selectedIntent shouldBe Some(CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset("Writing")))
+    deleteOption.selectedIntent shouldBe Some(CommandIntent.UiPresets(UiPresetsIntent.DeleteUiPreset("Writing")))
+    resetOption.selectedIntent shouldBe Some(CommandIntent.UiPresets(UiPresetsIntent.ResetUiPreset("Writing")))
+    applyOption.options.map(_.label) shouldBe
+      List("Writing", "Documentation", "Code", "Compact", "Review", "Drafting", "Research Notes")
+    overwriteOption.options.map(_.intent) should contain(
+      CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset("Documentation"))
+    )
   }
 
   it should "preserve selected built-in and custom UI presets in the settings submenu" in {
@@ -247,10 +257,16 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
     val inputs = descendants(presetGroup).collect {
       case item: CommandSurfaceItem.InputItem if item.id.startsWith("ui-preset-") => item
     }
-    inputs.find(_.id == "ui-preset-overwrite").map(_.currentValue) shouldBe Some("Research Notes")
-    inputs.find(_.id == "ui-preset-apply").map(_.currentValue) shouldBe Some("Research Notes")
     inputs.find(_.id == "ui-preset-duplicate").map(_.currentValue) shouldBe Some("Research Notes -> ")
     inputs.find(_.id == "ui-preset-rename").map(_.currentValue) shouldBe Some("Research Notes -> ")
-    inputs.find(_.id == "ui-preset-delete").map(_.currentValue) shouldBe Some("Research Notes")
-    inputs.find(_.id == "ui-preset-reset").map(_.currentValue) shouldBe Some("Research Notes")
+
+    val options = descendants(presetGroup).collect {
+      case item: CommandSurfaceItem.OptionItem
+          if List("ui-preset-apply", "ui-preset-overwrite", "ui-preset-delete", "ui-preset-reset").contains(item.id) =>
+        item
+    }
+    options.find(_.id == "ui-preset-overwrite").map(_.selectedOption) shouldBe Some("Research Notes")
+    options.find(_.id == "ui-preset-apply").map(_.selectedOption) shouldBe Some("Research Notes")
+    options.find(_.id == "ui-preset-delete").map(_.selectedOption) shouldBe Some("Research Notes")
+    options.find(_.id == "ui-preset-reset").map(_.selectedOption) shouldBe Some("Research Notes")
   }

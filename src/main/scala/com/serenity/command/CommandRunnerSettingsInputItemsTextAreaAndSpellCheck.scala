@@ -25,7 +25,8 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
           .map(value =>
             CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaLeftInset(value / 100.0)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(f"${AppConfig.default.surfaceConfig.textAreaInsets.leftPercent}%.1f")
     ),
     CommandSurfaceItem.InputItem(
       id = "text-area-right",
@@ -39,7 +40,8 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
           .map(value =>
             CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaRightInset(value / 100.0)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(f"${AppConfig.default.surfaceConfig.textAreaInsets.rightPercent}%.1f")
     ),
     CommandSurfaceItem.InputItem(
       id = "text-area-top",
@@ -53,7 +55,8 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
           .map(value =>
             CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaTopInset(value / 100.0)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(f"${AppConfig.default.surfaceConfig.textAreaInsets.topPercent}%.1f")
     ),
     CommandSurfaceItem.InputItem(
       id = "text-area-bottom",
@@ -68,6 +71,7 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
             CommandIntent
               .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaBottomInset(value / 100.0)))
           ),
+      defaultValue = Some(f"${AppConfig.default.surfaceConfig.textAreaInsets.bottomPercent}%.1f"),
       category = CommandCategory.Settings
     )
   )

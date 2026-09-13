@@ -426,3 +426,118 @@ class TerminalInputDecoderSpec extends AnyFlatSpec with Matchers:
   it should "still decode a plain printable ASCII character (0x61 = 'a') as Character('a')" in {
     decodeAll(Array(0x61.toByte)) shouldBe List(tok(InputKey.Character, Some('a')))
   }
+
+  // ===Windows `win32-input-mode` (`CSI ?9001h`, #1320): `TerminalShell` enables this Windows-only enhanced protocol
+  // as its final fallback when neither the kitty nor the xterm modifyOtherKeys negotiation is confirmed -- the case
+  // hit on current-generation Windows Terminal over ConPTY, which answers neither query. Wire shape (from
+  // github.com/microsoft/terminal#8343, the feature's own tracking issue): `CSI Vk;Sc;Uc;Kd;Cs;Rc _` -- virtual-key
+  // code, scan code (unused here), UTF-16 character, key-down flag, control-key-state bitmask, repeat count. `Cs`'s
+  // bit values are the standard Win32 console `KEY_EVENT_RECORD.dwControlKeyState` flags (confirmed against
+  // microsoft/terminal#337 and Microsoft Learn's key-event-record-str, both reachable through this environment's
+  // egress proxy where invisible-island.net/learn.microsoft.com were not): `RIGHT_ALT_PRESSED = 0x0001`,
+  // `LEFT_ALT_PRESSED = 0x0002`, `RIGHT_CTRL_PRESSED = 0x0004`, `LEFT_CTRL_PRESSED = 0x0008`, `SHIFT_PRESSED =
+  // 0x0010`. Virtual-key codes (`VK_BACK`, `VK_TAB`, ... ) are the Winuser.h constants, unchanged since Win32's
+  // original release -- standard, stable values not gated on any environment-specific lookup.
+  //
+  // Unlike the CSI-u path's `BareModifierCodepoints`, this decoder does not attempt to report a bare Shift/Ctrl/Alt
+  // tap of its own from a win32-input-mode record: which `Vk` a standalone modifier key reports under real Windows
+  // Terminal/ConPTY passthrough (the generic `VK_SHIFT`/`VK_CONTROL`/`VK_MENU` vs. the left/right-specific
+  // `VK_LSHIFT`/... codes) is not confirmable from documentation alone and was not verified against a real Windows
+  // Terminal session -- caution, here be imagine dragons, so this decoder deliberately drops any record whose `Vk`
+  // isn't a mapped key (see `namedWin32Key`) and whose `Uc` isn't a printable character, rather than guess.
+
+  private def win32(vk: Int, uc: Int, kd: Int, cs: Int, rc: Int = 1): Array[Byte] =
+    csi(s"$vk;0;$uc;$kd;$cs;${rc}_")
+
+  private val Win32LeftCtrl: Int  = 0x0008
+  private val Win32RightCtrl: Int = 0x0004
+  private val Win32Shift: Int     = 0x0010
+  private val Win32LeftAlt: Int   = 0x0002
+
+  it should "decode a win32-input-mode Backspace key-down record with no modifiers as plain Backspace" in {
+    decodeAll(win32(vk = 0x08, uc = 0x08, kd = 1, cs = 0)) shouldBe List(tok(InputKey.Backspace))
+  }
+
+  it should "decode a win32-input-mode Backspace key-down record with the Ctrl bit set as Ctrl+Backspace" in {
+    decodeAll(win32(vk = 0x08, uc = 0x08, kd = 1, cs = Win32LeftCtrl)) shouldBe
+      List(tok(InputKey.Backspace, mods = Set(Modifier.Ctrl)))
+    decodeAll(win32(vk = 0x08, uc = 0x08, kd = 1, cs = Win32RightCtrl)) shouldBe
+      List(tok(InputKey.Backspace, mods = Set(Modifier.Ctrl)))
+  }
+
+  it should "decode a win32-input-mode Backspace key-down record with Ctrl+Shift as Backspace with both modifiers" in {
+    decodeAll(win32(vk = 0x08, uc = 0x08, kd = 1, cs = Win32LeftCtrl | Win32Shift)) shouldBe
+      List(tok(InputKey.Backspace, mods = Set(Modifier.Ctrl, Modifier.Shift)))
+  }
+
+  it should "drop a win32-input-mode key-up record (Kd=0), same as a kitty-protocol release" in {
+    decodeAll(win32(vk = 0x08, uc = 0x08, kd = 0, cs = Win32LeftCtrl)) shouldBe Nil
+  }
+
+  it should "decode win32-input-mode named keys: arrows, Home/End, PageUp/PageDown, Delete, Tab, Enter, Escape" in {
+    decodeAll(win32(vk = 0x25, uc = 0, kd = 1, cs = 0)) shouldBe List(tok(InputKey.ArrowLeft))
+    decodeAll(win32(vk = 0x26, uc = 0, kd = 1, cs = 0)) shouldBe List(tok(InputKey.ArrowUp))
+    decodeAll(win32(vk = 0x27, uc = 0, kd = 1, cs = 0)) shouldBe List(tok(InputKey.ArrowRight))
+    decodeAll(win32(vk = 0x28, uc = 0, kd = 1, cs = 0)) shouldBe List(tok(InputKey.ArrowDown))
+    decodeAll(win32(vk = 0x24, uc = 0, kd = 1, cs = 0)) shouldBe List(tok(InputKey.Home))
+    decodeAll(win32(vk = 0x23, uc = 0, kd = 1, cs = 0)) shouldBe List(tok(InputKey.End))
+    decodeAll(win32(vk = 0x21, uc = 0, kd = 1, cs = 0)) shouldBe List(tok(InputKey.PageUp))
+    decodeAll(win32(vk = 0x22, uc = 0, kd = 1, cs = 0)) shouldBe List(tok(InputKey.PageDown))
+    decodeAll(win32(vk = 0x2e, uc = 0, kd = 1, cs = 0)) shouldBe List(tok(InputKey.Delete))
+    decodeAll(win32(vk = 0x09, uc = 0x09, kd = 1, cs = 0)) shouldBe List(tok(InputKey.Tab))
+    decodeAll(win32(vk = 0x0d, uc = 0x0d, kd = 1, cs = 0)) shouldBe List(tok(InputKey.Enter))
+    decodeAll(win32(vk = 0x1b, uc = 0x1b, kd = 1, cs = 0)) shouldBe List(tok(InputKey.Escape))
+  }
+
+  it should "decode win32-input-mode Shift+Tab as ReverseTab with Shift stripped, mirroring the CSI-u path" in {
+    decodeAll(win32(vk = 0x09, uc = 0x09, kd = 1, cs = Win32Shift)) shouldBe List(tok(InputKey.ReverseTab))
+  }
+
+  it should "decode win32-input-mode function keys F1-F12" in {
+    decodeAll(win32(vk = 0x70, uc = 0, kd = 1, cs = 0)) shouldBe List(tok(InputKey.F1))
+    decodeAll(win32(vk = 0x7b, uc = 0, kd = 1, cs = 0)) shouldBe List(tok(InputKey.F12))
+  }
+
+  it should "decode a win32-input-mode plain printable character record from its Uc field" in {
+    decodeAll(win32(vk = 0x41, uc = 'a'.toInt, kd = 1, cs = 0)) shouldBe List(tok(InputKey.Character, Some('a')))
+    // Shift is already baked into Uc by the OS translation (uppercase 'A'), so it must not also appear as a modifier.
+    decodeAll(win32(vk = 0x41, uc = 'A'.toInt, kd = 1, cs = Win32Shift)) shouldBe List(
+      tok(InputKey.Character, Some('A'))
+    )
+  }
+
+  it should "decode a win32-input-mode Ctrl+letter record as Character with Ctrl, from Vk rather than the control-code Uc" in {
+    decodeAll(win32(vk = 0x41, uc = 0x01, kd = 1, cs = Win32LeftCtrl)) shouldBe
+      List(tok(InputKey.Character, Some('a'), Set(Modifier.Ctrl)))
+  }
+
+  it should "decode a win32-input-mode Ctrl+Shift+letter record with both modifiers -- a combo the legacy protocol cannot distinguish" in {
+    decodeAll(win32(vk = 0x41, uc = 0x01, kd = 1, cs = Win32LeftCtrl | Win32Shift)) shouldBe
+      List(tok(InputKey.Character, Some('a'), Set(Modifier.Ctrl, Modifier.Shift)))
+  }
+
+  it should "keep the Alt modifier on a win32-input-mode printable-character record" in {
+    decodeAll(win32(vk = 0x41, uc = 'a'.toInt, kd = 1, cs = Win32LeftAlt)) shouldBe
+      List(tok(InputKey.Character, Some('a'), Set(Modifier.Alt)))
+  }
+
+  it should "expand a win32-input-mode record's repeat count (Rc) into that many identical key tokens" in {
+    decodeAll(win32(vk = 0x41, uc = 'a'.toInt, kd = 1, cs = 0, rc = 3)) shouldBe
+      List.fill(3)(tok(InputKey.Character, Some('a')))
+  }
+
+  it should "drop a win32-input-mode record for an unmapped key with no printable Uc (e.g. a bare modifier key itself)" in {
+    decodeAll(win32(vk = 0x10, uc = 0, kd = 1, cs = Win32Shift)) shouldBe Nil // VK_SHIFT
+  }
+
+  it should "drop a malformed win32-input-mode record (wrong field count) rather than throw" in {
+    decodeAll(csi("8;0;8;1_")) shouldBe Nil
+  }
+
+  it should "drop a win32-input-mode record with a non-numeric field (empty Rc) rather than throw" in {
+    // Letters aren't valid CSI parameter bytes (isCsiParamOrIntermediate only admits 0x20-0x3F), so a non-numeric
+    // field can't be spelled with a letter without the CSI scan itself terminating early at that byte -- this uses an
+    // empty field instead, which stays within the valid param-byte range and so reaches decodeWin32Input's own
+    // toIntOption-based validation.
+    decodeAll(csi("8;0;8;1;5;_")) shouldBe Nil
+  }
