@@ -8,7 +8,7 @@ import cats.effect.*
 import cats.effect.std.Queue
 import cats.syntax.all.*
 import com.serenity.lsp.config.{LanguageId, LspServerConfig}
-import com.serenity.lsp.model.Diagnostic
+import com.serenity.lsp.model.{Diagnostic, SemanticTokensLegend}
 import fs2.Stream
 import fs2.io.readInputStream
 import io.circe.Json
@@ -20,6 +20,7 @@ class LspConnection private (
     idRef: Ref[IO, Long],
     pendingRef: Ref[IO, Map[RequestId, Deferred[IO, Either[Throwable, Json]]]],
     notifQueue: Queue[IO, Option[Json]],
+    legendRef: Ref[IO, Option[SemanticTokensLegend]],
     requestTimeout: FiniteDuration,
     logger: Logger[IO]
 ):
@@ -105,6 +106,16 @@ class LspConnection private (
   private[lsp] def pendingRequestCount: IO[Int] =
     pendingRef.get.map(_.size)
 
+  /** The server's semantic tokens legend, captured off its `initialize` result during the handshake (see
+    * [[LspConnection.initHandshake]]) -- `None` when the server never declared `semanticTokensProvider`, or (in tests)
+    * when nothing has recorded one yet.
+    */
+  private[lsp] def semanticTokensLegend: IO[Option[SemanticTokensLegend]] =
+    legendRef.get
+
+  private[lsp] def recordSemanticTokensLegend(legend: Option[SemanticTokensLegend]): IO[Unit] =
+    legendRef.set(legend)
+
   private[lsp] def outgoingMessages: Stream[IO, Json] =
     Stream.fromQueueNoneTerminated(sendQueue)
 
@@ -150,7 +161,8 @@ object LspConnection:
       idRef      <- Ref.of[IO, Long](0L)
       pendingRef <- Ref.of[IO, Map[RequestId, Deferred[IO, Either[Throwable, Json]]]](Map.empty)
       notifQueue <- Queue.bounded[IO, Option[Json]](256)
-    yield new LspConnection(languageId, sendQueue, idRef, pendingRef, notifQueue, requestTimeout, logger)
+      legendRef  <- Ref.of[IO, Option[SemanticTokensLegend]](None)
+    yield new LspConnection(languageId, sendQueue, idRef, pendingRef, notifQueue, legendRef, requestTimeout, logger)
 
   // Package-visible entry point — accepts pre-opened streams; used by tests via MockLspServer.
   private[lsp] def connect(
@@ -220,9 +232,10 @@ object LspConnection:
     for
       pid <- IO(ProcessHandle.current().pid().toInt)
       _   <- logger.info(s"[LSP] initialize ${conn.languageId.id} rootUri=${rootUri.value}")
-      _ <- conn
+      initializeResult <- conn
         .sendRequest(LspMethod("initialize"), LspProtocol.initializeParams(pid, rootUri))
         .handleErrorWith(ex => logger.error(ex)("[LSP] initialize failed") >> IO.raiseError(ex))
+      _ <- conn.recordSemanticTokensLegend(LspProtocol.parseSemanticTokensLegend(initializeResult))
       _ <- conn.sendNotification(LspMethod("initialized"), LspProtocol.initializedParams)
       _ <- logger.info(s"[LSP] Handshake complete: ${conn.languageId.id}")
     yield ()
