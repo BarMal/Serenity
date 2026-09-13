@@ -45,16 +45,16 @@ object DocxDocumentCodec:
   )
 
   def read(path: Path): IO[RichTextDocument] =
-    IO.blocking(readBytes(RichTextArchive.readFile(path, "DOCX")))
+    IO.blocking(RichTextArchive.readFile(path, "DOCX")).flatMap(bytes => IO.fromEither(readBytes(bytes)))
 
   /** Read a DOCX file and report structures that the native model cannot round-trip. */
   def readWithFidelity(path: Path): IO[RichTextImport] =
-    IO.blocking(readBytesWithFidelity(RichTextArchive.readFile(path, "DOCX")))
+    IO.blocking(RichTextArchive.readFile(path, "DOCX")).flatMap(bytes => IO.fromEither(readBytesWithFidelity(bytes)))
 
   def write(document: RichTextDocument, path: Path): IO[Unit] =
     AtomicFileWriter.writeBytes(path, writeBytes(document))
 
-  def readBytes(bytes: Array[Byte]): RichTextDocument =
+  def readBytes(bytes: Array[Byte]): Either[RichTextCodecException, RichTextDocument] =
     try
       val content = RichTextArchive.zipEntry(bytes, "word/document.xml", "DOCX").getOrElse {
         throw RichTextCodecException("DOCX archive is missing word/document.xml")
@@ -68,27 +68,34 @@ object DocxDocumentCodec:
         )
         .getOrElse(Nil)
 
-      RichTextDocument(
-        if paragraphs.nonEmpty then paragraphs
-        else List(RichTextParagraph.plain(""))
-      ).normalized
+      Right(
+        RichTextDocument(
+          if paragraphs.nonEmpty then paragraphs
+          else List(RichTextParagraph.plain(""))
+        ).normalized
+      )
     catch
-      case error: RichTextCodecException => throw error
-      case NonFatal(error)               => throw RichTextCodecException("DOCX document could not be decoded", error)
+      case error: RichTextCodecException => Left(error)
+      case NonFatal(error)               => Left(RichTextCodecException("DOCX document could not be decoded", error))
 
   /** Decode DOCX bytes and report structures that the native model cannot round-trip. */
-  def readBytesWithFidelity(bytes: Array[Byte]): RichTextImport =
-    val document = readBytes(bytes)
-    val content  = RichTextArchive.zipEntry(bytes, "word/document.xml", "DOCX").getOrElse(Array.emptyByteArray)
-    val xml      = parseXml(content)
-    val unsupportedElements =
-      (0 until xml.getElementsByTagNameNS(WNs, "*").getLength)
-        .map(xml.getElementsByTagNameNS(WNs, "*").item)
-        .collect { case element: Element => element.getLocalName }
-        .filterNot(SupportedElements.contains)
-        .toSet
-    val unsupportedEntries = RichTextArchive.entryNames(bytes, "DOCX") -- SupportedArchiveEntries
-    RichTextImport(document, RichTextFidelity(unsupportedElements, unsupportedEntries))
+  def readBytesWithFidelity(bytes: Array[Byte]): Either[RichTextCodecException, RichTextImport] =
+    readBytes(bytes).flatMap { document =>
+      try
+        val content = RichTextArchive.zipEntry(bytes, "word/document.xml", "DOCX").getOrElse(Array.emptyByteArray)
+        val xml     = parseXml(content)
+        val unsupportedElements =
+          (0 until xml.getElementsByTagNameNS(WNs, "*").getLength)
+            .map(xml.getElementsByTagNameNS(WNs, "*").item)
+            .collect { case element: Element => element.getLocalName }
+            .filterNot(SupportedElements.contains)
+            .toSet
+        val unsupportedEntries = RichTextArchive.entryNames(bytes, "DOCX") -- SupportedArchiveEntries
+        Right(RichTextImport(document, RichTextFidelity(unsupportedElements, unsupportedEntries)))
+      catch
+        case error: RichTextCodecException => Left(error)
+        case NonFatal(error)               => Left(RichTextCodecException("DOCX document could not be decoded", error))
+    }
 
   def writeBytes(document: RichTextDocument): Array[Byte] =
     val output = ByteArrayOutputStream()

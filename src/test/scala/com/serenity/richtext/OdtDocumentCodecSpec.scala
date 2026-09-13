@@ -8,10 +8,11 @@ import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
 
 import cats.effect.unsafe.implicits.global
 import com.sun.net.httpserver.HttpServer
+import org.scalatest.EitherValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
+class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
 
   "OdtDocumentCodec" should "read inline marks and paragraph alignment from ODT" in {
     val contentXml =
@@ -42,7 +43,7 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
         |  </office:body>
         |</office:document-content>""".stripMargin
 
-    val document  = OdtDocumentCodec.readBytes(odtBytes(contentXml))
+    val document  = OdtDocumentCodec.readBytes(odtBytes(contentXml)).value
     val paragraph = singleParagraph(document)
 
     paragraph.alignment shouldBe ParagraphAlignment.Center
@@ -65,7 +66,7 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val decoded   = OdtDocumentCodec.readBytes(OdtDocumentCodec.writeBytes(source))
+    val decoded   = OdtDocumentCodec.readBytes(OdtDocumentCodec.writeBytes(source)).value
     val paragraph = singleParagraph(decoded)
 
     paragraph.alignment shouldBe ParagraphAlignment.Right
@@ -81,7 +82,7 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val decoded = OdtDocumentCodec.readBytes(OdtDocumentCodec.writeBytes(source))
+    val decoded = OdtDocumentCodec.readBytes(OdtDocumentCodec.writeBytes(source)).value
 
     decoded.paragraphs.map(_.plainText) shouldBe List("Chapter One", "Body")
     decoded.paragraphs.map(_.role) shouldBe List(ParagraphRole.Heading(2), ParagraphRole.Body)
@@ -104,7 +105,7 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
         |  </office:body>
         |</office:document-content>""".stripMargin
 
-    val document = OdtDocumentCodec.readBytes(odtBytes(contentXml))
+    val document = OdtDocumentCodec.readBytes(odtBytes(contentXml)).value
 
     document.paragraphs.map(_.plainText) shouldBe List("Scene Three", "Body")
     document.paragraphs.map(_.role) shouldBe List(ParagraphRole.Heading(3), ParagraphRole.Body)
@@ -124,7 +125,7 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val decodedStyle = singleParagraph(OdtDocumentCodec.readBytes(OdtDocumentCodec.writeBytes(source))).runs
+    val decodedStyle = singleParagraph(OdtDocumentCodec.readBytes(OdtDocumentCodec.writeBytes(source)).value).runs
       .find(_.text.contains("styled"))
       .map(_.style)
 
@@ -138,7 +139,7 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
 
     val bytes      = OdtDocumentCodec.writeBytes(source)
     val contentXml = zipEntryText(bytes, "content.xml")
-    val decoded    = OdtDocumentCodec.readBytes(bytes)
+    val decoded    = OdtDocumentCodec.readBytes(bytes).value
 
     contentXml should include("<text:tab/>")
     contentXml should include("<text:line-break/>")
@@ -152,13 +153,13 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
     val contentXml = zipEntryText(bytes, "content.xml")
 
     contentXml should include("<text:s/>")
-    singleParagraph(OdtDocumentCodec.readBytes(bytes)).plainText shouldBe "alpha  beta"
+    singleParagraph(OdtDocumentCodec.readBytes(bytes).value).plainText shouldBe "alpha  beta"
   }
 
   it should "report unsupported ODT structures before a lossy save" in {
     val xml = fixture("odt-unsupported-table.xml")
 
-    val imported = OdtDocumentCodec.readBytesWithFidelity(odtBytes(xml))
+    val imported = OdtDocumentCodec.readBytesWithFidelity(odtBytes(xml)).value
 
     imported.document.plainText shouldBe "kept text"
     imported.fidelity.isLossless shouldBe false
@@ -179,7 +180,7 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fail safely when the ODT content entry is missing" in {
-    val error = the[RichTextCodecException] thrownBy OdtDocumentCodec.readBytes(emptyZipBytes())
+    val error = OdtDocumentCodec.readBytes(emptyZipBytes()).left.value
 
     error.getMessage should include("missing content.xml")
   }
@@ -187,13 +188,13 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
   it should "fail safely when the ODT content entry is oversized" in {
     val bytes = odtRawBytes("content.xml", Array.fill(RichTextArchive.MaxXmlEntryBytes + 1)(0.toByte))
 
-    val error = the[RichTextCodecException] thrownBy OdtDocumentCodec.readBytes(bytes)
+    val error = OdtDocumentCodec.readBytes(bytes).left.value
 
     error.getMessage should include("content.xml is too large")
   }
 
   it should "wrap malformed ODT XML in a codec exception" in {
-    val error = the[RichTextCodecException] thrownBy OdtDocumentCodec.readBytes(odtBytes("<office:document-content>"))
+    val error = OdtDocumentCodec.readBytes(odtBytes("<office:document-content>")).left.value
 
     error.getMessage should include("ODT document could not be decoded")
   }
@@ -209,7 +210,7 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
            |  <office:body><office:text><text:p>&external;</text:p></office:text></office:body>
            |</office:document-content>""".stripMargin
 
-      val error = the[RichTextCodecException] thrownBy OdtDocumentCodec.readBytes(odtBytes(xml))
+      val error = OdtDocumentCodec.readBytes(odtBytes(xml)).left.value
 
       error.getMessage should include("ODT document could not be decoded")
       requests.get() shouldBe 0
@@ -226,7 +227,7 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
            |  <office:body><office:text><text:p>safe</text:p></office:text></office:body>
            |</office:document-content>""".stripMargin
 
-      val error = the[RichTextCodecException] thrownBy OdtDocumentCodec.readBytes(odtBytes(xml))
+      val error = OdtDocumentCodec.readBytes(odtBytes(xml)).left.value
 
       error.getMessage should include("ODT document could not be decoded")
       requests.get() shouldBe 0
@@ -244,7 +245,7 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
            |  <office:body><office:text><text:p>safe</text:p></office:text></office:body>
            |</office:document-content>""".stripMargin
 
-      OdtDocumentCodec.readBytes(odtBytes(xml)).plainText shouldBe "safe"
+      OdtDocumentCodec.readBytes(odtBytes(xml)).value.plainText shouldBe "safe"
       requests.get() shouldBe 0
     }
 
@@ -262,7 +263,7 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers:
         |  <office:body><office:text><text:p>&c;</text:p></office:text></office:body>
         |</office:document-content>""".stripMargin
 
-    val error = the[RichTextCodecException] thrownBy OdtDocumentCodec.readBytes(odtBytes(xml))
+    val error = OdtDocumentCodec.readBytes(odtBytes(xml)).left.value
 
     error.getMessage should include("ODT document could not be decoded")
   }
