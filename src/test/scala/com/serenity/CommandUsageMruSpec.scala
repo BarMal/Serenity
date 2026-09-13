@@ -7,10 +7,9 @@ import com.serenity.state.models.SurfaceContent
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** issue #1048: MRU tracking survives the palette closing and reopening within the same session, since
-  * `CommandRunner` itself is reconstructed fresh on every open (`AppEventReducer.openCommandRunner`) -- the
-  * generation counter has to live on `AppState.runtime` instead, and get seeded back into the freshly-activated
-  * runner.
+/** issue #1048: MRU tracking survives the palette closing and reopening within the same session, since `CommandRunner`
+  * itself is reconstructed fresh on every open (`AppEventReducer.openCommandRunner`) -- the generation counter has to
+  * live on `AppState.runtime` instead, and get seeded back into the freshly-activated runner.
   */
 class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
@@ -20,8 +19,7 @@ class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTes
       .commandRunnerSurface
       .flatMap(_.content match
         case SurfaceContent.CommandPalette(runner) => Some(runner)
-        case _                                     => None
-      )
+        case _                                     => None)
       .getOrElse(fail("expected the command palette to be open"))
 
   "executing a command" should "record its use on AppState.runtime, surviving the palette closing" in {

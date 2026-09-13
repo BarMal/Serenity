@@ -144,8 +144,8 @@ final case class CommandRunner(
     selectedItem.collect { case CommandSurfaceItem.CommandItem(command) => command }
 
   /** issue #1048: record a command's execution for MRU ranking -- the new generation is always one past every
-    * generation recorded so far, so the command just run is always the most recent regardless of how many others
-    * have run before it.
+    * generation recorded so far, so the command just run is always the most recent regardless of how many others have
+    * run before it.
     */
   def recordCommandUsage(name: String): CommandRunner =
     val nextGeneration = commandUsage.values.maxOption.getOrElse(0) + 1

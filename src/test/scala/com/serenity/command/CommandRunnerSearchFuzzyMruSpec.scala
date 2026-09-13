@@ -3,8 +3,8 @@ package com.serenity.command
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** issue #1048: fuzzy subsequence scoring (replacing token prefix/contains matching wholesale) and MRU-weighted
-  * palette ranking.
+/** issue #1048: fuzzy subsequence scoring (replacing token prefix/contains matching wholesale) and MRU-weighted palette
+  * ranking.
   */
 class CommandRunnerSearchFuzzyMruSpec extends AnyFlatSpec with Matchers:
 
@@ -31,7 +31,7 @@ class CommandRunnerSearchFuzzyMruSpec extends AnyFlatSpec with Matchers:
     // "l"(1), "i"(2), "n"(4), "e"(5) appear in that order in "aligned" but never contiguously as "line".
     CommandRunnerSearch.fuzzyScore("line", "aligned") shouldBe defined
     val scattered = CommandRunnerSearch.fuzzyScore("line", "aligned").get
-    val boundary   = CommandRunnerSearch.fuzzyScore("line", "toggle-line-numbers").get
+    val boundary  = CommandRunnerSearch.fuzzyScore("line", "toggle-line-numbers").get
     scattered should be < boundary
   }
 
@@ -55,8 +55,9 @@ class CommandRunnerSearchFuzzyMruSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not let a token-AND fallback outscore a genuine whole-query exact/prefix match" in {
-    val exact       = CommandRunnerSearch.fuzzyScore("line numbers", "line numbers").getOrElse(fail("expected a match"))
-    val tokenAndOnly = CommandRunnerSearch.fuzzyScore("numbers line", "Toggle Line Numbers").getOrElse(fail("expected a match"))
+    val exact = CommandRunnerSearch.fuzzyScore("line numbers", "line numbers").getOrElse(fail("expected a match"))
+    val tokenAndOnly =
+      CommandRunnerSearch.fuzzyScore("numbers line", "Toggle Line Numbers").getOrElse(fail("expected a match"))
     exact should be > tokenAndOnly
   }
 
@@ -89,8 +90,8 @@ class CommandRunnerSearchFuzzyMruSpec extends AnyFlatSpec with Matchers:
 
   it should "still find a command when the query words are reordered" in {
     val lineNumbers = testCommand("toggle-line-numbers", "Toggle Line Numbers")
-    val unrelated    = testCommand("save-current-file", "Save")
-    val searcher     = new CommandSearcher(List(unrelated, lineNumbers))
+    val unrelated   = testCommand("save-current-file", "Save")
+    val searcher    = new CommandSearcher(List(unrelated, lineNumbers))
 
     val results = searcher.search("numbers line", maxResults = 10)
 
@@ -105,8 +106,8 @@ class CommandRunnerSearchFuzzyMruSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "re-rank equally-relevant search results so a recently used command floats up" in {
-    val commandA = testCommand("test-alpha-widget", "Alpha Widget")
-    val commandB = testCommand("test-beta-widget", "Beta Widget")
+    val commandA          = testCommand("test-alpha-widget", "Alpha Widget")
+    val commandB          = testCommand("test-beta-widget", "Beta Widget")
     given CommandRegistry = CommandRegistry(List(commandA, commandB))
 
     val used = CommandRunner.empty
