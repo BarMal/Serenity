@@ -1,7 +1,7 @@
 package com.serenity.text
 
 import java.text.CharacterIterator
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import com.ibm.icu.text.BreakIterator
 
@@ -128,23 +128,33 @@ object TextEditing:
         case _ =>
           CharacterClass.Punctuation
 
-  /** One `BreakIterator.getCharacterInstance` per thread, reused across calls via `setText` rather than constructed
-    * fresh each time. `BreakIterator` is stateful and not thread-safe, so a single shared instance isn't safe -- hence
-    * `ThreadLocal` -- but constructing `getCharacterInstance()` itself is expensive enough (cloning the rule engine)
-    * that doing it on every grapheme-boundary query measurably regressed find/replace over large documents, which
-    * resolves thousands of matches by calling `isWholeGraphemeRange` (and so this) per match.
+  /** One `BreakIterator.getCharacterInstance` per thread, paired with the `CharacterSource` it was last `setText` onto.
+    * `BreakIterator` is stateful and not thread-safe, so a single shared instance isn't safe -- hence `ThreadLocal` --
+    * but constructing `getCharacterInstance()` itself is expensive enough (cloning the rule engine) that doing it on
+    * every grapheme-boundary query measurably regressed find/replace over large documents. `preceding` and `following`
+    * are meant to be called repeatedly against one `setText` per ICU4J's own usage pattern, so the paired source
+    * (compared by reference, not content -- `graphemeBoundaryBeforeOrAt`/`AfterOrAt` and a caller scanning many matches
+    * over one document, e.g. `FindSearch.results`, reuse the exact same `CharacterSource` instance across calls) lets
+    * repeat calls against the same source skip `setText` entirely.
     */
-  private val threadLocalBreakIterator: ThreadLocal[BreakIterator] =
-    ThreadLocal.withInitial(() => BreakIterator.getCharacterInstance())
+  final private class BreakIteratorCache:
+    val iterator: BreakIterator                             = BreakIterator.getCharacterInstance()
+    private val lastSource: AtomicReference[Option[AnyRef]] = new AtomicReference(None)
+
+    def forSource(source: CharacterSource): BreakIterator =
+      val previous = lastSource.getAndSet(Some(source))
+      if !previous.exists(_.eq(source)) then iterator.setText(CharacterSourceIterator(source))
+      iterator
+
+  private val threadLocalBreakIterator: ThreadLocal[BreakIteratorCache] =
+    ThreadLocal.withInitial(() => BreakIteratorCache())
 
   /** `source` adapted through [[CharacterSourceIterator]] rather than a materialised `String` -- confirmed against
     * `RopeCharacterSource` (#1277 step 3 spike) to work directly against a rope-backed source, so a large line's
     * grapheme scan never copies the whole line into a `String`.
     */
   private def graphemeBreakIterator(source: CharacterSource): BreakIterator =
-    val boundary = threadLocalBreakIterator.get()
-    boundary.setText(CharacterSourceIterator(source))
-    boundary
+    threadLocalBreakIterator.get().forSource(source)
 
   @annotation.tailrec
   private def scanBackwardClassStart(source: CharacterSource, idx: Int, targetClass: CharacterClass): Int =
