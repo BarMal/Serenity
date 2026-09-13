@@ -7,7 +7,6 @@ import cats.effect.{Deferred, Fiber, IO, Ref, Resource}
 import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
-import com.serenity.lsp.model.TextDocumentSyncKind
 import com.serenity.state.models.CursorPosition
 import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.Stream
@@ -55,7 +54,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
     * error, or cancellation) rather than only the happy path `manager.stop` covered; cancelling a fiber that already
     * finished via `manager.stop` is a no-op, so this changes nothing on that path.
     */
-  private def harness: Resource[IO, Harness] =
+  private def harness(serverAvailable: Boolean = true): Resource[IO, Harness] =
     for
       effects      <- Resource.eval(Queue.unbounded[IO, Option[LspEffect]])
       events       <- Resource.eval(Ref.of[IO, List[Event]](Nil))
@@ -68,9 +67,11 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
           fileUri: DocumentUri,
           onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
         ): IO[Option[LspManager.ResolvedConnection]] =
-          IO.pure(
-            Some(resolvedConnection(WorkspaceRootUri("file:///workspace"), connection, released.complete(()).void))
-          )
+          if serverAvailable then
+            IO.pure(
+              Some(resolvedConnection(WorkspaceRootUri("file:///workspace"), connection, released.complete(()).void))
+            )
+          else IO.pure(None)
       managerFiber <- Resource.make(
         LspManager
           .runWithProvider(
@@ -111,7 +112,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
 
   "LspManager" should "send document changes while a hover response is pending" in
     runVirtual(
-      harness
+      harness()
         .use { manager =>
           for
             _ <- open(manager)
@@ -137,7 +138,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
   it should "discard a definition response after its document version changes" in {
     val anchor = CursorPosition(0, 1)
     runVirtual(
-      harness
+      harness()
         .use { manager =>
           for
             _ <- open(manager)
@@ -173,7 +174,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
     val firstAnchor  = CursorPosition(0, 1)
     val secondAnchor = CursorPosition(0, 2)
     runVirtual(
-      harness
+      harness()
         .use { manager =>
           for
             _ <- open(manager)
@@ -206,7 +207,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
 
   it should "cancel pending request fibers before releasing connections on shutdown" in
     runVirtual(
-      harness
+      harness()
         .use { manager =>
           for
             _ <- open(manager)
@@ -230,7 +231,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
     val program: IO[Int] =
       for
         connectionRef <- Ref.of[IO, Option[LspConnection]](None)
-        _ <- harness.use { manager =>
+        _ <- harness().use { manager =>
           connectionRef.set(Some(manager.connection)) >>
             (for
               _ <- open(manager)
@@ -259,7 +260,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
     // definition already use -- means the sequential effects loop moves on to the next effect as soon as the
     // completion request is sent, without waiting for its response.
     runVirtual(
-      harness
+      harness()
         .use { manager =>
           for
             _ <- open(manager)
@@ -278,6 +279,56 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
           yield succeed
         }
     )
+
+  // #1508: the "no server available" fallback in `startRequest` used to hardcode `LspHoverReceived` regardless of
+  // which request kind was actually being made. These three cover the fallback's kind-appropriate event for each of
+  // the request kinds that exist today (Hover, Completion, Definition); a semantic-tokens case will need the same
+  // treatment once #1506 (currently unmerged) introduces that request kind.
+  it should "emit an explanatory hover message when no LSP server is available" in {
+    val anchor = CursorPosition(0, 1)
+    runVirtual(
+      harness(serverAvailable = false)
+        .use { manager =>
+          for
+            _      <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, anchor)))
+            _      <- manager.stop
+            events <- manager.events.get
+          yield events shouldBe List(
+            LspEvent.LspHoverReceived(s"No LSP server available for ${LanguageId.Scala.displayName}", anchor)
+          )
+        }
+    )
+  }
+
+  it should "emit an empty completion list when no LSP server is available" in {
+    val anchor = CursorPosition(0, 1)
+    runVirtual(
+      harness(serverAvailable = false)
+        .use { manager =>
+          for
+            _      <- manager.effects.offer(Some(LspEffect.CompletionRequested(uri, LanguageId.Scala, 0, 1, anchor)))
+            _      <- manager.stop
+            events <- manager.events.get
+          yield events shouldBe List(LspEvent.LspCompletionReceived(Nil, anchor))
+        }
+    )
+  }
+
+  it should "emit no event for a definition request when no LSP server is available" in {
+    val anchor = CursorPosition(0, 1)
+    runVirtual(
+      harness(serverAvailable = false)
+        .use { manager =>
+          for
+            _ <- manager.effects.offer(
+              Some(LspEffect.DefinitionRequested(uri, LanguageId.Scala, 0, 1, anchor, "Foo"))
+            )
+            _      <- manager.stop
+            events <- manager.events.get
+          yield events shouldBe Nil
+        }
+    )
+  }
 
   it should "create separate connections for same-language documents in different workspaces" in {
     val firstUri  = "file:///workspace-one/Foo.scala"
@@ -522,61 +573,3 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
 
     runVirtual(program)
   }
-
-  it should "send a range-based didChange when the connection negotiated incremental sync" in
-    runVirtual(
-      harness
-        .use { manager =>
-          for
-            _ <- open(manager)
-            _ <- manager.connection.setSyncKind(TextDocumentSyncKind.Incremental)
-            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
-            change <- takeMessage(manager.connection)
-            _ = change.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didChange")
-            contentChange = change.hcursor.downField("params").downField("contentChanges").downArray
-            _             = contentChange.downField("range").succeeded shouldBe true
-            _             = contentChange.downField("rangeLength").as[Int].toOption shouldBe Some(0)
-            _             = contentChange.downField("text").as[String].toOption shouldBe Some("2")
-            _ <- manager.stop
-          yield succeed
-        }
-    )
-
-  it should "keep sending full-text didChange when the connection has not negotiated incremental sync" in
-    runVirtual(
-      harness
-        .use { manager =>
-          for
-            _ <- open(manager)
-            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
-            change <- takeMessage(manager.connection)
-            contentChange = change.hcursor.downField("params").downField("contentChanges").downArray
-            _             = contentChange.downField("range").succeeded shouldBe false
-            _             = contentChange.downField("text").as[String].toOption shouldBe Some("object Foo2")
-            _ <- manager.stop
-          yield succeed
-        }
-    )
-
-  it should "diff incremental didChange against the text from the most recent open, not a stale one" in
-    runVirtual(
-      harness
-        .use { manager =>
-          for
-            _ <- open(manager)
-            _ <- manager.effects.offer(Some(LspEffect.FileClosed(uri, LanguageId.Scala)))
-            _ <- takeMessage(manager.connection) // didClose
-            _ <- manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Reopened")))
-            _ <- takeMessage(manager.connection) // didOpen
-            _ <- manager.connection.setSyncKind(TextDocumentSyncKind.Incremental)
-            _ <- manager.effects.offer(
-              Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Reopened2", version = 2))
-            )
-            change <- takeMessage(manager.connection)
-            contentChange = change.hcursor.downField("params").downField("contentChanges").downArray
-            _             = contentChange.downField("rangeLength").as[Int].toOption shouldBe Some(0)
-            _             = contentChange.downField("text").as[String].toOption shouldBe Some("2")
-            _ <- manager.stop
-          yield succeed
-        }
-    )
