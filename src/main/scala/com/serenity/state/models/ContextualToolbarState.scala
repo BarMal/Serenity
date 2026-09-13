@@ -403,12 +403,12 @@ object ContextualToolbar:
         inputItem = CommandSurfaceItem.InputItem(
           id = "font-size",
           label = "Size",
-          hint = "Points (1.0-144.0)",
+          hint = "Points (8.0-48.0)",
           currentValue = formatFontSize(currentFontSize),
           kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
           parse = text =>
             text.toFloatOption
-              .filter(size => size >= 1.0f && size <= 144.0f)
+              .filter(size => size >= 8.0f && size <= 48.0f)
               .map(commandIntentArg => CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(commandIntentArg))),
           category = CommandCategory.Edit
         )

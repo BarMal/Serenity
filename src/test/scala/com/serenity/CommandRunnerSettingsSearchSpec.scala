@@ -202,6 +202,23 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
     } shouldBe true
   }
 
+  // issue #1060: a font-family picker embedded inside a settings row (e.g. rich text's "Selection Font Family",
+  // or code/prose/UI font's own family picker) is an inline value editor, not an independently navigable settings
+  // section -- it must not outrank the real "Prose Font"/"Code Font" sections in a bare "font" search just because
+  // its parent (Document & Writing, say) happens to precede Typography in the settings tree.
+  it should "not let an inline font-family picker outrank real font settings sections during search" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
+      .updateSearchTerm("font")
+
+    runner.visibleItems.exists {
+      case group: CommandSurfaceItem.GroupItem => group.id == "rich-text-font-family"
+      case _                                   => false
+    } shouldBe false
+  }
+
   it should "keep strong command matches ahead of settings groups during search" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
