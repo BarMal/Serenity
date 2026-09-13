@@ -133,8 +133,8 @@ class MockRenderSurface(
 
   private val drawRunPxCallsBuffer = scala.collection.mutable.ListBuffer.empty[DrawRunPxCall]
 
-  /** The `TextStyle` a real `Java2DRenderSurface` would currently be painting with: whatever `enableStyle` last set,
-    * or `TextStyle.normal` once `disableStyle` has reverted to the base (unstyled) font -- mirroring
+  /** The `TextStyle` a real `Java2DRenderSurface` would currently be painting with: whatever `enableStyle` last set, or
+    * `TextStyle.normal` once `disableStyle` has reverted to the base (unstyled) font -- mirroring
     * `Java2DRenderSurface.disableStyle`'s unconditional `g.setFont(baseFontRef.get())`, which drops back to no style
     * override regardless of which style was passed in. Recorded onto every [[DrawRunPxCall]] so a test can assert two
     * draws of the same range resolved the same style, the way #1482 did not.
@@ -290,11 +290,12 @@ class MockRenderSurface(
   def disableStyle(style: TextStyle): Unit =
     styleCallsBuffer += StyleCall("disable", style)
     currentStyle.set(TextStyle.normal)
-  def hideCursor(): Unit                   = ()
-  def viewportWidth: Int                   = width
-  def viewportHeight: Int                  = height
-  def flush(): Unit                        = ()
-  def styleCalls: List[StyleCall]          = styleCallsBuffer.toList
+
+  def hideCursor(): Unit          = ()
+  def viewportWidth: Int          = width
+  def viewportHeight: Int         = height
+  def flush(): Unit               = ()
+  def styleCalls: List[StyleCall] = styleCallsBuffer.toList
 
   def getChar(x: Int, y: Int): Char =
     if y >= 0 && y < height && x >= 0 && x < width then chars(y)(x) else ' '

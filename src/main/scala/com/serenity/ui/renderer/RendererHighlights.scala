@@ -136,12 +136,11 @@ object RendererHighlights:
     Color(blendChannel(_.getRed), blendChannel(_.getGreen), blendChannel(_.getBlue))
 
   /** `rangeStart`/`rangeEnd` (buffer columns) split into the contiguous sub-ranges that share one [[TextStyle]]
-    * according to `styledSegments` -- the same per-run style [[com.serenity.ui.renderer.CharacterRenderer]] painted
-    * the underlying glyphs with. A highlight overlay that skipped this and always painted with whatever style the
-    * surface happened to be left at (#1482) silently dropped the run's own font family/size/weight, so a redraw could
-    * come out a different size than the glyphs it was covering. `styledSegments` absent, or not covering the whole
-    * range, falls back to [[TextStyle.normal]] for the uncovered part -- the same default the underlying text itself
-    * falls back to.
+    * according to `styledSegments` -- the same per-run style [[com.serenity.ui.renderer.CharacterRenderer]] painted the
+    * underlying glyphs with. A highlight overlay that skipped this and always painted with whatever style the surface
+    * happened to be left at (#1482) silently dropped the run's own font family/size/weight, so a redraw could come out
+    * a different size than the glyphs it was covering. `styledSegments` absent, or not covering the whole range, falls
+    * back to [[TextStyle.normal]] for the uncovered part -- the same default the underlying text itself falls back to.
     */
   private def styleRangesWithin(
     styledSegments: Option[List[StyledText]],
@@ -154,10 +153,10 @@ object RendererHighlights:
         case _ if offset >= localEnd => acc.reverse
         case Nil                     => ((offset.max(localStart), localEnd, TextStyle.normal) :: acc).reverse
         case segment :: rest =>
-          val segmentEnd  = offset + segment.content.length
-          val chunkStart  = math.max(localStart, offset)
-          val chunkEnd    = math.min(localEnd, segmentEnd)
-          val nextAcc     = if chunkStart < chunkEnd then (chunkStart, chunkEnd, segment.style) :: acc else acc
+          val segmentEnd = offset + segment.content.length
+          val chunkStart = math.max(localStart, offset)
+          val chunkEnd   = math.min(localEnd, segmentEnd)
+          val nextAcc    = if chunkStart < chunkEnd then (chunkStart, chunkEnd, segment.style) :: acc else acc
           loop(rest, segmentEnd, nextAcc)
 
     styledSegments match

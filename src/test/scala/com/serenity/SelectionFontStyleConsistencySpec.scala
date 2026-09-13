@@ -1,6 +1,13 @@
 package com.serenity
 
-import com.serenity.richtext.{ParagraphAlignment, ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun, RichTextStyle}
+import com.serenity.richtext.{
+  ParagraphAlignment,
+  ParagraphRole,
+  RichTextDocument,
+  RichTextParagraph,
+  RichTextRun,
+  RichTextStyle
+}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -9,16 +16,15 @@ import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** #1482: regular (unselected) prose rendered at a different font size than the same text once selected. The two
-  * paint passes shared one `RenderSurface` and one active buffer font, but only the normal glyph pass
+/** #1482: regular (unselected) prose rendered at a different font size than the same text once selected. The two paint
+  * passes shared one `RenderSurface` and one active buffer font, but only the normal glyph pass
   * ([[com.serenity.ui.renderer.CharacterRenderer.renderMeasuredLineWithAnimation]]) ever applied a run's own
   * [[com.serenity.ui.theme.TextStyle]] (font family/size/weight) via `enableStyle`/`disableStyle` before painting --
-  * the selection/comment/diagnostic highlight overlays in
-  * [[com.serenity.ui.renderer.RendererHighlights]] repainted the same glyphs with whatever style the surface
-  * happened to be left at, silently dropping the run's own style. For a document with an explicit per-run font size
-  * (a rich-text prose paragraph, or an imported document with its own point size), that made the highlighted copy
-  * render at the *surface's* base size while the underlying, unselected glyphs kept their own -- exactly the
-  * mismatch reported.
+  * the selection/comment/diagnostic highlight overlays in [[com.serenity.ui.renderer.RendererHighlights]] repainted the
+  * same glyphs with whatever style the surface happened to be left at, silently dropping the run's own style. For a
+  * document with an explicit per-run font size (a rich-text prose paragraph, or an imported document with its own point
+  * size), that made the highlighted copy render at the *surface's* base size while the underlying, unselected glyphs
+  * kept their own -- exactly the mismatch reported.
   */
 class SelectionFontStyleConsistencySpec extends AnyFlatSpec with Matchers:
 
@@ -72,4 +78,3 @@ class SelectionFontStyleConsistencySpec extends AnyFlatSpec with Matchers:
 
     selectedDraw.activeStyle.fontSize shouldBe unselectedDraw.activeStyle.fontSize
   }
-
