@@ -7,6 +7,7 @@ import cats.effect.{Deferred, Fiber, IO, Ref, Resource}
 import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
+import com.serenity.lsp.model.TextDocumentSyncKind
 import com.serenity.state.models.CursorPosition
 import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.Stream
@@ -521,3 +522,61 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
 
     runVirtual(program)
   }
+
+  it should "send a range-based didChange when the connection negotiated incremental sync" in
+    runVirtual(
+      harness
+        .use { manager =>
+          for
+            _ <- open(manager)
+            _ <- manager.connection.setSyncKind(TextDocumentSyncKind.Incremental)
+            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
+            change <- takeMessage(manager.connection)
+            _ = change.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didChange")
+            contentChange = change.hcursor.downField("params").downField("contentChanges").downArray
+            _             = contentChange.downField("range").succeeded shouldBe true
+            _             = contentChange.downField("rangeLength").as[Int].toOption shouldBe Some(0)
+            _             = contentChange.downField("text").as[String].toOption shouldBe Some("2")
+            _ <- manager.stop
+          yield succeed
+        }
+    )
+
+  it should "keep sending full-text didChange when the connection has not negotiated incremental sync" in
+    runVirtual(
+      harness
+        .use { manager =>
+          for
+            _ <- open(manager)
+            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
+            change <- takeMessage(manager.connection)
+            contentChange = change.hcursor.downField("params").downField("contentChanges").downArray
+            _             = contentChange.downField("range").succeeded shouldBe false
+            _             = contentChange.downField("text").as[String].toOption shouldBe Some("object Foo2")
+            _ <- manager.stop
+          yield succeed
+        }
+    )
+
+  it should "diff incremental didChange against the text from the most recent open, not a stale one" in
+    runVirtual(
+      harness
+        .use { manager =>
+          for
+            _ <- open(manager)
+            _ <- manager.effects.offer(Some(LspEffect.FileClosed(uri, LanguageId.Scala)))
+            _ <- takeMessage(manager.connection) // didClose
+            _ <- manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Reopened")))
+            _ <- takeMessage(manager.connection) // didOpen
+            _ <- manager.connection.setSyncKind(TextDocumentSyncKind.Incremental)
+            _ <- manager.effects.offer(
+              Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Reopened2", version = 2))
+            )
+            change <- takeMessage(manager.connection)
+            contentChange = change.hcursor.downField("params").downField("contentChanges").downArray
+            _             = contentChange.downField("rangeLength").as[Int].toOption shouldBe Some(0)
+            _             = contentChange.downField("text").as[String].toOption shouldBe Some("2")
+            _ <- manager.stop
+          yield succeed
+        }
+    )

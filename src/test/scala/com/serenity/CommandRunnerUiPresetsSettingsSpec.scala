@@ -77,26 +77,29 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
       }
       .getOrElse(fail("missing edit preset group"))
 
-    createPreset.label shouldBe "Create New Preset"
-    createPreset.children.map(_.id) shouldBe List(
-      "settings-preset-create-name",
-      "settings-preset-active-panels",
-      "settings-preset-theme",
-      "settings-preset-animations",
-      "settings-preset-fonts",
-      "settings-preset-document-defaults"
+    // issue #1058: editing/creating a preset used to walk a hand-maintained parallel clone tree (Active Panels,
+    // Theme & Surface > Surface Material, Animations > Cursor/Text Entry/UI Surface Motion, Fonts > Editor/Code/UI
+    // Typography, Document Defaults > New Documents/Markdown Preview/Spelling) that re-sliced the same canonical
+    // items several levels deeper than their top-level counterparts. It now reuses the same canonical settings
+    // groups directly (see `presetScopedGroups` in `CommandRunnerSettingsGroups`), just re-tagged with
+    // `settings-preset-*` ids so they remain addressable as distinct pages.
+    val presetScopedGroupIds = List(
+      "settings-preset-workspace-layout",
+      "settings-preset-surface-appearance",
+      "settings-preset-cursor",
+      "settings-preset-animation",
+      "settings-preset-prose-font",
+      "settings-preset-code-font",
+      "settings-preset-ui-font",
+      "settings-preset-document-defaults",
+      "settings-preset-spellcheck"
     )
+    createPreset.label shouldBe "Create New Preset"
+    createPreset.children.map(_.id) shouldBe "settings-preset-create-name" :: presetScopedGroupIds
     editPreset.label shouldBe "Edit Preset: Writing"
     editPreset.hint shouldBe Some("Editing Writing")
-    editPreset.children.map(_.id) shouldBe List(
-      "settings-preset-name",
-      "settings-preset-actions",
-      "settings-preset-active-panels",
-      "settings-preset-theme",
-      "settings-preset-animations",
-      "settings-preset-fonts",
-      "settings-preset-document-defaults"
-    )
+    editPreset.children.map(_.id) shouldBe
+      List("settings-preset-name", "settings-preset-actions") ++ presetScopedGroupIds
     val createName = createPreset.children
       .collectFirst {
         case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-create-name" => group
@@ -126,10 +129,10 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
     )
     val activePanels = editPreset.children
       .collectFirst {
-        case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-active-panels" => group
+        case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-workspace-layout" => group
       }
-      .getOrElse(fail("missing active panels group"))
-    activePanels.label shouldBe "Active Panels"
+      .getOrElse(fail("missing workspace layout group"))
+    activePanels.label shouldBe "Panels & Workspace"
     val workspaceItems = descendants(activePanels)
     workspaceItems.collect {
       case option: CommandSurfaceItem.OptionItem => option.options.map(_.intent)
@@ -140,40 +143,34 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
       CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom)))
     )
     workspaceItems.collect { case CommandSurfaceItem.CommandItem(command) => command.intent } shouldBe Nil
-    val animations = groupByIdRecursive(List(editPreset), "settings-preset-animations")
-    animations.children.map(_.id) shouldBe List(
-      "settings-preset-cursor-motion",
-      "settings-preset-text-entry-motion",
-      "settings-preset-ui-surface-motion"
-    )
-    val fonts = groupByIdRecursive(List(editPreset), "settings-preset-fonts")
-    fonts.children.map(_.id) shouldBe List(
-      "settings-preset-editor-typography",
-      "settings-preset-code-typography",
-      "settings-preset-ui-typography"
-    )
+    val animation = groupByIdRecursive(List(editPreset), "settings-preset-animation")
+    animation.label shouldBe "Motion & Animation"
+    animation.children.map(_.id) should contain allOf ("motion-preset", "cursor-speed-scale", "editor-text-transition")
+    val proseFont = groupByIdRecursive(List(editPreset), "settings-preset-prose-font")
+    proseFont.label shouldBe "Prose Font"
+    proseFont.children.map(_.id) should contain allOf ("text-font", "text-ligatures", "text-font-size")
+    val codeFont = groupByIdRecursive(List(editPreset), "settings-preset-code-font")
+    codeFont.children.map(_.id) should contain allOf ("code-font", "code-ligatures", "code-font-size")
+    val uiFont = groupByIdRecursive(List(editPreset), "settings-preset-ui-font")
+    uiFont.children.map(_.id) should contain allOf ("ui-font", "ui-ligatures", "ui-font-size")
     val documentDefaults = groupByIdRecursive(List(editPreset), "settings-preset-document-defaults")
-    documentDefaults.children.map(_.id) shouldBe List(
-      "settings-preset-new-documents",
-      "settings-preset-markdown-preview",
-      "settings-preset-spelling"
-    )
-    descendants(documentDefaults).map(_.id) should contain allOf (
-      "default-document-mode",
-      "markdown-view",
+    documentDefaults.label shouldBe "Document Defaults"
+    documentDefaults.children.map(_.id) shouldBe List("default-document-mode", "markdown-view")
+    val spellcheck = groupByIdRecursive(List(editPreset), "settings-preset-spellcheck")
+    spellcheck.label shouldBe "Spell Check"
+    spellcheck.children.map(_.id) should contain allOf (
       "spellcheck-enabled",
       "spellcheck-languages",
       "spellcheck-dictionaries",
       "spellcheck-words"
     )
     descendants(documentDefaults).map(_.id) should not contain "lang-plain-text"
-    // issue #1057: this used to also carry a "settings-preset-theme-selection" child (Theme Chooser/Creator/Toggle/
-    // Reload) -- those are one-shot actions with no preset-scoped value of their own, now ordinary CommandRegistry
-    // commands (CommandRunnerOneShotActionsSpec), not part of this settings subtree.
-    val theme = groupByIdRecursive(List(editPreset), "settings-preset-theme")
-    theme.label shouldBe "Theme & Surface"
-    theme.children.map(_.id) shouldBe List("settings-preset-surface-material")
-    descendants(theme).map(_.id) should contain allOf ("background-style", "material-preset", "blur-radius")
+    // issue #1057: this used to also carry a "Theme Selection" child (Theme Chooser/Creator/Toggle/Reload) -- those
+    // are one-shot actions with no preset-scoped value of their own, now ordinary CommandRegistry commands
+    // (CommandRunnerOneShotActionsSpec), not part of this settings subtree.
+    val surfaceAppearance = groupByIdRecursive(List(editPreset), "settings-preset-surface-appearance")
+    surfaceAppearance.label shouldBe "Surface Appearance"
+    surfaceAppearance.children.map(_.id) should contain allOf ("background-style", "material-preset", "blur-radius")
 
     // issue #1060: Apply/Overwrite/Delete/Reset now pick from the existing-preset catalog instead of requiring a
     // typed exact name -- Duplicate/Rename/Save-As-New still need typed input since each needs a *new* name.
