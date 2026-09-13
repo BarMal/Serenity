@@ -13,7 +13,14 @@ import com.serenity.lsp.client.{
   RequestId,
   WorkspaceRootUri
 }
-import com.serenity.lsp.model.{DiagnosticSeverity, LspPosition, LspRange, SemanticToken, SemanticTokensLegend}
+import com.serenity.lsp.model.{
+  DiagnosticSeverity,
+  LspPosition,
+  LspRange,
+  SemanticToken,
+  SemanticTokensLegend,
+  TextDocumentSyncKind
+}
 import io.circe.Json
 import io.circe.syntax.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -244,6 +251,76 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
     td.downField("version").as[Int].toOption shouldBe Some(2)
     params.hcursor.downField("contentChanges").downArray.downField("text").as[String].toOption shouldBe
       Some("object Updated")
+  }
+
+  it should "advertise synchronization capabilities so a server can negotiate its didChange sync kind" in {
+    val params = LspProtocol.initializeParams(123, WorkspaceRootUri("file:///workspace"))
+    params.hcursor
+      .downField("capabilities")
+      .downField("textDocument")
+      .downField("synchronization")
+      .succeeded shouldBe true
+  }
+
+  it should "build range-based didChange params when the server negotiated incremental sync" in {
+    val params = LspProtocol.didChangeParams(
+      DocumentUri("file:///foo/Bar.scala"),
+      2,
+      previousText = "object Foo",
+      newText = "object Foo2",
+      syncKind = TextDocumentSyncKind.Incremental
+    )
+    val td = params.hcursor.downField("textDocument")
+    td.downField("uri").as[String].toOption shouldBe Some("file:///foo/Bar.scala")
+    td.downField("version").as[Int].toOption shouldBe Some(2)
+
+    val change = params.hcursor.downField("contentChanges").downArray
+    change.downField("range").downField("start").downField("line").as[Int].toOption shouldBe Some(0)
+    change.downField("range").downField("start").downField("character").as[Int].toOption shouldBe Some(10)
+    change.downField("range").downField("end").downField("line").as[Int].toOption shouldBe Some(0)
+    change.downField("range").downField("end").downField("character").as[Int].toOption shouldBe Some(10)
+    change.downField("rangeLength").as[Int].toOption shouldBe Some(0)
+    change.downField("text").as[String].toOption shouldBe Some("2")
+  }
+
+  it should "fall back to full-text didChange params when the server only supports full sync" in {
+    val params = LspProtocol.didChangeParams(
+      DocumentUri("file:///foo/Bar.scala"),
+      2,
+      previousText = "object Foo",
+      newText = "object Foo2",
+      syncKind = TextDocumentSyncKind.Full
+    )
+    params.hcursor.downField("contentChanges").downArray.downField("text").as[String].toOption shouldBe
+      Some("object Foo2")
+    params.hcursor.downField("contentChanges").downArray.downField("range").succeeded shouldBe false
+  }
+
+  "TextDocumentSyncKind.fromInitializeResult" should "parse an integer textDocumentSync capability" in {
+    val result = Json.obj("capabilities" -> Json.obj("textDocumentSync" -> 2.asJson))
+    TextDocumentSyncKind.fromInitializeResult(result) shouldBe TextDocumentSyncKind.Incremental
+  }
+
+  it should "parse the object form of textDocumentSync via its change field" in {
+    val result = Json.obj(
+      "capabilities" -> Json.obj("textDocumentSync" -> Json.obj("openClose" -> true.asJson, "change" -> 2.asJson))
+    )
+    TextDocumentSyncKind.fromInitializeResult(result) shouldBe TextDocumentSyncKind.Incremental
+  }
+
+  it should "parse a None (0) textDocumentSync capability" in {
+    val result = Json.obj("capabilities" -> Json.obj("textDocumentSync" -> 0.asJson))
+    TextDocumentSyncKind.fromInitializeResult(result) shouldBe TextDocumentSyncKind.None
+  }
+
+  it should "default to Full when textDocumentSync is absent" in {
+    val result = Json.obj("capabilities" -> Json.obj())
+    TextDocumentSyncKind.fromInitializeResult(result) shouldBe TextDocumentSyncKind.Full
+  }
+
+  it should "default to Full when textDocumentSync has an unrecognized shape" in {
+    val result = Json.obj("capabilities" -> Json.obj("textDocumentSync" -> "unexpected".asJson))
+    TextDocumentSyncKind.fromInitializeResult(result) shouldBe TextDocumentSyncKind.Full
   }
 
   it should "build hover, definition, and completion params from document positions" in {

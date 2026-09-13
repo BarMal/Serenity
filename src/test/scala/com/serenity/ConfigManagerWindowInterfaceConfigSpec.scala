@@ -19,7 +19,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.preferredWindowSize shouldBe Some(PreferredWindowSize(1400, 900))
     ConfigManager.configToString(config) should include("window.preferred.width = 1400")
@@ -34,7 +34,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.windowChromeMode shouldBe WindowChromeMode.Auto
     ConfigManager.configToString(config) should include(
@@ -52,7 +52,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
         |""".stripMargin
     )
 
-    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+    val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
     result.report.invalidEntries.map(_.key) should contain("window.chrome")
     result.report.invalidEntries.map(_.key) should contain("window.preferred.width")
@@ -66,7 +66,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.interfaceDensity shouldBe InterfaceDensity.Spacious
     ConfigManager.configToString(config) should include("interface.density = spacious")
@@ -82,7 +82,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
         |""".stripMargin
     )
 
-    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+    val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
     result.report.invalidEntries.map(_.key) should contain("interface.density")
     result.report.invalidEntries.map(_.key) should contain("ui.element_gap")
@@ -97,7 +97,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.uiElementGap shouldBe 3
     ConfigManager.configToString(config) should include("ui.element_gap = 3")
@@ -111,7 +111,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.uiCornerRadiusPx shouldBe 14
     ConfigManager.configToString(config) should include("ui.corner_radius = 14")
@@ -125,7 +125,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.uiOutlineThicknessPx shouldBe 4
     ConfigManager.configToString(config) should include("ui.outline_thickness = 4")

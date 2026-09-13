@@ -2,6 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
 import com.serenity.command.{CommandRegistry, CommandRunnerSurface, CommandSurfaceItem, SettingsSurfaceState}
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
@@ -89,7 +90,7 @@ final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMou
                   hasHeader = true,
                   hasFooter = true,
                   reservedContentRows = groupPreviewRowCount(items, runner.settingsSurfaceSelectedIndex),
-                  itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+                  itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
                   itemTargetRows =
                     SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
                 )
@@ -113,7 +114,7 @@ final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMou
                   hasHeader = true,
                   hasFooter = items.nonEmpty || runner.statusMessage.nonEmpty,
                   reservedContentRows = groupPreviewRowCount(items, runner.selectedIndex),
-                  itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+                  itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
                   itemTargetRows =
                     SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
                 )

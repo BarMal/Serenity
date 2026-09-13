@@ -24,7 +24,8 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
           .map(commandIntentArg =>
             CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiElementGap(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(CommandRunnerSettingsInputItems.formatDecimal(AppConfig.default.interfaceConfig.elementGap))
     ),
     CommandSurfaceItem.InputItem(
       id = "ui-corner-radius",
@@ -39,7 +40,8 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
             CommandIntent
               .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiCornerRadiusPx(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(AppConfig.default.interfaceConfig.cornerRadiusPx.toString)
     ),
     CommandSurfaceItem.InputItem(
       id = "ui-outline-thickness",
@@ -54,77 +56,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
             CommandIntent
               .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiOutlineThicknessPx(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
-    )
-  )
-
-  private[command] def commandRunnerLayoutItems(
-    commandRowsValue: String,
-    commandItemGapRowsValue: String,
-    commandCursorGapRowsValue: String
-  ): List[CommandSurfaceItem.InputItem] = List(
-    CommandSurfaceItem.InputItem(
-      id = "command-runner-visible-rows",
-      label = "Visible Commands",
-      hint =
-        s"Command rows (${AppConfig.MinCommandRunnerVisibleRows}-${AppConfig.MaxCommandRunnerVisibleRows}) or auto",
-      currentValue = commandRowsValue,
-      kind = CommandSurfaceItem.InputKind.FreeText,
-      parse = text =>
-        val normalized = text.trim.toLowerCase
-        if normalized == "auto" then
-          Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(None))))
-        else
-          normalized.toIntOption
-            .filter(value =>
-              value >= AppConfig.MinCommandRunnerVisibleRows &&
-                value <= AppConfig.MaxCommandRunnerVisibleRows
-            )
-            .map(value =>
-              CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(Some(value))))
-            )
-      ,
-      category = CommandCategory.Settings
-    ),
-    CommandSurfaceItem.InputItem(
-      id = "command-runner-item-gap-rows",
-      label = "Command Item Spacing",
-      hint =
-        s"Rows, decimals supported (${AppConfig.MinCommandRunnerItemGapRows}-${AppConfig.MaxCommandRunnerItemGapRows})",
-      currentValue = commandItemGapRowsValue,
-      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
-      parse = text =>
-        text.trim.toDoubleOption
-          .filter(value =>
-            value >= AppConfig.MinCommandRunnerItemGapRows &&
-              value <= AppConfig.MaxCommandRunnerItemGapRows
-          )
-          .map(commandIntentArg =>
-            CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerItemGapRows(commandIntentArg)))
-          ),
-      category = CommandCategory.Settings
-    ),
-    CommandSurfaceItem.InputItem(
-      id = "command-runner-cursor-gap-rows",
-      label = "Command Cursor Spacing",
-      hint =
-        s"Rows, decimals supported (${AppConfig.MinCommandRunnerCursorGapRows}-${AppConfig.MaxCommandRunnerCursorGapRows}) or auto",
-      currentValue = commandCursorGapRowsValue,
-      kind = CommandSurfaceItem.InputKind.FreeText,
-      parse = text =>
-        val normalized = text.trim.toLowerCase
-        if normalized == "auto" then
-          Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerCursorGapRows(None))))
-        else
-          normalized.toDoubleOption
-            .filter(value =>
-              value >= AppConfig.MinCommandRunnerCursorGapRows &&
-                value <= AppConfig.MaxCommandRunnerCursorGapRows
-            )
-            .map(value =>
-              CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerCursorGapRows(Some(value))))
-            )
-      ,
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(AppConfig.default.interfaceConfig.outlineThicknessPx.toString)
     )
   )

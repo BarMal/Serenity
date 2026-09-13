@@ -197,3 +197,38 @@ class CommandPaletteContentResolverSpec extends AnyFlatSpec with Matchers:
 
     row.segments.last.tone shouldBe OverlayTone.Error
   }
+
+  it should "append a visible, muted default-value hint for a row that has one (issue #1056)" in {
+    val item = CommandSurfaceItem.InputItem(
+      id = "font-size",
+      label = "Size",
+      hint = "Points",
+      currentValue = "18",
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
+      parse = text => text.toFloatOption.map(size => CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(size))),
+      category = CommandCategory.Edit,
+      defaultValue = Some("12")
+    )
+
+    val row = CommandPaletteContentResolver.inputRow(item, selected = false, editingText = None)
+
+    row.plainText shouldBe "Size: Points 18 (default: 12)"
+    row.segments.last.text shouldBe "(default: 12)"
+    row.segments.last.tone shouldBe OverlayTone.Muted
+  }
+
+  it should "show no default-value hint for a row with no default" in {
+    val item = CommandSurfaceItem.InputItem(
+      id = "rich-text-font-size",
+      label = "Selection Font Size",
+      hint = "Points (8.0-48.0)",
+      currentValue = "",
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
+      parse = text => text.toFloatOption.map(size => CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(size))),
+      category = CommandCategory.Edit
+    )
+
+    val row = CommandPaletteContentResolver.inputRow(item, selected = false, editingText = None)
+
+    row.segments.map(_.text) shouldBe List("Selection Font Size", "Points (8.0-48.0)", "")
+  }

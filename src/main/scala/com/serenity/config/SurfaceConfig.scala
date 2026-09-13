@@ -42,7 +42,11 @@ final case class SurfaceConfig(
     commandRunnerAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     uiAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     commandRunnerVisibleRows: Option[Int] = None,
-    commandRunnerItemGapRows: Double = 0.0,
+    // issue #1046: `None` (the default) now falls back to the current interface density's own item spacing
+    // (`InterfaceDensityMetrics.itemGapRows`, via `AppConfig.effectiveCommandRunnerItemGapRows`) rather than a flat
+    // 0.0 regardless of density -- consistent with `commandRunnerVisibleRows`/`commandRunnerCursorGapRows` above,
+    // which already fall back to a density-derived default when unset.
+    commandRunnerItemGapRows: Option[Double] = None,
     commandRunnerCursorGapRows: Option[Double] = None,
     // Opt-out (unlike `showWordCount`/`commentDisplayMode`): the persistent key-hint footer (issue #931, Stage 3) is
     // the discoverability fix the stage exists to deliver, so it ships on by default; callers who want the old
@@ -91,7 +95,7 @@ final case class SurfaceConfig(
       cursorTransitionSpeedScale = cursorTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
       motionConfiguration = motionConfiguration.map(_.normalized),
       commandRunnerVisibleRows = commandRunnerVisibleRows.map(AppConfig.clampCommandRunnerVisibleRows),
-      commandRunnerItemGapRows = AppConfig.clampCommandRunnerItemGapRows(commandRunnerItemGapRows),
+      commandRunnerItemGapRows = commandRunnerItemGapRows.map(AppConfig.clampCommandRunnerItemGapRows),
       commandRunnerCursorGapRows = commandRunnerCursorGapRows.map(AppConfig.clampCommandRunnerCursorGapRows),
       commandRunnerCursorPeekTapWindowMillis =
         AppConfig.clampCommandRunnerCursorPeekTapWindowMillis(commandRunnerCursorPeekTapWindowMillis),

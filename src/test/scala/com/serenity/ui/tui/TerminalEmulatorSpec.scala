@@ -149,6 +149,25 @@ class TerminalEmulatorSpec extends AnyFlatSpec with Matchers:
     emulator().consume(s"$esc]52;c;$payload$esc\\").osc52Payloads shouldBe Vector("st form")
   }
 
+  "OSC 0" should "record the terminal title, BEL- or ST-terminated" in {
+    emulator().consume(s"$esc]0;Document title$bel").title shouldBe Some("Document title")
+    emulator().consume(s"$esc]0;ST title$esc\\").title shouldBe Some("ST title")
+  }
+
+  it should "also be recognised as OSC 2 (icon title, no window-title-only distinction tracked here)" in {
+    emulator().consume(s"$esc]2;Icon title$bel").title shouldBe Some("Icon title")
+  }
+
+  it should "reflect only the most recent title, replacing the previous one" in {
+    emulator().consume(s"$esc]0;first$bel$esc]0;second$bel").title shouldBe Some("second")
+  }
+
+  "OSC 9" should "collect every desktop notification message in order" in {
+    val result = emulator().consume(s"$esc]9;first$bel$esc]9;second$bel")
+
+    result.notifications shouldBe Vector("first", "second")
+  }
+
   "a wide glyph" should "occupy its leading cell and reserve the column to its right" in {
     val result = emulator().consume(cup(1, 1) + "漢x")
 

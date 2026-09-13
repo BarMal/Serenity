@@ -55,7 +55,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
     * error, or cancellation) rather than only the happy path `manager.stop` covered; cancelling a fiber that already
     * finished via `manager.stop` is a no-op, so this changes nothing on that path.
     */
-  private def harness: Resource[IO, Harness] =
+  private def harness(serverAvailable: Boolean = true): Resource[IO, Harness] =
     for
       effects      <- Resource.eval(Queue.unbounded[IO, Option[LspEffect]])
       events       <- Resource.eval(Ref.of[IO, List[Event]](Nil))
@@ -68,9 +68,11 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
           fileUri: DocumentUri,
           onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
         ): IO[Option[LspManager.ResolvedConnection]] =
-          IO.pure(
-            Some(resolvedConnection(WorkspaceRootUri("file:///workspace"), connection, released.complete(()).void))
-          )
+          if serverAvailable then
+            IO.pure(
+              Some(resolvedConnection(WorkspaceRootUri("file:///workspace"), connection, released.complete(()).void))
+            )
+          else IO.pure(None)
       managerFiber <- Resource.make(
         LspManager
           .runWithProvider(
@@ -111,7 +113,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
 
   "LspManager" should "send document changes while a hover response is pending" in
     runVirtual(
-      harness
+      harness()
         .use { manager =>
           for
             _ <- open(manager)
@@ -137,7 +139,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
   it should "discard a definition response after its document version changes" in {
     val anchor = CursorPosition(0, 1)
     runVirtual(
-      harness
+      harness()
         .use { manager =>
           for
             _ <- open(manager)
@@ -173,7 +175,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
     val firstAnchor  = CursorPosition(0, 1)
     val secondAnchor = CursorPosition(0, 2)
     runVirtual(
-      harness
+      harness()
         .use { manager =>
           for
             _ <- open(manager)
@@ -206,7 +208,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
 
   it should "cancel pending request fibers before releasing connections on shutdown" in
     runVirtual(
-      harness
+      harness()
         .use { manager =>
           for
             _ <- open(manager)
@@ -230,7 +232,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
     val program: IO[Int] =
       for
         connectionRef <- Ref.of[IO, Option[LspConnection]](None)
-        _ <- harness.use { manager =>
+        _ <- harness().use { manager =>
           connectionRef.set(Some(manager.connection)) >>
             (for
               _ <- open(manager)
@@ -259,7 +261,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
     // definition already use -- means the sequential effects loop moves on to the next effect as soon as the
     // completion request is sent, without waiting for its response.
     runVirtual(
-      harness
+      harness()
         .use { manager =>
           for
             _ <- open(manager)
@@ -278,6 +280,56 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
           yield succeed
         }
     )
+
+  // #1508: the "no server available" fallback in `startRequest` used to hardcode `LspHoverReceived` regardless of
+  // which request kind was actually being made. These three cover the fallback's kind-appropriate event for each of
+  // the request kinds that exist today (Hover, Completion, Definition); a semantic-tokens case will need the same
+  // treatment once #1506 (currently unmerged) introduces that request kind.
+  it should "emit an explanatory hover message when no LSP server is available" in {
+    val anchor = CursorPosition(0, 1)
+    runVirtual(
+      harness(serverAvailable = false)
+        .use { manager =>
+          for
+            _      <- manager.effects.offer(Some(LspEffect.HoverRequested(uri, LanguageId.Scala, 0, 1, anchor)))
+            _      <- manager.stop
+            events <- manager.events.get
+          yield events shouldBe List(
+            LspEvent.LspHoverReceived(s"No LSP server available for ${LanguageId.Scala.displayName}", anchor)
+          )
+        }
+    )
+  }
+
+  it should "emit an empty completion list when no LSP server is available" in {
+    val anchor = CursorPosition(0, 1)
+    runVirtual(
+      harness(serverAvailable = false)
+        .use { manager =>
+          for
+            _      <- manager.effects.offer(Some(LspEffect.CompletionRequested(uri, LanguageId.Scala, 0, 1, anchor)))
+            _      <- manager.stop
+            events <- manager.events.get
+          yield events shouldBe List(LspEvent.LspCompletionReceived(Nil, anchor))
+        }
+    )
+  }
+
+  it should "emit no event for a definition request when no LSP server is available" in {
+    val anchor = CursorPosition(0, 1)
+    runVirtual(
+      harness(serverAvailable = false)
+        .use { manager =>
+          for
+            _ <- manager.effects.offer(
+              Some(LspEffect.DefinitionRequested(uri, LanguageId.Scala, 0, 1, anchor, "Foo"))
+            )
+            _      <- manager.stop
+            events <- manager.events.get
+          yield events shouldBe Nil
+        }
+    )
+  }
 
   it should "create separate connections for same-language documents in different workspaces" in {
     val firstUri  = "file:///workspace-one/Foo.scala"
