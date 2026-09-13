@@ -78,9 +78,9 @@ final class TerminalScreenBuffer(val width: Int, val height: Int):
 
   def snapshot: TerminalFrame = TerminalFrame(width, height, grid.map(_.toVector).toVector)
 
-  /** Rows written with a value different from what they already held, since the last call to this method -- then
-    * reset for the next one. See `dirtyRows`'s own doc for why this is the complete, correct source of "what
-    * changed" rather than a re-derived or partial one.
+  /** Rows written with a value different from what they already held, since the last call to this method -- then reset
+    * for the next one. See `dirtyRows`'s own doc for why this is the complete, correct source of "what changed" rather
+    * than a re-derived or partial one.
     */
   def consumeDirtyRows(): Set[Int] =
     val touched = (0 until height).filter(dirtyRows.get).toSet

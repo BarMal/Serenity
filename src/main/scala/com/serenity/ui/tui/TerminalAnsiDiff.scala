@@ -17,10 +17,9 @@ object TerminalAnsiDiff:
 
   /** `dirtyRows`, when given, is trusted as the complete set of rows that could have changed -- rows outside it are
     * never scanned at all, rather than re-derived or double-checked. `None` (every call site before #1464, and every
-    * caller with no such record available) preserves the original full-frame scan. `TerminalRenderSurface.flush`
-    * passes `TerminalScreenBuffer.consumeDirtyRows()`, the one source that actually covers every paint path -- see
-    * its own doc comment for why the renderer's pane-scoped `FramePlan.dirtyRowsByPane` can't safely serve here
-    * instead.
+    * caller with no such record available) preserves the original full-frame scan. `TerminalRenderSurface.flush` passes
+    * `TerminalScreenBuffer.consumeDirtyRows()`, the one source that actually covers every paint path -- see its own doc
+    * comment for why the renderer's pane-scoped `FramePlan.dirtyRowsByPane` can't safely serve here instead.
     */
   def emit(previous: Option[TerminalFrame], next: TerminalFrame, dirtyRows: Option[Set[Int]] = None): String =
     previous match
