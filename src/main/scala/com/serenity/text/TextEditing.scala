@@ -35,8 +35,7 @@ object TextEditing:
     * with `deleteWordBackward` and to be ready if a field ever gains real interior-cursor tracking.
     */
   def deleteWordForward(text: String): String =
-    val boundary = nextWordBoundary(text, text.length)
-    text.substring(0, boundary) + text.substring(text.length)
+    text
 
   def previousWordBoundary(text: String, cursor: Int): Int =
     previousWordBoundary(StringCharacterSource(text), cursor)
