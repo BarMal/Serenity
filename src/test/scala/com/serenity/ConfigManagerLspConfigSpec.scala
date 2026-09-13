@@ -23,7 +23,7 @@ class ConfigManagerLspConfigSpec extends AnyFlatSpec with Matchers with OptionVa
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.languageToolsConfig.lspUserConfig.servers.value(LanguageId.Scala.id) shouldBe LspServerOverride(
       command = None,
@@ -46,14 +46,14 @@ class ConfigManagerLspConfigSpec extends AnyFlatSpec with Matchers with OptionVa
     val configFile = Files.createTempFile("serenity-lsp-comma-args", ".conf")
     Files.writeString(configFile, "lsp.python.args = [\"--define=A,B\", \"--stdio\"]\n")
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.languageToolsConfig.lspUserConfig.servers.value(LanguageId.Python.id).args shouldBe Some(
       List("--define=A,B", "--stdio")
     )
     val written = ConfigManager.configToString(config)
     Files.writeString(configFile, written)
-    ConfigManager
+    ConfigManagerTestSupport
       .loadConfig(Some(configFile.toString))
       .languageToolsConfig
       .lspUserConfig
