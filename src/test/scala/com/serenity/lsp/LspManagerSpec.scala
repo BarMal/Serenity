@@ -577,7 +577,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
 
   it should "send a range-based didChange when the connection negotiated incremental sync" in
     runVirtual(
-      harness
+      harness()
         .use { manager =>
           for
             _ <- open(manager)
@@ -596,7 +596,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
 
   it should "keep sending full-text didChange when the connection has not negotiated incremental sync" in
     runVirtual(
-      harness
+      harness()
         .use { manager =>
           for
             _ <- open(manager)
@@ -612,7 +612,7 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
 
   it should "diff incremental didChange against the text from the most recent open, not a stale one" in
     runVirtual(
-      harness
+      harness()
         .use { manager =>
           for
             _ <- open(manager)
