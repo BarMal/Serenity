@@ -163,13 +163,13 @@ final case class UndoState(
     copy(redoStack = boundedPush(entry, redoStack))
 
   // `Vector` keeps this O(1) amortized on every push, not just below the cap: prepending (`+:`) and dropping the
-  // oldest entry off the far end (`init`) are both effectively-constant-time operations on a `Vector`, unlike a
+  // oldest entry off the far end (`dropRight(1)`) are both effectively-constant-time operations on a `Vector`, unlike a
   // `List`, which has no cheap way to drop its last element. The prior fix only avoided the O(maxUndoDepth) `take`
   // copy while under the cap; every push once the stack reached the cap -- the steady state for any session longer
   // than `maxUndoDepth` edits -- still paid it in full (#1455).
   private def boundedPush(entry: HistoryEntry, stack: Vector[HistoryEntry]): Vector[HistoryEntry] =
     val pushed = entry +: stack
-    if pushed.lengthIs <= effectiveMaxUndoDepth then pushed else pushed.init
+    if pushed.lengthIs <= effectiveMaxUndoDepth then pushed else pushed.dropRight(1)
 
   private def effectiveMaxUndoDepth: Int =
     math.max(1, maxUndoDepth)

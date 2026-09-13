@@ -38,7 +38,7 @@ final private[manager] class UndoRecording(port: UndoRecordingPort):
       flushed.undoStack.headOption match
         case None => IO.unit
         case Some(entry) =>
-          val rest = flushed.undoStack.tail
+          val rest = flushed.undoStack.drop(1)
           restoreAndPush(entry, state => flushed.copy(undoStack = rest).pushRedo(state))
     }
 
@@ -47,7 +47,7 @@ final private[manager] class UndoRecording(port: UndoRecordingPort):
       undo.redoStack.headOption match
         case None => IO.unit
         case Some(entry) =>
-          val rest = undo.redoStack.tail
+          val rest = undo.redoStack.drop(1)
           restoreAndPush(entry, inverse => undo.copy(redoStack = rest).pushUndo(inverse, clearRedo = false))
     }
 
