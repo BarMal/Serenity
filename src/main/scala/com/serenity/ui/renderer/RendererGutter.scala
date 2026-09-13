@@ -28,64 +28,7 @@ object RendererGutter:
         // Diagnostic markers share the divider's own column (the gutter's last), so they are collected here and
         // repainted afterwards -- once the divider itself has been painted as one continuous stroke -- rather than
         // drawn inline per row, which would have the divider immediately paint back over them.
-        val diagnosticRows: List[(Int, List[com.serenity.lsp.model.Diagnostic])] =
-          state.persisted.layout.activeEditorPaneId
-            .flatMap(state.persisted.layout.editorPanes.get)
-            .toList
-            .flatMap { pane =>
-              val buffer = pane.bufferId.flatMap(state.persisted.buffers.get)
-              val snapshot =
-                state.persisted.layout.activeEditorPaneId
-                  .flatMap(renderPlan.snapshots.get)
-                  .orElse {
-                    for
-                      paneLayout <- state.persisted.layout.activeEditorPaneId.flatMap(renderPlan.paneLayouts.get)
-                      buf        <- buffer
-                    yield RendererPaneSetup.snapshotForBuffer(buf, paneLayout.contentRect, state, context)
-                  }
-              snapshot.toList.flatMap { snapshot =>
-                renderPlan.layoutContract.lineNumberRowSlots(snapshot.visualLines.length).toList.flatMap {
-                  case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), rowY)
-                      if RendererPaneContent.visualLineFits(lineRect, index, context, snapshot) =>
-                    snapshot.visualLines.lift(index).toList.flatMap { visualLine =>
-                      val lineTopPx = RendererPaneContent.visualLineTopPx(lineRect, index, context, snapshot)
-                      val rendersLineNumber =
-                        shouldRenderLineNumberForVisualLine(
-                          visualLine,
-                          state.persisted.config.surfaceConfig.wordWrapEnabled
-                        )
-                      val lineNumberText =
-                        if rendersLineNumber then
-                          val numberWidth = math.max(1, lineRect.width - 1)
-                          (visualLine.bufferLine + 1).toString.reverse.padTo(numberWidth, ' ').reverse + " "
-                        else continuationIndicatorText(lineRect.width)
-                      val measuredLineNumberFont = buffer.filter(useMeasuredLineNumberFont(_, context))
-                      if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) && measuredLineNumberFont.nonEmpty
-                      then
-                        measuredLineNumberFont.foreach(buf => surface.text.setFont(context.fontForBuffer(buf)))
-                        surface.text.drawRunPx(
-                          context.cellMetrics.toPixelX(lineRect.x).toFloat,
-                          lineTopPx,
-                          lineRect.width * context.cellMetrics.charWidth.toFloat,
-                          snapshot.lineHeightPx,
-                          snapshot.ascentPx,
-                          lineNumberText
-                        )
-                        surface.text.setFont(context.uiFont)
-                      else surface.putString(lineRect.x, rowY, lineNumberText)
-                      if rendersLineNumber then
-                        (for
-                          bufferId   <- pane.bufferId.toList
-                          annotation <- renderPlan.annotations.get(bufferId).toList
-                          diagnostics = annotation.diagnosticsByLine.getOrElse(visualLine.bufferLine, Nil)
-                          if diagnostics.nonEmpty
-                        yield rowY -> diagnostics)
-                      else Nil
-                    }
-                  case _ => Nil
-                }
-              }
-            }
+        val diagnosticRows = renderLineNumberRows(state, context, renderPlan, lineRect, surface)
 
         // The gutter/body boundary, painted once per frame as a single full-height fill (#1483) rather than
         // implicitly by each row's own background fill: a divider assembled that way is only as continuous as every
@@ -97,10 +40,99 @@ object RendererGutter:
         surface.fillRect(lineRect.x + lineRect.width - 1, lineRect.y, 1, lineRect.height, ' ')
         surface.setBackgroundColor(state.persisted.theme.panel.background)
 
-        diagnosticRows.foreach { case (rowY, diagnostics) =>
-          renderDiagnosticIndicator(surface, lineRect, rowY, diagnostics, state)
+        diagnosticRows.foreach {
+          case (rowY, diagnostics) =>
+            renderDiagnosticIndicator(surface, lineRect, rowY, diagnostics, state)
         }
       }
+
+  private def renderLineNumberRows(
+    state: AppState,
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    lineRect: LayoutRect,
+    surface: RenderSurface
+  ): List[(Int, List[com.serenity.lsp.model.Diagnostic])] =
+    state.persisted.layout.activeEditorPaneId
+      .flatMap(state.persisted.layout.editorPanes.get)
+      .toList
+      .flatMap { pane =>
+        val buffer = pane.bufferId.flatMap(state.persisted.buffers.get)
+        val snapshot =
+          state.persisted.layout.activeEditorPaneId
+            .flatMap(renderPlan.snapshots.get)
+            .orElse {
+              for
+                paneLayout <- state.persisted.layout.activeEditorPaneId.flatMap(renderPlan.paneLayouts.get)
+                buf        <- buffer
+              yield RendererPaneSetup.snapshotForBuffer(buf, paneLayout.contentRect, state, context)
+            }
+        snapshot.toList.flatMap { snapshot =>
+          renderPlan.layoutContract.lineNumberRowSlots(snapshot.visualLines.length).toList.flatMap {
+            case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), rowY)
+                if RendererPaneContent.visualLineFits(lineRect, index, context, snapshot) =>
+              snapshot.visualLines.lift(index).toList.flatMap { visualLine =>
+                renderLineNumberRow(
+                  state,
+                  context,
+                  renderPlan,
+                  lineRect,
+                  surface,
+                  pane,
+                  buffer,
+                  snapshot,
+                  index,
+                  visualLine,
+                  rowY
+                )
+              }
+            case _ => Nil
+          }
+        }
+      }
+
+  private def renderLineNumberRow(
+    state: AppState,
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    lineRect: LayoutRect,
+    surface: RenderSurface,
+    pane: EditorPane,
+    buffer: Option[Buffer],
+    snapshot: TextLayoutSnapshot,
+    index: Int,
+    visualLine: TextVisualLine,
+    rowY: Int
+  ): List[(Int, List[com.serenity.lsp.model.Diagnostic])] =
+    val lineTopPx = RendererPaneContent.visualLineTopPx(lineRect, index, context, snapshot)
+    val rendersLineNumber =
+      shouldRenderLineNumberForVisualLine(visualLine, state.persisted.config.surfaceConfig.wordWrapEnabled)
+    val lineNumberText =
+      if rendersLineNumber then
+        val numberWidth = math.max(1, lineRect.width - 1)
+        (visualLine.bufferLine + 1).toString.reverse.padTo(numberWidth, ' ').reverse + " "
+      else continuationIndicatorText(lineRect.width)
+    val measuredLineNumberFont = buffer.filter(useMeasuredLineNumberFont(_, context))
+    if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) && measuredLineNumberFont.nonEmpty then
+      measuredLineNumberFont.foreach(buf => surface.text.setFont(context.fontForBuffer(buf)))
+      surface.text.drawRunPx(
+        context.cellMetrics.toPixelX(lineRect.x).toFloat,
+        lineTopPx,
+        lineRect.width * context.cellMetrics.charWidth.toFloat,
+        snapshot.lineHeightPx,
+        snapshot.ascentPx,
+        lineNumberText
+      )
+      surface.text.setFont(context.uiFont)
+    else surface.putString(lineRect.x, rowY, lineNumberText)
+    if rendersLineNumber then
+      for
+        bufferId   <- pane.bufferId.toList
+        annotation <- renderPlan.annotations.get(bufferId).toList
+        diagnostics = annotation.diagnosticsByLine.getOrElse(visualLine.bufferLine, Nil)
+        if diagnostics.nonEmpty
+      yield rowY -> diagnostics
+    else Nil
 
   private def useMeasuredLineNumberFont(buffer: Buffer, context: RenderContext): Boolean =
     buffer.typographyRole != TypographyRole.Code && context.fontForBuffer(buffer) != context.codeFont

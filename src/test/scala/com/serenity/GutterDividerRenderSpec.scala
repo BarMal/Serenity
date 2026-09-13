@@ -7,17 +7,17 @@ import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** #1483: the vertical divider between the line-number gutter and the document body rendered as short per-line
-  * dashes instead of one smooth continuous line. Fixed by painting the gutter's last column as a single full-height
-  * background fill ([[com.serenity.ui.renderer.RendererGutter.renderLineNumbers]]) instead of leaving its colour to
-  * fall out of each row's own, independent fill.
+/** #1483: the vertical divider between the line-number gutter and the document body rendered as short per-line dashes
+  * instead of one smooth continuous line. Fixed by painting the gutter's last column as a single full-height background
+  * fill ([[com.serenity.ui.renderer.RendererGutter.renderLineNumbers]]) instead of leaving its colour to fall out of
+  * each row's own, independent fill.
   */
 class GutterDividerRenderSpec extends AnyFlatSpec with Matchers:
 
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
   "RendererGutter.renderLineNumbers" should "paint the gutter/body divider as a single full-height fill, not one call per row" in {
-    val lines  = (1 to 20).map(i => s"line $i").mkString("\n")
+    val lines = (1 to 20).map(i => s"line $i").mkString("\n")
     val buffer = Buffer
       .fromString(BufferId(1), lines)
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 10, visibleColumns = 20))

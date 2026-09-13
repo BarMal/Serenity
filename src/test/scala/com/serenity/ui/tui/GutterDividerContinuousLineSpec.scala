@@ -2,12 +2,11 @@ package com.serenity.ui.tui
 
 import TuiScenarios.*
 
-/** #1483: the vertical divider between the line-number gutter and the document body rendered as short per-line
-  * dashes instead of one smooth continuous line. [[com.serenity.ui.renderer.RendererGutter.renderLineNumbers]] now
-  * paints that boundary as a single full-height background fill rather than leaving it to agree with itself across
-  * each row's own (independent) fill -- so every body row must show the exact same colour at the gutter's last
-  * column, and that colour must be visibly distinct from the plain document background, not just incidentally
-  * uniform.
+/** #1483: the vertical divider between the line-number gutter and the document body rendered as short per-line dashes
+  * instead of one smooth continuous line. [[com.serenity.ui.renderer.RendererGutter.renderLineNumbers]] now paints that
+  * boundary as a single full-height background fill rather than leaving it to agree with itself across each row's own
+  * (independent) fill -- so every body row must show the exact same colour at the gutter's last column, and that colour
+  * must be visibly distinct from the plain document background, not just incidentally uniform.
   */
 class GutterDividerContinuousLineSpec extends TuiSpec:
 
@@ -20,8 +19,8 @@ class GutterDividerContinuousLineSpec extends TuiSpec:
     for
       _ <- typeDocument("first line", "second line", "third line")
       _ <- verify("continuous divider") { screen =>
-        val bodyRows              = 1 until (screen.height - 1)
-        val dividerBackgrounds    = bodyRows.map(row => screen.backgroundAt(DividerColumn, row)).toSet
+        val bodyRows               = 1 until (screen.height - 1)
+        val dividerBackgrounds     = bodyRows.map(row => screen.backgroundAt(DividerColumn, row)).toSet
         val documentBodyBackground = screen.backgroundAt(DividerColumn + 2, 1)
 
         withClue(s"divider column backgrounds: $dividerBackgrounds") {
