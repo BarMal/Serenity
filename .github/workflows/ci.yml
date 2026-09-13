@@ -145,6 +145,11 @@ jobs:
       - name: Set up sbt launcher
         uses: sbt/setup-sbt@v1
 
+      # Unit tests for the regression-check script's own logic (threshold comparison, cache-cold handling) --
+      # stdlib `unittest`, no Python dependency to install.
+      - name: Test the regression-check script
+        run: python3 -m unittest scripts.test_check_perf_regression -v
+
       # The benchmark suite builds a real `SwingWindow` (`PerformanceBenchmarks.main`'s `SwingWindow.resource`), which
       # needs a display even though nothing is ever shown on screen -- a runner with no X server at all raises
       # `HeadlessException` constructing it, so this job needs a virtual one.
@@ -188,8 +193,18 @@ jobs:
           restore-keys: |
             perf-baseline-${{ runner.os }}-
 
+      # A cache-cold run (first run on a branch, or the cache evicted) has no baseline to restore. Only the run that
+      # is about to establish a fresh baseline itself -- a push to master, per the steps below -- is allowed to treat
+      # that as expected; every other run (in particular a PR) fails loudly instead of silently passing with nothing
+      # actually compared.
       - name: Check for a performance regression
-        run: python3 scripts/check_perf_regression.py perf-baseline.csv perf-results.csv --threshold 3.0
+        run: |
+          set -euo pipefail
+          ARGS=(--threshold 2.0)
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/master" ]; then
+            ARGS+=(--allow-missing-baseline)
+          fi
+          python3 scripts/check_perf_regression.py perf-baseline.csv perf-results.csv "${ARGS[@]}"
 
       - name: Archive benchmark results
         if: always()
