@@ -284,7 +284,11 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
       .interpretCommand(command(CommandIntent.File(FileIntent.OpenRecentFile(missing))), AppState.initial)
       .unsafeRunSync()
 
-    fixture.currentState shouldBe AppState.initial
+    // issue #1048: interpretCommand records MRU usage for every command it runs regardless of outcome, so the
+    // otherwise-no-op file load still bumps `runtime.commandUsage` for `command`'s own "test-command" name.
+    fixture.currentState shouldBe AppState.initial.copy(runtime =
+      AppState.initial.runtime.copy(commandUsage = Map("test-command" -> 1))
+    )
   }
 
   it should "route CloseAll, CloseOthers, and CloseCurrentFile to their close scopes" in {
@@ -457,7 +461,11 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     fixture.committedStates.get.unsafeRunSync() shouldBe Nil
-    fixture.currentState shouldBe AppState.initial
+    // issue #1048: interpretCommand records MRU usage for every command it runs regardless of outcome, so the
+    // otherwise-no-op restore still bumps `runtime.commandUsage` for `command`'s own "test-command" name.
+    fixture.currentState shouldBe AppState.initial.copy(runtime =
+      AppState.initial.runtime.copy(commandUsage = Map("test-command" -> 1))
+    )
   }
 
   // ---------------------------------------------------------------------------------------------------------------

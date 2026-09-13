@@ -97,6 +97,12 @@ private[layout] object CommandPaletteContentResolver:
                 )
             if selected then row :: groupPreview else List(row)
         }
+        // issue #1049: a query that matches nothing used to fall through to a silent empty list (no rows, no
+        // footer, no key hint) -- indistinguishable from the palette still loading or the query not having reached
+        // it yet. An explicit row says so instead, exactly like every other genuinely-empty state (`Empty document`,
+        // "no matches" list panels) already does elsewhere in this renderer.
+        val noMatchesRow =
+          Option.when(allItems.isEmpty && runner.searchTerm.nonEmpty)(OverlayRow("No matching commands"))
         // With the persistent row on, `footer` reverts to being purely the transient status-message slot -- the
         // dynamic hint text moves to `keyHintRow` and is no longer suppressed while a status message shows (issue
         // #931, Stage 3). With it off, `footer` keeps doing both jobs exactly as before.
@@ -114,7 +120,7 @@ private[layout] object CommandPaletteContentResolver:
         ResolvedSurfaceContent(
           title = SurfaceContentResolver.titleFor(mode, "commands"),
           header = header,
-          rows = rows,
+          rows = noMatchesRow.fold(rows)(List(_)),
           footer = footer,
           keyHintRow = Option.when(hasKeyHint)(OverlayRow(paletteKeyHintText))
         )

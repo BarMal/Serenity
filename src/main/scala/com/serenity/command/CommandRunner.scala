@@ -91,7 +91,13 @@ final case class CommandRunner(
         // Category tabs are retired (issue #931): an empty query is just every command, no category to default to.
         // Settings are still reachable here -- via search, below -- exactly as issue #931's "fold into text search"
         // intends; there is just no longer a separate navigation mode for it.
-        if state.searchTerm.isEmpty then commandItems
+        //
+        // issue #1049: opening to a raw registry-order list showed an arbitrary alphabetical-ish top (whatever
+        // happens to be first in `defaultCommands`) rather than anything personalized. A stable sort by MRU
+        // recency (issue #1048's `commandUsage`) puts recently/frequently-used commands first while leaving every
+        // never-used command in its original relative order -- so a fresh session (empty `commandUsage`) still
+        // shows the exact same "sensible default set" it always has.
+        if state.searchTerm.isEmpty then commandItems.sortBy(item => -commandUsage.getOrElse(item.command.name, 0))
         else
           val (strongCommandMatches, remainingCommandMatches) =
             commandItems.partition(item => CommandRunnerSearch.isStrongCommandMatch(item.command, state.searchTerm))
