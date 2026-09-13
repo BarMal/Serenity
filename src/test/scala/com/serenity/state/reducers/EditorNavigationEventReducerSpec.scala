@@ -54,10 +54,12 @@ class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "deduplicate cursors that land on the same position and sort the result" in {
-    val before = stateWith("hello", List(CursorPosition(0, 2), CursorPosition(0, 0)))
+    val before = stateWith("hello", List(CursorPosition(0, 5), CursorPosition(0, 4)))
 
-    // Both move right by one; neither lands on the other's position, but the result must still come back sorted.
-    bufferAfter(MoveRight, before).editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
+    // "hello" has 5 characters: the cursor already at column 5 (the end) can't move further right and stays put,
+    // while the cursor at column 4 advances onto that same position -- a genuine collision the reducer's
+    // `.distinct` must collapse to one cursor rather than leaving a duplicate in the list.
+    bufferAfter(MoveRight, before).editing.cursors shouldBe List(CursorPosition(0, 5))
   }
 
   "MoveLeft at the start of the document" should "leave the cursor in place" in {
