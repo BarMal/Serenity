@@ -1,6 +1,7 @@
 package com.serenity.command
 
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 
 /** Animation timing and transition speed-scale input items. Split out of `CommandRunnerSettingsInputItems.build` to
   * keep both under the architecture size targets -- see that object's doc.
@@ -26,7 +27,8 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
             CommandIntent
               .Settings(SettingsIntent.General(GeneralSettingsIntent.SetAnimationDuration(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(AppConfig.default.editorConfig.characterAnimation.map(_.durationMs.toString).getOrElse("0"))
     ),
     CommandSurfaceItem.InputItem(
       id = "animation-steps",
@@ -40,11 +42,14 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
           .map(commandIntentArg =>
             CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAnimationSteps(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(AppConfig.default.editorConfig.characterAnimation.map(_.steps.toString).getOrElse("0"))
     ),
     CommandSurfaceItem.InputItem(
+      // issue #1060: label used to say "Motion Speed Scale", disagreeing with both this key and the sibling
+      // "<Domain> Speed" labels below (Editor Text Speed, Command Runner Speed, Panel/UI Speed, Cursor Speed).
       id = "element-transition-speed-scale",
-      label = "Motion Speed Scale",
+      label = "Element Transition Speed",
       hint = "Scale (0.0-4.0)",
       currentValue = speedScaleValue,
       kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
@@ -58,7 +63,8 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
             CommandIntent
               .Settings(SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(f"${AppConfig.default.surfaceConfig.elementTransitionSpeedScale}%.2f")
     ),
     CommandSurfaceItem.InputItem(
       id = "editor-text-speed-scale",
@@ -76,7 +82,8 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
             CommandIntent
               .Settings(SettingsIntent.Motion(MotionIntent.SetEditorTextTransitionSpeedScale(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(f"${AppConfig.default.effectiveEditorTextTransitionSpeedScale}%.2f")
     )
   )
 
@@ -102,7 +109,8 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
             CommandIntent
               .Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerTransitionSpeedScale(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(f"${AppConfig.default.effectiveCommandRunnerTransitionSpeedScale}%.2f")
     ),
     CommandSurfaceItem.InputItem(
       id = "ui-speed-scale",
@@ -119,7 +127,8 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
           .map(commandIntentArg =>
             CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetUiTransitionSpeedScale(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(f"${AppConfig.default.effectiveUiTransitionSpeedScale}%.2f")
     ),
     CommandSurfaceItem.InputItem(
       id = "cursor-speed-scale",
@@ -137,7 +146,8 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
             CommandIntent
               .Settings(SettingsIntent.Motion(MotionIntent.SetCursorTransitionSpeedScale(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(f"${AppConfig.default.effectiveCursorTransitionSpeedScale}%.2f")
     ),
     CommandSurfaceItem.InputItem(
       id = "blur-radius",
@@ -151,6 +161,7 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
           .map(commandIntentArg =>
             CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetBlurRadius(commandIntentArg)))
           ),
-      category = CommandCategory.Settings
+      category = CommandCategory.Settings,
+      defaultValue = Some(AppConfig.default.surfaceConfig.blurRadius.toString)
     )
   )

@@ -40,18 +40,21 @@ final private[manager] class StateManagerPanelEffects(
     */
   private val MinimumPanelSize = 4
 
+  private def validatedUpdate(update: AppState => AppState): IO[Unit] =
+    stateRef.get.flatMap(current => validateAndUpdateState(update(current), current))
+
   private[manager] def interpret(intent: ViewIntent, state: AppState): IO[Unit] =
     intent match
       case ViewIntent.NextTab =>
-        stateRef.update(com.serenity.state.core.EditorState.navigateToNextBuffer)
+        validatedUpdate(com.serenity.state.core.EditorState.navigateToNextBuffer)
       case ViewIntent.PreviousTab =>
-        stateRef.update(com.serenity.state.core.EditorState.navigateToPreviousBuffer)
+        validatedUpdate(com.serenity.state.core.EditorState.navigateToPreviousBuffer)
       case ViewIntent.SplitPaneHorizontal =>
-        stateRef.update(com.serenity.state.core.EditorState.splitFocusedPane(_, SplitAxis.Horizontal))
+        validatedUpdate(com.serenity.state.core.EditorState.splitFocusedPane(_, SplitAxis.Horizontal))
       case ViewIntent.SplitPaneVertical =>
-        stateRef.update(com.serenity.state.core.EditorState.splitFocusedPane(_, SplitAxis.Vertical))
+        validatedUpdate(com.serenity.state.core.EditorState.splitFocusedPane(_, SplitAxis.Vertical))
       case ViewIntent.ClosePane =>
-        stateRef.update(com.serenity.state.core.EditorState.removeFocusedPane)
+        validatedUpdate(com.serenity.state.core.EditorState.removeFocusedPane)
       case ViewIntent.PinExplorerPanel =>
         setPanelPin(PanelKind.Explorer, Some(PanelPosition.Left))
       case ViewIntent.PinOutlinePanel =>

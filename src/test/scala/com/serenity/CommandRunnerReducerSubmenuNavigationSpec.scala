@@ -340,11 +340,15 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     runner.focusedSubmenuItems.map(_.id) should contain allOf (
       "settings-preset-name",
       "settings-preset-actions",
-      "settings-preset-active-panels",
-      "settings-preset-theme",
-      "settings-preset-animations",
-      "settings-preset-fonts",
-      "settings-preset-document-defaults"
+      "settings-preset-workspace-layout",
+      "settings-preset-surface-appearance",
+      "settings-preset-cursor",
+      "settings-preset-animation",
+      "settings-preset-prose-font",
+      "settings-preset-code-font",
+      "settings-preset-ui-font",
+      "settings-preset-document-defaults",
+      "settings-preset-spellcheck"
     )
   }
 
@@ -354,18 +358,18 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
 
     val presetOptions = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
     val typographySelected = CommandRunnerReducer
-      .reduce(RunnerSelectSubmenuItem(5), presetOptions, registry)
+      .reduce(RunnerSelectSubmenuItem(6), presetOptions, registry)
       .state
     val typography = CommandRunnerReducer.reduce(RunnerSubmit, typographySelected, registry)
     val runner     = runnerFrom(typography.state)
 
-    runner.activeSubmenuGroupId shouldBe Some("settings-preset-fonts")
+    runner.activeSubmenuGroupId shouldBe Some("settings-preset-prose-font")
     runner.activeSubmenuParentGroupId shouldBe Some("settings-preset-edit")
     runner.activeSubmenuAncestorGroupIds shouldBe Some(List("settings-ui-presets", "settings-preset-edit"))
-    runner.submenuBreadcrumbLabels("settings-preset-fonts") shouldBe List(
+    runner.submenuBreadcrumbLabels("settings-preset-prose-font") shouldBe List(
       "UI Presets",
       "Edit Preset: Writing",
-      "Fonts"
+      "Prose Font"
     )
   }
 
@@ -377,9 +381,9 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     val state    = settingsStateOnItem("settings-ui-presets", "settings-preset-edit")
 
     val presetOptions      = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
-    val typographySelected = CommandRunnerReducer.reduce(RunnerSelectSubmenuItem(5), presetOptions, registry).state
+    val typographySelected = CommandRunnerReducer.reduce(RunnerSelectSubmenuItem(6), presetOptions, registry).state
     val typography         = CommandRunnerReducer.reduce(RunnerSubmit, typographySelected, registry).state
-    runnerFrom(typography).activeSubmenuGroupId shouldBe Some("settings-preset-fonts")
+    runnerFrom(typography).activeSubmenuGroupId shouldBe Some("settings-preset-prose-font")
 
     val backOnce = CommandRunnerReducer.reduce(Escape, typography, registry)
     runnerFrom(backOnce.state).activeSubmenuGroupId shouldBe Some("settings-preset-edit")
@@ -399,8 +403,8 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     val searchedRunner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .openSettings
-      .updateSearchTerm("fonts")
-    val runner = searchedRunner.withSelectedItem("settings-preset-fonts")
+      .updateSearchTerm("prose font")
+    val runner = searchedRunner.withSelectedItem("settings-preset-prose-font")
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -415,20 +419,20 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
       runtime = Runtime(uiSurfaces = List(surface))
     )
 
-    runner.selectedItem.map(_.id) shouldBe Some("settings-preset-fonts")
+    runner.selectedItem.map(_.id) shouldBe Some("settings-preset-prose-font")
 
     val entered       = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
     val enteredRunner = runnerFrom(entered.state)
 
-    enteredRunner.activeSubmenuGroupId shouldBe Some("settings-preset-fonts")
+    enteredRunner.activeSubmenuGroupId shouldBe Some("settings-preset-prose-font")
     enteredRunner.activeSubmenuParentGroupId shouldBe Some("settings-preset-edit")
     enteredRunner.activeSubmenuAncestorGroupIds shouldBe Some(
       List("settings-ui-presets", "settings-preset-edit")
     )
-    enteredRunner.submenuBreadcrumbLabels("settings-preset-fonts") shouldBe List(
+    enteredRunner.submenuBreadcrumbLabels("settings-preset-prose-font") shouldBe List(
       "UI Presets",
       "Edit Preset: Writing",
-      "Fonts"
+      "Prose Font"
     )
   }
 

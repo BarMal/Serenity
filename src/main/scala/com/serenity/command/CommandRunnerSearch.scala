@@ -65,23 +65,40 @@ private[command] object CommandRunnerSearch:
       case item: CommandSurfaceItem.InputItem  => Some(item.currentValue)
       case _                                   => None
 
-  /** issue #1048: fuzzy score of `term` against one target string, or `None` when it doesn't match at all -- the
-    * same shape VS Code/IntelliJ/Raycast-style fuzzy filters use. Case-insensitive. Checked in order, each tier
-    * strictly outscoring every tier below it:
+  /** issue #1048: fuzzy score of `term` against one target string, or `None` when it doesn't match at all -- the same
+    * shape VS Code/IntelliJ/Raycast-style fuzzy filters use. Case-insensitive. Checked in order, each tier strictly
+    * outscoring every tier below it:
     *   1. exact match
     *   2. prefix match
-    *   3. contiguous substring match anywhere (earlier, and starting right at a word boundary, scores higher --
-    *      "line" against "toggle-line-numbers" matches here, right after the "-" separator)
+    *   3. contiguous substring match anywhere (earlier, and starting right at a word boundary, scores higher -- "line"
+    *      against "toggle-line-numbers" matches here, right after the "-" separator)
     *   4. scattered in-order subsequence match (every character of `term` appears in `target` in order, but not
     *      necessarily touching) -- always the lowest tier, so a real substring match never loses to a scattered one
-    * This is the one matcher every search call site in this cluster shares -- `CommandSearcher` (the palette) and
-    * `isStrongCommandMatch` below both call this rather than keeping their own separate prefix/contains ladders.
+    * A multi-word `term` is additionally tried as a per-token AND match (tiers 1-4 run independently for each
+    * whitespace-separated token, all of which must match somewhere in `target`) and the better of the two wins -- this
+    * is what lets a reordered or scattered query like "numbers line" still match "Toggle Line Numbers" even though it
+    * is not, as a whole string, an in-order subsequence of the target. This restores the old per-token AND matcher's
+    * coverage for multi-word queries without giving up the single whole-string match's scoring. This is the one matcher
+    * every search call site in this cluster shares -- `CommandSearcher` (the palette) and `isStrongCommandMatch` below
+    * both call this rather than keeping their own separate prefix/contains ladders.
     */
   private[command] def fuzzyScore(term: String, target: String): Option[Double] =
     val needle   = term.trim.toLowerCase(Locale.ROOT)
     val haystack = target.toLowerCase(Locale.ROOT)
     if needle.isEmpty then Some(0.0)
-    else if haystack == needle then Some(1000.0)
+    else
+      val wholeQueryScore = singleTermScore(needle, haystack)
+      val tokenAndScore   = tokenAndFallbackScore(needle, haystack)
+      (wholeQueryScore, tokenAndScore) match
+        case (Some(whole), Some(tokenAnd)) => Some(math.max(whole, tokenAnd))
+        case (Some(whole), None)           => Some(whole)
+        case (None, fallback)              => fallback
+
+  /** Tiers 1-4 of `fuzzyScore` against a single, already-normalized needle (either the whole query, or one token of it
+    * in the AND fallback below).
+    */
+  private def singleTermScore(needle: String, haystack: String): Option[Double] =
+    if haystack == needle then Some(1000.0)
     else if haystack.startsWith(needle) then Some(900.0)
     else
       val substringIndex = haystack.indexOf(needle)
@@ -89,6 +106,21 @@ private[command] object CommandRunnerSearch:
         val wordBoundary = substringIndex == 0 || !haystack(substringIndex - 1).isLetterOrDigit
         Some(700.0 + (if wordBoundary then 100.0 else 0.0) - substringIndex.toDouble)
       else subsequenceScore(needle, haystack)
+
+  /** issue #1048 regression fix: the whole-query sequence match above requires every character of `needle` to appear in
+    * `target` in query order, so a reordered or scattered multi-word query (words present, but not in the order typed)
+    * fails it entirely -- the old per-token AND matcher this replaced did not have that limitation. Splits `needle` on
+    * whitespace and requires every token to independently match somewhere in `haystack` (AND semantics); `None` if
+    * there is only one token (no benefit over the whole-query match) or if any token fails to match at all. The
+    * combined score is the mean of the per-token scores, so it can only win over the whole-query score when the latter
+    * is `None` or comes from the weaker scattered-subsequence tier.
+    */
+  private def tokenAndFallbackScore(needle: String, haystack: String): Option[Double] =
+    val tokens = needle.split("\\s+").filter(_.nonEmpty).toList
+    if tokens.length < 2 then None
+    else
+      val perTokenScores = tokens.map(token => singleTermScore(token, haystack))
+      if perTokenScores.forall(_.isDefined) then Some(perTokenScores.flatten.sum / tokens.length) else None
 
   /** Greedy scattered-subsequence fallback: every character of `needle` must appear in `haystack` in order (not
     * necessarily contiguous), rewarding an earlier start and any contiguous runs found along the way. Always scores

@@ -10,7 +10,8 @@ final private[manager] class StateManagerReplaceWorkflow(
     stateRef: Ref[IO, AppState],
     undoRef: Ref[IO, UndoState],
     activeEditorBufferId: AppState => Option[BufferId],
-    updateReplaceWorkflowSurface: (SurfaceId, ReplaceWorkflowState) => IO[Unit]
+    updateReplaceWorkflowSurface: (SurfaceId, ReplaceWorkflowState) => IO[Unit],
+    validateAndUpdateState: (AppState, AppState) => IO[Unit]
 )(using balance: Balance):
 
   private[manager] def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
@@ -55,55 +56,66 @@ final private[manager] class StateManagerReplaceWorkflow(
                     surfaceId,
                     workflow.copy(statusMessage = Some("No matches found"))
                   )
-                else
-                  val updatedContent =
-                    replaceMatchesInRanges(
-                      rope = buffer.document.content,
-                      matchOffsets = matches,
-                      findText = workflow.findText,
-                      replacementText = workflow.replacementText
-                    )
-                  val cursorOffset =
-                    finalCursorOffsetAfterReplacements(
-                      matches,
-                      workflow.findText.length,
-                      workflow.replacementText.length
-                    )
-                  val newCursor = updatedContent.offsetToCursorPosition(cursorOffset)
-                  val updatedFindState =
-                    refreshedFindState(updatedContent, workflow.findText, requestedIndex = 0)
-                  val updatedBuffer = buffer.copy(
-                    document = buffer.document.copy(
-                      content = updatedContent,
-                      isDirty = true,
-                      isNewEmpty = false
-                    ),
-                    editing = buffer.editing.copy(
-                      cursors = List(newCursor),
-                      selection = None,
-                      selections = Nil,
-                      preferredColumn = Some(newCursor.column),
-                      preferredXPx = None
-                    ),
-                    findState = updatedFindState
-                  )
-                  recordWorkflowUndo(state, bufferId, buffer) >> stateRef.update { current =>
-                    val updatedState = current.copy(
-                      persisted =
-                        current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer)),
-                      runtime =
-                        current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(_.id == surfaceId))
-                    )
-                    current.persisted.layout.activeEditorPaneId match
-                      case Some(paneId) =>
-                        updatedState.copy(persisted = updatedState.persisted.copy(focus = Focus.EditorPane(paneId)))
-                      case None => updatedState
-                  }
+                else replaceAllMatches(surfaceId, workflow, state, bufferId, buffer, matches)
           case None =>
             updateReplaceWorkflowSurface(
               surfaceId,
               workflow.copy(statusMessage = Some("No active buffer"))
             )
+
+  /** The state transition for `submitReplaceAllEffect`'s match-found case, split out so the dispatcher above stays
+    * under the method-length ratchet -- behaviorally this is still one linear step of that method.
+    */
+  private def replaceAllMatches(
+    surfaceId: SurfaceId,
+    workflow: ReplaceWorkflowState,
+    state: AppState,
+    bufferId: BufferId,
+    buffer: Buffer,
+    matches: List[Int]
+  ): IO[Unit] =
+    val updatedContent =
+      replaceMatchesInRanges(
+        rope = buffer.document.content,
+        matchOffsets = matches,
+        findText = workflow.findText,
+        replacementText = workflow.replacementText
+      )
+    val cursorOffset =
+      finalCursorOffsetAfterReplacements(
+        matches,
+        workflow.findText.length,
+        workflow.replacementText.length
+      )
+    val newCursor = updatedContent.offsetToCursorPosition(cursorOffset)
+    val updatedFindState =
+      refreshedFindState(updatedContent, workflow.findText, requestedIndex = 0)
+    val updatedBuffer = buffer.copy(
+      document = buffer.document.copy(
+        content = updatedContent,
+        isDirty = true,
+        isNewEmpty = false
+      ),
+      editing = buffer.editing.copy(
+        cursors = List(newCursor),
+        selection = None,
+        selections = Nil,
+        preferredColumn = Some(newCursor.column),
+        preferredXPx = None
+      ),
+      findState = updatedFindState
+    )
+    recordWorkflowUndo(state, bufferId, buffer) >> stateRef.get.flatMap { current =>
+      val withReplacement = current.copy(
+        persisted = current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer)),
+        runtime = current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(_.id == surfaceId))
+      )
+      val updatedState = current.persisted.layout.activeEditorPaneId match
+        case Some(paneId) =>
+          withReplacement.copy(persisted = withReplacement.persisted.copy(focus = Focus.EditorPane(paneId)))
+        case None => withReplacement
+      validateAndUpdateState(updatedState, current)
+    }
 
   private def submitReplaceNextEffect(surfaceId: SurfaceId, workflow: ReplaceWorkflowState, state: AppState): IO[Unit] =
     activeEditorBufferId(state) match
@@ -193,9 +205,12 @@ final private[manager] class StateManagerReplaceWorkflow(
       ),
       findState = updatedFindState
     )
-    recordWorkflowUndo(state, bufferId, buffer) >> stateRef.update { current =>
-      current.copy(persisted =
-        current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer))
+    recordWorkflowUndo(state, bufferId, buffer) >> stateRef.get.flatMap { current =>
+      validateAndUpdateState(
+        current.copy(persisted =
+          current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer))
+        ),
+        current
       )
     } >> updateReplaceWorkflowSurface(
       surfaceId,
