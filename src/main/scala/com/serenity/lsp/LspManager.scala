@@ -9,6 +9,7 @@ import com.serenity.diagnostics.Trace
 import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.{DocumentUri, LspConnection, LspMethod, LspProtocol, WorkspaceRootUri}
 import com.serenity.lsp.config.*
+import com.serenity.lsp.model.TextDocumentSyncKind
 import com.serenity.state.models.CursorPosition
 import fs2.Stream
 import org.typelevel.log4cats.Logger
@@ -72,6 +73,7 @@ object LspManager:
           connectionsRef      <- Ref.of[IO, Map[ConnectionIdentity, ManagedConnection]](Map.empty)
           documentConnections <- Ref.of[IO, Map[DocumentUri, ConnectionIdentity]](Map.empty)
           documentVersions    <- Ref.of[IO, Map[DocumentUri, Int]](Map.empty)
+          documentTexts       <- Ref.of[IO, Map[DocumentUri, String]](Map.empty)
           requestContexts     <- Ref.of[IO, Map[RequestKey, RequestContext]](Map.empty)
           requestFibers       <- Ref.of[IO, Map[RequestKey, cats.effect.Fiber[IO, Throwable, Unit]]](Map.empty)
           runEffects = effects
@@ -81,6 +83,7 @@ object LspManager:
                 connectionsRef,
                 documentConnections,
                 documentVersions,
+                documentTexts,
                 requestContexts,
                 requestFibers,
                 supervisor,
@@ -100,6 +103,7 @@ object LspManager:
     connectionsRef: Ref[IO, Map[ConnectionIdentity, ManagedConnection]],
     documentConnections: Ref[IO, Map[DocumentUri, ConnectionIdentity]],
     documentVersions: Ref[IO, Map[DocumentUri, Int]],
+    documentTexts: Ref[IO, Map[DocumentUri, String]],
     requestContexts: Ref[IO, Map[RequestKey, RequestContext]],
     requestFibers: Ref[IO, Map[RequestKey, cats.effect.Fiber[IO, Throwable, Unit]]],
     supervisor: Supervisor[IO],
@@ -113,6 +117,7 @@ object LspManager:
         val uri = DocumentUri(rawUri)
         invalidateDocument(uri, requestContexts, requestFibers) >>
           documentVersions.update(_ + (uri -> 1)) >>
+          documentTexts.update(_ + (uri -> text)) >>
           ensureConnection(connectionsRef, languageId, uri, applyEvent, logger, connectionProvider).flatMap {
             case Some((identity, conn)) =>
               associateDocument(uri, identity, documentConnections, connectionsRef, logger) >>
@@ -130,18 +135,22 @@ object LspManager:
         val uri = DocumentUri(rawUri)
         invalidateDocument(uri, requestContexts, requestFibers) >>
           documentVersions.update(_ + (uri -> version)) >>
-          connectionForDocument(uri, documentConnections, connectionsRef).flatMap {
-            case Some(managed) =>
-              managed.connection
-                .sendNotification(LspMethod("textDocument/didChange"), LspProtocol.didChangeParams(uri, version, text))
-                .handleErrorWith(ex => logger.error(ex)(s"[LSP] didChange failed: $rawUri"))
-            case None => IO.unit
-          }
+          connectionForDocument(uri, documentConnections, connectionsRef)
+            .flatMap {
+              case Some(managed) =>
+                sendDidChange(managed.connection, uri, version, text, documentTexts, logger).flatMap {
+                  case true  => documentTexts.update(_ + (uri -> text))
+                  case false => IO.unit
+                }
+              case None =>
+                documentTexts.update(_ + (uri -> text))
+            }
 
       case LspEffect.FileClosed(rawUri, languageId) =>
         val uri = DocumentUri(rawUri)
         invalidateDocument(uri, requestContexts, requestFibers) >>
           documentVersions.update(_ - uri) >>
+          documentTexts.update(_ - uri) >>
           connectionProvider.evictResolution(languageId, uri) >>
           connectionForDocument(uri, documentConnections, connectionsRef).flatMap {
             case Some(managed) =>
@@ -286,6 +295,38 @@ object LspManager:
             supervisor.supervise(request(conn, context)).flatMap(fiber => requestFibers.update(_.updated(key, fiber)))
           case None =>
             applyEvent(LspEvent.LspHoverReceived(s"No LSP server available for ${languageId.displayName}", anchor))
+        }
+    }
+
+  /** Sends `didChange` using whatever sync kind the connection negotiated during `initialize` (#1468): a range-based
+    * diff against the document's previous text for `Incremental`, the existing full-text notification for `Full`, and
+    * nothing at all for `None` -- a server that opted out of document sync should not be sent notifications for it
+    * regardless of how expensive skipping them is.
+    *
+    * Returns whether the caller's `documentTexts` mirror may now advance to `text`. Under `Incremental` sync that
+    * mirror is the base the next diff is computed against, so if the notification failed to send, the server never saw
+    * this version -- advancing the mirror anyway would compute the next diff against text the server doesn't have,
+    * permanently desyncing client and server state.
+    */
+  private def sendDidChange(
+    connection: LspConnection,
+    uri: DocumentUri,
+    version: Int,
+    text: String,
+    documentTexts: Ref[IO, Map[DocumentUri, String]],
+    logger: Logger[IO]
+  ): IO[Boolean] =
+    connection.syncKind.flatMap {
+      case TextDocumentSyncKind.None => IO.pure(true)
+      case syncKind =>
+        documentTexts.get.map(_.getOrElse(uri, text)).flatMap { previousText =>
+          connection
+            .sendNotification(
+              LspMethod("textDocument/didChange"),
+              LspProtocol.didChangeParams(uri, version, previousText, text, syncKind)
+            )
+            .as(true)
+            .handleErrorWith(ex => logger.error(ex)(s"[LSP] didChange failed: ${uri.value}").as(false))
         }
     }
 

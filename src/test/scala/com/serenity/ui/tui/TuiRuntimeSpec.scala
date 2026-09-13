@@ -9,6 +9,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.AppConfig
+import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.state.models.{Buffer, BufferId, CursorPosition, Viewport}
 import org.jline.terminal.Terminal
 import org.jline.terminal.impl.DumbTerminal
@@ -286,4 +287,23 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     window.firstSourceLine should (be > 0 and be <= 150)
     window.source should include("line 150")
+  }
+
+  // ===keyboardFidelityTier (#1109/#1194/#1320): maps every TerminalShell.KeyboardProtocolTier onto its
+  // KeyboardFidelityTier.===
+
+  "keyboardFidelityTier" should "report Full only for the Kitty tier" in {
+    TuiRuntime.keyboardFidelityTier(TerminalShell.KeyboardProtocolTier.Kitty) shouldBe KeyboardFidelityTier.Full
+  }
+
+  it should "report ModifyOtherKeys for ModifyOtherKeys, Win32Input, and Legacy alike" in {
+    TuiRuntime.keyboardFidelityTier(
+      TerminalShell.KeyboardProtocolTier.ModifyOtherKeys
+    ) shouldBe KeyboardFidelityTier.ModifyOtherKeys
+    TuiRuntime.keyboardFidelityTier(
+      TerminalShell.KeyboardProtocolTier.Win32Input
+    ) shouldBe KeyboardFidelityTier.ModifyOtherKeys
+    TuiRuntime.keyboardFidelityTier(
+      TerminalShell.KeyboardProtocolTier.Legacy
+    ) shouldBe KeyboardFidelityTier.ModifyOtherKeys
   }
