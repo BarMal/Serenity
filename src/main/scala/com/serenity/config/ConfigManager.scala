@@ -28,8 +28,8 @@ object ConfigManager:
   val defaultConfigPath: Path =
     Paths.get(System.getProperty("user.home"), ".serenity", "config.conf")
 
-  /** Load configuration from file on the Cats Effect blocking pool, falling back to defaults on a missing
-    * or unparseable file.
+  /** Load configuration from file on the Cats Effect blocking pool, falling back to defaults on a missing or
+    * unparseable file.
     */
   def loadConfigIO(configPath: Option[String] = None): IO[AppConfig] =
     IO.blocking {
@@ -195,12 +195,12 @@ object ConfigManager:
 
   /** The config text to write, refused if it is not something this module could read back.
     *
-    * An unparseable file is worse than a failed save: loading falls back to defaults for the whole file, so
-    * one bad value silently resets every other setting the user had. That is exactly what an unquoted comma in the
-    * cursor info bar's segment list used to do. Checking here keeps a formatting mistake in one setting from reaching
-    * the file at all, and leaves whatever the user already had in place. A setting the file would swallow rather than
-    * reject -- a key written at a path that also has children -- costs the user that one setting just as silently, so
-    * it is refused on the same terms.
+    * An unparseable file is worse than a failed save: loading falls back to defaults for the whole file, so one bad
+    * value silently resets every other setting the user had. That is exactly what an unquoted comma in the cursor info
+    * bar's segment list used to do. Checking here keeps a formatting mistake in one setting from reaching the file at
+    * all, and leaves whatever the user already had in place. A setting the file would swallow rather than reject -- a
+    * key written at a path that also has children -- costs the user that one setting just as silently, so it is refused
+    * on the same terms.
     */
   private[config] def renderedConfig(config: AppConfig): Either[String, String] =
     ConfigFileFormat.unwritableSettings(config) match

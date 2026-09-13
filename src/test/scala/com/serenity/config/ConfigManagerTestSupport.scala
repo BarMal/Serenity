@@ -11,10 +11,10 @@ import org.slf4j.LoggerFactory
 /** Blocking load/save entry points kept for test convenience only.
   *
   * Production code exclusively drives config I/O through `ConfigManager.loadConfigIO`/
-  * `loadConfigResultIO`/`saveConfigIO` on the Cats Effect blocking pool. These synchronous
-  * equivalents used to live on `ConfigManager` itself but had no production callers (#1462); they
-  * are kept here, test-only, so the large existing body of specs can drive load/save without
-  * threading `IO` through every call site. Behaviour is unchanged from the removed originals.
+  * `loadConfigResultIO`/`saveConfigIO` on the Cats Effect blocking pool. These synchronous equivalents used to live on
+  * `ConfigManager` itself but had no production callers (#1462); they are kept here, test-only, so the large existing
+  * body of specs can drive load/save without threading `IO` through every call site. Behaviour is unchanged from the
+  * removed originals.
   */
 object ConfigManagerTestSupport:
   private val logger = LoggerFactory.getLogger("com.serenity.config.ConfigManagerTestSupport")
