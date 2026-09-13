@@ -89,15 +89,19 @@ final private[manager] class StateManagerViewportCapability(
     }
 
   private def clickMinimap(paneId: PaneId, targetLine: Int): IO[Unit] =
-    stateRef.update { state =>
-      state.persisted.layout.editorPanes.get(paneId) match
+    stateRef.get.flatMap { state =>
+      val nextState = state.persisted.layout.editorPanes.get(paneId) match
         case Some(pane) =>
           pane.bufferId.flatMap(state.persisted.buffers.get) match
             case Some(buffer) =>
+              // `targetLine` is derived from a click row against the minimap's rendering of the buffer at resolve
+              // time; if the document has since shrunk (a concurrent edit/undo racing the click), it can land past
+              // the buffer's current line count, so it is clamped here rather than trusted as already in-bounds.
+              val clampedLine = math.max(0, math.min(targetLine, math.max(0, buffer.document.content.lineCount - 1)))
               val halfVisible = buffer.viewport.visibleLines / 2
-              val newTopLine  = math.max(0, targetLine - halfVisible)
+              val newTopLine  = math.max(0, clampedLine - halfVisible)
               val updatedBuffer = buffer.copy(
-                editing = buffer.editing.copy(cursors = List(CursorPosition(targetLine, 0))),
+                editing = buffer.editing.copy(cursors = List(CursorPosition(clampedLine, 0))),
                 viewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
               )
               state.copy(persisted =
@@ -105,6 +109,7 @@ final private[manager] class StateManagerViewportCapability(
               )
             case None => state
         case None => state
+      validateAndUpdateState(nextState, state)
     }
 
   def handleViewportResize(newSize: ViewportSize): IO[Unit] =

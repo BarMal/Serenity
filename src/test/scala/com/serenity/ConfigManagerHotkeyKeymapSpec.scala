@@ -27,7 +27,7 @@ class ConfigManagerHotkeyKeymapSpec extends AnyFlatSpec with Matchers with Optio
     val configFile = Files.createTempFile("serenity-sitter-config", ".conf")
     Files.writeString(configFile, ConfigManager.configToString(config))
 
-    val reloaded = ConfigManager.loadConfig(Some(configFile.toString)).windowSitterConfig
+    val reloaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString)).windowSitterConfig
     reloaded.enabled shouldBe false
     reloaded.action shouldBe com.serenity.animation.WindowSitterAction.Blink
     reloaded.frames shouldBe Vector(".", "x")
@@ -46,7 +46,7 @@ class ConfigManagerHotkeyKeymapSpec extends AnyFlatSpec with Matchers with Optio
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.inputConfig.hotkeyConfig
       .bindingsFor(HotkeyAction.ToggleCommandRunner)
@@ -81,7 +81,7 @@ class ConfigManagerHotkeyKeymapSpec extends AnyFlatSpec with Matchers with Optio
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.inputConfig.hotkeyConfig
       .bindingsFor(HotkeyAction.ToggleCommandRunner)
@@ -124,7 +124,7 @@ class ConfigManagerHotkeyKeymapSpec extends AnyFlatSpec with Matchers with Optio
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.inputConfig.focusedKeymapConfig.editor
       .bindingsFor(EditorKeyAction.PageDown)
@@ -187,7 +187,7 @@ class ConfigManagerHotkeyKeymapSpec extends AnyFlatSpec with Matchers with Optio
         |""".stripMargin
     )
 
-    val keymap = ConfigManager.loadConfig(Some(configFile.toString)).inputConfig.focusedKeymapConfig
+    val keymap = ConfigManagerTestSupport.loadConfig(Some(configFile.toString)).inputConfig.focusedKeymapConfig
 
     keymap.editor.bindingsFor(EditorKeyAction.MoveLeft).map(_.render) shouldBe List("alt+h")
     keymap.editor.bindingsFor(EditorKeyAction.PageDown).map(_.render) shouldBe List("ctrl+pagedown")

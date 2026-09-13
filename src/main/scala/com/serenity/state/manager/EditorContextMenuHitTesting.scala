@@ -2,6 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
 import com.serenity.command.CommandRegistry
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -164,7 +165,7 @@ final private[manager] class EditorContextMenuHitTesting(port: EditorContextMenu
         .forMenu(
           menu,
           node.frameRect,
-          state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+          state.persisted.config.effectiveCommandRunnerItemGapRows,
           SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
         )
         .hitAt(event.col.toDouble, event.row.toDouble)
@@ -190,7 +191,7 @@ final private[manager] class EditorContextMenuHitTesting(port: EditorContextMenu
       composition = ContextMenuSurfaceComposition.forMenu(
         menu,
         node.frameRect,
-        state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+        state.persisted.config.effectiveCommandRunnerItemGapRows,
         SurfaceFrameLayout.itemTargetRowsFor(surface.content, state.persisted.config.interfaceDensity)
       )
     yield contentRect.contains(event.col, event.row) &&

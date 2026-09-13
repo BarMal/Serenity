@@ -1,5 +1,6 @@
 package com.serenity.ui.layout
 
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, InterfaceDensityMetrics}
 import com.serenity.state.models.*
 
@@ -207,10 +208,7 @@ object FloatingSurfaceLayout:
   private[layout] def floatingCursorGapRows(state: AppState, content: SurfaceContent): Double =
     content match
       case SurfaceContent.CommandPalette(_) =>
-        math.max(
-          0.0,
-          state.persisted.config.surfaceConfig.commandRunnerCursorGapRows.getOrElse(floatingStackGapRows(state))
-        )
+        math.max(0.0, state.persisted.config.effectiveCommandRunnerCursorGapRows)
       case _ => floatingStackGapRows(state)
 
   private[layout] def floatingStackGapRows(state: AppState): Double =
@@ -229,18 +227,14 @@ object FloatingSurfaceLayout:
   ): Int =
     val densityMetrics = InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity)
     val commandMaxHeight =
-      state.persisted.config.surfaceConfig.commandRunnerVisibleRows
-        .map(rows =>
-          SurfaceFrameLayout.frameHeightForItemRows(
-            AppConfig.clampCommandRunnerVisibleRows(rows),
-            hasHeader = true,
-            hasFooter = true,
-            borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
-            itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
-            itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
-          )
-        )
-        .getOrElse(densityMetrics.commandSurfaceMaxHeight)
+      SurfaceFrameLayout.frameHeightForItemRows(
+        AppConfig.clampCommandRunnerVisibleRows(state.persisted.config.effectiveCommandRunnerVisibleRows),
+        hasHeader = true,
+        hasFooter = true,
+        borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
+        itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
+        itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
+      )
     val preferredHeight = content match
       case SurfaceContent.StartPage(_)            => maxHeight
       case SurfaceContent.QuickInfo(text)         => math.max(3, text.linesIterator.size + 2)
@@ -285,7 +279,7 @@ object FloatingSurfaceLayout:
           hasHeader = true,
           hasFooter = menu.items.nonEmpty,
           borderCells = SurfaceFrameLayout.borderCellsFor(content),
-          itemGapRows = state.persisted.config.surfaceConfig.commandRunnerItemGapRows,
+          itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
           itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity)
         )
       case SurfaceContent.CommentLens(lens) =>

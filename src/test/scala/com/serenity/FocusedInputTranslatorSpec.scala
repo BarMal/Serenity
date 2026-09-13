@@ -183,7 +183,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
         |hotkey.find = ctrl+k
         |""".stripMargin
     )
-    val loadedState = withConfig(ConfigManager.loadConfig(Some(configFile.toString)))
+    val loadedState = withConfig(ConfigManagerTestSupport.loadConfig(Some(configFile.toString)))
     val duplicate   = HotkeyTrigger(InputKey.Character, Some('k'), Set(Modifier.Ctrl))
     val invalidConfig = AppConfig.default.withHotkeyConfig(
       HotkeyConfig(

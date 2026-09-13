@@ -31,7 +31,7 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.editorConfig.fontConfig.codeFontFamily shouldBe "Monospaced"
     config.editorConfig.fontConfig.textFontFamily shouldBe "Serif"
@@ -64,7 +64,7 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.editorConfig.fontConfig.codeFontSize shouldBe 48.0f
     config.editorConfig.fontConfig.textFontSize shouldBe 8.0f
@@ -80,7 +80,7 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.cursorColors.active shouldBe Some(new Color(0x33, 0x66, 0xcc))
     config.cursorColors.inactive shouldBe Some(new Color(0xcc, 0x66, 0x33, 0x80))
@@ -96,7 +96,7 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.cursorMode shouldBe CursorMode.Breathe
     ConfigManager.configToString(config) should include("cursor.mode = breathe")
@@ -111,7 +111,7 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.cursorInfoBarSegments shouldBe List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
     config.cursorInfoBarPlacement shouldBe CursorInfoBarPlacement.PinnedBottom
@@ -130,7 +130,7 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
         |""".stripMargin
     )
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.cursorColors.active shouldBe None
     config.cursorColors.inactive shouldBe None
@@ -147,7 +147,7 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
         |""".stripMargin
     )
 
-    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+    val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
     result.report.invalidEntries.map(_.key) should contain("cursor.mode")
     result.report.invalidEntries.map(_.key) should contain("cursor.active.color")

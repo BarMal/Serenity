@@ -97,6 +97,12 @@ private[layout] object CommandPaletteContentResolver:
                 )
             if selected then row :: groupPreview else List(row)
         }
+        // issue #1049: a query that matches nothing used to fall through to a silent empty list (no rows, no
+        // footer, no key hint) -- indistinguishable from the palette still loading or the query not having reached
+        // it yet. An explicit row says so instead, exactly like every other genuinely-empty state (`Empty document`,
+        // "no matches" list panels) already does elsewhere in this renderer.
+        val noMatchesRow =
+          Option.when(allItems.isEmpty && runner.searchTerm.nonEmpty)(OverlayRow("No matching commands"))
         // With the persistent row on, `footer` reverts to being purely the transient status-message slot -- the
         // dynamic hint text moves to `keyHintRow` and is no longer suppressed while a status message shows (issue
         // #931, Stage 3). With it off, `footer` keeps doing both jobs exactly as before.
@@ -114,7 +120,7 @@ private[layout] object CommandPaletteContentResolver:
         ResolvedSurfaceContent(
           title = SurfaceContentResolver.titleFor(mode, "commands"),
           header = header,
-          rows = rows,
+          rows = noMatchesRow.fold(rows)(List(_)),
           footer = footer,
           keyHintRow = Option.when(hasKeyHint)(OverlayRow(paletteKeyHintText))
         )
@@ -365,14 +371,20 @@ private[layout] object CommandPaletteContentResolver:
     val isError     = editingText.exists(item.isOutOfBounds)
     val valueTone   = if isError then OverlayTone.Error else OverlayTone.Normal
     val cursorCol   = editingText.map(_ => s"${item.label}: ${item.hint} ".length + displayText.length)
+    // issue #1056: every row with a default shows it, so "default" (the reset sentinel `parseOrDefault` accepts)
+    // is discoverable without needing a changelog -- omitted for rows with no meaningful default (e.g. rich-text
+    // formatting, which has no persisted "current" to reset to either, per `InputItem.defaultValue`'s own doc).
+    val defaultSuffix = item.defaultValue.map(value => s" (default: $value)").getOrElse("")
+    val defaultSegments =
+      item.defaultValue.toList.map(value => OverlaySegment(s"(default: $value)", tone = OverlayTone.Muted))
     OverlayRow(
-      plainText = s"${item.label}: ${item.hint} $displayText",
+      plainText = s"${item.label}: ${item.hint} $displayText$defaultSuffix",
       selected = selected,
       cursorColumn = cursorCol,
       segments = List(
         OverlaySegment(item.label),
         OverlaySegment(item.hint, tone = OverlayTone.Normal),
         OverlaySegment(displayText, tone = valueTone, selected = editingText.isDefined)
-      ),
+      ) ++ defaultSegments,
       layout = OverlayRowLayout.Columns
     )

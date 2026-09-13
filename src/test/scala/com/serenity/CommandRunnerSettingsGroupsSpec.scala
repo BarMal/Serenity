@@ -4,6 +4,7 @@ import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.rope.Balance
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -137,6 +138,8 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "ui-shadows",
       "blur-radius"
     )
+    // issue #1046: command-runner visible-rows/item-gap-rows/cursor-gap-rows are no longer separate rows here --
+    // Interface Density above is the one control governing all three now.
     nestedGroup("settings-interface-layout").label shouldBe "Interface Layout"
     nestedGroup("settings-interface-layout").children.map(_.id) shouldBe List(
       "interface-density",
@@ -144,10 +147,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "command-runner-key-hints",
       "ui-element-gap",
       "ui-corner-radius",
-      "ui-outline-thickness",
-      "command-runner-visible-rows",
-      "command-runner-item-gap-rows",
-      "command-runner-cursor-gap-rows"
+      "ui-outline-thickness"
     )
     nestedGroup("settings-rendering").children.map(_.id) shouldBe
       List("render-fps", "render-damage-granularity")
@@ -307,25 +307,21 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "surface command runner visible rows as a typed interface setting" in {
+  // issue #1046: command-runner visible-rows/item-gap-rows/cursor-gap-rows are no longer separate settings rows --
+  // Interface Density is the one control that now governs command palette row height/spacing. The underlying config
+  // keys still parse as explicit overrides (`ConfigManagerSurfaceLayoutSpec`), they just aren't editable here.
+  it should "not surface command runner visible/item-gap/cursor-gap rows as separate interface settings" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withCommandRunnerVisibleRows(Some(9)))
 
     val interfaceGroup = groupByIdRecursive(runner.settingsGroups, "settings-interface-layout")
-    val input = interfaceGroup.children
-      .collectFirst { case item: CommandSurfaceItem.InputItem if item.id == "command-runner-visible-rows" => item }
-      .getOrElse(fail("missing command runner visible rows input"))
 
-    input.currentValue shouldBe "9"
-    input.parse("12") shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(Some(12))))
-    )
-    input.parse("auto") shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(None)))
-    )
-    input.parse("0") shouldBe None
+    val ids = interfaceGroup.children.map(_.id)
+    ids should not contain "command-runner-visible-rows"
+    ids should not contain "command-runner-item-gap-rows"
+    ids should not contain "command-runner-cursor-gap-rows"
   }
 
   it should "surface render FPS target as a rendering setting" in {
@@ -397,17 +393,31 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
   it should "surface rich text inline style inputs in settings" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
+    // A deterministic catalog, not the host's installed fonts (see `CommandRunnerSettingsGroups.build`'s own doc).
+    val fontFamilies = FontLoader.FontFamilyCatalog(monospace = List("Mono"), text = List("Serif", "Sans"), ui = Nil)
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
+      .copy(fontFamilies = fontFamilies)
 
     val richTextGroup = groupByIdRecursive(runner.settingsGroups, "settings-rich-text")
-    val inputs        = richTextGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
 
-    inputs.map(_.id) shouldBe List("rich-text-font-family", "rich-text-font-size", "rich-text-color")
-    inputs.head.parse("Serif") shouldBe Some(CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily("Serif")))
-    inputs(1).parse("18") shouldBe Some(CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(18.0f)))
-    inputs(2).parse("#336699") shouldBe Some(CommandIntent.RichText(RichTextIntent.SetRichTextColor("#336699")))
-    inputs(2).parse("not-a-colour") shouldBe None
+    // issue #1060: font family is a picker now, matching code/prose/UI font family, not typed free text.
+    richTextGroup.children.map(_.id) shouldBe List("rich-text-font-family", "rich-text-font-size", "rich-text-color")
+    val fontFamilyGroup = richTextGroup.children
+      .collectFirst { case item: CommandSurfaceItem.GroupItem if item.id == "rich-text-font-family" => item }
+      .getOrElse(fail("missing rich text font family picker"))
+    fontFamilyGroup.label shouldBe "Selection Font Family"
+    fontFamilyGroup.children.collect { case CommandSurfaceItem.CommandItem(command) => command.intent } should
+      contain(CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily("Serif")))
+
+    val inputs = richTextGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }
+    inputs.map(_.id) shouldBe List("rich-text-font-size", "rich-text-color")
+    // issue #1060: 8.0-48.0, matching code/prose/UI font size -- no longer a 1.0-144.0 outlier.
+    inputs.head.hint shouldBe "Points (8.0-48.0)"
+    inputs.head.parse("18") shouldBe Some(CommandIntent.RichText(RichTextIntent.SetRichTextFontSize(18.0f)))
+    inputs.head.parse("144") shouldBe None
+    inputs(1).parse("#336699") shouldBe Some(CommandIntent.RichText(RichTextIntent.SetRichTextColor("#336699")))
+    inputs(1).parse("not-a-colour") shouldBe None
   }
 
   it should "surface spell-check settings as typed controls" in {

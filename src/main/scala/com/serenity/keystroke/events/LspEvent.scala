@@ -1,6 +1,6 @@
 package com.serenity.keystroke.events
 
-import com.serenity.lsp.model.{Diagnostic, LspPosition}
+import com.serenity.lsp.model.{Diagnostic, LspPosition, SemanticToken}
 import com.serenity.state.models.CursorPosition
 
 enum LspEvent:
@@ -8,3 +8,5 @@ enum LspEvent:
   case LspHoverReceived(text: String, anchor: CursorPosition)
   case LspCompletionReceived(items: List[String], anchor: CursorPosition)
   case LspDefinitionReceived(symbol: String, uri: String, position: LspPosition, anchor: CursorPosition)
+  case LspSemanticTokensReceived(uri: String, tokens: List[SemanticToken])
+  case LspSemanticTokensUnavailable(uri: String)

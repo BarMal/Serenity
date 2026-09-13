@@ -138,7 +138,7 @@ final private[manager] class StateManagerEventPipeline(
   )
 
   private val mouseHitTesting = new MouseHitTesting(
-    MouseHitTestingPort(stateRef = state.stateRef),
+    MouseHitTestingPort(stateRef = state.stateRef, validateAndUpdateState = validateAndUpdateState),
     editorMouseTargeting,
     editorContextMenuHitTesting,
     contextualToolbarHitTesting,

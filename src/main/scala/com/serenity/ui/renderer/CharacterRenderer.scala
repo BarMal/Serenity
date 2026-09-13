@@ -5,10 +5,11 @@ import java.util.LinkedHashMap
 
 import com.serenity.animation.AnimationState
 import com.serenity.lsp.config.LanguageId
+import com.serenity.lsp.model.SemanticToken
 import com.serenity.state.models.TextVisualLine
 import com.serenity.text.TextEditing
 import com.serenity.ui.layout.CharWidth
-import com.serenity.ui.theme.{LexState, StyledText, TextStyle, Theme}
+import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 
 /** Paints text onto a [[RenderSurface]] in the two ways a surface can accept it: the cell-grid path (`putString`,
   * counting screen columns) and the measured pixel path ([[renderMeasuredLineWithAnimation]], laying glyph runs out
@@ -143,7 +144,7 @@ object CharacterRenderer:
     bufferLine: Int = 0,
     bufferStartColumn: Int = 0,
     styledSegments: Option[List[StyledText]] = None,
-    lexStartState: LexState = LexState.Default,
+    semanticTokens: Option[List[SemanticToken]] = None,
     maxColumn: Option[Int] = None
   ): Unit =
     styledSegments match
@@ -160,7 +161,7 @@ object CharacterRenderer:
           maxColumn
         )
       case None if syntaxHighlightingEnabled =>
-        val styledTexts = com.serenity.ui.theme.ThemeManager.highlightLine(content, theme, language, lexStartState)
+        val styledTexts = com.serenity.ui.theme.ThemeManager.highlightLine(content, theme, language, semanticTokens)
         renderStyledLineWithAnimation(
           surface,
           x,
@@ -224,7 +225,7 @@ object CharacterRenderer:
     language: Option[LanguageId] = None,
     styledSegments: Option[List[StyledText]] = None,
     clipRightXPx: Option[Float] = None,
-    lexStartState: LexState = LexState.Default
+    semanticTokens: Option[List[SemanticToken]] = None
   ): Unit =
     val text = visualLine.text
     if text.nonEmpty then
@@ -232,7 +233,7 @@ object CharacterRenderer:
       val styledSegments0 =
         styledSegments.getOrElse {
           if syntaxHighlightingEnabled then
-            com.serenity.ui.theme.ThemeManager.highlightLine(text, theme, language, lexStartState)
+            com.serenity.ui.theme.ThemeManager.highlightLine(text, theme, language, semanticTokens)
           else List(StyledText(text, TextStyle.normal, theme.foreground, theme.background))
         }
 

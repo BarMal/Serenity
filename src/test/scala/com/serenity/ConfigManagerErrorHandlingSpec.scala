@@ -44,7 +44,7 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
         |""".stripMargin
     )
 
-    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+    val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
     result.config.editorConfig.fontConfig.codeFontSize shouldBe 18.0f
     result.report.deprecatedEntries.map(_.key) should contain("font_code_size")
@@ -58,7 +58,7 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
     val configFile = Files.createTempFile("serenity-unparseable-sync-config", ".conf")
     Files.writeString(configFile, "this is not = valid = hocon {\n")
 
-    val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+    val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
     result.config shouldBe AppConfig.default
     result.report shouldBe ConfigMigrationReport.empty
@@ -67,7 +67,7 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
   it should "return default config result with an empty report when the config file is missing" in {
     val missingConfig = Files.createTempDirectory("serenity-missing-config-result").resolve("missing.conf")
 
-    val result = ConfigManager.loadConfigResult(Some(missingConfig.toString))
+    val result = ConfigManagerTestSupport.loadConfigResult(Some(missingConfig.toString))
 
     result.config shouldBe AppConfig.default
     result.report.hasWarnings shouldBe false
@@ -94,16 +94,16 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "log the real cause instead of silently discarding it when the synchronous save fails" in {
-    // Prior to this test, ConfigManager.saveConfig's `catch case _: Exception => false` swallowed the underlying
-    // exception entirely -- the caller got `false` and nothing else was ever recorded anywhere.
-    val logger   = LoggerFactory.getLogger("com.serenity.config.ConfigManager")
+    // Prior to this test, ConfigManagerTestSupport.saveConfig's `catch case _: Exception => false` swallowed the
+    // underlying exception entirely -- the caller got `false` and nothing else was ever recorded anywhere.
+    val logger   = LoggerFactory.getLogger("com.serenity.config.ConfigManagerTestSupport")
     val appender = new ListAppender[ILoggingEvent]()
     appender.start()
     logger.asInstanceOf[ch.qos.logback.classic.Logger].addAppender(appender)
     try
       val directoryPath = Files.createTempDirectory("serenity-sync-save-error")
 
-      ConfigManager.saveConfig(AppConfig.default, directoryPath) shouldBe false
+      ConfigManagerTestSupport.saveConfig(AppConfig.default, directoryPath) shouldBe false
 
       val errorEvents = appender.list.asScala.toList.filter(_.getLevel == Level.ERROR)
       errorEvents should not be empty
@@ -120,12 +120,12 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
     // it, and it falls through to a real HOCON parse of unparseable syntax, which does throw.
     Files.writeString(configFile, "this is not valid hocon at all {{{\n")
 
-    val logger   = LoggerFactory.getLogger("com.serenity.config.ConfigManager")
+    val logger   = LoggerFactory.getLogger("com.serenity.config.ConfigManagerTestSupport")
     val appender = new ListAppender[ILoggingEvent]()
     appender.start()
     logger.asInstanceOf[ch.qos.logback.classic.Logger].addAppender(appender)
     try
-      val result = ConfigManager.loadConfigResult(Some(configFile.toString))
+      val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
       result.config shouldBe AppConfig.default
 

@@ -151,9 +151,9 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     }
     val configFile = Files.createTempFile("serenity-hotkeys", ".conf")
 
-    ConfigManager.saveConfig(config, configFile) shouldBe true
+    ConfigManagerTestSupport.saveConfig(config, configFile) shouldBe true
 
-    val reloaded = ConfigManager.loadConfig(Some(configFile.toString))
+    val reloaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     overrides.foreach {
       case (action, binding) =>
@@ -165,7 +165,7 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     val configFile = Files.createTempFile("serenity-double-tap-hotkey", ".conf")
     Files.writeString(configFile, "hotkey.command_palette = ctrl+ctrl\n")
 
-    val config = ConfigManager.loadConfig(Some(configFile.toString))
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).head.render shouldBe "ctrl+ctrl"
   }
@@ -174,9 +174,9 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     val config     = AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux"))
     val configFile = Files.createTempFile("serenity-multi-hotkey", ".conf")
 
-    ConfigManager.saveConfig(config, configFile) shouldBe true
+    ConfigManagerTestSupport.saveConfig(config, configFile) shouldBe true
 
-    val reloaded = ConfigManager.loadConfig(Some(configFile.toString))
+    val reloaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     reloaded.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.ToggleCommandRunner).map(_.render) shouldBe List(
       "ctrl+p",
@@ -218,7 +218,7 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     val configFile = Files.createTempFile("serenity-toggle-shortcuts-help", ".conf")
     Files.writeString(configFile, "hotkey.toggle_shortcuts_help = ctrl+alt+k\n")
 
-    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
+    val loaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     loaded.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.ToggleShortcutsHelp).map(_.render) shouldBe List(
       "ctrl+alt+k"
@@ -237,10 +237,10 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
         |""".stripMargin
     )
 
-    val loaded = ConfigManager.loadConfig(Some(configFile.toString))
-    ConfigManager.saveConfig(loaded, configFile) shouldBe true
+    val loaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+    ConfigManagerTestSupport.saveConfig(loaded, configFile) shouldBe true
 
-    val reloaded = ConfigManager.loadConfig(Some(configFile.toString))
+    val reloaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     Map(
       HotkeyAction.FileSearch -> List("ctrl+shift+f", "alt+shift+f"),
