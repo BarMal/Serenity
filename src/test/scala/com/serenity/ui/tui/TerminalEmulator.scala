@@ -29,6 +29,8 @@ final case class TerminalEmulator(
     pen: TerminalEmulator.Pen,
     privateModes: Set[Int],
     osc52Payloads: Vector[String],
+    title: Option[String],
+    notifications: Vector[String],
     pending: String
 ):
   import TerminalEmulator.*
@@ -108,6 +110,8 @@ object TerminalEmulator:
       pen = Pen(fg, bg, TextStyle.normal),
       privateModes = Set.empty,
       osc52Payloads = Vector.empty,
+      title = None,
+      notifications = Vector.empty,
       pending = ""
     )
 
@@ -122,7 +126,24 @@ object TerminalEmulator:
       next: Int
   )
 
-  final private case class Interp(cursor: Cursor, pen: Pen, modes: Set[Int], payloads: Vector[String])
+  final private case class Interp(
+      cursor: Cursor,
+      pen: Pen,
+      modes: Set[Int],
+      payloads: Vector[String],
+      title: Option[String],
+      notifications: Vector[String]
+  )
+
+  /** OSC 0/2 (title) and OSC 9 (notification) update dedicated `Interp` fields; every other OSC body is handled as
+    * before, as a possible OSC 52 clipboard payload. Kept top-level rather than nested in `interpret` so that method
+    * doesn't grow past its already-tracked architecture-ratchet baseline.
+    */
+  private def applyOsc(state: Interp, body: String): Interp =
+    body.split(";", 2).toVector match
+      case Vector(("0" | "2"), text) => state.copy(title = Some(text))
+      case Vector("9", text)         => state.copy(notifications = state.notifications :+ text)
+      case _                         => state.copy(payloads = state.payloads ++ osc52Payload(body))
 
   private def interpret(start: TerminalEmulator, ansi: String): TerminalEmulator =
     val width  = start.frame.width
@@ -186,7 +207,7 @@ object TerminalEmulator:
               case None      => (index, state)
           case Esc if index + 1 < ansi.length && ansi(index + 1) == ']' =>
             scanOsc(ansi, index + 2) match
-              case Some((body, next)) => loop(next, state.copy(payloads = state.payloads ++ osc52Payload(body)))
+              case Some((body, next)) => loop(next, applyOsc(state, body))
               case None               => (index, state)
           case Esc if index + 1 < ansi.length => loop(index + 2, state)
           case Esc                            => (index, state)
@@ -203,15 +224,30 @@ object TerminalEmulator:
             val codePoint = ansi.codePointAt(index)
             loop(index + Character.charCount(codePoint), printCodePoint(state, codePoint))
 
-    val (consumedTo, finalState) =
-      loop(0, Interp(start.cursor, start.pen, start.privateModes, start.osc52Payloads))
+    val initial =
+      Interp(start.cursor, start.pen, start.privateModes, start.osc52Payloads, start.title, start.notifications)
+    val (consumedTo, finalState) = loop(0, initial)
+    rebuild(width, height, grid, ansi, consumedTo, finalState)
 
+  /** Assembles the emulator `interpret` produces from its loop's end state -- pulled out of `interpret` itself so that
+    * method's line count stays under the architecture ratchet's tracked baseline for it.
+    */
+  private def rebuild(
+    width: Int,
+    height: Int,
+    grid: Array[Array[TerminalCell]],
+    ansi: String,
+    consumedTo: Int,
+    finalState: Interp
+  ): TerminalEmulator =
     TerminalEmulator(
       frame = TerminalFrame(width, height, grid.map(_.toVector).toVector),
       cursor = finalState.cursor,
       pen = finalState.pen,
       privateModes = finalState.modes,
       osc52Payloads = finalState.payloads,
+      title = finalState.title,
+      notifications = finalState.notifications,
       pending = ansi.substring(consumedTo)
     )
 

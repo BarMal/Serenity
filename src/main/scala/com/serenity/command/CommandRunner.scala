@@ -35,7 +35,13 @@ final case class CommandRunner(
     fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system,
     // The cursor info bar segments' actual current order, refreshed alongside `optionSelections` in `activate`/
     // `updateInputItems` -- threaded into `settingsGroups` so its reorder commands reflect it (issue #1298).
-    cursorInfoBarSegments: List[CursorInfoBarSegment] = Nil
+    cursorInfoBarSegments: List[CursorInfoBarSegment] = Nil,
+    // issue #1048: MRU (most-recently-used) tracking for palette commands -- keyed by `Command.name`, valued by an
+    // incrementing "recency generation" (higher = used more recently), bumped by `recordCommandUsage` whenever a
+    // command executes from the palette. A generation counter rather than wall-clock time: recency-*ordering* is all
+    // ranking needs, and it keeps this pure and IO-free. In-session only (not persisted across restarts) -- issue
+    // #1049's empty-query "recents" view is expected to read this same map, not a separate one.
+    commandUsage: Map[String, Int] = Map.empty
 ) extends CommandRunnerSubmenuEditing
     with CommandRunnerLifecycle
     with CommandRunnerSettingsSearch:
@@ -85,7 +91,13 @@ final case class CommandRunner(
         // Category tabs are retired (issue #931): an empty query is just every command, no category to default to.
         // Settings are still reachable here -- via search, below -- exactly as issue #931's "fold into text search"
         // intends; there is just no longer a separate navigation mode for it.
-        if state.searchTerm.isEmpty then commandItems
+        //
+        // issue #1049: opening to a raw registry-order list showed an arbitrary alphabetical-ish top (whatever
+        // happens to be first in `defaultCommands`) rather than anything personalized. A stable sort by MRU
+        // recency (issue #1048's `commandUsage`) puts recently/frequently-used commands first while leaving every
+        // never-used command in its original relative order -- so a fresh session (empty `commandUsage`) still
+        // shows the exact same "sensible default set" it always has.
+        if state.searchTerm.isEmpty then commandItems.sortBy(item => -commandUsage.getOrElse(item.command.name, 0))
         else
           val (strongCommandMatches, remainingCommandMatches) =
             commandItems.partition(item => CommandRunnerSearch.isStrongCommandMatch(item.command, state.searchTerm))
@@ -115,7 +127,10 @@ final case class CommandRunner(
   def updateSearchTerm(term: String)(using registry: CommandRegistry): CommandRunner =
     val filtered =
       if term.isEmpty then registry.getAllCommands
-      else registry.searchCommands(term, maxResults = 50)
+      // issue #1048: `searchCommands` already ranks by fuzzy relevance; re-sorting (stably) by recency on top of
+      // that lets a recently-used command float above an equally (or less) relevant one without ever displacing a
+      // clearly stronger match, since a `sortBy` is stable across ties in `-commandUsage`.
+      else registry.searchCommands(term, maxResults = 50).sortBy(command => -commandUsage.getOrElse(command.name, 0))
     val updatedState = CommandPaletteState(term, 0, filtered)
     val updatedSurface = surface match
       case CommandRunnerSurface.Palette(_)     => CommandRunnerSurface.Palette(updatedState)
@@ -133,6 +148,14 @@ final case class CommandRunner(
 
   def selectedCommand: Option[Command] =
     selectedItem.collect { case CommandSurfaceItem.CommandItem(command) => command }
+
+  /** issue #1048: record a command's execution for MRU ranking -- the new generation is always one past every
+    * generation recorded so far, so the command just run is always the most recent regardless of how many others have
+    * run before it.
+    */
+  def recordCommandUsage(name: String): CommandRunner =
+    val nextGeneration = commandUsage.values.maxOption.getOrElse(0) + 1
+    copy(commandUsage = commandUsage + (name -> nextGeneration))
 
   lazy val settingsGroups: List[CommandSurfaceItem.GroupItem] =
     CommandRunnerSettingsGroups.build(
@@ -258,19 +281,33 @@ final case class CommandRunner(
   def submenuGroup(groupId: String): Option[CommandSurfaceItem.GroupItem] =
     findGroup(groupId, settingsGroups)
 
-  private def findGroup(
+  /** `visited` guards against a settings-group definition that (accidentally) nests a group under itself: it carries
+    * only the ids on the current ancestor path (each group's own id is added exactly when descending into *its own*
+    * children), so a repeated group id is never descended into twice along the same branch, which would otherwise
+    * recurse without bound (issue #1454). It must not be seeded from a whole level's sibling ids -- doing so would make
+    * an unrelated sibling's id (at any level, including the top-level `settingsGroups` entries) look like an
+    * already-visited ancestor purely because it happens to collide with some other group's id, silently pruning a
+    * genuine, non-cyclic match as a false "cycle" (caught in review on PR #1500). `settingsGroups` is generated from
+    * static definitions and is presumably acyclic by construction -- this isn't a currently-reachable bug -- but
+    * nothing enforced that invariant, so a future addition that nests a group under itself would previously
+    * stack-overflow rather than simply fail to find a match past the cycle.
+    */
+  private[command] def findGroup(
     groupId: String,
-    groups: List[CommandSurfaceItem.GroupItem]
+    groups: List[CommandSurfaceItem.GroupItem],
+    visited: Set[String] = Set.empty
   ): Option[CommandSurfaceItem.GroupItem] =
     groups
       .collectFirst { case group if group.id == groupId => group }
-      .orElse(
-        groups
-          .flatMap(_.children.collect { case group: CommandSurfaceItem.GroupItem => group })
-          .view
-          .flatMap(group => findGroup(groupId, List(group)))
+      .orElse {
+        groups.view
+          .filterNot(group => visited.contains(group.id))
+          .flatMap { group =>
+            val childGroups = group.children.collect { case child: CommandSurfaceItem.GroupItem => child }
+            findGroup(groupId, childGroups, visited + group.id)
+          }
           .headOption
-      )
+      }
 
   private def preferredAncestorGroupIds(groupId: String): List[String] =
     groupPaths(groupId, settingsGroups)
@@ -310,17 +347,20 @@ final case class CommandRunner(
       case editing: SettingsPage.Editing =>
         filteredPageItems(editing, submenuItems(editing.groupId)).indexWhere(_.id == editing.itemId).max(0)
 
-  private def groupPaths(
+  /** As [[findGroup]]'s `visited` parameter, guarding this traversal against a self-nested group the same way -- and
+    * seeded the same per-branch way, not from a whole level's sibling ids.
+    */
+  private[command] def groupPaths(
     groupId: String,
-    groups: List[CommandSurfaceItem.GroupItem]
+    groups: List[CommandSurfaceItem.GroupItem],
+    visited: Set[String] = Set.empty
   ): List[List[String]] =
     groups.flatMap { group =>
-      val current = Option.when(group.id == groupId)(List(group.id)).toList
-      val childGroups = group.children.collect {
-        case child: CommandSurfaceItem.GroupItem =>
-          child
-      }
-      current ++ groupPaths(groupId, childGroups).map(group.id :: _)
+      if visited.contains(group.id) then Nil
+      else
+        val current     = Option.when(group.id == groupId)(List(group.id)).toList
+        val childGroups = group.children.collect { case child: CommandSurfaceItem.GroupItem => child }
+        current ++ groupPaths(groupId, childGroups, visited + group.id).map(group.id :: _)
     }
 
   def focusedSubmenuItems: List[CommandSurfaceItem] =

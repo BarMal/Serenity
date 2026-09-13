@@ -25,7 +25,8 @@ final private[manager] class StateManagerUiPresetEffects(
     persistConfigFile: AppConfig => IO[Unit],
     withUpdatedRunnerConfig: (AppState, AppConfig) => AppState,
     openMarkdownPreview: IO[Unit],
-    loadPinnedDirectoryEffect: (com.serenity.ui.layout.PanelPosition, java.nio.file.Path) => IO[Unit]
+    loadPinnedDirectoryEffect: (com.serenity.ui.layout.PanelPosition, java.nio.file.Path) => IO[Unit],
+    validateAndUpdateState: (AppState, AppState) => IO[Unit]
 ):
 
   private[manager] def interpret(intent: UiPresetsIntent): IO[Unit] =
@@ -138,17 +139,21 @@ final private[manager] class StateManagerUiPresetEffects(
 
   private def applyLoadedUiPreset(preset: UiPreset, isBuiltInWorkflow: Boolean, theme: Theme): IO[Unit] =
     for
-      appliedConfig <- stateRef.modify { state =>
-        val restoredPresetState =
-          if isBuiltInWorkflow then UiPreset.applyBuiltInWorkflowToState(preset, state, theme)
-          else UiPreset.applyToState(preset, state, theme)
-        val restoredDocumentState =
-          applyPresetDocumentModeToActiveEmptyBuffer(restoredPresetState, preset.config.defaultDocumentMode)
-        val restoredOutlineState = hydratePresetSymbolPanels(restoredDocumentState)
-        val restored             = withUpdatedRunnerConfig(restoredOutlineState, restoredOutlineState.persisted.config)
-        (restored, restored.persisted.config)
-      }
-      _ <- persistConfigFile(appliedConfig)
+      current <- stateRef.get
+      restoredPresetState =
+        if isBuiltInWorkflow then UiPreset.applyBuiltInWorkflowToState(preset, current, theme)
+        else UiPreset.applyToState(preset, current, theme)
+      restoredDocumentState =
+        applyPresetDocumentModeToActiveEmptyBuffer(restoredPresetState, preset.config.defaultDocumentMode)
+      restoredOutlineState = hydratePresetSymbolPanels(restoredDocumentState)
+      restored             = withUpdatedRunnerConfig(restoredOutlineState, restoredOutlineState.persisted.config)
+      // A preset can rewrite the entire workspace/layout/theme/config in one shot (highest single-call blast radius
+      // of any UI-preset mutation, #1183), so it is committed through the checked path rather than a bare
+      // `stateRef.modify` -- an invalid preset (e.g. one referencing a pane/buffer layout stale relative to the
+      // live session) is rejected instead of silently corrupting the running state.
+      _             <- validateAndUpdateState(restored, current)
+      appliedConfig <- stateRef.get.map(_.persisted.config)
+      _             <- persistConfigFile(appliedConfig)
       _ <- onFontConfigChanged(appliedConfig.editorConfig.fontConfig)
         .handleErrorWith(error => logger.error(error)("[PRESET] Failed to apply preset font config"))
       _ <- reloadPresetDirectories(preset)

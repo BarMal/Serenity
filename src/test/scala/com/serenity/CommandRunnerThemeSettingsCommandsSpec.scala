@@ -8,7 +8,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.config.{ConfigManager, SpellCheckConfig}
+import com.serenity.config.{ConfigManagerTestSupport, SpellCheckConfig}
 import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.*
 import com.serenity.spellcheck.SpellChecker
@@ -231,7 +231,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-item-gap-rows",
           "Set command runner item gaps.",
-          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerItemGapRows(1))),
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerItemGapRows(Some(1)))),
           CommandCategory.Settings
         )
       )
@@ -248,7 +248,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     val config = stateManager.getCurrentState.unsafeRunSync().persisted.config
-    config.surfaceConfig.commandRunnerItemGapRows shouldBe 1
+    config.surfaceConfig.commandRunnerItemGapRows shouldBe Some(1)
     config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(3)
   }
 
@@ -273,7 +273,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "apply-compact-preset", "apply-compact-preset")
 
     val updated   = stateManager.getCurrentState.unsafeRunSync().persisted.config
-    val persisted = ConfigManager.loadConfig(Some(configFile.toString))
+    val persisted = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     updated.surfaceConfig.showLineNumbers shouldBe true
     updated.surfaceConfig.showGutter shouldBe true

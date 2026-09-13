@@ -94,5 +94,8 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
       .executeCommand(resizeCommand(com.serenity.state.models.SurfaceId("missing"), 6))
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync() shouldBe before
+    // issue #1048: every executed command records MRU usage regardless of outcome, so the resize command's own
+    // no-op still bumps `runtime.commandUsage` even though the panel state itself is unchanged.
+    val expected = before.copy(runtime = before.runtime.copy(commandUsage = Map("resize-focused-panel" -> 1)))
+    stateManager.getCurrentState.unsafeRunSync() shouldBe expected
   }

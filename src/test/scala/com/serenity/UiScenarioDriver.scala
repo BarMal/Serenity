@@ -9,7 +9,7 @@ import java.util.concurrent.atomic.AtomicReference
 import cats.effect.IO
 import cats.syntax.apply.*
 import com.serenity.animation.AnimationState
-import com.serenity.config.ConfigManager
+import com.serenity.config.ConfigManagerTestSupport
 import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -487,7 +487,7 @@ object UiScenarioDriver:
     for
       configuredSessionRoot <- sessionRoot.fold(IO.blocking(Files.createTempDirectory(s"$name-ui-scenario")))(IO.pure)
       configuredInitialConfig <-
-        if isolatedConfig then IO.blocking(ConfigManager.loadConfig(Some(isolatedConfigPath.toString)))
+        if isolatedConfig then IO.blocking(ConfigManagerTestSupport.loadConfig(Some(isolatedConfigPath.toString)))
         else IO.pure(initialConfig)
       manager <- StateManager(
         logger,

@@ -29,7 +29,11 @@ final case class PaneFrameRecord(
 
 final case class BufferRenderAnnotations(
     commentsByLine: Map[Int, List[DocumentComment]],
-    diagnosticsByLine: Map[Int, List[com.serenity.lsp.model.Diagnostic]]
+    diagnosticsByLine: Map[Int, List[com.serenity.lsp.model.Diagnostic]],
+    // See `SemanticTokensAvailability` for what each case means -- `Pending` (a request may still be in flight) is
+    // deliberately distinct from `Unavailable` (confirmed no server/capability). AppState.semanticTokensAvailability
+    // is where this is derived.
+    semanticTokensAvailability: SemanticTokensAvailability
 )
 
 /** Answers "what does each pane's content look like this frame": the per-frame [[EditorPaneRenderPlan]] (buffer layout
@@ -86,12 +90,13 @@ object RendererPaneSetup:
       .distinct
       .flatMap { bufferId =>
         state.persisted.buffers.get(bufferId).map { _ =>
-          val visibleLines = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
-          val cached =
-            state.annotationIndexByBuffer.get(bufferId).map(_()).getOrElse(AnnotationLineIndex(Vector.empty, Map.empty))
-          val commentsByLine    = cached.commentsByLine(visibleLines)
+          val visibleLines   = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
+          val cached         = state.annotationIndex(bufferId).getOrElse(AnnotationLineIndex(Vector.empty, Map.empty))
+          val commentsByLine = cached.commentsByLine(visibleLines)
           val diagnosticsByLine = visibleAnnotationLines(visibleLines, cached.diagnosticsByLine)
-          bufferId -> BufferRenderAnnotations(commentsByLine, diagnosticsByLine)
+          val semanticTokensAvailability =
+            state.semanticTokensAvailability(bufferId).getOrElse(SemanticTokensAvailability.Pending)
+          bufferId -> BufferRenderAnnotations(commentsByLine, diagnosticsByLine, semanticTokensAvailability)
         }
       }
       .toMap

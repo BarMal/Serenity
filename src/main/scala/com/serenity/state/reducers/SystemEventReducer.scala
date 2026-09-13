@@ -40,6 +40,30 @@ object SystemEventReducer:
           state
         )
 
+      case LspEvent.LspSemanticTokensReceived(uri, tokens) =>
+        ReducerResult.noEffects(
+          state.copy(runtime =
+            state.runtime.copy(semanticTokensState =
+              state.runtime.semanticTokensState.copy(
+                byUri = state.runtime.semanticTokensState.byUri + (uri -> tokens),
+                unavailableUris = state.runtime.semanticTokensState.unavailableUris - uri
+              )
+            )
+          )
+        )
+
+      case LspEvent.LspSemanticTokensUnavailable(uri) =>
+        ReducerResult.noEffects(
+          state.copy(runtime =
+            state.runtime.copy(semanticTokensState =
+              state.runtime.semanticTokensState.copy(
+                byUri = state.runtime.semanticTokensState.byUri - uri,
+                unavailableUris = state.runtime.semanticTokensState.unavailableUris + uri
+              )
+            )
+          )
+        )
+
       case ExplorerEvent.RootDirectoryLoaded(position, rootPath, size, entries, selectedPath) =>
         val tree = DirectoryTreeData(rootPath, entries = Map(rootPath -> entries))
         PanelStateReducer.pin(

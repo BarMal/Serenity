@@ -26,15 +26,15 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
   private def savedText(config: AppConfig): String =
     val file = Files.createTempFile("serenity-config-property", ".conf")
     try
-      ConfigManager.saveConfig(config, file) shouldBe true
+      ConfigManagerTestSupport.saveConfig(config, file) shouldBe true
       Files.readString(file)
     finally Files.deleteIfExists(file): Unit
 
   private def savedAndReloaded(config: AppConfig): AppConfig =
     val file = Files.createTempFile("serenity-config-property", ".conf")
     try
-      ConfigManager.saveConfig(config, file) shouldBe true
-      ConfigManager.loadConfig(Some(file.toString))
+      ConfigManagerTestSupport.saveConfig(config, file) shouldBe true
+      ConfigManagerTestSupport.loadConfig(Some(file.toString))
     finally Files.deleteIfExists(file): Unit
 
   private def writtenKeys(text: String): List[String] =

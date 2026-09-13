@@ -29,10 +29,12 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val stateRef = Ref.of[IO, AppState](initialState).unsafeRunSync()
     val bufferAnimationsRef =
       Ref.of[IO, Map[BufferId, com.serenity.animation.AnimationState]](Map.empty).unsafeRunSync()
+    val validateAndUpdateState: (AppState, AppState) => IO[Unit] =
+      (newState, fallbackState) => stateRef.set(AppStateValidation.validated(newState).getOrElse(fallbackState))
     new Harness(
       stateRef,
       bufferAnimationsRef,
-      new StateManagerNavigationEffects(stateRef, bufferAnimationsRef, NoOpLogger.impl[IO])
+      new StateManagerNavigationEffects(stateRef, bufferAnimationsRef, NoOpLogger.impl[IO], validateAndUpdateState)
     )
 
   /** A state with a single editor pane/buffer -- the buffer built from `content`, with the given cursor and annotations

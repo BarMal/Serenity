@@ -37,15 +37,15 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
   private def savedText(config: AppConfig): String =
     val file = Files.createTempFile("serenity-config-round-trip", ".conf")
     try
-      ConfigManager.saveConfig(config, file) shouldBe true
+      ConfigManagerTestSupport.saveConfig(config, file) shouldBe true
       Files.readString(file)
     finally Files.deleteIfExists(file): Unit
 
   private def savedAndReloaded(config: AppConfig): AppConfig =
     val file = Files.createTempFile("serenity-config-round-trip", ".conf")
     try
-      ConfigManager.saveConfig(config, file) shouldBe true
-      ConfigManager.loadConfig(Some(file.toString))
+      ConfigManagerTestSupport.saveConfig(config, file) shouldBe true
+      ConfigManagerTestSupport.loadConfig(Some(file.toString))
     finally Files.deleteIfExists(file): Unit
 
   /** The keys a saved file actually assigns, read off the text rather than through a parser -- these tests have to be
@@ -81,7 +81,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withPostProcessingEffect(PostProcessingEffect.Scanlines)
     .withUiShadowsEnabled(false)
     .withCommandRunnerVisibleRows(Some(11))
-    .withCommandRunnerItemGapRows(1.5)
+    .withCommandRunnerItemGapRows(Some(1.5))
     .withCommandRunnerCursorGapRows(Some(2.0))
     .withCommandRunnerShowKeyHints(false)
     .withCommandRunnerCursorPeekEnabled(true)

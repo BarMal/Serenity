@@ -235,7 +235,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val base  = buildState("content", 0)
     val state = base.copy(persisted = base.persisted.copy(buffers = Map(bufferId -> buffer)))
 
-    val index = state.annotationIndexByBuffer(bufferId)()
+    val index = state.annotationIndex(bufferId).getOrElse(fail("expected an index for a buffer that exists"))
 
     index.comments should have size 10000
     index.commentsByLine(Set(100000)).values.flatten should contain only comment
@@ -253,7 +253,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val base  = buildState("content", 0)
     val state = base.copy(persisted = base.persisted.copy(buffers = Map(bufferId -> buffer)))
 
-    val result = state.annotationIndexByBuffer(bufferId)().commentsByLine(Set(100000))
+    val result = state.annotationIndex(bufferId).getOrElse(fail("no annotation index")).commentsByLine(Set(100000))
 
     result.values.flatten.toList shouldBe List(visible)
   }

@@ -224,7 +224,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
     Files.writeString(configFile, ConfigManager.configToString(config))
 
     config.surfaceConfig.motionConfiguration.map(_.baseline) shouldBe Some(MotionPreset.Custom)
-    ConfigManager
+    ConfigManagerTestSupport
       .loadConfig(Some(configFile.toString))
       .surfaceConfig
       .effectiveMotionBaseline shouldBe MotionPreset.Custom
@@ -248,7 +248,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
     val config     = stateManager.getCurrentState.unsafeRunSync().persisted.config
     val configFile = Files.createTempFile("serenity-custom-editor-timing", ".conf")
     Files.writeString(configFile, ConfigManager.configToString(config))
-    val persistedFamily = ConfigManager
+    val persistedFamily = ConfigManagerTestSupport
       .loadConfig(Some(configFile.toString))
       .surfaceConfig
       .effectiveMotionConfiguration
@@ -291,7 +291,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
         |ui.motion.family.editor_text.animation.steps = 9
         |""".stripMargin
     )
-    val updated = ConfigManager
+    val updated = ConfigManagerTestSupport
       .loadConfig(Some(configFile.toString))
       .withUiTransitionSpeedScale(Some(1.5))
       .withUiAnimation(AnimationConfig.quick)

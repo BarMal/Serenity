@@ -15,98 +15,21 @@ enum SyntaxElement:
 
 object SyntaxElement:
 
-  def fromText(text: String): SyntaxElement =
-    text.trim match
-      case s if s.isEmpty          => Whitespace
-      case s if isKeyword(s)       => Keyword
-      case s if isStringLiteral(s) => String
-      case s if isComment(s)       => Comment
-      case s if isNumber(s)        => Number
-      case s if isOperator(s)      => Operator
-      case s if isDelimiter(s)     => Delimiter
-      case _                       => Normal
-
-  private def isKeyword(text: String): Boolean =
-    val keywords = Set(
-      "def",
-      "val",
-      "var",
-      "if",
-      "else",
-      "while",
-      "for",
-      "do",
-      "try",
-      "catch",
-      "finally",
-      "class",
-      "object",
-      "trait",
-      "extends",
-      "with",
-      "import",
-      "package",
-      "private",
-      "protected",
-      "override",
-      "abstract",
-      "sealed",
-      "final",
-      "lazy",
-      "implicit",
-      "match",
-      "case",
-      "return",
-      "throw",
-      "new",
-      "this",
-      "super",
-      "null",
-      "true",
-      "false",
-      "given",
-      "using",
-      "enum"
-    )
-    keywords.contains(text)
-
-  private def isStringLiteral(text: String): Boolean =
-    (text.startsWith("\"") && text.endsWith("\"")) ||
-      (text.startsWith("'") && text.endsWith("'")) ||
-      text.startsWith("\"\"\"")
-
-  private def isComment(text: String): Boolean =
-    text.startsWith("//") || text.startsWith("/*") || text.startsWith("*")
-
-  private def isNumber(text: String): Boolean =
-    text.matches("""^\d+(\.\d+)?[fFdD]?$""") || text.matches("""^0[xX][0-9a-fA-F]+$""")
-
-  private def isOperator(text: String): Boolean =
-    val operators = Set(
-      "+",
-      "-",
-      "*",
-      "/",
-      "%",
-      "=",
-      "==",
-      "!=",
-      "<",
-      ">",
-      "<=",
-      ">=",
-      "&&",
-      "||",
-      "!",
-      "&",
-      "|",
-      "^",
-      "~",
-      "<<",
-      ">>",
-      ">>>"
-    )
-    operators.contains(text) || text.forall("+-*/%=<>!&|^~".contains(_))
-
-  private def isDelimiter(text: String): Boolean =
-    Set("(", ")", "{", "}", "[", "]", ",", ";", ":", ".", "?").contains(text)
+  /** Maps an LSP semantic token type (`textDocument/semanticTokens`'s legend, LSP 3.17 §3.17.7.4 -- `namespace`,
+    * `class`, `keyword`, etc.) onto this theme's coarser vocabulary. This is now the only source of syntax
+    * classification (issue #859/#1177): the handwritten regex-based tokenizer this replaced classified line-local text
+    * fragments rather than real language tokens, and coerced every language through Scala-shaped keyword/string/number
+    * rules.
+    */
+  def fromLspTokenType(tokenType: String): SyntaxElement =
+    tokenType match
+      case "keyword" | "modifier"                                                             => Keyword
+      case "string" | "regexp"                                                                => String
+      case "comment"                                                                          => Comment
+      case "number"                                                                           => Number
+      case "operator"                                                                         => Operator
+      case "namespace" | "class" | "enum" | "interface" | "struct" | "typeParameter" | "type" => Type
+      case "parameter" | "variable" | "property" | "enumMember" | "function" | "method" | "macro" | "event" |
+          "decorator" | "label" =>
+        Identifier
+      case _ => Normal
