@@ -254,6 +254,31 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
     finalScreen.cursor.visible shouldBe true
   }
 
+  it should "retitle the terminal with the focused document so a screen reader's title announcement fires (#1447)" in {
+    val file = Files.createTempFile("tui-runtime-accessibility-spec", ".md")
+    Files.writeString(file, "alpha")
+    val sessionRoot = Files.createTempDirectory("tui-runtime-accessibility-spec-session")
+    val harness     = liveInputTerminal()
+
+    val program = TuiRuntime.run(
+      shell = TerminalShell.forTerminal(harness.terminal),
+      appConfig = AppConfig.default,
+      openPath = Some(file),
+      configPersistencePath = None,
+      hasDisplay = false,
+      sessionRootOverride = Some(sessionRoot)
+    )
+
+    val fiber = program.start.unsafeRunSync()
+
+    eventually {
+      screenOf(harness).title should contain(s"document ${file.getFileName}: alpha")
+    }
+
+    harness.send(Array(ctrl('q')))
+    fiber.joinWithNever.unsafeRunTimed(15.seconds) shouldBe defined
+  }
+
   "TuiRuntime.markdownPreviewSourceWindow" should "return an empty window for an empty buffer" in {
     val buffer = Buffer.fromString(BufferId(1), "")
 

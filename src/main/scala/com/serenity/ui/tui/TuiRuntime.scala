@@ -20,6 +20,7 @@ import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Buffer, BufferId, Damage}
+import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync, TuiAccessibilityBridge}
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{RendererCursorOverlay, RendererEntryPoints}
 import org.typelevel.log4cats.{Logger, LoggerFactory}
@@ -69,6 +70,8 @@ object TuiRuntime:
           // `makeInputHandler` runs -- which `AppRuntime.run` sequences before its own `registerFocusCallback` call --
           // so this holder is always populated by the time that callback registration reaches into it.
           inputHandlerHolder <- IO(new AtomicReference[Option[TerminalInputHandler]](None))
+          accessibilitySync  <- AccessibilitySync.empty
+          accessibilityBridge = new TuiAccessibilityBridge(writeToTerminal(terminalShell))
           _ <- AppRuntime.run(
             initialViewportSize = initialViewportSize,
             makeInputHandler = router =>
@@ -85,8 +88,20 @@ object TuiRuntime:
                   handler
                 },
             checkResize = terminalShell.checkResize,
-            renderFull = renderFullFn(surfaceHolder, terminalShell, previewWindowAvailability),
-            renderCursorOnly = renderCursorOnlyFn(surfaceHolder, terminalShell, previewWindowAvailability),
+            renderFull = renderFullFn(
+              surfaceHolder,
+              terminalShell,
+              previewWindowAvailability,
+              accessibilitySync,
+              accessibilityBridge
+            ),
+            renderCursorOnly = renderCursorOnlyFn(
+              surfaceHolder,
+              terminalShell,
+              previewWindowAvailability,
+              accessibilitySync,
+              accessibilityBridge
+            ),
             appConfig = terminalConfig,
             registerFocusCallback = cb => inputHandlerHolder.get().foreach(_.registerFocusCallback(cb)),
             makeStateManager = Some(
@@ -229,29 +244,57 @@ object TuiRuntime:
       bufferAnimations
     )
 
+  /** Where a [[TuiAccessibilityBridge]] writes: the terminal's own writer, exactly as `Osc52Clipboard` writes its
+    * escape sequences through it.
+    */
+  private[tui] def writeToTerminal(shell: TerminalShell): String => Unit =
+    text =>
+      shell.writer.write(text)
+      shell.writer.flush()
+
+  /** Project and publish the accessibility snapshot for one render, memoized against the `AppState` last synced -- the
+    * same `AccessibilitySync` the GUI path (`Main.syncAccessibility`) uses, so the O(document-size) projection in
+    * `AccessibilitySnapshot.from` is paid once per accessibility-relevant state change here too, not once per frame.
+    */
+  private[tui] def syncAccessibility(
+    state: AppState,
+    size: ViewportSize,
+    accessibilitySync: AccessibilitySync,
+    accessibilityBridge: TuiAccessibilityBridge
+  ): IO[Unit] =
+    accessibilitySync
+      .sync(state)(previous => IO(AccessibilitySnapshot.from(state, size, previous)))
+      .flatMap(snapshot => IO(accessibilityBridge.publish(snapshot)))
+
   private def renderFullFn(
     surfaceHolder: SurfaceHolder,
     shell: TerminalShell,
-    previewWindowAvailability: MarkdownPreviewWindowAvailability
+    previewWindowAvailability: MarkdownPreviewWindowAvailability,
+    accessibilitySync: AccessibilitySync,
+    accessibilityBridge: TuiAccessibilityBridge
   ): AppRuntime.RenderFn =
     (state, cursorVisible, cursorColor, damage, _) =>
       for
         size <- shell.viewportSize
         surface = surfaceHolder.forSize(size)
         _ <- IO(paintFrame(state, surface, size, cursorVisible, cursorColor, damage))
+        _ <- syncAccessibility(state, size, accessibilitySync, accessibilityBridge)
         _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability)
       yield ()
 
   private def renderCursorOnlyFn(
     surfaceHolder: SurfaceHolder,
     shell: TerminalShell,
-    previewWindowAvailability: MarkdownPreviewWindowAvailability
+    previewWindowAvailability: MarkdownPreviewWindowAvailability,
+    accessibilitySync: AccessibilitySync,
+    accessibilityBridge: TuiAccessibilityBridge
   ): AppRuntime.RenderFn =
     (state, cursorVisible, cursorColor, _, bufferAnimations) =>
       for
         size <- shell.viewportSize
         surface = surfaceHolder.forSize(size)
         _ <- IO(paintCursorOnly(state, surface, size, cursorVisible, cursorColor, bufferAnimations))
+        _ <- syncAccessibility(state, size, accessibilitySync, accessibilityBridge)
         _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability)
       yield ()
 
