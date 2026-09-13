@@ -7,7 +7,6 @@ import cats.effect.{Deferred, Fiber, IO, Ref, Resource}
 import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
-import com.serenity.lsp.model.{SemanticToken, SemanticTokensLegend}
 import com.serenity.state.models.CursorPosition
 import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.Stream
@@ -526,73 +525,8 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
     runVirtual(program)
   }
 
-  it should "send a semanticTokens/full request and emit the decoded tokens when the server supports it" in {
-    val legend         = SemanticTokensLegend(tokenTypes = List("keyword"), tokenModifiers = Nil)
-    val expectedMethod = "textDocument/semanticTokens/full"
-    val expectedToken =
-      SemanticToken(line = 0, startCharacter = 0, length = 3, tokenType = "keyword", tokenModifiers = Set.empty)
-    runVirtual(
-      harness
-        .use { manager =>
-          for
-            _       <- open(manager)
-            _       <- manager.connection.recordSemanticTokensLegend(Some(legend))
-            _       <- manager.effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
-            request <- takeMessage(manager.connection)
-            _ = request.hcursor.downField("method").as[String].toOption shouldBe Some(expectedMethod)
-            _ = request.hcursor
-              .downField("params")
-              .downField("textDocument")
-              .downField("uri")
-              .as[String]
-              .toOption shouldBe Some(uri)
-            _ <- manager.connection.handleIncomingJson(
-              response(requestId(request), Json.obj("data" -> List(0, 0, 3, 0, 0).map(_.asJson).asJson))
-            )
-            _      <- manager.eventApplied.get
-            events <- manager.events.get
-            _ = events shouldBe List(LspEvent.LspSemanticTokensReceived(uri, List(expectedToken)))
-            _ <- manager.stop
-          yield succeed
-        }
-    )
-  }
-
-  it should "send no semanticTokens request when the server never declared the capability" in
-    runVirtual(
-      harness
-        .use { manager =>
-          for
-            _ <- open(manager)
-            // No `recordSemanticTokensLegend` call here -- the connection's legend stays `None`, exactly as it would
-            // for a real server that never declared `semanticTokensProvider` during its handshake.
-            _ <- manager.effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
-            _ <- noMessage(manager.connection)
-            _ <- manager.stop
-          yield succeed
-        }
-    )
-
-  it should "discard a semantic tokens response after its document version changes" in
-    runVirtual(
-      harness
-        .use { manager =>
-          for
-            _       <- open(manager)
-            _       <- manager.connection.recordSemanticTokensLegend(Some(SemanticTokensLegend(List("keyword"), Nil)))
-            _       <- manager.effects.offer(Some(LspEffect.SemanticTokensRequested(uri, LanguageId.Scala)))
-            request <- takeMessage(manager.connection)
-            _ <- manager.effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo2", version = 2)))
-            _ <- takeMessage(manager.connection)
-            _ <- manager.connection.handleIncomingJson(
-              response(requestId(request), Json.obj("data" -> List(0, 0, 3, 0, 0).map(_.asJson).asJson))
-            )
-            events <- manager.events.get
-            _ = events shouldBe Nil
-            _ <- manager.stop
-          yield succeed
-        }
-    )
+  // Semantic-tokens request/response coverage lives in LspManagerSemanticTokensSpec, split out to keep this file
+  // under the architecture ratchet's line-count target.
 
   it should "separate connections when a workspace resolves different server configurations" in {
     val firstUri       = "file:///workspace/Foo.scala"

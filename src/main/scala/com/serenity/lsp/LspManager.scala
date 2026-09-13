@@ -362,6 +362,8 @@ object LspManager:
         Some(LspEvent.LspCompletionReceived(Nil, anchor))
       case RequestKind.Definition =>
         None
+      case RequestKind.SemanticTokens =>
+        None
 
   /** Sends `didChange` using whatever sync kind the connection negotiated during `initialize` (#1468): a range-based
     * diff against the document's previous text for `Incremental`, the existing full-text notification for `Full`, and
