@@ -102,17 +102,15 @@ final class TerminalScreenBuffer(val width: Int, val height: Int):
       if previous.span == CellSpan.Wide && cell.span != CellSpan.Wide then blankIfContinuation(x + 1, y)
       if previous.span == CellSpan.Continuation && cell.span != CellSpan.Continuation then blankIfWideLeader(x - 1, y)
 
+  // Routed through `writeCell` itself -- rather than writing `grid` directly -- so there is exactly one funnel point
+  // for both dirty-row tracking and the active clip, instead of three hand-synchronized write sites.
   private def blankIfContinuation(x: Int, y: Int): Unit =
     if inBounds(x, y) && grid(y)(x).span == CellSpan.Continuation then
-      val blank = TerminalCell.blank(fgColorRef.get(), bgColorRef.get())
-      if grid(y)(x) != blank then dirtyRows.set(y)
-      grid(y)(x) = blank
+      writeCell(x, y, TerminalCell.blank(fgColorRef.get(), bgColorRef.get()))
 
   private def blankIfWideLeader(x: Int, y: Int): Unit =
     if inBounds(x, y) && grid(y)(x).span == CellSpan.Wide then
-      val blank = TerminalCell.blank(fgColorRef.get(), bgColorRef.get())
-      if grid(y)(x) != blank then dirtyRows.set(y)
-      grid(y)(x) = blank
+      writeCell(x, y, TerminalCell.blank(fgColorRef.get(), bgColorRef.get()))
 
 object TerminalScreenBuffer:
 

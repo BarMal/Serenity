@@ -110,6 +110,35 @@ class TerminalScreenBufferSpec extends AnyFlatSpec with Matchers:
     frame(1, 0).text shouldBe "a"
   }
 
+  // The orphan repair (`blankIfContinuation`/`blankIfWideLeader`) funnels through `writeCell` itself rather than
+  // writing `grid` directly, so it is subject to the same active clip as every other write -- these two cases are
+  // the only way to observe that structurally, since both helpers are private.
+  it should "honor the active clip when repairing an orphaned wide-glyph continuation cell" in {
+    val buf = buffer()
+    buf.putString(0, 0, "中") // leader at (0,0), continuation at (1,0)
+
+    buf.withClip(0, 0, 1, 1) {
+      buf.putString(0, 0, "a") // overwrites the leader; the orphaned continuation at (1,0) is outside this clip
+    }
+
+    val frame = buf.snapshot
+    frame(0, 0).text shouldBe "a"
+    frame(1, 0).span shouldBe CellSpan.Continuation // left alone: repair must respect the clip too
+  }
+
+  it should "honor the active clip when repairing an orphaned wide-glyph leader cell" in {
+    val buf = buffer()
+    buf.putString(0, 0, "中") // leader at (0,0), continuation at (1,0)
+
+    buf.withClip(1, 0, 1, 1) {
+      buf.putString(1, 0, "a") // overwrites the continuation; the orphaned leader at (0,0) is outside this clip
+    }
+
+    val frame = buf.snapshot
+    frame(1, 0).text shouldBe "a"
+    frame(0, 0).span shouldBe CellSpan.Wide // left alone: repair must respect the clip too
+  }
+
   // #1464: TerminalAnsiDiff.emitDiff rescanned every cell of every row to find what changed, duplicating a diff the
   // renderer's own dirty-row bookkeeping (FramePlan/DirtyLineDiff) already does -- but that bookkeeping only covers
   // editor pane content, not chrome/panels/modal, so it can't safely stand in as the dirty-row source for the whole
