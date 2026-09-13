@@ -13,9 +13,9 @@
 # approach used for every test file at or above that threshold in this same audit) would fragment a single scenario
 # rather than separate distinct ones. perf/PerformanceBenchmarks.scala and TerminalEmulator.interpret are the same
 # "declarative table"/"exhaustive match" category already accepted for ConfigRegistry.
-# #1511 rendering-slice review: CharacterRenderer.scala's 615 -> 616 bump is `lexStartState: LexState` becoming
-# `semanticTokens: Option[List[SemanticToken]]` (one extra import line) -- the same file, same reasoning as above,
-# not new growth to re-justify.
+# paydown: CharacterRenderer.scala's 615 -> 616 bump (#859/#1177 rendering slice, PR #1511) is
+# `lexStartState: LexState` becoming `semanticTokens: Option[List[SemanticToken]]` (one extra import line) --
+# the same file, same reasoning as the #1477 audit above, not new growth to re-justify.
 main/scala/com/serenity/app/AppRuntime.scala	file length	757
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	119
 main/scala/com/serenity/config/ConfigRegistry.scala	file length	680
