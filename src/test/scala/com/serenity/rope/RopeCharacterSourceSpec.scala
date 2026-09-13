@@ -14,22 +14,26 @@ class RopeCharacterSourceSpec extends AnyFlatSpec with Matchers:
   given balance: Balance = Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 3)
 
   // `Rope` is sealed, so this delegates to a real `Leaf`/`Node` tree while itself extending the still-open `Leaf`
-  // purely to satisfy the type system (the same shape `RendererSnapshotReuseSpec.NonCollectingRope` uses), backed by
-  // `delegate`'s own flattened content so the sealed trait's own (final, non-overridable) `chunksInRange` still walks
-  // real content. Counts calls to `index`, the O(log n) root-descending lookup #1458 says `RopeCharacterSource.charAt`
-  // must stop calling once per character.
+  // purely to satisfy the type system (the same shape `RendererSnapshotReuseSpec.NonCollectingRope` uses). It
+  // instruments `chunksInRange` -- the method `RopeCharacterSource.charAt` actually calls on every cache miss --
+  // rather than `index`, which the current `charAt` never calls at all, so counting it would pass trivially whether
+  // or not caching exists. `chunksInRange` forwards to `delegate.chunksInRange` so the real multi-leaf tree still
+  // decides chunk boundaries; only the call count is observed here. (`chunksInRange` is no longer `final` on `Rope`
+  // for exactly this reason -- see its doc there.)
   final private class CountingRope(delegate: Rope) extends Leaf(delegate.collect()):
-    val indexCalls = new AtomicInteger(0)
+    val chunksInRangeCalls = new AtomicInteger(0)
 
     override def weight: Int = delegate.weight
     override def height: Int = delegate.height
 
-    override def index(i: Int): Option[Char] =
-      indexCalls.incrementAndGet()
-      delegate.index(i)
+    override def index(i: Int): Option[Char] = delegate.index(i)
 
     override def splitAt(index: Int): Option[(Rope, Rope)] = delegate.splitAt(index)
     override def rebalance: Rope                           = this
+
+    override private[rope] def chunksInRange(startIndex: Int, endIndex: Int): Iterator[(Int, String)] =
+      chunksInRangeCalls.incrementAndGet()
+      delegate.chunksInRange(startIndex, endIndex)
 
   "RopeCharacterSource" should "expose the rope's weight as its length" in {
     RopeCharacterSource(Rope("hello world")).length shouldBe 11
@@ -55,7 +59,9 @@ class RopeCharacterSourceSpec extends AnyFlatSpec with Matchers:
 
     text.indices.foreach(i => source.charAt(i) shouldBe text.charAt(i))
 
-    counting.indexCalls.get() shouldBe 0
+    // Without caching, every one of the 11 `charAt` calls would miss and call `chunksInRange` itself; caching
+    // collapses that to one call per leaf chunk, well under one per character.
+    counting.chunksInRangeCalls.get() should be < text.length
   }
 
   it should "still cross a genuine chunk boundary correctly after caching the previous one" in {

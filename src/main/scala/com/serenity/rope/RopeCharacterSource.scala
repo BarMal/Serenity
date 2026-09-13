@@ -13,6 +13,8 @@ import com.serenity.text.TextEditing
   * where a k-character scan cost O(k log n)) -- only a genuine chunk crossing pays the O(log n) `chunksInRange` walk.
   */
 final case class RopeCharacterSource(rope: Rope) extends TextEditing.CharacterSource:
+  // Plain `AtomicReference`, not `Ref[IO, _]`: `charAt` is a pure synchronous scan (no `IO`, no fiber ever shares
+  // this instance), so there is no async boundary for `Ref` to protect and no reason to lift this into `IO`.
   private val cachedChunk = new AtomicReference[Option[(Int, String)]](None)
 
   override def length: Int = rope.weight
