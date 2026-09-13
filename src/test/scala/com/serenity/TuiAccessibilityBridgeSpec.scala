@@ -101,8 +101,8 @@ class TuiAccessibilityBridgeSpec extends AnyFlatSpec with Matchers:
 
     bridge.publish(
       AccessibilitySnapshot(
-        List(node(AccessibilityRole.Button, s"evil${esc}]0;hijack$bel")),
-        List(AccessibilityAnnouncement(s"msg${esc}]9;hijack$bel"))
+        List(node(AccessibilityRole.Button, s"evil$esc]0;hijack$bel")),
+        List(AccessibilityAnnouncement(s"msg$esc]9;hijack$bel"))
       )
     )
 

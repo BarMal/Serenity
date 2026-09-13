@@ -70,7 +70,7 @@ object TuiRuntime:
           // `makeInputHandler` runs -- which `AppRuntime.run` sequences before its own `registerFocusCallback` call --
           // so this holder is always populated by the time that callback registration reaches into it.
           inputHandlerHolder <- IO(new AtomicReference[Option[TerminalInputHandler]](None))
-          accessibilitySync <- AccessibilitySync.empty
+          accessibilitySync  <- AccessibilitySync.empty
           accessibilityBridge = new TuiAccessibilityBridge(writeToTerminal(terminalShell))
           _ <- AppRuntime.run(
             initialViewportSize = initialViewportSize,
@@ -246,13 +246,12 @@ object TuiRuntime:
     * escape sequences through it.
     */
   private[tui] def writeToTerminal(shell: TerminalShell): String => Unit =
-    text => {
+    text =>
       shell.writer.write(text)
       shell.writer.flush()
-    }
 
-  /** Project and publish the accessibility snapshot for one render, memoized against the `AppState` last synced --
-    * the same `AccessibilitySync` the GUI path (`Main.syncAccessibility`) uses, so the O(document-size) projection in
+  /** Project and publish the accessibility snapshot for one render, memoized against the `AppState` last synced -- the
+    * same `AccessibilitySync` the GUI path (`Main.syncAccessibility`) uses, so the O(document-size) projection in
     * `AccessibilitySnapshot.from` is paid once per accessibility-relevant state change here too, not once per frame.
     */
   private[tui] def syncAccessibility(

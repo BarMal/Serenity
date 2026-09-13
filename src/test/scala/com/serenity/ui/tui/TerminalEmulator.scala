@@ -135,6 +135,16 @@ object TerminalEmulator:
       notifications: Vector[String]
   )
 
+  /** OSC 0/2 (title) and OSC 9 (notification) update dedicated `Interp` fields; every other OSC body is handled as
+    * before, as a possible OSC 52 clipboard payload. Kept top-level rather than nested in `interpret` so that method
+    * doesn't grow past its already-tracked architecture-ratchet baseline.
+    */
+  private def applyOsc(state: Interp, body: String): Interp =
+    body.split(";", 2).toVector match
+      case Vector(("0" | "2"), text) => state.copy(title = Some(text))
+      case Vector("9", text)         => state.copy(notifications = state.notifications :+ text)
+      case _                         => state.copy(payloads = state.payloads ++ osc52Payload(body))
+
   private def interpret(start: TerminalEmulator, ansi: String): TerminalEmulator =
     val width  = start.frame.width
     val height = start.frame.height
@@ -176,12 +186,6 @@ object TerminalEmulator:
             case _ => clearRange(rowStart, rowStart + width, state.pen)
       state
 
-    def applyOsc(state: Interp, body: String): Interp =
-      body.split(";", 2).toVector match
-        case Vector(("0" | "2"), text) => state.copy(title = Some(text))
-        case Vector("9", text)         => state.copy(notifications = state.notifications :+ text)
-        case _                         => state.copy(payloads = state.payloads ++ osc52Payload(body))
-
     def applyCsi(state: Interp, csi: Csi): Interp =
       (csi.prefix, csi.intermediates, csi.finalByte) match
         case (None, "", 'H') | (None, "", 'f') =>
@@ -220,12 +224,22 @@ object TerminalEmulator:
             val codePoint = ansi.codePointAt(index)
             loop(index + Character.charCount(codePoint), printCodePoint(state, codePoint))
 
-    val (consumedTo, finalState) =
-      loop(
-        0,
-        Interp(start.cursor, start.pen, start.privateModes, start.osc52Payloads, start.title, start.notifications)
-      )
+    val initial =
+      Interp(start.cursor, start.pen, start.privateModes, start.osc52Payloads, start.title, start.notifications)
+    val (consumedTo, finalState) = loop(0, initial)
+    rebuild(width, height, grid, ansi, consumedTo, finalState)
 
+  /** Assembles the emulator `interpret` produces from its loop's end state -- pulled out of `interpret` itself so that
+    * method's line count stays under the architecture ratchet's tracked baseline for it.
+    */
+  private def rebuild(
+    width: Int,
+    height: Int,
+    grid: Array[Array[TerminalCell]],
+    ansi: String,
+    consumedTo: Int,
+    finalState: Interp
+  ): TerminalEmulator =
     TerminalEmulator(
       frame = TerminalFrame(width, height, grid.map(_.toVector).toVector),
       cursor = finalState.cursor,
