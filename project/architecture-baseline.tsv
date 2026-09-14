@@ -54,7 +54,6 @@ test/scala/com/serenity/RendererSnapshotReuseSpec.scala	file length	618
 test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	694
 test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	728
 test/scala/com/serenity/SpellCheckerDictionaryIoSpec.scala	file length	614
-test/scala/com/serenity/UiPresetSpec.scala	file length	705
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	750
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	320
 test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	663

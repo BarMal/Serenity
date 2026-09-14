@@ -179,13 +179,12 @@ final private[manager] class StateManagerUiPresetEffects(
   private def seedEditorFromSplash(state: AppState): AppState =
     if state.startPageSurface.isEmpty then state
     else
-      val withoutStartPage = state.copy(runtime =
-        state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot { surface =>
+      val withoutStartPage =
+        state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot { surface =>
           surface.content match
             case SurfaceContent.StartPage(_) => true
             case _                           => false
-        })
-      )
+        }))
       EditorState.openNewTab(withoutStartPage)
 
   private def applyPresetDocumentModeToActiveEmptyBuffer(state: AppState, mode: DefaultDocumentMode): AppState =

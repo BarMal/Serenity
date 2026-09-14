@@ -98,7 +98,7 @@ class StartupLaunchSurfaceSpec extends AnyFlatSpec with Matchers with StateManag
   }
 
   it should "quick-resume the previous session with Tab" in {
-    val page   = AppStartup.createStartPage(sessionExists = true, recentFiles = Nil, resumeIdentifier = Some("notes.md"))
+    val page = AppStartup.createStartPage(sessionExists = true, recentFiles = Nil, resumeIdentifier = Some("notes.md"))
     val result = StartupPageComponent().processEvent(TabKey, stateFor(page))
 
     result should matchPattern {

@@ -532,7 +532,6 @@ private object KeymapCodecSupport:
     // Skip action keys this build doesn't recognize -- config written by another version (an action since renamed or
     // removed, e.g. a `next_category` binding in an older saved preset) must not discard the whole keymap section and
     // fall the user back to defaults. Recognized bindings are kept, merged onto defaults; unknown keys are dropped.
-    val recognized = bindings.toList.flatMap { (key, triggers) =>
-      values.find(action => keyOf(action) == key).map(_ -> triggers)
-    }
+    val recognized =
+      bindings.toList.flatMap((key, triggers) => values.find(action => keyOf(action) == key).map(_ -> triggers))
     Right(defaults ++ recognized.toMap)
