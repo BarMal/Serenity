@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.io.FileManager
@@ -89,7 +89,7 @@ final private[manager] class StateManagerWorkflowCapability(
     val dirtyBufferIds =
       targetBufferIds.filter(bufferId => state.persisted.buffers.get(bufferId).exists(_.hasUnsavedChanges))
     val cleanBufferIds =
-      if scope == CloseScope.Quit then Nil
+      if preservesBuffers(scope) then Nil
       else targetBufferIds.filterNot(dirtyBufferIds.contains)
     val stateAfterClean = cleanBufferIds.foldLeft(state)(closeBufferUsingExistingFlow)
 
@@ -97,12 +97,7 @@ final private[manager] class StateManagerWorkflowCapability(
       case Nil =>
         val finalState = clearCloseActions(stateAfterClean)
         validateAndUpdateState(finalState, state) >>
-          stateRef.get.flatMap { committed =>
-            IO.whenA(scope == CloseScope.Quit)(
-              sessionPersistence.onAppClose(committed) >>
-                quitSignal.complete(()).attempt.void
-            )
-          }
+          stateRef.get.flatMap(committed => finishCloseScope(scope, committed))
       case currentBufferId :: remaining =>
         promptCloseWorkflow(
           stateAfterClean,
@@ -114,6 +109,71 @@ final private[manager] class StateManagerWorkflowCapability(
           )
         )
 
+  /** Scopes that leave clean buffers open rather than closing them as they go: Quit (state is discarded on exit
+    * anyway) and ReturnToStartPage (the whole session is snapshotted, then replaced by the start page).
+    */
+  private def preservesBuffers(scope: CloseScope): Boolean =
+    scope == CloseScope.Quit || scope == CloseScope.ReturnToStartPage
+
+  /** In the return-to-start-page flow a resolved dirty buffer (saved or discarded) stays open so it is captured by the
+    * session snapshot -- unlike Quit/Close, which drop it. Every other scope closes it as before.
+    */
+  private def closeUnlessSnapshotting(scope: CloseScope, state: AppState, bufferId: BufferId): AppState =
+    if scope == CloseScope.ReturnToStartPage then state
+    else closeBufferUsingExistingFlow(state, bufferId)
+
+  /** The terminal step once every buffer a close action targets has been resolved: Quit persists and quits;
+    * ReturnToStartPage snapshots the session and swaps the editor for a freshly-built start page; the rest do nothing.
+    */
+  private def finishCloseScope(scope: CloseScope, committed: AppState): IO[Unit] =
+    scope match
+      case CloseScope.Quit =>
+        sessionPersistence.onAppClose(committed) >> quitSignal.complete(()).attempt.void
+      case CloseScope.ReturnToStartPage =>
+        snapshotAndShowStartPage(committed)
+      case _ =>
+        IO.unit
+
+  /** Persist the current session (unsaved buffers included, so [Tab] Quick-resume restores them) and replace the
+    * editor with a start page that offers to resume it. Runtime chrome (theme, viewport, terminal/GUI mode, keyboard
+    * tier) carries over from the committed editor state so the splash matches the environment it came from.
+    */
+  private def snapshotAndShowStartPage(committed: AppState): IO[Unit] =
+    sessionManager.saveSession(committed, persistUnsavedBuffers = true) >>
+      IO.blocking(
+        committed.persisted.recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path))
+      ).flatMap { readableRecentFiles =>
+        val page = StartupPageContent.createStartPage(
+          sessionExists = true,
+          recentFiles = readableRecentFiles,
+          resumeIdentifier = Some(StartupPageContent.sessionResumeIdentifier(committed))
+        )
+        validateAndUpdateState(startPageStateFrom(committed, page), committed)
+      }
+
+  private def startPageStateFrom(committed: AppState, page: StartupPage): AppState =
+    val startPageSurfaceId = SurfaceId("surface-0")
+    val base               = AppState.empty(committed.persisted.config)
+    base.copy(
+      persisted = base.persisted.copy(
+        focus = Focus.Surface(startPageSurfaceId),
+        theme = committed.persisted.theme
+      ),
+      runtime = base.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            id = startPageSurfaceId,
+            content = SurfaceContent.StartPage(page),
+            presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        ),
+        viewportSize = committed.runtime.viewportSize,
+        nextSurfaceId = 1,
+        isTuiMode = committed.runtime.isTuiMode,
+        keyboardFidelityTier = committed.runtime.keyboardFidelityTier
+      )
+    )
+
   protected def closeTargets(scope: CloseScope, state: AppState): List[BufferId] =
     scope match
       case CloseScope.Current => activeEditorBufferId(state).toList
@@ -122,7 +182,8 @@ final private[manager] class StateManagerWorkflowCapability(
         activeEditorBufferId(state) match
           case Some(focused) => state.persisted.bufferOrder.filterNot(_ == focused)
           case None          => state.persisted.bufferOrder
-      case CloseScope.Quit => state.persisted.bufferOrder
+      case CloseScope.Quit              => state.persisted.bufferOrder
+      case CloseScope.ReturnToStartPage => state.persisted.bufferOrder
 
   protected def promptCloseWorkflow(state: AppState, workflow: CloseWorkflowState): IO[Unit] =
     val focusedState = focusBufferForWorkflow(state, workflow.currentBufferId)
@@ -140,7 +201,7 @@ final private[manager] class StateManagerWorkflowCapability(
                 stateRef.get.flatMap(current => validateAndUpdateState(clearCloseActions(current), current))
             case CloseWorkflowChoice.Discard =>
               val dismissedState = clearCloseActions(dismissModalSurface(state))
-              val nextState      = closeBufferUsingExistingFlow(dismissedState, workflow.currentBufferId)
+              val nextState      = closeUnlessSnapshotting(workflow.scope, dismissedState, workflow.currentBufferId)
               validateAndUpdateState(nextState, state) >>
                 stateRef.get.flatMap(committed => continueCloseWorkflow(workflow, committed))
             case CloseWorkflowChoice.Save =>
@@ -149,7 +210,7 @@ final private[manager] class StateManagerWorkflowCapability(
                   saveBufferEffect(workflow.currentBufferId) >>
                     stateRef.get.flatMap { savedState =>
                       val dismissedState = clearCloseActions(dismissModalSurface(savedState))
-                      val nextState      = closeBufferUsingExistingFlow(dismissedState, workflow.currentBufferId)
+                      val nextState = closeUnlessSnapshotting(workflow.scope, dismissedState, workflow.currentBufferId)
                       validateAndUpdateState(nextState, savedState) >>
                         stateRef.get.flatMap(committed => continueCloseWorkflow(workflow, committed))
                     }
@@ -176,12 +237,7 @@ final private[manager] class StateManagerWorkflowCapability(
       case Nil =>
         val finalState = clearCloseActions(state)
         validateAndUpdateState(finalState, state) >>
-          stateRef.get.flatMap { committed =>
-            IO.whenA(workflow.scope == CloseScope.Quit)(
-              sessionPersistence.onAppClose(committed) >>
-                quitSignal.complete(()).attempt.void
-            )
-          }
+          stateRef.get.flatMap(committed => finishCloseScope(workflow.scope, committed))
 
   protected def focusBufferForWorkflow(state: AppState, bufferId: BufferId): AppState =
     EditorState.focusBuffer(EditorState.rebalancePanes(state, Some(bufferId)), bufferId)
@@ -247,7 +303,7 @@ final private[manager] class StateManagerWorkflowCapability(
         case Some(closeWorkflow) if closeWorkflow.currentBufferId == bufferId =>
           val dismissedState = dismissModalSurface(savedState)
           val nextState =
-            if closeWorkflow.scope == CloseScope.Quit then dismissedState
+            if preservesBuffers(closeWorkflow.scope) then dismissedState
             else closeBufferUsingExistingFlow(dismissedState, bufferId)
           validateAndUpdateState(nextState, savedState) >>
             stateRef.get.flatMap(committed => continueCloseWorkflow(closeWorkflow, committed))
@@ -291,7 +347,7 @@ final private[manager] class StateManagerWorkflowCapability(
         case Some(closeWorkflow) =>
           val dismissedState = dismissModalSurface(savedState)
           val nextState =
-            if closeWorkflow.scope == CloseScope.Quit then dismissedState
+            if preservesBuffers(closeWorkflow.scope) then dismissedState
             else closeBufferUsingExistingFlow(dismissedState, bufferId)
           validateAndUpdateState(nextState, savedState) >>
             stateRef.get.flatMap(committed => continueCloseWorkflow(closeWorkflow, committed))

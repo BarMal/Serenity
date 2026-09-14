@@ -3,7 +3,6 @@ package com.serenity.app
 import java.nio.file.{Files, Path}
 
 import cats.effect.IO
-import com.serenity.command.{Command, CommandIntent, FileIntent, SessionIntent, UiPresetsIntent}
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.state.manager.*
@@ -15,7 +14,8 @@ import com.serenity.ui.theme.config.AppThemeManager
 object AppStartup:
 
   /** `recentFiles` must already be filtered to existing, readable files -- `createStartPage` does no filesystem access
-    * of its own, so callers filter via `IO.blocking` before calling this.
+    * of its own, so callers filter via `IO.blocking` before calling this. Delegates to [[StartupPageContent]] so the
+    * same page can be rebuilt from the state layer (the "return to start page" command) without a package cycle.
     */
   def createStartPage(
     sessionExists: Boolean,
@@ -23,98 +23,7 @@ object AppStartup:
     configNotice: Option[String] = None,
     resumeIdentifier: Option[String] = None
   ): StartupPage =
-    // A configuration that could not be read takes the status line: it is the more consequential of the two, and the
-    // start page is on screen at exactly the moment it happened. Its only other report is a log line the TUI discards.
-    val statusMessage =
-      configNotice.orElse(Option.when(!sessionExists)("No previous session found"))
-
-    val primaryActions = List(
-      StartupAction(
-        "new-session",
-        "New document",
-        Command
-          .typed("startup.new-session", "Start a new session", CommandIntent.Session(SessionIntent.StartupNewSession)),
-        Some('1'),
-        Some("Enter")
-      ),
-      StartupAction(
-        "open-file",
-        "Open file or folder",
-        Command.typed(
-          "startup.open-file",
-          "Open an existing file or directory",
-          CommandIntent.Session(SessionIntent.StartupOpenFile)
-        ),
-        Some('2'),
-        Some("Enter")
-      )
-    )
-    val resume = Option.when(sessionExists)(
-      StartupResumeHint(
-        resumeIdentifier.getOrElse("previous session"),
-        Command.typed(
-          "startup.restore-session",
-          "Restore an existing session",
-          CommandIntent.Session(SessionIntent.StartupRestoreSession)
-        )
-      )
-    )
-    val recentActions = recentFiles
-      .map(path => path.toAbsolutePath.normalize())
-      .distinct
-      .take(5)
-      .map { path =>
-        StartupAction(
-          s"recent:${path.toString}",
-          path.toString,
-          Command.typed(
-            s"startup.open-recent.${path.getFileName}",
-            s"Open recent file $path",
-            CommandIntent.File(FileIntent.OpenRecentFile(path))
-          ),
-          detail = Some("Recent")
-        )
-      }
-    val workflowActions = List(("Writing", 'W'), ("Code", 'C'), ("Compact", 'M')).map { (name, key) =>
-      StartupAction(
-        s"workflow-${name.toLowerCase}",
-        name,
-        Command
-          .typed(
-            s"startup.workflow.${name.toLowerCase}",
-            s"Use the $name workflow",
-            CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset(name))
-          ),
-        shortcut = Some(key),
-        section = StartupActionSection.Workflow
-      )
-    }
-    val actions = primaryActions ++ recentActions
-    StartupPage(
-      "Welcome to Serenity",
-      options = actions.map(_.renderedLabel),
-      statusMessage = statusMessage,
-      actions = actions,
-      workflows = workflowActions,
-      resume = resume
-    )
-
-  /** The previous session's main file name (active pane's buffer, else the first buffered file), for the quick-resume
-    * hint -- so the user recognises what Tab would resume. Falls back to a generic label for an empty/file-less session.
-    */
-  private def sessionResumeIdentifier(session: AppState): String =
-    val persisted = session.persisted
-    val activeFile = persisted.layout.activeEditorPaneId
-      .flatMap(persisted.layout.editorPanes.get)
-      .flatMap(_.bufferId)
-      .flatMap(persisted.buffers.get)
-      .flatMap(_.document.filePath)
-    val fallbackFile =
-      persisted.bufferOrder.flatMap(persisted.buffers.get).flatMap(_.document.filePath).headOption
-    activeFile
-      .orElse(fallbackFile)
-      .flatMap(path => Option(path.getFileName).map(_.toString))
-      .getOrElse("previous session")
+    StartupPageContent.createStartPage(sessionExists, recentFiles, configNotice, resumeIdentifier)
 
   def startPageState(
     sessionService: SessionService,
@@ -133,7 +42,7 @@ object AppStartup:
       readableRecentFiles <- IO.blocking(
         recentFiles.filter(path => Files.isRegularFile(path) && Files.isReadable(path))
       )
-      resumeIdentifier = loadedSession.map(sessionResumeIdentifier)
+      resumeIdentifier = loadedSession.map(StartupPageContent.sessionResumeIdentifier)
       startPage        = createStartPage(sessionExists, readableRecentFiles, configNotice, resumeIdentifier)
     yield
       val startPageSurfaceId = SurfaceId("surface-0")

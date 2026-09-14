@@ -387,6 +387,8 @@ final private[manager] class StateManagerEffectHandlers(
         restoreStartupSession()
       case SessionIntent.StartupOpenFile =>
         requestOpenFileDialog
+      case SessionIntent.ReturnToStartPage =>
+        beginCloseAction(CloseScope.ReturnToStartPage, state)
 
   private def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)

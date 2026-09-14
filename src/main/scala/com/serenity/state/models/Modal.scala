@@ -56,6 +56,9 @@ enum CloseScope:
   case All
   case Others
   case Quit
+  // #6: like Quit for the save/discard prompts, but no buffer is dropped -- the whole session is snapshotted and the
+  // editor is replaced by the start page, so [Tab] Quick-resume restores everything exactly as it was left.
+  case ReturnToStartPage
 
 enum CloseWorkflowChoice:
   case Save

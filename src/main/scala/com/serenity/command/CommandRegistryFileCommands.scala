@@ -56,6 +56,13 @@ private[command] object CommandRegistryFileCommands:
       label = "Clear Session"
     ),
     Command.typed(
+      "return-to-start-page",
+      "Snapshot the session and return to the start page (Tab resumes it).",
+      CommandIntent.Session(SessionIntent.ReturnToStartPage),
+      CommandCategory.File,
+      label = "Return to Start Page"
+    ),
+    Command.typed(
       "open",
       "Open a file.",
       CommandIntent.File(FileIntent.OpenFile),

@@ -134,6 +134,7 @@ enum SessionIntent:
   case StartupNewSession
   case StartupRestoreSession
   case StartupOpenFile
+  case ReturnToStartPage
 
 enum KeybindingsIntent:
   case SetGlobalHotkey(action: HotkeyAction, binding: String)
