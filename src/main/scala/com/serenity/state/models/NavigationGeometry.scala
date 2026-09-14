@@ -13,7 +13,11 @@ final case class TextVisualLine(
     widthPx: Float,
     caretStops: Vector[TextCaretStop],
     xOffsetPx: Float = 0.0f,
-    xSortedCaretStops: Vector[TextCaretStop] = Vector.empty
+    xSortedCaretStops: Vector[TextCaretStop] = Vector.empty,
+    // Per-line measured metrics (measured/proportional layout only): the tallest run on this visual line. 0 means
+    // "unset" -- callers fall back to the snapshot's uniform lineHeightPx/ascentPx (cell layout, or non-rich buffers).
+    heightPx: Int = 0,
+    ascentPx: Int = 0
 ):
 
   def xForColumn(column: Int): Option[Float] =

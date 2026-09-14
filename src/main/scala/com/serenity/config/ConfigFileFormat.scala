@@ -156,6 +156,14 @@ object ConfigFileFormat:
     comment("Keep the cursor's line vertically centred (typewriter scrolling), padding past the document's end"),
     field("display.typewriter_scrolling"),
     field("display.line_numbers"),
+    comment(
+      "Line-number placement (left, right, both) and cell spacing: margin from the panel edge to the counter, " +
+        "padding between the counter and the content"
+    ),
+    field("display.line_number_side"),
+    field("display.line_number_margin_left"),
+    field("display.line_number_margin_right"),
+    field("display.line_number_padding"),
     field("display.gutter"),
     field("display.word_count"),
     comment("Where document comments are shown: floating, margin"),

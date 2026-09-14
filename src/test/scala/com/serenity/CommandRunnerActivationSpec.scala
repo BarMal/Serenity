@@ -180,6 +180,10 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     settingsGroup(runner, "settings-text-display").map(_.children.map(_.id)) should contain(
       List(
         "line-numbers",
+        "line-number-side",
+        "line-number-margin-left",
+        "line-number-margin-right",
+        "line-number-padding",
         "gutter",
         "line-wrap",
         "visual-line-navigation",

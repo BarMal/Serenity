@@ -66,6 +66,7 @@ object CommandRunnerSettingsGroups:
     val spellCheckItem      = CommandRunnerSettingsItems.spellCheckOptionItem(optionSelections)
     val textScaleModeItem   = CommandRunnerSettingsItems.textScaleModeOptionItem(optionSelections)
     val lineNumbersItem     = CommandRunnerSettingsTextDisplayItems.lineNumbersOptionItem(optionSelections)
+    val lineNumberSideItem  = CommandRunnerSettingsTextDisplayItems.lineNumberSideOptionItem(optionSelections)
     val wordCountItem       = CommandRunnerSettingsTextDisplayItems.wordCountOptionItem(optionSelections)
     val gutterItem          = CommandRunnerSettingsTextDisplayItems.gutterOptionItem(optionSelections)
     val lineWrapItem        = CommandRunnerSettingsTextDisplayItems.lineWrapOptionItem(optionSelections)
@@ -102,6 +103,12 @@ object CommandRunnerSettingsGroups:
       label = "Text Display",
       children = List(
         lineNumbersItem,
+        lineNumberSideItem
+      ) ++ inputItems.filter(item =>
+        item.id == "line-number-margin-left" ||
+          item.id == "line-number-margin-right" ||
+          item.id == "line-number-padding"
+      ) ++ List(
         gutterItem,
         lineWrapItem,
         visualLineNavigationItem,
@@ -112,7 +119,7 @@ object CommandRunnerSettingsGroups:
         contextualToolbarDisplayItem
       ),
       category = CommandCategory.Settings,
-      hint = Some("Line numbers, gutter, wrap, visual-line navigation, word count, focus, toolbar")
+      hint = Some("Line numbers, placement, gutter, wrap, visual-line navigation, word count, focus, toolbar")
     )
     val motionInputIds = Set(
       "element-transition-speed-scale",

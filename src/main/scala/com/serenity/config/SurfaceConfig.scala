@@ -6,6 +6,9 @@ import com.serenity.state.models.SurfacePlacement
 
 final case class SurfaceConfig(
     showLineNumbers: Boolean = true,
+    // Placement and spacing of the line-number counter (independent of interface density). `showLineNumbers` remains the
+    // master on/off; this only takes effect while that is on.
+    lineNumberLayout: LineNumberLayout = LineNumberLayout(),
     showGutter: Boolean = true,
     showPaneHeaders: Boolean = true,
     // Opt-in (like `cursorInfoBarMode`): the status bar's default text (position/language/file) is covered by
@@ -99,6 +102,7 @@ final case class SurfaceConfig(
       commandRunnerCursorGapRows = commandRunnerCursorGapRows.map(AppConfig.clampCommandRunnerCursorGapRows),
       commandRunnerCursorPeekTapWindowMillis =
         AppConfig.clampCommandRunnerCursorPeekTapWindowMillis(commandRunnerCursorPeekTapWindowMillis),
+      lineNumberLayout = lineNumberLayout.normalized,
       textAreaInsets = textAreaInsets.normalized,
       viewportSizing = viewportSizing.normalized,
       cursorInfoBarBackgroundAlpha = cursorInfoBarBackgroundAlpha.map(AppConfig.clampCursorInfoBarBackgroundAlpha)

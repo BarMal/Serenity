@@ -300,8 +300,8 @@ object RendererPaneContent:
                 context.surface,
                 xOriginPx,
                 lineTopPx,
-                snapshot.lineHeightPx,
-                snapshot.ascentPx,
+                rowHeightPxFor(visualLine, snapshot),
+                rowAscentPxFor(visualLine, snapshot),
                 visualLine,
                 lineTheme,
                 context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
@@ -416,12 +416,23 @@ object RendererPaneContent:
       contentRect = rect,
       gridMetrics = context.cellMetrics,
       rowLineHeightPx = snapshot.lineHeightPx,
-      usesMeasuredLayout = RendererPaneSetup.usesMeasuredDrawing(snapshot, context)
+      usesMeasuredLayout = RendererPaneSetup.usesMeasuredDrawing(snapshot, context),
+      rowHeightsPx =
+        snapshot.visualLines.map(line => if line.heightPx > 0 then line.heightPx else snapshot.lineHeightPx)
     )
 
   def visualLineCellOffset(visualLine: TextVisualLine, context: RenderContext): Int =
     if visualLine.xOffsetPx <= 0.0f then 0
     else math.round(visualLine.xOffsetPx / context.cellMetrics.charWidth.toFloat).max(0)
+
+  /** A visual line's own measured height (the tallest run on it), or the snapshot's uniform height when unset (cell
+    * layout, or a non-rich buffer). Shared by content, gutter, cursor, and highlight rendering so they agree per row.
+    */
+  def rowHeightPxFor(visualLine: TextVisualLine, snapshot: TextLayoutSnapshot): Int =
+    if visualLine.heightPx > 0 then visualLine.heightPx else snapshot.lineHeightPx
+
+  def rowAscentPxFor(visualLine: TextVisualLine, snapshot: TextLayoutSnapshot): Int =
+    if visualLine.ascentPx > 0 then visualLine.ascentPx else snapshot.ascentPx
 
   private def richTextStyledSegments(
     visualLine: TextVisualLine,
@@ -435,7 +446,8 @@ object RendererPaneContent:
           visualLine.bufferLine,
           visualLine.startColumn,
           visualLine.endColumn,
-          theme
+          theme,
+          snapshot.proseScale
         )
       }
       .filter(segments => segments.map(_.content).mkString == visualLine.text)

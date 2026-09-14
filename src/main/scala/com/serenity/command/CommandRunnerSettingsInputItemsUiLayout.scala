@@ -60,3 +60,58 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
       defaultValue = Some(AppConfig.default.interfaceConfig.outlineThicknessPx.toString)
     )
   )
+
+  private[command] def lineNumberSpacingItems(
+    marginLeftValue: String,
+    marginRightValue: String,
+    paddingValue: String
+  ): List[CommandSurfaceItem.InputItem] =
+    def cellsItem(
+      id: String,
+      label: String,
+      hint: String,
+      currentValue: String,
+      default: Int,
+      intent: Int => PanelChromeIntent
+    ): CommandSurfaceItem.InputItem =
+      CommandSurfaceItem.InputItem(
+        id = id,
+        label = label,
+        hint = hint,
+        currentValue = currentValue,
+        kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
+        parse = text =>
+          text.toIntOption
+            .filter(value => value >= 0 && value <= LineNumberLayout.MaxCells)
+            .map(cells => CommandIntent.Settings(SettingsIntent.PanelChrome(intent(cells)))),
+        category = CommandCategory.Settings,
+        defaultValue = Some(default.toString)
+      )
+
+    val defaults = LineNumberLayout()
+    List(
+      cellsItem(
+        "line-number-margin-left",
+        "Line Number Margin (Left)",
+        s"Cells from the left edge to the counter (0-${LineNumberLayout.MaxCells})",
+        marginLeftValue,
+        defaults.marginLeft,
+        PanelChromeIntent.SetLineNumberMarginLeft(_)
+      ),
+      cellsItem(
+        "line-number-margin-right",
+        "Line Number Margin (Right)",
+        s"Cells from the right edge to the counter (0-${LineNumberLayout.MaxCells})",
+        marginRightValue,
+        defaults.marginRight,
+        PanelChromeIntent.SetLineNumberMarginRight(_)
+      ),
+      cellsItem(
+        "line-number-padding",
+        "Line Number Padding",
+        s"Cells between the counter and the content (0-${LineNumberLayout.MaxCells})",
+        paddingValue,
+        defaults.padding,
+        PanelChromeIntent.SetLineNumberPadding(_)
+      )
+    )

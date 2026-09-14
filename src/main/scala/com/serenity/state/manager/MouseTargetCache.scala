@@ -337,7 +337,9 @@ private[serenity] object AuthoritativeUiScene:
               font,
               wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled,
               cellMetricsOverride = Some(fontMetrics),
-              forceCellLayout = cellMetrics.isDefined
+              forceCellLayout = cellMetrics.isDefined,
+              // Match the render path's prose zoom so hit-testing rows/advances line up with what was drawn.
+              proseScale = com.serenity.ui.theme.RichTextStyling.proseZoom(font.getSize2D)
             )
       }
       val scene = base.withTextSnapshots(snapshots)

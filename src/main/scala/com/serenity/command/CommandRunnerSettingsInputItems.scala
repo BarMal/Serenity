@@ -46,6 +46,9 @@ object CommandRunnerSettingsInputItems:
       elementGapValue: String,
       cornerRadiusValue: String,
       outlineThicknessValue: String,
+      lineNumberMarginLeftValue: String,
+      lineNumberMarginRightValue: String,
+      lineNumberPaddingValue: String,
       spellCheck: SpellCheckConfig,
       sitterConfig: WindowSitterConfig
   )
@@ -76,6 +79,9 @@ object CommandRunnerSettingsInputItems:
       elementGapValue = formatDecimal(interfaceConfig.elementGap),
       cornerRadiusValue = interfaceConfig.cornerRadiusPx.toString,
       outlineThicknessValue = interfaceConfig.outlineThicknessPx.toString,
+      lineNumberMarginLeftValue = surfaceConfig.lineNumberLayout.marginLeft.toString,
+      lineNumberMarginRightValue = surfaceConfig.lineNumberLayout.marginRight.toString,
+      lineNumberPaddingValue = surfaceConfig.lineNumberLayout.padding.toString,
       spellCheck = languageToolsConfig.spellCheck.normalized,
       sitterConfig = config.windowSitterConfig
     )
@@ -125,6 +131,11 @@ object CommandRunnerSettingsInputItems:
         v.elementGapValue,
         v.cornerRadiusValue,
         v.outlineThicknessValue
+      ) ++
+      CommandRunnerSettingsInputItemsUiLayout.lineNumberSpacingItems(
+        v.lineNumberMarginLeftValue,
+        v.lineNumberMarginRightValue,
+        v.lineNumberPaddingValue
       ) ++
       CommandRunnerSettingsInputItemsWindowSitterAndFont.windowSitterAndInputItems(
         v.sitterConfig,

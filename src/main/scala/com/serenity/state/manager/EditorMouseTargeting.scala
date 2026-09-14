@@ -42,8 +42,22 @@ final private[manager] class EditorMouseTargeting(port: EditorMouseTargetingPort
                 case Some(buffer) =>
                   val contentRect = paneLayout.contentRect
                   val vp          = buffer.viewport
-                  val visualRow   = (click.row - contentRect.y).max(0)
                   mouseTargetSnapshot(cache, paneId).map { snapshot =>
+                    // With variable per-line heights a cell row no longer maps to a visual line, so reverse the click's
+                    // pixel Y through the same cumulative row geometry the renderer used. Falls back to the cell row when
+                    // there's no pixel Y (TUI) or the layout is uniform (cell mode).
+                    val rowMetrics = TextRowMetrics(
+                      contentRect = contentRect,
+                      gridMetrics = MouseHitTestGeometry.floatingCellMetrics(state),
+                      rowLineHeightPx = snapshot.lineHeightPx,
+                      usesMeasuredLayout = snapshot.usesMeasuredLayout,
+                      rowHeightsPx = snapshot.visualLines.map(line =>
+                        if line.heightPx > 0 then line.heightPx else snapshot.lineHeightPx
+                      )
+                    )
+                    val visualRow = click.pixelY match
+                      case Some(pixelY) if snapshot.usesMeasuredLayout => rowMetrics.visualRowAt(pixelY)
+                      case _                                           => (click.row - contentRect.y).max(0)
                     val cellWidthPx =
                       if contentRect.width > 0 then snapshot.panelWidthPx.toFloat / contentRect.width.toFloat else 1.0f
                     val xPx = click.pixelX match
