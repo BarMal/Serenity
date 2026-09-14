@@ -19,6 +19,15 @@ class PaintExecutionContextSpec extends AnyFlatSpec with Matchers:
     names.toSet shouldBe Set("serenity-paint")
   }
 
+  // #1543: a CPU-bound paint worker must never keep the JVM alive after the app has otherwise shut down.
+  it should "run paint work on a daemon thread" in {
+    val isDaemon = PaintExecutionContext.resource.use { ec =>
+      IO(Thread.currentThread().isDaemon).evalOn(ec)
+    }.unsafeRunSync()
+
+    isDaemon shouldBe true
+  }
+
   it should "shut down its executor when the resource is released" in {
     val program = PaintExecutionContext.resource.allocated.flatMap {
       case (ec, release) =>

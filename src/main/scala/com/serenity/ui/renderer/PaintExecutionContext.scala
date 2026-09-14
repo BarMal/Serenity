@@ -19,7 +19,11 @@ object PaintExecutionContext:
 
   def resource: Resource[IO, ExecutionContext] =
     Resource
-      .make(IO(Executors.newSingleThreadExecutor(runnable => new Thread(runnable, "serenity-paint"))))(executor =>
-        IO(executor.shutdown())
-      )
+      .make(IO(Executors.newSingleThreadExecutor { runnable =>
+        // Daemon so this CPU-bound paint worker can never keep the JVM alive once the app has otherwise shut down
+        // (#1543): a lingering non-daemon thread is one way a GUI process outlives its window.
+        val thread = new Thread(runnable, "serenity-paint")
+        thread.setDaemon(true)
+        thread
+      }))(executor => IO(executor.shutdown()))
       .map(ExecutionContext.fromExecutorService)
