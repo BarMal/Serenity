@@ -513,6 +513,30 @@ object ConfigRegistry:
       _.surfaceConfig.showLineNumbers,
       (config, value) => config.withLineNumbers(value)
     ),
+    named("display.line_number_side", "lineNumberSide", "display.line.number.side")(
+      enumerated(LineNumberSide.fromConfigKey, _.configKey, text => LineNumberSide.values.find(_.toString == text))
+    )(
+      _.surfaceConfig.lineNumberLayout.side,
+      (config, value) => config.withLineNumberLayout(config.lineNumberLayout.copy(side = value))
+    ),
+    named("display.line_number_margin_left", "lineNumberMarginLeft", "display.line.number.margin.left")(
+      int.filtered(cells => cells >= 0 && cells <= LineNumberLayout.MaxCells)
+    )(
+      _.surfaceConfig.lineNumberLayout.marginLeft,
+      (config, value) => config.withLineNumberLayout(config.lineNumberLayout.copy(marginLeft = value))
+    ),
+    named("display.line_number_margin_right", "lineNumberMarginRight", "display.line.number.margin.right")(
+      int.filtered(cells => cells >= 0 && cells <= LineNumberLayout.MaxCells)
+    )(
+      _.surfaceConfig.lineNumberLayout.marginRight,
+      (config, value) => config.withLineNumberLayout(config.lineNumberLayout.copy(marginRight = value))
+    ),
+    named("display.line_number_padding", "lineNumberPadding", "display.line.number.padding")(
+      int.filtered(cells => cells >= 0 && cells <= LineNumberLayout.MaxCells)
+    )(
+      _.surfaceConfig.lineNumberLayout.padding,
+      (config, value) => config.withLineNumberLayout(config.lineNumberLayout.copy(padding = value))
+    ),
     named("display.gutter", "showGutter", "display_gutter")(boolean)(
       _.surfaceConfig.showGutter,
       (config, value) => config.withGutter(value)

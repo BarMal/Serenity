@@ -1,6 +1,9 @@
 package com.serenity.ui.theme
 
+import java.awt.font.TextAttribute
 import java.awt.{Color, Font}
+
+import scala.jdk.CollectionConverters.*
 
 final case class TextStyle(
     isBold: Boolean = false,
@@ -29,6 +32,19 @@ object TextStyle:
   def italic: TextStyle     = TextStyle(isItalic = true)
   def underlined: TextStyle = TextStyle(isUnderlined = true)
   def boldItalic: TextStyle = TextStyle(isBold = true, isItalic = true)
+
+  /** Derive the concrete AWT font a style paints (and is measured) with, over a base font. This is the single source
+    * both `Java2DRenderSurface.enableStyle` (drawing) and the measured-layout caret measurement use, so a run's glyph
+    * advances always match the glyphs actually drawn.
+    */
+  def styledFont(base: Font, style: TextStyle): Font =
+    val fontMode = style.fontMode
+    val size     = style.fontSize.getOrElse(base.getSize2D).max(1.0f)
+    val styled = style.fontFamily match
+      case Some(family) => Font(family, fontMode, size.round.max(1)).deriveFont(fontMode, size)
+      case None         => base.deriveFont(fontMode, size)
+    if style.isUnderlined then styled.deriveFont(Map(TextAttribute.UNDERLINE -> TextAttribute.UNDERLINE_ON).asJava)
+    else styled
 
 final case class StyledText(
     content: String,

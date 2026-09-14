@@ -17,41 +17,57 @@ object RendererGutter:
   def renderLineNumbers(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
     if state.persisted.config.surfaceConfig.showLineNumbers then
       context.surface.text.setFont(context.uiFont)
-      renderPlan.layoutContract.lineNumberRect foreach { lineRect =>
-        val surface = context.surface
+      renderPlan.layoutContract.lineNumberRect.foreach(rect =>
+        renderCounterColumn(state, context, renderPlan, rect, dividerOnLeft = false)
+      )
+      renderPlan.layoutContract.rightLineNumberRect.foreach(rect =>
+        renderCounterColumn(state, context, renderPlan, rect, dividerOnLeft = true)
+      )
 
-        surface.setBackgroundColor(state.persisted.theme.panel.background)
-        surface.setForegroundColor(state.persisted.theme.muted)
+  /** Paint one line-number counter. The gutter/body divider sits on the counter's content-facing edge: the last column
+    * for a left-placed counter, the first column for a right-placed one (`dividerOnLeft`).
+    */
+  private def renderCounterColumn(
+    state: AppState,
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    lineRect: LayoutRect,
+    dividerOnLeft: Boolean
+  ): Unit =
+    val surface = context.surface
 
-        surface.fillRect(lineRect.x, lineRect.y, lineRect.width, lineRect.height, ' ')
+    surface.setBackgroundColor(state.persisted.theme.panel.background)
+    surface.setForegroundColor(state.persisted.theme.muted)
 
-        // Diagnostic markers share the divider's own column (the gutter's last), so they are collected here and
-        // repainted afterwards -- once the divider itself has been painted as one continuous stroke -- rather than
-        // drawn inline per row, which would have the divider immediately paint back over them.
-        val diagnosticRows = renderLineNumberRows(state, context, renderPlan, lineRect, surface)
+    surface.fillRect(lineRect.x, lineRect.y, lineRect.width, lineRect.height, ' ')
 
-        // The gutter/body boundary, painted once per frame as a single full-height fill (#1483) rather than
-        // implicitly by each row's own background fill: a divider assembled that way is only as continuous as every
-        // row's fill agrees with its neighbours, and a row with no content to anchor it (or a diagnostic marker
-        // briefly claiming the column, below) leaves a gap -- reading as a dashed line rather than one continuous
-        // rule. Recolouring rather than redrawing the text keeps every existing rendered string identical; only the
-        // last column's background changes.
-        surface.setBackgroundColor(state.persisted.theme.panelBorder)
-        surface.fillRect(lineRect.x + lineRect.width - 1, lineRect.y, 1, lineRect.height, ' ')
-        surface.setBackgroundColor(state.persisted.theme.panel.background)
+    // Diagnostic markers share the divider's own column, so they are collected here and repainted afterwards -- once
+    // the divider itself has been painted as one continuous stroke -- rather than drawn inline per row, which would
+    // have the divider immediately paint back over them.
+    val diagnosticRows = renderLineNumberRows(state, context, renderPlan, lineRect, surface, dividerOnLeft)
 
-        diagnosticRows.foreach {
-          case (rowY, diagnostics) =>
-            renderDiagnosticIndicator(surface, lineRect, rowY, diagnostics, state)
-        }
-      }
+    // The gutter/body boundary, painted once per frame as a single full-height fill (#1483) rather than implicitly by
+    // each row's own background fill: a divider assembled that way is only as continuous as every row's fill agrees
+    // with its neighbours, and a row with no content to anchor it (or a diagnostic marker briefly claiming the column,
+    // below) leaves a gap -- reading as a dashed line rather than one continuous rule. Recolouring rather than
+    // redrawing the text keeps every existing rendered string identical; only the boundary column's background changes.
+    val dividerX = if dividerOnLeft then lineRect.x else lineRect.x + lineRect.width - 1
+    surface.setBackgroundColor(state.persisted.theme.panelBorder)
+    surface.fillRect(dividerX, lineRect.y, 1, lineRect.height, ' ')
+    surface.setBackgroundColor(state.persisted.theme.panel.background)
+
+    diagnosticRows.foreach {
+      case (rowY, diagnostics) =>
+        renderDiagnosticIndicator(surface, lineRect, rowY, diagnostics, state, dividerOnLeft)
+    }
 
   private def renderLineNumberRows(
     state: AppState,
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan,
     lineRect: LayoutRect,
-    surface: RenderSurface
+    surface: RenderSurface,
+    dividerOnLeft: Boolean
   ): List[(Int, List[com.serenity.lsp.model.Diagnostic])] =
     state.persisted.layout.activeEditorPaneId
       .flatMap(state.persisted.layout.editorPanes.get)
@@ -67,8 +83,12 @@ object RendererGutter:
                 buf        <- buffer
               yield RendererPaneSetup.snapshotForBuffer(buf, paneLayout.contentRect, state, context)
             }
+        val rowSlots =
+          if dividerOnLeft then
+            renderPlan.layoutContract.rightLineNumberRowSlots(snapshot.map(_.visualLines.length).getOrElse(0))
+          else renderPlan.layoutContract.lineNumberRowSlots(snapshot.map(_.visualLines.length).getOrElse(0))
         snapshot.toList.flatMap { snapshot =>
-          renderPlan.layoutContract.lineNumberRowSlots(snapshot.visualLines.length).toList.flatMap {
+          rowSlots.toList.flatMap {
             case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), rowY)
                 if RendererPaneContent.visualLineFits(lineRect, index, context, snapshot) =>
               snapshot.visualLines.lift(index).toList.flatMap { visualLine =>
@@ -83,7 +103,8 @@ object RendererGutter:
                   snapshot,
                   index,
                   visualLine,
-                  rowY
+                  rowY,
+                  dividerOnLeft
                 )
               }
             case _ => Nil
@@ -102,15 +123,19 @@ object RendererGutter:
     snapshot: TextLayoutSnapshot,
     index: Int,
     visualLine: TextVisualLine,
-    rowY: Int
+    rowY: Int,
+    dividerOnLeft: Boolean
   ): List[(Int, List[com.serenity.lsp.model.Diagnostic])] =
     val lineTopPx = RendererPaneContent.visualLineTopPx(lineRect, index, context, snapshot)
     val rendersLineNumber =
       shouldRenderLineNumberForVisualLine(visualLine, state.persisted.config.surfaceConfig.wordWrapEnabled)
     val lineNumberText =
       if rendersLineNumber then
-        val numberWidth = math.max(1, lineRect.width - 1)
-        (visualLine.bufferLine + 1).toString.reverse.padTo(numberWidth, ' ').reverse + " "
+        val numberWidth  = math.max(1, lineRect.width - 1)
+        val rightAligned = (visualLine.bufferLine + 1).toString.reverse.padTo(numberWidth, ' ').reverse
+        // The single spacer cell falls on the divider's own column: trailing for a left counter, leading for a right
+        // one, so digits always sit against the panel edge and the divider always against the content.
+        if dividerOnLeft then " " + rightAligned else rightAligned + " "
       else continuationIndicatorText(lineRect.width)
     val measuredLineNumberFont = buffer.filter(useMeasuredLineNumberFont(_, context))
     if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) && measuredLineNumberFont.nonEmpty then
@@ -150,7 +175,8 @@ object RendererGutter:
     lineRect: LayoutRect,
     screenY: Int,
     lineDiags: List[com.serenity.lsp.model.Diagnostic],
-    state: AppState
+    state: AppState,
+    dividerOnLeft: Boolean
   ): Unit =
     if lineDiags.nonEmpty then
       val worstCode = lineDiags.flatMap(_.severity).map(_.code).minOption
@@ -160,7 +186,8 @@ object RendererGutter:
         case _       => state.persisted.theme.muted
       surface.setForegroundColor(color)
       surface.setBackgroundColor(state.persisted.theme.panel.background)
-      surface.putString(lineRect.x + lineRect.width - 1, screenY, "!")
+      val markerX = if dividerOnLeft then lineRect.x else lineRect.x + lineRect.width - 1
+      surface.putString(markerX, screenY, "!")
 
   def renderGutter(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =
     contract.gutterRect.foreach { gutterRect =>

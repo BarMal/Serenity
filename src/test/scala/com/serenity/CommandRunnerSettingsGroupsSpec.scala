@@ -169,6 +169,10 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-text-display").label shouldBe "Text Display"
     nestedGroup("settings-text-display").children.map(_.id) shouldBe List(
       "line-numbers",
+      "line-number-side",
+      "line-number-margin-left",
+      "line-number-margin-right",
+      "line-number-padding",
       "gutter",
       "line-wrap",
       "visual-line-navigation",
@@ -283,6 +287,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
 
     options.map(option => option.id -> option.selectedOption) shouldBe List(
       "line-numbers"               -> "Off",
+      "line-number-side"           -> "Left",
       "gutter"                     -> "Off",
       "line-wrap"                  -> "Off",
       "visual-line-navigation"     -> "On",
@@ -294,6 +299,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     )
     options.flatMap(_.selectedIntent) shouldBe List(
       CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumbers(false))),
+      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumberSide(LineNumberSide.Left))),
       CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetGutter(false))),
       CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWordWrap(false))),
       CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualLineCursorNavigation(true))),

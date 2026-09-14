@@ -4,10 +4,25 @@ final case class TextRowMetrics(
     contentRect: LayoutRect,
     gridMetrics: CellMetrics,
     rowLineHeightPx: Int,
-    usesMeasuredLayout: Boolean
+    usesMeasuredLayout: Boolean,
+    // Per-visual-row heights (measured/proportional rich text). Empty means every row is `rowLineHeightPx` tall, which
+    // reproduces the old uniform stacking exactly. Entries of 0 also fall back to `rowLineHeightPx`.
+    rowHeightsPx: Vector[Int] = Vector.empty
 ):
   private val contentTopPx: Int =
     gridMetrics.toPixelY(contentRect.y)
+
+  private def heightOf(visualRow: Int): Int =
+    rowHeightsPx.lift(visualRow).filter(_ > 0).getOrElse(rowLineHeightPx)
+
+  /** Cumulative top pixel of each measured row (index i = top of row i; last entry = bottom of the final row). */
+  private val measuredTops: Vector[Int] =
+    if usesMeasuredLayout then rowHeightsPx.scanLeft(contentTopPx)((top, height) => top + math.max(1, height))
+    else Vector.empty
+
+  /** The measured height of a single visual row (the tallest run on it), or the grid row height in cell layout. */
+  def rowHeightPx(visualRow: Int): Int =
+    if usesMeasuredLayout then heightOf(visualRow) else gridMetrics.lineHeight
 
   def contentBottomPx: Int =
     gridMetrics.toPixelY(contentRect.bottom)
@@ -16,7 +31,13 @@ final case class TextRowMetrics(
     gridMetrics.toPixelY(viewportHeightCells)
 
   def lineTopPx(visualRow: Int): Int =
-    if usesMeasuredLayout then contentTopPx + visualRow * rowLineHeightPx
+    if usesMeasuredLayout then
+      measuredTops
+        .lift(visualRow)
+        .getOrElse {
+          val lastTop = measuredTops.lastOption.getOrElse(contentTopPx)
+          lastTop + math.max(0, visualRow - math.max(0, measuredTops.length - 1)) * rowLineHeightPx
+        }
     else gridMetrics.toPixelY(contentRect.y + visualRow)
 
   def lineFits(visualRow: Int): Boolean =
@@ -32,6 +53,18 @@ final case class TextRowMetrics(
     else
       val row = contentRect.y + visualRow
       row >= 0 && row < contentRect.bottom && row < viewportHeightCells
+
+  /** The visual row that owns an absolute surface pixel Y -- the inverse of [[lineTopPx]]. Used by mouse hit-testing so
+    * a click on a tall heading row targets that row rather than a uniform-grid guess. Clamps above the first row and
+    * below the last.
+    */
+  def visualRowAt(pixelY: Int): Int =
+    if !usesMeasuredLayout then math.max(0, gridMetrics.toRow(pixelY) - contentRect.y)
+    else if rowHeightsPx.isEmpty then math.max(0, (pixelY - contentTopPx) / math.max(1, rowLineHeightPx))
+    else
+      val firstBelow = measuredTops.indexWhere(_ > pixelY)
+      val row        = if firstBelow < 0 then rowHeightsPx.length - 1 else firstBelow - 1
+      row.max(0)
 
   def cursorTopPx(visualRow: Int): Int =
     if usesMeasuredLayout then lineTopPx(visualRow)

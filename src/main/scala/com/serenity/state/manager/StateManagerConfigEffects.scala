@@ -471,6 +471,20 @@ final private[manager] class StateManagerConfigEffects(
         ).void
       case PanelChromeIntent.SetLineNumbers(enabled) =>
         updateTextDisplayConfig(config => config.withLineNumbers(enabled)).void
+      case PanelChromeIntent.SetLineNumberSide(side) =>
+        updateTextDisplayConfig(config => config.withLineNumberLayout(config.lineNumberLayout.copy(side = side))).void
+      case PanelChromeIntent.SetLineNumberMarginLeft(cells) =>
+        updateTextDisplayConfig(config =>
+          config.withLineNumberLayout(config.lineNumberLayout.copy(marginLeft = cells))
+        ).void
+      case PanelChromeIntent.SetLineNumberMarginRight(cells) =>
+        updateTextDisplayConfig(config =>
+          config.withLineNumberLayout(config.lineNumberLayout.copy(marginRight = cells))
+        ).void
+      case PanelChromeIntent.SetLineNumberPadding(cells) =>
+        updateTextDisplayConfig(config =>
+          config.withLineNumberLayout(config.lineNumberLayout.copy(padding = cells))
+        ).void
       case PanelChromeIntent.SetGutter(enabled) =>
         updateTextDisplayConfig(config => config.withGutter(enabled)).void
       case PanelChromeIntent.SetWordWrap(enabled) =>

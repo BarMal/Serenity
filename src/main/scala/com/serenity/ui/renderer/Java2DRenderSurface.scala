@@ -1,12 +1,10 @@
 package com.serenity.ui.renderer
 
 import java.awt.*
-import java.awt.font.{FontRenderContext, TextAttribute}
+import java.awt.font.FontRenderContext
 import java.awt.geom.{Area, Rectangle2D, RoundRectangle2D}
 import java.awt.image.*
 import java.util.concurrent.atomic.AtomicReference
-
-import scala.jdk.CollectionConverters.*
 
 import com.serenity.config.PostProcessingEffect
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
@@ -227,18 +225,7 @@ class Java2DRenderSurface(
       .getOrElse(metrics.toPixelY(row))
 
   def enableStyle(style: TextStyle): Unit =
-    val base     = baseFontRef.get()
-    val fontMode = style.fontMode
-    val size     = style.fontSize.getOrElse(base.getSize2D).max(1.0f)
-    val styled = style.fontFamily match
-      case Some(family) =>
-        Font(family, fontMode, size.round.max(1)).deriveFont(fontMode, size)
-      case None =>
-        base.deriveFont(fontMode, size)
-    val derived =
-      if style.isUnderlined then styled.deriveFont(Map(TextAttribute.UNDERLINE -> TextAttribute.UNDERLINE_ON).asJava)
-      else styled
-    g.setFont(derived)
+    g.setFont(TextStyle.styledFont(baseFontRef.get(), style))
 
   def disableStyle(style: TextStyle): Unit =
     g.setFont(baseFontRef.get())

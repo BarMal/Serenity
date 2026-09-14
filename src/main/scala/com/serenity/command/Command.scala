@@ -58,6 +58,7 @@ enum RichTextIntent:
   case ToggleRichTextMark(mark: InlineMark)
   case SetRichTextFontFamily(family: String)
   case SetRichTextFontSize(size: Float)
+  case AdjustRichTextFontSize(deltaPt: Float)
   case SetRichTextColor(color: String)
   case SetRichTextParagraphRole(role: ParagraphRole)
   case SetRichTextParagraphAlignment(alignment: ParagraphAlignment)
@@ -218,6 +219,10 @@ enum PanelChromeIntent:
   case ToggleVisualLineCursorNavigation
   case ToggleTypewriterScrolling
   case SetLineNumbers(enabled: Boolean)
+  case SetLineNumberSide(side: LineNumberSide)
+  case SetLineNumberMarginLeft(cells: Int)
+  case SetLineNumberMarginRight(cells: Int)
+  case SetLineNumberPadding(cells: Int)
   case SetGutter(enabled: Boolean)
   case SetWordWrap(enabled: Boolean)
   case SetVisualLineCursorNavigation(enabled: Boolean)

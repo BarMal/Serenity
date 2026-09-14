@@ -67,6 +67,7 @@ object CommandRunnerOptionSelections:
       "app-mode"                   -> appModeIndex(config.appMode),
       "settings-show-all"          -> (if config.showAllSettingsRegardlessOfMode then 1 else 0),
       "line-numbers"               -> enabledIndex(surfaceConfig.showLineNumbers),
+      "line-number-side"           -> lineNumberSideIndex(surfaceConfig.lineNumberLayout.side),
       "show-word-count"            -> enabledIndex(surfaceConfig.showWordCount),
       "gutter"                     -> enabledIndex(surfaceConfig.showGutter),
       "line-wrap"                  -> enabledIndex(surfaceConfig.wordWrapEnabled),
@@ -131,6 +132,12 @@ object CommandRunnerOptionSelections:
       case InterfaceDensity.Compact     => 0
       case InterfaceDensity.Comfortable => 1
       case InterfaceDensity.Spacious    => 2
+
+  private def lineNumberSideIndex(side: LineNumberSide): Int =
+    side match
+      case LineNumberSide.Left  => 0
+      case LineNumberSide.Right => 1
+      case LineNumberSide.Both  => 2
 
   private def windowChromeModeIndex(mode: WindowChromeMode): Int =
     mode match

@@ -19,6 +19,7 @@ import com.serenity.state.models.{
 }
 import com.serenity.text.TextEditing
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.theme.{RichTextStyling, TextStyle}
 
 final case class TextLayoutSnapshot(
     visualLines: Vector[TextVisualLine],
@@ -27,7 +28,10 @@ final case class TextLayoutSnapshot(
     ascentPx: Int,
     isProportional: Boolean = false,
     usesMeasuredLayout: Boolean = false,
-    richTextDocument: Option[RichTextDocument] = None
+    richTextDocument: Option[RichTextDocument] = None,
+    // Prose zoom applied to rich-text runs (1x = authored). The draw path reads it so its per-run font sizes match the
+    // sizes this snapshot measured caret advances and per-line heights with.
+    proseScale: Float = 1.0f
 ):
 
   def navigationGeometry: NavigationGeometry = NavigationGeometry(visualLines)
@@ -69,7 +73,7 @@ object TextLayoutSnapshot:
   ): Vector[Float] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
-    caretXs(text, font, fontRenderContext, measuredLayout, cellMetrics)
+    caretXs(text, 0, singleFontResolver(font), fontRenderContext, measuredLayout, cellMetrics)
 
   def visualLineForText(
     text: String,
@@ -86,7 +90,7 @@ object TextLayoutSnapshot:
       bufferLine,
       startColumn,
       startColumn + text.length,
-      font,
+      singleFontResolver(font),
       fontRenderContext,
       measuredLayout,
       cellMetrics
@@ -113,8 +117,8 @@ object TextLayoutSnapshot:
         val visibleColumns = math.max(1, visibleWidthPx / charWidth)
         math.max(0, safeColumn - visibleColumns + 1)
       else
-        val xs            = caretXs(lineText, font, fontRenderContext, measuredLayout, cellMetrics)
-        val cursorXPx     = xs.lift(safeColumn).getOrElse(xs.lastOption.getOrElse(0.0f))
+        val xs        = caretXs(lineText, 0, singleFontResolver(font), fontRenderContext, measuredLayout, cellMetrics)
+        val cursorXPx = xs.lift(safeColumn).getOrElse(xs.lastOption.getOrElse(0.0f))
         val targetLeftXPx = math.max(0.0f, cursorXPx - visibleWidthPx.toFloat + 1.0f)
         xs.zipWithIndex.takeWhile { case (x, _) => x <= targetLeftXPx }.map(_._2).lastOption.getOrElse(0)
 
@@ -140,7 +144,7 @@ object TextLayoutSnapshot:
         lineText,
         0,
         math.max(1, panelWidthPx),
-        font,
+        singleFontResolver(font),
         fontRenderContext,
         measuredLayout,
         cellMetrics
@@ -168,7 +172,7 @@ object TextLayoutSnapshot:
       text,
       bufferLine,
       math.max(1, panelWidthPx),
-      font,
+      singleFontResolver(font),
       fontRenderContext,
       measuredLayout,
       cellMetrics,
@@ -191,7 +195,10 @@ object TextLayoutSnapshot:
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     wordWrapEnabled: Boolean = true,
     cellMetricsOverride: Option[CellMetrics] = None,
-    forceCellLayout: Boolean = false
+    forceCellLayout: Boolean = false,
+    // Prose zoom (1x = authored). Multiplies each rich-text run's font size for measurement so caret advances, wrap
+    // points, and per-line heights track the scaled glyphs the draw path paints. Only affects rich-text buffers.
+    proseScale: Float = 1.0f
   ): TextLayoutSnapshot =
     val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout =
@@ -224,7 +231,8 @@ object TextLayoutSnapshot:
         cellMetrics,
         visualLineLimit,
         richDocument,
-        wordWrapEnabled
+        wordWrapEnabled,
+        proseScale
       ).drop(viewportTopVisualLine).take(buffer.viewport.visibleLines)
 
     TextLayoutSnapshot(
@@ -234,7 +242,8 @@ object TextLayoutSnapshot:
       ascentPx = ascentPx,
       isProportional = !FontLoader.isMonospacedFont(font),
       usesMeasuredLayout = measuredLayout,
-      richTextDocument = richDocument
+      richTextDocument = richDocument,
+      proseScale = proseScale
     )
 
   private def collectVisualLines(
@@ -247,7 +256,8 @@ object TextLayoutSnapshot:
     cellMetrics: CellMetrics,
     visualLineLimit: Int,
     richDocument: Option[RichTextDocument],
-    wordWrapEnabled: Boolean
+    wordWrapEnabled: Boolean,
+    proseScale: Float
   ): Vector[TextVisualLine] =
     @annotation.tailrec
     def loop(lines: Vector[(Int, String)], acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
@@ -262,6 +272,11 @@ object TextLayoutSnapshot:
               if wordWrapEnabled then rawLine.drop(startColumn)
               else unwrappedVisibleSlice(rawLine, startColumn, buffer.viewport.visibleColumns)
             val remainingVisualLines = math.max(0, visualLineLimit - acc.length)
+            // Cell layout (TUI) never consults per-run fonts -- one glyph per cell, one row per line -- so skip deriving
+            // them there and use the single base font.
+            val resolver =
+              if measuredLayout then resolverForLine(font, richDocument, lineIndex, rawLine.length, proseScale)
+              else singleFontResolver(font)
             val wrapped =
               if remainingVisualLines <= 0 then Vector.empty
               else if wordWrapEnabled then
@@ -269,7 +284,7 @@ object TextLayoutSnapshot:
                   visibleSlice,
                   lineIndex,
                   panelWidthPx,
-                  font,
+                  resolver,
                   frc,
                   measuredLayout,
                   cellMetrics,
@@ -283,7 +298,7 @@ object TextLayoutSnapshot:
                     lineIndex,
                     startColumn,
                     startColumn + visibleSlice.length,
-                    font,
+                    resolver,
                     frc,
                     measuredLayout,
                     cellMetrics
@@ -307,7 +322,7 @@ object TextLayoutSnapshot:
     line: String,
     bufferLine: Int,
     panelWidthPx: Int,
-    font: Font,
+    resolver: LineFontResolver,
     frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics,
@@ -316,20 +331,21 @@ object TextLayoutSnapshot:
   ): Vector[TextVisualLine] =
     if maxVisualLines <= 0 then Vector.empty
     else if line.isEmpty then
-      Vector(shapeSegment("", bufferLine, baseColumn, baseColumn, font, frc, measuredLayout, cellMetrics))
+      Vector(shapeSegment("", bufferLine, baseColumn, baseColumn, resolver, frc, measuredLayout, cellMetrics))
     else
       def loop(startColumn: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
         if startColumn >= line.length || acc.length >= maxVisualLines then acc
         else
-          val remaining        = line.substring(startColumn)
-          val fittingLength    = fittingSegmentLength(remaining, panelWidthPx, font, frc, measuredLayout, cellMetrics)
+          val remaining    = line.substring(startColumn)
+          val segmentStart = baseColumn + startColumn
+          val fittingLength =
+            fittingSegmentLength(remaining, panelWidthPx, segmentStart, resolver, frc, measuredLayout, cellMetrics)
           val segmentLength    = wordBoundarySegmentLength(remaining, fittingLength)
           val endColumnInSlice = startColumn + segmentLength
           val segment          = line.substring(startColumn, endColumnInSlice)
-          val segmentStart     = baseColumn + startColumn
           val segmentEnd       = baseColumn + endColumnInSlice
           val visualLine =
-            shapeSegment(segment, bufferLine, segmentStart, segmentEnd, font, frc, measuredLayout, cellMetrics)
+            shapeSegment(segment, bufferLine, segmentStart, segmentEnd, resolver, frc, measuredLayout, cellMetrics)
           loop(endColumnInSlice, acc :+ visualLine)
 
       loop(0, Vector.empty)
@@ -337,7 +353,8 @@ object TextLayoutSnapshot:
   private def fittingSegmentLength(
     text: String,
     panelWidthPx: Int,
-    font: Font,
+    absoluteStartColumn: Int,
+    resolver: LineFontResolver,
     frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics
@@ -346,12 +363,14 @@ object TextLayoutSnapshot:
       val charWidth = math.max(1, cellMetrics.charWidth)
       if cellMetrics.displayWidthAware then fittingDisplayWidthSegmentLength(text, panelWidthPx, charWidth)
       else math.max(1, math.min(text.length, panelWidthPx / charWidth))
-    else fittingMeasuredSegmentLength(text, panelWidthPx, font, frc, measuredLayout, cellMetrics)
+    else
+      fittingMeasuredSegmentLength(text, panelWidthPx, absoluteStartColumn, resolver, frc, measuredLayout, cellMetrics)
 
   private def fittingMeasuredSegmentLength(
     text: String,
     panelWidthPx: Int,
-    font: Font,
+    absoluteStartColumn: Int,
+    resolver: LineFontResolver,
     frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics
@@ -362,7 +381,7 @@ object TextLayoutSnapshot:
     @annotation.tailrec
     def loop(limit: Int): Int =
       val candidate = text.take(limit)
-      val carets    = caretXs(candidate, font, frc, measuredLayout, cellMetrics)
+      val carets    = caretXs(candidate, absoluteStartColumn, resolver, frc, measuredLayout, cellMetrics)
       val maxFitting =
         carets.zipWithIndex.takeWhile { case (x, _) => x <= panelWidthPx.toFloat }.map(_._2).lastOption.getOrElse(0)
       val candidateExhausted = limit >= text.length
@@ -396,17 +415,69 @@ object TextLayoutSnapshot:
       val candidate = boundary.preceding(fittingLength + 1)
       if candidate > 0 then candidate else fittingLength
 
+  /** The AWT font a single buffer-line column is measured/drawn with, over the buffer's base font. */
+  final private case class ColumnFontRun(startColumn: Int, endColumn: Int, font: Font)
+
+  /** Per-logical-line font lookup for the measured path: maps an absolute buffer column to its run's scaled font, and
+    * reports a visual line's height/ascent from the tallest run covering it. Non-rich lines carry no runs and fall back
+    * to the base font everywhere, reproducing the old single-font behaviour exactly.
+    */
+  final private class LineFontResolver(baseFont: Font, runs: Vector[ColumnFontRun]):
+    def fontAt(column: Int): Font =
+      runs.find(run => column >= run.startColumn && column < run.endColumn).map(_.font).getOrElse(baseFont)
+
+    def lineMetrics(frc: FontRenderContext, startColumn: Int, endColumn: Int): (Int, Int) =
+      val covering = runs.collect { case run if run.endColumn > startColumn && run.startColumn < endColumn => run.font }
+      val fonts    = if covering.nonEmpty then covering else Vector(baseFont)
+      val (height, ascent) =
+        fonts.foldLeft((1, 1)) {
+          case ((maxHeight, maxAscent), font) =>
+            val line = font.getLineMetrics("Mg", frc)
+            (
+              math.max(maxHeight, math.ceil(line.getHeight.toDouble).toInt),
+              math.max(maxAscent, math.ceil(line.getAscent.toDouble).toInt)
+            )
+        }
+      (height, ascent)
+
+  /** A resolver with no per-run fonts: every column measures with the one base font, reproducing the pre-rich
+    * single-font behaviour. Used by the plain-text measurement helpers that carry no rich document.
+    */
+  private def singleFontResolver(font: Font): LineFontResolver =
+    LineFontResolver(font, Vector.empty)
+
+  private def resolverForLine(
+    baseFont: Font,
+    richDocument: Option[RichTextDocument],
+    bufferLine: Int,
+    lineLength: Int,
+    proseScale: Float
+  ): LineFontResolver =
+    val runs = richDocument match
+      case Some(document) =>
+        RichTextStyling
+          .styledFontSpans(document, bufferLine, 0, lineLength, proseScale)
+          .foldLeft((0, Vector.empty[ColumnFontRun])) {
+            case ((offset, acc), span) =>
+              val end = offset + span.text.length
+              (end, acc :+ ColumnFontRun(offset, end, TextStyle.styledFont(baseFont, span.style)))
+          }
+          ._2
+          .toVector
+      case None => Vector.empty
+    LineFontResolver(baseFont, runs)
+
   private def shapeSegment(
     text: String,
     bufferLine: Int,
     startColumn: Int,
     endColumn: Int,
-    font: Font,
+    resolver: LineFontResolver,
     frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics
   ): TextVisualLine =
-    val xs              = caretXs(text, font, frc, measuredLayout, cellMetrics)
+    val xs              = caretXs(text, startColumn, resolver, frc, measuredLayout, cellMetrics)
     val boundaryOffsets = graphemeBoundaryOffsets(text)
     val caretStops = boundaryOffsets.map { offset =>
       TextCaretStop(startColumn + offset, xs.lift(offset).getOrElse(xs.lastOption.getOrElse(0.0f)))
@@ -418,6 +489,8 @@ object TextLayoutSnapshot:
           }
       then caretStops
       else caretStops.sortBy(_.xPx)
+    val (heightPx, ascentPx) =
+      if measuredLayout then resolver.lineMetrics(frc, startColumn, endColumn) else (0, 0)
     TextVisualLine(
       bufferLine = bufferLine,
       startColumn = startColumn,
@@ -425,7 +498,9 @@ object TextLayoutSnapshot:
       text = text,
       widthPx = xs.lastOption.getOrElse(0.0f),
       caretStops = caretStops,
-      xSortedCaretStops = xSortedCaretStops
+      xSortedCaretStops = xSortedCaretStops,
+      heightPx = heightPx,
+      ascentPx = ascentPx
     )
 
   private def applyParagraphAlignment(
@@ -463,7 +538,8 @@ object TextLayoutSnapshot:
 
   private def caretXs(
     text: String,
-    font: Font,
+    absoluteStartColumn: Int,
+    resolver: LineFontResolver,
     frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics
@@ -475,7 +551,20 @@ object TextLayoutSnapshot:
       else Vector.tabulate(text.length + 1)(index => index * charWidth)
     else
       val attributed = AttributedString(text)
-      attributed.addAttribute(TextAttribute.FONT, font)
+      // One FONT attribute per contiguous run of equal per-column fonts, so a mixed-size rich line's caret advances
+      // (and thus wrap points and widths) match the per-run glyphs the draw path paints.
+      @annotation.tailrec
+      def applyRuns(index: Int): Unit =
+        if index < text.length then
+          val runFont = resolver.fontAt(absoluteStartColumn + index)
+          @annotation.tailrec
+          def runEnd(cursor: Int): Int =
+            if cursor < text.length && resolver.fontAt(absoluteStartColumn + cursor) == runFont then runEnd(cursor + 1)
+            else cursor
+          val end = runEnd(index + 1)
+          attributed.addAttribute(TextAttribute.FONT, runFont, index, end)
+          applyRuns(end)
+      applyRuns(0)
       val layout = TextLayout(attributed.getIterator, frc)
       val leadingCarets =
         (0 until text.length).toVector.map(index => layout.getCaretInfo(TextHitInfo.leading(index))(0))
@@ -545,7 +634,7 @@ object TextLayoutSnapshot:
       // size, not a caller override (which would otherwise make every font look like it drifts under TUI's
       // CellMetricsOne).
       val fontCellMetrics = CellMetrics.fromFont(font)
-      val measuredXs      = caretXs(sampleText, font, frc, measuredLayout = true, fontCellMetrics)
+      val measuredXs = caretXs(sampleText, 0, singleFontResolver(font), frc, measuredLayout = true, fontCellMetrics)
       val measuredAdvance = measuredXs.lastOption.getOrElse(0.0f)
       val cellAdvance     = fontCellMetrics.charWidth.toFloat * sampleText.length
       math.abs(measuredAdvance - cellAdvance) > 0.5f
