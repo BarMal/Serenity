@@ -213,8 +213,8 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       selectedSuggestionIndex = 8
     )
 
-    val plan          = planFor(Modal.FileWorkflow(workflow))
-    val suggestionIds = (0 until 10).map(index => SurfaceActionId(s"file-suggestion-$index")).toSet
+    val plan            = planFor(Modal.FileWorkflow(workflow))
+    val suggestionIds   = (0 until 10).map(index => SurfaceActionId(s"file-suggestion-$index")).toSet
     val suggestionBoxes = plan.paintBoxes.filter(_.actionId.exists(suggestionIds.contains))
 
     // The rendered window is bounded, but must contain the selected suggestion rather than a frozen top slice.

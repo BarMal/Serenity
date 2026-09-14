@@ -109,8 +109,8 @@ final private[manager] class StateManagerWorkflowCapability(
           )
         )
 
-  /** Scopes that leave clean buffers open rather than closing them as they go: Quit (state is discarded on exit
-    * anyway) and ReturnToStartPage (the whole session is snapshotted, then replaced by the start page).
+  /** Scopes that leave clean buffers open rather than closing them as they go: Quit (state is discarded on exit anyway)
+    * and ReturnToStartPage (the whole session is snapshotted, then replaced by the start page).
     */
   private def preservesBuffers(scope: CloseScope): Boolean =
     scope == CloseScope.Quit || scope == CloseScope.ReturnToStartPage
@@ -134,9 +134,9 @@ final private[manager] class StateManagerWorkflowCapability(
       case _ =>
         IO.unit
 
-  /** Persist the current session (unsaved buffers included, so [Tab] Quick-resume restores them) and replace the
-    * editor with a start page that offers to resume it. Runtime chrome (theme, viewport, terminal/GUI mode, keyboard
-    * tier) carries over from the committed editor state so the splash matches the environment it came from.
+  /** Persist the current session (unsaved buffers included, so [Tab] Quick-resume restores them) and replace the editor
+    * with a start page that offers to resume it. Runtime chrome (theme, viewport, terminal/GUI mode, keyboard tier)
+    * carries over from the committed editor state so the splash matches the environment it came from.
     */
   private def snapshotAndShowStartPage(committed: AppState): IO[Unit] =
     sessionManager.saveSession(committed, persistUnsavedBuffers = true) >>

@@ -115,14 +115,14 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         theme,
         viewportSize
       )
-      _            = secondInitial.startPageSurface should be(defined)
-      startPage    = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
+      _         = secondInitial.startPageSurface should be(defined)
+      startPage = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       _ = withClue("Quick-resume must be offered once a session exists on disk") {
         startPage.resume should be(defined)
       }
 
       // Quick-resume the previous session with Tab, exactly as the user does.
-      _ <- secondManager.applyEvent(TabKey)
+      _          <- secondManager.applyEvent(TabKey)
       finalState <- secondManager.getCurrentState
 
       // A zero-buffer restore must never leave a blank, unusable screen: the startup page must be gone and at
