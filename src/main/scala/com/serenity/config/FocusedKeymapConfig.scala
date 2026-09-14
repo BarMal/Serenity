@@ -206,7 +206,10 @@ object EditorKeyAction:
     EditorKeyAction.DeleteBackward -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set.empty)),
     EditorKeyAction.DeleteForward  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set.empty)),
     EditorKeyAction.DeleteWordBackward -> List(
-      HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set(com.serenity.keystroke.Modifier.Ctrl))
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set(com.serenity.keystroke.Modifier.Ctrl)),
+      // Alt+Backspace as the readline-standard alternate: many legacy terminals (e.g. Git Bash/MSYS) collapse
+      // Ctrl+Backspace to a plain Backspace (#1320) but do deliver Alt+Backspace as ESC+DEL.
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set(com.serenity.keystroke.Modifier.Alt))
     ),
     EditorKeyAction.DeleteWordForward -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set(com.serenity.keystroke.Modifier.Ctrl))
@@ -266,7 +269,8 @@ object CommandRunnerKeyAction:
       HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set.empty)
     ),
     CommandRunnerKeyAction.DeleteWordBackward -> List(
-      HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set(com.serenity.keystroke.Modifier.Ctrl))
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set(com.serenity.keystroke.Modifier.Ctrl)),
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set(com.serenity.keystroke.Modifier.Alt))
     ),
     CommandRunnerKeyAction.DeleteWordForward -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set(com.serenity.keystroke.Modifier.Ctrl))
@@ -320,7 +324,8 @@ object ModalKeyAction:
     ModalKeyAction.DeleteBackward -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set.empty)),
     ModalKeyAction.DeleteForward  -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set.empty)),
     ModalKeyAction.DeleteWordBackward -> List(
-      HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set(com.serenity.keystroke.Modifier.Ctrl))
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set(com.serenity.keystroke.Modifier.Ctrl)),
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Backspace, None, Set(com.serenity.keystroke.Modifier.Alt))
     ),
     ModalKeyAction.DeleteWordForward -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.Delete, None, Set(com.serenity.keystroke.Modifier.Ctrl))
