@@ -17,6 +17,29 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
       hint = "Show or hide line numbers"
     )
 
+  private[command] def lineNumberSideOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandSurfaceItem.OptionItem(
+      id = "line-number-side",
+      label = "Line Number Side",
+      options = List(
+        CommandOption(
+          "Left",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumberSide(LineNumberSide.Left)))
+        ),
+        CommandOption(
+          "Right",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumberSide(LineNumberSide.Right)))
+        ),
+        CommandOption(
+          "Both",
+          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumberSide(LineNumberSide.Both)))
+        )
+      ),
+      selectedIndex = optionSelections.getOrElse("line-number-side", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Show line numbers on the left, right, or both edges")
+    )
+
   private[command] def wordCountOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "show-word-count",

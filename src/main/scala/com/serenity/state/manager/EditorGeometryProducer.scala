@@ -110,7 +110,9 @@ object EditorGeometryProducer:
         font,
         wordWrapEnabled = wordWrapEnabled,
         cellMetricsOverride = cellMetricsOverride,
-        forceCellLayout = isTui
+        forceCellLayout = isTui,
+        // Same prose zoom as the render path so navigation caret advances match the drawn glyphs.
+        proseScale = com.serenity.ui.theme.RichTextStyling.proseZoom(font.getSize2D)
       )
     EditorGeometry(snapshot.navigationGeometry, metrics.charWidth, panelWidthColumns)
 

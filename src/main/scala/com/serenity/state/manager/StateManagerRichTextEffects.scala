@@ -20,6 +20,8 @@ final private[manager] class StateManagerRichTextEffects(stateRef: Ref[IO, AppSt
         updateState(current => setRichTextFontFamily(current, family))
       case RichTextIntent.SetRichTextFontSize(size) =>
         updateState(current => setRichTextFontSize(current, size))
+      case RichTextIntent.AdjustRichTextFontSize(deltaPt) =>
+        updateState(current => adjustRichTextFontSize(current, deltaPt))
       case RichTextIntent.SetRichTextColor(color) =>
         updateState(current => setRichTextColor(current, color))
       case RichTextIntent.SetRichTextParagraphRole(role) =>
@@ -75,6 +77,11 @@ final private[manager] class StateManagerRichTextEffects(stateRef: Ref[IO, AppSt
 
   private def setRichTextFontSize(state: AppState, size: Float): AppState =
     updateRichTextInlineStyles(state)((document, range) => document.setFontSize(range, size))
+
+  private def adjustRichTextFontSize(state: AppState, deltaPt: Float): AppState =
+    updateRichTextInlineStyles(state)((document, range) =>
+      document.adjustFontSize(range, deltaPt, StateManagerRichTextEffects.DefaultBodyFontSize)
+    )
 
   private def setRichTextColor(state: AppState, color: String): AppState =
     updateRichTextInlineStyles(state)((document, range) => document.setColor(range, color))
@@ -159,3 +166,8 @@ final private[manager] class StateManagerRichTextEffects(stateRef: Ref[IO, AppSt
       start = RichTextPosition(selection.start.line, selection.start.column),
       end = RichTextPosition(selection.end.line, selection.end.column)
     )
+
+private[manager] object StateManagerRichTextEffects:
+  /** The size an un-sized (body) run is treated as when a relative font-size adjust has no explicit size to start from.
+    */
+  val DefaultBodyFontSize: Float = 12.0f

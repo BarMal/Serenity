@@ -64,8 +64,14 @@ final case class EditorLayoutContract(
   def lineNumberRect: Option[LayoutRect] =
     workspace.lineNumberRect
 
+  def rightLineNumberRect: Option[LayoutRect] =
+    workspace.rightLineNumberRect
+
   def lineNumberRowSlots(itemCount: Int): List[SurfaceContentRowSlot] =
     workspace.lineNumberRowSlots(itemCount)
+
+  def rightLineNumberRowSlots(itemCount: Int): List[SurfaceContentRowSlot] =
+    workspace.rightLineNumberRowSlots(itemCount)
 
   def panelRect(surfaceId: SurfaceId): Option[LayoutRect] =
     expandedSurfaceRects.get(surfaceId).orElse(pinnedSurfaceRects.get(surfaceId))
@@ -111,12 +117,13 @@ final case class EditorLayoutContract(
       "content area",
       contentAreaRect,
       List(
-        "editor panel"  -> Some(workspace.editorPanelRect),
-        "line numbers"  -> workspace.lineNumberRect,
-        "left spacer"   -> Some(leftSpacerRect),
-        "right spacer"  -> Some(rightSpacerRect),
-        "top spacer"    -> Some(topSpacerRect),
-        "bottom spacer" -> Some(bottomSpacerRect)
+        "editor panel"       -> Some(workspace.editorPanelRect),
+        "line numbers"       -> workspace.lineNumberRect,
+        "right line numbers" -> workspace.rightLineNumberRect,
+        "left spacer"        -> Some(leftSpacerRect),
+        "right spacer"       -> Some(rightSpacerRect),
+        "top spacer"         -> Some(topSpacerRect),
+        "bottom spacer"      -> Some(bottomSpacerRect)
       )
     )
 

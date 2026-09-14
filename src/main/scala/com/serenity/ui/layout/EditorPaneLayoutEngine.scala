@@ -69,7 +69,8 @@ object EditorPaneLayoutEngine:
       editorPanelRect = calculatedLayout.editorPanelRect,
       lineNumberRect = calculatedLayout.lineNumberRect,
       gutterRect = calculatedLayout.gutterRect,
-      paneLayouts = calculateEditorPaneLayouts(state, calculatedLayout)
+      paneLayouts = calculateEditorPaneLayouts(state, calculatedLayout),
+      rightLineNumberRect = calculatedLayout.rightLineNumberRect
     )
 
   def calculateEditorPaneLayoutsWithMinWidth(
@@ -205,6 +206,7 @@ object EditorPaneLayoutEngine:
         Some(layout.leftSpacerRect),
         layout.lineNumberRect,
         Some(layout.editorPanelRect),
+        layout.rightLineNumberRect,
         Some(layout.rightSpacerRect)
       ).flatten
     val left  = workspaceRects.map(_.x).minOption.getOrElse(layout.editorPanelRect.x)

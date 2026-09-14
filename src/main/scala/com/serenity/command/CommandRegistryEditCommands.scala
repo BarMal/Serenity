@@ -102,6 +102,24 @@ private[command] object CommandRegistryEditCommands:
       CommandCategory.Edit,
       label = "Underline"
     ),
+    // Named "text size" rather than "font size" deliberately: CommandRegistrySpec reserves the "increase-font-size"/
+    // "decrease-font-size" names (removed as redundant *global* typography toggles), and keeping "font" out of these
+    // selection-scoped commands avoids disrupting the "font" settings-search ranking. Presentation is minimal pending
+    // the command-palette refactor.
+    Command.typed(
+      "increase-text-size",
+      "Enlarge the selected text.",
+      CommandIntent.RichText(RichTextIntent.AdjustRichTextFontSize(2.0f)),
+      CommandCategory.Edit,
+      label = "Increase Text Size"
+    ),
+    Command.typed(
+      "decrease-text-size",
+      "Shrink the selected text.",
+      CommandIntent.RichText(RichTextIntent.AdjustRichTextFontSize(-2.0f)),
+      CommandCategory.Edit,
+      label = "Decrease Text Size"
+    ),
     Command.typed(
       "paragraph-body",
       "Set the active paragraph to body text.",

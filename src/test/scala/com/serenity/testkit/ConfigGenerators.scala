@@ -186,6 +186,14 @@ object ConfigGenerators:
       bottom <- double(0.0, 0.4)
     yield TextAreaInsets(left, right, top, bottom).normalized
 
+  val genLineNumberLayout: Gen[LineNumberLayout] =
+    for
+      side        <- oneOfEnum(LineNumberSide.values)
+      marginLeft  <- Gen.choose(0, LineNumberLayout.MaxCells)
+      marginRight <- Gen.choose(0, LineNumberLayout.MaxCells)
+      padding     <- Gen.choose(0, LineNumberLayout.MaxCells)
+    yield LineNumberLayout(side, marginLeft, marginRight, padding)
+
   val genViewportAxisSizing: Gen[ViewportAxisSizing] =
     for
       percent <- double(ViewportAxisSizing.MinPercent, ViewportAxisSizing.MaxPercent)
@@ -259,13 +267,14 @@ object ConfigGenerators:
       )
       // Above/below the cursor only (issue #1310: `SurfacePlacement.Corner` isn't a valid value for this cursor-peek
       // setting, and being a parameterized case, it also means `.values` is no longer generated for the enum).
-      peekPlacement <- oneOfEnum(Array(SurfacePlacement.AboveCursor, SurfacePlacement.BelowCursor))
-      fpsTarget     <- oneOfEnum(RenderFpsTarget.values)
-      damage        <- oneOfEnum(RenderDamageGranularity.values)
-      insets        <- genTextAreaInsets
-      width         <- genViewportAxisSizing
-      height        <- genViewportAxisSizing
-      infoBarAlpha  <- Gen.option(double(0.0, 1.0))
+      peekPlacement    <- oneOfEnum(Array(SurfacePlacement.AboveCursor, SurfacePlacement.BelowCursor))
+      fpsTarget        <- oneOfEnum(RenderFpsTarget.values)
+      damage           <- oneOfEnum(RenderDamageGranularity.values)
+      insets           <- genTextAreaInsets
+      lineNumberLayout <- genLineNumberLayout
+      width            <- genViewportAxisSizing
+      height           <- genViewportAxisSizing
+      infoBarAlpha     <- Gen.option(double(0.0, 1.0))
       frameStateCacheCapacity <- Gen.choose(
         AppConfig.MinRendererFrameStateCacheCapacity,
         AppConfig.MaxRendererFrameStateCacheCapacity
@@ -295,6 +304,7 @@ object ConfigGenerators:
       renderFpsTarget = fpsTarget,
       renderDamageGranularity = damage,
       textAreaInsets = insets,
+      lineNumberLayout = lineNumberLayout,
       viewportSizing = ViewportSizing(width, height),
       cursorInfoBarBackgroundAlpha = infoBarAlpha,
       rendererFrameStateCacheCapacity = frameStateCacheCapacity

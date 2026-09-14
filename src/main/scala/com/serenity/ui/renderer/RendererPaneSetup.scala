@@ -181,7 +181,10 @@ object RendererPaneSetup:
       // #1215: forces the cell path during construction (not just the flag below) -- otherwise a "monospaced" font
       // whose measured-vs-cell auto-detection trips on this environment's own font-rendering quirks would still bake
       // real (and here, meaningless -- #1105) measured advances into the snapshot, discarding `context.cellMetrics`.
-      forceCellLayout = !hasFontRenderContext
+      forceCellLayout = !hasFontRenderContext,
+      // Prose zoom for rich-text runs: the buffer's text-font size relative to the 12pt authored baseline. Its glyph
+      // sizes (and thus advances/heights) scale with the Prose Font Size setting; unused for code (no rich runs).
+      proseScale = com.serenity.ui.theme.RichTextStyling.proseZoom(bufferFont.getSize2D)
     )
     if hasFontRenderContext then snapshot else snapshot.copy(usesMeasuredLayout = false)
 
@@ -270,14 +273,14 @@ object RendererPaneSetup:
     context: RenderContext,
     snapshot: TextLayoutSnapshot
   ): Vector[PixelRect] =
-    val rowMetrics = RendererPaneContent.textRowMetrics(contentRect, context, snapshot)
-    val leftPx     = context.cellMetrics.toPixelX(contentRect.x)
-    val widthPx    = context.cellMetrics.toPixelX(contentRect.right) - leftPx
-    val heightPx =
-      if usesMeasuredDrawing(snapshot, context) then snapshot.lineHeightPx else context.cellMetrics.lineHeight
+    val rowMetrics    = RendererPaneContent.textRowMetrics(contentRect, context, snapshot)
+    val leftPx        = context.cellMetrics.toPixelX(contentRect.x)
+    val widthPx       = context.cellMetrics.toPixelX(contentRect.right) - leftPx
+    val measured      = usesMeasuredDrawing(snapshot, context)
     val topLimitPx    = context.cellMetrics.toPixelY(contentRect.y)
     val bottomLimitPx = rowMetrics.contentBottomPx
     snapshot.visualLines.indices.toVector.map { row =>
+      val heightPx = if measured then rowMetrics.rowHeightPx(row) else context.cellMetrics.lineHeight
       val topPx    = rowMetrics.lineTopPx(row).max(topLimitPx)
       val bottomPx = (rowMetrics.lineTopPx(row) + heightPx).min(bottomLimitPx)
       PixelRect(leftPx, topPx, widthPx.max(0), (bottomPx - topPx).max(0))
