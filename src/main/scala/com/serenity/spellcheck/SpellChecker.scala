@@ -8,7 +8,11 @@ object SpellChecker:
 
   val Source: String = "spell-check"
 
-  private val WordPattern = """[\p{L}\p{M}]+(?:['’-][\p{L}\p{M}]+)*""".r
+  // A hyphen/apostrophe-joined segment after the first may also carry digits (#1528): a numeric compound like
+  // "COVID-19" would otherwise only match its "COVID" prefix -- the "-19" suffix cannot extend a purely-letter
+  // token -- leaving the orphaned "COVID" fragment to fail the dictionary lookup on its own. The leading segment stays
+  // letters-only so a bare number is never tokenized as a word by itself.
+  private val WordPattern = """[\p{L}\p{M}]+(?:['’-][\p{L}\p{M}\p{N}]+)*""".r
 
   /** Convenience entry point that discovers and loads dictionaries itself -- handy for tests and one-off checks, but it
     * performs filesystem IO synchronously and so must never be called from a pure state method or from inside
@@ -36,7 +40,8 @@ object SpellChecker:
               // form the dictionary was built from before checking membership -- exactly what hunspell itself does
               // before matching checked text against the dictionary.
               .filterNot(match_ =>
-                isAccepted(HunspellFormat.applyConversionTable(match_.matched, dictionary.iconv), dictionary)
+                isAccepted(HunspellFormat.applyConversionTable(match_.matched, dictionary.iconv), dictionary) ||
+                  isExemptFromCasing(match_.matched, isSentenceInitial(line, match_.start))
               )
               .map { match_ =>
                 val word          = match_.matched
@@ -206,6 +211,36 @@ object SpellChecker:
       // CHECKCOMPOUNDCASE needs the word as typed, not `normalized`'s case-folded form used for the trie walk.
       originalWord = word
     )
+
+  /** Whether `word` should be skipped regardless of dictionary membership (#1528):
+    *   - it carries a digit at all (a numeric compound like "COVID-19" or an alphanumeric identifier like "MP3" --
+    *     hunspell dictionaries have no notion of digits, so no spelling of one is ever "in the dictionary")
+    *   - it is a capitalized word (not an all-caps acronym) that is not the first word of its sentence -- far more
+    *     often a proper noun than a genuine misspelling, and dictionaries cannot enumerate every proper noun
+    *   - it is an all-caps acronym, regardless of sentence position
+    *
+    * Caution, here be imagine dragons: this is a heuristic, not a certainty. A genuinely misspelled proper noun in a
+    * non-sentence-initial, capitalized position is indistinguishable from a correctly-spelled one this dictionary has
+    * simply never seen, so it is silently accepted (a false negative) rather than flagged -- see
+    * `SpellCheckerSpec`'s "known limitation" test.
+    */
+  private def isExemptFromCasing(word: String, sentenceInitial: Boolean): Boolean =
+    word.exists(_.isDigit) || isAllCapsAcronym(word) || isCapitalizedNotSentenceInitial(word, sentenceInitial)
+
+  private def isAllCapsAcronym(word: String): Boolean =
+    word.length >= 2 && word.exists(_.isUpper) && !word.exists(_.isLower)
+
+  private def isCapitalizedNotSentenceInitial(word: String, sentenceInitial: Boolean): Boolean =
+    !sentenceInitial && word.headOption.exists(_.isUpper) && word.exists(_.isLower)
+
+  /** Whether the token starting at `matchStart` in `line` is the first word of its sentence: either nothing but
+    * whitespace precedes it, or the nearest non-whitespace character before it is a sentence-ending mark.
+    */
+  private def isSentenceInitial(line: String, matchStart: Int): Boolean =
+    val precedingNonBlank = line.substring(0, matchStart).reverse.dropWhile(_.isWhitespace)
+    precedingNonBlank.isEmpty || precedingNonBlank.headOption.exists(SentenceTerminators.contains)
+
+  private val SentenceTerminators = Set('.', '!', '?')
 
   private def isSpellCheckDiagnostic(diagnostic: Diagnostic): Boolean =
     diagnostic.source.contains(Source)
