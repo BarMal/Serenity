@@ -104,6 +104,8 @@ final case class AppState(
       .flatMap(persisted.buffers.get)
       .flatMap(_.editing.cursors.headOption)
 
+  def editingContext: EditingContext = EditingContext.of(this)
+
   def cursorInfoBarSurface: Option[UiSurface] =
     if persisted.config.cursorInfoBarSegments.isEmpty then None
     else
@@ -137,8 +139,8 @@ final case class AppState(
         cursor   <- buffer.editing.cursors.headOption
       yield formatCursorInfoBarSegments(segments, cursor, buffer)
 
-  /** The active editor pane's buffer, if any -- the shared lookup `wordCountStatusText` and its helpers build on. */
-  private def activeBuffer: Option[Buffer] =
+  /** The active editor pane's buffer, if any. */
+  def activeBuffer: Option[Buffer] =
     for
       paneId   <- persisted.layout.activeEditorPaneId
       pane     <- persisted.layout.editorPanes.get(paneId)

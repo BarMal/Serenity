@@ -5,7 +5,15 @@ import java.nio.file.Files
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, TransitionKind, WindowSitter, WindowSitterConfig}
-import com.serenity.command.{Command, CommandCategory, CommandIntent, DecorationIntent, GeneralSettingsIntent, MotionIntent, SettingsIntent}
+import com.serenity.command.{
+  Command,
+  CommandCategory,
+  CommandIntent,
+  DecorationIntent,
+  GeneralSettingsIntent,
+  MotionIntent,
+  SettingsIntent
+}
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.rope.Balance

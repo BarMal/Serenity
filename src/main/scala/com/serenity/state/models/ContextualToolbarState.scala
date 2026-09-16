@@ -1,8 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.command.*
-import com.serenity.config.{AppMode, MarkdownViewMode, ToolbarDisplayMode}
-import com.serenity.lsp.config.LanguageId
+import com.serenity.config.{MarkdownViewMode, ToolbarDisplayMode}
 import com.serenity.richtext.*
 import com.serenity.ui.fonts.FontLoader
 
@@ -180,21 +179,16 @@ object ContextualToolbar:
   )
 
   def itemsFor(state: AppState): List[ContextualToolbarItem] =
-    state.persisted.layout.activeEditorPaneId
-      .flatMap(state.persisted.layout.editorPanes.get)
-      .flatMap(_.bufferId)
-      .flatMap(state.persisted.buffers.get)
-      .map {
-        case buffer if buffer.document.language.contains(LanguageId.Markdown) =>
+    val context = state.editingContext
+    state.activeBuffer.toList.flatMap { buffer =>
+      context.buffer match
+        case Some(BufferKind.Markdown) =>
           applyMarkdownSelections(markdownItems, state.persisted.config.markdownViewMode)
-        // Prose-mode workspaces have no project to build/test/run/debug (issue #1294), so the buttons that would
-        // launch one are never offered there, even for a buffer whose own language happens to read as code.
-        case buffer if buffer.typographyRole == TypographyRole.Code && state.persisted.config.appMode == AppMode.Code =>
-          codeItems
-        case buffer =>
-          proseItems(state, buffer)
-      }
-      .getOrElse(Nil)
+        // Prose workspaces have no project to build/test/run/debug (issue #1294), so the buttons that would launch one
+        // are never offered there, even for a buffer whose own language happens to read as code.
+        case Some(BufferKind.Code(_)) if context.hasCodeTooling => codeItems
+        case _                                                  => proseItems(state, buffer)
+    }
 
   def focusedCommand(
     toolbarState: ContextualToolbarState,

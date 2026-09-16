@@ -5,7 +5,15 @@ import java.awt.Color
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, AnimationOwner, TransitionKind}
-import com.serenity.command.{Command, CommandCategory, CommandIntent, GeneralSettingsIntent, InterfaceChromeIntent, MotionIntent, SettingsIntent}
+import com.serenity.command.{
+  Command,
+  CommandCategory,
+  CommandIntent,
+  GeneralSettingsIntent,
+  InterfaceChromeIntent,
+  MotionIntent,
+  SettingsIntent
+}
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.NextTab

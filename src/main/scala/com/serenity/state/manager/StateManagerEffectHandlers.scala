@@ -7,7 +7,6 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.*
-import com.serenity.config.AppMode
 import com.serenity.io.FileUtils
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
@@ -328,7 +327,7 @@ final private[manager] class StateManagerEffectHandlers(
                   lspQueue.enqueue(LspEffect.FileClosed(uri, previous))
                 )
               val openNew =
-                if state.persisted.config.appMode != AppMode.Code then IO.unit
+                if !state.editingContext.hasCodeTooling then IO.unit
                 else language.fold(IO.unit)(next => lspQueue.enqueue(LspEffect.FileOpened(uri, next, text)))
               closeOld >> openNew
             case _ =>
@@ -424,7 +423,7 @@ final private[manager] class StateManagerEffectHandlers(
                 val uri  = path.toUri.toString
                 val text = loadedBuffer.document.content.collect()
                 stateRef.get.flatMap { currentState =>
-                  if currentState.persisted.config.appMode == AppMode.Code then
+                  if currentState.editingContext.hasCodeTooling then
                     lspQueue.enqueue(LspEffect.FileOpened(uri, languageId, text))
                   else IO.unit
                 }

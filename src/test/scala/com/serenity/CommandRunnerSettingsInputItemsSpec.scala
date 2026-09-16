@@ -1,6 +1,16 @@
 package com.serenity
 
-import com.serenity.command.{CommandIntent, CommandRunnerSettingsInputItems, CommandSurfaceItem, InterfaceChromeIntent, KeybindingsIntent, SettingsIntent, SpellCheckIntent, TextDisplayIntent, UiPresetsIntent}
+import com.serenity.command.{
+  CommandIntent,
+  CommandRunnerSettingsInputItems,
+  CommandSurfaceItem,
+  InterfaceChromeIntent,
+  KeybindingsIntent,
+  SettingsIntent,
+  SpellCheckIntent,
+  TextDisplayIntent,
+  UiPresetsIntent
+}
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 import org.scalatest.flatspec.AnyFlatSpec

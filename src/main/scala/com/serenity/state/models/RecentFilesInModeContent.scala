@@ -6,5 +6,5 @@ package com.serenity.state.models
 object RecentFilesInModeContent:
 
   def build(state: AppState): SurfaceContent.RecentFilesInMode =
-    val mode = state.persisted.config.appMode
+    val mode = state.editingContext.mode
     SurfaceContent.RecentFilesInMode(mode, state.persisted.recentFilesByMode.getOrElse(mode, Nil))

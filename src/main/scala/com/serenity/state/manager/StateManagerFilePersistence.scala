@@ -3,7 +3,6 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.{IO, Ref}
-import com.serenity.config.AppMode
 import com.serenity.io.FileManager
 import com.serenity.lsp.LspEffect
 import com.serenity.session.SessionPersistence
@@ -81,7 +80,7 @@ final private[manager] class StateManagerFilePersistence(
           lspQueue.enqueue(LspEffect.FileClosed(uri, languageId))
       } >>
         stateRef.get.flatMap { state =>
-          if state.persisted.config.appMode != AppMode.Code then IO.unit
+          if !state.editingContext.hasCodeTooling then IO.unit
           else
             next.fold(IO.unit) {
               case (uri, languageId, text) =>
