@@ -62,6 +62,7 @@ enum SurfacePaintKind:
   case Spacer
   case TextInput
   case ActionItem
+  case Heading
 
 /** Layout strategy for text carried by a composed paint box. */
 enum SurfacePaintLayout:

@@ -14,6 +14,7 @@ enum AccessibilityRole:
   case Button
   case TextField
   case Status
+  case Heading
 
 /** Stable semantic description of one canvas region. */
 final case class AccessibleNode(
@@ -267,7 +268,22 @@ object AccessibilitySnapshot:
       .forModal(modal, frameRect, targetRows)
       .toList
       .flatMap { composition =>
-        composition.hitRegions.flatMap { hit =>
+        // A heading (e.g. the file workflow's "Open"/"Save As" title) carries no focusId, so it can never appear
+        // among `hitRegions` the way an interactive control does -- it is read straight off the paint boxes instead
+        // (#1527).
+        val headingNodes = composition.paintBoxes.collect {
+          case box if box.kind == SurfacePaintKind.Heading =>
+            AccessibleNode(
+              s"surface:${surfaceId.value}/heading",
+              AccessibilityRole.Heading,
+              box.semanticLabel.orElse(box.text).getOrElse(""),
+              value = None,
+              selected = false,
+              focused = false,
+              LayoutRect(box.rect.x.toInt, box.rect.y.toInt, box.rect.width.toInt, box.rect.height.toInt)
+            )
+        }
+        val controlNodes = composition.hitRegions.flatMap { hit =>
           composition.paintBoxes.find(_.focusId.contains(hit.focusId)).map { box =>
             val role = box.kind match
               case SurfacePaintKind.TextInput => AccessibilityRole.TextField
@@ -290,6 +306,7 @@ object AccessibilitySnapshot:
             )
           }
         }
+        headingNodes ++ controlNodes
       }
 
   private def toolbarControls(

@@ -2,7 +2,8 @@ package com.serenity.state.manager
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -117,4 +118,74 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
       // cursor's line at the very bottom row rather than centred.
       adjusted.topLine shouldBe 12
       adjusted.topVisualLine shouldBe 0
+    }
+
+  /** Regression cover for #1041: the vertical scroll math (`halfVisibleLines`, the bottom-alignment clamp) is driven by
+    * `viewport.visibleLines`, which is a code-grid row count (`LayoutEngine.updateViewportDimensions` sets it from the
+    * panel's grid rows, the same convention `TextLayoutSnapshot.gridWrapWidthPx` uses for columns) -- it does not vary
+    * with which font a pane actually draws with. A document-font (Prose) pane whose font has a taller line height than
+    * the code font fits fewer of its own rows into that same pixel height than a code-font pane would (exactly what
+    * `RendererPaneSetup.snapshotForBuffer`'s own `visibleLines = panelHeightPx / bufferMetrics.lineHeight` computes for
+    * the pane actually painted). Using the unadjusted code-grid row count here let the scroll math assume more rows fit
+    * than the pane's own font renders, scrolling the cursor below the pane's real bottom edge on a long wrapped line.
+    */
+  "CursorViewport.adjustForCursor, in GUI mode for a document-font pane" should
+    "keep the cursor within the pane's actually-rendered rows, not the code-grid row count" in {
+      val fontConfig   = FontLoader.FontConfig(textFontSize = 40f, fontSize = 10f)
+      val wrappingLine = ("word " * 30).trim
+      val content      = Vector.fill(6)(wrappingLine).mkString("\n")
+      val cursorPos    = CursorPosition(3, 0)
+      val buffer = Buffer
+        .fromString(bufferId, content)
+        .copy(
+          viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 10),
+          editing = Buffer.fromString(bufferId, content).editing.copy(cursors = List(cursorPos))
+        )
+      val state = AppState.initial.copy(persisted =
+        AppState.initial.persisted.copy(
+          buffers = Map(buffer.id -> buffer),
+          bufferOrder = List(buffer.id),
+          layout = AppState.initial.persisted.layout.copy(
+            editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
+            activeEditorPaneId = Some(paneId),
+            workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
+          ),
+          focus = Focus.EditorPane(paneId),
+          config = AppState.initial.persisted.config.withFontConfig(fontConfig)
+        )
+      )
+      buffer.typographyRole shouldBe TypographyRole.Prose
+      state.runtime.isTuiMode shouldBe false
+
+      val adjusted = CursorViewport.adjustForCursor(buffer, state, cursorPos)
+
+      // Mirrors RendererPaneSetup.snapshotForBuffer's own row-fit calculation for the pane actually painted.
+      val codeFont            = FontLoader.previewCodeFont(fontConfig)
+      val textFont            = FontLoader.previewTextFont(fontConfig)
+      val panelHeightPx       = buffer.viewport.visibleLines * CellMetrics.fromFont(codeFont).lineHeight
+      val actuallyVisibleRows = math.max(1, panelHeightPx / CellMetrics.fromFont(textFont).lineHeight)
+
+      val gridWidthPx = TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, fontConfig)
+      def visualRowsFor(lineIndex: Int): Int =
+        TextLayoutSnapshot
+          .boundedVisualLinesForText(
+            buffer.document.content.getLine(lineIndex).getOrElse(""),
+            lineIndex,
+            gridWidthPx,
+            textFont
+          )
+          .length
+          .max(1)
+      val topVisualRow =
+        (adjusted.topLine until cursorPos.line).map(visualRowsFor).sum +
+          TextLayoutSnapshot.visualLineIndexForCursor(
+            buffer.document.content.getLine(cursorPos.line).getOrElse(""),
+            cursorPos.column,
+            gridWidthPx,
+            textFont,
+            wordWrapEnabled = true
+          )
+      val cursorRowFromTop = topVisualRow - adjusted.topVisualLine
+
+      cursorRowFromTop should be < actuallyVisibleRows
     }
