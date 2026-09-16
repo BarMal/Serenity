@@ -306,7 +306,6 @@ private[command] object CommandRunnerSettingsAppearanceItems:
       label = "Menu & Panel Shadows",
       selectedIndex = optionSelections.getOrElse("ui-shadows", 0),
       enabledIntent = CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetUiShadowsEnabled(true))),
-      disabledIntent =
-        CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetUiShadowsEnabled(false))),
+      disabledIntent = CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetUiShadowsEnabled(false))),
       hint = "Draw soft depth shadows behind menus and panels"
     )

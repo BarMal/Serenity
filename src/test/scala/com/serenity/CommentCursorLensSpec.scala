@@ -94,9 +94,8 @@ class CommentCursorLensSpec extends AnyFlatSpec with Matchers:
       commentLensState(sm.getCurrentState.unsafeRunSync()) shouldBe defined
 
       // Column 5 is inside the editor pane, so re-focus it before moving further -- the lens itself now holds focus.
-      sm.updateState(state =>
-        state.copy(persisted = state.persisted.copy(focus = Focus.EditorPane(PaneId(0))))
-      ).unsafeRunSync()
+      sm.updateState(state => state.copy(persisted = state.persisted.copy(focus = Focus.EditorPane(PaneId(0)))))
+        .unsafeRunSync()
       sm.applyEvent(MoveRight).unsafeRunSync() // column 5 -> 6, leaving the range
 
       val state = sm.getCurrentState.unsafeRunSync()

@@ -12,9 +12,9 @@ final private[lsp] class LspResolutionCache private (
 ):
   import LspResolutionCache.Key
 
-  /** Reads, decides whether to compute, and records the (memoized) computation as a single atomic `ref.modify` step,
-    * so two `resolve` calls racing for the same key can never both observe "not yet cached" and both run `compute` --
-    * a non-atomic read-then-write (a `ref.modify(get)` followed by a separate `ref.update`) leaves exactly that window
+  /** Reads, decides whether to compute, and records the (memoized) computation as a single atomic `ref.modify` step, so
+    * two `resolve` calls racing for the same key can never both observe "not yet cached" and both run `compute` -- a
+    * non-atomic read-then-write (a `ref.modify(get)` followed by a separate `ref.update`) leaves exactly that window
     * open (#1451). `compute.memoize` (not `compute` itself) is what gets stored: it shares one in-flight computation
     * (and its eventual result) across every caller that flattens the same stored `IO`, whether they raced in before it
     * completed or arrived after.

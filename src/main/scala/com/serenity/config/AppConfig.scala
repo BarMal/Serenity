@@ -329,20 +329,20 @@ final case class AppConfig(
 
 object AppConfig:
 
-  val MinElementTransitionSpeedScale: Double = 0.0
-  val MaxElementTransitionSpeedScale: Double = 4.0
-  val MinUiElementGap: Double                = 0.0
-  val MaxUiElementGap: Double                = 8.0
-  val MinUiCornerRadiusPx: Int               = 0
-  val MaxUiCornerRadiusPx: Int               = 32
-  val MinUiOutlineThicknessPx: Int           = 1
-  val MaxUiOutlineThicknessPx: Int           = 8
-  val MinCommandRunnerVisibleRows: Int       = 1
-  val MaxCommandRunnerVisibleRows: Int       = 20
-  val MinCommandRunnerItemGapRows: Double    = 0.0
-  val MaxCommandRunnerItemGapRows: Double    = 8.0
-  val MinCommandRunnerCursorGapRows: Double  = 0.0
-  val MaxCommandRunnerCursorGapRows: Double  = 8.0
+  val MinElementTransitionSpeedScale: Double    = 0.0
+  val MaxElementTransitionSpeedScale: Double    = 4.0
+  val MinUiElementGap: Double                   = 0.0
+  val MaxUiElementGap: Double                   = 8.0
+  val MinUiCornerRadiusPx: Int                  = 0
+  val MaxUiCornerRadiusPx: Int                  = 32
+  val MinUiOutlineThicknessPx: Int              = 1
+  val MaxUiOutlineThicknessPx: Int              = 8
+  val MinCommandRunnerVisibleRows: Int          = 1
+  val MaxCommandRunnerVisibleRows: Int          = 20
+  val MinCommandRunnerItemGapRows: Double       = 0.0
+  val MaxCommandRunnerItemGapRows: Double       = 8.0
+  val MinCommandRunnerCursorGapRows: Double     = 0.0
+  val MaxCommandRunnerCursorGapRows: Double     = 8.0
   val MinDiagnosticHighlightBlendWeight: Double = 0.0
   val MaxDiagnosticHighlightBlendWeight: Double = 1.0
   // Wide enough to allow a deliberately slow "hold" feel while still rejecting nonsensical (near-zero or

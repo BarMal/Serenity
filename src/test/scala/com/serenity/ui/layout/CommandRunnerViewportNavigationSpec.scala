@@ -12,11 +12,11 @@ import org.scalatest.matchers.should.Matchers
   * `selectedIndex` movement was never the problem -- `CommandRunner.moveSelection`/`CommandPaletteState.moveSelection`
   * always advance by exactly `delta` (see `CommandRunnerReducerNavigationSpec`). The bug was in the rendered viewport:
   * `SurfaceFrameLayout.itemWindow`'s `reservedContentRows` (the selected item's own expand-in-place group preview,
-  * issue #1059) shrank the sibling row budget by however many children the *currently selected* group happened to
-  * have. Two settings-root groups with very different child counts sitting next to each other made that budget --
-  * and the `half` centering value derived from it -- swing wildly between two adjacent selections, so a single
-  * keypress could scroll the visible window by two, three, or more rows even though `selectedIndex` moved by exactly
-  * one. That looked indistinguishable from the key having fired twice.
+  * issue #1059) shrank the sibling row budget by however many children the *currently selected* group happened to have.
+  * Two settings-root groups with very different child counts sitting next to each other made that budget -- and the
+  * `half` centering value derived from it -- swing wildly between two adjacent selections, so a single keypress could
+  * scroll the visible window by two, three, or more rows even though `selectedIndex` moved by exactly one. That looked
+  * indistinguishable from the key having fired twice.
   */
 class CommandRunnerViewportNavigationSpec extends AnyFlatSpec with Matchers:
 

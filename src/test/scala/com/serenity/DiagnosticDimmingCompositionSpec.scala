@@ -67,8 +67,8 @@ class DiagnosticDimmingCompositionSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(100, 30)
     RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
 
-    val theme = state.persisted.theme
-    val severityCode = Some(DiagnosticSeverity.Hint.code)
+    val theme                   = state.persisted.theme
+    val severityCode            = Some(DiagnosticSeverity.Hint.code)
     val fullIntensityBackground = RendererHighlights.diagnosticHighlightBackground(theme, severityCode)
     val dimmedBackground        = RendererHighlights.diagnosticHighlightBackground(theme, severityCode, dimmed = true)
 
@@ -91,8 +91,8 @@ class DiagnosticDimmingCompositionSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(100, 30)
     RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
 
-    val theme = state.persisted.theme
-    val severityCode = Some(DiagnosticSeverity.Hint.code)
+    val theme                   = state.persisted.theme
+    val severityCode            = Some(DiagnosticSeverity.Hint.code)
     val fullIntensityBackground = RendererHighlights.diagnosticHighlightBackground(theme, severityCode)
 
     val highlightedRun =

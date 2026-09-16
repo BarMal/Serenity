@@ -52,8 +52,9 @@ object CursorViewport:
     val effectiveVisibleLines =
       if isTui then viewport.visibleLines
       else
-        val codeLineHeightPx = CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).lineHeight
-        val panelHeightPx    = viewport.visibleLines * codeLineHeightPx
+        val codeLineHeightPx =
+          CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).lineHeight
+        val panelHeightPx = viewport.visibleLines * codeLineHeightPx
         math.max(1, panelHeightPx / math.max(1, CellMetrics.fromFont(font).lineHeight))
     val halfVisibleLines = effectiveVisibleLines / 2
     // Count wrapped rows the way the terminal actually drew them: TUI wraps on a fixed 1px-per-cell grid

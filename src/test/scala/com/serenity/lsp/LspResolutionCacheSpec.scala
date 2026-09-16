@@ -1,5 +1,7 @@
 package com.serenity.lsp
 
+import scala.concurrent.duration.*
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
@@ -7,8 +9,6 @@ import com.serenity.lsp.client.{DocumentUri, WorkspaceRootUri}
 import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-
-import scala.concurrent.duration.*
 
 class LspResolutionCacheSpec extends AnyFlatSpec with Matchers:
 

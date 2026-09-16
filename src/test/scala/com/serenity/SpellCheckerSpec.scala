@@ -161,8 +161,8 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     diagnostics.map(_.message) shouldBe List("Possible spelling issue: wrld")
   }
 
-  /** Regression cover for #1528: a capitalized word that is not the first word of its sentence is, by far, more often
-    * a proper noun (a name, a place, a product) than a genuine misspelling -- hunspell-style dictionaries cannot
+  /** Regression cover for #1528: a capitalized word that is not the first word of its sentence is, by far, more often a
+    * proper noun (a name, a place, a product) than a genuine misspelling -- hunspell-style dictionaries cannot
     * enumerate every proper noun, so `isAccepted` flagged every one of them that was not coincidentally also a common
     * word. The fix exempts a capitalized, non-sentence-initial word from spell-check entirely.
     */
@@ -196,8 +196,8 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
 
   /** Documents a known limitation (#1528): once a word is capitalized and not sentence-initial, this exemption cannot
     * tell a genuine misspelling of a proper noun apart from a correctly-spelled one it has simply never seen --
-    * dictionaries do not enumerate proper nouns, so there is no signal left to distinguish the two cases. A
-    * misspelled proper noun in that position is therefore a false negative (silently accepted) rather than flagged.
+    * dictionaries do not enumerate proper nouns, so there is no signal left to distinguish the two cases. A misspelled
+    * proper noun in that position is therefore a false negative (silently accepted) rather than flagged.
     */
   it should "silently accept a misspelled proper noun when it is capitalized and not sentence-initial (known limitation)" in {
     val config = SpellCheckConfig(enabled = true)

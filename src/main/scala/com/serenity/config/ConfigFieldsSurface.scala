@@ -40,7 +40,10 @@ private[config] object ConfigFieldsSurface:
       double.filtered(weight =>
         weight >= AppConfig.MinDiagnosticHighlightBlendWeight && weight <= AppConfig.MaxDiagnosticHighlightBlendWeight
       )
-    )(_.surfaceConfig.diagnosticHighlightBlendWeight, (config, value) => config.withDiagnosticHighlightBlendWeight(value))
+    )(
+      _.surfaceConfig.diagnosticHighlightBlendWeight,
+      (config, value) => config.withDiagnosticHighlightBlendWeight(value)
+    )
       .restoredBy((config, value) =>
         config.withSurfaceConfig(config.surfaceConfig.copy(diagnosticHighlightBlendWeight = value))
       ),

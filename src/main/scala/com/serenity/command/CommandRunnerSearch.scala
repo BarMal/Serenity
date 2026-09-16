@@ -48,11 +48,11 @@ private[command] object CommandRunnerSearch:
     // for "command runner" match a wall of unrelated key bindings ahead of Interface Density, whose *hint* actually
     // describes the command runner/palette's visible-item count. A match against the human-facing label/hint is real
     // relevance; a match that only exists via id/breadcrumb namespacing is a weaker, tie-breaking signal.
-    val terms              = term.split(" ").filter(_.nonEmpty).toList
+    val terms                      = term.split(" ").filter(_.nonEmpty).toList
     def allMatch(haystack: String) = terms.nonEmpty && terms.forall(haystack.contains)
-    val hint                = normalizedSearchTerm(itemHint(item).getOrElse(""))
-    val labelOrHintMatch    = allMatch(s"$label $hint")
-    val idOrScopeAlsoMatch  = allMatch(s"$label $id $scope $hint")
+    val hint                       = normalizedSearchTerm(itemHint(item).getOrElse(""))
+    val labelOrHintMatch           = allMatch(s"$label $hint")
+    val idOrScopeAlsoMatch         = allMatch(s"$label $id $scope $hint")
     if label == term || id == term then Some(0)
     else if label.startsWith(term) || id.startsWith(term) then Some(1)
     else if labelOrHintMatch then Some(2)

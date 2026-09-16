@@ -157,8 +157,7 @@ object CommandRunnerSettingsItems:
       label = "Spell Check",
       selectedIndex = optionSelections.getOrElse("spellcheck-enabled", 1),
       enabledIntent = CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(true))),
-      disabledIntent =
-        CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(false))),
+      disabledIntent = CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(false))),
       hint = "Check prose buffers"
     )
 

@@ -221,8 +221,8 @@ object SpellChecker:
     *
     * Caution, here be imagine dragons: this is a heuristic, not a certainty. A genuinely misspelled proper noun in a
     * non-sentence-initial, capitalized position is indistinguishable from a correctly-spelled one this dictionary has
-    * simply never seen, so it is silently accepted (a false negative) rather than flagged -- see
-    * `SpellCheckerSpec`'s "known limitation" test.
+    * simply never seen, so it is silently accepted (a false negative) rather than flagged -- see `SpellCheckerSpec`'s
+    * "known limitation" test.
     */
   private def isExemptFromCasing(word: String, sentenceInitial: Boolean): Boolean =
     word.exists(_.isDigit) || isAllCapsAcronym(word) || isCapitalizedNotSentenceInitial(word, sentenceInitial)

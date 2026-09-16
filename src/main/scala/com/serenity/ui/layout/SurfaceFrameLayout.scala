@@ -136,18 +136,18 @@ final case class SurfaceFrameLayout(
     )
 
   /** Caps how many rows a per-item inline preview (e.g. a settings group's expand-in-place child preview,
-    * `reservedContentRows` below) may claim from the row budget siblings otherwise share. Without this cap, the size
-    * of that claim tracks whichever item happens to be selected -- a one-child group next to a many-children one --
-    * so `itemWindow`'s `maxRows`, and the `half` derived from it, could swing wildly from one selection to the next
-    * even though `selectedIndex` only moved by one. That swing is issue #1548's "double navigation": the visible
-    * window jumping by more than a row for a single up/down press.
+    * `reservedContentRows` below) may claim from the row budget siblings otherwise share. Without this cap, the size of
+    * that claim tracks whichever item happens to be selected -- a one-child group next to a many-children one -- so
+    * `itemWindow`'s `maxRows`, and the `half` derived from it, could swing wildly from one selection to the next even
+    * though `selectedIndex` only moved by one. That swing is issue #1548's "double navigation": the visible window
+    * jumping by more than a row for a single up/down press.
     *
-    * The cap is 1, not merely "smaller than before": `half = maxRows / 2` is a floor division, constant across any
-    * two `maxRows` values that round down to the same half (e.g. 4 and 5 both give 2), but that only holds when
-    * `maxRows` can vary by at most 1 -- a claim of 2 or more lets `maxRows` (and so `half`) cross a rounding
-    * boundary between neighbouring selections, reintroducing the same multi-row jump this cap exists to prevent. A
-    * claim of at most 1 keeps every side of `itemWindow`'s offset formula (`half`, and the `itemCount - maxRows`
-    * clamp) within one row of its neighbour's, however large the reservation a specific item would otherwise want.
+    * The cap is 1, not merely "smaller than before": `half = maxRows / 2` is a floor division, constant across any two
+    * `maxRows` values that round down to the same half (e.g. 4 and 5 both give 2), but that only holds when `maxRows`
+    * can vary by at most 1 -- a claim of 2 or more lets `maxRows` (and so `half`) cross a rounding boundary between
+    * neighbouring selections, reintroducing the same multi-row jump this cap exists to prevent. A claim of at most 1
+    * keeps every side of `itemWindow`'s offset formula (`half`, and the `itemCount - maxRows` clamp) within one row of
+    * its neighbour's, however large the reservation a specific item would otherwise want.
     */
   def cappedReservedContentRows(itemCount: Int, requestedReservedRows: Int): Int =
     if itemCount <= 0 then 0

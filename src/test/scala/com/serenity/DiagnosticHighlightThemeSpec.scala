@@ -6,7 +6,7 @@ import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{RendererEntryPoints, RendererHighlights}
-import com.serenity.ui.theme.{Theme, TextStyle}
+import com.serenity.ui.theme.{TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -37,11 +37,11 @@ class DiagnosticHighlightThemeSpec extends AnyFlatSpec with Matchers:
   }
 
   "RendererHighlights.diagnosticHighlightBackground" should "honour a caller-supplied blend weight" in {
-    val theme = Theme.light
+    val theme        = Theme.light
     val severityCode = Some(DiagnosticSeverity.Warning.code)
 
     val lightlyBlended = RendererHighlights.diagnosticHighlightBackground(theme, severityCode, blendWeight = 0.1)
-    val heavilyBlended  = RendererHighlights.diagnosticHighlightBackground(theme, severityCode, blendWeight = 0.9)
+    val heavilyBlended = RendererHighlights.diagnosticHighlightBackground(theme, severityCode, blendWeight = 0.9)
 
     lightlyBlended should not be heavilyBlended
   }

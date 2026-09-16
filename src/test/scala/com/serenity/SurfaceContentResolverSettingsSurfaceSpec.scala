@@ -310,8 +310,8 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
         CommandRunnerSurface
           .Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("settings-ui-presets", 1))))
       )
-    val items         = runner.submenuItems("settings-ui-presets")
-    val preview       = SettingsSurfaceState.previewRows(items, 1)
+    val items            = runner.submenuItems("settings-ui-presets")
+    val preview          = SettingsSurfaceState.previewRows(items, 1)
     val fullPreviewCount = preview.rows.size + (if preview.overflowCount > 0 then 1 else 0)
     fullPreviewCount should be > 1
     val rect = LayoutRect(
