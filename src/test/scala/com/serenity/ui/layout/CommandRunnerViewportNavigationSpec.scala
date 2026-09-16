@@ -74,24 +74,24 @@ class CommandRunnerViewportNavigationSpec extends AnyFlatSpec with Matchers:
         }
         .getOrElse(fail("Expected command runner surface"))
 
-    var state          = initialState
-    var previousIndex   = runnerOf(state).settingsSurfaceSelectedIndex
-    var previousVisible = resolvedAbsoluteIndices(runnerOf(state), narrowFrame)
+    val initialIndex   = runnerOf(initialState).settingsSurfaceSelectedIndex
+    val initialVisible = resolvedAbsoluteIndices(runnerOf(initialState), narrowFrame)
 
-    for (_ <- 0 until (itemCount - 1)) do
-      val result   = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Down), state, registry)
-      state = result.state
-      val nextRunner = runnerOf(state)
-      val nextIndex   = nextRunner.settingsSurfaceSelectedIndex
-      val nextVisible = resolvedAbsoluteIndices(nextRunner, narrowFrame)
+    (0 until (itemCount - 1)).foldLeft((initialState, initialIndex, initialVisible)) {
+      case ((state, previousIndex, previousVisible), _) =>
+        val result      = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Down), state, registry)
+        val nextState   = result.state
+        val nextRunner  = runnerOf(nextState)
+        val nextIndex   = nextRunner.settingsSurfaceSelectedIndex
+        val nextVisible = resolvedAbsoluteIndices(nextRunner, narrowFrame)
 
-      // The reducer's own index bookkeeping: exactly one step per keypress.
-      nextIndex shouldBe (previousIndex + 1)
-      // The rendered window: the newly selected item is always visible after that one keypress.
-      nextVisible should contain(nextIndex)
-      // The window's own start never jumps by more than one row for that single keypress.
-      math.abs(nextVisible.min - previousVisible.min) should be <= 1
+        // The reducer's own index bookkeeping: exactly one step per keypress.
+        nextIndex shouldBe (previousIndex + 1)
+        // The rendered window: the newly selected item is always visible after that one keypress.
+        nextVisible should contain(nextIndex)
+        // The window's own start never jumps by more than one row for that single keypress.
+        math.abs(nextVisible.min - previousVisible.min) should be <= 1
 
-      previousIndex = nextIndex
-      previousVisible = nextVisible
+        (nextState, nextIndex, nextVisible)
+    }
   }
