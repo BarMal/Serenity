@@ -274,3 +274,54 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     buffer.editing.cursors.headOption shouldBe Some(com.serenity.state.models.CursorPosition(0, 1))
   }
+
+  it should "resolve a click below wrapped text to the last visual row of the wrap group, not the first" in {
+    // #1547: with line wrap on, clicking beneath the last visible row must land on the LAST visual row of
+    // whichever logical line the click falls back to, not that line's first (unwrapped-looking) row -- the
+    // fallback in EditorMouseTargeting.resolveMouseTarget must not treat the click's column as a raw offset
+    // into the logical line (which is only correct for that line's first wrap segment).
+    val sm       = makeStateManager()
+    val bufferId = sm.bufferManager.createBuffer("placeholder", None).unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+    sm.updateState(state =>
+      state.copy(runtime = state.runtime.copy(isTuiMode = true))
+    ).unsafeRunSync()
+
+    val state       = sm.getCurrentState.unsafeRunSync()
+    val layout      = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
+    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val contentRect = CursorLayout.contentRectForPane(paneRect)
+
+    // One logical line, long enough to wrap into three visual rows on the cell grid: two full-width rows plus a
+    // short third row. The click below lands on that third row's column range.
+    val fullRowLength     = contentRect.width
+    val lastRowLength     = 5
+    val lineText          = "x" * (fullRowLength * 2 + lastRowLength)
+    val lastRowStartColumn = fullRowLength * 2
+    val xOffsetOnLastRow   = 3
+
+    sm.updateState { state =>
+      state.copy(
+        persisted = state.persisted.copy(buffers =
+          state.persisted.buffers.updated(
+            bufferId,
+            state.persisted
+              .buffers(bufferId)
+              .copy(document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(lineText)))
+          )
+        )
+      )
+    }.unsafeRunSync()
+
+    // Click a row below all three wrapped rows (still inside the content area) at a column that is only valid
+    // relative to the last wrapped row's own start.
+    val clickRow = contentRect.y + 5
+    val clickCol = contentRect.x + xOffsetOnLastRow
+    sm.applyEvent(MouseClick(clickCol, clickRow)).unsafeRunSync()
+
+    val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
+    buffer.editing.cursors.headOption shouldBe Some(
+      com.serenity.state.models.CursorPosition(0, lastRowStartColumn + xOffsetOnLastRow)
+    )
+  }

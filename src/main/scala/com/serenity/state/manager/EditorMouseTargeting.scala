@@ -66,11 +66,22 @@ final private[manager] class EditorMouseTargeting(port: EditorMouseTargetingPort
                     val clickedCursor = snapshot
                       .cursorForVisualRowAndXPx(visualRow, xPx.max(0.0f))
                       .orElse {
-                        val bufferLine  = (vp.topLine + visualRow).max(0)
-                        val bufferCol   = (vp.leftColumn + (click.col - contentRect.x)).max(0)
-                        val clampedLine = bufferLine.min(math.max(0, buffer.document.content.lineCount - 1))
-                        val lineLen     = buffer.document.content.getLine(clampedLine).getOrElse("").length
-                        Some(CursorPosition(clampedLine, bufferCol.min(lineLen)))
+                        // Below the last rendered visual row (#1547): the click's X still lands inside a wrap
+                        // group, so it must resolve against that group's LAST visual row -- reusing the raw
+                        // click column as a direct offset into the logical line (as the line-count-only clamp
+                        // below does) is only correct for a wrap group's first row, putting the cursor at the
+                        // logical start of whatever line the click falls back to instead of its lowest row.
+                        snapshot.visualLines.lastOption
+                          .map(lastVisualLine =>
+                            CursorPosition(lastVisualLine.bufferLine, lastVisualLine.nearestColumnForXPx(xPx.max(0.0f)))
+                          )
+                          .orElse {
+                            val bufferLine  = (vp.topLine + visualRow).max(0)
+                            val bufferCol   = (vp.leftColumn + (click.col - contentRect.x)).max(0)
+                            val clampedLine = bufferLine.min(math.max(0, buffer.document.content.lineCount - 1))
+                            val lineLen     = buffer.document.content.getLine(clampedLine).getOrElse("").length
+                            Some(CursorPosition(clampedLine, bufferCol.min(lineLen)))
+                          }
                       }
                     clickedCursor.map(cursor => (paneId, buffer, cursor))
                   }
