@@ -2,11 +2,11 @@ package com.serenity.keystroke.events
 
 sealed trait StartupPageEvent
 
-case object StartupPageMoveUp                  extends StartupPageEvent
-case object StartupPageMoveDown                extends StartupPageEvent
-case object StartupPageSubmit                  extends StartupPageEvent
-case object StartupPageDismiss                 extends StartupPageEvent
-case object StartupPageResume                  extends StartupPageEvent
+case object StartupPageMoveUp                    extends StartupPageEvent
+case object StartupPageMoveDown                  extends StartupPageEvent
+case object StartupPageSubmit                    extends StartupPageEvent
+case object StartupPageDismiss                   extends StartupPageEvent
+case object StartupPageResume                    extends StartupPageEvent
 final case class StartupPageSelect(index: Int)   extends StartupPageEvent
 final case class StartupPageShortcut(char: Char) extends StartupPageEvent
 
