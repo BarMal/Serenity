@@ -103,7 +103,6 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("status-position") shouldBe 0
     selections("status-language") shouldBe 1
     selections("line-wrap") shouldBe 1
-    selections("word-wrap") shouldBe 1
     selections("contextual-toolbar") shouldBe 1
     selections("command-runner-key-hints") shouldBe 0
     selections("code-font") shouldBe FontLoader.availableMonospaceFamilies.indexOf(codeFont)

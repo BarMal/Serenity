@@ -47,8 +47,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "background-style",
       "material-preset",
       "post-processing",
-      "ui-shadows",
-      "blur-radius"
+      "ui-shadows"
     )
   }
 
@@ -67,15 +66,12 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     val groupItems = runner.visibleItems.collect { case group: CommandSurfaceItem.GroupItem => group }
 
     groupItems.map(_.id) shouldBe List(
-      "settings-app-mode",
-      "settings-workspace-layout",
-      "settings-document-writing",
-      "settings-editor-view",
+      "settings-workspace",
+      "settings-editor",
       "settings-typography",
-      "settings-appearance-motion",
-      "settings-ui-presets",
-      "settings-accessibility",
-      "settings-performance",
+      "settings-look",
+      "settings-animation",
+      "settings-language-tools",
       "settings-keymap"
     )
     def group(id: String): CommandSurfaceItem.GroupItem =
@@ -86,11 +82,16 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
         .find(_.id == id)
         .getOrElse(fail(s"missing nested group $id"))
 
-    val workspaceLayoutGroup = group("settings-workspace-layout")
-    workspaceLayoutGroup.label shouldBe "Panels & Workspace"
-    workspaceLayoutGroup.children.map(_.id) shouldBe List(
-      "settings-panel-pins"
+    group("settings-workspace").label shouldBe "Workspace"
+    group("settings-workspace").children.map(_.id) shouldBe List(
+      "app-mode",
+      "settings-show-all",
+      "settings-workspace-layout",
+      "settings-ui-presets"
     )
+    val workspaceLayoutGroup = nestedGroup("settings-workspace-layout")
+    workspaceLayoutGroup.label shouldBe "Panels"
+    workspaceLayoutGroup.children.map(_.id) shouldBe List("settings-panel-pins")
     val panelPins = groupById(workspaceLayoutGroup.children, "settings-panel-pins")
     panelPins.label shouldBe "Panel Pins"
     panelPins.children.map(_.id) shouldBe List(
@@ -100,30 +101,33 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "panel-diagnostics-pin",
       "panel-markdown-preview-pin"
     )
-    // issue #1057: "settings-language" (Current Buffer Language) is gone -- see CommandRunnerOneShotActionsSpec.
-    group("settings-document-writing").children.map(_.id) shouldBe List(
-      "settings-navigation",
-      "settings-document-defaults",
-      "settings-rich-text",
-      "settings-spellcheck"
+    nestedGroup("settings-ui-presets").children.map(_.id) shouldBe List(
+      "settings-preset-select",
+      "settings-preset-create",
+      "settings-preset-edit"
     )
-    group("settings-editor-view").children.map(_.id) shouldBe List(
+    group("settings-editor").children.map(_.id) shouldBe List(
       "settings-text-display",
       "settings-status-line",
       "settings-text-area",
-      "settings-text-scale"
+      "settings-document-defaults",
+      "settings-navigation"
     )
+    nestedGroup("settings-navigation").label shouldBe "Comments"
     group("settings-typography").children.map(_.id) shouldBe List(
       "settings-prose-font",
       "settings-code-font",
-      "settings-ui-font"
+      "settings-ui-font",
+      "settings-text-scale",
+      "settings-rich-text"
     )
-    group("settings-appearance-motion").children.map(_.id) shouldBe List(
-      "settings-cursor",
+    group("settings-look").label shouldBe "Look"
+    group("settings-look").children.map(_.id) shouldBe List(
+      "theme",
       "settings-surface-appearance",
       "settings-interface-layout",
-      "settings-rendering",
-      "settings-animation"
+      "settings-cursor",
+      "settings-look-advanced"
     )
     nestedGroup("settings-cursor").label shouldBe "Cursor"
     nestedGroup("settings-cursor").children.map(_.id) shouldBe List("cursor-mode")
@@ -134,8 +138,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "background-style",
       "material-preset",
       "post-processing",
-      "ui-shadows",
-      "blur-radius"
+      "ui-shadows"
     )
     // issue #1046: command-runner visible-rows/item-gap-rows/cursor-gap-rows are no longer separate rows here --
     // Interface Density above is the one control governing all three now.
@@ -143,28 +146,46 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-interface-layout").children.map(_.id) shouldBe List(
       "interface-density",
       "window-chrome",
-      "command-runner-key-hints",
+      "command-runner-key-hints"
+    )
+    // Blur, spacing, corners, outlines, render cadence and decorative extras are one Advanced leaf, not five groups.
+    nestedGroup("settings-look-advanced").label shouldBe "Advanced"
+    nestedGroup("settings-look-advanced").children.map(_.id) shouldBe List(
+      "blur-radius",
       "ui-element-gap",
       "ui-corner-radius",
-      "ui-outline-thickness"
+      "ui-outline-thickness",
+      "render-fps",
+      "render-damage-granularity",
+      "visual-flair-level",
+      "companion-sprite-enabled"
     )
-    nestedGroup("settings-rendering").children.map(_.id) shouldBe
-      List("render-fps", "render-damage-granularity")
-    nestedGroup("settings-animation").children.map(_.id) should contain allOf (
+    group("settings-animation").label shouldBe "Motion"
+    group("settings-animation").children.map(_.id) shouldBe List(
+      "motion-accessibility",
       "motion-preset",
       "editor-text-transition",
       "panel-open-transition",
       "panel-close-transition",
       "command-runner-transition",
       "command-runner-fade",
-      "ui-animation"
+      "ui-animation",
+      "window-sitter-enabled",
+      "window-sitter-action",
+      "settings-motion-advanced"
     )
-    group("settings-ui-presets").label shouldBe "UI Presets"
-    group("settings-ui-presets").children.map(_.id) shouldBe List(
-      "settings-preset-select",
-      "settings-preset-create",
-      "settings-preset-edit"
+    nestedGroup("settings-motion-advanced").children.map(_.id) shouldBe List(
+      "cursor-speed-scale",
+      "element-transition-speed-scale",
+      "editor-text-speed-scale",
+      "command-runner-speed-scale",
+      "ui-speed-scale",
+      "window-sitter-frames",
+      "window-sitter-active-ticks",
+      "window-sitter-fast-active-ticks",
+      "window-sitter-fast-threshold-ms"
     )
+    group("settings-language-tools").children.map(_.id) shouldBe List("buffer-language", "settings-spellcheck")
     nestedGroup("settings-text-display").label shouldBe "Text Display"
     nestedGroup("settings-text-display").children.map(_.id) shouldBe List(
       "line-numbers",
@@ -175,6 +196,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "line-wrap",
       "visual-line-navigation",
       "typewriter-scrolling",
+      "wheel-scroll-lines",
       "focused-text-body",
       "contextual-toolbar",
       "contextual-toolbar-display"
@@ -218,7 +240,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "spellcheck-dictionaries",
       "spellcheck-words"
     )
-    group("settings-keymap").label shouldBe "Keymap"
+    group("settings-keymap").label shouldBe "Keys"
     group("settings-keymap").children.map(_.id) should contain allOf (
       "keymap-global-command_palette",
       "keymap-command-runner-submit",
@@ -241,9 +263,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       .copy(optionSelections = Map("panel-outline-pin" -> 2, "panel-diagnostics-pin" -> 4))
       .openSettings
 
-    val workspace = runner.visibleItems
-      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-workspace-layout" => group }
-      .getOrElse(fail("Expected workspace layout settings group"))
+    val workspace = groupByIdRecursive(runner.settingsGroups, "settings-workspace-layout")
 
     val panelPins  = groupById(workspace.children, "settings-panel-pins")
     val pinOptions = panelPins.children.collect { case option: CommandSurfaceItem.OptionItem => option }
@@ -322,13 +342,13 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     ids should not contain "command-runner-cursor-gap-rows"
   }
 
-  it should "surface render FPS target as a rendering setting" in {
+  it should "surface render FPS target under Look's advanced leaf" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default.withRenderFpsTarget(RenderFpsTarget.Fps120))
 
-    val renderingGroup = groupByIdRecursive(runner.settingsGroups, "settings-rendering")
+    val renderingGroup = groupByIdRecursive(runner.settingsGroups, "settings-look-advanced")
     val option = renderingGroup.children
       .collectFirst { case item: CommandSurfaceItem.OptionItem if item.id == "render-fps" => item }
       .getOrElse(fail("missing render FPS option"))

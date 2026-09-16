@@ -69,23 +69,27 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     val effectiveConfig =
       if itemId == "animation-duration" || itemId == "animation-steps" then config.withMotionPreset(MotionPreset.Custom)
       else config
-    val searchedRunner = CommandRunner.empty
-      .activate(registry, effectiveConfig)
-      .openSettings
-      .updateSearchTerm(settingsGroupSearchTerm(groupId))
-    val selectedIndex = searchedRunner.visibleItems.indexWhere(_.id == groupId) match
-      case -1    => 0
-      case index => index
-    val baseRunner = searchedRunner.withSelectedVisibleIndex(selectedIndex)
-    val group      = baseRunner.submenuGroup(groupId).getOrElse(fail(s"missing settings group $groupId"))
-    val groupIndex =
-      group.children.indexWhere(_.id == itemId) match
-        case -1    => 0
-        case index => index
-    // issue #1059: a drilled-in settings group renders on the one command-runner surface now -- no more second
-    // floating submenu surface or a separate focus target for it.
-    val runner = baseRunner.enterSelectedGroup
-      .withDrilledSettingsSurface(SettingsSurfaceState(SettingsPage.Group(groupId, groupIndex)))
+    val opened = CommandRunner.empty.activate(registry, effectiveConfig).openSettings
+    def pathTo(groups: List[CommandSurfaceItem.GroupItem], trail: List[String]): Option[List[String]] =
+      groups
+        .collectFirst { case group if group.id == groupId => trail :+ group.id }
+        .orElse(
+          groups.view
+            .flatMap(group =>
+              pathTo(group.children.collect { case child: CommandSurfaceItem.GroupItem => child }, trail :+ group.id)
+            )
+            .headOption
+        )
+    val path = pathTo(opened.settingsGroups, Nil).getOrElse(fail(s"missing settings group $groupId"))
+    // Drilled in along the group's real path, so a nested group keeps its ancestors and re-entering it from the
+    // parent page lands on the remembered row -- the same navigation a user performs.
+    val entered = path.tail.foldLeft(opened.withSelectedItem(path.head).enterSelectedGroup) { (runner, childId) =>
+      runner
+        .withSelectedFocusedSubmenuIndex(runner.focusedSubmenuItems.indexWhere(_.id == childId))
+        .enterSelectedSubmenuGroup
+    }
+    val groupIndex = entered.focusedSubmenuItems.indexWhere(_.id == itemId).max(0)
+    val runner     = entered.withSelectedFocusedSubmenuIndex(groupIndex)
     val surface = UiSurface(
       SurfaceId("command-runner"),
       SurfaceContent.CommandPalette(runner),
@@ -100,9 +104,6 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
       runtime = Runtime(uiSurfaces = List(surface))
     )
 
-  private def settingsGroupSearchTerm(groupId: String): String =
-    groupId.stripPrefix("settings-").replace("-", " ")
-
   "CommandRunnerReducer" should "open the exact settings leaf selected from search" in {
     val registry = CommandRegistry.default
     val searched = List('a', 'n', 'i', 'm', 'a', 't', 'i', 'o', 'n', ' ', 'd', 'u', 'r', 'a', 't', 'i', 'o', 'n')
@@ -113,7 +114,7 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     val opened = CommandRunnerReducer.reduce(RunnerSubmit, searched, registry).state
     val runner = runnerFrom(opened)
 
-    runner.activeSubmenuGroupId shouldBe Some("settings-animation")
+    runner.activeSubmenuGroupId shouldBe Some("settings-motion-advanced")
     runner.activeSubmenuSelectedItem.map(_.id) shouldBe Some("animation-duration")
   }
 
@@ -232,7 +233,7 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     val state = CommandRunnerReducer
       .reduce(
         RunnerInsertChar('5'),
-        settingsStateOnItem("settings-animation", "animation-duration"),
+        settingsStateOnItem("settings-motion-advanced", "animation-duration"),
         registry
       )
       .state
@@ -250,13 +251,13 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
 
   it should "preserve submenu selection when exiting to the parent and re-entering the same group" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-animation", "animation-steps")
+    val state    = settingsStateOnItem("settings-motion-advanced", "animation-steps")
 
     val exited    = CommandRunnerReducer.reduce(RunnerDismiss, state, registry)
     val reentered = CommandRunnerReducer.reduce(RunnerSubmit, exited.state, registry)
     val runner    = runnerFrom(reentered.state)
 
-    runner.activeSubmenuSelectedIndex shouldBe Some(16)
+    runner.activeSubmenuSelectedIndex shouldBe Some(6)
     runner.activeSubmenuSelectedItem.map(_.id) shouldBe Some("animation-steps")
   }
 
@@ -293,21 +294,19 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
 
   // issue #1057/#931: "settings-language" is gone and category-switching no longer affects what's shown (category
   // tabs are retired), so this now searches straight from a fresh palette -- text search alone reaches settings
-  // regardless of any prior category, which is the whole point of #931's "fold into text search". "accessibility"
-  // exact-matches the still-present "Accessibility" settings group by label -- "markdown" was tried first, but
-  // collides with the newly-registered "lang-markdown" command's own label ("Markdown"), which now wins the exact
-  // match instead.
+  // regardless of any prior category, which is the whole point of #931's "fold into text search". "cursor"
+  // exact-matches the "Cursor" settings group by label.
   it should "open an exact single-word setting search at its target" in {
     val registry = CommandRegistry.default
-    val searched = "accessibility".foldLeft(activeState(registry)) { (state, char) =>
+    val searched = "cursor".foldLeft(activeState(registry)) { (state, char) =>
       CommandRunnerReducer.reduce(RunnerInsertChar(char), state, registry).state
     }
 
     val opened = CommandRunnerReducer.reduce(RunnerSubmit, searched, registry)
     val runner = runnerFrom(opened.state)
 
-    runner.activeSubmenuGroupId shouldBe Some("settings-accessibility")
-    runner.activeSubmenuSelectedItem.map(_.id) shouldBe Some("motion-accessibility")
+    runner.activeSubmenuGroupId shouldBe Some("settings-cursor")
+    runner.activeSubmenuSelectedItem.map(_.id) shouldBe Some("cursor-mode")
     runner.activeSubmenuSearchTerm shouldBe Some("")
   }
 
@@ -365,8 +364,11 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
 
     runner.activeSubmenuGroupId shouldBe Some("settings-preset-prose-font")
     runner.activeSubmenuParentGroupId shouldBe Some("settings-preset-edit")
-    runner.activeSubmenuAncestorGroupIds shouldBe Some(List("settings-ui-presets", "settings-preset-edit"))
+    runner.activeSubmenuAncestorGroupIds shouldBe Some(
+      List("settings-workspace", "settings-ui-presets", "settings-preset-edit")
+    )
     runner.submenuBreadcrumbLabels("settings-preset-prose-font") shouldBe List(
+      "Workspace",
       "UI Presets",
       "Edit Preset: Writing",
       "Prose Font"
@@ -391,7 +393,10 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     val backTwice = CommandRunnerReducer.reduce(Escape, backOnce.state, registry)
     runnerFrom(backTwice.state).activeSubmenuGroupId shouldBe Some("settings-ui-presets")
 
-    val backToRoot = CommandRunnerReducer.reduce(Escape, backTwice.state, registry)
+    val backToWorkspace = CommandRunnerReducer.reduce(Escape, backTwice.state, registry)
+    runnerFrom(backToWorkspace.state).activeSubmenuGroupId shouldBe Some("settings-workspace")
+
+    val backToRoot = CommandRunnerReducer.reduce(Escape, backToWorkspace.state, registry)
     val rootRunner = runnerFrom(backToRoot.state)
     rootRunner.activeSettingsSurface shouldBe None
     rootRunner.isActive shouldBe true // the palette itself stays open -- this Escape only closed the submenu stack
@@ -427,9 +432,10 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     enteredRunner.activeSubmenuGroupId shouldBe Some("settings-preset-prose-font")
     enteredRunner.activeSubmenuParentGroupId shouldBe Some("settings-preset-edit")
     enteredRunner.activeSubmenuAncestorGroupIds shouldBe Some(
-      List("settings-ui-presets", "settings-preset-edit")
+      List("settings-workspace", "settings-ui-presets", "settings-preset-edit")
     )
     enteredRunner.submenuBreadcrumbLabels("settings-preset-prose-font") shouldBe List(
+      "Workspace",
       "UI Presets",
       "Edit Preset: Writing",
       "Prose Font"
@@ -461,7 +467,7 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     val entered = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
     val runner  = runnerFrom(entered.state)
 
-    runner.activeSubmenuGroupId shouldBe Some("settings-interface-layout")
+    runner.activeSubmenuGroupId shouldBe Some("settings-look-advanced")
     runner.activeSubmenuSearchTerm shouldBe Some("")
     runner.searchTerm shouldBe "UI Outline Thickness"
     runner.activeSubmenuSelectedItem.map(_.id) shouldBe Some("ui-outline-thickness")
@@ -486,7 +492,7 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     val registry = CommandRegistry.default
     val editingState = List('5').foldLeft(
       CommandRunnerReducer
-        .reduce(RunnerSubmit, settingsStateOnItem("settings-animation", "animation-steps"), registry)
+        .reduce(RunnerSubmit, settingsStateOnItem("settings-motion-advanced", "animation-steps"), registry)
         .state
     )((s, c) => CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry).state)
 
@@ -495,7 +501,7 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     val reentered      = CommandRunnerReducer.reduce(RunnerSubmit, exited.state, registry)
     val runner         = runnerFrom(reentered.state)
 
-    runner.activeSubmenuSelectedIndex shouldBe Some(16)
+    runner.activeSubmenuSelectedIndex shouldBe Some(6)
     runner.activeSubmenuEditingItemId shouldBe None
     runner.activeSubmenuEditingText shouldBe Some("")
   }

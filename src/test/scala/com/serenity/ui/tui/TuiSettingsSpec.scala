@@ -30,7 +30,7 @@ class TuiSettingsSpec extends TuiSpec:
       }
       _ <- enter
       _ <- verify("opened group") { screen =>
-        screen.containsText("Settings > Appearance & Motion > Surface Appearance") shouldBe true
+        screen.containsText("Settings > Look > Surface Appearance") shouldBe true
         screen.containsText("Post-processing") shouldBe true
       }
     yield ()

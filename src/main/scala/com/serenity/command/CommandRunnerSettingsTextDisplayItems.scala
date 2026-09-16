@@ -44,7 +44,7 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
     CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "line-wrap",
       label = "Line Wrap",
-      selectedIndex = optionSelections.getOrElse("line-wrap", optionSelections.getOrElse("word-wrap", 0)),
+      selectedIndex = optionSelections.getOrElse("line-wrap", 0),
       enabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetWordWrap(true))),
       disabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetWordWrap(false))),
       hint = "Wrap long logical lines to the editor width"

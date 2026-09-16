@@ -87,6 +87,7 @@ enum LspIntent:
 
 enum ThemeIntent:
   case ToggleTheme
+  case ApplyTheme(name: String)
   case ReloadTheme
   case OpenThemeChooser
   case OpenThemeCreator

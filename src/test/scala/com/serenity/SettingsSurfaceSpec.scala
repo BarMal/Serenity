@@ -38,20 +38,14 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
 
     runner.settingsSurfaceItems.collect {
       case group: CommandSurfaceItem.GroupItem => group.label
-    } should contain allOf (
-      "Document Writing",
-      "Editor View",
-      "Panels & Workspace",
-      "Appearance & Motion",
-      "Accessibility"
-    )
+    } should contain allOf ("Workspace", "Editor", "Typography", "Look", "Motion", "Language Tools", "Keys")
 
     val searched = runner.updateSettingsSearch("default document")
     val result = searched.settingsSurfaceItems
       .collectFirst { case item: CommandSurfaceItem.SettingSearchItem => item }
       .getOrElse(fail("Expected matching setting"))
     result.effectiveValue shouldBe Some("Plain Text")
-    result.breadcrumb should include("Document Writing")
+    result.breadcrumb should include("Editor")
   }
 
   // Rewritten for issue #1059: Backspace navigating up a level (the previous version of this test) was exactly the
@@ -62,18 +56,18 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
     val opened = CommandRunner.empty
       .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
       .openSettings
-      .withSelectedItem("settings-document-writing")
+      .withSelectedItem("settings-editor")
       .enterSelectedGroup
       .withSelectedFocusedSubmenuIndex(0)
       .enterSelectedSubmenuGroup
 
-    opened.activeSettingsSurface.map(_.current.groupId) shouldBe Some("settings-navigation")
+    opened.activeSettingsSurface.map(_.current.groupId) shouldBe Some("settings-text-display")
 
     val afterBackspace = CommandRunnerReducer.reduce(RunnerDeleteBackward, stateFor(opened), registry)
-    runnerFrom(afterBackspace.state).activeSettingsSurface.map(_.current.groupId) shouldBe Some("settings-navigation")
+    runnerFrom(afterBackspace.state).activeSettingsSurface.map(_.current.groupId) shouldBe Some("settings-text-display")
 
     val back = CommandRunnerReducer.reduce(Escape, stateFor(opened), registry)
-    runnerFrom(back.state).activeSettingsSurface.map(_.current.groupId) shouldBe Some("settings-document-writing")
+    runnerFrom(back.state).activeSettingsSurface.map(_.current.groupId) shouldBe Some("settings-editor")
 
     val backToRoot = CommandRunnerReducer.reduce(Escape, back.state, registry)
     runnerFrom(backToRoot.state).activeSettingsSurface shouldBe None
@@ -100,11 +94,11 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .openSettings
-      .withSelectedItem("settings-appearance-motion")
+      .withSelectedItem("settings-look")
       .enterSelectedGroup
-      .withSelectedFocusedSubmenuIndex(1)
-      .enterSelectedSubmenuGroup
       .withSelectedFocusedSubmenuIndex(4)
+      .enterSelectedSubmenuGroup
+      .withSelectedFocusedSubmenuIndex(0)
       .beginSubmenuEditMode
 
     val resolved = SurfaceContentResolver.resolve(
@@ -114,7 +108,7 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
     )
 
     resolved.title shouldBe Some("Settings")
-    resolved.header.map(_.plainText) shouldBe Some("Settings > Appearance & Motion > Surface Appearance")
+    resolved.header.map(_.plainText) shouldBe Some("Settings > Look > Advanced")
     resolved.rows.exists(_.cursorColumn.nonEmpty) shouldBe true
     resolved.footer.map(_.plainText).getOrElse(fail("Expected settings footer")) should include("Back")
   }
@@ -126,11 +120,11 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
       SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance"))
     )
     val input = option.withDrilledSettingsSurface(
-      SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance", selectedIndex = 4))
+      SettingsSurfaceState(SettingsPage.Group("settings-look-advanced", selectedIndex = 0))
     )
     val editing = input.withDrilledSettingsSurface(
       SettingsSurfaceState(
-        SettingsPage.Editing(groupId = "settings-surface-appearance", itemId = "blur-radius", draftText = "1")
+        SettingsPage.Editing(groupId = "settings-look-advanced", itemId = "blur-radius", draftText = "1")
       )
     )
 

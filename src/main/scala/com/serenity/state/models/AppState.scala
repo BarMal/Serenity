@@ -126,6 +126,13 @@ final case class AppState(
         presentation = SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
       )
 
+  def commandRunnerContext: com.serenity.command.CommandRunnerContext =
+    com.serenity.command.CommandRunnerContext(
+      bufferLanguage = activeBuffer.flatMap(_.document.language),
+      themeNames = runtime.availableThemeNames,
+      currentThemeName = Some(persisted.theme.name)
+    )
+
   /** The active editor pane's buffer, if any. */
   def activeBuffer: Option[Buffer] =
     for

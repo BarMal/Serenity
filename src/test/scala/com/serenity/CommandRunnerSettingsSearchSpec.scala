@@ -76,7 +76,7 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
 
     val animationGroup = groupByIdRecursive(runner.settingsGroups, "settings-animation")
 
-    animationGroup.label shouldBe "Motion & Animation"
+    animationGroup.label shouldBe "Motion"
     animationGroup.children.map(_.id) shouldBe List(
       "motion-accessibility",
       "motion-preset",
@@ -86,17 +86,9 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
       "command-runner-transition",
       "command-runner-fade",
       "ui-animation",
-      "element-transition-speed-scale",
-      "editor-text-speed-scale",
-      "command-runner-speed-scale",
-      "ui-speed-scale",
-      "cursor-speed-scale",
       "window-sitter-enabled",
       "window-sitter-action",
-      "window-sitter-frames",
-      "window-sitter-active-ticks",
-      "window-sitter-fast-active-ticks",
-      "window-sitter-fast-threshold-ms"
+      "settings-motion-advanced"
     )
   }
 
@@ -107,10 +99,12 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default.withMotionPreset(MotionPreset.Custom))
       .updateSearchTerm("animation")
 
-    // Window-sitter settings now live inside Motion & Animation (consolidated from Interface Layout),
-    // so "settings-animation" is the sole direct global match and the search short-circuits to it.
+    // Motion matches by its own id; its Advanced leaf matches through the custom timing inputs it holds; the
+    // preset-scoped copy trails the two global groups.
     runner.visibleItems.collect { case group: CommandSurfaceItem.GroupItem => group.id } shouldBe List(
-      "settings-animation"
+      "settings-animation",
+      "settings-motion-advanced",
+      "settings-preset-animation"
     )
   }
 
@@ -125,12 +119,7 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
       case item: CommandSurfaceItem.SettingSearchItem =>
         (item.targetGroupId, item.targetItemId, item.label, item.breadcrumb)
     } shouldBe List(
-      (
-        "settings-animation",
-        "animation-duration",
-        "Animation Duration",
-        "Settings > Appearance & Motion > Motion & Animation"
-      )
+      ("settings-motion-advanced", "animation-duration", "Animation Duration", "Settings > Motion > Advanced")
     )
   }
 
@@ -145,7 +134,7 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
     runner.visibleItems.collect {
       case item: CommandSurfaceItem.SettingSearchItem if item.targetItemId == "animation-duration" =>
         (item.targetGroupId, item.effectiveValue, item.sourceScope)
-    } shouldBe List(("settings-animation", Some("0"), "Global"))
+    } shouldBe List(("settings-motion-advanced", Some("0"), "Global"))
   }
 
   it should "rank a normalized exact setting ahead of a prefix command" in {
@@ -174,18 +163,19 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
     runner.visibleItems.headOption.map(_.id) shouldBe Some("settings-ui-font")
   }
 
-  // issue #1057: "lang-markdown" used to be a settings-tree search target (`settings-language`); it is an ordinary
-  // CommandRegistry command now, so an exact search for its own name finds the command directly, not a
-  // SettingSearchItem pointing into a settings group.
-  it should "find a buffer-language command by its exact name via search" in {
+  // issue #1047: the buffer-language switchers are one picker under Language Tools, so a search for one lands on
+  // that picker's row rather than on a palette command.
+  it should "find a buffer language through the Language Tools picker via search" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .updateSearchTerm("lang-markdown")
 
-    runner.visibleItems.headOption.collect { case CommandSurfaceItem.CommandItem(command) => command.name } shouldBe
-      Some("lang-markdown")
+    runner.visibleItems.headOption.collect {
+      case item: CommandSurfaceItem.SettingSearchItem =>
+        (item.targetGroupId, item.targetItemId, item.breadcrumb)
+    } shouldBe Some(("buffer-language", "lang-markdown", "Settings > Language Tools > Buffer Language"))
   }
 
   it should "surface font settings groups ahead of command matches when searching font-related terms" in {

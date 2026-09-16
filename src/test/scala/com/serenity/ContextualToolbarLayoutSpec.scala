@@ -182,9 +182,9 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
 
   it should "give constrained toolbar rows more room for descriptive controls" in {
     val items = List(
-      ContextualToolbarItem.Button("bold", "Bold", "bold", "b"),
-      ContextualToolbarItem.Button("font-family", "Font family", "font-family", "f"),
-      ContextualToolbarItem.Button("size", "Size", "size", "s")
+      ContextualToolbarItem.Button("bold", "Bold", CommandIntent.Edit(EditIntent.Undo), "b"),
+      ContextualToolbarItem.Button("font-family", "Font family", CommandIntent.Edit(EditIntent.Undo), "f"),
+      ContextualToolbarItem.Button("size", "Size", CommandIntent.Edit(EditIntent.Undo), "s")
     )
 
     val widths = ContextualToolbarLayout.itemCellWidths(items, contentWidth = 22, ToolbarDisplayMode.TextOnly)

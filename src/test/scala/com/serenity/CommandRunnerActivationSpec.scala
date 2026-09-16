@@ -80,7 +80,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
 
     val keymapGroup = runner.settingsGroups.find(_.id == "settings-keymap").getOrElse(fail("Expected keymap group"))
 
-    keymapGroup.label shouldBe "Keymap"
+    keymapGroup.label shouldBe "Keys"
     keymapGroup.children.collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "keymap-global-command_palette" => item.currentValue
     } shouldBe Some("ctrl+k")
@@ -113,10 +113,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       List(
         "interface-density",
         "window-chrome",
-        "command-runner-key-hints",
-        "ui-element-gap",
-        "ui-corner-radius",
-        "ui-outline-thickness"
+        "command-runner-key-hints"
       )
     )
     settingsGroup(runner, "settings-interface-layout")
@@ -125,7 +122,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       )
       .map(item => (item.selectedIndex, item.hint)) shouldBe
       Some((2, Some("Applies after restart; auto uses Serenity chrome on Linux")))
-    settingsGroup(runner, "settings-interface-layout")
+    settingsGroup(runner, "settings-look-advanced")
       .flatMap(
         _.children.collectFirst {
           case item: CommandSurfaceItem.InputItem if item.id == "ui-element-gap" =>
@@ -139,7 +136,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         None
       )
     )
-    settingsGroup(runner, "settings-interface-layout")
+    settingsGroup(runner, "settings-look-advanced")
       .flatMap(
         _.children.collectFirst {
           case item: CommandSurfaceItem.InputItem if item.id == "ui-corner-radius" =>
@@ -153,7 +150,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         None
       )
     )
-    settingsGroup(runner, "settings-interface-layout")
+    settingsGroup(runner, "settings-look-advanced")
       .flatMap(
         _.children.collectFirst {
           case item: CommandSurfaceItem.InputItem if item.id == "ui-outline-thickness" =>
@@ -187,6 +184,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         "line-wrap",
         "visual-line-navigation",
         "typewriter-scrolling",
+        "wheel-scroll-lines",
         "focused-text-body",
         "contextual-toolbar",
         "contextual-toolbar-display"
@@ -280,7 +278,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       case item: CommandSurfaceItem.OptionItem if item.id == "motion-preset" =>
         (item.selectedOption, item.options.map(_.label))
     } shouldBe Some("Reduced" -> List("Reduced", "Subtle", "Smooth", "Expressive", "Custom"))
-    motionGroup.children.collectFirst {
+    settingsGroup(runner, "settings-motion-advanced").toList.flatMap(_.children).collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "element-transition-speed-scale" =>
         (item.currentValue, item.hint, item.parse("2.25"))
     } shouldBe Some(
@@ -290,7 +288,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(2.25))))
       )
     )
-    motionGroup.children.collectFirst {
+    settingsGroup(runner, "settings-motion-advanced").toList.flatMap(_.children).collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "editor-text-speed-scale" =>
         (item.currentValue, item.hint, item.parse("0.75"))
     } shouldBe Some(
@@ -300,7 +298,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetEditorTextTransitionSpeedScale(0.75))))
       )
     )
-    motionGroup.children.collectFirst {
+    settingsGroup(runner, "settings-motion-advanced").toList.flatMap(_.children).collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "command-runner-speed-scale" =>
         (item.currentValue, item.hint, item.parse("1.75"))
     } shouldBe Some(
@@ -310,7 +308,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerTransitionSpeedScale(1.75))))
       )
     )
-    motionGroup.children.collectFirst {
+    settingsGroup(runner, "settings-motion-advanced").toList.flatMap(_.children).collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "ui-speed-scale" =>
         (item.currentValue, item.hint, item.parse("1.00"))
     } shouldBe Some(
@@ -340,7 +338,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       case item: CommandSurfaceItem.OptionItem if item.id == "command-runner-fade" =>
         (item.selectedOption, item.options.map(_.label))
     } shouldBe Some("Off" -> List("Off", "Subtle", "Smooth", "Expressive"))
-    motionGroup.children.collectFirst {
+    settingsGroup(runner, "settings-motion-advanced").toList.flatMap(_.children).collectFirst {
       case item: CommandSurfaceItem.InputItem if item.id == "cursor-speed-scale" =>
         (item.currentValue, item.hint, item.parse("0.25"))
     } shouldBe Some(

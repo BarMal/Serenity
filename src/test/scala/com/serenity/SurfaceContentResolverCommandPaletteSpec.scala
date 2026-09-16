@@ -146,7 +146,7 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
   }
 
   it should "scroll a long root command list so the selected language stays visible" in {
-    val registry = CommandRegistry(CommandRegistry.default.getAllCommands.filter(_.name.startsWith("lang-")))
+    val registry = CommandRegistry(languageCommands)
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .withSelectedVisibleIndex(10)
@@ -226,7 +226,7 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
   }
 
   it should "render root search text and filtered language command results" in {
-    val registry          = CommandRegistry(CommandRegistry.default.getAllCommands.filter(_.name.startsWith("lang-")))
+    val registry          = CommandRegistry(languageCommands)
     given CommandRegistry = registry
     // Windows Desktop Publish release-blocker: `updateSearchTerm` searches the settings tree unconditionally (it
     // isn't scoped by `registry` -- settings live outside CommandRegistry entirely, see CommandRunner.visibleItems),
@@ -253,12 +253,33 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
     floating.header.map(_.plainText) shouldBe Some("search: java")
     // Every result here is CommandCategory.Settings, so each carries the quiet inline category tag search results
     // get once category tabs are gone (issue #931) -- "[Settings] " prefixes every row.
-    floating.rows.map(_.plainText) shouldBe List(
+    // The two fixture commands plus the Buffer Language picker's own "Java" row (#1047): an exact settings target
+    // ranks right behind the exact command match, and being exact it stands in for the picker's other matches.
+    floating.rows.map(_.plainText) should contain allOf (
       "[Settings] Java - Use Java mode for the current buffer.",
-      "[Settings] JavaScript - Use JavaScript mode for the current buffer."
+      "[Settings] JavaScript - Use JavaScript mode for the current buffer.",
+      "Java"
     )
+    floating.rows.headOption.map(_.plainText) shouldBe Some("[Settings] Java - Use Java mode for the current buffer.")
     floating.rows.headOption.map(_.selected) shouldBe Some(true)
-    floating.footer.map(_.plainText) shouldBe Some("↑↓ navigate • Enter run • Esc dismiss • 1/2")
+    floating.footer.map(_.plainText) shouldBe Some("↑↓ navigate • Enter run • Esc dismiss • 1/3")
   }
+
+  /** A deterministic 23-command list in a known order (the retired per-language palette commands, kept as a fixture).
+    */
+  private def languageCommands: List[Command] =
+    ("lang-plain-text", "Plain Text") ::
+      com.serenity.lsp.config.LanguageId.values.toList
+        .sortBy(_.displayName)
+        .map(lang => (s"lang-${lang.id}", lang.displayName)) map {
+        case (name, label) =>
+          Command.typed(
+            name,
+            s"Use $label mode for the current buffer.",
+            CommandIntent.File(FileIntent.SetBufferLanguage(None)),
+            CommandCategory.Settings,
+            label = label
+          )
+      }
 
 end SurfaceContentResolverCommandPaletteSpec

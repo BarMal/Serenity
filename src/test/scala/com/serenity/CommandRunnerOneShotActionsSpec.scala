@@ -55,18 +55,38 @@ class CommandRunnerOneShotActionsSpec extends AnyFlatSpec with Matchers:
     panelActionCommandNames.diff(commandNames) shouldBe empty
   }
 
-  // CommandRunnerSettingsItems.scala: "Current Buffer Language" -- these did not previously exist as registry
-  // commands at all (only as settings-tree entries), so this is the one genuinely new registration this turn adds.
-  it should "register every buffer-language switcher as a command (issue #1057)" in {
-    commandNames should contain("lang-plain-text")
-    LanguageId.values.foreach(lang => commandNames should contain(s"lang-${lang.id}"))
+  // issue #1047: the buffer-language switchers are one picker under Language Tools rather than 23 palette commands
+  // whose labels ("Markdown", "Java"...) collided with every other search for those words.
+  it should "not register a palette command per buffer language" in {
+    commandNames.filter(_.startsWith("lang-")) shouldBe empty
   }
 
-  it should "give each language command a SetBufferLanguage intent for its own language" in {
+  private def languagePicker(current: Option[LanguageId]): CommandSurfaceItem.GroupItem =
+    def groups(items: List[CommandSurfaceItem]): List[CommandSurfaceItem.GroupItem] =
+      items.collect { case group: CommandSurfaceItem.GroupItem => group }.flatMap(g => g :: groups(g.children))
+    val runner = CommandRunner.empty.activate(
+      registry,
+      com.serenity.config.AppConfig.default,
+      context = CommandRunnerContext(bufferLanguage = current)
+    )
+    groups(runner.settingsGroups).find(_.id == "buffer-language").getOrElse(fail("missing buffer-language picker"))
+
+  "the buffer language picker" should "offer every language with a SetBufferLanguage intent for it" in {
+    val picker  = languagePicker(Some(LanguageId.Scala))
+    val entries = picker.children.collect { case CommandSurfaceItem.CommandItem(command) => command }
+
+    picker.hint shouldBe Some("Scala")
+    entries.map(_.name) should contain("lang-plain-text")
+    entries.find(_.name == "lang-plain-text").map(_.intent) shouldBe Some(
+      CommandIntent.File(FileIntent.SetBufferLanguage(None))
+    )
     LanguageId.values.foreach { lang =>
-      val command = registry.findCommand(s"lang-${lang.id}").getOrElse(fail(s"missing lang-${lang.id}"))
-      command.intent shouldBe CommandIntent.File(FileIntent.SetBufferLanguage(Some(lang)))
+      entries.find(_.name == s"lang-${lang.id}").map(_.intent) shouldBe Some(
+        CommandIntent.File(FileIntent.SetBufferLanguage(Some(lang)))
+      )
     }
-    val plainText = registry.findCommand("lang-plain-text").getOrElse(fail("missing lang-plain-text"))
-    plainText.intent shouldBe CommandIntent.File(FileIntent.SetBufferLanguage(None))
+  }
+
+  it should "name a plain-text buffer as such" in {
+    languagePicker(None).hint shouldBe Some("Plain Text")
   }

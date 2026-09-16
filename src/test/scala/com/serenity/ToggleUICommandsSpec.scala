@@ -338,16 +338,17 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.wordWrapEnabled shouldBe false
   }
 
+  // issue #1047: "toggle-word-wrap" and "toggle-line-wrap" were two commands for one intent; the one that stays is
+  // still found by either word.
   it should "be found in command registry by search terms" in {
     val registry = CommandRegistry.withToggleUI
 
     val wordResults = registry.searchCommands("word")
     val wrapResults = registry.searchCommands("wrap")
-    val command     = registry.findCommand("toggle-word-wrap").get
 
-    wordResults.map(_.name) should contain("toggle-word-wrap")
-    wrapResults.map(_.name) should contain("toggle-word-wrap")
-    command.intent shouldBe CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleWordWrap))
+    registry.findCommand("toggle-word-wrap") shouldBe None
+    wordResults.map(_.name) should contain("toggle-line-wrap")
+    wrapResults.map(_.name) should contain("toggle-line-wrap")
   }
 
   it should "toggle text body focus from disabled to enabled" in {
@@ -429,7 +430,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.wordWrapEnabled shouldBe true
 
-    executeCommandThroughRunner(stateManager, "toggle-word-wrap", "toggle-word-wrap")
+    executeCommandThroughRunner(stateManager, "toggle-line-wrap", "toggle-line-wrap")
 
     stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.wordWrapEnabled shouldBe false
   }

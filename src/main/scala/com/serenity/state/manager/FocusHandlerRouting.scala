@@ -25,7 +25,7 @@ private[manager] object FocusHandlerRouting:
   private val themePicker: LocalEventHandler       = new ThemePickerComponent()
   private val themeCreator: LocalEventHandler      = new ThemeCreatorComponent()
   private val fileSearch: LocalEventHandler        = new FileSearchComponent()
-  private val contextualToolbar: LocalEventHandler = new ContextualToolbarComponent(registry)
+  private val contextualToolbar: LocalEventHandler = new ContextualToolbarComponent
   private val commentLens: LocalEventHandler       = new CommentLensComponent()
   private val startupPage: LocalEventHandler       = new StartupPageComponent()
 

@@ -197,7 +197,7 @@ final private[manager] class StateManagerEffectHandlers(
         ThemeConfigWriter
           .writeUserTheme(config)
           .flatTap(path => logger.info(s"[THEMES] Saved user theme '${config.name}' to $path"))
-          .flatMap(_ => themeManager.listAvailableThemes.flatMap(themeNamesRef.set))
+          .flatMap(_ => surfacePopupEffects.refreshThemeNames)
           .handleErrorWith(ex => logger.error(ex)(s"[THEMES] Failed to save user theme '${config.name}'"))
 
   private def interpretSurfaceEffect(effect: SurfaceEffect): IO[Unit] =

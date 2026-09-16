@@ -145,7 +145,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
     loaded.ui.panelBorder shouldBe Some("#445566")
   }
 
-  it should "enable spell-checking from the command runner and refresh diagnostics asynchronously" in {
+  it should "enable spell-checking through its setting and refresh diagnostics asynchronously" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
 
@@ -166,7 +166,16 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.getCurrentState.unsafeRunSync().runtime.diagnosticsState.diagnostics shouldBe empty
 
-    executeCommandThroughRunner(stateManager, "spellcheck-on", "spellcheck-on")
+    stateManager.commandExecutor
+      .executeCommand(
+        Command.typed(
+          "spellcheck-enabled",
+          "Spell Check",
+          CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(true))),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
 

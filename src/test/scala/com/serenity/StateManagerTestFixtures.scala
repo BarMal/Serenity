@@ -229,8 +229,13 @@ private[serenity] object StateManagerTestFixtures:
     * production) -- only reachable here for the closePane fixture's "closed the last pane" case.
     */
   def ensureCommandRunnerSurface(state: AppState): AppState =
-    val registry        = CommandRegistry.default
-    val activatedRunner = CommandRunner.empty.activate(registry, state.persisted.config, state.runtime.isTuiMode)
+    val registry = CommandRegistry.default
+    val activatedRunner = CommandRunner.empty.activate(
+      registry,
+      state.persisted.config,
+      state.runtime.isTuiMode,
+      context = state.commandRunnerContext
+    )
     val runner = activatedRunner.copy(
       optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
     )

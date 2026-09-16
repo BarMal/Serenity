@@ -77,7 +77,7 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
 
   "CommandRunnerReducer" should "leave a selected submenu input item unchanged when enter is pressed before typing" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-animation", "animation-duration")
+    val state    = settingsStateOnItem("settings-motion-advanced", "animation-duration")
 
     val submitted = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
     val runner    = runnerFrom(submitted.state)
@@ -140,7 +140,7 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
 
   it should "fire SetAnimationSteps intent on Enter with valid value" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-animation", "animation-steps")
+    val state    = settingsStateOnItem("settings-motion-advanced", "animation-steps")
 
     val typed = List('2', '0').foldLeft(state) { (s, c) =>
       val r = CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry)
@@ -182,7 +182,7 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
 
   it should "be a no-op on Enter when the value is out of bounds" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-animation", "animation-steps")
+    val state    = settingsStateOnItem("settings-motion-advanced", "animation-steps")
 
     val typedOutOfBounds = List('9', '9', '9').foldLeft(state) { (s, c) =>
       val r = CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry)

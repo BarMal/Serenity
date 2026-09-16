@@ -36,6 +36,7 @@ final case class CommandRunner(
     // The status line's actual current segment order, refreshed alongside `optionSelections` in `activate`/
     // `updateInputItems` -- threaded into `settingsGroups` so its reorder commands reflect it (issue #1298).
     statusSegments: List[StatusSegment] = Nil,
+    context: CommandRunnerContext = CommandRunnerContext.empty,
     // issue #1048: MRU (most-recently-used) tracking for palette commands -- keyed by `Command.name`, valued by an
     // incrementing "recency generation" (higher = used more recently), bumped by `recordCommandUsage` whenever a
     // command executes from the palette. A generation counter rather than wall-clock time: recency-*ordering* is all
@@ -165,7 +166,8 @@ final case class CommandRunner(
       editingPresetName = editingPresetName,
       isTuiMode = isTuiMode,
       fontFamilies = fontFamilies,
-      statusSegments = statusSegments
+      statusSegments = statusSegments,
+      context = context
     )
 
   def openSettings: CommandRunner =

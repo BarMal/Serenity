@@ -95,8 +95,13 @@ object AppEventReducer:
         openCommandRunner(state, registry)
 
   private def openCommandRunner(state: AppState, registry: CommandRegistry): AppState =
-    val activatedRunner = CommandRunner.empty
-      .activate(registry, state.persisted.config, state.runtime.isTuiMode, state.runtime.keyboardFidelityTier)
+    val activatedRunner = CommandRunner.empty.activate(
+      registry,
+      state.persisted.config,
+      state.runtime.isTuiMode,
+      state.runtime.keyboardFidelityTier,
+      state.commandRunnerContext
+    )
     val runnerWithPanelSelections = activatedRunner.copy(
       optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state),
       // issue #1048: `CommandRunner.empty` is reconstructed fresh on every open, so MRU ranking has to be seeded
@@ -150,8 +155,13 @@ object AppEventReducer:
     state.persisted.config.surfaceConfig.commandRunnerCursorPeekModifier
 
   private def beginCursorPeek(state: AppState, registry: CommandRegistry): AppState =
-    val activatedRunner = CommandRunner.empty
-      .activate(registry, state.persisted.config, state.runtime.isTuiMode, state.runtime.keyboardFidelityTier)
+    val activatedRunner = CommandRunner.empty.activate(
+      registry,
+      state.persisted.config,
+      state.runtime.isTuiMode,
+      state.runtime.keyboardFidelityTier,
+      state.commandRunnerContext
+    )
     val peekSurface = UiSurface(
       id = SurfaceId.CursorPeek,
       content = SurfaceContent.CommandRunnerPeek(activatedRunner),

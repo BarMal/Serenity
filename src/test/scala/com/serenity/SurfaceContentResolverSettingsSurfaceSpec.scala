@@ -32,7 +32,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       "Default Document",
       "Plain Text",
       "Global",
-      "Settings > Document Writing > Document Defaults"
+      "Settings > Editor > Document Defaults"
     )
   }
 
@@ -94,9 +94,9 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
     * matching production's `itemTargetRowsFor`) plus the default-on persistent key-hint row
     * (`commandRunnerShowKeyHints`, matching `showKeyHintsFor`), four or more preview rows exhausts the budget entirely,
     * before the *selected* item's own row is accounted for. The whole settings list then rendered as no rows at all --
-    * not even the selected group -- rather than just dropping unselected sibling rows to make room. "Document Writing"
-    * (4 children: Navigation, Document Defaults, Rich Text, Spell Check) is the first settings-root group hit at this
-    * window size, with these (production-matching) rendering parameters.
+    * not even the selected group -- rather than just dropping unselected sibling rows to make room. "Typography" (5
+    * children) is the first settings-root group hit at this window size, with these (production-matching) rendering
+    * parameters.
     */
   it should "always render the selected settings-root group's own row, even when its preview needs the whole item budget" in {
     val runner = CommandRunner.empty
@@ -113,7 +113,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
     )
 
     resolved.rows should not be empty
-    resolved.rows.find(_.selected).map(_.plainText) shouldBe Some("Document Writing")
+    resolved.rows.find(_.selected).map(_.plainText) shouldBe Some("Typography")
   }
 
   // issue #1058: "Fonts" (Editor/Code/UI Typography) is gone -- editing a preset's typography now drills straight
@@ -174,8 +174,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       "Background Style",
       "Material Preset",
       "Post-processing",
-      "Menu & Panel Shadows",
-      "Blur Radius"
+      "Menu & Panel Shadows"
     )
   }
 

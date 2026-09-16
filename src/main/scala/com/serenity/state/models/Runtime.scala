@@ -26,6 +26,8 @@ final case class Runtime(
     hoveredEditorTarget: Option[HoveredEditorTarget] = None,
     windowSitter: WindowSitter = WindowSitter.default,
     typingActivity: TypingActivity = TypingActivity.idle,
+    // The theme names the theme manager found on disk, listed at startup and after a reload or save; never persisted.
+    availableThemeNames: List[String] = Nil,
     companionSprite: CompanionSpriteState = CompanionSpriteState(),
     diagnosticsState: DiagnosticsState = DiagnosticsState(),
     semanticTokensState: SemanticTokensState = SemanticTokensState(),

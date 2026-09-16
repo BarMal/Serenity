@@ -1,11 +1,10 @@
 package com.serenity.state.components
 
-import com.serenity.command.CommandRegistry
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{ContextualToolbarLayout, EditorLayoutContract, LayoutEngine, SurfaceFrameLayout}
 
-class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocusedComponent[ModalInputEvent]:
+class ContextualToolbarComponent extends TypedFocusedComponent[ModalInputEvent]:
 
   protected def decodeEvent(event: Event): Option[ModalInputEvent] =
     ModalInputEvent.fromEvent(event)
@@ -94,7 +93,7 @@ class ContextualToolbarComponent(registry: CommandRegistry) extends TypedFocused
         toolbarState.normalized(items).focusedItem(items) match
           case Some(_: ContextualToolbarItem.Button) =>
             ContextualToolbar
-              .focusedCommand(toolbarState, state, registry)
+              .focusedCommand(toolbarState, state)
               .map(command =>
                 ComponentResult.composite(
                   ComponentResult.executeCommand(command),
