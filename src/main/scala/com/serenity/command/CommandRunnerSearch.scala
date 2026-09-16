@@ -33,11 +33,17 @@ private[command] object CommandRunnerSearch:
       case _ => false
 
   private[command] def settingSearchRank(item: CommandSurfaceItem, breadcrumb: String, term: String): Option[Int] =
-    val label         = normalizedSearchTerm(itemLabel(item))
-    val id            = normalizedSearchTerm(item.id)
-    val scope         = normalizedSearchTerm(breadcrumb)
+    val label = normalizedSearchTerm(itemLabel(item))
+    val id    = normalizedSearchTerm(item.id)
+    val scope = normalizedSearchTerm(breadcrumb)
+    // issue #1549: an item's hint (rendered next to it, e.g. "also controls how many command runner/palette items
+    // are visible at once") is real, user-facing text describing what the setting does, but was silently excluded
+    // from this rank -- a query for exactly the words a hint uses to describe a setting (when its label/id/breadcrumb
+    // don't) found nothing. `directItemSearchText`/`directGroupSearchText` already fold hints into the group-level
+    // search below; this leaf-level rank now does the same.
+    val hint          = normalizedSearchTerm(itemHint(item).getOrElse(""))
     val terms         = term.split(" ").filter(_.nonEmpty).toList
-    val allTermsMatch = terms.nonEmpty && terms.forall(token => s"$label $id $scope".contains(token))
+    val allTermsMatch = terms.nonEmpty && terms.forall(token => s"$label $id $scope $hint".contains(token))
     if label == term || id == term then Some(0)
     else if label.startsWith(term) || id.startsWith(term) then Some(1)
     else if allTermsMatch then Some(2)

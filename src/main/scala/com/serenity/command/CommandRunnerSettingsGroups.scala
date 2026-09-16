@@ -175,7 +175,10 @@ object CommandRunnerSettingsGroups:
       // issue #1046: command-runner row count/spacing (visible rows, item gap, cursor gap) is no longer editable
       // here as three separate knobs -- Interface Density above is the one control that governs all three; the
       // underlying config keys still parse as explicit overrides for back-compat, they just aren't palette rows.
-      hint = Some("Density, spacing, window chrome, key hints")
+      // issue #1549: that consolidation also buried the setting from a single-word settings search (a query short
+      // enough to match by group rather than leaf) -- naming it in this group's own hint, which
+      // `CommandRunnerSearch.directGroupSearchText` already searches, is what makes "palette" alone find this group.
+      hint = Some("Density, spacing, window chrome, key hints, and how many command runner/palette items are visible")
     )
     val renderingGroup = CommandSurfaceItem.GroupItem(
       id = "settings-rendering",

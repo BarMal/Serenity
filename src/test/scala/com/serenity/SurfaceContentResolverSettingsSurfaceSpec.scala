@@ -55,9 +55,13 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       .headOption
       .getOrElse(fail("Expected interface density option row"))
 
+    // issue #1549: this hint now also names "command runner"/"palette" so the setting is findable by search --
+    // see CommandRunnerSettingsAppearanceItems.interfaceDensityOptionItem's own note.
+    val expectedHint =
+      "Compact, comfortable, or spacious -- also controls how many command runner and palette items are visible at once"
     row.layout shouldBe OverlayRowLayout.Columns
-    row.plainText shouldBe "Interface Density: Compact, comfortable, or spacious Comfortable"
-    row.segments.map(_.text) shouldBe List("Interface Density", "Compact, comfortable, or spacious", "Comfortable")
+    row.plainText shouldBe s"Interface Density: $expectedHint Comfortable"
+    row.segments.map(_.text) shouldBe List("Interface Density", expectedHint, "Comfortable")
     row.segments.filter(_.selected).map(_.text) shouldBe List("Comfortable")
   }
 

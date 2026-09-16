@@ -73,7 +73,13 @@ private[command] object CommandRunnerSettingsAppearanceItems:
       ),
       selectedIndex = optionSelections.getOrElse("interface-density", 1),
       category = CommandCategory.Settings,
-      hint = Some("Compact, comfortable, or spacious")
+      // issue #1046 folded the command runner/palette's standalone "visible rows" setting into this one density
+      // control; issue #1549 is that folding it in also made it unfindable by search, since nothing about this
+      // item's label or id ever said so. Naming it here (searched via `CommandRunnerSearch.settingSearchRank`) is
+      // what lets a search for "command runner", "palette", or "visible items" surface this row.
+      hint = Some(
+        "Compact, comfortable, or spacious -- also controls how many command runner and palette items are visible at once"
+      )
     )
 
   private[command] def windowChromeOptionItem(

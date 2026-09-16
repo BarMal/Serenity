@@ -114,6 +114,28 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  // issue #1549: the command runner/palette's visible-item count is governed entirely by Interface Density (issue
+  // #1046 folded the old standalone "visible rows" knob into it), but nothing about that item's label, id, or
+  // breadcrumb ever said so -- searching the very words a user looking for that setting would type ("command
+  // runner", "palette", "visible items") either found nothing or, worse, landed on the unrelated Command Runner Key
+  // Hints toggle (whose label happens to also contain "Command Runner"). The setting's hint text now names it.
+  it should "surface Interface Density as a settings search result for \"command runner\", \"palette\", and \"visible items\"" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+
+    List("command runner", "palette", "visible items").foreach { query =>
+      val runner = CommandRunner.empty.activate(registry, AppConfig.default).updateSearchTerm(query)
+
+      val matchedTargetIds = runner.visibleItems.collect {
+        case item: CommandSurfaceItem.SettingSearchItem => item.targetItemId
+        case item: CommandSurfaceItem.GroupItem         => item.id
+      }
+      withClue(s"query '$query' -> $matchedTargetIds: ") {
+        matchedTargetIds should (contain("interface-density") or contain("settings-interface-layout"))
+      }
+    }
+  }
+
   it should "return a unique leaf result with its breadcrumb for an exact settings search" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
