@@ -23,6 +23,11 @@
 # field (issue #1046), so an unset override now round-trips as "auto" and falls back to interface density the
 # same way `command_runner.visible_rows`/`command_runner.cursor_gap_rows` already did -- not new debt, just
 # the last of the three command-runner spacing fields catching up to the other two's existing shape.
+# paydown: ConfigRegistry.scala grew 682 -> 706 adding the four display.line_number_side/_margin_left/_margin_right/
+# _padding fields for the configurable line-number layout. Same declarative-registry reasoning as the #1477 audit
+# above: the file is a flat field table whose entries splitting would obscure, and these four extend the existing
+# display group in place (the biggest editor-side prose/line-number work was split out into TextMeasurement,
+# LayoutContractChecks, and StateManagerPanelWindowEffects instead of paid down).
 # paydown: CharacterRenderer.scala's 615 -> 616 bump (#859/#1177 rendering slice, PR #1511/#1520) is
 # `lexStartState: LexState` becoming `semanticTokens: Option[List[SemanticToken]]` (one extra import line) --
 # the same file, same reasoning as the #1477 audit above, not new growth to re-justify.
@@ -38,7 +43,7 @@
 # concerns.
 main/scala/com/serenity/app/AppRuntime.scala	file length	757
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	119
-main/scala/com/serenity/config/ConfigRegistry.scala	file length	682
+main/scala/com/serenity/config/ConfigRegistry.scala	file length	706
 main/scala/com/serenity/lsp/LspManager.scala	file length	632
 main/scala/com/serenity/rope/Rope.scala	file length	631
 main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	616
