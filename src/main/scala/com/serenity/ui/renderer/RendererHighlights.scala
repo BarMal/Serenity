@@ -85,6 +85,12 @@ object RendererHighlights:
     * background highlight so the flagged text itself is visible, not just its line. Works in both the measured (GUI)
     * and cell-based (TUI) drawing paths via `renderTextRangeBackground`, the same helper
     * `renderDocumentCommentHighlights` uses.
+    *
+    * `dimmed` (#1530) is whether focus mode's `RendererPaneContent.focusedTextBodyLines` already muted this line: the
+    * highlight then blends its severity colour against the theme's own dimmed tone rather than painting full intensity,
+    * so a misspelled word in an out-of-focus paragraph still reads as dimmed overall. `blendWeight` (#1529) is the
+    * theme/config-exposed strength of that blend (`SurfaceConfig.diagnosticHighlightBlendWeight`), not a hardcoded
+    * literal.
     */
   def renderDiagnosticHighlights(
     surface: RenderSurface,
@@ -96,11 +102,14 @@ object RendererHighlights:
     theme: Theme,
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
-    styledSegments: Option[List[StyledText]] = None
+    styledSegments: Option[List[StyledText]] = None,
+    dimmed: Boolean = false,
+    blendWeight: Double = DefaultDiagnosticHighlightBlendWeight
   ): Unit =
     lineDiagnostics.foreach { diagnostic =>
-      val start = CursorPosition(diagnostic.range.start.line, diagnostic.range.start.character)
-      val end   = CursorPosition(diagnostic.range.end.line, diagnostic.range.end.character)
+      val start        = CursorPosition(diagnostic.range.start.line, diagnostic.range.start.character)
+      val end          = CursorPosition(diagnostic.range.end.line, diagnostic.range.end.character)
+      val severityCode = diagnostic.severity.map(_.code)
       columnsForRange(start, end, visualLine, markPoint = false).foreach {
         case (diagStart, diagEnd) =>
           renderTextRangeBackground(
@@ -109,23 +118,51 @@ object RendererHighlights:
             rect,
             screenY,
             lineTopPx,
-            theme.foreground,
-            diagnosticHighlightBackground(theme, diagnostic.severity.map(_.code)),
+            diagnosticHighlightForeground(theme, severityCode, dimmed, blendWeight),
+            diagnosticHighlightBackground(theme, severityCode, dimmed, blendWeight),
             context,
             snapshot,
             diagStart,
             diagEnd,
-            styledSegments
+            styledSegments,
+            extraStyle = TextStyle(isUnderlined = severityThemeColor(theme, severityCode).style.isUnderlined)
           )
       }
     }
 
-  def diagnosticHighlightBackground(theme: Theme, severityCode: Option[Int]): Color =
-    val accent = severityCode match
-      case Some(1) => theme.error.background
-      case Some(2) => theme.warning.background
-      case _       => theme.muted
-    blend(accent, theme.background, warningWeight = 0.45)
+  /** The default blend weight (#1529): kept here, rather than only as `SurfaceConfig`'s default, so a caller testing
+    * these functions directly (or a legacy 2-arg call) gets the same result the app always used to render.
+    */
+  val DefaultDiagnosticHighlightBlendWeight: Double = 0.45
+
+  private def severityThemeColor(theme: Theme, severityCode: Option[Int]): ThemeColor =
+    severityCode match
+      case Some(1) => theme.error
+      case Some(2) => theme.warning
+      case _       => ThemeColor(theme.foreground, theme.muted)
+
+  /** The diagnostic's own foreground: the severity's theme colour (#1529) at full intensity, or -- inside a dimmed,
+    * out-of-focus paragraph (#1530) -- blended toward the theme's muted tone so it still reads as part of the dimmed
+    * line rather than jumping back to full intensity.
+    */
+  def diagnosticHighlightForeground(
+    theme: Theme,
+    severityCode: Option[Int],
+    dimmed: Boolean = false,
+    blendWeight: Double = DefaultDiagnosticHighlightBlendWeight
+  ): Color =
+    val severityForeground = severityThemeColor(theme, severityCode).foreground
+    if dimmed then blend(severityForeground, theme.muted, blendWeight) else severityForeground
+
+  def diagnosticHighlightBackground(
+    theme: Theme,
+    severityCode: Option[Int],
+    dimmed: Boolean = false,
+    blendWeight: Double = DefaultDiagnosticHighlightBlendWeight
+  ): Color =
+    val accent  = severityThemeColor(theme, severityCode).background
+    val blended = blend(accent, theme.background, blendWeight)
+    if dimmed then blend(blended, theme.background, blendWeight) else blended
 
   private def blend(foreground: Color, background: Color, warningWeight: Double): Color =
     val clampedWeight    = math.max(0.0, math.min(1.0, warningWeight))
@@ -175,7 +212,8 @@ object RendererHighlights:
     snapshot: TextLayoutSnapshot,
     rangeStart: Int,
     rangeEnd: Int,
-    styledSegments: Option[List[StyledText]]
+    styledSegments: Option[List[StyledText]],
+    extraStyle: TextStyle = TextStyle.normal
   ): Unit =
     if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
       val localStart = rangeStart - visualLine.startColumn
@@ -198,9 +236,10 @@ object RendererHighlights:
             val desiredWidthPx = math.max(context.cellMetrics.charWidth.toFloat, endXPx - startXPx)
             RendererCursorGlyphs.measuredRunWidthWithin(rect, context, startXPx, startXPx + desiredWidthPx).foreach {
               widthPx =>
+                val combinedStyle = style.combine(extraStyle)
                 surface.setForegroundColor(foreground)
                 surface.setBackgroundColor(background)
-                surface.enableStyle(style)
+                surface.enableStyle(combinedStyle)
                 try
                   surface.text.drawRunPx(
                     startXPx,
@@ -211,22 +250,25 @@ object RendererHighlights:
                     chunkText,
                     clipGlyphToRun = true
                   )
-                finally surface.disableStyle(style)
+                finally surface.disableStyle(combinedStyle)
             }
         }
     else
-      (rangeStart until rangeEnd).foreach { bufferColumn =>
-        val relativeColumn = bufferColumn - visualLine.startColumn
-        val screenX        = rect.x + RendererPaneContent.visualLineCellOffset(visualLine, context) + relativeColumn
-        if screenX >= rect.x && screenX < rect.right then
-          val charIndex = bufferColumn - visualLine.startColumn
-          val charToRender =
-            if charIndex >= 0 && charIndex < visualLine.text.length then visualLine.text.charAt(charIndex)
-            else ' '
-          surface.setForegroundColor(foreground)
-          surface.setBackgroundColor(background)
-          CharacterRenderer.renderChar(surface, screenX, screenY, charToRender)
-      }
+      surface.enableStyle(extraStyle)
+      try
+        (rangeStart until rangeEnd).foreach { bufferColumn =>
+          val relativeColumn = bufferColumn - visualLine.startColumn
+          val screenX        = rect.x + RendererPaneContent.visualLineCellOffset(visualLine, context) + relativeColumn
+          if screenX >= rect.x && screenX < rect.right then
+            val charIndex = bufferColumn - visualLine.startColumn
+            val charToRender =
+              if charIndex >= 0 && charIndex < visualLine.text.length then visualLine.text.charAt(charIndex)
+              else ' '
+            surface.setForegroundColor(foreground)
+            surface.setBackgroundColor(background)
+            CharacterRenderer.renderChar(surface, screenX, screenY, charToRender)
+        }
+      finally surface.disableStyle(extraStyle)
 
   private def columnsForRange(
     start: CursorPosition,

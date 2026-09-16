@@ -272,6 +272,10 @@ object ConfigGenerators:
         AppConfig.MinRendererFrameStateCacheCapacity,
         AppConfig.MaxRendererFrameStateCacheCapacity
       )
+      diagnosticBlendWeight <- double(
+        AppConfig.MinDiagnosticHighlightBlendWeight,
+        AppConfig.MaxDiagnosticHighlightBlendWeight
+      )
     yield SurfaceConfig(
       showLineNumbers = lineNumbers,
       showPaneHeaders = paneHeaders,
@@ -297,7 +301,8 @@ object ConfigGenerators:
       textAreaInsets = insets,
       lineNumberLayout = lineNumberLayout,
       viewportSizing = ViewportSizing(width, height),
-      rendererFrameStateCacheCapacity = frameStateCacheCapacity
+      rendererFrameStateCacheCapacity = frameStateCacheCapacity,
+      diagnosticHighlightBlendWeight = diagnosticBlendWeight
     )
 
   /** The material settings, applied through the setters for the same reason as the motion ones: choosing a blur or a

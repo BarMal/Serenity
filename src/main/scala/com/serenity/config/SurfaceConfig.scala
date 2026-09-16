@@ -74,7 +74,12 @@ final case class SurfaceConfig(
     // GC reachability the way the WeakHashMap it replaced could, so growth is bounded by recency instead. 64 is a
     // conservative default for a single window; tune it up if a session with many concurrently open surfaces (or a
     // busy test run sharing these process-wide caches) sees avoidable extra redraws from eviction churn.
-    rendererFrameStateCacheCapacity: Int = 64
+    rendererFrameStateCacheCapacity: Int = 64,
+    // How strongly a misspelled-word/LSP diagnostic's severity colour shows through its highlight, versus the colour
+    // it's painted over -- the current (possibly focus-mode-dimmed) foreground/background, not always the theme's own
+    // full-intensity ones (#1530). Was a hardcoded literal in `RendererHighlights` (#1529); 0.45 matches that literal
+    // so existing themes render unchanged until a user tunes it.
+    diagnosticHighlightBlendWeight: Double = 0.45
 ):
 
   def normalized: SurfaceConfig =
@@ -95,7 +100,8 @@ final case class SurfaceConfig(
         AppConfig.clampCommandRunnerCursorPeekTapWindowMillis(commandRunnerCursorPeekTapWindowMillis),
       lineNumberLayout = lineNumberLayout.normalized,
       textAreaInsets = textAreaInsets.normalized,
-      viewportSizing = viewportSizing.normalized
+      viewportSizing = viewportSizing.normalized,
+      diagnosticHighlightBlendWeight = AppConfig.clampDiagnosticHighlightBlendWeight(diagnosticHighlightBlendWeight)
     )
 
   /** Speed scales as the legacy fields alone describe them: a per-family override if there is one, otherwise the
