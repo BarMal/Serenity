@@ -1,5 +1,6 @@
 package com.serenity.document
 
+import com.serenity.config.CommentDisplayMode
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.models.*
@@ -42,6 +43,57 @@ object CommentRendering:
           .pushFocus(Focus.Surface(surface.id))
       case None =>
         state
+
+  /** Keeps the floating comment lens (#1222) in sync with the cursor for every state transition dispatched through
+    * `validateAndUpdateState` (#1550), so a keyboard cursor move opens/closes it exactly the way a mouse click already
+    * did: moving into a `DocumentComment`'s range opens the same read-only lens `MouseHitTesting`'s click handler opens,
+    * and moving out of it -- by any further interaction, not only a click -- closes it. Scoped to `Focus.EditorPane` so
+    * it never touches a lens the user is actively interacting with (`Focus.Surface(comment-lens)`, entered by
+    * `openLensAtCursor`/`CommentLensMouseHitTesting` the moment the lens opens), and only opens for a plain
+    * (collapsed-cursor) move -- a double/triple-click word/line selection or a shift-click/shift-arrow range
+    * selection landing inside the range is a selection gesture, not a request to read the comment, matching
+    * `MouseHitTesting.opensFloatingCommentLens`'s own click-count/shift exclusion.
+    *
+    * Opens only on genuine *entry* into a comment's range -- `previousState`'s cursor was over a different comment (or
+    * none) -- rather than on every transition the cursor happens to still be inside one for. Otherwise dismissing the
+    * lens with Escape (which moves focus back to `Focus.EditorPane` without moving the cursor out of the comment) would
+    * have this immediately reopen the very lens Escape just closed.
+    */
+  def syncFloatingLensWithCursor(state: AppState, previousState: AppState): AppState =
+    if state.persisted.config.surfaceConfig.commentDisplayMode != CommentDisplayMode.Floating then state
+    else
+      state.persisted.focus match
+        case Focus.EditorPane(paneId) =>
+          documentCommentAtCursor(state, paneId) match
+            case Some(_) if hasActiveSelection(state, paneId) => state
+            case Some(comment) if documentCommentAtCursor(previousState, paneId).contains(comment) => state
+            case Some(_)                                      => openLensAtCursor(state, CommentLensMode.ReadOnly)
+            case None                                         => dismissFloatingLens(state)
+        case _ => state
+
+  private def paneBuffer(state: AppState, paneId: PaneId): Option[Buffer] =
+    for
+      pane     <- state.persisted.layout.editorPanes.get(paneId)
+      bufferId <- pane.bufferId
+      buffer   <- state.persisted.buffers.get(bufferId)
+    yield buffer
+
+  private def hasActiveSelection(state: AppState, paneId: PaneId): Boolean =
+    paneBuffer(state, paneId).exists(_.allSelections.nonEmpty)
+
+  private def documentCommentAtCursor(state: AppState, paneId: PaneId): Option[DocumentComment] =
+    for
+      buffer  <- paneBuffer(state, paneId)
+      cursor  <- buffer.editing.cursors.headOption
+      comment <- buffer.annotations.documentComments.find(_.contains(cursor))
+    yield comment
+
+  private def dismissFloatingLens(state: AppState): AppState =
+    if state.commentLensSurface.isEmpty then state
+    else
+      state.copy(runtime =
+        state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(isCommentLensSurface))
+      )
 
   def activeEditorComment(state: AppState): Option[(CursorPosition, CommentLensState)] =
     for
