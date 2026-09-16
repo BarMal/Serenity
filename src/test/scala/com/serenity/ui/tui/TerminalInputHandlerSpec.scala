@@ -60,6 +60,16 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
     terminal.setSize(new Size(80, 24))
     terminal
 
+  /** Like [[structuralTerminal]], but keeps a handle on the backing `ByteArrayOutputStream` so a test can inspect the
+    * exact mode-toggle escape sequences [[TerminalInputHandler.create]]/`.shutdown` write to it (#1532).
+    */
+  private def terminalWithCapturedOutput(): (DumbTerminal, ByteArrayOutputStream) =
+    val out = new ByteArrayOutputStream()
+    val terminal =
+      new DumbTerminal("test", "xterm-256color", new ByteArrayInputStream(Array.emptyByteArray), out, StandardCharsets.UTF_8)
+    terminal.setSize(new Size(80, 24))
+    (terminal, out)
+
   private def handlerFor(input: Array[Byte]): IO[(TerminalInputHandler, SystemClipboard[IO])] =
     val reader = new FakeTerminalReader
     reader.feed(input)
@@ -406,4 +416,72 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
     ) shouldBe List(
       translator.translate(KeyStrokeInfo(InputKey.Backspace, None, Set.empty))
     )
+  }
+
+  // === Mouse-tracking capability detection (#1532): mintty over an MSYS pipe (Git Bash on Windows without winpty) is
+  // a real, documented case (see `rawReadLoop`'s READ_EXPIRED doc above) where the terminal can never honor the SGR
+  // mouse-tracking sequences `enableModes` sends -- they should not be sent into that environment at all. Bracketed
+  // paste is unaffected (the issue's own findings implicate mouse tracking specifically, not paste), so it stays on
+  // regardless. `mouseTrackingSupported` is `create`'s injectable capability signal, so both branches are exercised
+  // here without needing a real console. ===
+
+  "a mouse-tracking-capable terminal" should "have SGR mouse tracking and bracketed paste enabled on creation" in {
+    val (terminal, out) = terminalWithCapturedOutput()
+    val program = for
+      clipboard <- InProcessClipboard[IO]
+      router    <- InputRouter.create[IO, Event](translator)
+      handler <- TerminalInputHandler.create(
+        terminal,
+        router,
+        clipboard,
+        readerOverride = Some(new FakeTerminalReader),
+        mouseTrackingSupported = true
+      )
+    yield handler
+
+    val handler = program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out"))
+    handler.mouseTrackingSupported shouldBe true
+    out.toString(StandardCharsets.UTF_8) shouldBe "\u001b[?1002h\u001b[?1003h\u001b[?1006h\u001b[?2004h"
+  }
+
+  "a terminal reported as not mouse-tracking-capable" should "enable bracketed paste only, sending no SGR mouse-tracking sequences" in {
+    val (terminal, out) = terminalWithCapturedOutput()
+    val program = for
+      clipboard <- InProcessClipboard[IO]
+      router    <- InputRouter.create[IO, Event](translator)
+      handler <- TerminalInputHandler.create(
+        terminal,
+        router,
+        clipboard,
+        readerOverride = Some(new FakeTerminalReader),
+        mouseTrackingSupported = false
+      )
+    yield handler
+
+    val handler = program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out"))
+    handler.mouseTrackingSupported shouldBe false
+    out.toString(StandardCharsets.UTF_8) shouldBe "\u001b[?2004h"
+  }
+
+  it should "send no SGR mouse-tracking disable sequences on shutdown either, since none were ever enabled" in {
+    val (terminal, out) = terminalWithCapturedOutput()
+    val program = for
+      clipboard <- InProcessClipboard[IO]
+      router    <- InputRouter.create[IO, Event](translator)
+      handler <- TerminalInputHandler.create(
+        terminal,
+        router,
+        clipboard,
+        readerOverride = Some(new FakeTerminalReader),
+        mouseTrackingSupported = false
+      )
+      _ <- handler.shutdown
+    yield ()
+
+    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out"))
+    out.toString(StandardCharsets.UTF_8) shouldBe "\u001b[?2004h\u001b[?2004l"
+  }
+
+  "TerminalInputHandler.defaultMouseTrackingSupported" should "be driven by System.console(), the JDK-level signal that is null for exactly the non-tty MSYS-pipe stdin this issue is about" in {
+    TerminalInputHandler.defaultMouseTrackingSupported shouldBe (System.console() != null)
   }

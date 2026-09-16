@@ -358,7 +358,11 @@ object TuiSession:
         clipboard,
         shell.pendingInputPrefix,
         environment.config.inputConfig.wheelScrollLines,
-        environment.escDeadline
+        environment.escDeadline,
+        // This harness simulates a fully-capable real terminal (issue #1532's degradation is specific to
+        // non-console stdin, e.g. Git Bash/mintty without winpty) -- `System.console()` is always null under
+        // sbt/scalatest regardless, so the auto-detected default would wrongly disable mouse tracking here.
+        mouseTrackingSupported = true
       )
       stateManager <- TuiRuntime.makeStateManager(
         terminalConfig,

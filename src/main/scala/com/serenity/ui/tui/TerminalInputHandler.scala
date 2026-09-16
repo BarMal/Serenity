@@ -33,7 +33,13 @@ final class TerminalInputHandler private (
     readerFiber: FiberIO[Unit],
     disableModes: IO[Unit],
     focusCallback: AtomicReference[Option[Boolean => Unit]],
-    metrics: TerminalInputMetrics
+    metrics: TerminalInputMetrics,
+    /** Whether [[TerminalInputHandler.create]] found the terminal capable of mouse tracking and actually enabled it
+      * (#1532) -- `false` on a terminal degraded to bracketed-paste-only, e.g. Git Bash/mintty on Windows without
+      * winpty. The handler has no status-line/log path of its own, so the caller (`TuiRuntime`) reads this to decide
+      * whether to surface a one-time degradation message.
+      */
+    val mouseTrackingSupported: Boolean
 ) extends InputHandler[IO]:
 
   import TerminalInputHandler.QueuedInput
@@ -109,20 +115,37 @@ object TerminalInputHandler:
   /** Enable SGR mouse reporting (clicks/drags via 1002, hover-tracking any-motion via 1003, extended coordinates via
     * 1006) and bracketed paste (2004). Sent once at handler creation; [[shutdown]] sends the matching disable sequences
     * so a quitting Serenity doesn't leave the user's regular shell reporting mouse events at it.
+    *
+    * The mouse-tracking sequences are skipped when `mouseTrackingSupported` is false (#1532): mintty over an MSYS pipe
+    * (Git Bash on Windows without winpty -- the same non-pty condition [[rawReadLoop]]'s `READ_EXPIRED` doc describes)
+    * needs a genuine pty to negotiate and emit mouse events back at all, so sending these into that environment can
+    * never produce a mouse event in return -- it would only be an escape sequence the terminal silently swallows.
+    * Bracketed paste is unaffected by that limitation and is always sent.
     */
-  private def enableModes(terminal: Terminal): IO[Unit] =
+  private def enableModes(terminal: Terminal, mouseTrackingSupported: Boolean): IO[Unit] =
     IO.blocking {
-      val w = terminal.writer()
-      w.write("\u001b[?1002h\u001b[?1003h\u001b[?1006h\u001b[?2004h")
+      val w             = terminal.writer()
+      val mouseTracking = if mouseTrackingSupported then "\u001b[?1002h\u001b[?1003h\u001b[?1006h" else ""
+      w.write(mouseTracking + "\u001b[?2004h")
       w.flush()
     }
 
-  private def disableModes(terminal: Terminal): IO[Unit] =
+  private def disableModes(terminal: Terminal, mouseTrackingSupported: Boolean): IO[Unit] =
     IO.blocking {
-      val w = terminal.writer()
-      w.write("\u001b[?2004l\u001b[?1006l\u001b[?1003l\u001b[?1002l")
+      val w             = terminal.writer()
+      val mouseTracking = if mouseTrackingSupported then "\u001b[?1006l\u001b[?1003l\u001b[?1002l" else ""
+      w.write("\u001b[?2004l" + mouseTracking)
       w.flush()
     }
+
+  /** The capability signal [[create]] defaults to for `mouseTrackingSupported` (#1532): `System.console()` is `null`
+    * whenever the JVM isn't attached to a real, interactive console, which is exactly the condition Git Bash/mintty on
+    * Windows without winpty presents on stdin (the plain-MSYS-pipe quirk [[rawReadLoop]]'s `READ_EXPIRED` doc already
+    * documents). Nothing in JLine's own `Terminal` API distinguishes that case from a genuine pty -- its capability
+    * lookups (e.g. `hasMouseSupport`) are keyed off the terminfo entry for `$TERM`, which mintty sets regardless of
+    * whether winpty is present -- so this JDK-level signal is used instead.
+    */
+  def defaultMouseTrackingSupported: Boolean = System.console() != null
 
   /** @param seedBytes
     *   bytes to treat as already-read input, decoded before anything the JLine reader delivers. [[TerminalShell]]'s
@@ -139,7 +162,8 @@ object TerminalInputHandler:
     wheelScrollLines: Int = InputConfig().wheelScrollLines,
     escDeadline: FiniteDuration = EscDisambiguationDeadline,
     readerOverride: Option[NonBlockingReader] = None,
-    metrics: TerminalInputMetrics = TerminalInputMetrics.Disabled
+    metrics: TerminalInputMetrics = TerminalInputMetrics.Disabled,
+    mouseTrackingSupported: Boolean = defaultMouseTrackingSupported
   ): IO[TerminalInputHandler] =
     for
       queue            <- Queue.unbounded[IO, Option[QueuedInput]]
@@ -149,7 +173,7 @@ object TerminalInputHandler:
       remainder        <- Ref.of[IO, Array[Byte]](Array.emptyByteArray)
       modifierTapState <- Ref.of[IO, ModifierTapState](ModifierTapState.empty)
       focusCallback    <- IO(new AtomicReference[Option[Boolean => Unit]](None))
-      _                <- enableModes(terminal)
+      _                <- enableModes(terminal, mouseTrackingSupported)
       // `readerOverride` lets a test drive the exact JLine reader in place of `terminal.reader()` -- in particular one
       // that emulates a non-tty pipe, where a timed read misfires. Production always uses the terminal's own reader.
       reader = readerOverride.getOrElse(terminal.reader())
@@ -171,7 +195,15 @@ object TerminalInputHandler:
         )
           .guarantee(rawFiber.cancel)
       }.start
-    yield new TerminalInputHandler(inputRouter, queue, fiber, disableModes(terminal), focusCallback, metrics)
+    yield new TerminalInputHandler(
+      inputRouter,
+      queue,
+      fiber,
+      disableModes(terminal, mouseTrackingSupported),
+      focusCallback,
+      metrics,
+      mouseTrackingSupported
+    )
 
   /** The byte a terminal sends for the Escape key, and to introduce an escape sequence. */
   private val Escape: Int = 0x1b
