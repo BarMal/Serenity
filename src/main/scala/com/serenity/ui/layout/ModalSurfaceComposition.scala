@@ -221,7 +221,10 @@ object ModalSurfaceComposition:
     val content   = SurfaceFrameLayout(frameRect).contentRect
     val bounds    = logicalRect(content.x, content.y, content.width, content.height)
     val rowHeight = 1
-    val header    = textBox(workflow.operationLabel, rowRect(bounds, 0))
+    // A dedicated kind (rather than plain Text) so AccessibilityModel.modalControls can find and announce this
+    // non-interactive header directly -- it has no focusId, so it can never turn up among `hitRegions` the way an
+    // interactive control does (#1527).
+    val header = headingBox(workflow.operationLabel, rowRect(bounds, 0))
     val filename = inputBox(
       "Filename",
       workflow.filename,
@@ -379,6 +382,9 @@ object ModalSurfaceComposition:
       segments = segments,
       layout = layout
     )
+
+  private def headingBox(text: String, rect: LogicalPixelRect): SurfacePaintBox =
+    SurfacePaintBox(SurfacePaintKind.Heading, rect, text = Some(text), semanticLabel = Some(text))
 
   private def inputBox(
     label: String,

@@ -77,6 +77,10 @@ final class SwingAccessibilityBridge(canvas: JComponent):
           val status = new TransparentLabel
           status.setText(node.value.getOrElse(node.name))
           status
+        case AccessibilityRole.Heading =>
+          val heading = new TransparentLabel
+          heading.setText(node.name)
+          heading
         case AccessibilityRole.Dialog | AccessibilityRole.Panel => new TransparentPanel
     component.setFocusable(false)
     component.setSemanticFocused(node.focused)
