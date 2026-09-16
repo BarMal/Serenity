@@ -68,7 +68,7 @@ class CommandRegistrySpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "auto-save",
         "Enable auto save",
-        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+        CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers))
       )
     )
 

@@ -298,17 +298,17 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "contextual-toolbar-display" -> "Text Only"
     )
     options.flatMap(_.selectedIntent) shouldBe List(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumbers(false))),
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumberSide(LineNumberSide.Left))),
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetGutter(false))),
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWordWrap(false))),
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualLineCursorNavigation(true))),
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTypewriterScrolling(false))),
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetShowWordCount(false))),
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetFocusedTextBody(false))),
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarEnabled(false))),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetLineNumbers(false))),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetLineNumberSide(LineNumberSide.Left))),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetGutter(false))),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetWordWrap(false))),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetVisualLineCursorNavigation(true))),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTypewriterScrolling(false))),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetShowWordCount(false))),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetFocusedTextBody(false))),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetContextualToolbarEnabled(false))),
       CommandIntent.Settings(
-        SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly))
+        SettingsIntent.TextDisplay(TextDisplayIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly))
       )
     )
   }

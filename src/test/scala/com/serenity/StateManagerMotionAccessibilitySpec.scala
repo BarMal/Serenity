@@ -5,15 +5,7 @@ import java.nio.file.Files
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimationConfig, TransitionKind, WindowSitter, WindowSitterConfig}
-import com.serenity.command.{
-  Command,
-  CommandCategory,
-  CommandIntent,
-  GeneralSettingsIntent,
-  MotionIntent,
-  PanelChromeIntent,
-  SettingsIntent
-}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, DecorationIntent, GeneralSettingsIntent, MotionIntent, SettingsIntent}
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.rope.Balance
@@ -143,16 +135,16 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
   it should "update persisted window sitter controls through settings commands" in {
     val stateManager = createStateManager()
     val commands = List(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterEnabled(false))),
+      CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterEnabled(false))),
       CommandIntent.Settings(
-        SettingsIntent.PanelChrome(
-          PanelChromeIntent.SetWindowSitterAction(com.serenity.animation.WindowSitterAction.Blink)
+        SettingsIntent.Decoration(
+          DecorationIntent.SetWindowSitterAction(com.serenity.animation.WindowSitterAction.Blink)
         )
       ),
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterFrames(Vector(".", "x")))),
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterActiveTicks(4))),
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterFastActiveTicks(9))),
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterFastTypingThresholdMs(275)))
+      CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterFrames(Vector(".", "x")))),
+      CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterActiveTicks(4))),
+      CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterFastActiveTicks(9))),
+      CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterFastTypingThresholdMs(275)))
     )
     commands.zipWithIndex.foreach {
       case (intent, index) =>

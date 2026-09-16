@@ -135,7 +135,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       (
         "2",
         "Cells, decimals supported (0.0-8.0)",
-        Some(CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiElementGap(3)))),
+        Some(CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiElementGap(3)))),
         None
       )
     )
@@ -149,7 +149,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       (
         "6",
         "Pixels (0-32)",
-        Some(CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiCornerRadiusPx(14)))),
+        Some(CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiCornerRadiusPx(14)))),
         None
       )
     )
@@ -163,7 +163,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       (
         "3",
         "Pixels (1-8)",
-        Some(CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiOutlineThicknessPx(4)))),
+        Some(CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiOutlineThicknessPx(4)))),
         None
       )
     )

@@ -59,7 +59,7 @@ class CommandRunnerReducerLifecycleSpec extends AnyFlatSpec with Matchers:
     val command = Command.typed(
       "test",
       "Test command",
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers))
     )
     val registry = CommandRegistry(List(command))
     val state    = activeState(registry)
@@ -76,7 +76,7 @@ class CommandRunnerReducerLifecycleSpec extends AnyFlatSpec with Matchers:
     executed.effects.head match
       case com.serenity.state.reducers.AppEffect.ExecuteCommand(commandToRun) =>
         commandToRun.intent shouldBe CommandIntent.Settings(
-          SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers)
+          SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers)
         )
       case other =>
         fail(s"Expected ExecuteCommand effect, got $other")
@@ -90,7 +90,7 @@ class CommandRunnerReducerLifecycleSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "toggle-line-numbers",
         "Toggle line numbers display on/off",
-        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+        CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers))
       )
     val registry = CommandRegistry(List(command))
     val state    = activeState(registry)
@@ -101,7 +101,7 @@ class CommandRunnerReducerLifecycleSpec extends AnyFlatSpec with Matchers:
     executed.effects.head match
       case com.serenity.state.reducers.AppEffect.ExecuteCommand(commandToRun) =>
         commandToRun.intent shouldBe CommandIntent.Settings(
-          SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers)
+          SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers)
         )
       case other =>
         fail(s"Expected ExecuteCommand effect, got $other")

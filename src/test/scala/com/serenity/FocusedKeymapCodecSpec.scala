@@ -1,11 +1,11 @@
 package com.serenity
 
-import com.serenity.config.HotkeyConfig.given
-import com.serenity.config.{CommandRunnerKeyAction, HotkeyTrigger, KeymapGroupConfig}
-import com.serenity.keystroke.{InputKey, Modifier}
-import com.serenity.keystroke.events.CommandRunnerEvent
 import _root_.io.circe.Json
 import _root_.io.circe.syntax.*
+import com.serenity.config.HotkeyConfig.given
+import com.serenity.config.{CommandRunnerKeyAction, HotkeyTrigger, KeymapGroupConfig}
+import com.serenity.keystroke.events.CommandRunnerEvent
+import com.serenity.keystroke.{InputKey, Modifier}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -18,7 +18,9 @@ class FocusedKeymapCodecSpec extends AnyFlatSpec with Matchers:
 
   "KeymapGroupConfig decoding" should "skip unknown action keys and keep the recognized bindings" in {
     val json = Json.obj(
-      "submit"        -> List(HotkeyTrigger(keyType = InputKey.Enter, character = None, modifiers = Set(Modifier.Ctrl))).asJson,
+      "submit" -> List(
+        HotkeyTrigger(keyType = InputKey.Enter, character = None, modifiers = Set(Modifier.Ctrl))
+      ).asJson,
       "next_category" -> List(HotkeyTrigger(keyType = InputKey.Tab, character = None, modifiers = Set.empty)).asJson
     )
 

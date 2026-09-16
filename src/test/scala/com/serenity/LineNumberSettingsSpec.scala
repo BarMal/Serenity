@@ -21,13 +21,13 @@ class LineNumberSettingsSpec extends AnyFlatSpec with Matchers:
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("LineNumberSettingsSpec"))
     StateManager.apply(logger).unsafeRunSync()
 
-  private def dispatch(stateManager: StateManager, intent: PanelChromeIntent): Unit =
+  private def dispatch(stateManager: StateManager, intent: TextDisplayIntent): Unit =
     stateManager
       .executeCommand(
         Command.typed(
           "line-number-setting",
           "Line number setting.",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(intent)),
+          CommandIntent.Settings(SettingsIntent.TextDisplay(intent)),
           CommandCategory.Settings
         )
       )
@@ -76,9 +76,9 @@ class LineNumberSettingsSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("missing line-number-side option"))
 
     item.options.map(_.intent) shouldBe List(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumberSide(LineNumberSide.Left))),
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumberSide(LineNumberSide.Right))),
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumberSide(LineNumberSide.Both)))
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetLineNumberSide(LineNumberSide.Left))),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetLineNumberSide(LineNumberSide.Right))),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetLineNumberSide(LineNumberSide.Both)))
     )
   }
 
@@ -90,7 +90,7 @@ class LineNumberSettingsSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("missing line-number-padding input"))
 
     padding.parse("3") shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumberPadding(3)))
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetLineNumberPadding(3)))
     )
     padding.parse("-1") shouldBe None
     padding.parse((LineNumberLayout.MaxCells + 1).toString) shouldBe None
@@ -100,16 +100,16 @@ class LineNumberSettingsSpec extends AnyFlatSpec with Matchers:
   "Dispatching line-number intents" should "update the config, clamping margins and padding" in {
     val stateManager = createStateManager()
 
-    dispatch(stateManager, PanelChromeIntent.SetLineNumberSide(LineNumberSide.Both))
-    dispatch(stateManager, PanelChromeIntent.SetLineNumberMarginLeft(4))
-    dispatch(stateManager, PanelChromeIntent.SetLineNumberPadding(2))
+    dispatch(stateManager, TextDisplayIntent.SetLineNumberSide(LineNumberSide.Both))
+    dispatch(stateManager, TextDisplayIntent.SetLineNumberMarginLeft(4))
+    dispatch(stateManager, TextDisplayIntent.SetLineNumberPadding(2))
 
     val layout = stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.lineNumberLayout
     layout.side shouldBe LineNumberSide.Both
     layout.marginLeft shouldBe 4
     layout.padding shouldBe 2
 
-    dispatch(stateManager, PanelChromeIntent.SetLineNumberMarginRight(LineNumberLayout.MaxCells + 100))
+    dispatch(stateManager, TextDisplayIntent.SetLineNumberMarginRight(LineNumberLayout.MaxCells + 100))
     stateManager.getCurrentState
       .unsafeRunSync()
       .persisted

@@ -60,7 +60,7 @@ class CommandRunnerComponentSpec extends AnyFlatSpec with Matchers:
     val testCommand = Command.typed(
       "test",
       "Test command",
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers))
     )
 
     val component         = new CommandRunnerComponent()
@@ -81,8 +81,8 @@ class CommandRunnerComponentSpec extends AnyFlatSpec with Matchers:
     val testCommand = Command.typed(
       "test",
       "Test command",
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers))
     )
 
-    testCommand.intent shouldBe CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+    testCommand.intent shouldBe CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers))
   }

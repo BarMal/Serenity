@@ -55,19 +55,19 @@ private[command] object CommandRunnerSettingsAppearanceItems:
         CommandOption(
           "Compact",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetInterfaceDensity(InterfaceDensity.Compact))
+            SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetInterfaceDensity(InterfaceDensity.Compact))
           )
         ),
         CommandOption(
           "Comfortable",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetInterfaceDensity(InterfaceDensity.Comfortable))
+            SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetInterfaceDensity(InterfaceDensity.Comfortable))
           )
         ),
         CommandOption(
           "Spacious",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetInterfaceDensity(InterfaceDensity.Spacious))
+            SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetInterfaceDensity(InterfaceDensity.Spacious))
           )
         )
       ),
@@ -86,25 +86,25 @@ private[command] object CommandRunnerSettingsAppearanceItems:
         CommandOption(
           "Auto (Linux Rounded)",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowChromeMode(WindowChromeMode.Auto))
+            SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetWindowChromeMode(WindowChromeMode.Auto))
           )
         ),
         CommandOption(
           "Native",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowChromeMode(WindowChromeMode.Native))
+            SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetWindowChromeMode(WindowChromeMode.Native))
           )
         ),
         CommandOption(
           "Native Themed (Windows)",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowChromeMode(WindowChromeMode.NativeThemed))
+            SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetWindowChromeMode(WindowChromeMode.NativeThemed))
           )
         ),
         CommandOption(
           "Custom",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowChromeMode(WindowChromeMode.Custom))
+            SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetWindowChromeMode(WindowChromeMode.Custom))
           )
         )
       ),
@@ -122,11 +122,11 @@ private[command] object CommandRunnerSettingsAppearanceItems:
       options = List(
         CommandOption(
           "On",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterEnabled(true)))
+          CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterEnabled(true)))
         ),
         CommandOption(
           "Off",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterEnabled(false)))
+          CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterEnabled(false)))
         )
       ),
       selectedIndex = optionSelections.getOrElse("window-sitter-enabled", 0),
@@ -143,11 +143,11 @@ private[command] object CommandRunnerSettingsAppearanceItems:
       options = List(
         CommandOption(
           "On",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCompanionSpriteEnabled(true)))
+          CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteEnabled(true)))
         ),
         CommandOption(
           "Off",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCompanionSpriteEnabled(false)))
+          CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteEnabled(false)))
         )
       ),
       selectedIndex = optionSelections.getOrElse("companion-sprite-enabled", 1),
@@ -165,19 +165,19 @@ private[command] object CommandRunnerSettingsAppearanceItems:
         CommandOption(
           "Full",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Full))
+            SettingsIntent.Decoration(DecorationIntent.SetVisualFlairLevel(VisualFlairLevel.Full))
           )
         ),
         CommandOption(
           "Reduced",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Reduced))
+            SettingsIntent.Decoration(DecorationIntent.SetVisualFlairLevel(VisualFlairLevel.Reduced))
           )
         ),
         CommandOption(
           "Off",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Off))
+            SettingsIntent.Decoration(DecorationIntent.SetVisualFlairLevel(VisualFlairLevel.Off))
           )
         )
       ),
@@ -196,19 +196,19 @@ private[command] object CommandRunnerSettingsAppearanceItems:
         CommandOption(
           "Cycle",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterAction(WindowSitterAction.Cycle))
+            SettingsIntent.Decoration(DecorationIntent.SetWindowSitterAction(WindowSitterAction.Cycle))
           )
         ),
         CommandOption(
           "Pulse",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterAction(WindowSitterAction.Pulse))
+            SettingsIntent.Decoration(DecorationIntent.SetWindowSitterAction(WindowSitterAction.Pulse))
           )
         ),
         CommandOption(
           "Blink",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterAction(WindowSitterAction.Blink))
+            SettingsIntent.Decoration(DecorationIntent.SetWindowSitterAction(WindowSitterAction.Blink))
           )
         )
       ),

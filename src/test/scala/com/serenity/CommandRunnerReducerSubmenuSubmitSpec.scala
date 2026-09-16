@@ -255,6 +255,6 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
     val result = CommandRunnerReducer.reduce(RunnerSubmit, typed, registry)
 
     result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaTopInset(0.225)))
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTextAreaTopInset(0.225)))
     )
   }

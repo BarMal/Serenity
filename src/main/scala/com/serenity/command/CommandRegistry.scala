@@ -84,63 +84,63 @@ object CommandRegistry:
     Command.typed(
       "toggle-line-numbers",
       "Show or hide line numbers.",
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers)),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers)),
       CommandCategory.View,
       label = "Toggle Line Numbers"
     ),
     Command.typed(
       "toggle-gutter",
       "Show or hide the status gutter.",
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleGutter)),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleGutter)),
       CommandCategory.View,
       label = "Toggle Gutter"
     ),
     Command.typed(
       "toggle-pane-headers",
       "Show or hide pane header bars.",
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.TogglePaneHeaders)),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.TogglePaneHeaders)),
       CommandCategory.View,
       label = "Toggle Pane Headers"
     ),
     Command.typed(
       "toggle-visual-line-navigation",
       "Move Up/Down by visual row instead of jumping straight to the previous/next logical line under word wrap.",
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleVisualLineCursorNavigation)),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleVisualLineCursorNavigation)),
       CommandCategory.View,
       label = "Toggle Visual Line Navigation"
     ),
     Command.typed(
       "toggle-typewriter-scrolling",
       "Keep the cursor's line vertically centred as you type, padding past the document's end.",
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleTypewriterScrolling)),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleTypewriterScrolling)),
       CommandCategory.View,
       label = "Toggle Typewriter Scrolling"
     ),
     Command.typed(
       "toggle-line-wrap",
       "Soft-wrap long logical lines to the editor width.",
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleWordWrap)),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleWordWrap)),
       CommandCategory.View,
       label = "Toggle Line Wrap"
     ),
     Command.typed(
       "toggle-word-wrap",
       "Wrap long logical lines to the editor width.",
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleWordWrap)),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleWordWrap)),
       CommandCategory.View,
       label = "Toggle Word Wrap"
     ),
     Command.typed(
       "toggle-text-body-focus",
       "Dim text outside the current paragraph or code block.",
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleFocusedTextBody)),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleFocusedTextBody)),
       CommandCategory.View,
       label = "Toggle Text Body Focus"
     ),
     Command.typed(
       "toggle-contextual-toolbar",
       "Show or hide the floating rich-text formatting toolbar near the cursor.",
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleContextualToolbar)),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleContextualToolbar)),
       CommandCategory.View,
       label = "Toggle Contextual Toolbar"
     )

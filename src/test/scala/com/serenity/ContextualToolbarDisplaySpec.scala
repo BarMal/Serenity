@@ -57,7 +57,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
           "contextual-toolbar-icon-only",
           "Set contextual toolbar display to icon only",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+            SettingsIntent.TextDisplay(TextDisplayIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
           ),
           CommandCategory.Settings
         )

@@ -120,7 +120,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       renderedLines.map(_._2) should contain allElementsOf expectedLines
 
       titleRun.yPx shouldBe expectedStartYPx
-      firstOptionRun.yPx shouldBe expectedStartYPx + (3 * lineHeightPx)
+      firstOptionRun.yPx shouldBe expectedStartYPx + (2 * lineHeightPx)
 
     program.unsafeRunSync()
   }
@@ -252,7 +252,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
         .getOrElse(fail("expected measured option draw call"))
 
       titleRun.yPx shouldBe expectedTopPx
-      firstOptionRun.yPx shouldBe expectedTopPx + (3 * lineHeightPx)
+      firstOptionRun.yPx shouldBe expectedTopPx + (2 * lineHeightPx)
 
     program.unsafeRunSync()
   }

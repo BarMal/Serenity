@@ -38,7 +38,6 @@
 # concerns.
 main/scala/com/serenity/app/AppRuntime.scala	file length	757
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	119
-main/scala/com/serenity/config/ConfigRegistry.scala	file length	682
 main/scala/com/serenity/lsp/LspManager.scala	file length	632
 main/scala/com/serenity/rope/Rope.scala	file length	631
 main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	616
@@ -54,7 +53,6 @@ test/scala/com/serenity/RendererSnapshotReuseSpec.scala	file length	618
 test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	694
 test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	728
 test/scala/com/serenity/SpellCheckerDictionaryIoSpec.scala	file length	614
-test/scala/com/serenity/UiPresetSpec.scala	file length	705
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	750
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	320
 test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	663

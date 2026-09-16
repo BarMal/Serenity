@@ -57,10 +57,10 @@ class SimpleCommandRunnerSpec extends AnyFlatSpec with Matchers:
       com.serenity.command.Command.typed(
         "cmd2",
         "Command 2",
-        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+        CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers))
       ),
       com.serenity.command.Command
-        .typed("cmd3", "Command 3", CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleGutter)))
+        .typed("cmd3", "Command 3", CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleGutter)))
     )
     val runner = CommandRunner.withCommands(commands)
 

@@ -111,9 +111,8 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
     AppStartup
       .initializeState(restored, restored.sessionStartupInfo, Theme.default, startupViewport)
       .unsafeRunSync()
-    restored.applyEvent(MoveDown).unsafeRunSync()
-    restored.applyEvent(MoveDown).unsafeRunSync()
-    restored.applyEvent(Enter).unsafeRunSync()
+    // Quick-resume is the Tab hint pinned to the start page's bottom, not a navigable list entry.
+    restored.applyEvent(TabKey).unsafeRunSync()
 
     val restoredState = restored.getCurrentState.unsafeRunSync()
     restoredState.persisted.buffers(bufferId).document.content.collect() shouldBe "startup session"

@@ -3,7 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.sprite.CompanionCharacter
-import com.serenity.command.{Command, CommandCategory, CommandIntent, PanelChromeIntent, SettingsIntent}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, DecorationIntent, SettingsIntent}
 import com.serenity.config.{AppConfig, VisualFlairLevel}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -15,7 +15,7 @@ import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Covers the companion-sprite-enabled toggle and visual-flair-level settings, following the `WindowSitterConfig`
-  * end-to-end wiring template exactly: `PanelChromeIntent` -> effect handler -> persisted `AppConfig` field, plus the
+  * end-to-end wiring template exactly: `DecorationIntent` -> effect handler -> persisted `AppConfig` field, plus the
   * pinned-panel surface the toggle adds/removes (unlike the window sitter, which has no surface of its own).
   */
 class StateManagerCompanionSpriteSettingsSpec extends AnyFlatSpec with Matchers:
@@ -27,22 +27,22 @@ class StateManagerCompanionSpriteSettingsSpec extends AnyFlatSpec with Matchers:
     val logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerCompanionSpriteSettingsSpec"))
     StateManager(logger, initialConfig = initialConfig).unsafeRunSync()
 
-  private def execute(stateManager: StateManager, intent: PanelChromeIntent): Unit =
+  private def execute(stateManager: StateManager, intent: DecorationIntent): Unit =
     stateManager.commandExecutor
       .executeCommand(
         Command.typed(
           "companion-sprite-settings-spec",
           "Companion sprite setting",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(intent)),
+          CommandIntent.Settings(SettingsIntent.Decoration(intent)),
           CommandCategory.Settings
         )
       )
       .unsafeRunSync()
 
-  "PanelChromeIntent.SetCompanionSpriteEnabled" should "persist the toggle and add the companion pane surface when enabled" in {
+  "DecorationIntent.SetCompanionSpriteEnabled" should "persist the toggle and add the companion pane surface when enabled" in {
     val stateManager = createStateManager()
 
-    execute(stateManager, PanelChromeIntent.SetCompanionSpriteEnabled(true))
+    execute(stateManager, DecorationIntent.SetCompanionSpriteEnabled(true))
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.persisted.config.companionSpriteConfig.enabled shouldBe true
@@ -54,9 +54,9 @@ class StateManagerCompanionSpriteSettingsSpec extends AnyFlatSpec with Matchers:
 
   it should "remove the companion pane surface when disabled again" in {
     val stateManager = createStateManager()
-    execute(stateManager, PanelChromeIntent.SetCompanionSpriteEnabled(true))
+    execute(stateManager, DecorationIntent.SetCompanionSpriteEnabled(true))
 
-    execute(stateManager, PanelChromeIntent.SetCompanionSpriteEnabled(false))
+    execute(stateManager, DecorationIntent.SetCompanionSpriteEnabled(false))
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.persisted.config.companionSpriteConfig.enabled shouldBe false
@@ -70,7 +70,7 @@ class StateManagerCompanionSpriteSettingsSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    execute(stateManager, PanelChromeIntent.SetCompanionSpriteEnabled(true))
+    execute(stateManager, DecorationIntent.SetCompanionSpriteEnabled(true))
 
     val state   = stateManager.getCurrentState.unsafeRunSync()
     val surface = state.runtime.uiSurfaces.find(_.id == SurfaceId.CompanionSprite).get
@@ -79,24 +79,24 @@ class StateManagerCompanionSpriteSettingsSpec extends AnyFlatSpec with Matchers:
     com.serenity.state.reducers.PanelStateReducer.currentSize(surface.id, state) shouldBe Some(12)
   }
 
-  "PanelChromeIntent.SetVisualFlairLevel" should "persist the level" in {
+  "DecorationIntent.SetVisualFlairLevel" should "persist the level" in {
     val stateManager = createStateManager()
 
-    execute(stateManager, PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Reduced))
+    execute(stateManager, DecorationIntent.SetVisualFlairLevel(VisualFlairLevel.Reduced))
 
     stateManager.getCurrentState.unsafeRunSync().persisted.config.visualFlairLevel shouldBe VisualFlairLevel.Reduced
   }
 
   it should "remove the companion pane when flair drops to Off, even while the sprite is still enabled" in {
     val stateManager = createStateManager()
-    execute(stateManager, PanelChromeIntent.SetCompanionSpriteEnabled(true))
+    execute(stateManager, DecorationIntent.SetCompanionSpriteEnabled(true))
     stateManager.getCurrentState
       .unsafeRunSync()
       .runtime
       .uiSurfaces
       .exists(_.id == SurfaceId.CompanionSprite) shouldBe true
 
-    execute(stateManager, PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Off))
+    execute(stateManager, DecorationIntent.SetVisualFlairLevel(VisualFlairLevel.Off))
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.persisted.config.companionSpriteConfig.enabled shouldBe true
@@ -105,10 +105,10 @@ class StateManagerCompanionSpriteSettingsSpec extends AnyFlatSpec with Matchers:
 
   it should "restore the companion pane when flair returns from Off, without needing the toggle touched again" in {
     val stateManager = createStateManager()
-    execute(stateManager, PanelChromeIntent.SetCompanionSpriteEnabled(true))
-    execute(stateManager, PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Off))
+    execute(stateManager, DecorationIntent.SetCompanionSpriteEnabled(true))
+    execute(stateManager, DecorationIntent.SetVisualFlairLevel(VisualFlairLevel.Off))
 
-    execute(stateManager, PanelChromeIntent.SetVisualFlairLevel(VisualFlairLevel.Full))
+    execute(stateManager, DecorationIntent.SetVisualFlairLevel(VisualFlairLevel.Full))
 
     stateManager.getCurrentState
       .unsafeRunSync()

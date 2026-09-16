@@ -218,7 +218,7 @@ class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
     movedRight.effects.exists {
       case AppEffect.ExecuteCommand(command) =>
         command.intent == CommandIntent.Settings(
-          SettingsIntent.PanelChrome(PanelChromeIntent.SetInterfaceDensity(InterfaceDensity.Spacious))
+          SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetInterfaceDensity(InterfaceDensity.Spacious))
         )
       case _ =>
         false

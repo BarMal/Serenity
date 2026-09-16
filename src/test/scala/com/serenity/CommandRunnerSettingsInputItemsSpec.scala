@@ -1,15 +1,6 @@
 package com.serenity
 
-import com.serenity.command.{
-  CommandIntent,
-  CommandRunnerSettingsInputItems,
-  CommandSurfaceItem,
-  KeybindingsIntent,
-  PanelChromeIntent,
-  SettingsIntent,
-  SpellCheckIntent,
-  UiPresetsIntent
-}
+import com.serenity.command.{CommandIntent, CommandRunnerSettingsInputItems, CommandSurfaceItem, InterfaceChromeIntent, KeybindingsIntent, SettingsIntent, SpellCheckIntent, TextDisplayIntent, UiPresetsIntent}
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -38,15 +29,15 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
 
     inputById(items, "ui-element-gap").currentValue shouldBe "3"
     inputById(items, "ui-element-gap").parse("4") shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiElementGap(4)))
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiElementGap(4)))
     )
     inputById(items, "ui-element-gap").parse("0.75") shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiElementGap(0.75)))
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiElementGap(0.75)))
     )
     inputById(items, "ui-element-gap").parse("9") shouldBe None
     inputById(items, "ui-outline-thickness").currentValue shouldBe "4"
     inputById(items, "ui-outline-thickness").parse("5") shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiOutlineThicknessPx(5)))
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiOutlineThicknessPx(5)))
     )
     inputById(items, "ui-outline-thickness").parse("9") shouldBe None
     // issue #1046: "command-runner-visible-rows" (and the other two command-runner row/spacing inputs) is no longer
@@ -54,11 +45,11 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
     items.map(_.id) should not contain "command-runner-visible-rows"
     inputById(items, "text-area-top").currentValue shouldBe "15.0"
     inputById(items, "text-area-top").parse("12.5") shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaTopInset(0.125)))
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTextAreaTopInset(0.125)))
     )
     inputById(items, "text-area-bottom").currentValue shouldBe "25.0"
     inputById(items, "text-area-bottom").parse("12.5") shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaBottomInset(0.125)))
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTextAreaBottomInset(0.125)))
     )
     inputById(items, "spellcheck-languages").currentValue shouldBe "en,fr"
     inputById(items, "spellcheck-languages").parse("fr,en") shouldBe

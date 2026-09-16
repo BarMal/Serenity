@@ -42,7 +42,9 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     cursor.selectedOption shouldBe "Breathe"
     chrome.selectedOption shouldBe "Auto (Linux Rounded)"
     chrome.selectedIntent shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowChromeMode(WindowChromeMode.Auto)))
+      CommandIntent.Settings(
+        SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetWindowChromeMode(WindowChromeMode.Auto))
+      )
     )
     chrome.options.map(_.label) shouldBe List("Auto (Linux Rounded)", "Native", "Native Themed (Windows)", "Custom")
   }
@@ -154,14 +156,14 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     onByDefault.label shouldBe "Command Runner Key Hints"
     onByDefault.selectedOption shouldBe "On"
     onByDefault.selectedIntent shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCommandRunnerShowKeyHints(true)))
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetCommandRunnerShowKeyHints(true)))
     )
 
     val explicitlyOff =
       CommandRunnerSettingsTextDisplayItems.commandRunnerKeyHintsOptionItem(Map("command-runner-key-hints" -> 1))
     explicitlyOff.selectedOption shouldBe "Off"
     explicitlyOff.selectedIntent shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCommandRunnerShowKeyHints(false)))
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetCommandRunnerShowKeyHints(false)))
     )
   }
 

@@ -106,12 +106,12 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
         Command.typed(
           "second",
           "Second command",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers))
         ),
         Command.typed(
           "third",
           "Third command",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleGutter))
+          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleGutter))
         )
       )
       val registry  = CommandRegistry(commands)
@@ -147,7 +147,7 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
         Command.typed(
           "second",
           "Second command",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers))
         )
       )
       val registry  = CommandRegistry(commands)
@@ -197,7 +197,7 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
         Command.typed(
           "test",
           "Test command",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers))
         )
       )
       val registry         = CommandRegistry(commands)
@@ -215,7 +215,7 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
           val newState = update(initialState)
 
           command.intent shouldEqual CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers)
+            SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers)
           )
           newState.commandRunnerSurface shouldBe None
           newState.persisted.focus shouldEqual Focus.EditorPane(PaneId(1))

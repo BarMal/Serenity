@@ -209,7 +209,8 @@ enum CursorIntent:
   case SetCursorInfoBarPlacement(placement: CursorInfoBarPlacement)
 
 /** Panel/text-area chrome: line numbers, gutter, word wrap, toolbar, spacing, window chrome and sitter, insets. */
-enum PanelChromeIntent:
+/** What the editor surface itself shows around and inside the text: chrome rows, wrap, scrolling, insets. */
+enum TextDisplayIntent:
   case ToggleLineNumbers
   case ToggleGutter
   case ToggleWordWrap
@@ -230,12 +231,24 @@ enum PanelChromeIntent:
   case SetFocusedTextBody(enabled: Boolean)
   case SetContextualToolbarEnabled(enabled: Boolean)
   case SetContextualToolbarDisplayMode(mode: ToolbarDisplayMode)
+  case SetTextAreaLeftInset(value: Double)
+  case SetTextAreaRightInset(value: Double)
+  case SetTextAreaTopInset(value: Double)
+  case SetTextAreaBottomInset(value: Double)
+  case SetShowWordCount(enabled: Boolean)
+
+/** How interface surfaces are sized and spaced: density, gaps, corner radius, window chrome, key hints. */
+enum InterfaceChromeIntent:
   case SetCommandRunnerShowKeyHints(enabled: Boolean)
   case SetUiElementGap(gap: Double)
   case SetUiCornerRadiusPx(radius: Int)
   case SetUiOutlineThicknessPx(thickness: Int)
   case SetInterfaceDensity(density: InterfaceDensity)
   case SetWindowChromeMode(mode: WindowChromeMode)
+  case SetWheelScrollLines(lines: Int)
+
+/** Purely decorative extras (window sitter, companion sprite, flair tier) that never change what is edited. */
+enum DecorationIntent:
   case SetWindowSitterEnabled(enabled: Boolean)
   case SetWindowSitterAction(action: com.serenity.animation.WindowSitterAction)
   case SetWindowSitterFrames(frames: Vector[String])
@@ -244,12 +257,6 @@ enum PanelChromeIntent:
   case SetWindowSitterFastTypingThresholdMs(ms: Int)
   case SetCompanionSpriteEnabled(enabled: Boolean)
   case SetVisualFlairLevel(level: VisualFlairLevel)
-  case SetWheelScrollLines(lines: Int)
-  case SetTextAreaLeftInset(value: Double)
-  case SetTextAreaRightInset(value: Double)
-  case SetTextAreaTopInset(value: Double)
-  case SetTextAreaBottomInset(value: Double)
-  case SetShowWordCount(enabled: Boolean)
 
 enum SpellCheckIntent:
   case SetSpellCheckEnabled(enabled: Boolean)
@@ -280,7 +287,9 @@ enum SettingsIntent:
   case Font(intent: FontIntent)
   case Motion(intent: MotionIntent)
   case Cursor(intent: CursorIntent)
-  case PanelChrome(intent: PanelChromeIntent)
+  case TextDisplay(intent: TextDisplayIntent)
+  case InterfaceChrome(intent: InterfaceChromeIntent)
+  case Decoration(intent: DecorationIntent)
   case SpellCheck(intent: SpellCheckIntent)
   case General(intent: GeneralSettingsIntent)
 

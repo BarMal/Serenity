@@ -152,7 +152,7 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
     val prefixCommand = Command.typed(
       name = "quoted-animation-duration",
       description = "A command whose label begins with the raw query.",
-      intent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers)),
+      intent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers)),
       label = "\"ANIMATION-duration\" options"
     )
     val registry          = CommandRegistry(List(prefixCommand))
@@ -235,12 +235,12 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "cmd2",
         "Command 2",
-        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+        CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers))
       ),
       Command.typed(
         "cmd3",
         "Command 3",
-        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleGutter))
+        CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleGutter))
       )
     )
     val runner = CommandRunner.withCommands(commands).activate(CommandRegistry(commands), AppConfig.default)
