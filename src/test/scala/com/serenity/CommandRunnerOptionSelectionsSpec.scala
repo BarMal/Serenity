@@ -80,7 +80,9 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
 
     selections("material-preset") shouldBe 3
     selections("post-processing") shouldBe 3
-    selections("ui-shadows") shouldBe 0
+    // issue #1044: "ui-shadows" now encodes On=0/Off=1 like every other boolean toggle (`enabledIndex`) --
+    // previously the one hand-rolled Off=0/On=1 encoding in this map, for a config with uiShadowsEnabled = false.
+    selections("ui-shadows") shouldBe 1
     selections("motion-preset") shouldBe 3
     selections("command-runner-fade") shouldBe 3
     selections("ui-animation") shouldBe 1
@@ -101,7 +103,9 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("markdown-view") shouldBe 2
     selections("default-document-mode") shouldBe 2
     selections("contextual-toolbar-display") shouldBe 1
-    selections("spellcheck-enabled") shouldBe 1
+    // issue #1044: "spellcheck-enabled" now encodes On=0/Off=1 (`enabledIndex`) like every other boolean toggle,
+    // for a config with spellCheck.enabled = true -- previously the dedicated On=1/Off=0 `spellCheckEnabledIndex`.
+    selections("spellcheck-enabled") shouldBe 0
     selections("line-numbers") shouldBe 1
     selections("gutter") shouldBe 1
     selections("line-wrap") shouldBe 1

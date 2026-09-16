@@ -33,7 +33,10 @@ object CommandRunnerSettingsGroups:
     // every setting's current value reaches this builder, so mode filtering can't drift from what the app-mode
     // toggle itself displays as selected.
     val appMode = if optionSelections.getOrElse("app-mode", 0) == 1 then AppMode.Prose else AppMode.Code
-    val showAllSettingsRegardlessOfMode = optionSelections.getOrElse("settings-show-all", 0) == 1
+    // issue #1044: "settings-show-all" now encodes On=0/Off=1 (`CommandRunnerOptionSelections.enabledIndex`), like
+    // every other boolean toggle -- was On=1/Off=0 (the one hand-rolled encoding `showAllSettingsOptionItem` used
+    // before being normalized onto the shared `enabledOptionItem` convention).
+    val showAllSettingsRegardlessOfMode = optionSelections.getOrElse("settings-show-all", 1) == 0
     val cursorModeItem                  = CommandRunnerSettingsCursorItems.cursorModeOptionItem(optionSelections)
     val cursorInfoBarItems =
       CommandRunnerSettingsCursorItems.cursorInfoBarSegmentItems(optionSelections, cursorInfoBarSegments)

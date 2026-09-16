@@ -145,6 +145,9 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
     loaded.ui.panelBorder shouldBe Some("#445566")
   }
 
+  // issue #1299/#1044: "spellcheck-on" was retired in favor of a single "toggle-spellcheck" command (the same
+  // single-toggle pattern every other boolean quick-action already uses) -- this test now exercises that one command
+  // rather than the old on/off pair.
   it should "enable spell-checking from the command runner and refresh diagnostics asynchronously" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
@@ -166,7 +169,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.getCurrentState.unsafeRunSync().runtime.diagnosticsState.diagnostics shouldBe empty
 
-    executeCommandThroughRunner(stateManager, "spellcheck-on", "spellcheck-on")
+    executeCommandThroughRunner(stateManager, "toggle-spellcheck", "toggle-spellcheck")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
 

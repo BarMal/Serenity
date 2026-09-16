@@ -149,18 +149,14 @@ private[command] object CommandRegistryViewSettingsCommands:
       CommandCategory.Settings,
       label = "App Mode: Prose"
     ),
+    // issue #1299/#1044: was a pair of separate "Spell Check On"/"Spell Check Off" commands -- two opposing buttons
+    // for one boolean, rather than the single-toggle-command pattern every other boolean quick-action in this file
+    // uses (see `toggle-line-numbers`, `toggle-word-wrap`, etc.).
     Command.typed(
-      "spellcheck-on",
-      "Enable spell-checking for prose buffers.",
-      CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(true))),
+      "toggle-spellcheck",
+      "Enable or disable spell-checking for prose buffers.",
+      CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.ToggleSpellCheckEnabled)),
       CommandCategory.Settings,
-      label = "Spell Check On"
-    ),
-    Command.typed(
-      "spellcheck-off",
-      "Disable spell-checking for prose buffers.",
-      CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(false))),
-      CommandCategory.Settings,
-      label = "Spell Check Off"
+      label = "Toggle Spell Check"
     )
   )

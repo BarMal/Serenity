@@ -18,7 +18,7 @@ object CommandRunnerOptionSelections:
     Map(
       "material-preset" -> materialPresetIndex(surfaceConfig.materialPreset),
       "post-processing" -> postProcessingEffectIndex(surfaceConfig.postProcessingEffect),
-      "ui-shadows"      -> (if surfaceConfig.uiShadowsEnabled then 1 else 0),
+      "ui-shadows"      -> enabledIndex(surfaceConfig.uiShadowsEnabled),
       "motion-preset"   -> motionPresetIndex(surfaceConfig.motionPreset),
       "motion-accessibility" -> motionAccessibilityIndex(
         surfaceConfig.motionConfiguration.fold(MotionAccessibility.Standard)(_.accessibility)
@@ -63,9 +63,9 @@ object CommandRunnerOptionSelections:
       "visual-flair-level"         -> visualFlairLevelIndex(config.visualFlairLevel),
       "markdown-view"              -> markdownViewModeIndex(documentConfig.markdownViewMode),
       "default-document-mode"      -> defaultDocumentModeIndex(documentConfig.defaultMode),
-      "spellcheck-enabled"         -> spellCheckEnabledIndex(languageToolsConfig.spellCheck.enabled),
+      "spellcheck-enabled"         -> enabledIndex(languageToolsConfig.spellCheck.enabled),
       "app-mode"                   -> appModeIndex(config.appMode),
-      "settings-show-all"          -> (if config.showAllSettingsRegardlessOfMode then 1 else 0),
+      "settings-show-all"          -> enabledIndex(config.showAllSettingsRegardlessOfMode),
       "line-numbers"               -> enabledIndex(surfaceConfig.showLineNumbers),
       "show-word-count"            -> enabledIndex(surfaceConfig.showWordCount),
       "gutter"                     -> enabledIndex(surfaceConfig.showGutter),
@@ -238,9 +238,6 @@ object CommandRunnerOptionSelections:
     mode match
       case AppMode.Code  => 0
       case AppMode.Prose => 1
-
-  private def spellCheckEnabledIndex(enabled: Boolean): Int =
-    if enabled then 1 else 0
 
   private def enabledIndex(enabled: Boolean): Int =
     if enabled then 0 else 1

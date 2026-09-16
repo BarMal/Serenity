@@ -248,6 +248,10 @@ enum PanelChromeIntent:
 
 enum SpellCheckIntent:
   case SetSpellCheckEnabled(enabled: Boolean)
+  // issue #1299/#1044: replaces the old "spellcheck-on"/"spellcheck-off" pair of separate one-shot commands (two
+  // opposing buttons for one boolean) with a single flip, mirroring every other `Toggle*` intent in this codebase
+  // (e.g. `PanelChromeIntent.ToggleLineNumbers`).
+  case ToggleSpellCheckEnabled
   case SetSpellCheckLanguages(languages: List[String])
   case SetSpellCheckDictionaryPaths(paths: List[String])
   case SetSpellCheckWords(words: List[String])

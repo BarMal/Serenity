@@ -140,3 +140,17 @@ class CommandRegistrySpec extends AnyFlatSpec with Matchers:
     )
     registry.findCommand("clear-session").map(_.intent) shouldBe Some(CommandIntent.Session(SessionIntent.ClearSession))
   }
+
+  // issue #1299/#1044: "spellcheck-on"/"spellcheck-off" were two separate commands for one boolean setting -- two
+  // opposing buttons where every other boolean quick-action in this registry is a single "toggle-X" command.
+  it should "expose spell-check as a single toggle command, not a separate on/off pair" in {
+    val registry     = CommandRegistry.default
+    val commandNames = registry.getAllCommands.map(_.name)
+
+    commandNames should not contain "spellcheck-on"
+    commandNames should not contain "spellcheck-off"
+    commandNames should contain("toggle-spellcheck")
+    registry.findCommand("toggle-spellcheck").map(_.intent) shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.ToggleSpellCheckEnabled))
+    )
+  }

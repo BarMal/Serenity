@@ -530,6 +530,8 @@ final private[manager] class StateManagerConfigEffects(
     intent match
       case SpellCheckIntent.SetSpellCheckEnabled(enabled) =>
         updateSpellCheckConfig(_.copy(enabled = enabled))
+      case SpellCheckIntent.ToggleSpellCheckEnabled =>
+        updateSpellCheckConfig(config => config.copy(enabled = !config.enabled))
       case SpellCheckIntent.SetSpellCheckLanguages(languages) =>
         updateSpellCheckConfig(_.copy(languages = languages))
       case SpellCheckIntent.SetSpellCheckDictionaryPaths(paths) =>

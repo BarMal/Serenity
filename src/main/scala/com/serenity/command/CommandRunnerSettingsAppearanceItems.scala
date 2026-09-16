@@ -297,21 +297,16 @@ private[command] object CommandRunnerSettingsAppearanceItems:
       hint = Some("Frame-wide scanlines, glow, or both")
     )
 
+  // issue #1044: was ordered Off/On (the one boolean toggle in this file built inline instead of through
+  // `CommandRunnerSettingsOptionItemHelpers.enabledOptionItem`) -- normalized to that helper's On/Off convention,
+  // the one every other boolean toggle in the settings tree already follows.
   private[command] def uiShadowsOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
-    CommandSurfaceItem.OptionItem(
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "ui-shadows",
       label = "Menu & Panel Shadows",
-      options = List(
-        CommandOption(
-          "Off",
-          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetUiShadowsEnabled(false)))
-        ),
-        CommandOption(
-          "On",
-          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetUiShadowsEnabled(true)))
-        )
-      ),
-      selectedIndex = optionSelections.getOrElse("ui-shadows", 1),
-      category = CommandCategory.Settings,
-      hint = Some("Draw soft depth shadows behind menus and panels")
+      selectedIndex = optionSelections.getOrElse("ui-shadows", 0),
+      enabledIntent = CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetUiShadowsEnabled(true))),
+      disabledIntent =
+        CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetUiShadowsEnabled(false))),
+      hint = "Draw soft depth shadows behind menus and panels"
     )
