@@ -130,7 +130,8 @@ final case class AppState(
     com.serenity.command.CommandRunnerContext(
       bufferLanguage = activeBuffer.flatMap(_.document.language),
       themeNames = runtime.availableThemeNames,
-      currentThemeName = Some(persisted.theme.name)
+      currentThemeName = Some(persisted.theme.name),
+      editingContext = Some(editingContext)
     )
 
   /** The active editor pane's buffer, if any. */

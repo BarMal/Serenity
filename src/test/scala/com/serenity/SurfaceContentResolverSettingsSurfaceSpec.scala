@@ -237,7 +237,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       showKeyHints = true
     )
 
-    resolved.keyHintRow.map(_.plainText) shouldBe Some("↑↓ navigate • Enter open • Esc back • ←→ cycle option")
+    resolved.keyHintRow.map(_.plainText) shouldBe Some("↑↓ move • Enter open • Esc back • ←→ change")
     resolved.footer shouldBe None
   }
 

@@ -98,7 +98,13 @@ final case class CommandRunner(
         // recency (issue #1048's `commandUsage`) puts recently/frequently-used commands first while leaving every
         // never-used command in its original relative order -- so a fresh session (empty `commandUsage`) still
         // shows the exact same "sensible default set" it always has.
-        if state.searchTerm.isEmpty then commandItems.sortBy(item => -commandUsage.getOrElse(item.command.name, 0))
+        // Settings is a fixed first row that no amount of recency reorders past; behind it come the commands that
+        // can act on the current editing context (`CommandRelevance`), recently used ones first.
+        if state.searchTerm.isEmpty then
+          val (settingsEntry, commands) = commandItems.partition(item => CommandRelevance.isSettingsEntry(item.command))
+          settingsEntry ++ commands
+            .filter(item => CommandRelevance.isRelevant(item.command, context.editingContext))
+            .sortBy(item => -commandUsage.getOrElse(item.command.name, 0))
         else
           val (strongCommandMatches, remainingCommandMatches) =
             commandItems.partition(item => CommandRunnerSearch.isStrongCommandMatch(item.command, state.searchTerm))

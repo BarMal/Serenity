@@ -36,7 +36,7 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
     floating.rows should have size 2
     floating.rows.head.plainText should include("Open")
     floating.rows.head.plainText should include("Open file")
-    floating.footer.map(_.plainText) shouldBe Some("↑↓ navigate • Enter run • Esc dismiss • 1/2")
+    floating.footer.map(_.plainText) shouldBe Some("↑↓ move • Enter run • Esc close • 1/2")
   }
 
   it should "render active platform and user shortcut bindings beside core command rows" in {
@@ -136,12 +136,12 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
       showKeyHints = true
     )
 
-    plainResolved.keyHintRow.map(_.plainText) shouldBe Some("↑↓ navigate • Enter run • Esc dismiss")
+    plainResolved.keyHintRow.map(_.plainText) shouldBe Some("↑↓ move • Enter run • Esc close")
     plainResolved.footer shouldBe None
 
     // The key hint stays put and the status message shows up separately as the footer -- neither slot suppresses
     // the other now that the row is persistent chrome (issue #931, Stage 3).
-    statusResolved.keyHintRow.map(_.plainText) shouldBe Some("↑↓ navigate • Enter run • Esc dismiss")
+    statusResolved.keyHintRow.map(_.plainText) shouldBe Some("↑↓ move • Enter run • Esc close")
     statusResolved.footer.map(_.plainText) shouldBe Some("Invalid binding: ctrl")
   }
 
@@ -167,7 +167,7 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
     floating.rows.find(_.selected).map(_.plainText) shouldBe Some(
       "JavaScript - Use JavaScript mode for the current buffer."
     )
-    floating.footer.map(_.plainText) shouldBe Some("↑↓ navigate • Enter run • Esc dismiss • 11/23")
+    floating.footer.map(_.plainText) shouldBe Some("↑↓ move • Enter run • Esc close • 11/23")
   }
 
   it should "derive command runner visible rows from the framed surface content contract" in {
@@ -262,7 +262,7 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
     )
     floating.rows.headOption.map(_.plainText) shouldBe Some("[Settings] Java - Use Java mode for the current buffer.")
     floating.rows.headOption.map(_.selected) shouldBe Some(true)
-    floating.footer.map(_.plainText) shouldBe Some("↑↓ navigate • Enter run • Esc dismiss • 1/3")
+    floating.footer.map(_.plainText) shouldBe Some("↑↓ move • Enter run • Esc close • 1/3")
   }
 
   /** A deterministic 23-command list in a known order (the retired per-language palette commands, kept as a fixture).

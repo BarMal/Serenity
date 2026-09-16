@@ -110,7 +110,7 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
     resolved.title shouldBe Some("Settings")
     resolved.header.map(_.plainText) shouldBe Some("Settings > Look > Advanced")
     resolved.rows.exists(_.cursorColumn.nonEmpty) shouldBe true
-    resolved.footer.map(_.plainText).getOrElse(fail("Expected settings footer")) should include("Back")
+    resolved.footer.map(_.plainText).getOrElse(fail("Expected settings footer")) should include("Esc back")
   }
 
   it should "describe the selected group, option, and input action in its footer" in {
@@ -128,16 +128,15 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    footerText(root) should include("Open")
-    footerText(option) should include("Apply")
-    footerText(input) should include("Edit")
-    footerText(editing) should include("Save")
+    footerText(root) should include("Enter open")
+    footerText(option) should include("Enter apply")
+    footerText(input) should include("Enter edit")
+    footerText(editing) should include("Enter save")
+    // One vocabulary for both surfaces: the same words the palette's own footer uses, in the same order.
     List(root, option, input, editing).foreach { runner =>
       val footer = footerText(runner)
-      footer should not include "Enter"
-      footer should not include "Backspace"
-      footer should not include "Esc"
-      footer should not include "↑"
+      footer should startWith("↑↓ move • Enter ")
+      footer should include(" • Esc back • ")
     }
   }
 

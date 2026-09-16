@@ -148,7 +148,7 @@ object CommandRunnerSurfaceComposition:
       if showKeyHints then runner.statusMessage
       else
         runner.statusMessage.orElse(
-          Some(s"Navigate • $selectedAction • Back • Dismiss • ${selectedIndex + 1}/${items.length.max(1)}")
+          Some(KeyHintVocabulary.footer(selectedAction.toLowerCase, "back", selectedIndex + 1, items.length))
         )
     val keyHint = Option.when(showKeyHints)(CommandPaletteContentResolver.settingsSurfaceKeyHintText(runner))
 

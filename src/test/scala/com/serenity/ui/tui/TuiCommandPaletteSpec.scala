@@ -30,7 +30,7 @@ class TuiCommandPaletteSpec extends TuiSpec:
       _ <- openCommandPalette
       _ <- verify("palette") { screen =>
         screen.containsText("search:") shouldBe true
-        screen.containsText("↑↓ navigate • Enter run • Esc dismiss") shouldBe true
+        screen.containsText("↑↓ move • Enter run • Esc close") shouldBe true
         // The document underneath is still drawn: the palette is an overlay, not a screen replacement.
         screen.statusBar should include("scratch.md")
       }

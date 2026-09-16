@@ -176,7 +176,7 @@ private[layout] object CommandPaletteContentResolver:
     val searchTerm     = runner.activeSettingsSurface.fold(runner.searchTerm)(_.current.searchTerm)
     val selectedAction = settingsSurfaceSelectedAction(runner, items.lift(selectedIndex))
     // Same footer/keyHintRow split as the palette above: with the persistent row on, `footer` is status-message-only
-    // and the always-current "Navigate • ... • Back • Dismiss" hint moves to `keyHintRow` (issue #931, Stage 3).
+    // and the always-current key hint moves to `keyHintRow` (issue #931, Stage 3).
     val footer =
       if showKeyHints then runner.statusMessage.map(OverlayRow(_))
       else
@@ -184,9 +184,7 @@ private[layout] object CommandPaletteContentResolver:
           .map(OverlayRow(_))
           .orElse(
             Some(
-              OverlayRow(
-                s"Navigate • $selectedAction • Back • Dismiss • ${selectedIndex + 1}/${items.length.max(1)}"
-              )
+              OverlayRow(KeyHintVocabulary.footer(selectedAction.toLowerCase, "back", selectedIndex + 1, items.length))
             )
           )
     ResolvedSurfaceContent(
@@ -202,7 +200,7 @@ private[layout] object CommandPaletteContentResolver:
     * the way the settings surface's do, so unlike `settingsSurfaceKeyHintText` this needs no runner state.
     */
   private[layout] def paletteKeyHintText: String =
-    "↑↓ navigate • Enter run • Esc dismiss"
+    KeyHintVocabulary.browse("run", "close")
 
   /** Key-hint text for whichever settings-surface state is actually active, matching the real reducer semantics
     * (`CommandRunnerReducer`) post Stage 1/2 rather than the dynamic footer's transient per-selection action word:
@@ -214,11 +212,11 @@ private[layout] object CommandPaletteContentResolver:
   private[layout] def settingsSurfaceKeyHintText(runner: com.serenity.command.CommandRunner): String =
     runner.activeSettingsSurface.map(_.current) match
       case Some(editing: SettingsPage.Editing) if editing.recording.nonEmpty =>
-        "Esc cancel"
+        KeyHintVocabulary.recording
       case Some(_: SettingsPage.Editing) =>
-        "Type to edit • Enter save • Esc cancel"
+        KeyHintVocabulary.editing
       case _ =>
-        "↑↓ navigate • Enter open • Esc back • ←→ cycle option"
+        KeyHintVocabulary.browse("open", "back", changesOptions = true)
 
   /** Renders `SettingsSurfaceState.previewRows`' capped child labels as indented, de-emphasized rows, with a trailing
     * "+N more" row when there are more children than fit. `leadingPadding` indents the row at render time
@@ -251,11 +249,9 @@ private[layout] object CommandPaletteContentResolver:
 
   private[layout] def commandPaletteFooter(runner: com.serenity.command.CommandRunner, itemCount: Int): String =
     val submitAction = runner.selectedItem match
-      case Some(_: CommandSurfaceItem.GroupItem) | Some(_: CommandSurfaceItem.SettingSearchItem) => "Enter open"
-      case _                                                                                     => "Enter run"
-    // Category tabs are retired (issue #931): no more "Tab categories" hint -- search is the only navigation mode.
-    List("↑↓ navigate", submitAction, "Esc dismiss", s"${runner.selectedIndex + 1}/$itemCount")
-      .mkString(" • ")
+      case Some(_: CommandSurfaceItem.GroupItem) | Some(_: CommandSurfaceItem.SettingSearchItem) => "open"
+      case _                                                                                     => "run"
+    KeyHintVocabulary.footer(submitAction, "close", runner.selectedIndex + 1, itemCount)
 
   private[layout] def breadcrumbHeader(labels: List[String], searchTerm: Option[String]): OverlayRow =
     val safeLabels = labels.filter(_.nonEmpty) match
