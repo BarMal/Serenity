@@ -13,10 +13,11 @@ import com.typesafe.config.ConfigUtil
   */
 object ConfigGroups:
 
-  private val motionFamilyPrefix = "ui.motion.family."
+  val motionFamilyPrefix       = "motion.family."
+  val legacyMotionFamilyPrefix = "ui.motion.family."
 
   val dynamicPrefixes: List[String] =
-    List("lsp.", "hotkey.", "keymap.", motionFamilyPrefix)
+    List("lsp.", "hotkey.", "keymap.", motionFamilyPrefix, legacyMotionFamilyPrefix)
 
   def animationPresetName(animation: Option[AnimationConfig]): String =
     animation match
@@ -50,7 +51,7 @@ object ConfigGroups:
     (s"$prefix.preset" -> HoconValue.string(preset)) :: custom
 
   def characterAnimation(config: AppConfig): List[(String, HoconValue)] =
-    animationEntries("character.animation", config.editorConfig.characterAnimation)
+    animationEntries("motion.character", config.editorConfig.characterAnimation)
 
   /** The motion hierarchy, plus the legacy per-family speed scales that still override it where they are set. */
   def motion(config: AppConfig): List[(String, HoconValue)] =
@@ -64,7 +65,7 @@ object ConfigGroups:
       "command_runner" -> surface.commandRunnerTransitionSpeedScale,
       "ui"             -> surface.uiTransitionSpeedScale,
       "cursor"         -> surface.cursorTransitionSpeedScale
-    ).collect { case (name, Some(value)) => s"ui.motion.$name.speed_scale" -> HoconValue.number(value) }
+    ).collect { case (name, Some(value)) => s"motion.$name.speed_scale" -> HoconValue.number(value) }
 
     val families = MotionFamily.values.toList.flatMap { family =>
       val family_ = settings.families(family)
@@ -93,8 +94,8 @@ object ConfigGroups:
     }
 
     List(
-      "ui.motion.preset"        -> HoconValue.string(settings.baseline.configKey),
-      "ui.motion.accessibility" -> HoconValue.string(settings.accessibility.configKey)
+      "motion.preset"        -> HoconValue.string(settings.baseline.configKey),
+      "motion.accessibility" -> HoconValue.string(settings.accessibility.configKey)
     ) ++ legacySpeeds ++ families
 
   def lsp(config: LspUserConfig): List[(String, HoconValue)] =
@@ -145,31 +146,51 @@ object ConfigGroups:
 
   /** The spellings groups own: the current one first, then the older ones that are still read.
     *
-    * `ui.motion` is a leaf on a path whose children (`ui.motion.family`, `ui.motion.accessibility`) HOCON would resolve
-    * by dropping it, so it survived only by being written as a quoted key. It stays readable for files that have it.
+    * `ui.motion` was a leaf on a path whose children (`ui.motion.family`, `ui.motion.accessibility`) HOCON would
+    * resolve by dropping it, so it survived only by being written as a quoted key. It stays readable for files that
+    * have it, as does the whole `ui.motion.*` spelling the `motion.*` namespace replaced.
     */
   private val spellings: List[(String, Set[String])] = List(
-    "character.animation.preset"      -> Set("character.animation", "character_animation"),
-    "character.animation.duration_ms" -> Set("character.animation.duration.ms", "character_animation_duration_ms"),
-    "character.animation.steps"       -> Set("character_animation_steps"),
-    "ui.motion.preset"                -> Set("ui.motion", "ui_motion", "motion.preset", "motion_preset"),
-    "ui.motion.accessibility"         -> Set.empty,
-    "ui.motion.speed_scale"           -> Set("motion.speed_scale", "ui_motion_speed_scale", "motion_speed_scale"),
-    "ui.motion.editor_text.speed_scale" ->
-      Set("ui.motion.editor.text.speed_scale", "ui_motion_editor_text_speed_scale"),
-    "ui.motion.command_runner.speed_scale" ->
-      Set("ui.motion.command.runner.speed_scale", "ui_motion_command_runner_speed_scale"),
-    "ui.motion.ui.speed_scale" ->
-      Set("ui.motion.ui_elements.speed_scale", "ui.motion.ui.elements.speed_scale", "ui_motion_ui_speed_scale"),
-    "ui.motion.cursor.speed_scale" ->
-      Set("ui.motion.cursor_speed_scale", "ui.motion.cursor.speed.scale", "ui_motion_cursor_speed_scale"),
-    "ui.motion.command_runner" -> Set("ui.motion.command.runner", "ui_motion_command_runner"),
-    "ui.motion.command_runner_reveal" ->
-      Set("ui.motion.command.runner.reveal", "ui_motion_command_runner_reveal"),
-    "ui.motion.ui"          -> Set("ui.motion.ui_elements", "ui.motion.ui.elements", "ui_motion_ui"),
-    "ui.motion.editor_text" -> Set("ui.motion.editor.text", "ui_motion_editor_text"),
-    "ui.motion.panel_open"  -> Set("ui.motion.panel.open", "ui_motion_panel_open"),
-    "ui.motion.panel_close" -> Set("ui.motion.panel.close", "ui_motion_panel_close")
+    "motion.character.preset" -> Set("character.animation.preset", "character.animation", "character_animation"),
+    "motion.character.duration_ms" ->
+      Set("character.animation.duration_ms", "character.animation.duration.ms", "character_animation_duration_ms"),
+    "motion.character.steps" -> Set("character.animation.steps", "character_animation_steps"),
+    "motion.preset"          -> Set("ui.motion.preset", "ui.motion", "ui_motion", "motion_preset"),
+    "motion.accessibility"   -> Set("ui.motion.accessibility"),
+    "motion.speed_scale"     -> Set("ui.motion.speed_scale", "ui_motion_speed_scale", "motion_speed_scale"),
+    "motion.editor_text.speed_scale" ->
+      Set(
+        "ui.motion.editor_text.speed_scale",
+        "ui.motion.editor.text.speed_scale",
+        "ui_motion_editor_text_speed_scale"
+      ),
+    "motion.command_runner.speed_scale" ->
+      Set(
+        "ui.motion.command_runner.speed_scale",
+        "ui.motion.command.runner.speed_scale",
+        "ui_motion_command_runner_speed_scale"
+      ),
+    "motion.ui.speed_scale" ->
+      Set(
+        "ui.motion.ui.speed_scale",
+        "ui.motion.ui_elements.speed_scale",
+        "ui.motion.ui.elements.speed_scale",
+        "ui_motion_ui_speed_scale"
+      ),
+    "motion.cursor.speed_scale" ->
+      Set(
+        "ui.motion.cursor.speed_scale",
+        "ui.motion.cursor_speed_scale",
+        "ui.motion.cursor.speed.scale",
+        "ui_motion_cursor_speed_scale"
+      ),
+    "motion.command_runner" -> Set("ui.motion.command_runner", "ui.motion.command.runner", "ui_motion_command_runner"),
+    "motion.command_runner_reveal" ->
+      Set("ui.motion.command_runner_reveal", "ui.motion.command.runner.reveal", "ui_motion_command_runner_reveal"),
+    "motion.ui"          -> Set("ui.motion.ui", "ui.motion.ui_elements", "ui.motion.ui.elements", "ui_motion_ui"),
+    "motion.editor_text" -> Set("ui.motion.editor_text", "ui.motion.editor.text", "ui_motion_editor_text"),
+    "motion.panel_open"  -> Set("ui.motion.panel_open", "ui.motion.panel.open", "ui_motion_panel_open"),
+    "motion.panel_close" -> Set("ui.motion.panel_close", "ui.motion.panel.close", "ui_motion_panel_close")
   )
 
   private val familyKeys: Set[String] =

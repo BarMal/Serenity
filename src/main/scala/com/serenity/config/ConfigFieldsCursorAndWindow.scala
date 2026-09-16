@@ -14,22 +14,26 @@ private[config] object ConfigFieldsCursorAndWindow:
 
   val fields: List[ConfigField[?]] = List(
     // -- Cursor ----------------------------------------------------------------------------------------------------------
-    named("cursor.mode", "cursorMode", "cursor_mode")(
+    named("editor.cursor.mode", "cursorMode", "cursor.mode", "cursor_mode")(
       enumerated(CursorMode.fromConfigKey, _.configKey, text => CursorMode.values.find(_.toString == text))
     )(
       _.cursorMode,
       (config, value) => config.withCursorMode(value)
     ),
-    named("cursor.active.color", "cursorActiveColor", "cursor_active_color")(color.orEmpty)(
+    named("editor.cursor.active_color", "cursorActiveColor", "cursor.active.color", "cursor_active_color")(
+      color.orEmpty
+    )(
       _.cursorColors.active,
       (config, value) => config.withCursorColors(config.cursorColors.copy(active = value))
     ),
-    named("cursor.inactive.color", "cursorInactiveColor", "cursor_inactive_color")(color.orEmpty)(
+    named("editor.cursor.inactive_color", "cursorInactiveColor", "cursor.inactive.color", "cursor_inactive_color")(
+      color.orEmpty
+    )(
       _.cursorColors.inactive,
       (config, value) => config.withCursorColors(config.cursorColors.copy(inactive = value))
     ),
     // -- Interface -------------------------------------------------------------------------------------------------------
-    named("interface.density", "interfaceDensity", "interface_density")(
+    named("ui.density", "interfaceDensity", "interface.density", "interface_density")(
       enumerated(InterfaceDensity.fromConfigKey, _.configKey, text => InterfaceDensity.values.find(_.toString == text))
     )(_.interfaceDensity, (config, value) => config.withInterfaceDensity(value)),
     named("ui.element_gap", "uiElementGap", "ui.element.gap", "ui_element_gap")(
@@ -48,11 +52,11 @@ private[config] object ConfigFieldsCursorAndWindow:
     named("window.chrome", "windowChromeMode", "window.chrome.mode", "window_chrome", "window_chrome_mode")(
       enumerated(WindowChromeMode.fromConfigKey, _.configKey, text => WindowChromeMode.values.find(_.toString == text))
     )(_.windowChromeMode, (config, value) => config.withWindowChromeMode(value)),
-    field("window.sitter.enabled")(boolean)(
+    field("motion.window_sitter.enabled", "window.sitter.enabled")(boolean)(
       _.windowSitterConfig.enabled,
       (config, value) => config.withWindowSitterConfig(config.windowSitterConfig.copy(enabled = value))
     ),
-    field("window.sitter.action")(
+    field("motion.window_sitter.action", "window.sitter.action")(
       enumerated(
         WindowSitterAction.fromConfigKey,
         _.configKey,
@@ -62,47 +66,47 @@ private[config] object ConfigFieldsCursorAndWindow:
       _.windowSitterConfig.action,
       (config, value) => config.withWindowSitterConfig(config.windowSitterConfig.copy(action = value))
     ),
-    field("window.sitter.frames")(stringList)(
+    field("motion.window_sitter.frames", "window.sitter.frames")(stringList)(
       _.windowSitterConfig.frames.toList,
       (config, value) => config.withWindowSitterConfig(config.windowSitterConfig.copy(frames = value.toVector))
     ),
-    field("window.sitter.active_ticks")(int)(
+    field("motion.window_sitter.active_ticks", "window.sitter.active_ticks")(int)(
       _.windowSitterConfig.activeTicks,
       (config, value) => config.withWindowSitterConfig(config.windowSitterConfig.copy(activeTicks = value))
     ),
-    field("window.sitter.fast_active_ticks")(int)(
+    field("motion.window_sitter.fast_active_ticks", "window.sitter.fast_active_ticks")(int)(
       _.windowSitterConfig.fastActiveTicks,
       (config, value) => config.withWindowSitterConfig(config.windowSitterConfig.copy(fastActiveTicks = value))
     ),
-    field("window.sitter.fast_typing_threshold_ms")(int)(
+    field("motion.window_sitter.fast_typing_threshold_ms", "window.sitter.fast_typing_threshold_ms")(int)(
       _.windowSitterConfig.fastTypingThresholdMs,
       (config, value) => config.withWindowSitterConfig(config.windowSitterConfig.copy(fastTypingThresholdMs = value))
     ),
 
     // -- Companion sprite ------------------------------------------------------------------------------------------------
-    field("companion.sprite.enabled")(boolean)(
+    field("ui.companion_sprite.enabled", "companion.sprite.enabled")(boolean)(
       _.companionSpriteConfig.enabled,
       (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(enabled = value))
     ),
-    field("companion.sprite.character")(
+    field("ui.companion_sprite.character", "companion.sprite.character")(
       enumerated(CompanionCharacter.fromConfigKey, _.id)
     )(
       _.companionSpriteConfig.character,
       (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(character = value))
     ),
-    field("companion.sprite.position")(
+    field("ui.companion_sprite.position", "companion.sprite.position")(
       enumeratedValues(PanelPosition.values, _.toString.toLowerCase(Locale.ROOT))
     )(
       _.companionSpriteConfig.position,
       (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(position = value))
     ),
-    field("companion.sprite.size")(
+    field("ui.companion_sprite.size", "companion.sprite.size")(
       int.filtered(size => size >= CompanionSpriteConfig.MinSize && size <= CompanionSpriteConfig.MaxSize)
     )(
       _.companionSpriteConfig.size,
       (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(size = value))
     ),
-    field("visual.flair.level")(
+    field("ui.visual_flair", "visual.flair.level")(
       enumerated(VisualFlairLevel.fromConfigKey, _.configKey)
     )(_.visualFlairLevel, (config, value) => config.withVisualFlairLevel(value)),
     // #1316: no preferred size to update yet means there is nothing to update -- inventing the other dimension made a

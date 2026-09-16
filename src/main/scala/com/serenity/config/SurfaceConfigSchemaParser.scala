@@ -54,7 +54,7 @@ object SurfaceConfigSchemaParser:
       case _                            => None
 
   private def parseMotionFamily(config: AppConfig, key: String, value: String): Option[AppConfig] =
-    val parts = key.stripPrefix(motionFamilyPrefix).split("\\.")
+    val parts = key.stripPrefix(motionFamilyPrefix).stripPrefix(legacyMotionFamilyPrefix).split("\\.")
     for
       familyName <- parts.headOption
       family     <- MotionFamily.values.find(_.configKey == familyName)

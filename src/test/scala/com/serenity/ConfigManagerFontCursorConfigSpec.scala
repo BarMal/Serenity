@@ -17,17 +17,17 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
     val configFile = Files.createTempFile("serenity-font-config", ".conf")
     Files.writeString(
       configFile,
-      """font.code.family = Monospaced
-        |font.text.family = Serif
-        |font.ui.family = Dialog
-        |font.code.size = 15.0
-        |font.text.size = 16.0
-        |font.ui.size = 13.0
-        |font.scale.mode = manual
-        |font.text_scale = 1.5
-        |font.code.ligatures = false
-        |font.text.ligatures = true
-        |font.ui.ligatures = true
+      """typography.code.family = Monospaced
+        |typography.prose.family = Serif
+        |typography.ui.family = Dialog
+        |typography.code.size = 15.0
+        |typography.prose.size = 16.0
+        |typography.ui.size = 13.0
+        |typography.scale.mode = manual
+        |typography.scale.factor = 1.5
+        |typography.code.ligatures = false
+        |typography.prose.ligatures = true
+        |typography.ui.ligatures = true
         |""".stripMargin
     )
 
@@ -45,12 +45,12 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
     config.editorConfig.fontConfig.textLigatures shouldBe true
     config.editorConfig.fontConfig.uiLigatures shouldBe true
 
-    ConfigManager.configToString(config) should include("font.ui.family = Dialog")
-    ConfigManager.configToString(config) should include("font.code.size = 15.0")
-    ConfigManager.configToString(config) should include("font.text.size = 16.0")
-    ConfigManager.configToString(config) should include("font.scale.mode = manual")
-    ConfigManager.configToString(config) should include("font.text_scale = 1.5")
-    ConfigManager.configToString(config) should include("font.ui.ligatures = true")
+    ConfigManager.configToString(config) should include("typography.ui.family = Dialog")
+    ConfigManager.configToString(config) should include("typography.code.size = 15.0")
+    ConfigManager.configToString(config) should include("typography.prose.size = 16.0")
+    ConfigManager.configToString(config) should include("typography.scale.mode = manual")
+    ConfigManager.configToString(config) should include("typography.scale.factor = 1.5")
+    ConfigManager.configToString(config) should include("typography.ui.ligatures = true")
     ConfigManager.configToString(config) should include("config.version = 1")
   }
 
@@ -58,9 +58,9 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
     val configFile = Files.createTempFile("serenity-font-clamp-config", ".conf")
     Files.writeString(
       configFile,
-      """font.code.size = 400
-        |font.text.size = 1
-        |font.ui.size = -5
+      """typography.code.size = 400
+        |typography.prose.size = 1
+        |typography.ui.size = -5
         |""".stripMargin
     )
 
@@ -75,8 +75,8 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
     val configFile = Files.createTempFile("serenity-cursor-config", ".conf")
     Files.writeString(
       configFile,
-      """cursor.active.color = #3366CC
-        |cursor.inactive.color = #CC663380
+      """editor.cursor.active_color = #3366CC
+        |editor.cursor.inactive_color = #CC663380
         |""".stripMargin
     )
 
@@ -84,22 +84,22 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
 
     config.cursorColors.active shouldBe Some(new Color(0x33, 0x66, 0xcc))
     config.cursorColors.inactive shouldBe Some(new Color(0xcc, 0x66, 0x33, 0x80))
-    ConfigManager.configToString(config) should include("cursor.active.color = \"#3366CC\"")
-    ConfigManager.configToString(config) should include("cursor.inactive.color = \"#CC663380\"")
+    ConfigManager.configToString(config) should include("editor.cursor.active_color = \"#3366CC\"")
+    ConfigManager.configToString(config) should include("editor.cursor.inactive_color = \"#CC663380\"")
   }
 
   it should "load and write cursor mode" in {
     val configFile = Files.createTempFile("serenity-cursor-mode-config", ".conf")
     Files.writeString(
       configFile,
-      """cursor.mode = breathe
+      """editor.cursor.mode = breathe
         |""".stripMargin
     )
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.cursorMode shouldBe CursorMode.Breathe
-    ConfigManager.configToString(config) should include("cursor.mode = breathe")
+    ConfigManager.configToString(config) should include("editor.cursor.mode = breathe")
   }
 
   it should "load and write cursor information bar mode" in {
@@ -125,8 +125,8 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
     val configFile = Files.createTempFile("serenity-cursor-config", ".conf")
     Files.writeString(
       configFile,
-      """cursor.active.color = not-a-colour
-        |cursor.inactive.color = #xyz
+      """editor.cursor.active_color = not-a-colour
+        |editor.cursor.inactive_color = #xyz
         |""".stripMargin
     )
 
@@ -140,8 +140,8 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
     val configFile = Files.createTempFile("serenity-cursor-invalid-config", ".conf")
     Files.writeString(
       configFile,
-      """cursor.mode = unknown
-        |cursor.active.color = not-a-colour
+      """editor.cursor.mode = unknown
+        |editor.cursor.active_color = not-a-colour
         |cursor.info_bar = sideways
         |cursor.info_bar.placement = upside-down
         |""".stripMargin
@@ -149,8 +149,8 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
 
     val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
-    result.report.invalidEntries.map(_.key) should contain("cursor.mode")
-    result.report.invalidEntries.map(_.key) should contain("cursor.active.color")
+    result.report.invalidEntries.map(_.key) should contain("editor.cursor.mode")
+    result.report.invalidEntries.map(_.key) should contain("editor.cursor.active_color")
     result.report.invalidEntries.map(_.key) should contain("cursor.info_bar")
     result.report.invalidEntries.map(_.key) should contain("cursor.info_bar.placement")
   }

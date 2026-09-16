@@ -88,42 +88,45 @@ object ConfigManager:
         .find(key)
         .flatMap(field => field.readValue(config, raw))
         .getOrElse(key match
-          case "character.animation" | "character.animation.preset" | "character_animation" =>
+          case "motion.character.preset" | "character.animation" | "character.animation.preset" |
+              "character_animation" =>
             value.trim.toLowerCase match
               case "none" | "false" | "off" | "disabled" =>
-                config.withoutCharacterAnimation
+                config.withCharacterAnimationSetting(None)
               case "quick" =>
-                config.withCharacterAnimation(AnimationConfig.Enabled.quick)
+                config.withCharacterAnimationSetting(Some(AnimationConfig.Enabled.quick))
               case "smooth" =>
-                config.withCharacterAnimation(AnimationConfig.Enabled.smooth)
+                config.withCharacterAnimationSetting(Some(AnimationConfig.Enabled.smooth))
               case "subtle" =>
-                config.withCharacterAnimation(AnimationConfig.Enabled.subtle)
+                config.withCharacterAnimationSetting(Some(AnimationConfig.Enabled.subtle))
               case "custom" =>
-                config.withCharacterAnimation(
-                  config.editorConfig.characterAnimation.getOrElse(AnimationConfig.Enabled.smooth)
+                config.withCharacterAnimationSetting(
+                  Some(config.editorConfig.characterAnimation.getOrElse(AnimationConfig.Enabled.smooth))
                 )
               case _ =>
                 config // Unknown value, keep current config
-          case "character.animation.duration_ms" | "character.animation.duration.ms" |
+          case "motion.character.duration_ms" | "character.animation.duration_ms" | "character.animation.duration.ms" |
               "character_animation_duration_ms" =>
             value.trim.toIntOption
               .filter(_ > 0)
               .map(ms =>
-                config.withCharacterAnimation(
-                  config.editorConfig.characterAnimation
-                    .getOrElse(AnimationConfig.Enabled.smooth)
-                    .copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
+                config.withCharacterAnimationSetting(
+                  Some(
+                    config.editorConfig.characterAnimation
+                      .getOrElse(AnimationConfig.Enabled.smooth)
+                      .copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
+                  )
                 )
               )
               .getOrElse(config)
-          case "character.animation.steps" | "character_animation_steps" =>
+          case "motion.character.steps" | "character.animation.steps" | "character_animation_steps" =>
             value.trim.toIntOption
               .filter(_ > 0)
               .map(steps =>
-                config.withCharacterAnimation(
-                  config.editorConfig.characterAnimation
-                    .getOrElse(AnimationConfig.Enabled.smooth)
-                    .copy(steps = steps)
+                config.withCharacterAnimationSetting(
+                  Some(
+                    config.editorConfig.characterAnimation.getOrElse(AnimationConfig.Enabled.smooth).copy(steps = steps)
+                  )
                 )
               )
               .getOrElse(config)
@@ -307,20 +310,24 @@ object ConfigManager:
 
   final private case class HoconEntry(key: String, value: String, valueType: ConfigValueType, raw: ConfigValue)
 
-  /** Entries in the order they are applied: shallower paths first, then alphabetically.
+  /** Entries in the order they are applied: the motion preset first, then shallower paths, then alphabetically.
     *
     * The parse is a fold, so a broader setting has to be applied before the narrower ones that refine it --
-    * `ui.motion.preset` rebuilds every motion family, and `ui.motion.family.command_surfaces.transition` then adjusts
-    * one of them. Sorting on the key alone made that ordering an accident of the alphabet: it held while the key was
-    * spelled `ui.motion` (which sorts before `ui.motion.family.…`) and broke the moment it was renamed. Depth says what
-    * was meant.
+    * `motion.preset` rebuilds every motion family, and `motion.family.command_surfaces.transition` or the legacy
+    * `motion.command_runner` then adjusts one of them. Sorting on the key alone made that ordering an accident of the
+    * alphabet, and depth alone stopped saying it once the preset and its legacy per-family overrides shared a depth, so
+    * the preset is ranked explicitly.
     */
   private def hoconEntries(source: Config): List[HoconEntry] =
+    def rank(key: String): Int = if SurfaceConfigSchemaKeys.motionPresetKeys.contains(key) then 0 else 1
     source
       .entrySet()
       .asScala
       .toList
-      .sortBy(entry => (entry.getKey.count(_ == '.'), entry.getKey))
+      .sortBy { entry =>
+        val key = entry.getKey.stripPrefix("\"").stripSuffix("\"").toLowerCase(Locale.ROOT)
+        (rank(key), key.count(_ == '.'), key)
+      }
       .map { entry =>
         val key = entry.getKey.stripPrefix("\"").stripSuffix("\"").toLowerCase(Locale.ROOT)
         val value = entry.getValue.valueType match
@@ -396,10 +403,12 @@ object ConfigManager:
         case Some(field) => field.codec.parse(value).isEmpty
         case None =>
           key match
-            case "character.animation" | "character.animation.preset" | "character_animation" =>
+            case "motion.character.preset" | "character.animation" | "character.animation.preset" |
+                "character_animation" =>
               !Set("none", "false", "off", "disabled", "quick", "smooth", "subtle", "custom").contains(normalizedValue)
-            case "character.animation.duration_ms" | "character.animation.duration.ms" |
-                "character_animation_duration_ms" | "character.animation.steps" | "character_animation_steps" =>
+            case "motion.character.duration_ms" | "motion.character.steps" | "character.animation.duration_ms" |
+                "character.animation.duration.ms" | "character_animation_duration_ms" | "character.animation.steps" |
+                "character_animation_steps" =>
               value.trim.toIntOption.forall(_ <= 0)
             case key if SurfaceConfigSchemaKeys.handles(key) =>
               SurfaceConfigSchemaParser.invalidValue(key, value)

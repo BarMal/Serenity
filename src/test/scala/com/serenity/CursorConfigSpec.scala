@@ -9,9 +9,9 @@ import org.scalatest.matchers.should.Matchers
 class CursorConfigSpec extends AnyFlatSpec with Matchers:
 
   "CursorConfig" should "own cursor schema metadata" in {
-    ConfigKeySchema.isKnownKey("cursor.mode") shouldBe true
-    ConfigKeySchema.isKnownKey("cursor.active.color") shouldBe true
-    ConfigKeySchema.isKnownKey("cursor.inactive.color") shouldBe true
+    ConfigKeySchema.isKnownKey("editor.cursor.mode") shouldBe true
+    ConfigKeySchema.isKnownKey("editor.cursor.active_color") shouldBe true
+    ConfigKeySchema.isKnownKey("editor.cursor.inactive_color") shouldBe true
     ConfigKeySchema.isKnownKey("cursor.info_bar") shouldBe true
     ConfigKeySchema.isKnownKey("cursor.info.bar") shouldBe true
     ConfigKeySchema.isKnownKey("status.placement") shouldBe true
@@ -21,8 +21,8 @@ class CursorConfigSpec extends AnyFlatSpec with Matchers:
 
     ConfigKeySchema.deprecatedKeys.should(
       contain allOf (
-        "cursor_mode"               -> "cursor.mode",
-        "cursor_active_color"       -> "cursor.active.color",
+        "cursor_mode"               -> "editor.cursor.mode",
+        "cursor_active_color"       -> "editor.cursor.active_color",
         "cursor_info_bar_placement" -> "status.placement"
       )
     )
@@ -74,7 +74,7 @@ class CursorConfigSpec extends AnyFlatSpec with Matchers:
         .getOrElse(fail("cursor mode parse"))
     val activeColorConfig =
       ConfigRegistry
-        .read(AppConfig.default, "cursor.active.color", "#3366CC")
+        .read(AppConfig.default, "editor.cursor.active_color", "#3366CC")
         .getOrElse(fail("active cursor colour parse"))
     val inactiveColorConfig =
       ConfigRegistry
@@ -105,18 +105,18 @@ class CursorConfigSpec extends AnyFlatSpec with Matchers:
     infoBarForegroundConfig.statusLine.colors.foreground.shouldBe(Some(foreground))
     infoBarBackgroundConfig.statusLine.colors.background.shouldBe(Some(background))
     ConfigRegistry
-      .read(AppConfig.default, "cursor.active.color", "")
+      .read(AppConfig.default, "editor.cursor.active_color", "")
       .map(_.cursorConfig.colors.active)
       .shouldBe(Some(None))
-    ConfigRegistry.read(AppConfig.default, "cursor.mode", "unknown").shouldBe(None)
+    ConfigRegistry.read(AppConfig.default, "editor.cursor.mode", "unknown").shouldBe(None)
   }
 
   it should "validate cursor config entries centrally" in {
-    ConfigRegistry.rejects("cursor.mode", "breathing").shouldBe(false)
-    ConfigRegistry.rejects("cursor.mode", "unknown").shouldBe(true)
-    ConfigRegistry.rejects("cursor.active.color", "#3366CC").shouldBe(false)
-    ConfigRegistry.rejects("cursor.active.color", "").shouldBe(false)
-    ConfigRegistry.rejects("cursor.active.color", "not-a-colour").shouldBe(true)
+    ConfigRegistry.rejects("editor.cursor.mode", "breathing").shouldBe(false)
+    ConfigRegistry.rejects("editor.cursor.mode", "unknown").shouldBe(true)
+    ConfigRegistry.rejects("editor.cursor.active_color", "#3366CC").shouldBe(false)
+    ConfigRegistry.rejects("editor.cursor.active_color", "").shouldBe(false)
+    ConfigRegistry.rejects("editor.cursor.active_color", "not-a-colour").shouldBe(true)
     ConfigRegistry.rejects("status.segments", "minimal").shouldBe(false)
     ConfigRegistry.rejects("status.segments", "sideways").shouldBe(true)
     ConfigRegistry.rejects("status.placement", "bottom").shouldBe(false)

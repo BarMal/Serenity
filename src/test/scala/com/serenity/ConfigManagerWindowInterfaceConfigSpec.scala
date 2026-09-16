@@ -62,21 +62,21 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
     val configFile = Files.createTempFile("serenity-density-config", ".conf")
     Files.writeString(
       configFile,
-      """interface.density = spacious
+      """ui.density = spacious
         |""".stripMargin
     )
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.interfaceDensity shouldBe InterfaceDensity.Spacious
-    ConfigManager.configToString(config) should include("interface.density = spacious")
+    ConfigManager.configToString(config) should include("ui.density = spacious")
   }
 
   it should "report invalid interface config values through the interface schema" in {
     val configFile = Files.createTempFile("serenity-interface-invalid-config", ".conf")
     Files.writeString(
       configFile,
-      """interface.density = roomy
+      """ui.density = roomy
         |ui.element_gap = wide
         |ui.outline_thickness =
         |""".stripMargin
@@ -84,7 +84,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
 
     val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
-    result.report.invalidEntries.map(_.key) should contain("interface.density")
+    result.report.invalidEntries.map(_.key) should contain("ui.density")
     result.report.invalidEntries.map(_.key) should contain("ui.element_gap")
     result.report.invalidEntries.map(_.key) should contain("ui.outline_thickness")
   }

@@ -10,7 +10,9 @@ private[config] object ConfigFieldsLanguageAndTypography:
 
   val fields: List[ConfigField[?]] = List(
     // -- Language tools --------------------------------------------------------------------------------------------------
-    named("syntax.highlighting", "syntaxHighlightingEnabled", "syntax_highlighting")(boolean)(
+    named("editor.syntax_highlighting", "syntaxHighlightingEnabled", "syntax.highlighting", "syntax_highlighting")(
+      boolean
+    )(
       _.languageToolsConfig.syntaxHighlightingEnabled,
       (config, value) => config.withSyntaxHighlighting(value)
     ),
@@ -34,38 +36,38 @@ private[config] object ConfigFieldsLanguageAndTypography:
     ),
 
     // -- Fonts -----------------------------------------------------------------------------------------------------------
-    field("font.code.family", "font_code_family")(string)(
+    field("typography.code.family", "font.code.family", "font_code_family")(string)(
       _.editorConfig.fontConfig.codeFontFamily,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(codeFontFamily = value))
     ),
-    field("font.text.family", "font_text_family")(string)(
+    field("typography.prose.family", "font.text.family", "font_text_family")(string)(
       _.editorConfig.fontConfig.textFontFamily,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(textFontFamily = value))
     ),
-    field("font.ui.family", "font_ui_family")(string)(
+    field("typography.ui.family", "font.ui.family", "font_ui_family")(string)(
       _.editorConfig.fontConfig.uiFontFamily,
       (config, value) =>
         // `${font.text.family}` is a substitution the old writer emitted rather than a family anyone has.
         val family = if value == "${font.text.family}" then config.editorConfig.fontConfig.textFontFamily else value
         config.withFontConfig(config.editorConfig.fontConfig.copy(uiFontFamily = family))
     ),
-    field("font.code.size", "font_code_size")(fontSize)(
+    field("typography.code.size", "font.code.size", "font_code_size")(fontSize)(
       _.editorConfig.fontConfig.codeFontSize,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(fontSize = value))
     ),
-    field("font.text.size", "font.prose.size", "font_text_size", "font_prose_size")(fontSize)(
+    field("typography.prose.size", "font.text.size", "font.prose.size", "font_text_size", "font_prose_size")(fontSize)(
       _.editorConfig.fontConfig.textFontSize,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(textFontSize = value))
     ),
-    field("font.ui.size", "font_ui_size")(fontSize)(
+    field("typography.ui.size", "font.ui.size", "font_ui_size")(fontSize)(
       _.editorConfig.fontConfig.uiFontSize,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(uiFontSize = value))
     ),
-    field("font.scale.mode", "font_scale_mode")(textScaleMode)(
+    field("typography.scale.mode", "font.scale.mode", "font_scale_mode")(textScaleMode)(
       _.editorConfig.fontConfig.textScaleMode,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(textScaleMode = value))
     ),
-    field("font.text_scale", "font.text.scale", "font_text_scale")(
+    field("typography.scale.factor", "font.text_scale", "font.text.scale", "font_text_scale")(
       double.filtered(scale =>
         scale >= FontLoader.FontConfig.MinTextScale && scale <= FontLoader.FontConfig.MaxTextScale
       )
@@ -73,15 +75,21 @@ private[config] object ConfigFieldsLanguageAndTypography:
       _.editorConfig.fontConfig.textScaleMultiplier,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(textScaleMultiplier = value))
     ),
-    field("font.code.ligatures", "font_code_ligatures")(boolean)(
+    field("typography.code.ligatures", "font.code.ligatures", "font_code_ligatures")(boolean)(
       _.editorConfig.fontConfig.codeLigatures,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(enableLigatures = value))
     ),
-    field("font.text.ligatures", "font.prose.ligatures", "font_text_ligatures", "font_prose_ligatures")(boolean)(
+    field(
+      "typography.prose.ligatures",
+      "font.text.ligatures",
+      "font.prose.ligatures",
+      "font_text_ligatures",
+      "font_prose_ligatures"
+    )(boolean)(
       _.editorConfig.fontConfig.textLigatures,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(textLigatures = value))
     ),
-    field("font.ui.ligatures", "font_ui_ligatures")(boolean)(
+    field("typography.ui.ligatures", "font.ui.ligatures", "font_ui_ligatures")(boolean)(
       _.editorConfig.fontConfig.uiLigatures,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(uiLigatures = value))
     )

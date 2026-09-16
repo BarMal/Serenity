@@ -24,7 +24,13 @@ object ConfigKeySchema:
     }.toMap ++ ConfigGroups.deprecatedKeys ++ LegacyStatusLineKeys.replacements
 
   def deprecatedReplacement(key: String): Option[String] =
-    deprecatedKeys.get(key)
+    deprecatedKeys
+      .get(key)
+      .orElse(
+        Option.when(key.startsWith(ConfigGroups.legacyMotionFamilyPrefix))(
+          ConfigGroups.motionFamilyPrefix + key.stripPrefix(ConfigGroups.legacyMotionFamilyPrefix)
+        )
+      )
 
   def isKnownKey(key: String): Boolean =
     currentKeys.contains(key) ||

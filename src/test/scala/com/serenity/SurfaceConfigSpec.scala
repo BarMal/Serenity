@@ -85,22 +85,22 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     // here too, but `ConfigRegistry` already owned parsing/validation/writing for every one of them end-to-end, so
     // `ConfigManager.parseConfig`'s fallback to this schema was unreachable dead code for those keys. Only the motion
     // hierarchy has no `ConfigField` to read it back with, so it is the one thing left here.
-    SurfaceConfigSchemaKeys.currentKeys.should(contain("ui.motion.cursor.speed_scale"))
-    SurfaceConfigSchemaKeys.currentKeys.should(contain("ui.motion.panel_open"))
-    SurfaceConfigSchemaKeys.currentKeys.should(contain("ui.motion.family.command_surfaces.transition"))
+    SurfaceConfigSchemaKeys.currentKeys.should(contain("motion.cursor.speed_scale"))
+    SurfaceConfigSchemaKeys.currentKeys.should(contain("motion.panel_open"))
+    SurfaceConfigSchemaKeys.currentKeys.should(contain("motion.family.command_surfaces.transition"))
     SurfaceConfigSchemaKeys.currentKeys.shouldNot(contain("ui.material"))
     SurfaceConfigSchemaKeys.currentKeys.shouldNot(contain("display.contextual_toolbar_mode"))
     SurfaceConfigSchemaKeys.currentKeys.shouldNot(contain("viewport.height.max"))
 
-    SurfaceConfigSchemaKeys.deprecatedKeys("ui_motion_cursor_speed_scale").shouldBe("ui.motion.cursor.speed_scale")
-    SurfaceConfigSchemaKeys.deprecatedKeys("ui_motion_command_runner").shouldBe("ui.motion.command_runner")
+    SurfaceConfigSchemaKeys.deprecatedKeys("ui_motion_cursor_speed_scale").shouldBe("motion.cursor.speed_scale")
+    SurfaceConfigSchemaKeys.deprecatedKeys("ui_motion_command_runner").shouldBe("motion.command_runner")
     SurfaceConfigSchemaKeys.deprecatedKeys.shouldNot(contain key "viewport_width_percent")
     SurfaceConfigSchemaKeys.deprecatedKeys.shouldNot(contain key "display_contextual_toolbar_mode")
 
     // Retired keys are still known and parsed -- just through `ConfigRegistry` rather than this schema.
     ConfigRegistry.allKeys.should(contain("ui.material"))
-    ConfigRegistry.allKeys.should(contain("display.contextual_toolbar_mode"))
-    ConfigRegistry.allKeys.should(contain("viewport.height.max"))
+    ConfigRegistry.allKeys.should(contain("editor.contextual_toolbar_mode"))
+    ConfigRegistry.allKeys.should(contain("window.viewport.height_max"))
   }
 
   it should "group motion, appearance, and text display settings under AppConfig" in {

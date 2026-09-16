@@ -8,9 +8,9 @@ import org.scalatest.matchers.should.Matchers
 class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
 
   "LanguageToolsConfig" should "own language-tool schema metadata and dynamic prefixes" in {
-    ConfigKeySchema.currentKeys.should(contain("syntax.highlighting"))
+    ConfigKeySchema.currentKeys.should(contain("editor.syntax_highlighting"))
     ConfigKeySchema.currentKeys.should(contain("spellcheck.dictionary_paths"))
-    ConfigKeySchema.deprecatedKeys("syntax_highlighting").shouldBe("syntax.highlighting")
+    ConfigKeySchema.deprecatedKeys("syntax_highlighting").shouldBe("editor.syntax_highlighting")
     ConfigKeySchema.deprecatedKeys("spellcheck_words").shouldBe("spellcheck.words")
     ConfigKeySchema.dynamicPrefixes.should(contain("lsp."))
   }
@@ -84,12 +84,12 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
       List("C:\\Dictionaries\\en_US.dic", "/usr/share/hunspell/fr.dic")
     )
     wordsConfig.languageToolsConfig.spellCheck.additionalWords.shouldBe(List("serenity", "io"))
-    ConfigRegistry.read(AppConfig.default, "syntax.highlighting", "maybe").shouldBe(None)
+    ConfigRegistry.read(AppConfig.default, "editor.syntax_highlighting", "maybe").shouldBe(None)
   }
 
   it should "validate language-tool config entries centrally" in {
-    ConfigRegistry.rejects("syntax.highlighting", "true").shouldBe(false)
-    ConfigRegistry.rejects("syntax.highlighting", "maybe").shouldBe(true)
+    ConfigRegistry.rejects("editor.syntax_highlighting", "true").shouldBe(false)
+    ConfigRegistry.rejects("editor.syntax_highlighting", "maybe").shouldBe(true)
     ConfigRegistry.rejects("spellcheck.enabled", "on").shouldBe(false)
     ConfigRegistry.rejects("spellcheck.enabled", "perhaps").shouldBe(true)
     ConfigRegistry.rejects("spellcheck.languages", "en,fr").shouldBe(false)

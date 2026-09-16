@@ -29,7 +29,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
 
-  /** Alias keys differ only in `.` versus `_` between words (`display.word_wrap` / `display.word.wrap`), so a written
+  /** Alias keys differ only in `.` versus `_` between words (`editor.word_wrap` / `display.word.wrap`), so a written
     * file only has to carry one spelling of each. Collapsing both separators is what makes "is this key covered?" a
     * question about the setting rather than about which spelling the writer happened to pick.
     */
@@ -335,7 +335,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
 
   "a config file that cannot be parsed" should "be kept aside rather than left to be overwritten by defaults" in {
     val file = Files.createTempFile("serenity-unreadable-config", ".conf")
-    Files.writeString(file, "display.pane_headers = false\nthis is not = valid = hocon {\n")
+    Files.writeString(file, "editor.pane_headers = false\nthis is not = valid = hocon {\n")
 
     val preserved = ConfigManager.preserveUnreadableConfig(file)
 

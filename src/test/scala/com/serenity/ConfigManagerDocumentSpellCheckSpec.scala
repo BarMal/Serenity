@@ -16,14 +16,14 @@ class ConfigManagerDocumentSpellCheckSpec extends AnyFlatSpec with Matchers with
     val configFile = Files.createTempFile("serenity-language-tools-invalid-config", ".conf")
     Files.writeString(
       configFile,
-      """syntax.highlighting = maybe
+      """editor.syntax_highlighting = maybe
         |spellcheck.enabled = perhaps
         |""".stripMargin
     )
 
     val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
-    result.report.invalidEntries.map(_.key) should contain("syntax.highlighting")
+    result.report.invalidEntries.map(_.key) should contain("editor.syntax_highlighting")
     result.report.invalidEntries.map(_.key) should contain("spellcheck.enabled")
   }
 
@@ -31,43 +31,43 @@ class ConfigManagerDocumentSpellCheckSpec extends AnyFlatSpec with Matchers with
     val configFile = Files.createTempFile("serenity-default-document-mode", ".conf")
     Files.writeString(
       configFile,
-      """document.default_mode = markdown
+      """editor.default_document_mode = markdown
         |""".stripMargin
     )
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
-    ConfigManager.configToString(config) should include("document.default_mode = markdown")
+    ConfigManager.configToString(config) should include("editor.default_document_mode = markdown")
   }
 
   it should "report invalid document config values through the document schema" in {
     val configFile = Files.createTempFile("serenity-document-invalid-config", ".conf")
     Files.writeString(
       configFile,
-      """document.default_mode = wordperfect
-        |document.markdown_view = preview-ish
+      """editor.default_document_mode = wordperfect
+        |editor.markdown_view = preview-ish
         |""".stripMargin
     )
 
     val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
-    result.report.invalidEntries.map(_.key) should contain("document.default_mode")
-    result.report.invalidEntries.map(_.key) should contain("document.markdown_view")
+    result.report.invalidEntries.map(_.key) should contain("editor.default_document_mode")
+    result.report.invalidEntries.map(_.key) should contain("editor.markdown_view")
   }
 
   it should "load and write the markdown view mode" in {
     val configFile = Files.createTempFile("serenity-markdown-view-mode", ".conf")
     Files.writeString(
       configFile,
-      """document.markdown_view = inline-lens
+      """editor.markdown_view = inline-lens
         |""".stripMargin
     )
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
-    ConfigManager.configToString(config) should include("document.markdown_view = inline-lens")
+    ConfigManager.configToString(config) should include("editor.markdown_view = inline-lens")
   }
 
   it should "load and write spell-check configuration" in {

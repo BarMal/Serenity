@@ -196,7 +196,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
 
     val saved = Files.readString(configFile)
     saved should include("config.version = 1")
-    saved should include("ui.motion.preset = smooth")
+    saved should include("motion.preset = smooth")
     stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface shouldBe None
   }
 

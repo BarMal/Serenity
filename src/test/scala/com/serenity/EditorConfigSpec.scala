@@ -13,24 +13,24 @@ class EditorConfigSpec extends AnyFlatSpec with Matchers:
     ConfigKeySchema.isKnownKey("character.animation") shouldBe true
     ConfigKeySchema.isKnownKey("character.animation.duration_ms") shouldBe true
     ConfigKeySchema.isKnownKey("character.animation.steps") shouldBe true
-    ConfigKeySchema.isKnownKey("font.code.family") shouldBe true
-    ConfigKeySchema.isKnownKey("font.text.family") shouldBe true
-    ConfigKeySchema.isKnownKey("font.ui.family") shouldBe true
-    ConfigKeySchema.isKnownKey("font.code.size") shouldBe true
-    ConfigKeySchema.isKnownKey("font.text.size") shouldBe true
-    ConfigKeySchema.isKnownKey("font.ui.size") shouldBe true
-    ConfigKeySchema.isKnownKey("font.scale.mode") shouldBe true
-    ConfigKeySchema.isKnownKey("font.text_scale") shouldBe true
-    ConfigKeySchema.isKnownKey("font.code.ligatures") shouldBe true
-    ConfigKeySchema.isKnownKey("font.text.ligatures") shouldBe true
-    ConfigKeySchema.isKnownKey("font.ui.ligatures") shouldBe true
+    ConfigKeySchema.isKnownKey("typography.code.family") shouldBe true
+    ConfigKeySchema.isKnownKey("typography.prose.family") shouldBe true
+    ConfigKeySchema.isKnownKey("typography.ui.family") shouldBe true
+    ConfigKeySchema.isKnownKey("typography.code.size") shouldBe true
+    ConfigKeySchema.isKnownKey("typography.prose.size") shouldBe true
+    ConfigKeySchema.isKnownKey("typography.ui.size") shouldBe true
+    ConfigKeySchema.isKnownKey("typography.scale.mode") shouldBe true
+    ConfigKeySchema.isKnownKey("typography.scale.factor") shouldBe true
+    ConfigKeySchema.isKnownKey("typography.code.ligatures") shouldBe true
+    ConfigKeySchema.isKnownKey("typography.prose.ligatures") shouldBe true
+    ConfigKeySchema.isKnownKey("typography.ui.ligatures") shouldBe true
 
     ConfigKeySchema.deprecatedKeys.should(
       contain allOf (
-        "character_animation"             -> "character.animation.preset",
-        "character_animation_duration_ms" -> "character.animation.duration_ms",
-        "font_code_family"                -> "font.code.family",
-        "font_ui_ligatures"               -> "font.ui.ligatures"
+        "character_animation"             -> "motion.character.preset",
+        "character_animation_duration_ms" -> "motion.character.duration_ms",
+        "font_code_family"                -> "typography.code.family",
+        "font_ui_ligatures"               -> "typography.ui.ligatures"
       )
     )
   }
