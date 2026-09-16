@@ -70,7 +70,7 @@ final private[manager] class StateManagerConfigEffects(
   private def updateMotionAccessibility(accessibility: com.serenity.config.MotionAccessibility): IO[AppConfig] =
     updateMotionConfig(_.withMotionAccessibility(accessibility))
 
-  private def updateWindowSitterConfig(
+  private[manager] def updateWindowSitterConfig(
     update: com.serenity.animation.WindowSitterConfig => com.serenity.animation.WindowSitterConfig
   ): IO[Unit] =
     updateAppearanceConfig(config => config.withWindowSitterConfig(update(config.windowSitterConfig))).flatTap { config =>
@@ -83,12 +83,12 @@ final private[manager] class StateManagerConfigEffects(
       }
     }.void
 
-  private def updateCompanionSpriteConfig(update: CompanionSpriteConfig => CompanionSpriteConfig): IO[Unit] =
+  private[manager] def updateCompanionSpriteConfig(update: CompanionSpriteConfig => CompanionSpriteConfig): IO[Unit] =
     updateAppearanceConfig(config => config.withCompanionSpriteConfig(update(config.companionSpriteConfig)))
       .flatTap(config => stateRef.update(state => syncCompanionSpritePanel(state, config)))
       .void
 
-  private def updateVisualFlairLevel(level: VisualFlairLevel): IO[Unit] =
+  private[manager] def updateVisualFlairLevel(level: VisualFlairLevel): IO[Unit] =
     updateAppearanceConfig(_.withVisualFlairLevel(level))
       .flatTap(config => stateRef.update(state => syncCompanionSpritePanel(state, config)))
       .void
@@ -241,7 +241,7 @@ final private[manager] class StateManagerConfigEffects(
   private def updateCustomMotionConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     updateMotionConfig(config => update(config).withCustomMotionBaseline)
 
-  private def updateTextDisplayConfig(update: AppConfig => AppConfig): IO[AppConfig] =
+  private[manager] def updateTextDisplayConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     applyConfigUpdate(update)
 
   /** Applies a configuration change to live state, persists it, and auto-saves the session. */

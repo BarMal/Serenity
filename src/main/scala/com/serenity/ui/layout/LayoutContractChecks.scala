@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-import com.serenity.state.models.*
+import com.serenity.state.models.SurfaceId
 
 /** The rectangle-containment and overlap predicates `EditorLayoutContract.violations` is built from. Kept apart from
   * the contract itself so the contract file reads as the list of ownership rules, not the arithmetic behind them.
@@ -51,5 +51,5 @@ private[layout] object LayoutContractChecks:
       case _ =>
         Nil
 
-  private[layout] def rectanglesOverlap(first: LayoutRect, second: LayoutRect): Boolean =
+  private def rectanglesOverlap(first: LayoutRect, second: LayoutRect): Boolean =
     first.x < second.right && second.x < first.right && first.y < second.bottom && second.y < first.bottom

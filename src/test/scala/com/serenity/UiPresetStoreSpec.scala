@@ -16,6 +16,10 @@ import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+/** Persistence and concurrency behaviour of `UiPresetStore`, plus editor-pane-layout restore behaviour for `UiPreset`.
+  * Split out of `UiPresetSpec` (which keeps the `UiPreset` model/capture/apply tests) to keep both files under the
+  * architecture size target.
+  */
 class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
