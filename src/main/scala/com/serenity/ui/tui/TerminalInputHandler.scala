@@ -32,7 +32,8 @@ final class TerminalInputHandler private (
     queue: Queue[IO, Option[TerminalInputHandler.QueuedInput]],
     readerFiber: FiberIO[Unit],
     disableModes: IO[Unit],
-    focusCallback: AtomicReference[Option[Boolean => Unit]]
+    focusCallback: AtomicReference[Option[Boolean => Unit]],
+    metrics: TerminalInputMetrics
 ) extends InputHandler[IO]:
 
   import TerminalInputHandler.QueuedInput
@@ -57,7 +58,7 @@ final class TerminalInputHandler private (
   private def orderedInputStream: Stream[IO, QueuedInput] = Stream.fromQueueNoneTerminated(queue)
 
   def shutdown: IO[Unit] =
-    readerFiber.cancel >> disableModes.attempt.void >> queue.offer(None)
+    readerFiber.cancel >> disableModes.attempt.void >> metrics.logSummary("shutdown") >> queue.offer(None)
 
 object TerminalInputHandler:
 
@@ -137,7 +138,8 @@ object TerminalInputHandler:
     seedBytes: Array[Byte] = Array.emptyByteArray,
     wheelScrollLines: Int = InputConfig().wheelScrollLines,
     escDeadline: FiniteDuration = EscDisambiguationDeadline,
-    readerOverride: Option[NonBlockingReader] = None
+    readerOverride: Option[NonBlockingReader] = None,
+    metrics: TerminalInputMetrics = TerminalInputMetrics.Disabled
   ): IO[TerminalInputHandler] =
     for
       queue            <- Queue.unbounded[IO, Option[QueuedInput]]
@@ -153,7 +155,7 @@ object TerminalInputHandler:
       reader = readerOverride.getOrElse(terminal.reader())
       // rawReadLoop runs on a dedicated fiber so the CE3 compute pool is never blocked waiting for the terminal;
       // guarantee(rawFiber.cancel) tears it down whenever readLoop exits (naturally or via cancellation).
-      fiber <- rawReadLoop(reader, rawQueue, escDeadline).start.flatMap { rawFiber =>
+      fiber <- rawReadLoop(reader, rawQueue, escDeadline, metrics).start.flatMap { rawFiber =>
         readLoop(
           rawQueue,
           queue,
@@ -164,11 +166,12 @@ object TerminalInputHandler:
           systemClipboard,
           seedBytes,
           focusCallback,
-          wheelScrollLines
+          wheelScrollLines,
+          metrics
         )
           .guarantee(rawFiber.cancel)
       }.start
-    yield new TerminalInputHandler(inputRouter, queue, fiber, disableModes(terminal), focusCallback)
+    yield new TerminalInputHandler(inputRouter, queue, fiber, disableModes(terminal), focusCallback, metrics)
 
   /** The byte a terminal sends for the Escape key, and to introduce an escape sequence. */
   private val Escape: Int = 0x1b
@@ -225,13 +228,15 @@ object TerminalInputHandler:
   private def rawReadLoop(
     reader: NonBlockingReader,
     rawQueue: Queue[IO, ReadOutcome],
-    escDeadline: FiniteDuration
+    escDeadline: FiniteDuration,
+    metrics: TerminalInputMetrics
   ): IO[Unit] =
     Queue.unbounded[IO, ReadOutcome].flatMap { pumpQueue =>
       def pump: IO[Unit] =
         IO.interruptible(reader.read()).map(toOutcome).flatMap {
-          case ReadOutcome.Eof => pumpQueue.offer(ReadOutcome.Eof)
-          case outcome         => pumpQueue.offer(outcome) >> pump
+          case ReadOutcome.Eof                => pumpQueue.offer(ReadOutcome.Eof)
+          case outcome @ ReadOutcome.Bytes(_) => metrics.recordCharsRead(1) >> pumpQueue.offer(outcome) >> pump
+          case outcome                        => pumpQueue.offer(outcome) >> pump
         }
 
       def forward(outcome: ReadOutcome): IO[Unit] =
@@ -266,7 +271,8 @@ object TerminalInputHandler:
     systemClipboard: SystemClipboard[IO],
     seedBytes: Array[Byte],
     focusCallback: AtomicReference[Option[Boolean => Unit]],
-    wheelScrollLines: Int
+    wheelScrollLines: Int,
+    metrics: TerminalInputMetrics
   ): IO[Unit] =
 
     def processTokens(tokens: List[DecodedToken]): IO[Unit] =
@@ -275,7 +281,7 @@ object TerminalInputHandler:
     def processToken(token: DecodedToken): IO[Unit] = token match
       case DecodedToken.Key(info) =>
         modifierTapState.update(ModifierTapDetector.otherKeyPressed) >>
-          latestMovement.set(None) >> queue.offer(Some(QueuedInput.Key(info)))
+          latestMovement.set(None) >> queue.offer(Some(QueuedInput.Key(info))) >> metrics.recordKeysQueued(1)
       case DecodedToken.Mouse(event) => enqueueMouse(event)
       case DecodedToken.WheelNotch(down) =>
         val scroll = if down then ScrollDown(wheelScrollLines) else ScrollUp(wheelScrollLines)
@@ -299,7 +305,8 @@ object TerminalInputHandler:
             ModifierTapDetector.modifierPressed(state, modifier, atMillis) match
               case ModifierTapDetector.Outcome.Emit(next) =>
                 modifierTapState.set(next) >> latestMovement.set(None) >>
-                  queue.offer(Some(QueuedInput.Key(KeyStrokeInfo(bareModifierKey(modifier), None, Set.empty))))
+                  queue.offer(Some(QueuedInput.Key(KeyStrokeInfo(bareModifierKey(modifier), None, Set.empty)))) >>
+                  metrics.recordKeysQueued(1)
               case ModifierTapDetector.Outcome.Pending(next) => modifierTapState.set(next)
           }
         }
@@ -344,33 +351,50 @@ object TerminalInputHandler:
 
     def appendAndDecode(buffer: Array[Byte]): IO[Unit] =
       val result = TerminalInputDecoder.decode(buffer)
-      processTokens(result.tokens) >> remainder.set(result.remainder)
+      metrics.recordTokens(result.tokens.length) >> processTokens(result.tokens) >> remainder.set(result.remainder)
 
     // Drain any characters rawReadLoop has already buffered into rawQueue without blocking. After each blocking take,
     // the dedicated reader fiber (rawReadLoop) has likely raced ahead and queued the next burst of characters; pulling
     // them all here before yielding to the CE3 scheduler batches an entire burst into a single decode call, so fast
     // typing never leaves characters stranded in the queue for a full scheduler quantum.
-    def drainAvailable(acc: Array[Byte]): IO[Array[Byte]] =
+    //
+    // Stops at the first non-`Bytes` outcome and hands it back rather than dropping it: `tryTake` removes whatever it
+    // inspects, so an `Eof` swallowed here would strand the stream open (the graceful shutdown never emitted, hanging
+    // the consumer), and an `Expired` swallowed here would leave a held lone `ESC` unresolved, to later fuse with the
+    // next byte into a spurious Alt-combo. The carried outcome is dispatched after the drained bytes decode, keeping
+    // stream order intact.
+    def drainAvailable(acc: Array[Byte]): IO[(Array[Byte], Option[ReadOutcome])] =
       rawQueue.tryTake.flatMap {
         case Some(ReadOutcome.Bytes(bs)) => drainAvailable(acc ++ bs)
-        case _                           => IO.pure(acc)
+        case Some(terminal)              => IO.pure((acc, Some(terminal)))
+        case None                        => IO.pure((acc, None))
+      }
+
+    def finishOnEof: IO[Unit] =
+      remainder.get.flatMap(pending => processTokens(TerminalInputDecoder.decodeFinal(pending))) >> emitEof
+
+    // A lone `ESC` currently held as the remainder resolves to Escape once the reader reports nothing followed it.
+    def resolveHeldEscape: IO[Unit] =
+      remainder.get.flatMap { pending =>
+        if pending.length == 1 && pending(0) == Escape.toByte then
+          processTokens(TerminalInputDecoder.decodeFinal(pending)) >> remainder.set(Array.emptyByteArray)
+        else IO.unit
       }
 
     // A lone `ESC` is Escape exactly when the reader reports that nothing followed it. Waiting is the reader's job;
     // this only has to read off what it found, which no amount of being late can change.
     def loop: IO[Unit] =
-      remainder.get.flatMap { pending =>
-        val holdingLoneEsc = pending.length == 1 && pending(0) == Escape.toByte
-        rawQueue.take.flatMap {
-          case ReadOutcome.Eof =>
-            processTokens(TerminalInputDecoder.decodeFinal(pending)) >> emitEof
-          case ReadOutcome.Bytes(bs) =>
-            drainAvailable(pending ++ bs).flatMap(appendAndDecode) >> loop
-          case ReadOutcome.Expired if holdingLoneEsc =>
-            processTokens(TerminalInputDecoder.decodeFinal(pending)) >> remainder.set(Array.emptyByteArray) >> loop
-          case ReadOutcome.Expired =>
-            loop
-        }
+      rawQueue.take.flatMap {
+        case ReadOutcome.Eof => finishOnEof
+        case ReadOutcome.Bytes(bs) =>
+          remainder.get.flatMap(pending => drainAvailable(pending ++ bs)).flatMap {
+            case (buffer, carried) =>
+              appendAndDecode(buffer) >> (carried match
+                case Some(ReadOutcome.Eof)     => finishOnEof
+                case Some(ReadOutcome.Expired) => resolveHeldEscape >> loop
+                case _                         => loop)
+          }
+        case ReadOutcome.Expired => resolveHeldEscape >> loop
       }
 
     // Decode any bytes TerminalShell's startup negotiation read off this same reader but couldn't attribute to its
