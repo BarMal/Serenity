@@ -151,7 +151,10 @@ object UiPreset:
 
   private def mergeBuiltInWorkflowConfig(base: AppConfig, preset: UiPreset): AppConfig =
     val source         = preset.config
-    val withMotion     = patchMotionConfig(base, source)
+    // The workflow's app mode travels with it: a prose workflow on a code workspace would otherwise leave the
+    // settings tree filtering out exactly the prose groups the workflow just made relevant.
+    val withMode       = base.withAppMode(source.appMode)
+    val withMotion     = patchMotionConfig(withMode, source)
     val withTypography = patchTypographyConfig(withMotion, source)
 
     nameKey(preset.name) match

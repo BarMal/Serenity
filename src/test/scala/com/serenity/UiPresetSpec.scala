@@ -160,6 +160,28 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     review.pinnedPanels.map(_.content) should contain(SessionPanelContent.Diagnostics(Nil))
   }
 
+  it should "carry the app mode each built-in workflow is for, and apply it with the workflow" in {
+    val writing = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
+    val docs    = UiPreset.builtIn("Documentation").getOrElse(fail("missing Documentation preset"))
+    val code    = UiPreset.builtIn("Code").getOrElse(fail("missing Code preset"))
+    val compact = UiPreset.builtIn("Compact").getOrElse(fail("missing Compact preset"))
+    val review  = UiPreset.builtIn("Review").getOrElse(fail("missing Review preset"))
+
+    writing.config.appMode shouldBe AppMode.Prose
+    docs.config.appMode shouldBe AppMode.Prose
+    code.config.appMode shouldBe AppMode.Code
+    compact.config.appMode shouldBe AppMode.Code
+    review.config.appMode shouldBe AppMode.Code
+
+    // A prose workflow picked from a code workspace must switch the workspace to prose: otherwise the settings tree
+    // keeps hiding the prose groups (Document Writing, Prose Font) the workflow just made relevant.
+    val fromCode = UiPreset.applyBuiltInWorkflowToState(writing, AppState.initial, Theme.dark)
+    fromCode.persisted.config.appMode shouldBe AppMode.Prose
+
+    val backToCode = UiPreset.applyBuiltInWorkflowToState(code, fromCode, Theme.dark)
+    backToCode.persisted.config.appMode shouldBe AppMode.Code
+  }
+
   it should "summarize presets for command runner previews" in {
     val writing = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
 

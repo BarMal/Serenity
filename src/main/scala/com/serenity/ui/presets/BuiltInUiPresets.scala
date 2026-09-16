@@ -25,6 +25,7 @@ private[presets] object BuiltInUiPresets:
     UiPreset(
       name = "Writing",
       config = AppConfig.default
+        .withAppMode(AppMode.Prose)
         .withLineNumbers(false)
         .withGutter(false)
         .withPaneHeaders(false)
@@ -50,6 +51,7 @@ private[presets] object BuiltInUiPresets:
     UiPreset(
       name = "Documentation",
       config = AppConfig.default
+        .withAppMode(AppMode.Prose)
         .withLineNumbers(true)
         .withGutter(false)
         .withPaneHeaders(false)
@@ -72,6 +74,7 @@ private[presets] object BuiltInUiPresets:
     UiPreset(
       name = "Code",
       config = AppConfig.default
+        .withAppMode(AppMode.Code)
         .withLineNumbers(true)
         .withGutter(true)
         .withMotionPreset(MotionPreset.Reduced)
@@ -96,6 +99,7 @@ private[presets] object BuiltInUiPresets:
     UiPreset(
       name = "Compact",
       config = AppConfig.default
+        .withAppMode(AppMode.Code)
         .withLineNumbers(true)
         .withGutter(true)
         .withPaneHeaders(true)
@@ -114,6 +118,7 @@ private[presets] object BuiltInUiPresets:
     UiPreset(
       name = "Review",
       config = AppConfig.default
+        .withAppMode(AppMode.Code)
         .withLineNumbers(true)
         .withGutter(true)
         .withMotionPreset(MotionPreset.Reduced)
