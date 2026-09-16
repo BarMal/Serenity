@@ -32,8 +32,14 @@ import org.scalatest.matchers.should.Matchers
   */
 class TerminalInputHandlerKittyBurstSpec extends AnyFlatSpec with Matchers:
 
-  private val StreamTimeout = 30.seconds
+  private val StreamTimeout = 60.seconds
   private val esc           = 0x1b.toByte
+
+  // These specs feed every byte up front, so an escape sequence's continuation is always already available -- what they
+  // verify is that the drain/decode never drops a byte at volume, not the 50ms lone-ESC disambiguation race (covered by
+  // TerminalInputHandlerSpec). A generous deadline keeps a starved CI runner from firing that race spuriously and
+  // splitting a CSI-u sequence, which would fail these assertions for a reason they aren't about.
+  private val EscDeadline = 10.seconds
 
   private val translator = new TextEntryTranslator(
     AppConfig.default.withHotkeyConfig(AppConfig.default.inputConfig.hotkeyConfig.forTerminalUse)
@@ -63,8 +69,14 @@ class TerminalInputHandlerKittyBurstSpec extends AnyFlatSpec with Matchers:
     val program = for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
-      handler   <- TerminalInputHandler.create(structuralTerminal(), router, clipboard, readerOverride = Some(reader))
-      strokes   <- handler.keyStrokeInfoStream.compile.toList
+      handler <- TerminalInputHandler.create(
+        structuralTerminal(),
+        router,
+        clipboard,
+        escDeadline = EscDeadline,
+        readerOverride = Some(reader)
+      )
+      strokes <- handler.keyStrokeInfoStream.compile.toList
     yield strokes
     program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out waiting for keystrokes"))
 
