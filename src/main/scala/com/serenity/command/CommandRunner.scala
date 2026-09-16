@@ -33,9 +33,10 @@ final case class CommandRunner(
     // override this with a deterministic catalog so results don't depend on what's installed on the machine running
     // them -- see `FontLoader.FontFamilyCatalog`'s doc.
     fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system,
-    // The cursor info bar segments' actual current order, refreshed alongside `optionSelections` in `activate`/
+    // The status line's actual current segment order, refreshed alongside `optionSelections` in `activate`/
     // `updateInputItems` -- threaded into `settingsGroups` so its reorder commands reflect it (issue #1298).
-    cursorInfoBarSegments: List[CursorInfoBarSegment] = Nil,
+    statusSegments: List[StatusSegment] = Nil,
+    context: CommandRunnerContext = CommandRunnerContext.empty,
     // issue #1048: MRU (most-recently-used) tracking for palette commands -- keyed by `Command.name`, valued by an
     // incrementing "recency generation" (higher = used more recently), bumped by `recordCommandUsage` whenever a
     // command executes from the palette. A generation counter rather than wall-clock time: recency-*ordering* is all
@@ -97,7 +98,13 @@ final case class CommandRunner(
         // recency (issue #1048's `commandUsage`) puts recently/frequently-used commands first while leaving every
         // never-used command in its original relative order -- so a fresh session (empty `commandUsage`) still
         // shows the exact same "sensible default set" it always has.
-        if state.searchTerm.isEmpty then commandItems.sortBy(item => -commandUsage.getOrElse(item.command.name, 0))
+        // Settings is a fixed first row that no amount of recency reorders past; behind it come the commands that
+        // can act on the current editing context (`CommandRelevance`), recently used ones first.
+        if state.searchTerm.isEmpty then
+          val (settingsEntry, commands) = commandItems.partition(item => CommandRelevance.isSettingsEntry(item.command))
+          settingsEntry ++ commands
+            .filter(item => CommandRelevance.isRelevant(item.command, context.editingContext))
+            .sortBy(item => -commandUsage.getOrElse(item.command.name, 0))
         else
           val (strongCommandMatches, remainingCommandMatches) =
             commandItems.partition(item => CommandRunnerSearch.isStrongCommandMatch(item.command, state.searchTerm))
@@ -165,7 +172,8 @@ final case class CommandRunner(
       editingPresetName = editingPresetName,
       isTuiMode = isTuiMode,
       fontFamilies = fontFamilies,
-      cursorInfoBarSegments = cursorInfoBarSegments
+      statusSegments = statusSegments,
+      context = context
     )
 
   def openSettings: CommandRunner =

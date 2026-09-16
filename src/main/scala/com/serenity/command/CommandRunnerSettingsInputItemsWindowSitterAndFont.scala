@@ -23,7 +23,7 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
         CommandRunnerSettingsTextParsing
           .nonEmptyCommaList(text)
           .map(values =>
-            CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterFrames(values.toVector)))
+            CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterFrames(values.toVector)))
           ),
       category = CommandCategory.Settings
     ),
@@ -38,7 +38,7 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
           .filter(value => value >= 1 && value <= 120)
           .map(commandIntentArg =>
             CommandIntent
-              .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterActiveTicks(commandIntentArg)))
+              .Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterActiveTicks(commandIntentArg)))
           ),
       category = CommandCategory.Settings,
       defaultValue = Some(AppConfig.default.windowSitterConfig.activeTicks.toString)
@@ -54,7 +54,7 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
           .filter(value => value >= 1 && value <= 240)
           .map(commandIntentArg =>
             CommandIntent.Settings(
-              SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterFastActiveTicks(commandIntentArg))
+              SettingsIntent.Decoration(DecorationIntent.SetWindowSitterFastActiveTicks(commandIntentArg))
             )
           ),
       category = CommandCategory.Settings,
@@ -71,7 +71,7 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
           .filter(value => value >= 1 && value <= 5000)
           .map(commandIntentArg =>
             CommandIntent.Settings(
-              SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowSitterFastTypingThresholdMs(commandIntentArg))
+              SettingsIntent.Decoration(DecorationIntent.SetWindowSitterFastTypingThresholdMs(commandIntentArg))
             )
           ),
       category = CommandCategory.Settings,
@@ -88,7 +88,7 @@ private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
           .filter(value => value >= 1 && value <= 50)
           .map(commandIntentArg =>
             CommandIntent
-              .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWheelScrollLines(commandIntentArg)))
+              .Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetWheelScrollLines(commandIntentArg)))
           ),
       category = CommandCategory.Settings,
       defaultValue = Some(AppConfig.default.inputConfig.wheelScrollLines.toString)

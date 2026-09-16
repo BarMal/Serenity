@@ -485,7 +485,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
           config = AppState.initial.persisted.config
             .withCursorMode(CursorMode.Blink)
             .withLineNumbers(false)
-            .withGutter(false)
+            .withoutStatusLine
             .withPaneHeaders(false),
           buffers = Map(buffer.id -> buffer),
           bufferOrder = List(buffer.id),
@@ -535,7 +535,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
         config = AppState.initial.persisted.config
           .withCursorMode(CursorMode.Blink)
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withPaneHeaders(false),
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),

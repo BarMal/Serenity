@@ -2,12 +2,12 @@ package com.serenity.ui.layout
 
 import com.serenity.state.models.SurfaceId
 
-/** Reusable geometry-containment checks for [[EditorLayoutContract.violations]]. Split out to keep the contract file
-  * under the architecture size target; each function is a pure predicate over rectangles/row slots.
+/** The rectangle-containment and overlap predicates `EditorLayoutContract.violations` is built from. Kept apart from
+  * the contract itself so the contract file reads as the list of ownership rules, not the arithmetic behind them.
   */
-object LayoutContractChecks:
+private[layout] object LayoutContractChecks:
 
-  def containedBy(
+  private[layout] def containedBy(
     ownerName: String,
     ownerRect: LayoutRect,
     children: List[(String, Option[LayoutRect])]
@@ -17,7 +17,7 @@ object LayoutContractChecks:
         LayoutContractViolation(ownerName, childName, ownerRect, childRect)
     }
 
-  def rowSlotViolations(
+  private[layout] def rowSlotViolations(
     ownerPrefix: String,
     ownerRects: Map[SurfaceId, LayoutRect],
     rowSlotsBySurface: Map[SurfaceId, List[SurfaceContentRowSlot]]
@@ -40,7 +40,7 @@ object LayoutContractChecks:
         }
     }
 
-  def titleContentOverlapViolations(
+  private[layout] def titleContentOverlapViolations(
     surfaceName: String,
     titleRect: Option[LayoutRect],
     contentRect: Option[LayoutRect]

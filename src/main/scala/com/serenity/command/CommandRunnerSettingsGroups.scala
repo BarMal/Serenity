@@ -1,17 +1,21 @@
 package com.serenity.command
 
-import com.serenity.config.{AppMode, CursorInfoBarSegment}
+import com.serenity.config.{AppMode, StatusSegment}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.UiPreset
 
-/** Builds command-runner settings groups from schema rows and current option selections. */
+/** Builds the settings tree from schema rows and current option selections.
+  *
+  * The tree is cut by the task someone is doing, not by where a value happens to live in `AppConfig`: Workspace (what
+  * am I working on), Editor (what the text area shows), Typography, Look, Motion, Language Tools and Keys. Each group
+  * that has knobs nobody needs day to day keeps them in one nested "Advanced" leaf rather than spreading them across
+  * the top level.
+  */
 object CommandRunnerSettingsGroups:
 
-  /** Derive the nested settings menu without depending on command-runner navigation state. */
   /** `isTuiMode` hides no controls -- every setting still applies its intent identically in TUI mode, so hiding one
-    * would make it impossible to prepare a config while running headless. Instead the two groups epic #1103 called out
-    * as inert in cell space (post-processing effects, typography) get their hint annotated to say so, exactly as
-    * `postProcessingOptionItem`'s own hint documents Cells-only granularity today.
+    * would make it impossible to prepare a config while running headless. Instead the groups epic #1103 called out as
+    * inert in cell space (post-processing effects, typography) get their hint annotated to say so.
     */
   def build(
     optionSelections: Map[String, Int],
@@ -24,436 +28,270 @@ object CommandRunnerSettingsGroups:
     // Desktop Publish release-blocker -- a Windows-only font whose family name happened to contain a search term
     // used in a settings-search test).
     fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system,
-    // The segments' actual current order (`AppConfig.cursorInfoBarSegments`) -- threaded through so the reorder
-    // commands `cursorInfoBarSegmentItems` builds reflect it (issue #1298). `Nil` falls back to that function's own
-    // fixed-order, ungated default.
-    cursorInfoBarSegments: List[CursorInfoBarSegment] = Nil
+    // The status line's actual current segment order, so its reorder commands reflect what is on screen (#1298).
+    statusSegments: List[StatusSegment] = Nil,
+    context: CommandRunnerContext = CommandRunnerContext.empty
   ): List[CommandSurfaceItem.GroupItem] =
     // Read off `optionSelections` rather than taking a separate `AppConfig` parameter: it is already the one place
     // every setting's current value reaches this builder, so mode filtering can't drift from what the app-mode
     // toggle itself displays as selected.
     val appMode = if optionSelections.getOrElse("app-mode", 0) == 1 then AppMode.Prose else AppMode.Code
     val showAllSettingsRegardlessOfMode = optionSelections.getOrElse("settings-show-all", 0) == 1
-    val cursorModeItem                  = CommandRunnerSettingsCursorItems.cursorModeOptionItem(optionSelections)
-    val cursorInfoBarItems =
-      CommandRunnerSettingsCursorItems.cursorInfoBarSegmentItems(optionSelections, cursorInfoBarSegments)
-    val cursorInfoPlacement     = CommandRunnerSettingsCursorItems.cursorInfoBarPlacementOptionItem(optionSelections)
-    val backgroundStyleItem     = CommandRunnerSettingsAppearanceItems.backgroundStyleOptionItem(optionSelections)
-    val interfaceDensityItem    = CommandRunnerSettingsAppearanceItems.interfaceDensityOptionItem(optionSelections)
-    val windowChromeItem        = CommandRunnerSettingsAppearanceItems.windowChromeOptionItem(optionSelections)
-    val windowSitterEnabledItem = CommandRunnerSettingsAppearanceItems.windowSitterEnabledOptionItem(optionSelections)
-    val windowSitterActionItem  = CommandRunnerSettingsAppearanceItems.windowSitterActionOptionItem(optionSelections)
-    val companionSpriteEnabledItem =
-      CommandRunnerSettingsAppearanceItems.companionSpriteEnabledOptionItem(optionSelections)
-    val visualFlairLevelItem = CommandRunnerSettingsAppearanceItems.visualFlairLevelOptionItem(optionSelections)
-    val materialPresetItem   = CommandRunnerSettingsAppearanceItems.materialPresetOptionItem(optionSelections)
-    val postProcessingItem =
-      annotateInertInTui(CommandRunnerSettingsAppearanceItems.postProcessingOptionItem(optionSelections), isTuiMode)
-    val uiShadowsItem           = CommandRunnerSettingsAppearanceItems.uiShadowsOptionItem(optionSelections)
-    val motionPresetItem        = CommandRunnerSettingsMotionItems.motionPresetOptionItem(optionSelections)
-    val motionAccessibilityItem = CommandRunnerSettingsMotionItems.motionAccessibilityOptionItem(optionSelections)
-    val commandRunnerFade       = CommandRunnerSettingsMotionItems.commandRunnerFadeOptionItem(optionSelections)
-    val uiAnimationItem         = CommandRunnerSettingsMotionItems.uiAnimationOptionItem(optionSelections)
-    val renderFpsItem           = CommandRunnerSettingsMotionItems.renderFpsOptionItem(optionSelections)
-    val renderDamageGranularityItem =
-      CommandRunnerSettingsMotionItems.renderDamageGranularityOptionItem(optionSelections)
-    val editorTextItem      = CommandRunnerSettingsMotionItems.editorTextTransitionOptionItem(optionSelections)
-    val panelOpenItem       = CommandRunnerSettingsMotionItems.panelOpenTransitionOptionItem(optionSelections)
-    val panelCloseItem      = CommandRunnerSettingsMotionItems.panelCloseTransitionOptionItem(optionSelections)
-    val commandRunnerReveal = CommandRunnerSettingsMotionItems.commandRunnerTransitionOptionItem(optionSelections)
-    val markdownViewItem    = CommandRunnerSettingsItems.markdownViewOptionItem(optionSelections)
-    val defaultDocumentItem = CommandRunnerSettingsItems.defaultDocumentModeOptionItem(optionSelections)
-    val spellCheckItem      = CommandRunnerSettingsItems.spellCheckOptionItem(optionSelections)
-    val textScaleModeItem   = CommandRunnerSettingsItems.textScaleModeOptionItem(optionSelections)
-    val lineNumbersItem     = CommandRunnerSettingsTextDisplayItems.lineNumbersOptionItem(optionSelections)
-    val lineNumberSideItem  = CommandRunnerSettingsTextDisplayItems.lineNumberSideOptionItem(optionSelections)
-    val wordCountItem       = CommandRunnerSettingsTextDisplayItems.wordCountOptionItem(optionSelections)
-    val gutterItem          = CommandRunnerSettingsTextDisplayItems.gutterOptionItem(optionSelections)
-    val lineWrapItem        = CommandRunnerSettingsTextDisplayItems.lineWrapOptionItem(optionSelections)
-    val visualLineNavigationItem =
-      CommandRunnerSettingsTextDisplayItems.visualLineNavigationOptionItem(optionSelections)
-    val typewriterScrollingItem = CommandRunnerSettingsTextDisplayItems.typewriterScrollingOptionItem(optionSelections)
-    val focusedTextBodyItem     = CommandRunnerSettingsTextDisplayItems.focusedTextBodyOptionItem(optionSelections)
-    val contextualToolbarItem   = CommandRunnerSettingsTextDisplayItems.contextualToolbarOptionItem(optionSelections)
-    val contextualToolbarDisplayItem =
-      CommandRunnerSettingsTextDisplayItems.contextualToolbarDisplayModeOptionItem(optionSelections)
-    val commandRunnerKeyHintsItem =
-      CommandRunnerSettingsTextDisplayItems.commandRunnerKeyHintsOptionItem(optionSelections)
-    val keymapItems = inputItems.filter(_.id.startsWith("keymap-"))
-    val workspaceLayoutGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-workspace-layout",
-      label = "Panels & Workspace",
-      children = CommandRunnerSettingsPanelItems.workspaceLayoutItems(optionSelections),
-      category = CommandCategory.Settings,
-      hint = Some("Pin, focus, expand, and unpin panels")
+    val showProseSettings               = showAllSettingsRegardlessOfMode || appMode == AppMode.Prose
+    val showCodeSettings                = showAllSettingsRegardlessOfMode || appMode == AppMode.Code
+    def input(ids: String*): List[CommandSurfaceItem.InputItem] =
+      ids.toList.flatMap(id => inputItems.find(_.id == id))
+    def group(id: String, label: String, hint: String, children: List[CommandSurfaceItem]) =
+      CommandSurfaceItem.GroupItem(id, label, children, CommandCategory.Settings, Some(hint))
+
+    val workspaceLayoutGroup = group(
+      "settings-workspace-layout",
+      "Panels",
+      "Pin, focus, expand, and unpin panels",
+      CommandRunnerSettingsPanelItems.workspaceLayoutItems(optionSelections)
     )
-    // issue #1057: Next/Previous Bookmark, Navigate Back/Forward, etc. used to live here too, as fake "settings"
-    // that just executed a one-shot action with no persisted value. They are ordinary CommandRegistry commands now
-    // (already were, in fact -- this group's own construction just duplicated them), reachable only via the palette.
-    // The one item that stays: authoring a document comment's text is a real input, not a one-shot action.
-    val navigationGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-navigation",
-      label = "Navigation",
-      children = inputItems.filter(_.id == "document-comment"),
-      category = CommandCategory.Settings,
-      hint = Some("Author a document comment")
+    val textDisplayGroup = group(
+      "settings-text-display",
+      "Text Display",
+      "Line numbers, wrap, scrolling, focus, toolbar",
+      List(
+        CommandRunnerSettingsTextDisplayItems.lineNumbersOptionItem(optionSelections),
+        CommandRunnerSettingsTextDisplayItems.lineNumberSideOptionItem(optionSelections)
+      ) ++ input("line-number-margin-left", "line-number-margin-right", "line-number-padding") ++ List(
+        CommandRunnerSettingsTextDisplayItems.lineWrapOptionItem(optionSelections),
+        CommandRunnerSettingsTextDisplayItems.visualLineNavigationOptionItem(optionSelections),
+        CommandRunnerSettingsTextDisplayItems.typewriterScrollingOptionItem(optionSelections)
+      ) ++ input("wheel-scroll-lines") ++ List(
+        CommandRunnerSettingsTextDisplayItems.focusedTextBodyOptionItem(optionSelections),
+        CommandRunnerSettingsTextDisplayItems.contextualToolbarOptionItem(optionSelections),
+        CommandRunnerSettingsTextDisplayItems.contextualToolbarDisplayModeOptionItem(optionSelections)
+      )
     )
-    val textDisplayGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-text-display",
-      label = "Text Display",
-      children = List(
-        lineNumbersItem,
-        lineNumberSideItem
-      ) ++ inputItems.filter(item =>
-        item.id == "line-number-margin-left" ||
-          item.id == "line-number-margin-right" ||
-          item.id == "line-number-padding"
-      ) ++ List(
-        gutterItem,
-        lineWrapItem,
-        visualLineNavigationItem,
-        typewriterScrollingItem,
-        wordCountItem,
-        focusedTextBodyItem,
-        contextualToolbarItem,
-        contextualToolbarDisplayItem
-      ),
-      category = CommandCategory.Settings,
-      hint = Some("Line numbers, placement, gutter, wrap, visual-line navigation, word count, focus, toolbar")
+    val statusLineGroup = group(
+      "settings-status-line",
+      "Status Line",
+      "Placement, segments, and their order",
+      CommandRunnerSettingsStatusLineItems.placementOptionItem(optionSelections) ::
+        CommandRunnerSettingsStatusLineItems.segmentItems(optionSelections, statusSegments)
     )
-    val motionInputIds = Set(
-      "element-transition-speed-scale",
-      "editor-text-speed-scale",
-      "command-runner-speed-scale",
-      "ui-speed-scale"
+    val textAreaGroup = group(
+      "settings-text-area",
+      "Text Area",
+      "Resize editor margins",
+      input("text-area-left", "text-area-right", "text-area-top", "text-area-bottom")
     )
-    val advancedMotionInputIds =
-      if optionSelections.get("motion-preset").contains(4) then Set("animation-duration", "animation-steps")
-      else Set.empty[String]
-    val windowSitterInputIds = Set(
-      "window-sitter-frames",
-      "window-sitter-active-ticks",
-      "window-sitter-fast-active-ticks",
-      "window-sitter-fast-threshold-ms"
+    val documentDefaultsGroup = group(
+      "settings-document-defaults",
+      "Document Defaults",
+      "New document mode and Markdown view",
+      List(
+        CommandRunnerSettingsItems.defaultDocumentModeOptionItem(optionSelections),
+        CommandRunnerSettingsItems.markdownViewOptionItem(optionSelections)
+      )
     )
-    val animationGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-animation",
-      label = "Motion & Animation",
-      children = List(
-        motionAccessibilityItem,
-        motionPresetItem,
-        editorTextItem,
-        panelOpenItem,
-        panelCloseItem,
-        commandRunnerReveal,
-        commandRunnerFade,
-        uiAnimationItem
-      ) ++ inputItems.filter(item => item.id == "cursor-speed-scale" || motionInputIds.contains(item.id)) ++
-        List(windowSitterEnabledItem, windowSitterActionItem) ++
-        inputItems.filter(item => windowSitterInputIds.contains(item.id) || advancedMotionInputIds.contains(item.id)),
-      category = CommandCategory.Settings,
-      hint = Some("Reveal style, timing, speed, and window sitter")
-    )
-    val cursorGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-cursor",
-      label = "Cursor",
-      children = List(cursorModeItem) ++ cursorInfoBarItems ++ List(cursorInfoPlacement),
-      category = CommandCategory.Settings,
-      hint = Some("Cursor style, info bar, placement")
-    )
-    val surfaceAppearanceGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-surface-appearance",
-      label = "Surface Appearance",
-      children = List(backgroundStyleItem, materialPresetItem, postProcessingItem, uiShadowsItem) ++ inputItems.filter(
-        _.id == "blur-radius"
-      ),
-      category = CommandCategory.Settings,
-      hint = Some("Background, material, blur, and effects")
-    )
-    val interfaceLayoutGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-interface-layout",
-      label = "Interface Layout",
-      children = List(interfaceDensityItem, windowChromeItem, commandRunnerKeyHintsItem) ++ inputItems.filter(item =>
-        item.id == "ui-element-gap" ||
-          item.id == "ui-corner-radius" ||
-          item.id == "ui-outline-thickness"
-      ),
-      category = CommandCategory.Settings,
-      // issue #1046: command-runner row count/spacing (visible rows, item gap, cursor gap) is no longer editable
-      // here as three separate knobs -- Interface Density above is the one control that governs all three; the
-      // underlying config keys still parse as explicit overrides for back-compat, they just aren't palette rows.
-      hint = Some("Density, spacing, window chrome, key hints")
-    )
-    val renderingGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-rendering",
-      label = "Rendering",
-      children = List(renderFpsItem, renderDamageGranularityItem),
-      category = CommandCategory.Settings,
-      hint = Some("Render loop cadence and performance")
-    )
-    val textAreaGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-text-area",
-      label = "Text Area",
-      children = inputItems.filter(item =>
-        item.id == "text-area-left" ||
-          item.id == "text-area-right" ||
-          item.id == "text-area-top" ||
-          item.id == "text-area-bottom"
-      ),
-      category = CommandCategory.Settings,
-      hint = Some("Resize editor margins")
-    )
-    val codeFontGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-code-font",
-      label = "Code Font",
-      children = List(
-        CommandRunnerSettingsItems.codeFontGroupItem(optionSelections, fontFamilies.monospace),
-        CommandRunnerSettingsItems.codeLigaturesOptionItem(optionSelections)
-      ) ++ inputItems.filter(_.id == "code-font-size"),
-      category = CommandCategory.Settings,
-      hint = Some(inertInTuiHint("Family, size, ligatures", isTuiMode))
-    )
-    val proseFontGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-prose-font",
-      label = "Prose Font",
-      children = List(
+    // issue #1057: the one-shot navigation commands that used to sit here are ordinary palette commands. The one item
+    // that stays is authoring a document comment's text, a real input rather than an action.
+    val commentsGroup = group("settings-navigation", "Comments", "Author a document comment", input("document-comment"))
+    val fontHint      = inertInTuiHint("Family, size, ligatures", isTuiMode)
+    val proseFontGroup = group(
+      "settings-prose-font",
+      "Prose Font",
+      fontHint,
+      List(
         CommandRunnerSettingsItems.textFontGroupItem(optionSelections, fontFamilies.text),
         CommandRunnerSettingsItems.textLigaturesOptionItem(optionSelections)
-      ) ++ inputItems.filter(_.id == "text-font-size"),
-      category = CommandCategory.Settings,
-      hint = Some(inertInTuiHint("Family, size, ligatures", isTuiMode))
+      ) ++ input("text-font-size")
     )
-    val richTextGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-rich-text",
-      label = "Rich Text",
-      // issue #1060: font family is a picker now, matching code/prose/UI font family -- no longer typed free text.
-      children = List(CommandRunnerSettingsItems.richTextFontGroupItem(optionSelections, fontFamilies.text)) ++
-        inputItems.filter(_.id.startsWith("rich-text-")),
-      category = CommandCategory.Settings,
-      hint = Some("Selection family, size, colour")
+    val codeFontGroup = group(
+      "settings-code-font",
+      "Code Font",
+      fontHint,
+      List(
+        CommandRunnerSettingsItems.codeFontGroupItem(optionSelections, fontFamilies.monospace),
+        CommandRunnerSettingsItems.codeLigaturesOptionItem(optionSelections)
+      ) ++ input("code-font-size")
     )
-    val uiFontGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-ui-font",
-      label = "UI Font",
-      children = List(
+    val uiFontGroup = group(
+      "settings-ui-font",
+      "UI Font",
+      fontHint,
+      List(
         CommandRunnerSettingsItems.uiFontGroupItem(optionSelections, fontFamilies.ui),
         CommandRunnerSettingsItems.uiLigaturesOptionItem(optionSelections)
-      ) ++ inputItems.filter(_.id == "ui-font-size"),
-      category = CommandCategory.Settings,
-      hint = Some(inertInTuiHint("Family, size, ligatures", isTuiMode))
+      ) ++ input("ui-font-size")
     )
-    val textScaleGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-text-scale",
-      label = "Text Scale",
-      children = List(textScaleModeItem) ++ inputItems.filter(_.id == "text-scale"),
-      category = CommandCategory.Settings,
-      hint = Some("Adapt all text to display scale")
+    val textScaleGroup = group(
+      "settings-text-scale",
+      "Text Scale",
+      "Adapt all text to display scale",
+      CommandRunnerSettingsItems.textScaleModeOptionItem(optionSelections) :: input("text-scale")
     )
-    val documentDefaultsGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-document-defaults",
-      label = "Document Defaults",
-      children = List(defaultDocumentItem, markdownViewItem),
-      category = CommandCategory.Settings,
-      hint = Some("New document mode and previews")
+    // issue #1060: font family is a picker now, matching code/prose/UI font family -- no longer typed free text.
+    val richTextGroup = group(
+      "settings-rich-text",
+      "Rich Text",
+      "Selection family, size, colour",
+      CommandRunnerSettingsItems.richTextFontGroupItem(optionSelections, fontFamilies.text) ::
+        inputItems.filter(_.id.startsWith("rich-text-"))
     )
-    val spellCheckGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-spellcheck",
-      label = "Spell Check",
-      children = List(spellCheckItem) ++ inputItems.filter(item =>
-        item.id == "spellcheck-languages" || item.id == "spellcheck-dictionaries" || item.id == "spellcheck-words"
-      ),
-      category = CommandCategory.Settings,
-      hint = Some("Enable, languages, dictionaries, accepted words")
-    )
-    val keymapGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-keymap",
-      label = "Keymap",
-      children = keymapItems,
-      category = CommandCategory.Settings,
-      hint = Some("Inspect and edit bindings")
-    )
-    val documentWritingGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-document-writing",
-      label = "Document Writing",
-      children = List(navigationGroup, documentDefaultsGroup, richTextGroup, spellCheckGroup),
-      category = CommandCategory.Settings,
-      hint = Some("Comments, previews, styling, and spelling")
-    )
-    val editorViewGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-editor-view",
-      label = "Editor View",
-      children = List(textDisplayGroup, textAreaGroup, textScaleGroup),
-      category = CommandCategory.Settings,
-      hint = Some("Wrap, gutters, margins, display scale")
-    )
-    val typographyGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-typography",
-      label = "Typography",
-      children = List(proseFontGroup, codeFontGroup, uiFontGroup),
-      category = CommandCategory.Settings,
-      hint = Some(inertInTuiHint("Typefaces for prose, code, and interface", isTuiMode))
-    )
-    val appearanceMotionGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-appearance-motion",
-      label = "Appearance & Motion",
-      children = List(cursorGroup, surfaceAppearanceGroup, interfaceLayoutGroup, renderingGroup, animationGroup),
-      category = CommandCategory.Settings,
-      hint = Some("Visual styling, spacing, and movement")
-    )
-    val editingPreset = presetEditContextName(optionSelections, uiPresetPreviews, editingPresetName)
-    val presetInputItems =
-      inputItems.filter(_.id.startsWith("ui-preset-")).map(withPresetInputContext(_, editingPreset))
-    val createPresetItems = presetInputItems.filter(_.id == "ui-preset-save-as-new")
-    val renamePresetItems = presetInputItems.filter(_.id == "ui-preset-rename")
-    // issue #1060: Apply/Overwrite/Delete/Reset act on one *existing* preset, so they pick from the same built-in-
-    // plus-saved catalog `ui-preset-select` already carousels through, instead of requiring a typed exact name.
-    val presetActionItems = List(
-      CommandRunnerSettingsItems.presetActionOptionItem(
-        "ui-preset-apply",
-        "Apply Preset",
-        "Reapply this preset's settings",
-        uiPresetPreviews,
-        editingPreset,
-        UiPresetsIntent.ApplyUiPreset(_)
-      ),
-      CommandRunnerSettingsItems.presetActionOptionItem(
-        "ui-preset-overwrite",
-        "Overwrite Preset",
-        "Save the current workspace into this preset",
-        uiPresetPreviews,
-        editingPreset,
-        UiPresetsIntent.OverwriteUiPreset(_)
-      )
-    ) ++ presetInputItems.filter(_.id == "ui-preset-duplicate") ++ List(
-      CommandRunnerSettingsItems.presetActionOptionItem(
-        "ui-preset-delete",
-        "Delete Preset",
-        "Remove this preset",
-        uiPresetPreviews,
-        editingPreset,
-        UiPresetsIntent.DeleteUiPreset(_)
-      ),
-      CommandRunnerSettingsItems.presetActionOptionItem(
-        "ui-preset-reset",
-        "Reset Preset",
-        "Discard this preset's overrides",
-        uiPresetPreviews,
-        editingPreset,
-        UiPresetsIntent.ResetUiPreset(_)
+    val themeGroup = CommandRunnerSettingsItems.themeGroupItem(context.themeNames, context.currentThemeName)
+    val surfaceAppearanceGroup = group(
+      "settings-surface-appearance",
+      "Surface Appearance",
+      "Background, material, and effects",
+      List(
+        CommandRunnerSettingsAppearanceItems.backgroundStyleOptionItem(optionSelections),
+        CommandRunnerSettingsAppearanceItems.materialPresetOptionItem(optionSelections),
+        annotateInertInTui(CommandRunnerSettingsAppearanceItems.postProcessingOptionItem(optionSelections), isTuiMode),
+        CommandRunnerSettingsAppearanceItems.uiShadowsOptionItem(optionSelections)
       )
     )
-    val presetNameGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-name",
-      label = "Name",
-      children = renamePresetItems,
-      category = CommandCategory.Settings,
-      hint = Some("Rename this preset")
+    // issue #1046: command-runner row count/spacing (visible rows, item gap, cursor gap) is not editable here as
+    // three separate knobs -- Interface Density is the one control that governs all three; the underlying config
+    // keys still parse as explicit overrides for back-compat, they just aren't palette rows.
+    val interfaceLayoutGroup = group(
+      "settings-interface-layout",
+      "Interface Layout",
+      "Density, window chrome, key hints",
+      List(
+        CommandRunnerSettingsAppearanceItems.interfaceDensityOptionItem(optionSelections),
+        CommandRunnerSettingsAppearanceItems.windowChromeOptionItem(optionSelections),
+        CommandRunnerSettingsTextDisplayItems.commandRunnerKeyHintsOptionItem(optionSelections)
+      )
     )
-    val presetActionsGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-actions",
-      label = "Preset Actions",
-      children = presetActionItems,
-      category = CommandCategory.Settings,
-      hint = Some("Apply, overwrite, duplicate, delete, or reset")
+    val cursorGroup = group(
+      "settings-cursor",
+      "Cursor",
+      "Blink or breathe",
+      List(CommandRunnerSettingsCursorItems.cursorModeOptionItem(optionSelections))
     )
-    val createPresetNameGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-create-name",
-      label = "Name",
-      children = createPresetItems,
-      category = CommandCategory.Settings,
-      hint = Some("Save the current workspace as a new preset")
+    val lookAdvancedGroup = group(
+      "settings-look-advanced",
+      "Advanced",
+      "Blur, spacing, corners, outlines, render cadence, decorative extras",
+      input("blur-radius", "ui-element-gap", "ui-corner-radius", "ui-outline-thickness") ++ List(
+        CommandRunnerSettingsMotionItems.renderFpsOptionItem(optionSelections),
+        CommandRunnerSettingsMotionItems.renderDamageGranularityOptionItem(optionSelections),
+        CommandRunnerSettingsAppearanceItems.visualFlairLevelOptionItem(optionSelections),
+        CommandRunnerSettingsAppearanceItems.companionSpriteEnabledOptionItem(optionSelections)
+      )
     )
-    // issue #1058: editing a preset used to walk a hand-maintained parallel tree of clone groups (Active Panels,
-    // Theme & Surface > Surface Material, Animations > Cursor/Text Entry/UI Surface Motion, Fonts > Editor/Code/UI
-    // Typography, Document Defaults > New Documents/Markdown Preview/Spelling) that re-sliced and re-labelled the
-    // exact same canonical items built above under new ids, several levels deeper than the equivalent top-level
-    // screen. Editing a preset already reads and writes the same live settings as the top-level Settings screens
-    // (see `presetEditContextName`/`CommandRunner.editingPresetName` -- explicit Apply/Overwrite/Reset actions are
-    // what move values between live config and a stored preset), so "scoped settings screens" means reusing those
-    // same canonical groups verbatim -- only their id is retagged (`settings-preset-*`) so they remain addressable
-    // as distinct pages from their top-level counterparts in the same navigation tree.
-    val presetScopedGroups = List(
+    val customMotionInputIds =
+      if optionSelections.get("motion-preset").contains(4) then List("animation-duration", "animation-steps") else Nil
+    val motionAdvancedGroup = group(
+      "settings-motion-advanced",
+      "Advanced",
+      "Per-family speed, custom timing, window sitter tuning",
+      input(
+        "cursor-speed-scale",
+        "element-transition-speed-scale",
+        "editor-text-speed-scale",
+        "command-runner-speed-scale",
+        "ui-speed-scale"
+      ) ++ input(customMotionInputIds*) ++ input(
+        "window-sitter-frames",
+        "window-sitter-active-ticks",
+        "window-sitter-fast-active-ticks",
+        "window-sitter-fast-threshold-ms"
+      )
+    )
+    val motionGroup = group(
+      "settings-animation",
+      "Motion",
+      "Accessibility, preset, reveal style, window sitter",
+      List(
+        CommandRunnerSettingsMotionItems.motionAccessibilityOptionItem(optionSelections),
+        CommandRunnerSettingsMotionItems.motionPresetOptionItem(optionSelections),
+        CommandRunnerSettingsMotionItems.editorTextTransitionOptionItem(optionSelections),
+        CommandRunnerSettingsMotionItems.panelOpenTransitionOptionItem(optionSelections),
+        CommandRunnerSettingsMotionItems.panelCloseTransitionOptionItem(optionSelections),
+        CommandRunnerSettingsMotionItems.commandRunnerTransitionOptionItem(optionSelections),
+        CommandRunnerSettingsMotionItems.commandRunnerFadeOptionItem(optionSelections),
+        CommandRunnerSettingsMotionItems.uiAnimationOptionItem(optionSelections),
+        CommandRunnerSettingsAppearanceItems.windowSitterEnabledOptionItem(optionSelections),
+        CommandRunnerSettingsAppearanceItems.windowSitterActionOptionItem(optionSelections),
+        motionAdvancedGroup
+      )
+    )
+    val bufferLanguageGroup = CommandRunnerSettingsItems.bufferLanguageGroupItem(context.bufferLanguage)
+    val spellCheckGroup = group(
+      "settings-spellcheck",
+      "Spell Check",
+      "Enable, languages, dictionaries, accepted words",
+      CommandRunnerSettingsItems.spellCheckOptionItem(optionSelections) ::
+        input("spellcheck-languages", "spellcheck-dictionaries", "spellcheck-words")
+    )
+    val keysGroup = group(
+      "settings-keymap",
+      "Keys",
+      "Inspect and edit bindings",
+      inputItems.filter(_.id.startsWith("keymap-"))
+    )
+
+    // issue #1058: editing a preset reuses these same canonical groups verbatim, only retagged (`settings-preset-*`)
+    // so they stay addressable as distinct pages from their top-level counterparts.
+    val presetScoped = List(
       workspaceLayoutGroup.copy(id = "settings-preset-workspace-layout"),
       surfaceAppearanceGroup.copy(id = "settings-preset-surface-appearance"),
       cursorGroup.copy(id = "settings-preset-cursor"),
-      animationGroup.copy(id = "settings-preset-animation"),
+      motionGroup.copy(id = "settings-preset-animation"),
       proseFontGroup.copy(id = "settings-preset-prose-font"),
       codeFontGroup.copy(id = "settings-preset-code-font"),
       uiFontGroup.copy(id = "settings-preset-ui-font"),
       documentDefaultsGroup.copy(id = "settings-preset-document-defaults"),
       spellCheckGroup.copy(id = "settings-preset-spellcheck")
     )
-    val selectPresetGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-select",
-      label = "Select Preset",
-      children = List(CommandRunnerSettingsItems.uiPresetSelectOptionItem(uiPresetPreviews, optionSelections)),
-      category = CommandCategory.Settings,
-      hint = Some("Browse available presets")
-    )
-    val createPresetGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-create",
-      label = "Create New Preset",
-      children = createPresetNameGroup :: presetScopedGroups,
-      category = CommandCategory.Settings,
-      hint = Some("Start from current workspace settings")
-    )
-    val editPresetGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-preset-edit",
-      label = editingPreset.fold("Edit Preset")(name => s"Edit Preset: $name"),
-      children = List(presetNameGroup, presetActionsGroup) ++ presetScopedGroups,
-      category = CommandCategory.Settings,
-      hint = Some(editingPreset.fold("Document, layout, typography, motion")(name => s"Editing $name"))
-    )
-    val uiPresetsGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-ui-presets",
-      label = "UI Presets",
-      children = List(selectPresetGroup, createPresetGroup, editPresetGroup),
-      category = CommandCategory.Settings,
-      hint = Some("Save or apply named layouts")
-    )
-    val accessibilityGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-accessibility",
-      label = "Accessibility",
-      children = List(motionAccessibilityItem),
-      category = CommandCategory.Settings,
-      hint = Some("Motion accessibility and reading comfort")
-    )
-    val performanceGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-performance",
-      label = "Performance",
-      children = List(visualFlairLevelItem, companionSpriteEnabledItem),
-      category = CommandCategory.Settings,
-      hint = Some("Trim purely decorative extras on a slow link or a battery-powered machine")
-    )
-    val appModeGroup = CommandSurfaceItem.GroupItem(
-      id = "settings-app-mode",
-      label = "App Mode",
-      children = List(
-        CommandRunnerSettingsItems.appModeOptionItem(optionSelections),
-        CommandRunnerSettingsItems.showAllSettingsOptionItem(optionSelections)
-      ),
-      category = CommandCategory.Settings,
-      hint = Some("Code or prose workspace -- filters which settings are shown below")
-    )
-    // Always shown regardless of mode, otherwise a user in prose mode could never find the toggle back to code mode.
-    val showProseSettings = showAllSettingsRegardlessOfMode || appMode == AppMode.Prose
-    val showCodeSettings  = showAllSettingsRegardlessOfMode || appMode == AppMode.Code
-    val filteredTypographyGroup = typographyGroup.copy(children = typographyGroup.children.filter {
-      case item if item.id == "settings-prose-font" => showProseSettings
-      case item if item.id == "settings-code-font"  => showCodeSettings
-      case _                                        => true
-    })
-    List(appModeGroup, workspaceLayoutGroup) ++
-      (if showProseSettings then List(documentWritingGroup) else Nil) ++
-      List(
-        editorViewGroup,
-        filteredTypographyGroup,
-        appearanceMotionGroup,
-        uiPresetsGroup,
-        accessibilityGroup,
-        performanceGroup,
-        keymapGroup
+    val presetsGroup =
+      CommandRunnerSettingsPresetGroups.build(
+        optionSelections,
+        inputItems,
+        uiPresetPreviews,
+        editingPresetName,
+        presetScoped
       )
+
+    val workspaceGroup = group(
+      "settings-workspace",
+      "Workspace",
+      "Code or prose mode, presets, panels",
+      List(
+        CommandRunnerSettingsItems.appModeOptionItem(optionSelections),
+        CommandRunnerSettingsItems.showAllSettingsOptionItem(optionSelections),
+        workspaceLayoutGroup,
+        presetsGroup
+      )
+    )
+    val editorGroup = group(
+      "settings-editor",
+      "Editor",
+      "Display, status line, margins, documents, comments",
+      List(textDisplayGroup, statusLineGroup, textAreaGroup, documentDefaultsGroup, commentsGroup)
+    )
+    val typographyGroup = group(
+      "settings-typography",
+      "Typography",
+      inertInTuiHint("Typefaces for prose, code, and interface", isTuiMode),
+      List(
+        Option.when(showProseSettings)(proseFontGroup),
+        Option.when(showCodeSettings)(codeFontGroup),
+        Some(uiFontGroup),
+        Some(textScaleGroup),
+        Option.when(showProseSettings)(richTextGroup)
+      ).flatten
+    )
+    val lookGroup = group(
+      "settings-look",
+      "Look",
+      "Theme, surfaces, density, cursor",
+      List(themeGroup, surfaceAppearanceGroup, interfaceLayoutGroup, cursorGroup, lookAdvancedGroup)
+    )
+    val languageToolsGroup = group(
+      "settings-language-tools",
+      "Language Tools",
+      "Buffer language and spelling",
+      bufferLanguageGroup :: Option.when(showProseSettings)(spellCheckGroup).toList
+    )
+    List(workspaceGroup, editorGroup, typographyGroup, lookGroup, motionGroup, languageToolsGroup, keysGroup)
 
   /** Lead a hint with the note that the control it describes has no visible effect on a fixed-cell terminal surface --
     * the setting still applies and persists identically, it just paints nothing different in TUI mode (see epic #1103's
@@ -471,42 +309,3 @@ object CommandRunnerSettingsGroups:
     isTuiMode: Boolean
   ): CommandSurfaceItem.OptionItem =
     item.copy(hint = Some(inertInTuiHint(item.hint.getOrElse(item.label), isTuiMode)))
-
-  private[command] def presetEditContextName(
-    optionSelections: Map[String, Int],
-    uiPresetPreviews: List[UiPreset.Preview],
-    editingPresetName: Option[String]
-  ): Option[String] =
-    editingPresetName
-      .map(_.trim)
-      .filter(_.nonEmpty)
-      .orElse(
-        optionSelections
-          .get("ui-preset-custom")
-          .flatMap(index => uiPresetPreviews.lift(index))
-          .map(_.name)
-      )
-      .orElse(
-        optionSelections
-          .get("ui-preset-built-in")
-          .flatMap(index => UiPreset.builtIns.lift(index))
-          .map(_.name)
-      )
-      .orElse(UiPreset.builtIns.headOption.map(_.name))
-
-  // issue #1060: only Duplicate/Rename still take typed input (both need a new name, which can't be picked from an
-  // existing-preset list) -- Apply/Overwrite/Delete/Reset are pickers now (`presetActionOptionItem`), so they no
-  // longer take a prefill via `currentValue`.
-  private def withPresetInputContext(
-    item: CommandSurfaceItem.InputItem,
-    presetName: Option[String]
-  ): CommandSurfaceItem.InputItem =
-    presetName match
-      case Some(name) =>
-        item.id match
-          case "ui-preset-duplicate" | "ui-preset-rename" =>
-            item.copy(currentValue = s"$name -> ")
-          case _ =>
-            item
-      case None =>
-        item

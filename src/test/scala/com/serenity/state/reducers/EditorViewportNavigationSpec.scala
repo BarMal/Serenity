@@ -23,7 +23,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(0)
     val initialState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
-        config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(true),
+        config = AppConfig.default.withLineNumbers(false).withoutStatusLine.withWordWrap(true),
         buffers = AppState.initial.persisted.buffers.updated(
           bufferId,
           AppState.initial.persisted

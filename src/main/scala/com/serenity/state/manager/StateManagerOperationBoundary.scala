@@ -51,7 +51,8 @@ final private[manager] class StateManagerOperationBoundary private (
         registry,
         state.persisted.config,
         state.runtime.isTuiMode,
-        state.runtime.keyboardFidelityTier
+        state.runtime.keyboardFidelityTier,
+        state.commandRunnerContext
       )
     val runner = activatedRunner.copy(
       optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)

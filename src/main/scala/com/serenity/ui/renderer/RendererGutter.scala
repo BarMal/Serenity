@@ -1,16 +1,10 @@
 package com.serenity.ui.renderer
 
-import com.serenity.config.{AppMode, CornerPosition, CursorInfoBarPlacement}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
-/** Paints the line-number column and the bottom gutter row (cursor position, language, filename, and the optional
-  * mode/tab corner widget), and the small chrome-text helpers those two share.
-  *
-  * It owns the whole mode/tab corner widget (issue #1307), both corners, which is why [[applyModeTabWidgetToTopCorner]]
-  * is public rather than private: `TopLeft`/`TopRight` fold into the active pane's header text, painted by
-  * [[RendererPaneContent]], and the two corners must agree on the glyph and the segment format or the indicator changes
-  * shape when the user moves it.
+/** Paints the line-number column and the pinned status row (`AppState.statusLineText`), and the small chrome-text
+  * helpers those two share.
   */
 object RendererGutter:
 
@@ -193,33 +187,25 @@ object RendererGutter:
     contract.gutterRect.foreach { gutterRect =>
       context.surface.text.setFont(context.uiFont)
       val surface = context.surface
+      val colors  = state.persisted.config.statusLine.colors
 
-      // #1295: scoped to the pinned-bottom cursor info bar the same way TextOverlayRenderer scopes its own colour
-      // override to the floating cursor info bar surface -- the legacy gutter (no info bar text to show) keeps the
-      // theme's own panel colours unconditionally.
-      val showsCursorInfoBar =
-        state.persisted.config.cursorInfoBarPlacement == CursorInfoBarPlacement.PinnedBottom &&
-          state.cursorInfoBarText.nonEmpty
-      val infoBarColors = state.persisted.config.cursorInfoBarColors
-      val gutterBackground =
-        if showsCursorInfoBar then infoBarColors.backgroundOr(state.persisted.theme.panel.background)
-        else state.persisted.theme.panel.background
-      val gutterForeground =
-        if showsCursorInfoBar then infoBarColors.foregroundOr(state.persisted.theme.panel.foreground)
-        else state.persisted.theme.panel.foreground
-
-      surface.setBackgroundColor(gutterBackground)
-      surface.setForegroundColor(gutterForeground)
-
+      surface.setBackgroundColor(colors.backgroundOr(state.persisted.theme.panel.background))
+      surface.setForegroundColor(colors.foregroundOr(state.persisted.theme.panel.foreground))
       surface.fillRect(gutterRect.x, gutterRect.y, gutterRect.width, gutterRect.height, ' ')
 
-      val gutterContent = buildGutterContent(state)
+      val content = s" ${state.statusLineText.getOrElse(emptyWorkspaceStatus(state))} "
       val displayContent =
-        if gutterContent.length > gutterRect.width then gutterContent.take(gutterRect.width - 3) + "..."
-        else gutterContent
+        if content.length > gutterRect.width then content.take(gutterRect.width - 3) + "..."
+        else content
 
       drawUiTextInCellRect(surface, context, gutterRect, displayContent)
     }
+
+  private def emptyWorkspaceStatus(state: AppState): String =
+    state.persisted.layout.activeEditorPaneId.flatMap(state.persisted.layout.editorPanes.get) match
+      case Some(pane) if pane.bufferId.flatMap(state.persisted.buffers.get).isEmpty => "No active buffer"
+      case Some(_)                                                                  => ""
+      case None                                                                     => "No active editor pane"
 
   private def drawUiTextInCellRect(
     surface: RenderSurface,
@@ -259,64 +245,3 @@ object RendererGutter:
       case None =>
         val middleRow = rect.y + math.max(0, (rect.height - 1) / 2)
         CharacterRenderer.renderString(surface, rect.x, middleRow, text.take(math.max(0, rect.width)))
-
-  private def buildGutterContent(state: AppState): String =
-    val base =
-      if state.persisted.config.cursorInfoBarPlacement == CursorInfoBarPlacement.PinnedBottom then
-        state.cursorInfoBarText.map(text => s" $text ").getOrElse(legacyGutterContent(state))
-      else legacyGutterContent(state)
-    // Opt-in (`surfaceConfig.showWordCount`, off by default): appended as its own segment rather than folded into
-    // `legacyGutterContent`/`cursorInfoBarText`, both of which existing callers assert on as exact strings.
-    val withWordCount = state.wordCountStatusText.fold(base)(segment => s" ${base.trim} | $segment ")
-    applyModeTabWidgetToBottomCorner(state, withWordCount)
-
-  /** Folds the mode indicator (issue #1307) into the gutter row's own already-reserved, already-dynamic text for
-    * `BottomLeft`/`BottomRight` rather than painting a separate rect over it -- the gutter is the only screen row every
-    * render already treats as free to overwrite each frame, so sharing it (the same way `wordCountStatusText` shares it
-    * above) is what keeps the indicator from clobbering whatever else happens to occupy that corner.
-    * `TopLeft`/`TopRight` fold into the active pane's header instead -- see `RendererPaneContent.renderBufferHeader`.
-    * Only the glyph is folded in, not the tab title: whichever chrome text it joins already shows that (the gutter's
-    * own filename segment, or the header's title verbatim), so repeating it here would just show the same name twice.
-    */
-  private def applyModeTabWidgetToBottomCorner(state: AppState, gutterText: String): String =
-    val segment = modeTabWidgetSegment(state)
-    state.persisted.config.modeTabWidgetCornerPosition match
-      case CornerPosition.BottomLeft                        => s" $segment ${gutterText.trim} "
-      case CornerPosition.BottomRight                       => s" ${gutterText.trim} $segment "
-      case CornerPosition.TopLeft | CornerPosition.TopRight => gutterText
-
-  private def modeTabWidgetSegment(state: AppState): String =
-    s"[${modeTabWidgetGlyph(state.persisted.config.appMode)}]"
-
-  private def modeTabWidgetGlyph(mode: AppMode): String =
-    mode match
-      case AppMode.Code  => "C"
-      case AppMode.Prose => "P"
-
-  /** The `TopLeft`/`TopRight` half of the mode/tab corner widget (issue #1307): folded into the active pane's own
-    * header text (which already shows "the current tab name" the issue asks the indicator to sit alongside) rather than
-    * a separate rect, for the same collision-avoidance reason as `applyModeTabWidgetToBottomCorner`.
-    */
-  def applyModeTabWidgetToTopCorner(state: AppState, title: String): String =
-    val segment = modeTabWidgetSegment(state)
-    state.persisted.config.modeTabWidgetCornerPosition match
-      case CornerPosition.TopLeft                                 => s"$segment $title"
-      case CornerPosition.TopRight                                => s"$title $segment"
-      case CornerPosition.BottomLeft | CornerPosition.BottomRight => title
-
-  private def legacyGutterContent(state: AppState): String =
-    state.persisted.layout.activeEditorPaneId.flatMap(state.persisted.layout.editorPanes.get) match
-      case Some(pane) =>
-        pane.bufferId.flatMap(state.persisted.buffers.get) match
-          case Some(buffer) =>
-            val cursor   = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
-            val position = s"Line ${cursor.line + 1}, Col ${cursor.column + 1}"
-            val language = buffer.document.language.fold("Plain Text")(_.displayName)
-
-            val filePath = buffer.document.filePath match
-              case Some(path) => s" | ${path.getFileName}"
-              case None       => " | Not saved to file yet"
-
-            s" $position | Language: $language$filePath "
-          case None => " No active buffer "
-      case None => " No active editor pane "

@@ -70,7 +70,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
         config = AppConfig.default
           .withSyntaxHighlighting(true)
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(mode)
       )
     )
@@ -128,7 +128,16 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       }
       .unsafeRunSync()
 
-    executeCommandThroughRunner(stateManager, "markdown-view-split", "markdown-view-split")
+    stateManager.commandExecutor
+      .executeCommand(
+        Command.typed(
+          "markdown-view",
+          "Markdown View",
+          CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.SplitPreview)),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
 
     val splitState = stateManager.getCurrentState.unsafeRunSync()
     splitState.persisted.config.markdownViewMode shouldBe MarkdownViewMode.SplitPreview
@@ -224,7 +233,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
         ),
         config = AppConfig.default
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
       ),
       runtime = AppState.empty.runtime
@@ -453,7 +462,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
         config = AppConfig.default
           .withSyntaxHighlighting(true)
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )
     )
@@ -507,7 +516,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
         focus = Focus.EditorPane(paneId),
         config = AppConfig.default
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
       ),
       runtime = AppState.empty.runtime

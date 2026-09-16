@@ -1,6 +1,7 @@
 package com.serenity.command
 
 import com.serenity.config.*
+import com.serenity.lsp.config.LanguageId
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.serenity.ui.presets.UiPreset
@@ -342,3 +343,48 @@ object CommandRunnerSettingsItems:
   // issue #1057: this built the "Current Buffer Language" settings group's rows. Removed -- buffer-language
   // switchers are one-shot actions with no persisted "current" value shown in their own row, and are now registered
   // directly as `CommandRegistry.languageCommands`, reachable only via the palette.
+
+  /** One picker for the active buffer's language mode (#1047): the rows are the same one-shot switchers that used to be
+    * 23 separate palette commands, and the group's hint names what the buffer is right now.
+    */
+  private[command] def bufferLanguageGroupItem(current: Option[LanguageId]): CommandSurfaceItem.GroupItem =
+    def entry(id: String, label: String, language: Option[LanguageId]) =
+      CommandSurfaceItem.CommandItem(
+        Command.typed(
+          id,
+          s"Use $label mode for the current buffer.",
+          CommandIntent.File(FileIntent.SetBufferLanguage(language)),
+          CommandCategory.Settings,
+          label = label
+        )
+      )
+    CommandSurfaceItem.GroupItem(
+      id = "buffer-language",
+      label = "Buffer Language",
+      children = entry("lang-plain-text", "Plain Text", None) ::
+        LanguageId.values.toList
+          .sortBy(_.displayName)
+          .map(lang => entry(s"lang-${lang.id}", lang.displayName, Some(lang))),
+      category = CommandCategory.Settings,
+      hint = Some(current.fold("Plain Text")(_.displayName))
+    )
+
+  /** The theme picker, listing every theme the theme manager found on disk with the current one as the hint. */
+  private[command] def themeGroupItem(themeNames: List[String], current: Option[String]): CommandSurfaceItem.GroupItem =
+    CommandSurfaceItem.GroupItem(
+      id = "theme",
+      label = "Theme",
+      children = themeNames.map { name =>
+        CommandSurfaceItem.CommandItem(
+          Command.typed(
+            s"theme-${name.toLowerCase.replaceAll("[^a-z0-9]+", "-")}",
+            s"Switch to the $name theme.",
+            CommandIntent.Theme(ThemeIntent.ApplyTheme(name)),
+            CommandCategory.Settings,
+            label = name
+          )
+        )
+      },
+      category = CommandCategory.Settings,
+      hint = current.orElse(Some("Pick a theme"))
+    )

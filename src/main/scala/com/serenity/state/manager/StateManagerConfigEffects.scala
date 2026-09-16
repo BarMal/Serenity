@@ -6,7 +6,7 @@ import com.serenity.animation.AnimationConfig
 import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.command.*
 import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.{AppConfig, CursorInfoBarSegment, VisualFlairLevel}
+import com.serenity.config.{AppConfig, LineNumberLayout, StatusLinePlacement, StatusSegment, VisualFlairLevel}
 import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CommandRunnerPanelSelections, CommandRunnerReducer}
@@ -300,10 +300,14 @@ final private[manager] class StateManagerConfigEffects(
     intent match
       case SettingsIntent.Font(fontIntent)               => interpretFontIntent(fontIntent)
       case SettingsIntent.Motion(motionIntent)           => interpretMotionIntent(motionIntent)
+      case SettingsIntent.StatusLine(statusLineIntent)   => interpretStatusLineIntent(statusLineIntent)
       case SettingsIntent.Cursor(cursorIntent)           => interpretCursorIntent(cursorIntent)
-      case SettingsIntent.PanelChrome(panelChromeIntent) => interpretPanelChromeIntent(panelChromeIntent)
-      case SettingsIntent.SpellCheck(spellCheckIntent)   => interpretSpellCheckIntent(spellCheckIntent)
-      case SettingsIntent.General(generalIntent)         => interpretGeneralSettingsIntent(generalIntent, state)
+      case SettingsIntent.TextDisplay(textDisplayIntent) => interpretTextDisplayIntent(textDisplayIntent)
+      case SettingsIntent.InterfaceChrome(interfaceChromeIntent) =>
+        interpretInterfaceChromeIntent(interfaceChromeIntent)
+      case SettingsIntent.Decoration(decorationIntent) => interpretDecorationIntent(decorationIntent)
+      case SettingsIntent.SpellCheck(spellCheckIntent) => interpretSpellCheckIntent(spellCheckIntent)
+      case SettingsIntent.General(generalIntent)       => interpretGeneralSettingsIntent(generalIntent, state)
 
   private def interpretFontIntent(intent: FontIntent): IO[Unit] =
     intent match
@@ -396,125 +400,123 @@ final private[manager] class StateManagerConfigEffects(
     intent match
       case CursorIntent.SetCursorMode(mode) =>
         updateAppearanceConfig(_.withCursorMode(mode)).void
-      case CursorIntent.SetCursorInfoBarSegmentIncluded(segment, included) =>
-        updateAppearanceConfig { config =>
-          val current = config.cursorInfoBarSegments
-          val updated =
-            if included then includeCursorInfoBarSegment(current, segment)
-            else current.filterNot(_ == segment)
-          config.withCursorInfoBarSegments(updated)
-        }.void
-      case CursorIntent.MoveCursorInfoBarSegmentEarlier(segment) =>
-        updateAppearanceConfig(config =>
-          config.withCursorInfoBarSegments(moveCursorInfoBarSegment(config.cursorInfoBarSegments, segment, -1))
-        ).void
-      case CursorIntent.MoveCursorInfoBarSegmentLater(segment) =>
-        updateAppearanceConfig(config =>
-          config.withCursorInfoBarSegments(moveCursorInfoBarSegment(config.cursorInfoBarSegments, segment, 1))
-        ).void
-      case CursorIntent.SetCursorInfoBarPlacement(placement) =>
-        updateAppearanceConfig(_.withCursorInfoBarPlacement(placement)).void
 
-  /** Adds `segment` at its slot in the canonical definition order (`CursorInfoBarSegment.values`) relative to the
-    * already-included segments, rather than appending to the end. So toggling a segment off then on restores its
-    * position instead of shunting it to the tail (#1533); existing segments keep their relative order, so a user's
-    * manual reordering via move-earlier/later is preserved. A no-op when the segment is already present.
-    */
-  private def includeCursorInfoBarSegment(
-    segments: List[CursorInfoBarSegment],
-    segment: CursorInfoBarSegment
-  ): List[CursorInfoBarSegment] =
-    if segments.contains(segment) then segments
-    else
-      val canonicalOrder                          = CursorInfoBarSegment.values.toList
-      def canonicalIndex(s: CursorInfoBarSegment) = canonicalOrder.indexOf(s)
-      segments.indexWhere(existing => canonicalIndex(existing) > canonicalIndex(segment)) match
-        case -1       => segments :+ segment
-        case insertAt => segments.patch(insertAt, List(segment), 0)
-
-  private def moveCursorInfoBarSegment(
-    segments: List[CursorInfoBarSegment],
-    segment: CursorInfoBarSegment,
-    delta: Int
-  ): List[CursorInfoBarSegment] =
-    val index  = segments.indexOf(segment)
-    val target = index + delta
-    if index < 0 || target < 0 || target >= segments.length then segments
-    else
-      segments.zipWithIndex.map {
-        case (_, `index`)  => segments(target)
-        case (_, `target`) => segments(index)
-        case (other, _)    => other
-      }
-
-  private def interpretPanelChromeIntent(intent: PanelChromeIntent): IO[Unit] =
+  private def interpretStatusLineIntent(intent: StatusLineIntent): IO[Unit] =
     intent match
-      case PanelChromeIntent.ToggleLineNumbers =>
+      case StatusLineIntent.SetSegmentIncluded(segment, included) =>
+        updateTextDisplayConfig { config =>
+          val current = config.statusLine.segments
+          config.withStatusLineSegments(
+            if included then StatusSegment.include(current, segment) else current.filterNot(_ == segment)
+          )
+        }.void
+      case StatusLineIntent.MoveSegmentEarlier(segment) =>
+        updateTextDisplayConfig(config =>
+          config.withStatusLineSegments(StatusSegment.move(config.statusLine.segments, segment, -1))
+        ).void
+      case StatusLineIntent.MoveSegmentLater(segment) =>
+        updateTextDisplayConfig(config =>
+          config.withStatusLineSegments(StatusSegment.move(config.statusLine.segments, segment, 1))
+        ).void
+      case StatusLineIntent.SetPlacement(placement) =>
+        updateTextDisplayConfig(_.withStatusLinePlacement(placement)).void
+      case StatusLineIntent.ToggleVisibility =>
+        updateTextDisplayConfig { config =>
+          val next =
+            if config.statusLine.placement == StatusLinePlacement.Off then StatusLinePlacement.Pinned
+            else StatusLinePlacement.Off
+          config.withStatusLinePlacement(next)
+        }.void
+
+  private def interpretTextDisplayIntent(intent: TextDisplayIntent): IO[Unit] =
+    intent match
+      case TextDisplayIntent.ToggleLineNumbers =>
         updateTextDisplayConfig(config => config.withLineNumbers(!config.surfaceConfig.showLineNumbers)).void
-      case PanelChromeIntent.ToggleGutter =>
-        updateTextDisplayConfig(config => config.withGutter(!config.surfaceConfig.showGutter)).void
-      case PanelChromeIntent.ToggleWordWrap =>
+      case TextDisplayIntent.ToggleWordWrap =>
         updateTextDisplayConfig(config => config.withWordWrap(!config.surfaceConfig.wordWrapEnabled)).void
-      case PanelChromeIntent.ToggleFocusedTextBody =>
+      case TextDisplayIntent.ToggleFocusedTextBody =>
         updateTextDisplayConfig(config => config.withFocusedTextBody(!config.surfaceConfig.focusedTextBodyEnabled)).void
-      case PanelChromeIntent.ToggleContextualToolbar =>
+      case TextDisplayIntent.ToggleContextualToolbar =>
         editor.enqueueEvent(com.serenity.keystroke.events.ToggleContextualToolbar)
-      case PanelChromeIntent.TogglePaneHeaders =>
+      case TextDisplayIntent.TogglePaneHeaders =>
         updateTextDisplayConfig(config => config.withPaneHeaders(!config.surfaceConfig.showPaneHeaders)).void
-      case PanelChromeIntent.ToggleVisualLineCursorNavigation =>
+      case TextDisplayIntent.ToggleVisualLineCursorNavigation =>
         updateTextDisplayConfig(config =>
           config.withVisualLineCursorNavigation(!config.surfaceConfig.visualLineCursorNavigation)
         ).void
-      case PanelChromeIntent.ToggleTypewriterScrolling =>
+      case TextDisplayIntent.ToggleTypewriterScrolling =>
         updateTextDisplayConfig(config =>
           config.withTypewriterScrolling(!config.surfaceConfig.typewriterScrollingEnabled)
         ).void
-      case PanelChromeIntent.SetLineNumbers(enabled) =>
+      case TextDisplayIntent.SetLineNumbers(enabled) =>
         updateTextDisplayConfig(config => config.withLineNumbers(enabled)).void
-      case PanelChromeIntent.SetLineNumberSide(side) =>
-        updateTextDisplayConfig(config => config.withLineNumberLayout(config.lineNumberLayout.copy(side = side))).void
-      case PanelChromeIntent.SetLineNumberMarginLeft(cells) =>
-        updateTextDisplayConfig(config =>
-          config.withLineNumberLayout(config.lineNumberLayout.copy(marginLeft = cells))
-        ).void
-      case PanelChromeIntent.SetLineNumberMarginRight(cells) =>
-        updateTextDisplayConfig(config =>
-          config.withLineNumberLayout(config.lineNumberLayout.copy(marginRight = cells))
-        ).void
-      case PanelChromeIntent.SetLineNumberPadding(cells) =>
-        updateTextDisplayConfig(config =>
-          config.withLineNumberLayout(config.lineNumberLayout.copy(padding = cells))
-        ).void
-      case PanelChromeIntent.SetGutter(enabled) =>
-        updateTextDisplayConfig(config => config.withGutter(enabled)).void
-      case PanelChromeIntent.SetWordWrap(enabled) =>
+      case TextDisplayIntent.SetLineNumberSide(side) =>
+        updateLineNumberLayout(_.copy(side = side))
+      case TextDisplayIntent.SetLineNumberMarginLeft(cells) =>
+        updateLineNumberLayout(_.copy(marginLeft = cells))
+      case TextDisplayIntent.SetLineNumberMarginRight(cells) =>
+        updateLineNumberLayout(_.copy(marginRight = cells))
+      case TextDisplayIntent.SetLineNumberPadding(cells) =>
+        updateLineNumberLayout(_.copy(padding = cells))
+      case TextDisplayIntent.SetWordWrap(enabled) =>
         updateTextDisplayConfig(config => config.withWordWrap(enabled)).void
-      case PanelChromeIntent.SetVisualLineCursorNavigation(enabled) =>
+      case TextDisplayIntent.SetVisualLineCursorNavigation(enabled) =>
         updateTextDisplayConfig(config => config.withVisualLineCursorNavigation(enabled)).void
-      case PanelChromeIntent.SetTypewriterScrolling(enabled) =>
+      case TextDisplayIntent.SetTypewriterScrolling(enabled) =>
         updateTextDisplayConfig(config => config.withTypewriterScrolling(enabled)).void
-      case PanelChromeIntent.SetFocusedTextBody(enabled) =>
+      case TextDisplayIntent.SetFocusedTextBody(enabled) =>
         updateTextDisplayConfig(config => config.withFocusedTextBody(enabled)).void
-      case PanelChromeIntent.SetContextualToolbarEnabled(enabled) =>
+      case TextDisplayIntent.SetContextualToolbarEnabled(enabled) =>
         updateTextDisplayConfig(config => config.withContextualToolbarEnabled(enabled)).void
-      case PanelChromeIntent.SetContextualToolbarDisplayMode(mode) =>
+      case TextDisplayIntent.SetContextualToolbarDisplayMode(mode) =>
         updateTextDisplayConfig(config => config.withContextualToolbarDisplayMode(mode)).void
-      case PanelChromeIntent.SetCommandRunnerShowKeyHints(enabled) =>
+      case TextDisplayIntent.SetTextAreaLeftInset(value) =>
+        updateTextDisplayConfig(_.withTextAreaLeftInset(value)).void
+      case TextDisplayIntent.SetTextAreaRightInset(value) =>
+        updateTextDisplayConfig(_.withTextAreaRightInset(value)).void
+      case TextDisplayIntent.SetTextAreaTopInset(value) =>
+        updateTextDisplayConfig(_.withTextAreaTopInset(value)).void
+      case TextDisplayIntent.SetTextAreaBottomInset(value) =>
+        updateTextDisplayConfig(_.withTextAreaBottomInset(value)).void
+
+  private def updateLineNumberLayout(update: LineNumberLayout => LineNumberLayout): IO[Unit] =
+    updateTextDisplayConfig(config => config.withLineNumberLayout(update(config.lineNumberLayout))).void
+
+  private def interpretInterfaceChromeIntent(intent: InterfaceChromeIntent): IO[Unit] =
+    intent match
+      case InterfaceChromeIntent.SetCommandRunnerShowKeyHints(enabled) =>
         updateAppearanceConfig(_.withCommandRunnerShowKeyHints(enabled)).void
-      case PanelChromeIntent.SetUiElementGap(gap) =>
+      case InterfaceChromeIntent.SetUiElementGap(gap) =>
         updateAppearanceConfig(_.withUiElementGap(gap)).void
-      case PanelChromeIntent.SetUiCornerRadiusPx(radius) =>
+      case InterfaceChromeIntent.SetUiCornerRadiusPx(radius) =>
         updateAppearanceConfig(_.withUiCornerRadiusPx(radius)).void
-      case PanelChromeIntent.SetUiOutlineThicknessPx(thickness) =>
+      case InterfaceChromeIntent.SetUiOutlineThicknessPx(thickness) =>
         updateAppearanceConfig(_.withUiOutlineThicknessPx(thickness)).void
-      case PanelChromeIntent.SetInterfaceDensity(density) =>
+      case InterfaceChromeIntent.SetInterfaceDensity(density) =>
         updateAppearanceConfig(_.withInterfaceDensity(density)).void
-      case PanelChromeIntent.SetWindowChromeMode(mode) =>
+      case InterfaceChromeIntent.SetWindowChromeMode(mode) =>
         updateAppearanceConfig(_.withWindowChromeMode(mode)).void
-      // Window sitter / companion sprite / visual flair / wheel scroll / text-area insets / word count -- none need
-      // the editor port, so they live in a sibling to keep this file under the architecture size target.
-      case other =>
-        StateManagerPanelWindowEffects.interpret(this, other)
+      case InterfaceChromeIntent.SetWheelScrollLines(lines) =>
+        updateConfig(_.withWheelScrollLines(lines)).void
+
+  private def interpretDecorationIntent(intent: DecorationIntent): IO[Unit] =
+    intent match
+      case DecorationIntent.SetWindowSitterEnabled(enabled) =>
+        updateWindowSitterConfig(_.copy(enabled = enabled))
+      case DecorationIntent.SetWindowSitterAction(action) =>
+        updateWindowSitterConfig(_.copy(action = action))
+      case DecorationIntent.SetWindowSitterFrames(frames) =>
+        updateWindowSitterConfig(_.copy(frames = frames))
+      case DecorationIntent.SetWindowSitterActiveTicks(ticks) =>
+        updateWindowSitterConfig(_.copy(activeTicks = ticks))
+      case DecorationIntent.SetWindowSitterFastActiveTicks(ticks) =>
+        updateWindowSitterConfig(_.copy(fastActiveTicks = ticks))
+      case DecorationIntent.SetWindowSitterFastTypingThresholdMs(ms) =>
+        updateWindowSitterConfig(_.copy(fastTypingThresholdMs = ms))
+      case DecorationIntent.SetCompanionSpriteEnabled(enabled) =>
+        updateCompanionSpriteConfig(_.copy(enabled = enabled))
+      case DecorationIntent.SetVisualFlairLevel(level) =>
+        updateVisualFlairLevel(level)
 
   private def interpretSpellCheckIntent(intent: SpellCheckIntent): IO[Unit] =
     intent match

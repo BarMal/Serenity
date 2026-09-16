@@ -275,7 +275,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
           workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         ),
         focus = Focus.EditorPane(paneId),
-        config = AppState.empty.persisted.config.withLineNumbers(false).withGutter(false)
+        config = AppState.empty.persisted.config.withLineNumbers(false).withoutStatusLine
       )
     )
     val surface     = new MockRenderSurface(80, 24)
@@ -341,7 +341,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
           workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         ),
         focus = Focus.EditorPane(paneId),
-        config = AppState.empty.persisted.config.withLineNumbers(false).withGutter(false)
+        config = AppState.empty.persisted.config.withLineNumbers(false).withoutStatusLine
       )
     )
     val surface     = new MockRenderSurface(80, 24)
@@ -386,7 +386,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
           workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         ),
         focus = Focus.EditorPane(paneId),
-        config = AppState.empty.persisted.config.withLineNumbers(false).withGutter(false)
+        config = AppState.empty.persisted.config.withLineNumbers(false).withoutStatusLine
       )
     )
     val surface     = new MockRenderSurface(80, 24)

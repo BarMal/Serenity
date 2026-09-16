@@ -39,21 +39,15 @@ object CommandRunnerOptionSelections:
       "panel-close-transition" -> panelTransitionIndex(
         configuredTransitionKind(surfaceConfig, MotionFamily.PinnedPanels, TransitionScope.PanelClose)
       ),
-      "cursor-mode"           -> cursorModeIndex(cursorConfig.mode),
-      "cursor-info-bar-title" -> enabledIndex(cursorConfig.infoBarSegments.contains(CursorInfoBarSegment.Title)),
-      "cursor-info-bar-position" -> enabledIndex(
-        cursorConfig.infoBarSegments.contains(CursorInfoBarSegment.Position)
-      ),
-      "cursor-info-bar-word-count" -> enabledIndex(
-        cursorConfig.infoBarSegments.contains(CursorInfoBarSegment.WordCount)
-      ),
-      "cursor-info-bar-char-count" -> enabledIndex(
-        cursorConfig.infoBarSegments.contains(CursorInfoBarSegment.CharCount)
-      ),
-      "cursor-info-bar-reading-time" -> enabledIndex(
-        cursorConfig.infoBarSegments.contains(CursorInfoBarSegment.ReadingTime)
-      ),
-      "cursor-info-bar-placement"  -> cursorInfoBarPlacementIndex(cursorConfig.infoBarPlacement),
+      "cursor-mode"                -> cursorModeIndex(cursorConfig.mode),
+      "status-placement"           -> statusPlacementIndex(config.statusLine.placement),
+      "status-position"            -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Position)),
+      "status-title"               -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Title)),
+      "status-language"            -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Language)),
+      "status-mode"                -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Mode)),
+      "status-word-count"          -> enabledIndex(config.statusLine.segments.contains(StatusSegment.WordCount)),
+      "status-char-count"          -> enabledIndex(config.statusLine.segments.contains(StatusSegment.CharCount)),
+      "status-reading-time"        -> enabledIndex(config.statusLine.segments.contains(StatusSegment.ReadingTime)),
       "background-style"           -> backgroundStyleIndex(surfaceConfig.backgroundStyle),
       "interface-density"          -> interfaceDensityIndex(interfaceConfig.density),
       "window-chrome"              -> windowChromeModeIndex(config.windowChromeMode),
@@ -68,10 +62,7 @@ object CommandRunnerOptionSelections:
       "settings-show-all"          -> (if config.showAllSettingsRegardlessOfMode then 1 else 0),
       "line-numbers"               -> enabledIndex(surfaceConfig.showLineNumbers),
       "line-number-side"           -> lineNumberSideIndex(surfaceConfig.lineNumberLayout.side),
-      "show-word-count"            -> enabledIndex(surfaceConfig.showWordCount),
-      "gutter"                     -> enabledIndex(surfaceConfig.showGutter),
       "line-wrap"                  -> enabledIndex(surfaceConfig.wordWrapEnabled),
-      "word-wrap"                  -> enabledIndex(surfaceConfig.wordWrapEnabled),
       "visual-line-navigation"     -> enabledIndex(surfaceConfig.visualLineCursorNavigation),
       "typewriter-scrolling"       -> enabledIndex(surfaceConfig.typewriterScrollingEnabled),
       "focused-text-body"          -> enabledIndex(surfaceConfig.focusedTextBodyEnabled),
@@ -115,10 +106,11 @@ object CommandRunnerOptionSelections:
       case CursorMode.Blink   => 0
       case CursorMode.Breathe => 1
 
-  private def cursorInfoBarPlacementIndex(placement: CursorInfoBarPlacement): Int =
+  private def statusPlacementIndex(placement: StatusLinePlacement): Int =
     placement match
-      case CursorInfoBarPlacement.Floating     => 0
-      case CursorInfoBarPlacement.PinnedBottom => 1
+      case StatusLinePlacement.Pinned   => 0
+      case StatusLinePlacement.Floating => 1
+      case StatusLinePlacement.Off      => 2
 
   private def backgroundStyleIndex(style: BackgroundStyle): Int =
     style match

@@ -114,15 +114,16 @@ object UiPreset:
       )
 
   private def patchTextDisplayConfig(base: AppConfig, source: AppConfig): AppConfig =
-    base.withSurfaceConfig(
-      base.surfaceConfig.copy(
-        showLineNumbers = source.surfaceConfig.showLineNumbers,
-        showGutter = source.surfaceConfig.showGutter,
-        wordWrapEnabled = source.surfaceConfig.wordWrapEnabled,
-        textAreaInsets = source.surfaceConfig.textAreaInsets,
-        viewportSizing = source.surfaceConfig.viewportSizing
+    base
+      .withStatusLine(source.statusLine)
+      .withSurfaceConfig(
+        base.surfaceConfig.copy(
+          showLineNumbers = source.surfaceConfig.showLineNumbers,
+          wordWrapEnabled = source.surfaceConfig.wordWrapEnabled,
+          textAreaInsets = source.surfaceConfig.textAreaInsets,
+          viewportSizing = source.surfaceConfig.viewportSizing
+        )
       )
-    )
 
   private def patchTypographyConfig(base: AppConfig, source: AppConfig): AppConfig =
     base.withEditorConfig(base.editorConfig.copy(fontConfig = source.editorConfig.fontConfig))
@@ -134,24 +135,28 @@ object UiPreset:
     includeContextualToolbar: Boolean = false,
     includeTextAreaInsets: Boolean = false
   ): AppConfig =
-    base.withSurfaceConfig(
-      base.surfaceConfig.copy(
-        showLineNumbers = source.surfaceConfig.showLineNumbers,
-        showGutter = source.surfaceConfig.showGutter,
-        showPaneHeaders = source.surfaceConfig.showPaneHeaders,
-        wordWrapEnabled =
-          if includeWordWrap then source.surfaceConfig.wordWrapEnabled else base.surfaceConfig.wordWrapEnabled,
-        contextualToolbarEnabled =
-          if includeContextualToolbar then source.surfaceConfig.contextualToolbarEnabled
-          else base.surfaceConfig.contextualToolbarEnabled,
-        textAreaInsets =
-          if includeTextAreaInsets then source.surfaceConfig.textAreaInsets else base.surfaceConfig.textAreaInsets
+    base
+      .withStatusLine(source.statusLine)
+      .withSurfaceConfig(
+        base.surfaceConfig.copy(
+          showLineNumbers = source.surfaceConfig.showLineNumbers,
+          showPaneHeaders = source.surfaceConfig.showPaneHeaders,
+          wordWrapEnabled =
+            if includeWordWrap then source.surfaceConfig.wordWrapEnabled else base.surfaceConfig.wordWrapEnabled,
+          contextualToolbarEnabled =
+            if includeContextualToolbar then source.surfaceConfig.contextualToolbarEnabled
+            else base.surfaceConfig.contextualToolbarEnabled,
+          textAreaInsets =
+            if includeTextAreaInsets then source.surfaceConfig.textAreaInsets else base.surfaceConfig.textAreaInsets
+        )
       )
-    )
 
   private def mergeBuiltInWorkflowConfig(base: AppConfig, preset: UiPreset): AppConfig =
-    val source         = preset.config
-    val withMotion     = patchMotionConfig(base, source)
+    val source = preset.config
+    // The workflow's app mode travels with it: a prose workflow on a code workspace would otherwise leave the
+    // settings tree filtering out exactly the prose groups the workflow just made relevant.
+    val withMode       = base.withAppMode(source.appMode)
+    val withMotion     = patchMotionConfig(withMode, source)
     val withTypography = patchTypographyConfig(withMotion, source)
 
     nameKey(preset.name) match
@@ -167,7 +172,6 @@ object UiPreset:
           )
           .withDocumentConfig(source.documentConfig)
           .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
-          .withCursorConfig(base.cursorConfig.copy(infoBarSegments = source.cursorInfoBarSegments))
       case "documentation" =>
         patchWorkflowChrome(withTypography, source)
           .withDocumentConfig(source.documentConfig)
@@ -189,7 +193,6 @@ object UiPreset:
       case "review" =>
         patchWorkflowChrome(withTypography, source)
           .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
-          .withCursorConfig(base.cursorConfig.copy(infoBarSegments = source.cursorInfoBarSegments))
       case _ => base
 
   private def unknownJsonFields(raw: JsonObject, known: JsonObject): JsonObject =

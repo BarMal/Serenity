@@ -1,7 +1,8 @@
 package com.serenity.ui.layout
 
-import java.awt.Font
 import java.awt.font.*
+import java.awt.image.BufferedImage
+import java.awt.{Font, RenderingHints}
 import java.util.Locale
 
 import com.ibm.icu.text.BreakIterator
@@ -16,7 +17,7 @@ import com.serenity.state.models.{
   TypographyRole
 }
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.TextMeasurement.*
+import com.serenity.ui.layout.TextCaretMeasurement.*
 
 final case class TextLayoutSnapshot(
     visualLines: Vector[TextVisualLine],
@@ -44,6 +45,8 @@ final case class TextLayoutSnapshot(
 
 object TextLayoutSnapshot:
   private val UnwrappedOverscanColumns = 2
+  final private case class MeasuredLayoutKey(font: Font, fontRenderContext: FontRenderContext)
+  private val measuredLayoutCache = java.util.concurrent.ConcurrentHashMap[MeasuredLayoutKey, java.lang.Boolean]()
 
   /** The pixel width text layout wraps at. The screen grid is the code font's cells whatever font a buffer draws with,
     * so scroll and navigation math must wrap at the grid width the renderer uses -- not the buffer font's own
@@ -479,8 +482,34 @@ object TextLayoutSnapshot:
         xOffsetPx = offsetPx
       )
 
-  /** Preserved public entry point for callers outside this package; the implementation now lives in
-    * [[TextMeasurement]].
-    */
+  private def shouldUseMeasuredLayout(font: Font, frc: FontRenderContext): Boolean =
+    measuredLayoutCache.computeIfAbsent(
+      MeasuredLayoutKey(font, frc),
+      key =>
+        (!FontLoader.isMonospacedFont(key.font) ||
+          FontLoader.ligaturesEnabled(key.font) ||
+          hasFractionalAdvanceDrift(key.font, key.fontRenderContext)): java.lang.Boolean
+    )
+
+  private def hasFractionalAdvanceDrift(font: Font, frc: FontRenderContext): Boolean =
+    val sampleText = "iiiiiiiiiiii"
+    if sampleText.isEmpty then false
+    else
+      // Whether this font itself has fractional-advance drift is a property of the font, independent of whatever
+      // "pixel" unit a caller's cellMetrics defines -- so this always measures against the font's own natural cell
+      // size, not a caller override (which would otherwise make every font look like it drifts under TUI's
+      // CellMetricsOne).
+      val fontCellMetrics = CellMetrics.fromFont(font)
+      val measuredXs = caretXs(sampleText, 0, singleFontResolver(font), frc, measuredLayout = true, fontCellMetrics)
+      val measuredAdvance = measuredXs.lastOption.getOrElse(0.0f)
+      val cellAdvance     = fontCellMetrics.charWidth.toFloat * sampleText.length
+      math.abs(measuredAdvance - cellAdvance) > 0.5f
+
   def defaultFontRenderContext(): FontRenderContext =
-    TextMeasurement.defaultFontRenderContext()
+    val image = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
+    val g     = image.createGraphics()
+    try
+      g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+      g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
+      g.getFontRenderContext
+    finally g.dispose()

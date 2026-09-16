@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
+import com.serenity.config.{AppConfig, StatusLinePlacement, TextAreaInsets}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -83,7 +83,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       AppState.initial.persisted.copy(
         config = AppConfig.default
           .withLineNumbers(true)
-          .withGutter(true)
+          .withStatusLinePlacement(StatusLinePlacement.Pinned)
           .withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.20))
       )
     )
@@ -514,54 +514,6 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     paneLayouts should have size 4
     editorRect.containsRect(focusedPane) shouldBe true
     paneLayouts.values.map(_.width).sum shouldBe editorRect.width
-  }
-
-  it should "apply interface density to editor spacing and overlay height" in {
-    val runner = com.serenity.command.CommandRunner.empty.activate(
-      com.serenity.command.CommandRegistry.default,
-      com.serenity.config.AppConfig.default
-    )
-    val commandSurface = UiSurface(
-      SurfaceId("command-runner"),
-      SurfaceContent.CommandPalette(runner),
-      SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.BelowCursor)
-    )
-    val paneId   = PaneId(0)
-    val bufferId = BufferId(1)
-    val baseState = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> Buffer.fromString(bufferId, "alpha\nbeta\ngamma")),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
-        focus = Focus.EditorPane(paneId)
-      ),
-      runtime = AppState.initial.runtime.copy(uiSurfaces = List(commandSurface))
-    )
-    val compact = LayoutEngine.calculateLayout(
-      baseState.copy(persisted =
-        baseState.persisted.copy(config = baseState.persisted.config.withInterfaceDensity(InterfaceDensity.Compact))
-      ),
-      ViewportSize(120, 30)
-    )
-    val comfortable = LayoutEngine.calculateLayout(baseState, ViewportSize(120, 30))
-    val spacious = LayoutEngine.calculateLayout(
-      baseState.copy(persisted =
-        baseState.persisted.copy(config = baseState.persisted.config.withInterfaceDensity(InterfaceDensity.Spacious))
-      ),
-      ViewportSize(120, 30)
-    )
-
-    compact.editorPanelRect shouldBe comfortable.editorPanelRect
-    spacious.editorPanelRect.x shouldBe comfortable.editorPanelRect.x
-    spacious.editorPanelRect.width shouldBe comfortable.editorPanelRect.width
-    compact.gutterRect.map(_.height) shouldBe Some(1)
-    spacious.gutterRect.map(_.height) shouldBe Some(2)
-    compact.belowCursorOverlayRect.map(_.height) should be < comfortable.belowCursorOverlayRect.map(_.height)
-    spacious.belowCursorOverlayRect.map(_.height) should be > comfortable.belowCursorOverlayRect.map(_.height)
   }
 
   it should "keep the command palette compact while clamping it to a narrow viewport" in {

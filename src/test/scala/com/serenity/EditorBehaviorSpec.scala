@@ -18,6 +18,8 @@ import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
 class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
 
+  private val bareConfig = AppConfig.default.withLineNumbers(false).withoutStatusLine
+
   given balance: Balance                 = Balance(weightBalance = 3, heightBalance = 1, leafChunkSize = 30)
   given loggerFactory: LoggerFactory[IO] = Slf4jFactory.create[IO]
   given logger: Logger[IO]               = Slf4jLogger.getLogger[IO]
@@ -344,7 +346,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     stateManager
       .updateState(current =>
         current
-          .copy(persisted = current.persisted.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)))
+          .copy(persisted = current.persisted.copy(config = bareConfig))
       )
       .unsafeRunSync()
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -405,9 +407,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
       .updateState(current =>
         current.copy(persisted =
           current.persisted.copy(
-            config = AppConfig.default
-              .withLineNumbers(false)
-              .withGutter(false)
+            config = bareConfig
               .withFontConfig(fontConfig)
           )
         )

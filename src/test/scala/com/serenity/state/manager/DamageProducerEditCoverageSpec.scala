@@ -1,7 +1,7 @@
 package com.serenity.state.manager
 
 import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.{CursorInfoBarPlacement, CursorInfoBarSegment, RenderDamageGranularity}
+import com.serenity.config.{RenderDamageGranularity, StatusLinePlacement, StatusSegment}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
@@ -445,21 +445,21 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
     state.copy(persisted =
       state.persisted.copy(config =
         state.persisted.config
-          .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position))
-          .withCursorInfoBarPlacement(CursorInfoBarPlacement.Floating)
+          .withStatusLineSegments(List(StatusSegment.Position))
+          .withStatusLinePlacement(StatusLinePlacement.Floating)
       )
     )
 
   "DamageProducer's cursor-info-bar coverage" should
     "report Damage.Surface(cursor-info-bar) when the cursor moves with a Floating info bar enabled" in {
-      // The Floating info bar is a *derived* surface (AppState.cursorInfoBarSurface), never stored in
+      // The Floating info bar is a *derived* surface (AppState.floatingStatusLineSurface), never stored in
       // runtime.uiSurfaces, so its cursor-following movement is invisible to uiSurfacesDamage. Without a Surface fact
       // the renderer's bounded repaint never pushes the rows it vacated, leaving a stale-background trail (#1263/#1265
       // regression fixed here).
       val before = withFloatingInfoBar(stateWithContent("alpha\nbeta\ngamma", cursors = List(CursorPosition(0, 0))))
       val after  = moveCursorTo(before, CursorPosition(1, 0))
 
-      Damage.surfaceIds(DamageProducer.forTransition(before, after)) should contain(UiSurface.CursorInfoBarSurfaceId)
+      Damage.surfaceIds(DamageProducer.forTransition(before, after)) should contain(UiSurface.StatusLineSurfaceId)
     }
 
   it should "not report Damage.Surface(cursor-info-bar) when the info bar is pinned to the bottom" in {
@@ -467,19 +467,20 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
     val before = base.copy(persisted =
       base.persisted.copy(config =
         base.persisted.config
-          .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position))
-          .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+          .withStatusLineSegments(List(StatusSegment.Position))
+          .withStatusLinePlacement(StatusLinePlacement.Pinned)
       )
     )
     val after = moveCursorTo(before, CursorPosition(1, 0))
 
-    Damage.surfaceIds(DamageProducer.forTransition(before, after)) should not contain UiSurface.CursorInfoBarSurfaceId
+    Damage.surfaceIds(DamageProducer.forTransition(before, after)) should not contain UiSurface.StatusLineSurfaceId
   }
 
-  it should "not report Damage.Surface(cursor-info-bar) when no info-bar segments are configured" in {
-    val before = stateWithContent("alpha\nbeta\ngamma", cursors = List(CursorPosition(0, 0)))
+  it should "not report Damage.Surface(status-line) when no segments are configured" in {
+    val base   = stateWithContent("alpha\nbeta\ngamma", cursors = List(CursorPosition(0, 0)))
+    val before = base.copy(persisted = base.persisted.copy(config = base.persisted.config.withStatusLineSegments(Nil)))
     val after  = moveCursorTo(before, CursorPosition(1, 0))
 
-    before.persisted.config.cursorInfoBarSegments shouldBe Nil
-    Damage.surfaceIds(DamageProducer.forTransition(before, after)) should not contain UiSurface.CursorInfoBarSurfaceId
+    before.persisted.config.statusLine.segments shouldBe Nil
+    Damage.surfaceIds(DamageProducer.forTransition(before, after)) should not contain UiSurface.StatusLineSurfaceId
   }

@@ -25,6 +25,8 @@ final private[manager] class StateManagerSurfacePopupEffects(
     intent match
       case ThemeIntent.ToggleTheme =>
         toggleThemeEffect(state)
+      case ThemeIntent.ApplyTheme(name) =>
+        applyThemeByName(name)
       case ThemeIntent.ReloadTheme =>
         reloadThemeEffect(state)
       case ThemeIntent.OpenThemeChooser =>
@@ -34,9 +36,15 @@ final private[manager] class StateManagerSurfacePopupEffects(
       case ThemeIntent.ExportCurrentTheme =>
         exportCurrentThemeEffect(state)
       case ThemeIntent.ReloadThemes =>
-        themeManager.listAvailableThemes
-          .flatMap(themeNamesRef.set)
-          .handleErrorWith(ex => logger.error(ex)("[THEMES] Failed to reload theme list"))
+        refreshThemeNames
+
+  /** Re-list the themes on disk into both the picker's ref and `runtime.availableThemeNames` (the settings picker). */
+  private[manager] def refreshThemeNames: IO[Unit] =
+    themeManager.listAvailableThemes
+      .flatMap(names =>
+        themeNamesRef.set(names) *> updateState(s => s.copy(runtime = s.runtime.copy(availableThemeNames = names)))
+      )
+      .handleErrorWith(ex => logger.error(ex)("[THEMES] Failed to reload theme list"))
 
   private def toggleThemeEffect(state: AppState): IO[Unit] =
     val targetThemeName =

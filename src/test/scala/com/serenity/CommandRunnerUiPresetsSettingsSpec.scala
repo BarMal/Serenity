@@ -33,7 +33,10 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .withUiPresetNames(List("Drafting", "Research Notes"))
-    val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
+    val presetGroup = runner.settingsGroups
+      .flatMap(group => group :: descendants(group))
+      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-ui-presets" => group }
+      .getOrElse(fail("missing presets group"))
 
     presetGroup.children.map(_.id) shouldBe List(
       "settings-preset-select",
@@ -132,7 +135,7 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
         case group: CommandSurfaceItem.GroupItem if group.id == "settings-preset-workspace-layout" => group
       }
       .getOrElse(fail("missing workspace layout group"))
-    activePanels.label shouldBe "Panels & Workspace"
+    activePanels.label shouldBe "Panels"
     val workspaceItems = descendants(activePanels)
     workspaceItems.collect {
       case option: CommandSurfaceItem.OptionItem => option.options.map(_.intent)
@@ -144,8 +147,12 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
     )
     workspaceItems.collect { case CommandSurfaceItem.CommandItem(command) => command.intent } shouldBe Nil
     val animation = groupByIdRecursive(List(editPreset), "settings-preset-animation")
-    animation.label shouldBe "Motion & Animation"
-    animation.children.map(_.id) should contain allOf ("motion-preset", "cursor-speed-scale", "editor-text-transition")
+    animation.label shouldBe "Motion"
+    descendants(animation).map(_.id) should contain allOf (
+      "motion-preset",
+      "cursor-speed-scale",
+      "editor-text-transition"
+    )
     val proseFont = groupByIdRecursive(List(editPreset), "settings-preset-prose-font")
     proseFont.label shouldBe "Prose Font"
     proseFont.children.map(_.id) should contain allOf ("text-font", "text-ligatures", "text-font-size")
@@ -170,7 +177,7 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
     // (CommandRunnerOneShotActionsSpec), not part of this settings subtree.
     val surfaceAppearance = groupByIdRecursive(List(editPreset), "settings-preset-surface-appearance")
     surfaceAppearance.label shouldBe "Surface Appearance"
-    surfaceAppearance.children.map(_.id) should contain allOf ("background-style", "material-preset", "blur-radius")
+    surfaceAppearance.children.map(_.id) should contain allOf ("background-style", "material-preset", "post-processing")
 
     // issue #1060: Apply/Overwrite/Delete/Reset now pick from the existing-preset catalog instead of requiring a
     // typed exact name -- Duplicate/Rename/Save-As-New still need typed input since each needs a *new* name.
@@ -236,7 +243,10 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
       .withUiPresetNames(List("Drafting", "Research Notes"))
       .copy(optionSelections = Map("ui-preset-built-in" -> 2, "ui-preset-custom" -> 1))
 
-    val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
+    val presetGroup = runner.settingsGroups
+      .flatMap(group => group :: descendants(group))
+      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-ui-presets" => group }
+      .getOrElse(fail("missing presets group"))
     val presetPicker = descendants(presetGroup)
       .collectFirst {
         case item: CommandSurfaceItem.OptionItem if item.id == "ui-preset-select" => item

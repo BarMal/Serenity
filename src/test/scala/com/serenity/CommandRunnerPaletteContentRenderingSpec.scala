@@ -270,7 +270,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
         .trim
 
     headerLine should include("Settings")
-    optionLine should include("App Mode")
+    optionLine should include("Workspace")
     optionLine should not include "["
 
     surface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor) should have size 1
@@ -351,7 +351,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
   // issue #1059: a settings leaf reached via search now renders its drilled-in navigation on the one command-runner
   // surface (no second floating submenu surface, and no live "search: ..." echo left showing once entered).
   // issue #1057: previously used a "lang-markdown" settings-tree search to reach the (now-removed) "Current Buffer
-  // Language" group; retargeted to "UI Outline Thickness", a still-present settings leaf inside "Interface Layout".
+  // Language" group; retargeted to "UI Outline Thickness", a still-present settings leaf inside Look > Advanced.
   it should "render a direct settings leaf while keeping editor cursors steady" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
@@ -399,7 +399,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor)
 
     visibleCursors.map(_.xPx) shouldBe hiddenCursors.map(_.xPx)
-    submenuText should include("Interface Layout")
+    submenuText should include("Advanced")
     submenuText should not include "search: UI Outline Thickness"
     submenuText should include("UI Outline Thickness")
   }

@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.command.*
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
@@ -24,11 +25,17 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
     val logger = LoggerFactory[IO].getLogger(using LoggerName("LspQueueSpec"))
     StateManager.apply(logger).unsafeRunSync()
 
-  private def setBufferLanguageThroughRunner(stateManager: StateManager, searchTerm: String): Unit =
-    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    searchTerm.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    stateManager.applyEvent(Enter).unsafeRunSync()
-    stateManager.applyEvent(Enter).unsafeRunSync()
+  private def setBufferLanguage(stateManager: StateManager, language: LanguageId): Unit =
+    stateManager.commandExecutor
+      .executeCommand(
+        Command.typed(
+          s"lang-${language.id}",
+          s"Use ${language.displayName} mode for the current buffer.",
+          CommandIntent.File(FileIntent.SetBufferLanguage(Some(language))),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
 
   "lspEffectStream" should "emit FileOpened when a Scala file is loaded" in {
     val sm       = makeStateManager()
@@ -94,7 +101,7 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
 
       sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync() should have size 1
 
-      setBufferLanguageThroughRunner(sm, "lang-markdown")
+      setBufferLanguage(sm, LanguageId.Markdown)
 
       val effects = sm.lspEffectSource.lspEffectStream
         .take(2)

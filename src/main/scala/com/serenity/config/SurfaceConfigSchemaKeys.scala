@@ -1,7 +1,8 @@
 package com.serenity.config
 
-/** Which config-file keys name a `ui.motion.*` setting: the current spelling of each one, the older spellings still
-  * read, and the per-setting key sets [[SurfaceConfigSchemaParser]] dispatches on.
+/** Which config-file keys name a `motion.*` setting: the current spelling of each one, the older spellings still read
+  * (the whole `ui.motion.*` namespace among them), and the per-setting key sets [[SurfaceConfigSchemaParser]]
+  * dispatches on.
   *
   * The material/post-processing/display/command-runner/text-area/viewport settings this used to also cover are gone
   * (#1406) -- [[ConfigRegistry]] already owned parsing, validation and writing for every one of them end-to-end, so
@@ -14,36 +15,10 @@ package com.serenity.config
   */
 object SurfaceConfigSchemaKeys:
 
-  val currentKeys: Set[String] = Set(
-    "ui.motion.preset",
-    "ui.motion",
-    "motion.preset",
-    "ui.motion.speed_scale",
-    "motion.speed_scale",
-    "ui.motion.editor_text.speed_scale",
-    "ui.motion.editor.text.speed_scale",
-    "ui.motion.command_runner.speed_scale",
-    "ui.motion.command.runner.speed_scale",
-    "ui.motion.ui.speed_scale",
-    "ui.motion.ui_elements.speed_scale",
-    "ui.motion.ui.elements.speed_scale",
-    "ui.motion.cursor.speed_scale",
-    "ui.motion.cursor_speed_scale",
-    "ui.motion.cursor.speed.scale",
-    "ui.motion.command_runner",
-    "ui.motion.command.runner",
-    "ui.motion.command_runner_reveal",
-    "ui.motion.command.runner.reveal",
-    "ui.motion.ui",
-    "ui.motion.ui_elements",
-    "ui.motion.ui.elements",
-    "ui.motion.editor_text",
-    "ui.motion.editor.text",
-    "ui.motion.panel_open",
-    "ui.motion.panel.open",
-    "ui.motion.panel_close",
-    "ui.motion.panel.close"
-  ) ++ Set("ui.motion.accessibility") ++ MotionFamily.values.flatMap { family =>
+  val motionFamilyPrefix: String       = ConfigGroups.motionFamilyPrefix
+  val legacyMotionFamilyPrefix: String = ConfigGroups.legacyMotionFamilyPrefix
+
+  private val familyFields: Set[String] =
     Set(
       "enabled",
       "transition",
@@ -52,115 +27,80 @@ object SurfaceConfigSchemaKeys:
       "animation.duration_ms",
       "animation.steps",
       "speed_scale"
-    ).map(field => s"ui.motion.family.${family.configKey}.$field")
-  } ++ Set(
-    "ui.motion.family.pinned_panels.open_transition",
-    "ui.motion.family.pinned_panels.close_transition"
-  )
-
-  val deprecatedKeys: Map[String, String] = Map(
-    "ui_motion"                            -> "ui.motion",
-    "motion_preset"                        -> "motion.preset",
-    "ui_motion_speed_scale"                -> "ui.motion.speed_scale",
-    "motion_speed_scale"                   -> "motion.speed_scale",
-    "ui_motion_editor_text_speed_scale"    -> "ui.motion.editor_text.speed_scale",
-    "ui_motion_command_runner_speed_scale" -> "ui.motion.command_runner.speed_scale",
-    "ui_motion_ui_speed_scale"             -> "ui.motion.ui.speed_scale",
-    "ui_motion_cursor_speed_scale"         -> "ui.motion.cursor.speed_scale",
-    "ui_motion_command_runner"             -> "ui.motion.command_runner",
-    "ui_motion_command_runner_reveal"      -> "ui.motion.command_runner_reveal",
-    "ui_motion_ui"                         -> "ui.motion.ui",
-    "ui_motion_editor_text"                -> "ui.motion.editor_text",
-    "ui_motion_panel_open"                 -> "ui.motion.panel_open",
-    "ui_motion_panel_close"                -> "ui.motion.panel_close"
-  )
-
-  /** `ui.motion.preset` is the spelling written. `ui.motion` is a leaf on a path whose children (`ui.motion.family`,
-    * `ui.motion.accessibility`) HOCON would resolve by dropping it, so it survived only by being written as a quoted
-    * key; it stays readable for files that already have it.
-    */
-  val motionPresetKeys: Set[String] =
-    Set("ui.motion.preset", "ui.motion", "ui_motion", "motion.preset", "motion_preset")
-  val motionAccessibilityKeys: Set[String] = Set("ui.motion.accessibility")
-  val motionFamilyPrefix                   = "ui.motion.family."
-
-  val motionFamilyKeys: Set[String] = MotionFamily.values.flatMap { family =>
-    Set(
-      "enabled",
-      "transition",
-      "animation",
-      "animation.preset",
-      "animation.duration_ms",
-      "animation.steps",
-      "speed_scale"
-    ).map(field => s"$motionFamilyPrefix${family.configKey}.$field")
-  }.toSet ++ Set(
-    s"${motionFamilyPrefix}pinned_panels.open_transition",
-    s"${motionFamilyPrefix}pinned_panels.close_transition"
-  )
-
-  val elementTransitionSpeedScaleKeys: Set[String] =
-    Set("ui.motion.speed_scale", "motion.speed_scale", "ui_motion_speed_scale", "motion_speed_scale")
-
-  val editorTextTransitionSpeedScaleKeys: Set[String] =
-    Set("ui.motion.editor_text.speed_scale", "ui.motion.editor.text.speed_scale", "ui_motion_editor_text_speed_scale")
-
-  val commandRunnerTransitionSpeedScaleKeys: Set[String] =
-    Set(
-      "ui.motion.command_runner.speed_scale",
-      "ui.motion.command.runner.speed_scale",
-      "ui_motion_command_runner_speed_scale"
     )
 
-  val uiTransitionSpeedScaleKeys: Set[String] =
-    Set(
-      "ui.motion.ui.speed_scale",
-      "ui.motion.ui_elements.speed_scale",
-      "ui.motion.ui.elements.speed_scale",
-      "ui_motion_ui_speed_scale"
-    )
+  private def familyKeysUnder(prefix: String): Set[String] =
+    MotionFamily.values.flatMap(family => familyFields.map(field => s"$prefix${family.configKey}.$field")).toSet ++
+      Set(s"${prefix}pinned_panels.open_transition", s"${prefix}pinned_panels.close_transition")
 
-  val cursorTransitionSpeedScaleKeys: Set[String] =
-    Set(
-      "ui.motion.cursor.speed_scale",
-      "ui.motion.cursor_speed_scale",
-      "ui.motion.cursor.speed.scale",
-      "ui_motion_cursor_speed_scale"
-    )
+  /** Each setting's spellings: the current one first, then the older ones still read. */
+  private val spellings: List[(String, List[String])] = List(
+    "motion.preset"        -> List("ui.motion.preset", "ui.motion", "ui_motion", "motion_preset"),
+    "motion.accessibility" -> List("ui.motion.accessibility"),
+    "motion.speed_scale"   -> List("ui.motion.speed_scale", "ui_motion_speed_scale", "motion_speed_scale"),
+    "motion.editor_text.speed_scale" ->
+      List(
+        "ui.motion.editor_text.speed_scale",
+        "ui.motion.editor.text.speed_scale",
+        "ui_motion_editor_text_speed_scale"
+      ),
+    "motion.command_runner.speed_scale" ->
+      List(
+        "ui.motion.command_runner.speed_scale",
+        "ui.motion.command.runner.speed_scale",
+        "ui_motion_command_runner_speed_scale"
+      ),
+    "motion.ui.speed_scale" ->
+      List(
+        "ui.motion.ui.speed_scale",
+        "ui.motion.ui_elements.speed_scale",
+        "ui.motion.ui.elements.speed_scale",
+        "ui_motion_ui_speed_scale"
+      ),
+    "motion.cursor.speed_scale" ->
+      List(
+        "ui.motion.cursor.speed_scale",
+        "ui.motion.cursor_speed_scale",
+        "ui.motion.cursor.speed.scale",
+        "ui_motion_cursor_speed_scale"
+      ),
+    "motion.command_runner" -> List("ui.motion.command_runner", "ui.motion.command.runner", "ui_motion_command_runner"),
+    "motion.command_runner_reveal" ->
+      List("ui.motion.command_runner_reveal", "ui.motion.command.runner.reveal", "ui_motion_command_runner_reveal"),
+    "motion.ui"          -> List("ui.motion.ui", "ui.motion.ui_elements", "ui.motion.ui.elements", "ui_motion_ui"),
+    "motion.editor_text" -> List("ui.motion.editor_text", "ui.motion.editor.text", "ui_motion_editor_text"),
+    "motion.panel_open"  -> List("ui.motion.panel_open", "ui.motion.panel.open", "ui_motion_panel_open"),
+    "motion.panel_close" -> List("ui.motion.panel_close", "ui.motion.panel.close", "ui_motion_panel_close")
+  )
 
-  val commandRunnerAnimationKeys: Set[String] =
-    Set("ui.motion.command_runner", "ui.motion.command.runner", "ui_motion_command_runner")
+  private def keysFor(current: String): Set[String] =
+    spellings.collectFirst { case (`current`, older) => (current :: older).toSet }.getOrElse(Set(current))
 
-  val commandRunnerTransitionKeys: Set[String] =
-    Set("ui.motion.command_runner_reveal", "ui.motion.command.runner.reveal", "ui_motion_command_runner_reveal")
+  val currentKeys: Set[String] = spellings.map(_._1).toSet ++ familyKeysUnder(motionFamilyPrefix)
 
-  val uiAnimationKeys: Set[String] =
-    Set("ui.motion.ui", "ui.motion.ui_elements", "ui.motion.ui.elements", "ui_motion_ui")
+  val deprecatedKeys: Map[String, String] =
+    spellings.flatMap { case (current, older) => older.map(_ -> current) }.toMap ++
+      familyKeysUnder(legacyMotionFamilyPrefix).map(key =>
+        key -> (motionFamilyPrefix + key.stripPrefix(legacyMotionFamilyPrefix))
+      )
 
-  val editorTextTransitionKeys: Set[String] =
-    Set("ui.motion.editor_text", "ui.motion.editor.text", "ui_motion_editor_text")
-
-  val panelOpenTransitionKeys: Set[String] =
-    Set("ui.motion.panel_open", "ui.motion.panel.open", "ui_motion_panel_open")
-
-  val panelCloseTransitionKeys: Set[String] =
-    Set("ui.motion.panel_close", "ui.motion.panel.close", "ui_motion_panel_close")
+  val motionPresetKeys: Set[String]        = keysFor("motion.preset")
+  val motionAccessibilityKeys: Set[String] = keysFor("motion.accessibility")
+  val motionFamilyKeys: Set[String] = familyKeysUnder(motionFamilyPrefix) ++ familyKeysUnder(legacyMotionFamilyPrefix)
+  val elementTransitionSpeedScaleKeys: Set[String]       = keysFor("motion.speed_scale")
+  val editorTextTransitionSpeedScaleKeys: Set[String]    = keysFor("motion.editor_text.speed_scale")
+  val commandRunnerTransitionSpeedScaleKeys: Set[String] = keysFor("motion.command_runner.speed_scale")
+  val uiTransitionSpeedScaleKeys: Set[String]            = keysFor("motion.ui.speed_scale")
+  val cursorTransitionSpeedScaleKeys: Set[String]        = keysFor("motion.cursor.speed_scale")
+  val commandRunnerAnimationKeys: Set[String]            = keysFor("motion.command_runner")
+  val commandRunnerTransitionKeys: Set[String]           = keysFor("motion.command_runner_reveal")
+  val uiAnimationKeys: Set[String]                       = keysFor("motion.ui")
+  val editorTextTransitionKeys: Set[String]              = keysFor("motion.editor_text")
+  val panelOpenTransitionKeys: Set[String]               = keysFor("motion.panel_open")
+  val panelCloseTransitionKeys: Set[String]              = keysFor("motion.panel_close")
 
   private val handledKeys: Set[String] =
-    motionPresetKeys ++
-      motionAccessibilityKeys ++
-      motionFamilyKeys ++
-      elementTransitionSpeedScaleKeys ++
-      editorTextTransitionSpeedScaleKeys ++
-      commandRunnerTransitionSpeedScaleKeys ++
-      uiTransitionSpeedScaleKeys ++
-      cursorTransitionSpeedScaleKeys ++
-      commandRunnerAnimationKeys ++
-      commandRunnerTransitionKeys ++
-      uiAnimationKeys ++
-      editorTextTransitionKeys ++
-      panelOpenTransitionKeys ++
-      panelCloseTransitionKeys
+    spellings.flatMap { case (current, older) => current :: older }.toSet ++ motionFamilyKeys
 
   def handles(key: String): Boolean =
     handledKeys.contains(key)

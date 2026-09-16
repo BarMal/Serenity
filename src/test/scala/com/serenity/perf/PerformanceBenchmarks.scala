@@ -213,7 +213,7 @@ object PerformanceBenchmarks:
       markdownStateBase.persisted.copy(config =
         AppConfig.default
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withWordWrap(false)
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )

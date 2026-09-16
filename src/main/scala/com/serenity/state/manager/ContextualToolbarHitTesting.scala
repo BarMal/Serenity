@@ -1,7 +1,6 @@
 package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
-import com.serenity.command.CommandRegistry
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -27,7 +26,6 @@ final private[manager] class ContextualToolbarHitTesting(port: ContextualToolbar
   def handleContextualToolbarMouseClick(click: MouseClick, state: AppState): IO[Boolean] =
     contextualToolbarSelectionAt(click, state) match
       case Some((surface, toolbarState, ContextualToolbarHit.TopLevelItem(index))) =>
-        val registry     = CommandRegistry.withToggleUI
         val items        = ContextualToolbar.itemsFor(state)
         val focusedState = toolbarState.withFocusedIndex(index, items)
         val focusedItem  = focusedState.normalized(items).focusedItem(items)
@@ -50,7 +48,7 @@ final private[manager] class ContextualToolbarHitTesting(port: ContextualToolbar
           stateRef.get.flatMap { current =>
             focusedItem match
               case Some(_: ContextualToolbarItem.Button) =>
-                ContextualToolbar.focusedCommand(focusedState, current, registry) match
+                ContextualToolbar.focusedCommand(focusedState, current) match
                   case Some(command) => executeCommand(command).as(true)
                   case None          => IO.pure(false)
               case Some(_: ContextualToolbarItem.Dropdown) | Some(_: ContextualToolbarItem.Input) =>

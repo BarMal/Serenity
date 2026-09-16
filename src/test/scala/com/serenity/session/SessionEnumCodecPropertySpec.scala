@@ -34,8 +34,8 @@ class SessionEnumCodecPropertySpec extends AnyPropSpec with ScalaCheckPropertyCh
     }
 
   roundTripsAllCases("CursorMode", CursorMode.values, _.configKey)
-  roundTripsAllCases("CursorInfoBarSegment", CursorInfoBarSegment.values, _.configKey)
-  roundTripsAllCases("CursorInfoBarPlacement", CursorInfoBarPlacement.values, _.configKey)
+  roundTripsAllCases("StatusSegment", StatusSegment.values, _.configKey)
+  roundTripsAllCases("StatusLinePlacement", StatusLinePlacement.values, _.configKey)
   roundTripsAllCases("WindowChromeMode", WindowChromeMode.values, _.configKey)
   roundTripsAllCases("MarkdownViewMode", MarkdownViewMode.values, _.configKey)
   roundTripsAllCases("DefaultDocumentMode", DefaultDocumentMode.values, _.configKey)

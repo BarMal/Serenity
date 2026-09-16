@@ -145,7 +145,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
     loaded.ui.panelBorder shouldBe Some("#445566")
   }
 
-  it should "enable spell-checking from the command runner and refresh diagnostics asynchronously" in {
+  it should "enable spell-checking through its setting and refresh diagnostics asynchronously" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
 
@@ -166,7 +166,16 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.getCurrentState.unsafeRunSync().runtime.diagnosticsState.diagnostics shouldBe empty
 
-    executeCommandThroughRunner(stateManager, "spellcheck-on", "spellcheck-on")
+    stateManager.commandExecutor
+      .executeCommand(
+        Command.typed(
+          "spellcheck-enabled",
+          "Spell Check",
+          CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(true))),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
 
@@ -187,7 +196,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
 
     val saved = Files.readString(configFile)
     saved should include("config.version = 1")
-    saved should include("ui.motion.preset = smooth")
+    saved should include("motion.preset = smooth")
     stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface shouldBe None
   }
 
@@ -261,7 +270,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.commandRunnerSurface shouldBe None
     updatedState.persisted.config.editorConfig.fontConfig.textFontFamily shouldBe Font.SERIF
     updatedState.persisted.config.surfaceConfig.showLineNumbers shouldBe false
-    updatedState.persisted.config.surfaceConfig.showGutter shouldBe false
+    updatedState.persisted.config.statusLine.isPinned shouldBe false
     updatedState.persisted.config.surfaceConfig.showPaneHeaders shouldBe false
     updatedState.pinnedSurfaces shouldBe Nil
   }
@@ -276,12 +285,12 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
     val persisted = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     updated.surfaceConfig.showLineNumbers shouldBe true
-    updated.surfaceConfig.showGutter shouldBe true
+    updated.statusLine.isPinned shouldBe true
     updated.surfaceConfig.showPaneHeaders shouldBe true
     updated.surfaceConfig.wordWrapEnabled shouldBe false
     updated.surfaceConfig.contextualToolbarEnabled shouldBe false
     persisted.surfaceConfig.showLineNumbers shouldBe updated.surfaceConfig.showLineNumbers
-    persisted.surfaceConfig.showGutter shouldBe updated.surfaceConfig.showGutter
+    persisted.statusLine.isPinned shouldBe updated.statusLine.isPinned
     persisted.surfaceConfig.showPaneHeaders shouldBe updated.surfaceConfig.showPaneHeaders
     persisted.surfaceConfig.wordWrapEnabled shouldBe updated.surfaceConfig.wordWrapEnabled
     persisted.surfaceConfig.contextualToolbarEnabled shouldBe updated.surfaceConfig.contextualToolbarEnabled

@@ -33,7 +33,7 @@ object OverlayStackLayout:
         case _ =>
           if belowSurfaces.nonEmpty then belowSurfaces.headOption.toList
           else
-            state.cursorInfoBarSurface.filter {
+            state.floatingStatusLineSurface.filter {
               _.presentation match
                 case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) => true
                 case _                                                             => false
@@ -121,7 +121,7 @@ object OverlayStackLayout:
     state: AppState,
     paneLayouts: Map[PaneId, EditorPaneLayout]
   ): BelowOverlayLayout =
-    val baseRects =
+    val preferredRects =
       surfaces.flatMap(surface =>
         FloatingSurfaceLayout.calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface -> _)
       )
@@ -129,6 +129,7 @@ object OverlayStackLayout:
       surfaces.headOption.flatMap(surface =>
         FloatingSurfaceLayout.calculateFloatingAnchorFrame(surface, state, paneLayouts)
       )
+    val baseRects = anchorFrameOpt.fold(preferredRects)(frame => fitPaletteBelow(preferredRects, frame, state))
     anchorFrameOpt match
       case None =>
         BelowOverlayLayout(Nil, Set.empty)
@@ -164,6 +165,32 @@ object OverlayStackLayout:
             )
         }
         BelowOverlayLayout(stacked.filter(_._2.height > 0), Set.empty)
+
+  /** The palette sized itself to the room below the caret on its own (#1045); in a stack it shares that room, so it
+    * gives its extra rows back first -- down to its density minimum -- before the whole stack would flip above.
+    */
+  private def fitPaletteBelow(
+    rects: List[(UiSurface, LayoutRect)],
+    anchorFrame: FloatingSurfaceLayout.FloatingAnchorFrame,
+    state: AppState
+  ): List[(UiSurface, LayoutRect)] =
+    val gapRows = rects.headOption
+      .map(entry =>
+        FloatingSurfaceLayout.wholeRowOrigin(FloatingSurfaceLayout.floatingCursorGapRows(state, entry._1.content))
+      )
+      .getOrElse(0)
+    val stackGapRows = FloatingSurfaceLayout.wholeRowOrigin(FloatingSurfaceLayout.floatingStackGapRows(state))
+    val totalHeight  = rects.map(_._2.height).sum + (stackGapRows * (rects.length - 1).max(0))
+    val overflow     = anchorFrame.screenPosition.y + 1 + gapRows + totalHeight - anchorFrame.contentRect.bottom
+    if overflow <= 0 then rects
+    else
+      rects.map { (surface, rect) =>
+        surface.content match
+          case SurfaceContent.CommandPalette(_) =>
+            val shrinkable = math.max(0, rect.height - FloatingSurfaceLayout.commandSurfaceMinimumHeight(state))
+            surface -> rect.copy(height = rect.height - math.min(overflow, shrinkable))
+          case _ => surface -> rect
+      }
 
   /** One panel's slot in a corner stack (issue #1310, mode 3): an id plus preferred size, ordered from the screen edge
     * outward -- deliberately its own type rather than reusing `FloatingSurfaceLayout.FrozenPeekSlot`, since a corner

@@ -91,8 +91,8 @@ class CommandRunnerSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       showKeyHints = false
     )
 
-    withItems.paintBoxes.exists(_.text.exists(_.contains("navigate"))) shouldBe true
-    empty.paintBoxes.exists(_.text.exists(_.contains("navigate"))) shouldBe false
+    withItems.paintBoxes.exists(_.text.exists(_.contains("↑↓ move"))) shouldBe true
+    empty.paintBoxes.exists(_.text.exists(_.contains("↑↓ move"))) shouldBe false
   }
 
   it should "add a persistent key-hint row only when showKeyHints is set" in {
@@ -102,8 +102,8 @@ class CommandRunnerSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     val withoutHints =
       CommandRunnerSurfaceComposition.forRunner(runner, LayoutRect(0, 0, 60, 10), 0.0, 1, showKeyHints = false)
 
-    withHints.paintBoxes.exists(_.text.contains("↑↓ navigate • Enter run • Esc dismiss")) shouldBe true
-    withoutHints.paintBoxes.exists(_.text.contains("↑↓ navigate • Enter run • Esc dismiss")) shouldBe false
+    withHints.paintBoxes.exists(_.text.contains("↑↓ move • Enter run • Esc close")) shouldBe true
+    withoutHints.paintBoxes.exists(_.text.contains("↑↓ move • Enter run • Esc close")) shouldBe false
   }
 
   it should "resolve hitAt to the exact command clicked, matching what was painted" in {

@@ -317,7 +317,7 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.get.config.uiOutlineThicknessPx shouldBe 2
   }
 
-  it should "default cursorInfoBarSegments to empty when loading older JSON without the field" in {
+  it should "default the status segments when loading older JSON without the field" in {
     val originalJson = SessionState
       .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
       .asJson
@@ -325,13 +325,13 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
     val jsonWithoutCursorInfoBarSegments =
       originalJson.mapObject(
-        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("cursorInfoBarSegments")))
+        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("statusSegments")))
       )
 
     val decoded = jsonWithoutCursorInfoBarSegments.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.cursorInfoBarSegments shouldBe Nil
+    decoded.toOption.get.config.statusLine.segments shouldBe StatusLineConfig.defaultSegments
   }
 
   it should "restore a legacy session that stored a single cursorInfoBarMode instead of a segment list" in {
@@ -345,7 +345,10 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
         _.add(
           "config",
           _root_.io.circe.Json.fromJsonObject(
-            configObject.remove("cursorInfoBarSegments").add("cursorInfoBarMode", Json.fromString("detailed"))
+            configObject
+              .remove("statusSegments")
+              .remove("statusPlacement")
+              .add("cursorInfoBarMode", Json.fromString("detailed"))
           )
         )
       )
@@ -353,25 +356,25 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
     val decoded = legacyJson.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.cursorInfoBarSegments shouldBe
-      List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
+    decoded.toOption.get.config.statusLine.segments shouldBe
+      List(StatusSegment.Position, StatusSegment.Title, StatusSegment.Mode)
   }
 
-  it should "default cursorInfoBarPlacement to Floating when loading older JSON without the field" in {
+  it should "default the status placement to pinned when loading older JSON without the field" in {
     val originalJson = SessionState
       .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
       .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
-    val jsonWithoutCursorInfoBarPlacement =
+    val jsonWithoutStatusLinePlacement =
       originalJson.mapObject(
-        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("cursorInfoBarPlacement")))
+        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("statusPlacement")))
       )
 
-    val decoded = jsonWithoutCursorInfoBarPlacement.as[SessionState]
+    val decoded = jsonWithoutStatusLinePlacement.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.cursorInfoBarPlacement shouldBe CursorInfoBarPlacement.Floating
+    decoded.toOption.get.config.statusLine.placement shouldBe StatusLinePlacement.Pinned
   }
 
   it should "default uiFontFamily to SansSerif when loading older JSON without the field" in {

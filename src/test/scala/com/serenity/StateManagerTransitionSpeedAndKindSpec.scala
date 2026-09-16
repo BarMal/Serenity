@@ -10,8 +10,8 @@ import com.serenity.command.{
   CommandCategory,
   CommandIntent,
   GeneralSettingsIntent,
+  InterfaceChromeIntent,
   MotionIntent,
-  PanelChromeIntent,
   SettingsIntent
 }
 import com.serenity.config.*
@@ -403,7 +403,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "ui-element-gap",
           "Set UI element gap",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiElementGap(3))),
+          CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiElementGap(3))),
           CommandCategory.Settings
         )
       )
@@ -420,7 +420,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "ui-corner-radius",
           "Set UI corner radius",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiCornerRadiusPx(14))),
+          CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiCornerRadiusPx(14))),
           CommandCategory.Settings
         )
       )
@@ -437,7 +437,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "ui-outline-thickness",
           "Set UI outline thickness",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiOutlineThicknessPx(4))),
+          CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiOutlineThicknessPx(4))),
           CommandCategory.Settings
         )
       )

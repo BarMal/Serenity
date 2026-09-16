@@ -2,6 +2,7 @@ package com.serenity.state.models
 
 import com.serenity.animation.WindowSitter
 import com.serenity.animation.sprite.CompanionSpriteState
+import com.serenity.config.{AppConfig, MotionFamily}
 import com.serenity.input.CursorPeekState
 import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.ui.layout.{ScreenPosition, ViewportSize}
@@ -24,6 +25,9 @@ final case class Runtime(
     navigation: NavigationHistory = NavigationHistory(),
     hoveredEditorTarget: Option[HoveredEditorTarget] = None,
     windowSitter: WindowSitter = WindowSitter.default,
+    typingActivity: TypingActivity = TypingActivity.idle,
+    // The theme names the theme manager found on disk, listed at startup and after a reload or save; never persisted.
+    availableThemeNames: List[String] = Nil,
     companionSprite: CompanionSpriteState = CompanionSpriteState(),
     diagnosticsState: DiagnosticsState = DiagnosticsState(),
     semanticTokensState: SemanticTokensState = SemanticTokensState(),
@@ -58,4 +62,15 @@ final case class Runtime(
     // reconstructed fresh on every open) within the same running session. Not persisted across restarts, matching
     // this whole case class's contract.
     commandUsage: Map[String, Int] = Map.empty
-)
+):
+
+  /** A typed character: the quiet window for cursor-adjacent surfaces always restarts; the window sitter reacts only
+    * when its motion family and its own switch are on.
+    */
+  def observeTyping(nowNanos: Long, config: AppConfig): Runtime =
+    val motion = config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
+    val sitter =
+      if motion.enabled && config.windowSitterConfig.enabled then
+        windowSitter.observeTyping(nowNanos, config.windowSitterConfig)
+      else windowSitter
+    copy(windowSitter = sitter, typingActivity = typingActivity.observed)

@@ -18,7 +18,7 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
     val configFile = Files.createTempFile("serenity-config-utf8", ".conf")
     Files.writeString(
       configFile,
-      """font.text.family = Sérif
+      """typography.prose.family = Sérif
         |""".stripMargin,
       StandardCharsets.UTF_8
     )
@@ -29,18 +29,18 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
     Files.delete(configFile)
 
     ConfigManagerTestSupport.saveConfig(config, configFile) shouldBe true
-    Files.readString(configFile, StandardCharsets.UTF_8) should include("font.text.family = Sérif")
+    Files.readString(configFile, StandardCharsets.UTF_8) should include("typography.prose.family = Sérif")
   }
 
   it should "round-trip HOCON quoting, comments, substitutions, lists, and commas" in {
     val configFile = Files.createTempFile("serenity-hocon-config", ".conf")
     Files.writeString(
       configFile,
-      """font.text.family = "Text Font #1" # trailing comment
+      """typography.prose.family = "Text Font #1" # trailing comment
         |spellcheck.languages = ["en", "fr"]
         |spellcheck.dictionary_paths = ["C:\\Dictionaries\\en_US.dic", "/usr/share/hunspell/fr.dic"]
         |spellcheck.words = ["hello, world", "Café"]
-        |font.ui.family = ${font.text.family}
+        |typography.ui.family = ${typography.prose.family}
         |""".stripMargin
     )
 
@@ -65,8 +65,8 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
     val configFile = Files.createTempFile("serenity-hocon-slash-comment", ".conf")
     Files.writeString(
       configFile,
-      """font.text.family = SansSerif // use the platform sans-serif font
-        |font.ui.family = ${font.text.family}
+      """typography.prose.family = SansSerif // use the platform sans-serif font
+        |typography.ui.family = ${typography.prose.family}
         |""".stripMargin
     )
 
@@ -114,9 +114,9 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
     val configFile = Files.createTempFile("serenity-hocon-legacy-path", ".conf")
     Files.writeString(
       configFile,
-      """font.text.family = Legacy Serif
+      """typography.prose.family = Legacy Serif
         |spellcheck.dictionary_paths = C:\Dictionaries\en_US.dic
-        |viewport.width.max =
+        |window.viewport.width_max =
         |""".stripMargin
     )
 
@@ -132,9 +132,9 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
     val configFile = Files.createTempFile("serenity-mixed-legacy-hocon", ".conf")
     Files.writeString(
       configFile,
-      """font.text.family = "Text Font"
-        |font.ui.family = ${font.text.family}
-        |font.code.family = ${?missing.font.family}
+      """typography.prose.family = "Text Font"
+        |typography.ui.family = ${typography.prose.family}
+        |typography.code.family = ${?missing.font.family}
         |spellcheck.dictionary_paths = C:\Dictionaries\en_US.dic
         |""".stripMargin
     )
@@ -154,14 +154,14 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
     val root      = directory.resolve("application.conf")
     Files.writeString(
       included,
-      """font.text.family = "Included Serif"
+      """typography.prose.family = "Included Serif"
         |spellcheck.dictionary_paths = "C:\\Dictionaries\\en_US.dic"
         |""".stripMargin
     )
     Files.writeString(
       root,
       """include required("included.conf")
-        |font.ui.family = ${font.text.family}
+        |typography.ui.family = ${typography.prose.family}
         |""".stripMargin
     )
 

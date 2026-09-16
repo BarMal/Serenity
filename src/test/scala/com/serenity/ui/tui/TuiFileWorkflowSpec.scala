@@ -75,7 +75,7 @@ class TuiFileWorkflowSpec extends TuiSpec:
         _ <- verify("second buffer") { screen =>
           screen.titleBar should include("unsaved")
           screen.rowText(1).stripTrailing shouldBe " 1 second buffer"
-          screen.statusBar should include("Not saved to file yet")
+          screen.statusBar should include("Unsaved")
         }
         _ <- verifyState("two buffers")(current => current.persisted.bufferOrder should have size 2)
       yield ()

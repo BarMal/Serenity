@@ -87,6 +87,7 @@ enum LspIntent:
 
 enum ThemeIntent:
   case ToggleTheme
+  case ApplyTheme(name: String)
   case ReloadTheme
   case OpenThemeChooser
   case OpenThemeCreator
@@ -203,15 +204,21 @@ enum MotionIntent:
 /** Cursor rendering mode and its info-bar presentation. */
 enum CursorIntent:
   case SetCursorMode(mode: CursorMode)
-  case SetCursorInfoBarSegmentIncluded(segment: CursorInfoBarSegment, included: Boolean)
-  case MoveCursorInfoBarSegmentEarlier(segment: CursorInfoBarSegment)
-  case MoveCursorInfoBarSegmentLater(segment: CursorInfoBarSegment)
-  case SetCursorInfoBarPlacement(placement: CursorInfoBarPlacement)
+
+/** The status line: which segments it shows, in what order, and where it lives. */
+enum StatusLineIntent:
+  case SetSegmentIncluded(segment: StatusSegment, included: Boolean)
+  case MoveSegmentEarlier(segment: StatusSegment)
+  case MoveSegmentLater(segment: StatusSegment)
+  case SetPlacement(placement: StatusLinePlacement)
+
+  /** Off when shown (either placement), back to pinned when off. */
+  case ToggleVisibility
 
 /** Panel/text-area chrome: line numbers, gutter, word wrap, toolbar, spacing, window chrome and sitter, insets. */
-enum PanelChromeIntent:
+/** What the editor surface itself shows around and inside the text: chrome rows, wrap, scrolling, insets. */
+enum TextDisplayIntent:
   case ToggleLineNumbers
-  case ToggleGutter
   case ToggleWordWrap
   case ToggleFocusedTextBody
   case ToggleContextualToolbar
@@ -223,19 +230,29 @@ enum PanelChromeIntent:
   case SetLineNumberMarginLeft(cells: Int)
   case SetLineNumberMarginRight(cells: Int)
   case SetLineNumberPadding(cells: Int)
-  case SetGutter(enabled: Boolean)
   case SetWordWrap(enabled: Boolean)
   case SetVisualLineCursorNavigation(enabled: Boolean)
   case SetTypewriterScrolling(enabled: Boolean)
   case SetFocusedTextBody(enabled: Boolean)
   case SetContextualToolbarEnabled(enabled: Boolean)
   case SetContextualToolbarDisplayMode(mode: ToolbarDisplayMode)
+  case SetTextAreaLeftInset(value: Double)
+  case SetTextAreaRightInset(value: Double)
+  case SetTextAreaTopInset(value: Double)
+  case SetTextAreaBottomInset(value: Double)
+
+/** How interface surfaces are sized and spaced: density, gaps, corner radius, window chrome, key hints. */
+enum InterfaceChromeIntent:
   case SetCommandRunnerShowKeyHints(enabled: Boolean)
   case SetUiElementGap(gap: Double)
   case SetUiCornerRadiusPx(radius: Int)
   case SetUiOutlineThicknessPx(thickness: Int)
   case SetInterfaceDensity(density: InterfaceDensity)
   case SetWindowChromeMode(mode: WindowChromeMode)
+  case SetWheelScrollLines(lines: Int)
+
+/** Purely decorative extras (window sitter, companion sprite, flair tier) that never change what is edited. */
+enum DecorationIntent:
   case SetWindowSitterEnabled(enabled: Boolean)
   case SetWindowSitterAction(action: com.serenity.animation.WindowSitterAction)
   case SetWindowSitterFrames(frames: Vector[String])
@@ -244,12 +261,6 @@ enum PanelChromeIntent:
   case SetWindowSitterFastTypingThresholdMs(ms: Int)
   case SetCompanionSpriteEnabled(enabled: Boolean)
   case SetVisualFlairLevel(level: VisualFlairLevel)
-  case SetWheelScrollLines(lines: Int)
-  case SetTextAreaLeftInset(value: Double)
-  case SetTextAreaRightInset(value: Double)
-  case SetTextAreaTopInset(value: Double)
-  case SetTextAreaBottomInset(value: Double)
-  case SetShowWordCount(enabled: Boolean)
 
 enum SpellCheckIntent:
   case SetSpellCheckEnabled(enabled: Boolean)
@@ -280,7 +291,10 @@ enum SettingsIntent:
   case Font(intent: FontIntent)
   case Motion(intent: MotionIntent)
   case Cursor(intent: CursorIntent)
-  case PanelChrome(intent: PanelChromeIntent)
+  case StatusLine(intent: StatusLineIntent)
+  case TextDisplay(intent: TextDisplayIntent)
+  case InterfaceChrome(intent: InterfaceChromeIntent)
+  case Decoration(intent: DecorationIntent)
   case SpellCheck(intent: SpellCheckIntent)
   case General(intent: GeneralSettingsIntent)
 

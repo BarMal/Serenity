@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.config.{BackgroundStyle, CursorInfoBarSegment, PostProcessingEffect, WindowChromeMode}
+import com.serenity.config.{BackgroundStyle, PostProcessingEffect, StatusSegment, WindowChromeMode}
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.presets.UiPreset
 import org.scalatest.flatspec.AnyFlatSpec
@@ -42,7 +42,9 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     cursor.selectedOption shouldBe "Breathe"
     chrome.selectedOption shouldBe "Auto (Linux Rounded)"
     chrome.selectedIntent shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWindowChromeMode(WindowChromeMode.Auto)))
+      CommandIntent.Settings(
+        SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetWindowChromeMode(WindowChromeMode.Auto))
+      )
     )
     chrome.options.map(_.label) shouldBe List("Auto (Linux Rounded)", "Native", "Native Themed (Windows)", "Custom")
   }
@@ -154,88 +156,50 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     onByDefault.label shouldBe "Command Runner Key Hints"
     onByDefault.selectedOption shouldBe "On"
     onByDefault.selectedIntent shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCommandRunnerShowKeyHints(true)))
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetCommandRunnerShowKeyHints(true)))
     )
 
     val explicitlyOff =
       CommandRunnerSettingsTextDisplayItems.commandRunnerKeyHintsOptionItem(Map("command-runner-key-hints" -> 1))
     explicitlyOff.selectedOption shouldBe "Off"
     explicitlyOff.selectedIntent shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCommandRunnerShowKeyHints(false)))
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetCommandRunnerShowKeyHints(false)))
     )
   }
 
-  it should "expose 5 cursor info bar include/exclude toggles (#1261)" in {
-    val items = CommandRunnerSettingsCursorItems.cursorInfoBarSegmentItems(Map.empty)
+  it should "expose an include/exclude toggle per status line segment" in {
+    val items = CommandRunnerSettingsStatusLineItems.segmentItems(Map.empty, currentOrder = Nil)
 
     items.collect { case o: CommandSurfaceItem.OptionItem => o.id } shouldBe List(
-      "cursor-info-bar-title",
-      "cursor-info-bar-position",
-      "cursor-info-bar-word-count",
-      "cursor-info-bar-char-count",
-      "cursor-info-bar-reading-time"
+      "status-position",
+      "status-title",
+      "status-language",
+      "status-mode",
+      "status-word-count",
+      "status-char-count",
+      "status-reading-time"
     )
   }
 
-  it should "expose no cursor info bar reorder commands when fewer than 2 segments are included" in {
-    val items = CommandRunnerSettingsCursorItems.cursorInfoBarSegmentItems(Map("cursor-info-bar-position" -> 0))
+  it should "expose no status line reorder commands when fewer than 2 segments are shown" in {
+    val items = CommandRunnerSettingsStatusLineItems.segmentItems(
+      Map("status-position" -> 0),
+      currentOrder = List(StatusSegment.Position)
+    )
 
     items.collect { case c: CommandSurfaceItem.CommandItem => c.command.name } shouldBe Nil
   }
 
-  it should "expose earlier/later reorder commands for each included cursor info bar segment once 2+ are included" in {
-    val items = CommandRunnerSettingsCursorItems.cursorInfoBarSegmentItems(
-      Map("cursor-info-bar-position" -> 0, "cursor-info-bar-title" -> 0)
+  // #1298: the commands follow the line's real order and only the direction that would actually move the segment is
+  // offered -- the first segment has no-op "earlier" suppressed, the last has no-op "later" suppressed.
+  it should "order status line reorder commands by the current segment order and suppress no-op directions" in {
+    val items = CommandRunnerSettingsStatusLineItems.segmentItems(
+      Map("status-position" -> 0, "status-title" -> 0),
+      currentOrder = List(StatusSegment.Position, StatusSegment.Title)
     )
 
     val moveCommands = items.collect { case c: CommandSurfaceItem.CommandItem => c.command }
-    moveCommands.map(_.name) shouldBe List(
-      "move-cursor-info-bar-title-earlier",
-      "move-cursor-info-bar-title-later",
-      "move-cursor-info-bar-position-earlier",
-      "move-cursor-info-bar-position-later"
-    )
+    moveCommands.map(_.name) shouldBe List("move-status-position-later", "move-status-title-earlier")
     // #1298: pressing "move earlier/later" repeatedly shouldn't force a full menu re-open between presses.
     moveCommands.foreach(_.keepMenuOpenOnSubmit shouldBe true)
-  }
-
-  // #1298: without a `currentOrder`, the reorder commands' listed sequence can't be trusted to match the segments'
-  // real on-screen order -- so, as before, every included segment still offers both directions rather than risking a
-  // wrongly-omitted one.
-  it should "order reorder commands by segmentDefinitions and gate neither direction when no current order is given" in {
-    val items = CommandRunnerSettingsCursorItems.cursorInfoBarSegmentItems(
-      Map("cursor-info-bar-position" -> 0, "cursor-info-bar-title" -> 0),
-      currentOrder = Nil
-    )
-
-    items.collect { case c: CommandSurfaceItem.CommandItem => c.command.name } shouldBe List(
-      "move-cursor-info-bar-title-earlier",
-      "move-cursor-info-bar-title-later",
-      "move-cursor-info-bar-position-earlier",
-      "move-cursor-info-bar-position-later"
-    )
-  }
-
-  // #1298: given the real order, the commands are listed in that order and only the direction that would actually
-  // move the segment is offered -- Position (first) has no-op "earlier" suppressed, Title (last) has no-op "later"
-  // suppressed.
-  it should "order reorder commands by the current segment order and suppress no-op directions" in {
-    val items = CommandRunnerSettingsCursorItems.cursorInfoBarSegmentItems(
-      Map("cursor-info-bar-position" -> 0, "cursor-info-bar-title" -> 0),
-      currentOrder = List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
-    )
-
-    items.collect { case c: CommandSurfaceItem.CommandItem => c.command.name } shouldBe List(
-      "move-cursor-info-bar-position-later",
-      "move-cursor-info-bar-title-earlier"
-    )
-  }
-
-  it should "expose no cursor info bar reorder commands when fewer than 2 segments are included, given a current order" in {
-    val items = CommandRunnerSettingsCursorItems.cursorInfoBarSegmentItems(
-      Map("cursor-info-bar-position" -> 0),
-      currentOrder = List(CursorInfoBarSegment.Position)
-    )
-
-    items.collect { case c: CommandSurfaceItem.CommandItem => c.command.name } shouldBe Nil
   }

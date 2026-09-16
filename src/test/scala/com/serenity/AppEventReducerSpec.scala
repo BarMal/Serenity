@@ -131,7 +131,8 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected command runner"))
 
     val workspace = runner.settingsGroups
-      .find(_.id == "settings-workspace-layout")
+      .flatMap(group => group :: descendants(group))
+      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-workspace-layout" => group }
       .getOrElse(fail("Expected workspace layout group"))
     val outlineOption = descendants(workspace)
       .collectFirst { case option: CommandSurfaceItem.OptionItem if option.id == "panel-outline-pin" => option }

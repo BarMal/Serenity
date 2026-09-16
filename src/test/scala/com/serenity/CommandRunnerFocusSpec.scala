@@ -75,7 +75,7 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     openSettingsViaCommand(stateManager)
-    moveRootSelectionTo(stateManager, "settings-appearance-motion")
+    moveRootSelectionTo(stateManager, "settings-look")
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val enteredState  = stateManager.getCurrentState.unsafeRunSync()
@@ -104,7 +104,7 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     openSettingsViaCommand(stateManager)
     (1 to 4).foreach(_ => stateManager.applyEvent(MoveDown).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
-    moveSubmenuSelectionTo(stateManager, "settings-animation")
+    moveSubmenuSelectionTo(stateManager, "settings-motion-advanced")
     stateManager.applyEvent(Enter).unsafeRunSync()
     moveSubmenuSelectionTo(stateManager, "animation-duration")
 
@@ -123,9 +123,9 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
     afterFirstEscape.runtime.uiSurfaces should have size 1
     afterFirstEscape.persisted.focus shouldBe Focus.Surface(mainSurfaceId)
     currentRunner(stateManager).activeSubmenuEditingItemId shouldBe None
-    currentRunner(stateManager).activeSubmenuGroupId shouldBe Some("settings-animation")
+    currentRunner(stateManager).activeSubmenuGroupId shouldBe Some("settings-motion-advanced")
 
-    // Escape #2: pops from the child submenu ("settings-animation") to its parent -- still on the one surface.
+    // Escape #2: pops from the child submenu ("settings-motion-advanced") to its parent -- still on the one surface.
     stateManager.applyEvent(Escape).unsafeRunSync()
     val afterSecondEscape = stateManager.getCurrentState.unsafeRunSync()
     afterSecondEscape.commandRunnerSurface shouldBe defined

@@ -44,7 +44,8 @@ class RendererUnwrappedOverscanClippingSpec extends AnyFlatSpec with Matchers:
     val buffer = bufferBase.copy(editing = bufferBase.editing.copy(cursors = List(cursor)))
     val pane   = EditorPane.withBuffer(paneId, bufferId)
 
-    val config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+    val config =
+      AppConfig.default.withLineNumbers(false).withoutStatusLine.withWordWrap(false)
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),

@@ -1,30 +1,27 @@
 package com.serenity.ui.layout
 
-import java.awt.font.*
-import java.awt.image.BufferedImage
-import java.awt.{Font, RenderingHints}
+import java.awt.Font
+import java.awt.font.{FontRenderContext, TextAttribute, TextHitInfo, TextLayout}
 import java.text.AttributedString
 
 import com.serenity.richtext.RichTextDocument
 import com.serenity.text.TextEditing
-import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.theme.{RichTextStyling, TextStyle}
 
-/** Leaf font/caret measurement primitives for the GUI's measured (proportional) text layout: per-run font resolution,
-  * caret-stop x positions, grapheme boundaries, and the measured-vs-cell decision. Split out of [[TextLayoutSnapshot]]
-  * (which keeps the higher-level visual-line shaping, wrapping, and viewport geometry) to keep both under the
-  * architecture size target. Everything here is a pure function of its inputs (aside from the layout-mode memo cache).
+/** Caret-stop measurement for one logical line: which AWT font each column measures with, and the x position of every
+  * caret boundary under either the fixed cell grid or the measured (proportional/ligature/rich) path. Pure geometry
+  * over a line of text -- `TextLayoutSnapshot` composes these into visual lines and wraps them.
   */
-object TextMeasurement:
+private[layout] object TextCaretMeasurement:
 
   /** The AWT font a single buffer-line column is measured/drawn with, over the buffer's base font. */
-  final case class ColumnFontRun(startColumn: Int, endColumn: Int, font: Font)
+  final private[layout] case class ColumnFontRun(startColumn: Int, endColumn: Int, font: Font)
 
   /** Per-logical-line font lookup for the measured path: maps an absolute buffer column to its run's scaled font, and
     * reports a visual line's height/ascent from the tallest run covering it. Non-rich lines carry no runs and fall back
     * to the base font everywhere, reproducing the old single-font behaviour exactly.
     */
-  final class LineFontResolver(baseFont: Font, runs: Vector[ColumnFontRun]):
+  final private[layout] class LineFontResolver(baseFont: Font, runs: Vector[ColumnFontRun]):
     def fontAt(column: Int): Font =
       runs.find(run => column >= run.startColumn && column < run.endColumn).map(_.font).getOrElse(baseFont)
 
@@ -45,10 +42,10 @@ object TextMeasurement:
   /** A resolver with no per-run fonts: every column measures with the one base font, reproducing the pre-rich
     * single-font behaviour. Used by the plain-text measurement helpers that carry no rich document.
     */
-  def singleFontResolver(font: Font): LineFontResolver =
+  private[layout] def singleFontResolver(font: Font): LineFontResolver =
     LineFontResolver(font, Vector.empty)
 
-  def resolverForLine(
+  private[layout] def resolverForLine(
     baseFont: Font,
     richDocument: Option[RichTextDocument],
     bufferLine: Int,
@@ -69,7 +66,7 @@ object TextMeasurement:
       case None => Vector.empty
     LineFontResolver(baseFont, runs)
 
-  def caretXs(
+  private[layout] def caretXs(
     text: String,
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
@@ -109,7 +106,7 @@ object TextMeasurement:
     * [[graphemeBoundaryOffsets]]) and so never a caret stop, and taking the glyph's trailing edge there keeps the
     * sequence non-decreasing for the callers that index it by raw column.
     */
-  def displayWidthCaretXs(text: String, charWidth: Float): Vector[Float] =
+  private[layout] def displayWidthCaretXs(text: String, charWidth: Float): Vector[Float] =
     @annotation.tailrec
     def loop(index: Int, xPx: Float, acc: Vector[Float]): Vector[Float] =
       if index >= text.length then acc :+ xPx
@@ -126,7 +123,7 @@ object TextMeasurement:
     * across the wrap boundary, and never splits a surrogate pair; like the uniform-advance branch it always consumes at
     * least one glyph, so wrapping makes progress even in a panel narrower than a single cell.
     */
-  def fittingDisplayWidthSegmentLength(text: String, panelWidthPx: Int, charWidth: Int): Int =
+  private[layout] def fittingDisplayWidthSegmentLength(text: String, panelWidthPx: Int, charWidth: Int): Int =
     @annotation.tailrec
     def loop(index: Int, usedPx: Int): Int =
       if index >= text.length then index
@@ -139,7 +136,7 @@ object TextMeasurement:
     val fitted = loop(0, 0)
     if fitted > 0 then fitted else math.min(text.length, Character.charCount(text.codePointAt(0)))
 
-  def graphemeBoundaryOffsets(text: String): Vector[Int] =
+  private[layout] def graphemeBoundaryOffsets(text: String): Vector[Int] =
     @annotation.tailrec
     def loop(offset: Int, acc: Vector[Int]): Vector[Int] =
       if offset >= text.length then if acc.lastOption.contains(text.length) then acc else acc :+ text.length
@@ -149,33 +146,7 @@ object TextMeasurement:
 
     loop(0, Vector(0))
 
-  final private case class MeasuredLayoutKey(font: Font, fontRenderContext: FontRenderContext)
-  private val measuredLayoutCache = java.util.concurrent.ConcurrentHashMap[MeasuredLayoutKey, java.lang.Boolean]()
-
-  def shouldUseMeasuredLayout(font: Font, frc: FontRenderContext): Boolean =
-    measuredLayoutCache.computeIfAbsent(
-      MeasuredLayoutKey(font, frc),
-      key =>
-        (!FontLoader.isMonospacedFont(key.font) ||
-          FontLoader.ligaturesEnabled(key.font) ||
-          hasFractionalAdvanceDrift(key.font, key.fontRenderContext)): java.lang.Boolean
-    )
-
-  private def hasFractionalAdvanceDrift(font: Font, frc: FontRenderContext): Boolean =
-    val sampleText = "iiiiiiiiiiii"
-    if sampleText.isEmpty then false
-    else
-      // Whether this font itself has fractional-advance drift is a property of the font, independent of whatever
-      // "pixel" unit a caller's cellMetrics defines -- so this always measures against the font's own natural cell
-      // size, not a caller override (which would otherwise make every font look like it drifts under TUI's
-      // CellMetricsOne).
-      val fontCellMetrics = CellMetrics.fromFont(font)
-      val measuredXs = caretXs(sampleText, 0, singleFontResolver(font), frc, measuredLayout = true, fontCellMetrics)
-      val measuredAdvance = measuredXs.lastOption.getOrElse(0.0f)
-      val cellAdvance     = fontCellMetrics.charWidth.toFloat * sampleText.length
-      math.abs(measuredAdvance - cellAdvance) > 0.5f
-
-  private def normalizeCollapsedCarets(rawXs: Vector[Float]): Vector[Float] =
+  private[layout] def normalizeCollapsedCarets(rawXs: Vector[Float]): Vector[Float] =
     if rawXs.length < 3 then rawXs
     else
       val normalized = rawXs.toArray
@@ -211,12 +182,3 @@ object TextMeasurement:
       normalizeFrom(1)
 
       normalized.toVector
-
-  def defaultFontRenderContext(): FontRenderContext =
-    val image = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
-    val g     = image.createGraphics()
-    try
-      g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-      g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
-      g.getFontRenderContext
-    finally g.dispose()

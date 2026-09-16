@@ -21,7 +21,8 @@ private[command] trait CommandRunnerLifecycle:
     registry: CommandRegistry,
     config: AppConfig,
     isTuiMode: Boolean = false,
-    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full
+    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full,
+    context: CommandRunnerContext = CommandRunnerContext.empty
   ): CommandRunner =
     copy(
       isActive = true,
@@ -31,7 +32,8 @@ private[command] trait CommandRunnerLifecycle:
       commandBindings = CommandRunner.commandBindings(config),
       isTuiMode = isTuiMode,
       keyboardFidelityTier = keyboardFidelityTier,
-      cursorInfoBarSegments = config.cursorInfoBarSegments
+      statusSegments = config.statusLine.segments,
+      context = context
     ).syncEditMode
 
   /** Rebuild input items from a new config (called after a setting is applied) */
@@ -40,7 +42,7 @@ private[command] trait CommandRunnerLifecycle:
       inputItems = CommandRunnerSettingsInputItems.build(config),
       optionSelections = CommandRunnerOptionSelections.default(config),
       commandBindings = CommandRunner.commandBindings(config),
-      cursorInfoBarSegments = config.cursorInfoBarSegments
+      statusSegments = config.statusLine.segments
     ).syncEditMode.normalizeSubmenuEditMode
 
   def withUiPresetNames(names: List[String]): CommandRunner =
@@ -63,7 +65,8 @@ private[command] trait CommandRunnerLifecycle:
       submenuSelections = Map.empty,
       uiPresetPreviews = Nil,
       editingPresetName = None,
-      cursorInfoBarSegments = Nil
+      statusSegments = Nil,
+      context = CommandRunnerContext.empty
     )
 
   /** Enter edit mode on the currently selected InputItem, or clear edit state otherwise */

@@ -20,6 +20,8 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
 
+  private val bareConfig = AppConfig.default.withLineNumbers(false).withoutStatusLine
+
   given Balance    = Balance.default
   given Logger[IO] = Slf4jLogger.getLogger[IO]
 
@@ -38,7 +40,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     viewportSize: ViewportSize = ViewportSize(100, 30),
     cellMetricsOverride: Option[CellMetrics] = None,
     textFontOverride: Option[Font] = None,
-    config: AppConfig = AppConfig.default.withLineNumbers(false).withGutter(false)
+    config: AppConfig = bareConfig
   ): MockRenderSurface =
     val paneId     = PaneId(0)
     val bufferId   = BufferId(1)
@@ -107,7 +109,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
-        config = AppConfig.default.withGutter(false).withWordWrap(true)
+        config = AppConfig.default.withoutStatusLine.withWordWrap(true)
       )
     )
     val viewportSize = ViewportSize(11, 6)
@@ -245,7 +247,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       codeFont,
       cellMetricsOverride = Some(CellMetrics.fromFont(codeFont)),
       textFontOverride = Some(textFont),
-      config = AppConfig.default.withLineNumbers(true).withGutter(false)
+      config = AppConfig.default.withLineNumbers(true).withoutStatusLine
     )
 
     val firstTextRun =
@@ -308,7 +310,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
-        config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+        config = bareConfig.withWordWrap(false)
       )
     )
     val surface = new MockRenderSurface(viewport.width, viewport.height)
@@ -344,7 +346,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
-        config = AppConfig.default.withLineNumbers(false).withGutter(false)
+        config = bareConfig
       )
     )
     val surface     = new MockRenderSurface(100, 30)
@@ -382,7 +384,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
-        config = AppConfig.default.withLineNumbers(false).withGutter(false)
+        config = bareConfig
       )
     )
     val cellMetrics    = CellMetrics.fromFont(font)
@@ -436,9 +438,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
-        config = AppConfig.default
-          .withLineNumbers(false)
-          .withGutter(false)
+        config = bareConfig
           .withCursorColors(CursorColorConfig(active = Some(activeColor), inactive = Some(inactiveColor)))
       )
     )
@@ -481,7 +481,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
-        config = AppConfig.default.withLineNumbers(false).withGutter(false)
+        config = bareConfig
       )
     )
     val cellMetrics = CellMetrics.fromFont(font)
@@ -509,7 +509,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       font,
       viewport,
       viewportSize = ViewportSize(5, 5),
-      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+      config = bareConfig.withWordWrap(false)
     )
     val rowX = firstNonSpaceColumn(surface, 1)
 
@@ -528,7 +528,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       font,
       viewport,
       viewportSize = ViewportSize(80, 10),
-      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+      config = bareConfig.withWordWrap(false)
     )
 
     val renderedRow = surface.getRow(1)
@@ -552,7 +552,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       viewportSize = ViewportSize(80, 10),
       cellMetricsOverride = Some(CellMetrics.fromFont(codeFont)),
       textFontOverride = Some(textFont),
-      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+      config = bareConfig.withWordWrap(false)
     )
     val renderedText = surface.drawRunPxCalls.map(_.s).mkString
 
@@ -574,7 +574,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       viewportSize = ViewportSize(100, 10),
       cellMetricsOverride = Some(CellMetrics.fromFont(codeFont)),
       textFontOverride = Some(textFont),
-      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+      config = bareConfig.withWordWrap(false)
     )
     val renderedText = surface.drawRunPxCalls.map(_.s).mkString
 
@@ -589,7 +589,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       font,
       viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 6),
       viewportSize = ViewportSize(100, 12),
-      config = AppConfig.default.withLineNumbers(false).withGutter(false).withFocusedTextBody(true)
+      config = bareConfig.withFocusedTextBody(true)
     )
 
     surface.drawRunPxCalls.find(_.s == "Alpha").map(_.foreground) shouldBe Some(Theme.light.foreground)
@@ -610,7 +610,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       font,
       viewport = Viewport(topLine = 4_900, leftColumn = 0, visibleColumns = 80, visibleLines = 6),
       viewportSize = ViewportSize(100, 12),
-      config = AppConfig.default.withLineNumbers(false).withGutter(false).withFocusedTextBody(true)
+      config = bareConfig.withFocusedTextBody(true)
     )
 
     surface.drawRunPxCalls.find(_.s == "unrelated prose").map(_.foreground) shouldBe Some(Theme.light.muted)
@@ -629,7 +629,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       font,
       viewport = Viewport(topLine = 1_000, leftColumn = 0, visibleColumns = 80, visibleLines = 6),
       viewportSize = ViewportSize(100, 12),
-      config = AppConfig.default.withLineNumbers(false).withGutter(false).withFocusedTextBody(true)
+      config = bareConfig.withFocusedTextBody(true)
     )
 
     surface.drawRunPxCalls.find(_.s == "fenced content").map(_.foreground) shouldBe Some(Theme.light.foreground)
@@ -648,7 +648,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       font,
       viewport = Viewport(topLine = 1_500, leftColumn = 0, visibleColumns = 80, visibleLines = 6),
       viewportSize = ViewportSize(100, 12),
-      config = AppConfig.default.withLineNumbers(false).withGutter(false).withFocusedTextBody(true)
+      config = bareConfig.withFocusedTextBody(true)
     )
 
     surface.drawRunPxCalls.find(_.s == "distant fenced content").map(_.foreground) shouldBe Some(Theme.light.foreground)
@@ -667,7 +667,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       font,
       viewport = Viewport(topLine = 1_500, leftColumn = 0, visibleColumns = 80, visibleLines = 6),
       viewportSize = ViewportSize(100, 12),
-      config = AppConfig.default.withLineNumbers(false).withGutter(false).withFocusedTextBody(true)
+      config = bareConfig.withFocusedTextBody(true)
     )
 
     surface.drawRunPxCalls.find(_.s == "asymmetric fenced content").map(_.foreground) shouldBe
@@ -685,7 +685,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       font,
       viewport,
       viewportSize = ViewportSize(80, 10),
-      config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+      config = bareConfig.withWordWrap(false)
     )
 
     val rowX = firstNonSpaceColumn(surface, 1)

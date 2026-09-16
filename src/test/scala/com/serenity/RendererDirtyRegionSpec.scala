@@ -351,7 +351,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
           uiSurfaces = List(
             UiSurface(
               id = surfaceId,
-              content = SurfaceContent.CursorInfoBar("info"),
+              content = SurfaceContent.QuickInfo("info"),
               presentation = SurfacePresentation.Floating(Some(anchor), SurfacePlacement.AboveCursor)
             )
           )

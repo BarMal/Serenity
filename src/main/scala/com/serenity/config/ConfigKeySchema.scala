@@ -21,10 +21,16 @@ object ConfigKeySchema:
   val deprecatedKeys: Map[String, String] =
     ConfigRegistry.fields.flatMap { field =>
       field.aliases.filterNot(currentKeys.contains).map(_ -> field.key)
-    }.toMap ++ ConfigGroups.deprecatedKeys
+    }.toMap ++ ConfigGroups.deprecatedKeys ++ LegacyStatusLineKeys.replacements
 
   def deprecatedReplacement(key: String): Option[String] =
-    deprecatedKeys.get(key)
+    deprecatedKeys
+      .get(key)
+      .orElse(
+        Option.when(key.startsWith(ConfigGroups.legacyMotionFamilyPrefix))(
+          ConfigGroups.motionFamilyPrefix + key.stripPrefix(ConfigGroups.legacyMotionFamilyPrefix)
+        )
+      )
 
   def isKnownKey(key: String): Boolean =
     currentKeys.contains(key) ||

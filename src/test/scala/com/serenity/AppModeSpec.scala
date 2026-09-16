@@ -30,20 +30,20 @@ class AppModeSpec extends AnyFlatSpec with Matchers:
 
   "ConfigRegistry" should "read and validate the app mode settings" in {
     ConfigRegistry
-      .read(AppConfig.default, "app.mode", "prose")
-      .getOrElse(fail("app.mode parse"))
+      .read(AppConfig.default, "workspace.mode", "prose")
+      .getOrElse(fail("workspace.mode parse"))
       .appMode shouldBe AppMode.Prose
 
     ConfigRegistry
-      .read(AppConfig.default, "app.show_all_settings", "true")
-      .getOrElse(fail("app.show_all_settings parse"))
+      .read(AppConfig.default, "workspace.show_all_settings", "true")
+      .getOrElse(fail("workspace.show_all_settings parse"))
       .showAllSettingsRegardlessOfMode shouldBe true
 
-    ConfigRegistry.rejects("app.mode", "prose") shouldBe false
-    ConfigRegistry.rejects("app.mode", "unknown") shouldBe true
+    ConfigRegistry.rejects("workspace.mode", "prose") shouldBe false
+    ConfigRegistry.rejects("workspace.mode", "unknown") shouldBe true
   }
 
   "ConfigKeySchema" should "know the app mode keys" in {
-    ConfigKeySchema.isKnownKey("app.mode") shouldBe true
-    ConfigKeySchema.isKnownKey("app.show_all_settings") shouldBe true
+    ConfigKeySchema.isKnownKey("workspace.mode") shouldBe true
+    ConfigKeySchema.isKnownKey("workspace.show_all_settings") shouldBe true
   }

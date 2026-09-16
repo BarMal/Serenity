@@ -7,15 +7,15 @@ import org.scalatest.matchers.should.Matchers
 class DocumentConfigSpec extends AnyFlatSpec with Matchers:
 
   "DocumentConfig" should "own document-mode and markdown-view schema metadata" in {
-    ConfigKeySchema.isKnownKey("document.default_mode") shouldBe true
+    ConfigKeySchema.isKnownKey("editor.default_document_mode") shouldBe true
     ConfigKeySchema.isKnownKey("document.default.mode") shouldBe true
-    ConfigKeySchema.isKnownKey("document.markdown_view") shouldBe true
+    ConfigKeySchema.isKnownKey("editor.markdown_view") shouldBe true
     ConfigKeySchema.isKnownKey("document.markdown.view") shouldBe true
 
     ConfigKeySchema.deprecatedKeys.should(
       contain allOf (
-        "document_default_mode"  -> "document.default_mode",
-        "document_markdown_view" -> "document.markdown_view"
+        "document_default_mode"  -> "editor.default_document_mode",
+        "document_markdown_view" -> "editor.markdown_view"
       )
     )
   }
@@ -51,12 +51,12 @@ class DocumentConfigSpec extends AnyFlatSpec with Matchers:
 
     markdownConfig.documentConfig.markdownViewMode.shouldBe(MarkdownViewMode.SplitPreview)
     defaultModeConfig.documentConfig.defaultMode.shouldBe(DefaultDocumentMode.RichText)
-    ConfigRegistry.read(AppConfig.default, "document.default_mode", "unknown").shouldBe(None)
+    ConfigRegistry.read(AppConfig.default, "editor.default_document_mode", "unknown").shouldBe(None)
   }
 
   it should "validate document config entries centrally" in {
-    ConfigRegistry.rejects("document.markdown_view", "preview").shouldBe(false)
-    ConfigRegistry.rejects("document.markdown_view", "unknown").shouldBe(true)
-    ConfigRegistry.rejects("document.default_mode", "rtf").shouldBe(false)
-    ConfigRegistry.rejects("document.default_mode", "").shouldBe(true)
+    ConfigRegistry.rejects("editor.markdown_view", "preview").shouldBe(false)
+    ConfigRegistry.rejects("editor.markdown_view", "unknown").shouldBe(true)
+    ConfigRegistry.rejects("editor.default_document_mode", "rtf").shouldBe(false)
+    ConfigRegistry.rejects("editor.default_document_mode", "").shouldBe(true)
   }

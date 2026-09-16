@@ -248,7 +248,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       "fontConfig",
       "minimumPaneWidth",
       "showLineNumbers",
-      "showGutter"
+      "statusPlacement"
     )
 
     val program = for
@@ -282,7 +282,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       loaded.map(_.persisted.config.surfaceConfig.showLineNumbers) shouldBe Some(
         AppConfig.default.surfaceConfig.showLineNumbers
       )
-      loaded.map(_.persisted.config.surfaceConfig.showGutter) shouldBe Some(AppConfig.default.surfaceConfig.showGutter)
+      loaded.map(_.persisted.config.statusLine.isPinned) shouldBe Some(AppConfig.default.statusLine.isPinned)
 
     program.unsafeRunSync()
   }

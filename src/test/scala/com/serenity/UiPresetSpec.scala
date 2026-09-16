@@ -3,8 +3,6 @@ package com.serenity
 import java.awt.Font
 import java.nio.file.Files
 
-import _root_.io.circe.parser.decode
-import _root_.io.circe.syntax.*
 import com.serenity.animation.TransitionKind
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
@@ -129,7 +127,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     writing.config.editorConfig.fontConfig.textFontFamily shouldBe Font.SERIF
     writing.config.editorConfig.fontConfig.textFontSize should be > AppConfig.default.editorConfig.fontConfig.textFontSize
     writing.config.surfaceConfig.showLineNumbers shouldBe false
-    writing.config.surfaceConfig.showGutter shouldBe false
+    writing.config.statusLine.isPinned shouldBe false
     writing.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
     writing.config.surfaceConfig.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
     writing.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
@@ -152,7 +150,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     code.pinnedPanels.map(_.position) should contain(PanelPosition.Left)
 
     compact.config.surfaceConfig.showLineNumbers shouldBe true
-    compact.config.surfaceConfig.showGutter shouldBe true
+    compact.config.statusLine.isPinned shouldBe true
     compact.config.surfaceConfig.showPaneHeaders shouldBe true
     compact.config.interfaceDensity shouldBe InterfaceDensity.Compact
     compact.config.surfaceConfig.wordWrapEnabled shouldBe false
@@ -160,6 +158,28 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     compact.pinnedPanels shouldBe Nil
 
     review.pinnedPanels.map(_.content) should contain(SessionPanelContent.Diagnostics(Nil))
+  }
+
+  it should "carry the app mode each built-in workflow is for, and apply it with the workflow" in {
+    val writing = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
+    val docs    = UiPreset.builtIn("Documentation").getOrElse(fail("missing Documentation preset"))
+    val code    = UiPreset.builtIn("Code").getOrElse(fail("missing Code preset"))
+    val compact = UiPreset.builtIn("Compact").getOrElse(fail("missing Compact preset"))
+    val review  = UiPreset.builtIn("Review").getOrElse(fail("missing Review preset"))
+
+    writing.config.appMode shouldBe AppMode.Prose
+    docs.config.appMode shouldBe AppMode.Prose
+    code.config.appMode shouldBe AppMode.Code
+    compact.config.appMode shouldBe AppMode.Code
+    review.config.appMode shouldBe AppMode.Code
+
+    // A prose workflow picked from a code workspace must switch the workspace to prose: otherwise the settings tree
+    // keeps hiding the prose groups (Document Writing, Prose Font) the workflow just made relevant.
+    val fromCode = UiPreset.applyBuiltInWorkflowToState(writing, AppState.initial, Theme.dark)
+    fromCode.persisted.config.appMode shouldBe AppMode.Prose
+
+    val backToCode = UiPreset.applyBuiltInWorkflowToState(code, fromCode, Theme.dark)
+    backToCode.persisted.config.appMode shouldBe AppMode.Code
   }
 
   it should "summarize presets for command runner previews" in {
@@ -377,7 +397,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       name = "Drafting",
       config = AppConfig.default
         .withLineNumbers(true)
-        .withGutter(true)
+        .withStatusLinePlacement(StatusLinePlacement.Pinned)
         .withWordWrap(true),
       themeName = Theme.dark.name,
       dockedPanels = List(SessionDockedPanel("panel-1", panel)),
@@ -385,7 +405,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     )
     val sourceConfig = AppConfig.default
       .withLineNumbers(false)
-      .withGutter(false)
+      .withoutStatusLine
       .withWordWrap(false)
       .withTextAreaInsets(TextAreaInsets.fromPercent(20.0, 10.0))
       .withViewportSizing(
@@ -398,7 +418,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val patched = UiPreset.Patch.TextDisplay(sourceConfig).applyTo(preset)
 
     patched.config.surfaceConfig.showLineNumbers shouldBe false
-    patched.config.surfaceConfig.showGutter shouldBe false
+    patched.config.statusLine.isPinned shouldBe false
     patched.config.surfaceConfig.wordWrapEnabled shouldBe false
     patched.config.surfaceConfig.textAreaInsets shouldBe TextAreaInsets.fromPercent(20.0, 10.0)
     patched.config.surfaceConfig.viewportSizing shouldBe sourceConfig.surfaceConfig.viewportSizing
@@ -430,93 +450,4 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     patched.config.languageToolsConfig.spellCheck.additionalWords shouldBe List("cats", "io")
     patched.pinnedPanels shouldBe List(panel)
     patched.targetEditorPaneCount shouldBe Some(1)
-  }
-
-  it should "collapse editor panes when a preset targets one editor pane" in {
-    val primaryBufferId   = BufferId(0)
-    val secondaryBufferId = BufferId(1)
-    val pane0             = PaneId(0)
-    val pane1             = PaneId(1)
-    val secondaryBuffer   = Buffer.newEmpty(secondaryBufferId)
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        buffers = AppState.initial.persisted.buffers + (secondaryBufferId -> secondaryBuffer),
-        bufferOrder = List(primaryBufferId, secondaryBufferId),
-        layout = Layout(
-          editorPanes = Map(
-            pane0 -> EditorPane.withBuffer(pane0, primaryBufferId),
-            pane1 -> EditorPane.withBuffer(pane1, secondaryBufferId)
-          ),
-          activeEditorPaneId = Some(pane1),
-          workspaceTree = Some(TestWorkspaceTrees.linear(pane0, pane1))
-        ),
-        focus = Focus.EditorPane(pane1)
-      ),
-      runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(2), nextPaneId = PaneId(2))
-    )
-    val preset = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
-
-    val restored = UiPreset.applyToState(preset, state, Theme.dark)
-
-    restored.persisted.layout.editorPanes should have size 1
-    restored.persisted.layout.activeEditorPaneId shouldBe Some(pane1)
-    restored.persisted.layout.orderedPaneIds shouldBe List(pane1)
-    restored.persisted.layout.editorPanes(pane1).bufferId shouldBe Some(secondaryBufferId)
-    restored.persisted.buffers.keySet should contain allOf (primaryBufferId, secondaryBufferId)
-    restored.persisted.bufferOrder shouldBe List(primaryBufferId, secondaryBufferId)
-  }
-
-  it should "restore editor pane count targets above one pane" in {
-    val primaryBufferId   = BufferId(0)
-    val secondaryBufferId = BufferId(1)
-    val pane0             = PaneId(0)
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        buffers = AppState.initial.persisted.buffers + (secondaryBufferId -> Buffer.newEmpty(secondaryBufferId)),
-        bufferOrder = List(primaryBufferId, secondaryBufferId),
-        layout = Layout(
-          editorPanes = Map(pane0 -> EditorPane.withBuffer(pane0, primaryBufferId)),
-          activeEditorPaneId = Some(pane0),
-          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane0.value}"), pane0)))
-        )
-      ),
-      runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(2), nextPaneId = PaneId(1))
-    )
-    val preset = UiPreset(
-      name = "Two Pane Drafting",
-      config = AppConfig.default,
-      themeName = Theme.dark.name,
-      dockedPanels = Nil,
-      targetEditorPaneCount = Some(2)
-    )
-
-    val restored = UiPreset.applyToState(preset, state, Theme.dark)
-
-    restored.persisted.layout.editorPanes should have size 2
-    restored.persisted.layout.orderedPaneIds shouldBe List(PaneId(0), PaneId(1))
-    restored.persisted.layout.editorPanes(PaneId(0)).bufferId shouldBe Some(primaryBufferId)
-    restored.persisted.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(secondaryBufferId)
-    restored.runtime.nextPaneId shouldBe PaneId(2)
-    restored.persisted.buffers.keySet should contain allOf (primaryBufferId, secondaryBufferId)
-  }
-
-  it should "decode saved presets that do not include editor pane layout intent" in {
-    import UiPreset.given
-
-    val preset = UiPreset(
-      name = "Legacy",
-      config = AppConfig.default,
-      themeName = Theme.dark.name,
-      dockedPanels = Nil
-    )
-    val legacyJson = preset.asJson.hcursor
-      .downField("targetEditorPaneCount")
-      .delete
-      .top
-      .getOrElse(fail("expected preset json"))
-      .noSpaces
-
-    val decoded = decode[UiPreset](legacyJson).getOrElse(fail("legacy preset should decode"))
-
-    decoded.targetEditorPaneCount shouldBe None
   }

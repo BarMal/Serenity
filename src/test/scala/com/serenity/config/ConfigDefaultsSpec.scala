@@ -42,14 +42,13 @@ class ConfigDefaultsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "put a single changed setting back without disturbing its neighbours" in {
-    val edited = AppConfig.default
-      .withGutter(!AppConfig.default.surfaceConfig.showGutter)
+    val edited = AppConfig.default.withoutStatusLine
       .withLineNumbers(!AppConfig.default.surfaceConfig.showLineNumbers)
 
     val restored = ConfigRegistry
-      .resetToDefault(edited, "display.gutter")
-      .getOrElse(fail("display.gutter is a registered setting"))
+      .resetToDefault(edited, "status.placement")
+      .getOrElse(fail("status.placement is a registered setting"))
 
-    restored.surfaceConfig.showGutter shouldBe AppConfig.default.surfaceConfig.showGutter
+    restored.statusLine.isPinned shouldBe AppConfig.default.statusLine.isPinned
     restored.surfaceConfig.showLineNumbers shouldBe !AppConfig.default.surfaceConfig.showLineNumbers
   }

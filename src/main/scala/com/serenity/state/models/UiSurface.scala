@@ -265,7 +265,7 @@ enum SurfaceContent:
   case QuickInfo(text: String)
   case FilePreview(path: Path, content: String)
   case SymbolDefinition(symbol: String, location: Location)
-  case CursorInfoBar(text: String)
+  case StatusLine(text: String)
   case DirectoryListing(path: Path, entries: List[DirEntry], selectedPath: Option[Path] = None)
   case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None)
   case CommandPalette(runner: CommandRunner)
@@ -329,11 +329,11 @@ final case class UiSurface(
 
 object UiSurface:
 
-  /** Identity of the derived cursor info bar surface `AppState.cursorInfoBarSurface` synthesizes each frame -- the one,
-    * fixed id every consumer that needs to recognize that specific surface (rather than any floating panel in general)
-    * keys off, e.g. `TextOverlayRenderer`'s per-surface background alpha override.
+  /** Identity of the derived floating status row `AppState.floatingStatusLineSurface` synthesizes each frame -- the
+    * one, fixed id every consumer that needs to recognize that specific surface (rather than any floating panel in
+    * general) keys off, e.g. `TextOverlayRenderer`'s colour override and its shadow-free painting.
     */
-  val CursorInfoBarSurfaceId: SurfaceId = SurfaceId("cursor-info-bar")
+  val StatusLineSurfaceId: SurfaceId = SurfaceId("status-line")
 
   def fromPanelContent(id: SurfaceId, content: PanelContent): UiSurface =
     UiSurface(

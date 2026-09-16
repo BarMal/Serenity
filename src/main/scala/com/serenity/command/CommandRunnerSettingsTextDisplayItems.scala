@@ -12,8 +12,8 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
       id = "line-numbers",
       label = "Line Numbers",
       selectedIndex = optionSelections.getOrElse("line-numbers", 0),
-      enabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumbers(true))),
-      disabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumbers(false))),
+      enabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetLineNumbers(true))),
+      disabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetLineNumbers(false))),
       hint = "Show or hide line numbers"
     )
 
@@ -24,15 +24,15 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
       options = List(
         CommandOption(
           "Left",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumberSide(LineNumberSide.Left)))
+          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetLineNumberSide(LineNumberSide.Left)))
         ),
         CommandOption(
           "Right",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumberSide(LineNumberSide.Right)))
+          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetLineNumberSide(LineNumberSide.Right)))
         ),
         CommandOption(
           "Both",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumberSide(LineNumberSide.Both)))
+          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetLineNumberSide(LineNumberSide.Both)))
         )
       ),
       selectedIndex = optionSelections.getOrElse("line-number-side", 0),
@@ -40,33 +40,13 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
       hint = Some("Show line numbers on the left, right, or both edges")
     )
 
-  private[command] def wordCountOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
-    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
-      id = "show-word-count",
-      label = "Word Count",
-      selectedIndex = optionSelections.getOrElse("show-word-count", 1),
-      enabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetShowWordCount(true))),
-      disabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetShowWordCount(false))),
-      hint = "Show word count, character count, and reading time in the status bar"
-    )
-
-  private[command] def gutterOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
-    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
-      id = "gutter",
-      label = "Gutter",
-      selectedIndex = optionSelections.getOrElse("gutter", 0),
-      enabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetGutter(true))),
-      disabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetGutter(false))),
-      hint = "Show or hide the status gutter"
-    )
-
   private[command] def lineWrapOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "line-wrap",
       label = "Line Wrap",
-      selectedIndex = optionSelections.getOrElse("line-wrap", optionSelections.getOrElse("word-wrap", 0)),
-      enabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWordWrap(true))),
-      disabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWordWrap(false))),
+      selectedIndex = optionSelections.getOrElse("line-wrap", 0),
+      enabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetWordWrap(true))),
+      disabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetWordWrap(false))),
       hint = "Wrap long logical lines to the editor width"
     )
 
@@ -78,9 +58,9 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
       label = "Visual Line Navigation",
       selectedIndex = optionSelections.getOrElse("visual-line-navigation", 0),
       enabledIntent =
-        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualLineCursorNavigation(true))),
+        CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetVisualLineCursorNavigation(true))),
       disabledIntent =
-        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetVisualLineCursorNavigation(false))),
+        CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetVisualLineCursorNavigation(false))),
       hint = "Move Up/Down by wrapped visual row instead of logical line"
     )
 
@@ -92,9 +72,9 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
       label = "Typewriter Scrolling",
       selectedIndex = optionSelections.getOrElse("typewriter-scrolling", 1),
       enabledIntent =
-        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTypewriterScrolling(true))),
+        CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTypewriterScrolling(true))),
       disabledIntent =
-        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTypewriterScrolling(false))),
+        CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTypewriterScrolling(false))),
       hint = "Keep the cursor's line vertically centred as you type, padding past the document's end"
     )
 
@@ -105,8 +85,8 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
       id = "focused-text-body",
       label = "Text Body Focus",
       selectedIndex = optionSelections.getOrElse("focused-text-body", 1),
-      enabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetFocusedTextBody(true))),
-      disabledIntent = CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetFocusedTextBody(false))),
+      enabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetFocusedTextBody(true))),
+      disabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetFocusedTextBody(false))),
       hint = "Dim text outside the active body"
     )
 
@@ -118,9 +98,9 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
       label = "Contextual Toolbar",
       selectedIndex = optionSelections.getOrElse("contextual-toolbar", 0),
       enabledIntent =
-        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarEnabled(true))),
+        CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetContextualToolbarEnabled(true))),
       disabledIntent =
-        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarEnabled(false))),
+        CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetContextualToolbarEnabled(false))),
       hint = "Show the floating rich-text toolbar near the cursor"
     )
 
@@ -134,20 +114,20 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
         CommandOption(
           "Icon Only",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
+            SettingsIntent.TextDisplay(TextDisplayIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly))
           )
         ),
         CommandOption(
           "Text Only",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly))
+            SettingsIntent.TextDisplay(TextDisplayIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly))
           )
         ),
         CommandOption(
           "Icon + Text",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(
-              PanelChromeIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText)
+            SettingsIntent.TextDisplay(
+              TextDisplayIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText)
             )
           )
         )
@@ -164,9 +144,11 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
       id = "command-runner-key-hints",
       label = "Command Runner Key Hints",
       selectedIndex = optionSelections.getOrElse("command-runner-key-hints", 0),
-      enabledIntent =
-        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCommandRunnerShowKeyHints(true))),
-      disabledIntent =
-        CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCommandRunnerShowKeyHints(false))),
+      enabledIntent = CommandIntent.Settings(
+        SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetCommandRunnerShowKeyHints(true))
+      ),
+      disabledIntent = CommandIntent.Settings(
+        SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetCommandRunnerShowKeyHints(false))
+      ),
       hint = "Persistent key-binding footer in the palette and settings surface"
     )

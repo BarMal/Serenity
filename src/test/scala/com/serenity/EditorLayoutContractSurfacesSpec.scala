@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.command.{CommandRegistry, CommandRunner}
-import com.serenity.config.{AppConfig, TextAreaInsets}
+import com.serenity.config.{AppConfig, StatusLinePlacement, TextAreaInsets}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -33,7 +33,7 @@ class EditorLayoutContractSurfacesSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         config = AppConfig.default
           .withLineNumbers(true)
-          .withGutter(true)
+          .withStatusLinePlacement(StatusLinePlacement.Pinned)
           .withTextAreaInsets(TextAreaInsets(left = 0.05, right = 0.05))
           .withUiElementGap(1),
         buffers = Map(buffer.id -> buffer),
@@ -364,7 +364,7 @@ class EditorLayoutContractSurfacesSpec extends AnyFlatSpec with Matchers:
     val paneId = PaneId(0)
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
-        config = AppConfig.default.withLineNumbers(true).withGutter(true),
+        config = AppConfig.default.withLineNumbers(true).withStatusLinePlacement(StatusLinePlacement.Pinned),
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
@@ -398,7 +398,7 @@ class EditorLayoutContractSurfacesSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         config = AppConfig.default
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.15))
       )
     )

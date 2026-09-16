@@ -29,7 +29,10 @@ class LineNumberPlacementLayoutSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.EditorPane(PaneId(0)),
         theme = Theme.light,
-        config = base.persisted.config.withLineNumbers(true).withGutter(false).withLineNumberLayout(layout)
+        config = base.persisted.config
+          .withLineNumbers(true)
+          .withoutStatusLine
+          .withLineNumberLayout(layout)
       )
     )
 

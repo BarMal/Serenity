@@ -262,18 +262,20 @@ object StateManager:
     RendererFrameState.configureCacheCapacity(initialConfig.surfaceConfig.rendererFrameStateCacheCapacity)
     for
       resolvedSessionRootOverride <- resolveSessionRootOverride(sessionRootOverride)
-      stateRef                    <- Ref.of[IO, AppState](AppState.initial(initialConfig))
-      undoRef                     <- Ref.of[IO, UndoState](UndoState(maxUndoDepth = policy.maxUndoDepth))
-      mouseTargetCacheRef         <- Ref.of[IO, Option[MouseTargetCache]](None)
-      documentAnalysisFiberRef    <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
-      bufferAnimationsRef         <- Ref.of[IO, Map[BufferId, AnimationState]](Map.empty)
-      themeNamesRef <- themeManager.listAvailableThemes
-        .handleErrorWith(_ => IO.pure(Nil))
-        .flatMap(Ref.of[IO, List[String]])
-      quitSignal           <- Deferred[IO, Unit]
-      lspQueue             <- LspEffectQueue.create
-      projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
-      projectTaskSemaphore <- Semaphore[IO](1)
+      themeNames                  <- themeManager.listAvailableThemes.handleErrorWith(_ => IO.pure(Nil))
+      initialState = AppState.initial(initialConfig)
+      stateRef <- Ref.of[IO, AppState](
+        initialState.copy(runtime = initialState.runtime.copy(availableThemeNames = themeNames))
+      )
+      undoRef                  <- Ref.of[IO, UndoState](UndoState(maxUndoDepth = policy.maxUndoDepth))
+      mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
+      documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
+      bufferAnimationsRef      <- Ref.of[IO, Map[BufferId, AnimationState]](Map.empty)
+      themeNamesRef            <- Ref.of[IO, List[String]](themeNames)
+      quitSignal               <- Deferred[IO, Unit]
+      lspQueue                 <- LspEffectQueue.create
+      projectTaskFiberRef      <- Ref.of[IO, Option[ManagedProjectTask]](None)
+      projectTaskSemaphore     <- Semaphore[IO](1)
       runtime = StateManagerRuntime.create(
         stateRef = stateRef,
         undoRef = undoRef,

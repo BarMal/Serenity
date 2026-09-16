@@ -59,7 +59,7 @@ object DamageProducer:
             )
     }
     bufferDamage |+| chromeDamage(before, after) |+| fullRenderDamage(before, after) |+|
-      paneChromeDamage(before, after) |+| cursorInfoBarDamage(before, after)
+      paneChromeDamage(before, after) |+| statusLineDamage(before, after)
 
   /** Everything about one buffer's own state that can dirty its visible rows without necessarily touching its rope
     * content -- cursor and selection movement, comment/diagnostic annotation changes, and a language reclassification
@@ -325,17 +325,12 @@ object DamageProducer:
         case Some(surfaceId) => Damage.Surface(surfaceId)
         case None            => Damage.Everything
 
-  /** The cursor info bar in `Floating` placement is a *derived* surface (`AppState.cursorInfoBarSurface`) synthesized
-    * each frame from the active cursor, never stored in `runtime.uiSurfaces` -- so [[uiSurfacesDamage]] above cannot
-    * see it move. Its anchor (and `position`/`word_count`/... text) changes on every cursor move, and the renderer
-    * needs a `Damage.Surface(cursor-info-bar)` fact to (a) exclude the rows the bar vacated from bounded repaint via
-    * `RendererFramePlanner.vacatedFloatingSurfaceRows` and (b) actually push them to screen -- without it a
-    * translucent-pane theme keeps the bar's old opaque background stuck until an unrelated full redraw. A pinned bar or
-    * an empty segment list yields `None` on both sides (no floating surface at all), so this reports nothing for those.
+  /** The floating status row is a *derived* surface (`AppState.floatingStatusLineSurface`), synthesized per frame
+    * rather than stored in `runtime.uiSurfaces`, so the generic surface-list comparison never sees it change.
     */
-  private def cursorInfoBarDamage(before: AppState, after: AppState): Damage =
-    if before.cursorInfoBarSurface == after.cursorInfoBarSurface then Damage.Nothing
-    else Damage.Surface(UiSurface.CursorInfoBarSurfaceId)
+  private def statusLineDamage(before: AppState, after: AppState): Damage =
+    if before.floatingStatusLineSurface == after.floatingStatusLineSurface then Damage.Nothing
+    else Damage.Surface(UiSurface.StatusLineSurfaceId)
 
   /** Whether `before`/`after` present the same *kind* of [[SurfacePresentation]] (ignoring the fields a non-marker kind
     * carries, e.g. a `Floating` surface's anchor/placement) -- the presentation-stability half of

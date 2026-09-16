@@ -20,11 +20,15 @@ private[command] trait CommandRunnerSettingsSearch:
         case None => matchingSettingsGroups(lowerTerm)
 
   private[command] def exactSettingsGroup(term: String): Option[CommandSurfaceItem.GroupItem] =
-    allSettingsGroups.find { group =>
+    def matches(group: CommandSurfaceItem.GroupItem): Boolean =
       val label = CommandRunnerSearch.normalizedSearchTerm(group.label)
       val id    = CommandRunnerSearch.normalizedSearchTerm(group.id)
       label == term || id == term
-    }
+    // The preset-scoped copy of a group shares its label, so the global one wins whichever is met first in the tree.
+    allSettingsGroups
+      .filterNot(_.id.startsWith("settings-preset-"))
+      .find(matches)
+      .orElse(allSettingsGroups.find(matches))
 
   private[command] def matchingSettingsGroups(lowerTerm: String): List[CommandSurfaceItem.GroupItem] =
     if lowerTerm.length < 3 then Nil
@@ -149,7 +153,7 @@ private[command] trait CommandRunnerSettingsSearch:
     loop(settingsGroups).distinctBy(_.id)
 
   private[command] def presetEditContextName: Option[String] =
-    CommandRunnerSettingsGroups.presetEditContextName(
+    CommandRunnerSettingsPresetGroups.presetEditContextName(
       optionSelections = optionSelections,
       uiPresetPreviews = uiPresetPreviews,
       editingPresetName = editingPresetName

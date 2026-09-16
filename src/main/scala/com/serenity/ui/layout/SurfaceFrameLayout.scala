@@ -278,6 +278,7 @@ object SurfaceFrameLayout:
   def borderCellsFor(content: SurfaceContent): Int =
     content match
       case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandRunnerPeek(_) => CommandSurfaceBorderCells
+      case SurfaceContent.StatusLine(_)                                           => 0
       case _                                                                      => DefaultBorderCells
 
   def forContent(frameRect: LayoutRect, content: SurfaceContent): SurfaceFrameLayout =

@@ -22,7 +22,7 @@ final case class AppConfig(
     interfaceConfig: InterfaceConfig = InterfaceConfig(),
     languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig(),
     appModeConfig: AppModeConfig = AppModeConfig(),
-    modeTabWidgetConfig: ModeTabWidgetConfig = ModeTabWidgetConfig()
+    statusLine: StatusLineConfig = StatusLineConfig.default
 ):
 
   def withEditorConfig(config: EditorConfig): AppConfig =
@@ -54,9 +54,6 @@ final case class AppConfig(
 
   def showAllSettingsRegardlessOfMode: Boolean =
     appModeConfig.showAllSettingsRegardlessOfMode
-
-  def modeTabWidgetCornerPosition: CornerPosition =
-    modeTabWidgetConfig.position
 
   def interfaceDensity: InterfaceDensity =
     interfaceConfig.density
@@ -131,17 +128,9 @@ final case class AppConfig(
   def lineNumberLayout: LineNumberLayout =
     surfaceConfig.lineNumberLayout
 
-  /** Create a new config with gutter toggled */
-  def withGutter(enabled: Boolean): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(showGutter = enabled))
-
   /** Show or hide the per-pane identity strip above editor content. */
   def withPaneHeaders(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(showPaneHeaders = enabled))
-
-  /** Show or hide the word/character-count and reading-time segment in the status bar (#1203). */
-  def withWordCount(enabled: Boolean): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(showWordCount = enabled))
 
   /** Selects how document comments become visible: floating on-demand lens or persistent margin (#1222). */
   def withCommentDisplayMode(mode: CommentDisplayMode): AppConfig =
@@ -156,14 +145,6 @@ final case class AppConfig(
 
   def withTypewriterScrolling(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(typewriterScrollingEnabled = enabled))
-
-  /** `None` restores the active theme's own panel alpha for the cursor info bar; `Some` overrides just that one panel's
-    * background alpha, independent of theme.
-    */
-  def withCursorInfoBarBackgroundAlpha(alpha: Option[Double]): AppConfig =
-    withSurfaceConfig(
-      surfaceConfig.copy(cursorInfoBarBackgroundAlpha = alpha.map(AppConfig.clampCursorInfoBarBackgroundAlpha))
-    )
 
   def withFocusedTextBody(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(focusedTextBodyEnabled = enabled))
@@ -233,15 +214,6 @@ final case class AppConfig(
   def cursorColors: CursorColorConfig =
     cursorConfig.colors
 
-  def cursorInfoBarSegments: List[CursorInfoBarSegment] =
-    cursorConfig.infoBarSegments
-
-  def cursorInfoBarPlacement: CursorInfoBarPlacement =
-    cursorConfig.infoBarPlacement
-
-  def cursorInfoBarColors: CursorInfoBarColorConfig =
-    cursorConfig.infoBarColors
-
   def withCursorConfig(config: CursorConfig): AppConfig =
     copy(cursorConfig = config)
 
@@ -251,14 +223,24 @@ final case class AppConfig(
   def withCursorColors(colors: CursorColorConfig): AppConfig =
     withCursorConfig(cursorConfig.copy(colors = colors))
 
-  def withCursorInfoBarSegments(segments: List[CursorInfoBarSegment]): AppConfig =
-    withCursorConfig(cursorConfig.copy(infoBarSegments = segments))
+  def withStatusLine(config: StatusLineConfig): AppConfig =
+    copy(statusLine =
+      config.copy(colors =
+        config.colors.copy(backgroundAlpha = config.colors.backgroundAlpha.map(StatusLineConfig.clampBackgroundAlpha))
+      )
+    )
 
-  def withCursorInfoBarPlacement(placement: CursorInfoBarPlacement): AppConfig =
-    withCursorConfig(cursorConfig.copy(infoBarPlacement = placement))
+  def withStatusLineSegments(segments: List[StatusSegment]): AppConfig =
+    withStatusLine(statusLine.copy(segments = segments))
 
-  def withCursorInfoBarColors(colors: CursorInfoBarColorConfig): AppConfig =
-    withCursorConfig(cursorConfig.copy(infoBarColors = colors))
+  def withStatusLinePlacement(placement: StatusLinePlacement): AppConfig =
+    withStatusLine(statusLine.copy(placement = placement))
+
+  def withoutStatusLine: AppConfig =
+    withStatusLinePlacement(StatusLinePlacement.Off)
+
+  def withStatusLineColors(colors: StatusLineColors): AppConfig =
+    withStatusLine(statusLine.copy(colors = colors))
 
   def withWindowConfig(config: WindowConfig): AppConfig =
     copy(windowConfig = config.normalized)
@@ -284,12 +266,6 @@ final case class AppConfig(
 
   def withShowAllSettingsRegardlessOfMode(value: Boolean): AppConfig =
     withAppModeConfig(appModeConfig.copy(showAllSettingsRegardlessOfMode = value))
-
-  def withModeTabWidgetConfig(config: ModeTabWidgetConfig): AppConfig =
-    copy(modeTabWidgetConfig = config)
-
-  def withModeTabWidgetCornerPosition(position: CornerPosition): AppConfig =
-    withModeTabWidgetConfig(modeTabWidgetConfig.copy(position = position))
 
   def withInterfaceConfig(config: InterfaceConfig): AppConfig =
     copy(interfaceConfig = config.normalized)
@@ -350,22 +326,20 @@ final case class AppConfig(
 
 object AppConfig:
 
-  val MinElementTransitionSpeedScale: Double  = 0.0
-  val MaxElementTransitionSpeedScale: Double  = 4.0
-  val MinUiElementGap: Double                 = 0.0
-  val MaxUiElementGap: Double                 = 8.0
-  val MinUiCornerRadiusPx: Int                = 0
-  val MaxUiCornerRadiusPx: Int                = 32
-  val MinUiOutlineThicknessPx: Int            = 1
-  val MaxUiOutlineThicknessPx: Int            = 8
-  val MinCommandRunnerVisibleRows: Int        = 1
-  val MaxCommandRunnerVisibleRows: Int        = 20
-  val MinCommandRunnerItemGapRows: Double     = 0.0
-  val MaxCommandRunnerItemGapRows: Double     = 8.0
-  val MinCommandRunnerCursorGapRows: Double   = 0.0
-  val MaxCommandRunnerCursorGapRows: Double   = 8.0
-  val MinCursorInfoBarBackgroundAlpha: Double = 0.0
-  val MaxCursorInfoBarBackgroundAlpha: Double = 1.0
+  val MinElementTransitionSpeedScale: Double = 0.0
+  val MaxElementTransitionSpeedScale: Double = 4.0
+  val MinUiElementGap: Double                = 0.0
+  val MaxUiElementGap: Double                = 8.0
+  val MinUiCornerRadiusPx: Int               = 0
+  val MaxUiCornerRadiusPx: Int               = 32
+  val MinUiOutlineThicknessPx: Int           = 1
+  val MaxUiOutlineThicknessPx: Int           = 8
+  val MinCommandRunnerVisibleRows: Int       = 1
+  val MaxCommandRunnerVisibleRows: Int       = 20
+  val MinCommandRunnerItemGapRows: Double    = 0.0
+  val MaxCommandRunnerItemGapRows: Double    = 8.0
+  val MinCommandRunnerCursorGapRows: Double  = 0.0
+  val MaxCommandRunnerCursorGapRows: Double  = 8.0
   // Wide enough to allow a deliberately slow "hold" feel while still rejecting nonsensical (near-zero or
   // multi-second) values; 200 (the default, matching `ModifierTapDetector.WindowMillis`) sits well inside it.
   val MinCommandRunnerCursorPeekTapWindowMillis: Long = 50L
@@ -392,10 +366,6 @@ object AppConfig:
 
   def clampCommandRunnerVisibleRows(rows: Int): Int =
     rows.max(MinCommandRunnerVisibleRows).min(MaxCommandRunnerVisibleRows)
-
-  def clampCursorInfoBarBackgroundAlpha(alpha: Double): Double =
-    if alpha.isFinite then alpha.max(MinCursorInfoBarBackgroundAlpha).min(MaxCursorInfoBarBackgroundAlpha)
-    else MinCursorInfoBarBackgroundAlpha
 
   def clampCommandRunnerItemGapRows(rows: Double): Double =
     if rows.isFinite then rows.max(MinCommandRunnerItemGapRows).min(MaxCommandRunnerItemGapRows)

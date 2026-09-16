@@ -40,7 +40,7 @@ class WordWrapRenderingSpec extends AnyFlatSpec with Matchers:
           workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         theme = Theme.light,
-        config = AppConfig.default.withLineNumbers(false).withGutter(false)
+        config = AppConfig.default.withLineNumbers(false).withoutStatusLine
       )
     )
     val contentRect =

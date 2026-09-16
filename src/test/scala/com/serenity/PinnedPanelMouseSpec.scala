@@ -450,7 +450,10 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       val docked =
         DockedPanelFixtures.dock(withViewport, surfaceId, SurfaceContent.Diagnostics(issues), PanelPosition.Right, 18)
       docked
-        .copy(persisted = docked.persisted.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false)))
+        .copy(persisted =
+          docked.persisted
+            .copy(config = AppConfig.default.withLineNumbers(false).withoutStatusLine)
+        )
     }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(compactSquareViewport)).unsafeRunSync()
 

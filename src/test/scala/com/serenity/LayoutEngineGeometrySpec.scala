@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.command.{CommandRegistry, CommandRunner}
-import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
+import com.serenity.config.{AppConfig, InterfaceDensity, StatusLinePlacement, TextAreaInsets}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -45,7 +45,7 @@ class LayoutEngineGeometrySpec extends AnyFlatSpec with Matchers:
           config = AppConfig.default
             .withInterfaceDensity(density)
             .withLineNumbers(true)
-            .withGutter(true)
+            .withStatusLinePlacement(StatusLinePlacement.Pinned)
             .withTextAreaInsets(TextAreaInsets(left = 0.05, right = 0.10))
             .withUiElementGap(2)
         )
@@ -178,7 +178,10 @@ class LayoutEngineGeometrySpec extends AnyFlatSpec with Matchers:
       .enterSelectedGroup
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
-        config = AppConfig.default.withLineNumbers(false).withGutter(false).withTextAreaInsets(TextAreaInsets()),
+        config = AppConfig.default
+          .withLineNumbers(false)
+          .withoutStatusLine
+          .withTextAreaInsets(TextAreaInsets()),
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
@@ -213,7 +216,7 @@ class LayoutEngineGeometrySpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         config = AppConfig.default
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0))
           .withUiElementGap(gap)
       )
@@ -245,7 +248,7 @@ class LayoutEngineGeometrySpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         config = AppConfig.default
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0, top = 0.0, bottom = 0.0))
           .withUiElementGap(gap)
       )
@@ -273,7 +276,10 @@ class LayoutEngineGeometrySpec extends AnyFlatSpec with Matchers:
   it should "apply horizontal spacer overrides consistently to workspace and active pane bounds" in {
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
-        config = AppConfig.default.withLineNumbers(false).withGutter(false).withTextAreaInsets(TextAreaInsets())
+        config = AppConfig.default
+          .withLineNumbers(false)
+          .withoutStatusLine
+          .withTextAreaInsets(TextAreaInsets())
       )
     )
 

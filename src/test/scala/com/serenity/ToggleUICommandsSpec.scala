@@ -3,7 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.config.ToolbarDisplayMode
+import com.serenity.config.{StatusLinePlacement, ToolbarDisplayMode}
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.SurfaceContent
@@ -67,7 +67,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     lineResults.map(_.name) should contain("toggle-line-numbers")
     numberResults.map(_.name) should contain("toggle-line-numbers")
     toggleResults.map(_.name) should contain("toggle-line-numbers")
-    command.intent shouldBe CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers))
+    command.intent shouldBe CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers))
   }
 
   it should "toggle line numbers from enabled to disabled" in {
@@ -104,37 +104,37 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     val gutterResults = registry.searchCommands("gutter")
     val statusResults = registry.searchCommands("status")
     val toggleResults = registry.searchCommands("toggle", maxResults = 50)
-    val command       = registry.findCommand("toggle-gutter").get
+    val command       = registry.findCommand("toggle-status-line").get
 
-    gutterResults.map(_.name) should contain("toggle-gutter")
-    statusResults.map(_.name) should contain("toggle-gutter")
-    toggleResults.map(_.name) should contain("toggle-gutter")
-    command.intent shouldBe CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleGutter))
+    gutterResults.map(_.name) should contain("toggle-status-line")
+    statusResults.map(_.name) should contain("toggle-status-line")
+    toggleResults.map(_.name) should contain("toggle-status-line")
+    command.intent shouldBe CommandIntent.Settings(SettingsIntent.StatusLine(StatusLineIntent.ToggleVisibility))
   }
 
   it should "toggle gutter from enabled to disabled" in {
     val stateManager = createStateManager()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.showGutter shouldBe true
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.statusLine.isPinned shouldBe true
 
-    executeCommandThroughRunner(stateManager, "toggle-gutter", "toggle-gutter")
+    executeCommandThroughRunner(stateManager, "toggle-status-line", "toggle-status-line")
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.persisted.config.surfaceConfig.showGutter shouldBe false
+    finalState.persisted.config.statusLine.isPinned shouldBe false
   }
 
   it should "toggle gutter from disabled to enabled" in {
     val stateManager = createStateManager()
 
     stateManager
-      .updateState(s => s.copy(persisted = s.persisted.copy(config = s.persisted.config.withGutter(false))))
+      .updateState(s => s.copy(persisted = s.persisted.copy(config = s.persisted.config.withoutStatusLine)))
       .unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.showGutter shouldBe false
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.statusLine.isPinned shouldBe false
 
-    executeCommandThroughRunner(stateManager, "toggle-gutter", "toggle-gutter")
+    executeCommandThroughRunner(stateManager, "toggle-status-line", "toggle-status-line")
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.persisted.config.surfaceConfig.showGutter shouldBe true
+    finalState.persisted.config.statusLine.isPinned shouldBe true
   }
 
   behavior of "Toggle Pane Headers Command"
@@ -148,7 +148,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
     paneResults.map(_.name) should contain("toggle-pane-headers")
     headerResults.map(_.name) should contain("toggle-pane-headers")
-    command.intent shouldBe CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.TogglePaneHeaders))
+    command.intent shouldBe CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.TogglePaneHeaders))
   }
 
   it should "toggle pane headers from enabled to disabled" in {
@@ -197,7 +197,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     visualResults.map(_.name) should contain("toggle-visual-line-navigation")
     navResults.map(_.name) should contain("toggle-visual-line-navigation")
     command.intent shouldBe CommandIntent.Settings(
-      SettingsIntent.PanelChrome(PanelChromeIntent.ToggleVisualLineCursorNavigation)
+      SettingsIntent.TextDisplay(TextDisplayIntent.ToggleVisualLineCursorNavigation)
     )
   }
 
@@ -244,7 +244,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     typewriterResults.map(_.name) should contain("toggle-typewriter-scrolling")
     scrollingResults.map(_.name) should contain("toggle-typewriter-scrolling")
     command.intent shouldBe CommandIntent.Settings(
-      SettingsIntent.PanelChrome(PanelChromeIntent.ToggleTypewriterScrolling)
+      SettingsIntent.TextDisplay(TextDisplayIntent.ToggleTypewriterScrolling)
     )
   }
 
@@ -284,33 +284,33 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
     val initialState = stateManager.getCurrentState.unsafeRunSync()
     initialState.persisted.config.surfaceConfig.showLineNumbers shouldBe true
-    initialState.persisted.config.surfaceConfig.showGutter shouldBe true
+    initialState.persisted.config.statusLine.isPinned shouldBe true
 
     executeCommandThroughRunner(stateManager, "toggle-line-numbers", "toggle-line-numbers")
 
     val midState = stateManager.getCurrentState.unsafeRunSync()
     midState.persisted.config.surfaceConfig.showLineNumbers shouldBe false
-    midState.persisted.config.surfaceConfig.showGutter shouldBe true
+    midState.persisted.config.statusLine.isPinned shouldBe true
     midState.commandRunnerSurface shouldBe None
 
-    executeCommandThroughRunner(stateManager, "toggle-gutter", "toggle-gutter")
+    executeCommandThroughRunner(stateManager, "toggle-status-line", "toggle-status-line")
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     finalState.persisted.config.surfaceConfig.showLineNumbers shouldBe false
-    finalState.persisted.config.surfaceConfig.showGutter shouldBe false
+    finalState.persisted.config.statusLine.isPinned shouldBe false
   }
 
   it should "have descriptive command names and descriptions" in {
     val registry      = CommandRegistry.withToggleUI
     val lineCommand   = registry.findCommand("toggle-line-numbers").get
-    val gutterCommand = registry.findCommand("toggle-gutter").get
+    val gutterCommand = registry.findCommand("toggle-status-line").get
 
     lineCommand.name shouldBe "toggle-line-numbers"
     lineCommand.label shouldBe "Toggle Line Numbers"
     lineCommand.description should include("line numbers")
 
-    gutterCommand.name shouldBe "toggle-gutter"
-    gutterCommand.label shouldBe "Toggle Gutter"
+    gutterCommand.name shouldBe "toggle-status-line"
+    gutterCommand.label shouldBe "Toggle Status Line"
     gutterCommand.description should include("gutter")
   }
 
@@ -325,7 +325,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
     lineResults.map(_.name) should contain("toggle-line-wrap")
     wrapResults.map(_.name) should contain("toggle-line-wrap")
-    command.intent shouldBe CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleWordWrap))
+    command.intent shouldBe CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleWordWrap))
   }
 
   it should "toggle soft line wrapping through the line wrap command" in {
@@ -338,16 +338,17 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.wordWrapEnabled shouldBe false
   }
 
+  // issue #1047: "toggle-word-wrap" and "toggle-line-wrap" were two commands for one intent; the one that stays is
+  // still found by either word.
   it should "be found in command registry by search terms" in {
     val registry = CommandRegistry.withToggleUI
 
     val wordResults = registry.searchCommands("word")
     val wrapResults = registry.searchCommands("wrap")
-    val command     = registry.findCommand("toggle-word-wrap").get
 
-    wordResults.map(_.name) should contain("toggle-word-wrap")
-    wrapResults.map(_.name) should contain("toggle-word-wrap")
-    command.intent shouldBe CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleWordWrap))
+    registry.findCommand("toggle-word-wrap") shouldBe None
+    wordResults.map(_.name) should contain("toggle-line-wrap")
+    wrapResults.map(_.name) should contain("toggle-line-wrap")
   }
 
   it should "toggle text body focus from disabled to enabled" in {
@@ -388,7 +389,9 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-key-hints-off",
           "Set command runner key hints off",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCommandRunnerShowKeyHints(false))),
+          CommandIntent.Settings(
+            SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetCommandRunnerShowKeyHints(false))
+          ),
           CommandCategory.Settings
         )
       )
@@ -406,7 +409,9 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-key-hints-on",
           "Set command runner key hints on",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetCommandRunnerShowKeyHints(true))),
+          CommandIntent.Settings(
+            SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetCommandRunnerShowKeyHints(true))
+          ),
           CommandCategory.Settings
         )
       )
@@ -425,7 +430,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.wordWrapEnabled shouldBe true
 
-    executeCommandThroughRunner(stateManager, "toggle-word-wrap", "toggle-word-wrap")
+    executeCommandThroughRunner(stateManager, "toggle-line-wrap", "toggle-line-wrap")
 
     stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.wordWrapEnabled shouldBe false
   }
@@ -438,7 +443,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "line-numbers-off",
           "Set line numbers off",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumbers(false))),
+          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetLineNumbers(false))),
           CommandCategory.Settings
         )
       )
@@ -448,7 +453,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "gutter-off",
           "Set gutter off",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetGutter(false))),
+          CommandIntent.Settings(SettingsIntent.StatusLine(StatusLineIntent.SetPlacement(StatusLinePlacement.Off))),
           CommandCategory.Settings
         )
       )
@@ -458,7 +463,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "word-wrap-off",
           "Set word wrap off",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWordWrap(false))),
+          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetWordWrap(false))),
           CommandCategory.Settings
         )
       )
@@ -468,7 +473,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "focused-body-on",
           "Set focused text body on",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetFocusedTextBody(true))),
+          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetFocusedTextBody(true))),
           CommandCategory.Settings
         )
       )
@@ -478,7 +483,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "contextual-toolbar-off",
           "Set contextual toolbar off",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarEnabled(false))),
+          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetContextualToolbarEnabled(false))),
           CommandCategory.Settings
         )
       )
@@ -489,7 +494,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
           "contextual-toolbar-text-only",
           "Set contextual toolbar display to text only",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly))
+            SettingsIntent.TextDisplay(TextDisplayIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly))
           ),
           CommandCategory.Settings
         )
@@ -498,7 +503,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
     val disabledState = stateManager.getCurrentState.unsafeRunSync()
     disabledState.persisted.config.surfaceConfig.showLineNumbers shouldBe false
-    disabledState.persisted.config.surfaceConfig.showGutter shouldBe false
+    disabledState.persisted.config.statusLine.isPinned shouldBe false
     disabledState.persisted.config.surfaceConfig.wordWrapEnabled shouldBe false
     disabledState.persisted.config.surfaceConfig.focusedTextBodyEnabled shouldBe true
     disabledState.persisted.config.surfaceConfig.contextualToolbarEnabled shouldBe false
@@ -510,7 +515,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
           .typed(
             "line-numbers-on",
             "Set line numbers on",
-            CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetLineNumbers(true))),
+            CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetLineNumbers(true))),
             CommandCategory.Settings
           )
       )
@@ -520,7 +525,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "gutter-on",
           "Set gutter on",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetGutter(true))),
+          CommandIntent.Settings(SettingsIntent.StatusLine(StatusLineIntent.SetPlacement(StatusLinePlacement.Pinned))),
           CommandCategory.Settings
         )
       )
@@ -530,7 +535,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "word-wrap-on",
           "Set word wrap on",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetWordWrap(true))),
+          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetWordWrap(true))),
           CommandCategory.Settings
         )
       )
@@ -540,7 +545,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "focused-body-off",
           "Set focused text body off",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetFocusedTextBody(false))),
+          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetFocusedTextBody(false))),
           CommandCategory.Settings
         )
       )
@@ -550,7 +555,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "contextual-toolbar-on",
           "Set contextual toolbar on",
-          CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarEnabled(true))),
+          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetContextualToolbarEnabled(true))),
           CommandCategory.Settings
         )
       )
@@ -561,8 +566,8 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
           "contextual-toolbar-icon-text",
           "Set contextual toolbar display to icon and text",
           CommandIntent.Settings(
-            SettingsIntent.PanelChrome(
-              PanelChromeIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText)
+            SettingsIntent.TextDisplay(
+              TextDisplayIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText)
             )
           ),
           CommandCategory.Settings
@@ -572,7 +577,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
     val enabledState = stateManager.getCurrentState.unsafeRunSync()
     enabledState.persisted.config.surfaceConfig.showLineNumbers shouldBe true
-    enabledState.persisted.config.surfaceConfig.showGutter shouldBe true
+    enabledState.persisted.config.statusLine.isPinned shouldBe true
     enabledState.persisted.config.surfaceConfig.wordWrapEnabled shouldBe true
     enabledState.persisted.config.surfaceConfig.focusedTextBodyEnabled shouldBe false
     enabledState.persisted.config.surfaceConfig.contextualToolbarEnabled shouldBe true

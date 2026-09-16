@@ -57,7 +57,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
         theme = Theme.light,
         config = AppConfig.default
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withTextAreaInsets(insets)
       )
     )
@@ -173,7 +173,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
           theme = Theme.light,
           config = AppConfig.default
             .withLineNumbers(false)
-            .withGutter(false)
+            .withoutStatusLine
             .withTextAreaInsets(largeMargin)
         ),
         runtime = AppState.initial.runtime.copy(viewportSize = Some(viewportSize))

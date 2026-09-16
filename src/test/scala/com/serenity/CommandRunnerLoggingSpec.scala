@@ -46,14 +46,14 @@ class CommandRunnerLoggingSpec extends AnyFlatSpec with Matchers:
     val command = Command.typed(
       "toggle-line-numbers",
       "Toggle line numbers display on/off",
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleLineNumbers)),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers)),
       CommandCategory.View
     )
 
     StateManager
       .describeCommandExecution(command)
       .shouldBe(
-        "command=toggle-line-numbers category=View intent=Settings(PanelChrome(ToggleLineNumbers))"
+        "command=toggle-line-numbers category=View intent=Settings(TextDisplay(ToggleLineNumbers))"
       )
   }
 

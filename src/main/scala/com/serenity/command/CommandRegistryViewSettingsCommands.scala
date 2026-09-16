@@ -1,7 +1,7 @@
 package com.serenity.command
 
-/** Theme, view-toggle, and Markdown/app-mode settings commands. Split out of `CommandRegistry.defaultCommands` to keep
-  * both under the architecture size targets -- see that method's doc.
+/** Theme and view-toggle commands. Split out of `CommandRegistry.defaultCommands` to keep both under the architecture
+  * size targets -- see that method's doc.
   */
 private[command] object CommandRegistryViewSettingsCommands:
 
@@ -113,54 +113,5 @@ private[command] object CommandRegistryViewSettingsCommands:
       CommandIntent.View(ViewIntent.OpenMarkdownPreview),
       CommandCategory.View,
       label = "Open Markdown Preview"
-    ),
-    Command.typed(
-      "markdown-view-source",
-      "Show Markdown buffers as editable source.",
-      CommandIntent.View(ViewIntent.SetMarkdownViewMode(com.serenity.config.MarkdownViewMode.Source)),
-      CommandCategory.Settings,
-      label = "Markdown View Source"
-    ),
-    Command.typed(
-      "markdown-view-split",
-      "Show Markdown source with a live side-by-side preview.",
-      CommandIntent.View(ViewIntent.SetMarkdownViewMode(com.serenity.config.MarkdownViewMode.SplitPreview)),
-      CommandCategory.Settings,
-      label = "Markdown View Split"
-    ),
-    Command.typed(
-      "markdown-view-inline-lens",
-      "Show rendered Markdown with a raw-source editing lens at the cursor.",
-      CommandIntent.View(ViewIntent.SetMarkdownViewMode(com.serenity.config.MarkdownViewMode.InlineLens)),
-      CommandCategory.Settings,
-      label = "Markdown View Inline Lens"
-    ),
-    Command.typed(
-      "app-mode-code",
-      "Switch the app to code mode, gating tooling and settings toward code workspaces.",
-      CommandIntent.View(ViewIntent.SetAppMode(com.serenity.config.AppMode.Code)),
-      CommandCategory.Settings,
-      label = "App Mode: Code"
-    ),
-    Command.typed(
-      "app-mode-prose",
-      "Switch the app to prose mode, gating tooling and settings toward prose workspaces.",
-      CommandIntent.View(ViewIntent.SetAppMode(com.serenity.config.AppMode.Prose)),
-      CommandCategory.Settings,
-      label = "App Mode: Prose"
-    ),
-    Command.typed(
-      "spellcheck-on",
-      "Enable spell-checking for prose buffers.",
-      CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(true))),
-      CommandCategory.Settings,
-      label = "Spell Check On"
-    ),
-    Command.typed(
-      "spellcheck-off",
-      "Disable spell-checking for prose buffers.",
-      CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(false))),
-      CommandCategory.Settings,
-      label = "Spell Check Off"
     )
   )

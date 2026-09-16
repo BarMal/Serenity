@@ -42,8 +42,7 @@ final private[manager] class StateManagerProjectLspEffects(
         requestLspDefinition(state)
 
   private def runProjectTask(state: AppState, kind: ProjectTaskKind): IO[Unit] =
-    if state.persisted.config.appMode != com.serenity.config.AppMode.Code then
-      pinProjectTerminal(ProjectTaskTerminal.notAvailableInProseMode(kind))
+    if !state.editingContext.hasCodeTooling then pinProjectTerminal(ProjectTaskTerminal.notAvailableInProseMode(kind))
     else
       projectTaskStartPath(state).flatMap { start =>
         ProjectTaskDetector.detect(start, kind) match

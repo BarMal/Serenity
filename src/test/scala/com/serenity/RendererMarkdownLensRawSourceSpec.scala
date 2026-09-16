@@ -37,7 +37,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
         config = AppState.empty.persisted.config
           .withSyntaxHighlighting(true)
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )
     )
@@ -99,7 +99,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
         config = AppState.empty.persisted.config
           .withSyntaxHighlighting(true)
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )
     )
@@ -181,7 +181,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
         config = AppState.empty.persisted.config
           .withSyntaxHighlighting(true)
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )
     )
@@ -230,7 +230,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
         config = AppState.empty.persisted.config
           .withSyntaxHighlighting(true)
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )
     )
@@ -275,7 +275,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
         config = AppState.empty.persisted.config
           .withSyntaxHighlighting(true)
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )
     )
@@ -378,7 +378,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
         config = AppState.empty.persisted.config
           .withSyntaxHighlighting(true)
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )
     )

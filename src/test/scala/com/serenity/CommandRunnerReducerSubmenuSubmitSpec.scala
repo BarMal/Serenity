@@ -77,7 +77,7 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
 
   "CommandRunnerReducer" should "leave a selected submenu input item unchanged when enter is pressed before typing" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-animation", "animation-duration")
+    val state    = settingsStateOnItem("settings-motion-advanced", "animation-duration")
 
     val submitted = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
     val runner    = runnerFrom(submitted.state)
@@ -101,24 +101,24 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
     submitted.state.commandRunnerSurface shouldBe None
   }
 
-  // #1298: reordering the cursor info bar's segments used to close the whole settings menu on every single move,
+  // #1298: reordering the status line's segments used to close the whole settings menu on every single move,
   // forcing a full re-open/re-navigate round trip to nudge one segment more than one step. Moving a segment now
-  // leaves the "Cursor" group open so the next move can be submitted immediately.
-  it should "keep the settings submenu open after moving a cursor info bar segment" in {
+  // leaves the "Status Line" group open so the next move can be submitted immediately.
+  it should "keep the settings submenu open after moving a status line segment" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val config = AppConfig.default.withCursorInfoBarSegments(
-      List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
+    val config = AppConfig.default.withStatusLineSegments(
+      List(StatusSegment.Position, StatusSegment.Title)
     )
     // Mirrors settingsStateOnItem's own navigation: search narrows visibleItems to the target group before
     // indexing into it, exactly as reaching any other settings group does elsewhere in this spec.
     val searched = CommandRunner.empty
       .activate(registry, config)
       .openSettings
-      .updateSearchTerm(settingsGroupSearchTerm("settings-cursor"))
-    val groupIndex = searched.visibleItems.indexWhere(_.id == "settings-cursor")
+      .updateSearchTerm(settingsGroupSearchTerm("settings-status-line"))
+    val groupIndex = searched.visibleItems.indexWhere(_.id == "settings-status-line")
     val entered    = searched.withSelectedVisibleIndex(groupIndex).enterSelectedGroup
-    val moveIndex  = entered.submenuItems("settings-cursor").indexWhere(_.id == "move-cursor-info-bar-position-later")
+    val moveIndex  = entered.submenuItems("settings-status-line").indexWhere(_.id == "move-status-position-later")
     val positioned = entered.withSelectedFocusedSubmenuIndex(moveIndex)
     val surface = UiSurface(
       SurfaceId("command-runner"),
@@ -133,14 +133,14 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
     val submitted = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
 
     submitted.state.commandRunnerSurface shouldBe defined
-    runnerFrom(submitted.state).activeSubmenuGroupId shouldBe Some("settings-cursor")
+    runnerFrom(submitted.state).activeSubmenuGroupId shouldBe Some("settings-status-line")
     submitted.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.name } shouldBe
-      Some("move-cursor-info-bar-position-later")
+      Some("move-status-position-later")
   }
 
   it should "fire SetAnimationSteps intent on Enter with valid value" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-animation", "animation-steps")
+    val state    = settingsStateOnItem("settings-motion-advanced", "animation-steps")
 
     val typed = List('2', '0').foldLeft(state) { (s, c) =>
       val r = CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry)
@@ -182,7 +182,7 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
 
   it should "be a no-op on Enter when the value is out of bounds" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-animation", "animation-steps")
+    val state    = settingsStateOnItem("settings-motion-advanced", "animation-steps")
 
     val typedOutOfBounds = List('9', '9', '9').foldLeft(state) { (s, c) =>
       val r = CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry)
@@ -255,6 +255,6 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
     val result = CommandRunnerReducer.reduce(RunnerSubmit, typed, registry)
 
     result.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.intent } shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaTopInset(0.225)))
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTextAreaTopInset(0.225)))
     )
   }

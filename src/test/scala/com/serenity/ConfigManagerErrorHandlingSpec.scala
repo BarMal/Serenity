@@ -23,8 +23,8 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
     val configFile = Files.createTempFile("serenity-config-io", ".conf")
     Files.writeString(
       configFile,
-      """syntax.highlighting = true
-        |font.code.size = 18.0
+      """editor.syntax_highlighting = true
+        |typography.code.size = 18.0
         |""".stripMargin
     )
 
@@ -40,7 +40,7 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
       configFile,
       """font_code_size = 18.0
         |unknown.setting = yes
-        |syntax.highlighting = maybe
+        |editor.syntax_highlighting = maybe
         |""".stripMargin
     )
 
@@ -48,9 +48,9 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
 
     result.config.editorConfig.fontConfig.codeFontSize shouldBe 18.0f
     result.report.deprecatedEntries.map(_.key) should contain("font_code_size")
-    result.report.deprecatedEntries.map(_.replacement) should contain("font.code.size")
+    result.report.deprecatedEntries.map(_.replacement) should contain("typography.code.size")
     result.report.unknownKeys should contain("unknown.setting")
-    result.report.invalidEntries.map(_.key) should contain("syntax.highlighting")
+    result.report.invalidEntries.map(_.key) should contain("editor.syntax_highlighting")
     result.report.hasWarnings shouldBe true
   }
 
@@ -81,10 +81,10 @@ class ConfigManagerErrorHandlingSpec extends AnyFlatSpec with Matchers with Opti
 
   it should "return structured errors at the effectful configuration boundary" in {
     val invalidFile = Files.createTempFile("serenity-invalid-hocon", ".conf")
-    Files.writeString(invalidFile, "font.code.size = [not-a-number]\n")
+    Files.writeString(invalidFile, "typography.code.size = [not-a-number]\n")
 
     ConfigManager.loadConfigResultIO(Some(invalidFile.toString)).unsafeRunSync() match
-      case Left(error)  => error.message should include("font.code.size")
+      case Left(error)  => error.message should include("typography.code.size")
       case Right(value) => fail(s"expected a structured load error, received $value")
 
     val directoryPath = Files.createTempDirectory("serenity-save-error")

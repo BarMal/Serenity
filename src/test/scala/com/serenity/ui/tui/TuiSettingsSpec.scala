@@ -14,7 +14,7 @@ class TuiSettingsSpec extends TuiSpec:
       _ <- openSettings
       _ <- verify("settings root") { screen =>
         screen.containsText("Settings") shouldBe true
-        screen.containsText("↑↓ navigate • Enter open • Esc back • ←→ cycle option") shouldBe true
+        screen.containsText("↑↓ move • Enter open • Esc back • ←→ change") shouldBe true
       }
       _ <- verifyState("surface")(current => current.runtime.uiSurfaces should have size 1)
     yield ()
@@ -30,7 +30,7 @@ class TuiSettingsSpec extends TuiSpec:
       }
       _ <- enter
       _ <- verify("opened group") { screen =>
-        screen.containsText("Settings > Appearance & Motion > Surface Appearance") shouldBe true
+        screen.containsText("Settings > Look > Surface Appearance") shouldBe true
         screen.containsText("Post-processing") shouldBe true
       }
     yield ()

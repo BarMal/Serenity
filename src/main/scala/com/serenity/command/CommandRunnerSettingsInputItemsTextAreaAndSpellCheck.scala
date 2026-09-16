@@ -23,7 +23,7 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
         text.toDoubleOption
           .filter(value => value >= 0.0 && value <= 45.0)
           .map(value =>
-            CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaLeftInset(value / 100.0)))
+            CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTextAreaLeftInset(value / 100.0)))
           ),
       category = CommandCategory.Settings,
       defaultValue = Some(f"${AppConfig.default.surfaceConfig.textAreaInsets.leftPercent}%.1f")
@@ -38,7 +38,7 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
         text.toDoubleOption
           .filter(value => value >= 0.0 && value <= 45.0)
           .map(value =>
-            CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaRightInset(value / 100.0)))
+            CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTextAreaRightInset(value / 100.0)))
           ),
       category = CommandCategory.Settings,
       defaultValue = Some(f"${AppConfig.default.surfaceConfig.textAreaInsets.rightPercent}%.1f")
@@ -53,7 +53,7 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
         text.toDoubleOption
           .filter(value => value >= 0.0 && value <= 45.0)
           .map(value =>
-            CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaTopInset(value / 100.0)))
+            CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTextAreaTopInset(value / 100.0)))
           ),
       category = CommandCategory.Settings,
       defaultValue = Some(f"${AppConfig.default.surfaceConfig.textAreaInsets.topPercent}%.1f")
@@ -69,7 +69,7 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
           .filter(value => value >= 0.0 && value <= 45.0)
           .map(value =>
             CommandIntent
-              .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetTextAreaBottomInset(value / 100.0)))
+              .Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTextAreaBottomInset(value / 100.0)))
           ),
       defaultValue = Some(f"${AppConfig.default.surfaceConfig.textAreaInsets.bottomPercent}%.1f"),
       category = CommandCategory.Settings

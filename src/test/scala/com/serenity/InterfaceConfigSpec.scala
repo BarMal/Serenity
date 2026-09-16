@@ -8,7 +8,7 @@ import org.scalatest.matchers.should.Matchers
 class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
 
   "InterfaceConfig" should "own interface density and chrome metric schema metadata" in {
-    ConfigKeySchema.isKnownKey("interface.density") shouldBe true
+    ConfigKeySchema.isKnownKey("ui.density") shouldBe true
     ConfigKeySchema.isKnownKey("ui.element_gap") shouldBe true
     ConfigKeySchema.isKnownKey("ui.element.gap") shouldBe true
     ConfigKeySchema.isKnownKey("ui.corner_radius") shouldBe true
@@ -18,7 +18,7 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
 
     ConfigKeySchema.deprecatedKeys.should(
       contain allOf (
-        "interface_density"    -> "interface.density",
+        "interface_density"    -> "ui.density",
         "ui_element_gap"       -> "ui.element_gap",
         "ui_corner_radius"     -> "ui.corner_radius",
         "ui_outline_thickness" -> "ui.outline_thickness"
@@ -68,12 +68,12 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
     gapConfig.interfaceConfig.elementGap.shouldBe(4)
     radiusConfig.interfaceConfig.cornerRadiusPx.shouldBe(14)
     outlineConfig.interfaceConfig.outlineThicknessPx.shouldBe(5)
-    ConfigRegistry.read(AppConfig.default, "interface.density", "unknown").shouldBe(None)
+    ConfigRegistry.read(AppConfig.default, "ui.density", "unknown").shouldBe(None)
   }
 
   it should "validate interface config entries centrally" in {
-    ConfigRegistry.rejects("interface.density", "compact").shouldBe(false)
-    ConfigRegistry.rejects("interface.density", "unknown").shouldBe(true)
+    ConfigRegistry.rejects("ui.density", "compact").shouldBe(false)
+    ConfigRegistry.rejects("ui.density", "unknown").shouldBe(true)
     ConfigRegistry.rejects("ui.element_gap", "wide").shouldBe(true)
     ConfigRegistry.rejects("ui.corner_radius", "14").shouldBe(false)
     ConfigRegistry.rejects("ui.outline.thickness", "").shouldBe(true)

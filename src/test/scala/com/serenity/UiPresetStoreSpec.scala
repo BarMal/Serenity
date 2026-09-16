@@ -2,20 +2,116 @@ package com.serenity
 
 import java.nio.file.Files
 
+import _root_.io.circe.parser.decode
 import _root_.io.circe.syntax.*
 import _root_.io.circe.{Json, JsonObject}
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
 import com.serenity.config.*
+import com.serenity.rope.Balance
+import com.serenity.state.models.*
+import com.serenity.ui.layout.*
 import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Persistence and concurrency behaviour of `UiPresetStore`. Split out of `UiPresetSpec` (which keeps the `UiPreset`
-  * model/capture/apply tests) to keep both files under the architecture size target.
+/** Persistence and concurrency behaviour of `UiPresetStore`, plus editor-pane-layout restore behaviour for `UiPreset`.
+  * Split out of `UiPresetSpec` (which keeps the `UiPreset` model/capture/apply tests) to keep both files under the
+  * architecture size target.
   */
 class UiPresetStoreSpec extends AnyFlatSpec with Matchers:
+
+  given Balance = Balance.default
+
+  "UiPreset" should "collapse editor panes when a preset targets one editor pane" in {
+    val primaryBufferId   = BufferId(0)
+    val secondaryBufferId = BufferId(1)
+    val pane0             = PaneId(0)
+    val pane1             = PaneId(1)
+    val secondaryBuffer   = Buffer.newEmpty(secondaryBufferId)
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        buffers = AppState.initial.persisted.buffers + (secondaryBufferId -> secondaryBuffer),
+        bufferOrder = List(primaryBufferId, secondaryBufferId),
+        layout = Layout(
+          editorPanes = Map(
+            pane0 -> EditorPane.withBuffer(pane0, primaryBufferId),
+            pane1 -> EditorPane.withBuffer(pane1, secondaryBufferId)
+          ),
+          activeEditorPaneId = Some(pane1),
+          workspaceTree = Some(TestWorkspaceTrees.linear(pane0, pane1))
+        ),
+        focus = Focus.EditorPane(pane1)
+      ),
+      runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(2), nextPaneId = PaneId(2))
+    )
+    val preset = UiPreset.builtIn("Writing").getOrElse(fail("missing Writing preset"))
+
+    val restored = UiPreset.applyToState(preset, state, Theme.dark)
+
+    restored.persisted.layout.editorPanes should have size 1
+    restored.persisted.layout.activeEditorPaneId shouldBe Some(pane1)
+    restored.persisted.layout.orderedPaneIds shouldBe List(pane1)
+    restored.persisted.layout.editorPanes(pane1).bufferId shouldBe Some(secondaryBufferId)
+    restored.persisted.buffers.keySet should contain allOf (primaryBufferId, secondaryBufferId)
+    restored.persisted.bufferOrder shouldBe List(primaryBufferId, secondaryBufferId)
+  }
+
+  it should "restore editor pane count targets above one pane" in {
+    val primaryBufferId   = BufferId(0)
+    val secondaryBufferId = BufferId(1)
+    val pane0             = PaneId(0)
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        buffers = AppState.initial.persisted.buffers + (secondaryBufferId -> Buffer.newEmpty(secondaryBufferId)),
+        bufferOrder = List(primaryBufferId, secondaryBufferId),
+        layout = Layout(
+          editorPanes = Map(pane0 -> EditorPane.withBuffer(pane0, primaryBufferId)),
+          activeEditorPaneId = Some(pane0),
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${pane0.value}"), pane0)))
+        )
+      ),
+      runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(2), nextPaneId = PaneId(1))
+    )
+    val preset = UiPreset(
+      name = "Two Pane Drafting",
+      config = AppConfig.default,
+      themeName = Theme.dark.name,
+      dockedPanels = Nil,
+      targetEditorPaneCount = Some(2)
+    )
+
+    val restored = UiPreset.applyToState(preset, state, Theme.dark)
+
+    restored.persisted.layout.editorPanes should have size 2
+    restored.persisted.layout.orderedPaneIds shouldBe List(PaneId(0), PaneId(1))
+    restored.persisted.layout.editorPanes(PaneId(0)).bufferId shouldBe Some(primaryBufferId)
+    restored.persisted.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(secondaryBufferId)
+    restored.runtime.nextPaneId shouldBe PaneId(2)
+    restored.persisted.buffers.keySet should contain allOf (primaryBufferId, secondaryBufferId)
+  }
+
+  it should "decode saved presets that do not include editor pane layout intent" in {
+    import UiPreset.given
+
+    val preset = UiPreset(
+      name = "Legacy",
+      config = AppConfig.default,
+      themeName = Theme.dark.name,
+      dockedPanels = Nil
+    )
+    val legacyJson = preset.asJson.hcursor
+      .downField("targetEditorPaneCount")
+      .delete
+      .top
+      .getOrElse(fail("expected preset json"))
+      .noSpaces
+
+    val decoded = decode[UiPreset](legacyJson).getOrElse(fail("legacy preset should decode"))
+
+    decoded.targetEditorPaneCount shouldBe None
+  }
 
   "UiPresetStore" should "persist named presets to disk and replace an existing preset by name" in {
     val path  = Files.createTempDirectory("ui-preset-store").resolve("ui-presets.json")

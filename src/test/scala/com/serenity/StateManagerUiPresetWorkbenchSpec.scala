@@ -92,7 +92,10 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
       .getOrElse(fail("command runner should be open"))
-    val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
+    val presetGroup = runner.settingsGroups
+      .flatMap(group => group :: descendants(group))
+      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-ui-presets" => group }
+      .getOrElse(fail("missing presets group"))
     val presetPicker = descendants(presetGroup)
       .collectFirst {
         case item: CommandSurfaceItem.OptionItem if item.id == "ui-preset-select" => item
@@ -133,7 +136,10 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
       .getOrElse(fail("command runner should stay open"))
-    val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
+    val presetGroup = runner.settingsGroups
+      .flatMap(group => group :: descendants(group))
+      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-ui-presets" => group }
+      .getOrElse(fail("missing presets group"))
     val presetPicker = descendants(presetGroup)
       .collectFirst {
         case item: CommandSurfaceItem.OptionItem if item.id == "ui-preset-select" => item
@@ -344,8 +350,11 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
       )
     ).unsafeRunSync()
 
-    val runner      = commandRunnerState(sm)
-    val presetGroup = runner.settingsGroups.find(_.id == "settings-ui-presets").getOrElse(fail("missing presets group"))
+    val runner = commandRunnerState(sm)
+    val presetGroup = runner.settingsGroups
+      .flatMap(group => group :: descendants(group))
+      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-ui-presets" => group }
+      .getOrElse(fail("missing presets group"))
     val activePanelsGroup = descendants(presetGroup)
       .collectFirst {
         case item: CommandSurfaceItem.GroupItem if item.id == "settings-preset-workspace-layout" => item

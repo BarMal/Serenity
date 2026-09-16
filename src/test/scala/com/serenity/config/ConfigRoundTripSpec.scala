@@ -9,6 +9,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig}
 import com.serenity.animation.{AnimationConfig, TransitionKind, WindowSitterAction, WindowSitterConfig}
 import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.{StatusLineColors, StatusLinePlacement, StatusSegment}
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
 import com.serenity.ui.fonts.FontLoader
@@ -28,7 +29,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
 
-  /** Alias keys differ only in `.` versus `_` between words (`display.word_wrap` / `display.word.wrap`), so a written
+  /** Alias keys differ only in `.` versus `_` between words (`editor.word_wrap` / `display.word.wrap`), so a written
     * file only has to carry one spelling of each. Collapsing both separators is what makes "is this key covered?" a
     * question about the setting rather than about which spelling the writer happened to pick.
     */
@@ -67,9 +68,8 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withSyntaxHighlighting(true)
     .withLineNumbers(false)
     .withLineNumberLayout(LineNumberLayout(side = LineNumberSide.Both, marginLeft = 2, marginRight = 3, padding = 1))
-    .withGutter(false)
+    .withoutStatusLine
     .withPaneHeaders(false)
-    .withWordCount(true)
     .withCommentDisplayMode(CommentDisplayMode.Margin)
     .withWordWrap(false)
     .withVisualLineCursorNavigation(false)
@@ -92,15 +92,13 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withRenderFpsTarget(RenderFpsTarget.Fps30)
     .withRenderDamageGranularity(RenderDamageGranularity.Cells)
     .withRendererFrameStateCacheCapacity(96)
-    .withCursorInfoBarBackgroundAlpha(Some(0.5))
     .withCursorMode(CursorMode.Breathe)
-    .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position, CursorInfoBarSegment.WordCount))
-    .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+    .withStatusLineSegments(List(StatusSegment.Position, StatusSegment.WordCount))
+    .withStatusLinePlacement(StatusLinePlacement.Floating)
     .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
     .withDefaultDocumentMode(DefaultDocumentMode.Markdown)
     .withAppMode(AppMode.Prose)
     .withShowAllSettingsRegardlessOfMode(true)
-    .withModeTabWidgetCornerPosition(CornerPosition.TopLeft)
     .withInterfaceDensity(InterfaceDensity.Compact)
     .withUiElementGap(2.0)
     .withUiCornerRadiusPx(6)
@@ -131,8 +129,12 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withCursorColors(
       CursorColorConfig(active = Some(Color(0x11, 0x22, 0x33)), inactive = Some(Color(0x44, 0x55, 0x66)))
     )
-    .withCursorInfoBarColors(
-      CursorInfoBarColorConfig(foreground = Some(Color(0x77, 0x88, 0x99)), background = Some(Color(0xaa, 0xbb, 0xcc)))
+    .withStatusLineColors(
+      StatusLineColors(
+        foreground = Some(Color(0x77, 0x88, 0x99)),
+        background = Some(Color(0xaa, 0xbb, 0xcc)),
+        backgroundAlpha = Some(0.5)
+      )
     )
     .withSpellCheck(
       SpellCheckConfig(
@@ -317,14 +319,14 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
 
   it should "survive a cursor info bar with several segments, which needs quoting to stay parseable" in {
     val configured = AppConfig.default
-      .withCursorInfoBarSegments(
-        List(CursorInfoBarSegment.Position, CursorInfoBarSegment.WordCount, CursorInfoBarSegment.CharCount)
+      .withStatusLineSegments(
+        List(StatusSegment.Position, StatusSegment.WordCount, StatusSegment.CharCount)
       )
       .withPaneHeaders(false)
 
     val reloaded = savedAndReloaded(configured)
 
-    reloaded.cursorInfoBarSegments shouldBe configured.cursorInfoBarSegments
+    reloaded.statusLine.segments shouldBe configured.statusLine.segments
     // The bug this pins: the unquoted comma made the whole file unparseable, so every *other* setting reset too.
     reloaded.surfaceConfig.showPaneHeaders shouldBe false
   }
@@ -333,7 +335,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
 
   "a config file that cannot be parsed" should "be kept aside rather than left to be overwritten by defaults" in {
     val file = Files.createTempFile("serenity-unreadable-config", ".conf")
-    Files.writeString(file, "display.pane_headers = false\nthis is not = valid = hocon {\n")
+    Files.writeString(file, "editor.pane_headers = false\nthis is not = valid = hocon {\n")
 
     val preserved = ConfigManager.preserveUnreadableConfig(file)
 

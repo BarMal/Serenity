@@ -90,11 +90,12 @@ object FloatingSurfaceLayout:
       case SurfaceContent.CommandPalette(_) | SurfaceContent.ShortcutsHelp(_) |
           SurfaceContent.ModalWorkflow(Modal.FileWorkflow(_)) =>
         calculateFloatingSurfaceWidth(contentRect.width)
+      // A quiet single row: as wide as its text (plus a cell of padding each side), never the whole pane.
+      case SurfaceContent.StatusLine(text) =>
+        math.min(contentRect.width, text.length + 2)
       case _ =>
         contentRect.width
-    val preferredHeight = calculateFloatingSurfaceHeight(surface.content, preferredWidth, contentRect.height, state)
-    val finalHeight     = forcedHeight.getOrElse(preferredHeight)
-    val gapRows         = wholeRowOrigin(floatingCursorGapRows(state, surface.content))
+    val gapRows = wholeRowOrigin(floatingCursorGapRows(state, surface.content))
 
     for
       anchor <- floatingAnchor(surface, state, buffer)
@@ -128,10 +129,17 @@ object FloatingSurfaceLayout:
             contentRect.x,
             math.min(horizontalAnchorX - (preferredWidth / 2), contentRect.right - preferredWidth)
           )
-      val preferredAboveY = screenPosition.y - finalHeight - gapRows
       val preferredBelowY = toolbarSelectionEndScreenPosition(surface, buffer, contentRect, state)
         .map(_.y + 1 + gapRows)
         .getOrElse(screenPosition.y + 1 + gapRows)
+      val roomOnPreferredSide = surface.presentation match
+        case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) => screenPosition.y - gapRows - contentRect.y
+        case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) => contentRect.bottom - preferredBelowY
+        case _                                                             => contentRect.height
+      val preferredHeight =
+        calculateFloatingSurfaceHeight(surface.content, preferredWidth, contentRect.height, state, roomOnPreferredSide)
+      val finalHeight     = forcedHeight.getOrElse(preferredHeight)
+      val preferredAboveY = screenPosition.y - finalHeight - gapRows
       val overlayY = topYOverride.getOrElse(surface.presentation match
         case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) =>
           surface.content match
@@ -223,24 +231,17 @@ object FloatingSurfaceLayout:
     content: SurfaceContent,
     maxWidth: Int,
     maxHeight: Int,
-    state: AppState
+    state: AppState,
+    roomOnPreferredSide: Int = Int.MaxValue
   ): Int =
-    val densityMetrics = InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity)
-    val commandMaxHeight =
-      SurfaceFrameLayout.frameHeightForItemRows(
-        AppConfig.clampCommandRunnerVisibleRows(state.persisted.config.effectiveCommandRunnerVisibleRows),
-        hasHeader = true,
-        hasFooter = true,
-        borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
-        itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
-        itemTargetRows = SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
-      )
+    val densityMetrics   = InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity)
+    val commandMaxHeight = commandSurfaceMaxHeight(state, maxHeight, roomOnPreferredSide)
     val preferredHeight = content match
       case SurfaceContent.StartPage(_)            => maxHeight
       case SurfaceContent.QuickInfo(text)         => math.max(3, text.linesIterator.size + 2)
       case SurfaceContent.FilePreview(_, content) => math.max(4, math.min(6, content.linesIterator.take(4).size + 2))
       case SurfaceContent.SymbolDefinition(_, _)  => 4
-      case SurfaceContent.CursorInfoBar(_)        => 3
+      case SurfaceContent.StatusLine(_)           => 1
       case SurfaceContent.DirectoryListing(_, entries, _) => math.max(4, math.min(6, entries.take(4).size + 2))
       case SurfaceContent.DirectoryTree(tree, _) =>
         math.max(4, math.min(8, DirectoryTreeData.visibleRows(tree).size + 2))
@@ -306,7 +307,50 @@ object FloatingSurfaceLayout:
       case SurfaceContent.GhostOverlay(_, cachedRect) =>
         cachedRect.height
 
-    math.max(3, math.min(maxHeight, preferredHeight))
+    val floor = content match
+      case SurfaceContent.StatusLine(_) => 1
+      case _                            => 3
+    math.max(floor, math.min(maxHeight, preferredHeight))
+
+  /** The share of the available height a command surface may take when no explicit row count is configured. */
+  private val CommandSurfaceViewportShare = 0.6
+
+  /** The command palette's frame height: an explicit `command_runner.visible_rows` wins; otherwise as many rows as fit
+    * in [[CommandSurfaceViewportShare]] of the space available and in the room on the side it is anchored to, never
+    * fewer than the density's own minimum (#1045: a flat per-density cap showed three commands on any window, however
+    * tall). Sizing to the room keeps the palette below the caret as it grows rather than flipping above it.
+    */
+  private[layout] def commandSurfaceMaxHeight(state: AppState, maxHeight: Int, roomOnPreferredSide: Int): Int =
+    val config      = state.persisted.config
+    val minimumRows = InterfaceDensityMetrics.forDensity(config.interfaceDensity).visibleRows
+    val rows = config.surfaceConfig.commandRunnerVisibleRows
+      .map(AppConfig.clampCommandRunnerVisibleRows)
+      .getOrElse {
+        val budget = math.min(math.floor(maxHeight * CommandSurfaceViewportShare).toInt, roomOnPreferredSide)
+        (minimumRows to AppConfig.MaxCommandRunnerVisibleRows)
+          .takeWhile(commandSurfaceFrameHeight(state, _) <= budget)
+          .lastOption
+          .getOrElse(minimumRows)
+      }
+    commandSurfaceFrameHeight(state, rows)
+
+  /** The shortest a command surface goes when it has to share the room below the caret with other surfaces. */
+  private[layout] def commandSurfaceMinimumHeight(state: AppState): Int =
+    commandSurfaceFrameHeight(
+      state,
+      InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity).visibleRows
+    )
+
+  private def commandSurfaceFrameHeight(state: AppState, rows: Int): Int =
+    val config = state.persisted.config
+    SurfaceFrameLayout.frameHeightForItemRows(
+      rows,
+      hasHeader = true,
+      hasFooter = true,
+      borderCells = SurfaceFrameLayout.CommandSurfaceBorderCells,
+      itemGapRows = config.effectiveCommandRunnerItemGapRows,
+      itemTargetRows = SurfaceFrameLayout.minimumTargetRows(config.interfaceDensity)
+    )
 
   private def surfaceAnchor(surface: UiSurface): Option[CursorPosition] =
     surface.presentation match

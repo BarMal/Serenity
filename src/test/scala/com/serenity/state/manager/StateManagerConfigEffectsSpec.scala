@@ -147,7 +147,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
     val fixture = harness()
 
     fixture.config
-      .interpret(SettingsIntent.PanelChrome(PanelChromeIntent.ToggleContextualToolbar), AppState.initial)
+      .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleContextualToolbar), AppState.initial)
       .unsafeRunSync()
 
     fixture.events.get.unsafeRunSync() shouldBe List(com.serenity.keystroke.events.ToggleContextualToolbar)
@@ -202,7 +202,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
     val mode    = com.serenity.config.ToolbarDisplayMode.values.find(_ != toolbar.displayMode).get
 
     fixture.config
-      .interpret(SettingsIntent.PanelChrome(PanelChromeIntent.SetContextualToolbarDisplayMode(mode)), state)
+      .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.SetContextualToolbarDisplayMode(mode)), state)
       .unsafeRunSync()
 
     fixture.stateRef.get.unsafeRunSync().surfaceById(toolbarId).map(_.content) shouldBe

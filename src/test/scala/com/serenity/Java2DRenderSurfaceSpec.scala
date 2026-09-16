@@ -477,7 +477,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val state = AppState.initial.copy(persisted =
       AppState.initial.persisted.copy(
         theme = Theme.light,
-        config = AppConfig.default.withLineNumbers(false).withGutter(false)
+        config = AppConfig.default.withLineNumbers(false).withoutStatusLine
       )
     )
 
@@ -496,7 +496,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
         theme = Theme.light,
         config = AppConfig.default
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withPostProcessingEffect(PostProcessingEffect.Scanlines)
       )
     )

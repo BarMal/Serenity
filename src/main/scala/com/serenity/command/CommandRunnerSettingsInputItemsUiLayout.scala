@@ -22,7 +22,8 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
         text.toDoubleOption
           .filter(value => value >= AppConfig.MinUiElementGap && value <= AppConfig.MaxUiElementGap)
           .map(commandIntentArg =>
-            CommandIntent.Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiElementGap(commandIntentArg)))
+            CommandIntent
+              .Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiElementGap(commandIntentArg)))
           ),
       category = CommandCategory.Settings,
       defaultValue = Some(CommandRunnerSettingsInputItems.formatDecimal(AppConfig.default.interfaceConfig.elementGap))
@@ -38,7 +39,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
           .filter(value => value >= AppConfig.MinUiCornerRadiusPx && value <= AppConfig.MaxUiCornerRadiusPx)
           .map(commandIntentArg =>
             CommandIntent
-              .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiCornerRadiusPx(commandIntentArg)))
+              .Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiCornerRadiusPx(commandIntentArg)))
           ),
       category = CommandCategory.Settings,
       defaultValue = Some(AppConfig.default.interfaceConfig.cornerRadiusPx.toString)
@@ -54,7 +55,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
           .filter(value => value >= AppConfig.MinUiOutlineThicknessPx && value <= AppConfig.MaxUiOutlineThicknessPx)
           .map(commandIntentArg =>
             CommandIntent
-              .Settings(SettingsIntent.PanelChrome(PanelChromeIntent.SetUiOutlineThicknessPx(commandIntentArg)))
+              .Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiOutlineThicknessPx(commandIntentArg)))
           ),
       category = CommandCategory.Settings,
       defaultValue = Some(AppConfig.default.interfaceConfig.outlineThicknessPx.toString)
@@ -72,7 +73,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
       hint: String,
       currentValue: String,
       default: Int,
-      intent: Int => PanelChromeIntent
+      intent: Int => TextDisplayIntent
     ): CommandSurfaceItem.InputItem =
       CommandSurfaceItem.InputItem(
         id = id,
@@ -83,7 +84,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
         parse = text =>
           text.toIntOption
             .filter(value => value >= 0 && value <= LineNumberLayout.MaxCells)
-            .map(cells => CommandIntent.Settings(SettingsIntent.PanelChrome(intent(cells)))),
+            .map(cells => CommandIntent.Settings(SettingsIntent.TextDisplay(intent(cells)))),
         category = CommandCategory.Settings,
         defaultValue = Some(default.toString)
       )
@@ -96,7 +97,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
         s"Cells from the left edge to the counter (0-${LineNumberLayout.MaxCells})",
         marginLeftValue,
         defaults.marginLeft,
-        PanelChromeIntent.SetLineNumberMarginLeft(_)
+        TextDisplayIntent.SetLineNumberMarginLeft(_)
       ),
       cellsItem(
         "line-number-margin-right",
@@ -104,7 +105,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
         s"Cells from the right edge to the counter (0-${LineNumberLayout.MaxCells})",
         marginRightValue,
         defaults.marginRight,
-        PanelChromeIntent.SetLineNumberMarginRight(_)
+        TextDisplayIntent.SetLineNumberMarginRight(_)
       ),
       cellsItem(
         "line-number-padding",
@@ -112,6 +113,6 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
         s"Cells between the counter and the content (0-${LineNumberLayout.MaxCells})",
         paddingValue,
         defaults.padding,
-        PanelChromeIntent.SetLineNumberPadding(_)
+        TextDisplayIntent.SetLineNumberPadding(_)
       )
     )

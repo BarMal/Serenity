@@ -19,18 +19,18 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
     Files.writeString(
       configFile,
       """ui.material = neon
-        |ui.motion = turbo
-        |ui.motion.speed_scale = 5
-        |ui.motion.command_runner_reveal = sideways
+        |motion.preset = turbo
+        |motion.speed_scale = 5
+        |motion.command_runner_reveal = sideways
         |""".stripMargin
     )
 
     val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
     result.report.invalidEntries.map(_.key) should contain("ui.material")
-    result.report.invalidEntries.map(_.key) should contain("ui.motion")
-    result.report.invalidEntries.map(_.key) should contain("ui.motion.speed_scale")
-    result.report.invalidEntries.map(_.key) should contain("ui.motion.command_runner_reveal")
+    result.report.invalidEntries.map(_.key) should contain("motion.preset")
+    result.report.invalidEntries.map(_.key) should contain("motion.speed_scale")
+    result.report.invalidEntries.map(_.key) should contain("motion.command_runner_reveal")
   }
 
   it should "round-trip the authoritative motion hierarchy" in {
@@ -58,19 +58,19 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
 
     val loaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
-    serialized should not include "ui.motion.speed_scale ="
-    serialized should not include "ui.motion.editor_text.speed_scale ="
-    serialized should not include "ui.motion.command_runner.speed_scale ="
-    serialized should not include "ui.motion.ui.speed_scale ="
-    serialized should not include "ui.motion.cursor.speed_scale ="
-    serialized should not include "ui.motion.command_runner ="
-    serialized should not include "ui.motion.command_runner_reveal ="
-    serialized should not include "ui.motion.ui ="
-    serialized should not include "ui.motion.editor_text ="
-    serialized should not include "ui.motion.panel_open ="
-    serialized should not include "ui.motion.panel_close ="
-    serialized should include("ui.motion.family.command_surfaces.speed_scale = 0.5")
-    serialized should include("ui.motion.family.pinned_panels.close_transition = off")
+    serialized should not include "motion.speed_scale ="
+    serialized should not include "motion.editor_text.speed_scale ="
+    serialized should not include "motion.command_runner.speed_scale ="
+    serialized should not include "motion.ui.speed_scale ="
+    serialized should not include "motion.cursor.speed_scale ="
+    serialized should not include "motion.command_runner ="
+    serialized should not include "motion.command_runner_reveal ="
+    serialized should not include "motion.ui ="
+    serialized should not include "motion.editor_text ="
+    serialized should not include "motion.panel_open ="
+    serialized should not include "motion.panel_close ="
+    serialized should include("motion.family.command_surfaces.speed_scale = 0.5")
+    serialized should include("motion.family.pinned_panels.close_transition = off")
     loaded.surfaceConfig.motionConfiguration shouldBe configured.surfaceConfig.motionConfiguration.map(configuration =>
       configuration.withFallback(MotionConfig.fromLegacy(configured.surfaceConfig, configuration.baseline))
     )
@@ -84,8 +84,8 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
     val enabledOnly = Files.createTempFile("serenity-motion-enabled-only", ".conf")
     Files.writeString(
       enabledOnly,
-      """ui.motion.family.editor_text.transition = off
-        |ui.motion.family.editor_text.enabled = true
+      """motion.family.editor_text.transition = off
+        |motion.family.editor_text.enabled = true
         |""".stripMargin
     )
     val loadedEnabledOnly = ConfigManagerTestSupport.loadConfig(Some(enabledOnly.toString))
@@ -100,8 +100,8 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
     val disabledOverride = Files.createTempFile("serenity-motion-disabled-override", ".conf")
     Files.writeString(
       disabledOverride,
-      """ui.motion.family.editor_text.transition = typed
-        |ui.motion.family.editor_text.enabled = false
+      """motion.family.editor_text.transition = typed
+        |motion.family.editor_text.enabled = false
         |""".stripMargin
     )
     val loadedDisabledOverride = ConfigManagerTestSupport.loadConfig(Some(disabledOverride.toString))
@@ -150,9 +150,9 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
 
     val loaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
-    serialized should include("ui.motion.family.command_surfaces.animation.preset = custom")
-    serialized should include("ui.motion.family.command_surfaces.animation.duration_ms = 320")
-    serialized should include("ui.motion.family.command_surfaces.animation.steps = 7")
+    serialized should include("motion.family.command_surfaces.animation.preset = custom")
+    serialized should include("motion.family.command_surfaces.animation.duration_ms = 320")
+    serialized should include("motion.family.command_surfaces.animation.steps = 7")
     loaded.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.CommandSurfaces).animation shouldBe Some(
       customAnimation
     )
@@ -163,18 +163,18 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
     Files.writeString(
       configFile,
       """ui.material = crystal
-        |ui.motion = reduced
-        |ui.motion.speed_scale = 1.75
-        |ui.motion.editor_text.speed_scale = 0.50
-        |ui.motion.command_runner.speed_scale = 2.25
-        |ui.motion.ui.speed_scale = 1.25
-        |ui.motion.cursor.speed_scale = 0.75
-        |ui.motion.editor_text = typed
-        |ui.motion.panel_open = directional
-        |ui.motion.panel_close = off
-        |ui.motion.command_runner_reveal = outline
-        |ui.motion.command_runner = subtle
-        |ui.motion.ui = smooth
+        |motion.preset = reduced
+        |motion.speed_scale = 1.75
+        |motion.editor_text.speed_scale = 0.50
+        |motion.command_runner.speed_scale = 2.25
+        |motion.ui.speed_scale = 1.25
+        |motion.cursor.speed_scale = 0.75
+        |motion.editor_text = typed
+        |motion.panel_open = directional
+        |motion.panel_close = off
+        |motion.command_runner_reveal = outline
+        |motion.command_runner = subtle
+        |motion.ui = smooth
         |""".stripMargin
     )
 
@@ -198,17 +198,17 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
     config.editorConfig.characterAnimation shouldBe None
     val serialized = ConfigManager.configToString(config)
     serialized should include("ui.material = crystal")
-    serialized should include("ui.motion.preset = reduced")
-    serialized should include("ui.motion.accessibility = standard")
-    serialized should include("ui.motion.family.editor_text.transition = typed")
-    serialized should include("ui.motion.family.editor_text.speed_scale = 0.5")
-    serialized should include("ui.motion.family.command_surfaces.transition = outline")
-    serialized should include("ui.motion.family.command_surfaces.animation.preset = subtle")
-    serialized should include("ui.motion.family.command_surfaces.speed_scale = 2.25")
-    serialized should include("ui.motion.family.pinned_panels.open_transition = directional")
-    serialized should include("ui.motion.family.pinned_panels.close_transition = off")
-    serialized should include("ui.motion.family.ui_transitions.animation.preset = smooth")
-    serialized should include("ui.motion.family.cursor.speed_scale = 0.75")
+    serialized should include("motion.preset = reduced")
+    serialized should include("motion.accessibility = standard")
+    serialized should include("motion.family.editor_text.transition = typed")
+    serialized should include("motion.family.editor_text.speed_scale = 0.5")
+    serialized should include("motion.family.command_surfaces.transition = outline")
+    serialized should include("motion.family.command_surfaces.animation.preset = subtle")
+    serialized should include("motion.family.command_surfaces.speed_scale = 2.25")
+    serialized should include("motion.family.pinned_panels.open_transition = directional")
+    serialized should include("motion.family.pinned_panels.close_transition = off")
+    serialized should include("motion.family.ui_transitions.animation.preset = smooth")
+    serialized should include("motion.family.cursor.speed_scale = 0.75")
   }
 
   it should "load and write the post-processing effect" in {
@@ -230,9 +230,9 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
     )
     val written = ConfigManager.configToString(AppConfig.default.withCharacterAnimation(customAnimation))
 
-    written should include("character.animation.preset = custom")
-    written should include("character.animation.duration_ms = 320")
-    written should include("character.animation.steps = 7")
+    written should include("motion.character.preset = custom")
+    written should include("motion.character.duration_ms = 320")
+    written should include("motion.character.steps = 7")
 
     val configFile = Files.createTempFile("serenity-custom-animation-config", ".conf")
     Files.writeString(configFile, written)

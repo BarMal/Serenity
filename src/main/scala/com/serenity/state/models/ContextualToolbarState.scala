@@ -1,8 +1,8 @@
 package com.serenity.state.models
 
 import com.serenity.command.*
-import com.serenity.config.{AppMode, MarkdownViewMode, ToolbarDisplayMode}
-import com.serenity.lsp.config.LanguageId
+import com.serenity.config.{MarkdownViewMode, ToolbarDisplayMode}
+import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.*
 import com.serenity.ui.fonts.FontLoader
 
@@ -14,7 +14,7 @@ enum ContextualToolbarItem:
   case Button(
       id: String,
       label: String,
-      commandName: String,
+      intent: CommandIntent,
       icon: String,
       selected: Boolean = false
   )
@@ -166,46 +166,72 @@ object ContextualToolbar:
   )
 
   val markdownItems: List[ContextualToolbarItem] = List(
-    ContextualToolbarItem.Button("markdown-preview", "Preview", "markdown-preview", "\uf1c5"),
-    ContextualToolbarItem.Button("markdown-view-source", "Source", "markdown-view-source", "\ue86f"),
-    ContextualToolbarItem.Button("markdown-view-split", "Split", "markdown-view-split", "\uf06d"),
-    ContextualToolbarItem.Button("markdown-view-inline-lens", "Lens", "markdown-view-inline-lens", "\ue8b6")
+    ContextualToolbarItem
+      .Button("markdown-preview", "Preview", CommandIntent.View(ViewIntent.OpenMarkdownPreview), "\uf1c5"),
+    ContextualToolbarItem.Button(
+      "markdown-view-source",
+      "Source",
+      CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.Source)),
+      "\ue86f"
+    ),
+    ContextualToolbarItem.Button(
+      "markdown-view-split",
+      "Split",
+      CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.SplitPreview)),
+      "\uf06d"
+    ),
+    ContextualToolbarItem.Button(
+      "markdown-view-inline-lens",
+      "Lens",
+      CommandIntent.View(ViewIntent.SetMarkdownViewMode(MarkdownViewMode.InlineLens)),
+      "\ue8b6"
+    )
   )
 
   val codeItems: List[ContextualToolbarItem] = List(
-    ContextualToolbarItem.Button("project-build", "Build", "project-build", "\ue869"),
-    ContextualToolbarItem.Button("project-test", "Test", "project-test", "\ue86c"),
-    ContextualToolbarItem.Button("project-run", "Run", "project-run", "\ue037"),
-    ContextualToolbarItem.Button("project-debug", "Run Debug Task", "project-debug", "\ue868")
+    ContextualToolbarItem.Button(
+      "project-build",
+      "Build",
+      CommandIntent.Project(ProjectIntent.RunProjectTask(ProjectTaskKind.Build)),
+      "\ue869"
+    ),
+    ContextualToolbarItem.Button(
+      "project-test",
+      "Test",
+      CommandIntent.Project(ProjectIntent.RunProjectTask(ProjectTaskKind.Test)),
+      "\ue86c"
+    ),
+    ContextualToolbarItem
+      .Button("project-run", "Run", CommandIntent.Project(ProjectIntent.RunProjectTask(ProjectTaskKind.Run)), "\ue037"),
+    ContextualToolbarItem.Button(
+      "project-debug",
+      "Run Debug Task",
+      CommandIntent.Project(ProjectIntent.RunProjectTask(ProjectTaskKind.Debug)),
+      "\ue868"
+    )
   )
 
   def itemsFor(state: AppState): List[ContextualToolbarItem] =
-    state.persisted.layout.activeEditorPaneId
-      .flatMap(state.persisted.layout.editorPanes.get)
-      .flatMap(_.bufferId)
-      .flatMap(state.persisted.buffers.get)
-      .map {
-        case buffer if buffer.document.language.contains(LanguageId.Markdown) =>
+    val context = state.editingContext
+    state.activeBuffer.toList.flatMap { buffer =>
+      context.buffer match
+        case Some(BufferKind.Markdown) =>
           applyMarkdownSelections(markdownItems, state.persisted.config.markdownViewMode)
-        // Prose-mode workspaces have no project to build/test/run/debug (issue #1294), so the buttons that would
-        // launch one are never offered there, even for a buffer whose own language happens to read as code.
-        case buffer if buffer.typographyRole == TypographyRole.Code && state.persisted.config.appMode == AppMode.Code =>
-          codeItems
-        case buffer =>
-          proseItems(state, buffer)
-      }
-      .getOrElse(Nil)
+        // Prose workspaces have no project to build/test/run/debug (issue #1294), so the buttons that would launch one
+        // are never offered there, even for a buffer whose own language happens to read as code.
+        case Some(BufferKind.Code(_)) if context.hasCodeTooling => codeItems
+        case _                                                  => proseItems(state, buffer)
+    }
 
   def focusedCommand(
     toolbarState: ContextualToolbarState,
-    state: AppState,
-    registry: CommandRegistry
+    state: AppState
   ): Option[Command] =
     toolbarState
       .normalized(itemsFor(state))
       .focusedItem(itemsFor(state))
       .collect { case item: ContextualToolbarItem.Button => item }
-      .flatMap(item => registry.findCommand(item.commandName))
+      .map(item => Command.typed(item.id, item.label, item.intent, label = item.label))
 
   def detailCommand(toolbarState: ContextualToolbarState, state: AppState): Option[Command] =
     val items = itemsFor(state)
@@ -284,20 +310,18 @@ object ContextualToolbar:
     items.map {
       case item: ContextualToolbarItem.Button =>
         val selected =
-          item.commandName match
-            case "markdown-view-source"      => mode == MarkdownViewMode.Source
-            case "markdown-view-split"       => mode == MarkdownViewMode.SplitPreview
-            case "markdown-view-inline-lens" => mode == MarkdownViewMode.InlineLens
-            case _                           => false
+          item.intent match
+            case CommandIntent.View(ViewIntent.SetMarkdownViewMode(buttonMode)) => buttonMode == mode
+            case _                                                              => false
         item.copy(selected = selected)
       case item =>
         item
     }
 
   private def proseItems(state: AppState, buffer: Buffer): List[ContextualToolbarItem] =
-    val document  = richTextDocumentFor(buffer)
-    val style     = activeStyle(buffer, document)
-    val paragraph = activeParagraph(buffer, document)
+    val document  = ContextualToolbarRichTextStyle.richTextDocumentFor(buffer)
+    val style     = ContextualToolbarRichTextStyle.activeStyle(buffer, document)
+    val paragraph = ContextualToolbarRichTextStyle.activeParagraph(buffer, document)
     val currentFamily =
       style.fontFamily.orElse(Some(state.persisted.config.editorConfig.fontConfig.textFontFamily)).getOrElse("")
     val currentFontSize  = style.fontSize.getOrElse(state.persisted.config.editorConfig.fontConfig.textFontSize)
@@ -309,21 +333,21 @@ object ContextualToolbar:
       ContextualToolbarItem.Button(
         "bold",
         "Bold",
-        "bold",
+        CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(InlineMark.Bold)),
         "\ue238",
         selected = style.marks.contains(InlineMark.Bold)
       ),
       ContextualToolbarItem.Button(
         "italic",
         "Italic",
-        "italic",
+        CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(InlineMark.Italic)),
         "\ue23f",
         selected = style.marks.contains(InlineMark.Italic)
       ),
       ContextualToolbarItem.Button(
         "underline",
         "Underline",
-        "underline",
+        CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(InlineMark.Underline)),
         "\ue765",
         selected = style.marks.contains(InlineMark.Underline)
       )
@@ -334,28 +358,28 @@ object ContextualToolbar:
         ContextualToolbarItem.Button(
           "align-left",
           "Left",
-          "align-left",
+          CommandIntent.RichText(RichTextIntent.SetRichTextParagraphAlignment(ParagraphAlignment.Left)),
           "\ue236",
           selected = paragraph.exists(_.alignment == ParagraphAlignment.Left)
         ),
         ContextualToolbarItem.Button(
           "align-center",
           "Center",
-          "align-center",
+          CommandIntent.RichText(RichTextIntent.SetRichTextParagraphAlignment(ParagraphAlignment.Center)),
           "\ue234",
           selected = paragraph.exists(_.alignment == ParagraphAlignment.Center)
         ),
         ContextualToolbarItem.Button(
           "align-right",
           "Right",
-          "align-right",
+          CommandIntent.RichText(RichTextIntent.SetRichTextParagraphAlignment(ParagraphAlignment.Right)),
           "\ue237",
           selected = paragraph.exists(_.alignment == ParagraphAlignment.Right)
         ),
         ContextualToolbarItem.Button(
           "align-justify",
           "Justify",
-          "align-justify",
+          CommandIntent.RichText(RichTextIntent.SetRichTextParagraphAlignment(ParagraphAlignment.Justify)),
           "\ue235",
           selected = paragraph.exists(_.alignment == ParagraphAlignment.Justify)
         )
@@ -501,96 +525,3 @@ object ContextualToolbar:
   private def formatFontSize(size: Float): String =
     val rounded = size.round.toFloat
     if rounded == size then rounded.toInt.toString else f"$size%.1f"
-
-  private def richTextDocumentFor(buffer: Buffer): RichTextDocument =
-    val text = buffer.document.content.collect()
-    buffer.richText.richTextDocument
-      .filter(_.matchesPlainText(text))
-      .getOrElse(RichTextDocument.fromPlainText(text))
-
-  private def activeParagraph(
-    buffer: Buffer,
-    document: RichTextDocument
-  ): Option[com.serenity.richtext.RichTextParagraph] =
-    val paragraphIndex = currentRange(buffer, document).start.paragraphIndex
-    document.paragraphs.lift(paragraphIndex)
-
-  private def activeStyle(
-    buffer: Buffer,
-    document: RichTextDocument
-  ): RichTextStyle =
-    buffer.primarySelection match
-      case Some(selection) if selection.start != selection.end =>
-        styleForSelection(selection, document)
-      case _ =>
-        buffer.editing.cursors.headOption
-          .flatMap(cursor => styleAtCursor(cursor, document))
-          .getOrElse(RichTextStyle.empty)
-
-  private def styleForSelection(
-    selection: Selection,
-    document: RichTextDocument
-  ): RichTextStyle =
-    val range = richTextRange(selection)
-    document.paragraphs
-      .lift(range.start.paragraphIndex)
-      .flatMap(paragraph => styleAtParagraphOffset(paragraph, range.start.offset))
-      .getOrElse(styleAtCursor(selection.focus, document).getOrElse(RichTextStyle.empty))
-
-  private def styleAtCursor(
-    cursor: CursorPosition,
-    document: RichTextDocument
-  ): Option[RichTextStyle] =
-    val paragraphIndex = cursor.line.max(0).min(document.paragraphs.length - 1)
-    document.paragraphs
-      .lift(paragraphIndex)
-      .flatMap(paragraph => styleAtParagraphOffset(paragraph, (cursor.column - 1).max(0)))
-
-  private def styleAtParagraphOffset(
-    paragraph: com.serenity.richtext.RichTextParagraph,
-    offset: Int
-  ): Option[RichTextStyle] =
-    val clampedOffset = offset.max(0).min(paragraph.plainText.length)
-    val targetOffset =
-      if clampedOffset == paragraph.plainText.length && clampedOffset > 0 then clampedOffset - 1
-      else clampedOffset
-    paragraph.runs
-      .foldLeft((0, Option.empty[RichTextStyle])) {
-        case ((currentOffset, found), run) =>
-          val nextOffset     = currentOffset + run.text.length
-          val containsOffset = targetOffset >= currentOffset && targetOffset < nextOffset
-          (nextOffset, found.orElse(Option.when(containsOffset)(run.style)))
-      }
-      ._2
-
-  private def currentRange(
-    buffer: Buffer,
-    document: RichTextDocument
-  ): RichTextRange =
-    buffer.primarySelection
-      .map(richTextRange)
-      .orElse(
-        buffer.editing.cursors.headOption
-          .map(cursor => RichTextRange(richTextPosition(cursor, document), richTextPosition(cursor, document)))
-      )
-      .getOrElse(RichTextRange(RichTextPosition(0, 0), RichTextPosition(0, 0)))
-
-  private def richTextRange(selection: Selection): RichTextRange =
-    RichTextRange(
-      start = RichTextPosition(selection.start.line, selection.start.column),
-      end = RichTextPosition(selection.end.line, selection.end.column)
-    ).normalized
-
-  private def richTextPosition(
-    cursor: CursorPosition,
-    document: RichTextDocument
-  ): RichTextPosition =
-    val paragraphIndex = cursor.line.max(0).min((document.paragraphs.length - 1).max(0))
-    val offset = document.paragraphs
-      .lift(paragraphIndex)
-      .map(_.plainText.length)
-      .map(length => cursor.column.max(0).min(length))
-      .getOrElse(0)
-    RichTextPosition(paragraphIndex, offset)
-
-end ContextualToolbar

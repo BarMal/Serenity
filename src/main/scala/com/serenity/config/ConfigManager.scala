@@ -88,42 +88,45 @@ object ConfigManager:
         .find(key)
         .flatMap(field => field.readValue(config, raw))
         .getOrElse(key match
-          case "character.animation" | "character.animation.preset" | "character_animation" =>
+          case "motion.character.preset" | "character.animation" | "character.animation.preset" |
+              "character_animation" =>
             value.trim.toLowerCase match
               case "none" | "false" | "off" | "disabled" =>
-                config.withoutCharacterAnimation
+                config.withCharacterAnimationSetting(None)
               case "quick" =>
-                config.withCharacterAnimation(AnimationConfig.Enabled.quick)
+                config.withCharacterAnimationSetting(Some(AnimationConfig.Enabled.quick))
               case "smooth" =>
-                config.withCharacterAnimation(AnimationConfig.Enabled.smooth)
+                config.withCharacterAnimationSetting(Some(AnimationConfig.Enabled.smooth))
               case "subtle" =>
-                config.withCharacterAnimation(AnimationConfig.Enabled.subtle)
+                config.withCharacterAnimationSetting(Some(AnimationConfig.Enabled.subtle))
               case "custom" =>
-                config.withCharacterAnimation(
-                  config.editorConfig.characterAnimation.getOrElse(AnimationConfig.Enabled.smooth)
+                config.withCharacterAnimationSetting(
+                  Some(config.editorConfig.characterAnimation.getOrElse(AnimationConfig.Enabled.smooth))
                 )
               case _ =>
                 config // Unknown value, keep current config
-          case "character.animation.duration_ms" | "character.animation.duration.ms" |
+          case "motion.character.duration_ms" | "character.animation.duration_ms" | "character.animation.duration.ms" |
               "character_animation_duration_ms" =>
             value.trim.toIntOption
               .filter(_ > 0)
               .map(ms =>
-                config.withCharacterAnimation(
-                  config.editorConfig.characterAnimation
-                    .getOrElse(AnimationConfig.Enabled.smooth)
-                    .copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
+                config.withCharacterAnimationSetting(
+                  Some(
+                    config.editorConfig.characterAnimation
+                      .getOrElse(AnimationConfig.Enabled.smooth)
+                      .copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
+                  )
                 )
               )
               .getOrElse(config)
-          case "character.animation.steps" | "character_animation_steps" =>
+          case "motion.character.steps" | "character.animation.steps" | "character_animation_steps" =>
             value.trim.toIntOption
               .filter(_ > 0)
               .map(steps =>
-                config.withCharacterAnimation(
-                  config.editorConfig.characterAnimation
-                    .getOrElse(AnimationConfig.Enabled.smooth)
-                    .copy(steps = steps)
+                config.withCharacterAnimationSetting(
+                  Some(
+                    config.editorConfig.characterAnimation.getOrElse(AnimationConfig.Enabled.smooth).copy(steps = steps)
+                  )
                 )
               )
               .getOrElse(config)
@@ -152,31 +155,8 @@ object ConfigManager:
                 else None
               }
               .getOrElse(config)
-          case keymapKey if keymapKey.startsWith("keymap.editor.") =>
-            EditorKeyAction.values
-              .find(action => s"keymap.editor.${action.configKey}" == keymapKey)
-              .map(action => config.withKeymapBinding(KeymapGroup.Editor)(action, value.trim))
-              .getOrElse(config)
-          case keymapKey if keymapKey.startsWith("keymap.command_runner.") =>
-            CommandRunnerKeyAction.values
-              .find(action => s"keymap.command_runner.${action.configKey}" == keymapKey)
-              .map(action => config.withKeymapBinding(KeymapGroup.CommandRunner)(action, value.trim))
-              .getOrElse(config)
-          case keymapKey if keymapKey.startsWith("keymap.modal.") =>
-            ModalKeyAction.values
-              .find(action => s"keymap.modal.${action.configKey}" == keymapKey)
-              .map(action => config.withKeymapBinding(KeymapGroup.Modal)(action, value.trim))
-              .getOrElse(config)
-          case keymapKey if keymapKey.startsWith("keymap.panel.") =>
-            PanelKeyAction.values
-              .find(action => s"keymap.panel.${action.configKey}" == keymapKey)
-              .map(action => config.withKeymapBinding(KeymapGroup.Panel)(action, value.trim))
-              .getOrElse(config)
-          case keymapKey if keymapKey.startsWith("keymap.peek.") =>
-            PeekKeyAction.values
-              .find(action => s"keymap.peek.${action.configKey}" == keymapKey)
-              .map(action => config.withKeymapBinding(KeymapGroup.Peek)(action, value.trim))
-              .getOrElse(config)
+          case keymapKey if keymapKey.startsWith("keymap.") =>
+            parseKeymapEntry(config, keymapKey, value.trim).getOrElse(config)
           case "config.version" =>
             config
           case _ =>
@@ -184,7 +164,8 @@ object ConfigManager:
     }
 
     val scaled       = inferTextScaleMode(parsed, entries)
-    val withLists    = applyHoconLists(scaled, source)
+    val withStatus   = LegacyStatusLineKeys.applied(scaled, entries.map(entry => entry.key -> entry.value))
+    val withLists    = applyHoconLists(withStatus, source)
     val withLspLists = PreferredWindowSizeParsing.applied(applyHoconLspLists(withLists, source), source)
     HotkeyConfig
       .fromBindings(withLspLists.inputConfig.hotkeyConfig.bindings)
@@ -329,20 +310,24 @@ object ConfigManager:
 
   final private case class HoconEntry(key: String, value: String, valueType: ConfigValueType, raw: ConfigValue)
 
-  /** Entries in the order they are applied: shallower paths first, then alphabetically.
+  /** Entries in the order they are applied: the motion preset first, then shallower paths, then alphabetically.
     *
     * The parse is a fold, so a broader setting has to be applied before the narrower ones that refine it --
-    * `ui.motion.preset` rebuilds every motion family, and `ui.motion.family.command_surfaces.transition` then adjusts
-    * one of them. Sorting on the key alone made that ordering an accident of the alphabet: it held while the key was
-    * spelled `ui.motion` (which sorts before `ui.motion.family.…`) and broke the moment it was renamed. Depth says what
-    * was meant.
+    * `motion.preset` rebuilds every motion family, and `motion.family.command_surfaces.transition` or the legacy
+    * `motion.command_runner` then adjusts one of them. Sorting on the key alone made that ordering an accident of the
+    * alphabet, and depth alone stopped saying it once the preset and its legacy per-family overrides shared a depth, so
+    * the preset is ranked explicitly.
     */
   private def hoconEntries(source: Config): List[HoconEntry] =
+    def rank(key: String): Int = if SurfaceConfigSchemaKeys.motionPresetKeys.contains(key) then 0 else 1
     source
       .entrySet()
       .asScala
       .toList
-      .sortBy(entry => (entry.getKey.count(_ == '.'), entry.getKey))
+      .sortBy { entry =>
+        val key = entry.getKey.stripPrefix("\"").stripSuffix("\"").toLowerCase(Locale.ROOT)
+        (rank(key), key.count(_ == '.'), key)
+      }
       .map { entry =>
         val key = entry.getKey.stripPrefix("\"").stripSuffix("\"").toLowerCase(Locale.ROOT)
         val value = entry.getValue.valueType match
@@ -418,13 +403,17 @@ object ConfigManager:
         case Some(field) => field.codec.parse(value).isEmpty
         case None =>
           key match
-            case "character.animation" | "character.animation.preset" | "character_animation" =>
+            case "motion.character.preset" | "character.animation" | "character.animation.preset" |
+                "character_animation" =>
               !Set("none", "false", "off", "disabled", "quick", "smooth", "subtle", "custom").contains(normalizedValue)
-            case "character.animation.duration_ms" | "character.animation.duration.ms" |
-                "character_animation_duration_ms" | "character.animation.steps" | "character_animation_steps" =>
+            case "motion.character.duration_ms" | "motion.character.steps" | "character.animation.duration_ms" |
+                "character.animation.duration.ms" | "character_animation_duration_ms" | "character.animation.steps" |
+                "character_animation_steps" =>
               value.trim.toIntOption.forall(_ <= 0)
             case key if SurfaceConfigSchemaKeys.handles(key) =>
               SurfaceConfigSchemaParser.invalidValue(key, value)
+            case key if LegacyStatusLineKeys.handles(key) =>
+              LegacyStatusLineKeys.rejects(key, value)
             case key if key.startsWith("hotkey.") || key.startsWith("keymap.") =>
               value.split(",").toList.map(_.trim).filter(_.nonEmpty).exists(HotkeyTrigger.parse(_).isEmpty)
             case key if key.startsWith("lsp.") =>
@@ -437,6 +426,23 @@ object ConfigManager:
               false
 
     Option.when(invalid)(InvalidConfigEntry(key, value, "Invalid value for supported config key"))
+
+  /** One `keymap.<group>.<action> = binding` entry, for whichever of the five focused keymap groups the key names. */
+  private def parseKeymapEntry(config: AppConfig, key: String, binding: String): Option[AppConfig] =
+    def bind[A <: KeymapEventAction[E], E <: com.serenity.keystroke.events.Event](
+      prefix: String,
+      actions: Array[A],
+      group: KeymapGroup[A, E]
+    ): Option[AppConfig] =
+      Option
+        .when(key.startsWith(prefix))(actions.find(action => s"$prefix${action.configKey}" == key))
+        .flatten
+        .map(action => config.withKeymapBinding(group)(action, binding))
+    bind("keymap.editor.", EditorKeyAction.values, KeymapGroup.Editor)
+      .orElse(bind("keymap.command_runner.", CommandRunnerKeyAction.values, KeymapGroup.CommandRunner))
+      .orElse(bind("keymap.modal.", ModalKeyAction.values, KeymapGroup.Modal))
+      .orElse(bind("keymap.panel.", PanelKeyAction.values, KeymapGroup.Panel))
+      .orElse(bind("keymap.peek.", PeekKeyAction.values, KeymapGroup.Peek))
 
   /** A config that carries a text scale but never says which mode it is in means manual scaling -- that is what the
     * multiplier was for before `font.scale.mode` existed. A config that does say is taken at its word, including when

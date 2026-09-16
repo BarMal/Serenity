@@ -26,6 +26,13 @@ object AppConfigMotionOps:
         updateMotionFamily(configuration, MotionFamily.EditorText)(_.copy(animation = Some(config)))
       }
 
+    /** The character animation on its own, as a config file states it: unlike [[withCharacterAnimation]] and
+      * [[withoutCharacterAnimation]] (the one-shot switches a command flips, which also move the motion preset), this
+      * leaves every other motion setting exactly as the file's other keys set it, whatever order they are read in.
+      */
+    def withCharacterAnimationSetting(animation: Option[AnimationConfig]): AppConfig =
+      appConfig.withEditorConfig(appConfig.editorConfig.copy(characterAnimation = animation))
+
     /** Create a new config with character animation disabled */
     def withoutCharacterAnimation: AppConfig =
       val updated = appConfig

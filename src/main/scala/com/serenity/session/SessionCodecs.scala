@@ -85,14 +85,13 @@ given Decoder[FontConfig] = Decoder.instance { cursor =>
 given Encoder[CursorMode] = configKeyEncoder(_.configKey)
 given Decoder[CursorMode] = configKeyDecoder("CursorMode", CursorMode.values, _.configKey)
 
-given Encoder[CursorInfoBarSegment] = configKeyEncoder(_.configKey)
-given Decoder[CursorInfoBarSegment] =
-  configKeyDecoder("CursorInfoBarSegment", CursorInfoBarSegment.values, _.configKey)
+given Encoder[StatusSegment] = configKeyEncoder(_.configKey)
+given Decoder[StatusSegment] = configKeyDecoder("StatusSegment", StatusSegment.values, _.configKey)
 
-given Encoder[CursorInfoBarPlacement] = configKeyEncoder(_.configKey)
+given Encoder[StatusLinePlacement] = configKeyEncoder(_.configKey)
 
-given Decoder[CursorInfoBarPlacement] =
-  configKeyDecoder("CursorInfoBarPlacement", CursorInfoBarPlacement.values, _.configKey)
+given Decoder[StatusLinePlacement] =
+  configKeyDecoder("StatusLinePlacement", StatusLinePlacement.values, _.configKey)
 
 given Encoder[WindowChromeMode] = configKeyEncoder(_.configKey)
 given Decoder[WindowChromeMode] = configKeyDecoder("WindowChromeMode", WindowChromeMode.values, _.configKey)
@@ -233,8 +232,8 @@ given Decoder[Color] = Decoder.decodeString.emap(value => parseColor(value).toRi
 given Encoder[CursorColorConfig] = deriveEncoder
 given Decoder[CursorColorConfig] = deriveDecoder
 
-given Encoder[CursorInfoBarColorConfig] = deriveEncoder
-given Decoder[CursorInfoBarColorConfig] = deriveDecoder
+given Encoder[StatusLineColors] = deriveEncoder
+given Decoder[StatusLineColors] = deriveDecoder
 
 given Encoder[LspServerOverride] = deriveEncoder
 given Decoder[LspServerOverride] = deriveDecoder

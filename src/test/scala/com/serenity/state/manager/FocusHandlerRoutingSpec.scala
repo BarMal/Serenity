@@ -16,7 +16,7 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
   private val quickInfo: SurfaceContent        = SurfaceContent.QuickInfo("info")
   private val filePreview: SurfaceContent      = SurfaceContent.FilePreview(Path.of("a.txt"), "content")
   private val symbolDefinition: SurfaceContent = SurfaceContent.SymbolDefinition("sym", Location(0, 0))
-  private val cursorInfoBar: SurfaceContent    = SurfaceContent.CursorInfoBar("cursor")
+  private val cursorInfoBar: SurfaceContent    = SurfaceContent.StatusLine("cursor")
   private val directoryListing: SurfaceContent =
     SurfaceContent.DirectoryListing(Path.of("dir"), Nil, None)
   private val directoryTree: SurfaceContent =

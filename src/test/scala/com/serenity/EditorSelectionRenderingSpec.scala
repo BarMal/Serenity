@@ -218,7 +218,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
         config = com.serenity.config.AppConfig.default
           .withSyntaxHighlighting(false)
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
       ),
       runtime = AppState.initial.runtime.copy(
         hoveredEditorTarget = Some(HoveredEditorTarget(paneId, bufferId, CursorPosition(1, 0)))

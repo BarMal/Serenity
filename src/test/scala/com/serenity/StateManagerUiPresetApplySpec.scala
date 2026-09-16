@@ -173,7 +173,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
 
     state.persisted.config.editorConfig.fontConfig.textFontFamily shouldBe Font.SERIF
     state.persisted.config.surfaceConfig.showLineNumbers shouldBe false
-    state.persisted.config.surfaceConfig.showGutter shouldBe false
+    state.persisted.config.statusLine.isPinned shouldBe false
     state.persisted.layout.editorPanes should have size 1
     state.persisted.layout.activeEditorPaneId shouldBe Some(PaneId(1))
     state.persisted.layout.editorPanes(PaneId(1)).bufferId shouldBe Some(BufferId(1))

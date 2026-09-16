@@ -110,20 +110,19 @@ object ConfigGenerators:
 
   val genCursorConfig: Gen[CursorConfig] =
     for
-      mode       <- oneOfEnum(CursorMode.values)
-      active     <- Gen.option(genColor)
-      inactive   <- Gen.option(genColor)
-      segments   <- Gen.someOf(CursorInfoBarSegment.values.toIndexedSeq).map(_.toList)
-      placement  <- oneOfEnum(CursorInfoBarPlacement.values)
+      mode     <- oneOfEnum(CursorMode.values)
+      active   <- Gen.option(genColor)
+      inactive <- Gen.option(genColor)
+    yield CursorConfig(mode, CursorColorConfig(active, inactive))
+
+  val genStatusLineConfig: Gen[StatusLineConfig] =
+    for
+      segments   <- Gen.someOf(StatusSegment.values.toIndexedSeq).map(_.toList)
+      placement  <- oneOfEnum(StatusLinePlacement.values)
       foreground <- Gen.option(genColor)
       background <- Gen.option(genColor)
-    yield CursorConfig(
-      mode,
-      CursorColorConfig(active, inactive),
-      segments,
-      placement,
-      CursorInfoBarColorConfig(foreground, background)
-    )
+      alpha      <- Gen.option(double(0.0, 1.0))
+    yield StatusLineConfig(segments, placement, StatusLineColors(foreground, background, alpha))
 
   val genWindowConfig: Gen[WindowConfig] =
     for
@@ -163,9 +162,6 @@ object ConfigGenerators:
       mode    <- oneOfEnum(AppMode.values)
       showAll <- Gen.oneOf(true, false)
     yield AppModeConfig(mode, showAll)
-
-  val genModeTabWidgetConfig: Gen[ModeTabWidgetConfig] =
-    oneOfEnum(CornerPosition.values).map(ModeTabWidgetConfig.apply)
 
   val genInterfaceConfig: Gen[InterfaceConfig] =
     for
@@ -237,9 +233,7 @@ object ConfigGenerators:
   val genSurfaceConfig: Gen[SurfaceConfig] =
     for
       lineNumbers         <- Gen.oneOf(true, false)
-      gutter              <- Gen.oneOf(true, false)
       paneHeaders         <- Gen.oneOf(true, false)
-      wordCount           <- Gen.oneOf(true, false)
       comments            <- oneOfEnum(CommentDisplayMode.values)
       wordWrap            <- Gen.oneOf(true, false)
       visualLineNav       <- Gen.oneOf(true, false)
@@ -274,16 +268,13 @@ object ConfigGenerators:
       lineNumberLayout <- genLineNumberLayout
       width            <- genViewportAxisSizing
       height           <- genViewportAxisSizing
-      infoBarAlpha     <- Gen.option(double(0.0, 1.0))
       frameStateCacheCapacity <- Gen.choose(
         AppConfig.MinRendererFrameStateCacheCapacity,
         AppConfig.MaxRendererFrameStateCacheCapacity
       )
     yield SurfaceConfig(
       showLineNumbers = lineNumbers,
-      showGutter = gutter,
       showPaneHeaders = paneHeaders,
-      showWordCount = wordCount,
       commentDisplayMode = comments,
       wordWrapEnabled = wordWrap,
       visualLineCursorNavigation = visualLineNav,
@@ -306,7 +297,6 @@ object ConfigGenerators:
       textAreaInsets = insets,
       lineNumberLayout = lineNumberLayout,
       viewportSizing = ViewportSizing(width, height),
-      cursorInfoBarBackgroundAlpha = infoBarAlpha,
       rendererFrameStateCacheCapacity = frameStateCacheCapacity
     )
 
@@ -377,7 +367,7 @@ object ConfigGenerators:
       syntax    <- Gen.oneOf(true, false)
       spell     <- genSpellCheckConfig
       appMode   <- genAppModeConfig
-      widget    <- genModeTabWidgetConfig
+      status    <- genStatusLineConfig
       motion    <- genMotionEdit
       material  <- genMaterialEdit
     yield (motion andThen material)(
@@ -394,6 +384,6 @@ object ConfigGenerators:
         interfaceConfig = interface,
         languageToolsConfig = LanguageToolsConfig(syntaxHighlightingEnabled = syntax, spellCheck = spell),
         appModeConfig = appMode,
-        modeTabWidgetConfig = widget
+        statusLine = status
       )
     )

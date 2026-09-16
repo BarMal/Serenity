@@ -35,28 +35,24 @@ object TextOverlayRenderer:
   ): Unit =
     val rect = overlay.rect
 
-    if config.surfaceConfig.uiShadowsEnabled then
+    val isStatusLine = overlay.surfaceId.contains(UiSurface.StatusLineSurfaceId)
+
+    // The status row is a quiet single line, not a panel: no shadow, and (via SurfaceFrameLayout) no border.
+    if config.surfaceConfig.uiShadowsEnabled && !isStatusLine then
       surface.roundedRects.foreach(
         _.drawRoundRectShadow(rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx, new Color(0, 0, 0))
       )
 
-    // Scoped to the one surface named by config.surfaceConfig.cursorInfoBarBackgroundAlpha's doc comment -- every
-    // other floating panel keeps painting with theme.panel.background exactly as before, unmodified.
-    val cursorInfoBarBackgroundAlphaOverride: Option[Int] =
+    // Scoped to the one surface the status line's colour overrides name -- every other floating panel keeps painting
+    // with the theme's panel colours and alpha exactly as before, unmodified (#1295).
+    val statusColors = config.statusLine.colors
+    val statusBackgroundAlphaOverride: Option[Int] =
       Option
-        .when(overlay.surfaceId.contains(UiSurface.CursorInfoBarSurfaceId))(
-          config.surfaceConfig.cursorInfoBarBackgroundAlpha
-        )
+        .when(isStatusLine)(statusColors.backgroundAlpha)
         .flatten
         .map(alpha => math.round(alpha * 255.0).toInt.max(0).min(255))
-
-    // #1295: same one-surface scoping as the alpha override above, for the cursor info bar's own foreground/
-    // background colour instead of just its background alpha.
-    val isCursorInfoBar = overlay.surfaceId.contains(UiSurface.CursorInfoBarSurfaceId)
-    val cursorInfoBarForegroundOverride: Option[Color] =
-      Option.when(isCursorInfoBar)(config.cursorInfoBarColors.foreground).flatten
-    val cursorInfoBarBackgroundOverride: Option[Color] =
-      Option.when(isCursorInfoBar)(config.cursorInfoBarColors.background).flatten
+    val statusForegroundOverride: Option[Color] = Option.when(isStatusLine)(statusColors.foreground).flatten
+    val statusBackgroundOverride: Option[Color] = Option.when(isStatusLine)(statusColors.background).flatten
 
     def rowColors(rowOffset: Int): (Color, Color) =
       val (defaultFg, defaultBg) = overlay.animationState
@@ -68,9 +64,9 @@ object TextOverlayRenderer:
           )
         )
         .getOrElse((theme.panel.foreground, theme.panel.background))
-      val fg = cursorInfoBarForegroundOverride.getOrElse(defaultFg)
-      val bg = cursorInfoBarBackgroundOverride.getOrElse(defaultBg)
-      (fg, cursorInfoBarBackgroundAlphaOverride.fold(bg)(bg.withAlpha))
+      val fg = statusForegroundOverride.getOrElse(defaultFg)
+      val bg = statusBackgroundOverride.getOrElse(defaultBg)
+      (fg, statusBackgroundAlphaOverride.fold(bg)(bg.withAlpha))
 
     surface.effects.foreach(_.setAlpha(SurfaceMaterials.panelAlpha(config, theme) * overlay.alphaMultiplier))
 

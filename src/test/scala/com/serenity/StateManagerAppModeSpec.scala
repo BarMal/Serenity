@@ -2,8 +2,8 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
-import com.serenity.config.AppMode
+import com.serenity.command.*
+import com.serenity.config.{AppConfig, AppMode}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -71,13 +71,23 @@ class StateManagerAppModeSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync().persisted.config.appMode shouldBe AppMode.Code
   }
 
-  "CommandRegistry" should "register the app-mode-code and app-mode-prose commands" in {
+  // issue #1047: one canonical entry per intent -- the app mode is the "app-mode" settings row, not two commands.
+  "CommandRegistry" should "not register app-mode commands alongside the app-mode setting" in {
     val registry = com.serenity.command.CommandRegistry.default
 
-    registry.findCommand("app-mode-code").map(_.intent) shouldBe Some(
-      CommandIntent.View(ViewIntent.SetAppMode(AppMode.Code))
-    )
-    registry.findCommand("app-mode-prose").map(_.intent) shouldBe Some(
+    registry.findCommand("app-mode-code") shouldBe None
+    registry.findCommand("app-mode-prose") shouldBe None
+    val runner = CommandRunner.empty.activate(registry, AppConfig.default)
+    def leaves(items: List[CommandSurfaceItem]): List[CommandSurfaceItem] =
+      items.flatMap {
+        case group: CommandSurfaceItem.GroupItem => leaves(group.children)
+        case leaf                                => List(leaf)
+      }
+    val appMode = leaves(runner.settingsGroups)
+      .collectFirst { case item: CommandSurfaceItem.OptionItem if item.id == "app-mode" => item }
+      .getOrElse(fail("missing app-mode setting"))
+    appMode.options.map(_.intent) shouldBe List(
+      CommandIntent.View(ViewIntent.SetAppMode(AppMode.Code)),
       CommandIntent.View(ViewIntent.SetAppMode(AppMode.Prose))
     )
   }
