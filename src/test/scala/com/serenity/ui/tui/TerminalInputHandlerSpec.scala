@@ -66,7 +66,13 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
   private def terminalWithCapturedOutput(): (DumbTerminal, ByteArrayOutputStream) =
     val out = new ByteArrayOutputStream()
     val terminal =
-      new DumbTerminal("test", "xterm-256color", new ByteArrayInputStream(Array.emptyByteArray), out, StandardCharsets.UTF_8)
+      new DumbTerminal(
+        "test",
+        "xterm-256color",
+        new ByteArrayInputStream(Array.emptyByteArray),
+        out,
+        StandardCharsets.UTF_8
+      )
     terminal.setSize(new Size(80, 24))
     (terminal, out)
 

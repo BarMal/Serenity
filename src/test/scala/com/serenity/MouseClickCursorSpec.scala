@@ -284,9 +284,7 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     val bufferId = sm.bufferManager.createBuffer("placeholder", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
-    sm.updateState(state =>
-      state.copy(runtime = state.runtime.copy(isTuiMode = true))
-    ).unsafeRunSync()
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(isTuiMode = true))).unsafeRunSync()
 
     val state       = sm.getCurrentState.unsafeRunSync()
     val layout      = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
@@ -295,9 +293,9 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
 
     // One logical line, long enough to wrap into three visual rows on the cell grid: two full-width rows plus a
     // short third row. The click below lands on that third row's column range.
-    val fullRowLength     = contentRect.width
-    val lastRowLength     = 5
-    val lineText          = "x" * (fullRowLength * 2 + lastRowLength)
+    val fullRowLength      = contentRect.width
+    val lastRowLength      = 5
+    val lineText           = "x" * (fullRowLength * 2 + lastRowLength)
     val lastRowStartColumn = fullRowLength * 2
     val xOffsetOnLastRow   = 3
 
@@ -308,7 +306,9 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
             bufferId,
             state.persisted
               .buffers(bufferId)
-              .copy(document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(lineText)))
+              .copy(document =
+                state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(lineText))
+              )
           )
         )
       )
