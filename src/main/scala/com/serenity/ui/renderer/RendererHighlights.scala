@@ -206,8 +206,8 @@ object RendererHighlights:
                     startXPx,
                     lineTopPx,
                     widthPx,
-                    snapshot.lineHeightPx,
-                    snapshot.ascentPx,
+                    RendererPaneContent.rowHeightPxFor(visualLine, snapshot),
+                    RendererPaneContent.rowAscentPxFor(visualLine, snapshot),
                     chunkText,
                     clipGlyphToRun = true
                   )

@@ -1,9 +1,7 @@
 package com.serenity.ui.layout
 
+import java.awt.Font
 import java.awt.font.*
-import java.awt.image.BufferedImage
-import java.awt.{Font, RenderingHints}
-import java.text.AttributedString
 import java.util.Locale
 
 import com.ibm.icu.text.BreakIterator
@@ -17,8 +15,8 @@ import com.serenity.state.models.{
   TextVisualLine,
   TypographyRole
 }
-import com.serenity.text.TextEditing
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.layout.TextMeasurement.*
 
 final case class TextLayoutSnapshot(
     visualLines: Vector[TextVisualLine],
@@ -27,7 +25,10 @@ final case class TextLayoutSnapshot(
     ascentPx: Int,
     isProportional: Boolean = false,
     usesMeasuredLayout: Boolean = false,
-    richTextDocument: Option[RichTextDocument] = None
+    richTextDocument: Option[RichTextDocument] = None,
+    // Prose zoom applied to rich-text runs (1x = authored). The draw path reads it so its per-run font sizes match the
+    // sizes this snapshot measured caret advances and per-line heights with.
+    proseScale: Float = 1.0f
 ):
 
   def navigationGeometry: NavigationGeometry = NavigationGeometry(visualLines)
@@ -43,8 +44,6 @@ final case class TextLayoutSnapshot(
 
 object TextLayoutSnapshot:
   private val UnwrappedOverscanColumns = 2
-  final private case class MeasuredLayoutKey(font: Font, fontRenderContext: FontRenderContext)
-  private val measuredLayoutCache = java.util.concurrent.ConcurrentHashMap[MeasuredLayoutKey, java.lang.Boolean]()
 
   /** The pixel width text layout wraps at. The screen grid is the code font's cells whatever font a buffer draws with,
     * so scroll and navigation math must wrap at the grid width the renderer uses -- not the buffer font's own
@@ -69,7 +68,7 @@ object TextLayoutSnapshot:
   ): Vector[Float] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
-    caretXs(text, font, fontRenderContext, measuredLayout, cellMetrics)
+    caretXs(text, 0, singleFontResolver(font), fontRenderContext, measuredLayout, cellMetrics)
 
   def visualLineForText(
     text: String,
@@ -86,7 +85,7 @@ object TextLayoutSnapshot:
       bufferLine,
       startColumn,
       startColumn + text.length,
-      font,
+      singleFontResolver(font),
       fontRenderContext,
       measuredLayout,
       cellMetrics
@@ -113,8 +112,8 @@ object TextLayoutSnapshot:
         val visibleColumns = math.max(1, visibleWidthPx / charWidth)
         math.max(0, safeColumn - visibleColumns + 1)
       else
-        val xs            = caretXs(lineText, font, fontRenderContext, measuredLayout, cellMetrics)
-        val cursorXPx     = xs.lift(safeColumn).getOrElse(xs.lastOption.getOrElse(0.0f))
+        val xs        = caretXs(lineText, 0, singleFontResolver(font), fontRenderContext, measuredLayout, cellMetrics)
+        val cursorXPx = xs.lift(safeColumn).getOrElse(xs.lastOption.getOrElse(0.0f))
         val targetLeftXPx = math.max(0.0f, cursorXPx - visibleWidthPx.toFloat + 1.0f)
         xs.zipWithIndex.takeWhile { case (x, _) => x <= targetLeftXPx }.map(_._2).lastOption.getOrElse(0)
 
@@ -140,7 +139,7 @@ object TextLayoutSnapshot:
         lineText,
         0,
         math.max(1, panelWidthPx),
-        font,
+        singleFontResolver(font),
         fontRenderContext,
         measuredLayout,
         cellMetrics
@@ -168,7 +167,7 @@ object TextLayoutSnapshot:
       text,
       bufferLine,
       math.max(1, panelWidthPx),
-      font,
+      singleFontResolver(font),
       fontRenderContext,
       measuredLayout,
       cellMetrics,
@@ -191,7 +190,10 @@ object TextLayoutSnapshot:
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     wordWrapEnabled: Boolean = true,
     cellMetricsOverride: Option[CellMetrics] = None,
-    forceCellLayout: Boolean = false
+    forceCellLayout: Boolean = false,
+    // Prose zoom (1x = authored). Multiplies each rich-text run's font size for measurement so caret advances, wrap
+    // points, and per-line heights track the scaled glyphs the draw path paints. Only affects rich-text buffers.
+    proseScale: Float = 1.0f
   ): TextLayoutSnapshot =
     val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout =
@@ -224,7 +226,8 @@ object TextLayoutSnapshot:
         cellMetrics,
         visualLineLimit,
         richDocument,
-        wordWrapEnabled
+        wordWrapEnabled,
+        proseScale
       ).drop(viewportTopVisualLine).take(buffer.viewport.visibleLines)
 
     TextLayoutSnapshot(
@@ -234,7 +237,8 @@ object TextLayoutSnapshot:
       ascentPx = ascentPx,
       isProportional = !FontLoader.isMonospacedFont(font),
       usesMeasuredLayout = measuredLayout,
-      richTextDocument = richDocument
+      richTextDocument = richDocument,
+      proseScale = proseScale
     )
 
   private def collectVisualLines(
@@ -247,7 +251,8 @@ object TextLayoutSnapshot:
     cellMetrics: CellMetrics,
     visualLineLimit: Int,
     richDocument: Option[RichTextDocument],
-    wordWrapEnabled: Boolean
+    wordWrapEnabled: Boolean,
+    proseScale: Float
   ): Vector[TextVisualLine] =
     @annotation.tailrec
     def loop(lines: Vector[(Int, String)], acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
@@ -262,6 +267,11 @@ object TextLayoutSnapshot:
               if wordWrapEnabled then rawLine.drop(startColumn)
               else unwrappedVisibleSlice(rawLine, startColumn, buffer.viewport.visibleColumns)
             val remainingVisualLines = math.max(0, visualLineLimit - acc.length)
+            // Cell layout (TUI) never consults per-run fonts -- one glyph per cell, one row per line -- so skip deriving
+            // them there and use the single base font.
+            val resolver =
+              if measuredLayout then resolverForLine(font, richDocument, lineIndex, rawLine.length, proseScale)
+              else singleFontResolver(font)
             val wrapped =
               if remainingVisualLines <= 0 then Vector.empty
               else if wordWrapEnabled then
@@ -269,7 +279,7 @@ object TextLayoutSnapshot:
                   visibleSlice,
                   lineIndex,
                   panelWidthPx,
-                  font,
+                  resolver,
                   frc,
                   measuredLayout,
                   cellMetrics,
@@ -283,7 +293,7 @@ object TextLayoutSnapshot:
                     lineIndex,
                     startColumn,
                     startColumn + visibleSlice.length,
-                    font,
+                    resolver,
                     frc,
                     measuredLayout,
                     cellMetrics
@@ -307,7 +317,7 @@ object TextLayoutSnapshot:
     line: String,
     bufferLine: Int,
     panelWidthPx: Int,
-    font: Font,
+    resolver: LineFontResolver,
     frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics,
@@ -316,20 +326,21 @@ object TextLayoutSnapshot:
   ): Vector[TextVisualLine] =
     if maxVisualLines <= 0 then Vector.empty
     else if line.isEmpty then
-      Vector(shapeSegment("", bufferLine, baseColumn, baseColumn, font, frc, measuredLayout, cellMetrics))
+      Vector(shapeSegment("", bufferLine, baseColumn, baseColumn, resolver, frc, measuredLayout, cellMetrics))
     else
       def loop(startColumn: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
         if startColumn >= line.length || acc.length >= maxVisualLines then acc
         else
-          val remaining        = line.substring(startColumn)
-          val fittingLength    = fittingSegmentLength(remaining, panelWidthPx, font, frc, measuredLayout, cellMetrics)
+          val remaining    = line.substring(startColumn)
+          val segmentStart = baseColumn + startColumn
+          val fittingLength =
+            fittingSegmentLength(remaining, panelWidthPx, segmentStart, resolver, frc, measuredLayout, cellMetrics)
           val segmentLength    = wordBoundarySegmentLength(remaining, fittingLength)
           val endColumnInSlice = startColumn + segmentLength
           val segment          = line.substring(startColumn, endColumnInSlice)
-          val segmentStart     = baseColumn + startColumn
           val segmentEnd       = baseColumn + endColumnInSlice
           val visualLine =
-            shapeSegment(segment, bufferLine, segmentStart, segmentEnd, font, frc, measuredLayout, cellMetrics)
+            shapeSegment(segment, bufferLine, segmentStart, segmentEnd, resolver, frc, measuredLayout, cellMetrics)
           loop(endColumnInSlice, acc :+ visualLine)
 
       loop(0, Vector.empty)
@@ -337,7 +348,8 @@ object TextLayoutSnapshot:
   private def fittingSegmentLength(
     text: String,
     panelWidthPx: Int,
-    font: Font,
+    absoluteStartColumn: Int,
+    resolver: LineFontResolver,
     frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics
@@ -346,12 +358,14 @@ object TextLayoutSnapshot:
       val charWidth = math.max(1, cellMetrics.charWidth)
       if cellMetrics.displayWidthAware then fittingDisplayWidthSegmentLength(text, panelWidthPx, charWidth)
       else math.max(1, math.min(text.length, panelWidthPx / charWidth))
-    else fittingMeasuredSegmentLength(text, panelWidthPx, font, frc, measuredLayout, cellMetrics)
+    else
+      fittingMeasuredSegmentLength(text, panelWidthPx, absoluteStartColumn, resolver, frc, measuredLayout, cellMetrics)
 
   private def fittingMeasuredSegmentLength(
     text: String,
     panelWidthPx: Int,
-    font: Font,
+    absoluteStartColumn: Int,
+    resolver: LineFontResolver,
     frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics
@@ -362,7 +376,7 @@ object TextLayoutSnapshot:
     @annotation.tailrec
     def loop(limit: Int): Int =
       val candidate = text.take(limit)
-      val carets    = caretXs(candidate, font, frc, measuredLayout, cellMetrics)
+      val carets    = caretXs(candidate, absoluteStartColumn, resolver, frc, measuredLayout, cellMetrics)
       val maxFitting =
         carets.zipWithIndex.takeWhile { case (x, _) => x <= panelWidthPx.toFloat }.map(_._2).lastOption.getOrElse(0)
       val candidateExhausted = limit >= text.length
@@ -401,12 +415,12 @@ object TextLayoutSnapshot:
     bufferLine: Int,
     startColumn: Int,
     endColumn: Int,
-    font: Font,
+    resolver: LineFontResolver,
     frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics
   ): TextVisualLine =
-    val xs              = caretXs(text, font, frc, measuredLayout, cellMetrics)
+    val xs              = caretXs(text, startColumn, resolver, frc, measuredLayout, cellMetrics)
     val boundaryOffsets = graphemeBoundaryOffsets(text)
     val caretStops = boundaryOffsets.map { offset =>
       TextCaretStop(startColumn + offset, xs.lift(offset).getOrElse(xs.lastOption.getOrElse(0.0f)))
@@ -418,6 +432,8 @@ object TextLayoutSnapshot:
           }
       then caretStops
       else caretStops.sortBy(_.xPx)
+    val (heightPx, ascentPx) =
+      if measuredLayout then resolver.lineMetrics(frc, startColumn, endColumn) else (0, 0)
     TextVisualLine(
       bufferLine = bufferLine,
       startColumn = startColumn,
@@ -425,7 +441,9 @@ object TextLayoutSnapshot:
       text = text,
       widthPx = xs.lastOption.getOrElse(0.0f),
       caretStops = caretStops,
-      xSortedCaretStops = xSortedCaretStops
+      xSortedCaretStops = xSortedCaretStops,
+      heightPx = heightPx,
+      ascentPx = ascentPx
     )
 
   private def applyParagraphAlignment(
@@ -461,137 +479,8 @@ object TextLayoutSnapshot:
         xOffsetPx = offsetPx
       )
 
-  private def caretXs(
-    text: String,
-    font: Font,
-    frc: FontRenderContext,
-    measuredLayout: Boolean,
-    cellMetrics: CellMetrics
-  ): Vector[Float] =
-    if text.isEmpty then Vector(0.0f)
-    else if !measuredLayout then
-      val charWidth = cellMetrics.charWidth.toFloat
-      if cellMetrics.displayWidthAware then displayWidthCaretXs(text, charWidth)
-      else Vector.tabulate(text.length + 1)(index => index * charWidth)
-    else
-      val attributed = AttributedString(text)
-      attributed.addAttribute(TextAttribute.FONT, font)
-      val layout = TextLayout(attributed.getIterator, frc)
-      val leadingCarets =
-        (0 until text.length).toVector.map(index => layout.getCaretInfo(TextHitInfo.leading(index))(0))
-      normalizeCollapsedCarets(leadingCarets :+ layout.getAdvance)
-
-  /** Caret stops for a display-width-aware cell grid: each codepoint advances by its own cell count ([[CharWidth]])
-    * rather than one cell per character, so the stops agree with the cells `TerminalScreenBuffer` actually paints. A
-    * surrogate pair contributes one advance across its two char indices; its low half is never a grapheme boundary (see
-    * [[graphemeBoundaryOffsets]]) and so never a caret stop, and taking the glyph's trailing edge there keeps the
-    * sequence non-decreasing for the callers that index it by raw column.
+  /** Preserved public entry point for callers outside this package; the implementation now lives in
+    * [[TextMeasurement]].
     */
-  private def displayWidthCaretXs(text: String, charWidth: Float): Vector[Float] =
-    @annotation.tailrec
-    def loop(index: Int, xPx: Float, acc: Vector[Float]): Vector[Float] =
-      if index >= text.length then acc :+ xPx
-      else
-        val codePoint = text.codePointAt(index)
-        val advanced  = xPx + CharWidth.of(codePoint) * charWidth
-        val charCount = Character.charCount(codePoint)
-        val stops     = if charCount == 2 then acc :+ xPx :+ advanced else acc :+ xPx
-        loop(index + charCount, advanced, stops)
-
-    loop(0, 0.0f, Vector.empty)
-
-  /** How many characters of `text` fit in `panelWidthPx` when each glyph costs its own cells. Never splits a wide glyph
-    * across the wrap boundary, and never splits a surrogate pair; like the uniform-advance branch it always consumes at
-    * least one glyph, so wrapping makes progress even in a panel narrower than a single cell.
-    */
-  private def fittingDisplayWidthSegmentLength(text: String, panelWidthPx: Int, charWidth: Int): Int =
-    @annotation.tailrec
-    def loop(index: Int, usedPx: Int): Int =
-      if index >= text.length then index
-      else
-        val codePoint = text.codePointAt(index)
-        val advance   = CharWidth.of(codePoint) * charWidth
-        if usedPx + advance > panelWidthPx then index
-        else loop(index + Character.charCount(codePoint), usedPx + advance)
-
-    val fitted = loop(0, 0)
-    if fitted > 0 then fitted else math.min(text.length, Character.charCount(text.codePointAt(0)))
-
-  private def graphemeBoundaryOffsets(text: String): Vector[Int] =
-    @annotation.tailrec
-    def loop(offset: Int, acc: Vector[Int]): Vector[Int] =
-      if offset >= text.length then if acc.lastOption.contains(text.length) then acc else acc :+ text.length
-      else
-        val next = TextEditing.nextGraphemeBoundary(text, offset)
-        loop(next, acc :+ next)
-
-    loop(0, Vector(0))
-
-  private def shouldUseMeasuredLayout(font: Font, frc: FontRenderContext): Boolean =
-    measuredLayoutCache.computeIfAbsent(
-      MeasuredLayoutKey(font, frc),
-      key =>
-        (!FontLoader.isMonospacedFont(key.font) ||
-          FontLoader.ligaturesEnabled(key.font) ||
-          hasFractionalAdvanceDrift(key.font, key.fontRenderContext)): java.lang.Boolean
-    )
-
-  private def hasFractionalAdvanceDrift(font: Font, frc: FontRenderContext): Boolean =
-    val sampleText = "iiiiiiiiiiii"
-    if sampleText.isEmpty then false
-    else
-      // Whether this font itself has fractional-advance drift is a property of the font, independent of whatever
-      // "pixel" unit a caller's cellMetrics defines -- so this always measures against the font's own natural cell
-      // size, not a caller override (which would otherwise make every font look like it drifts under TUI's
-      // CellMetricsOne).
-      val fontCellMetrics = CellMetrics.fromFont(font)
-      val measuredXs      = caretXs(sampleText, font, frc, measuredLayout = true, fontCellMetrics)
-      val measuredAdvance = measuredXs.lastOption.getOrElse(0.0f)
-      val cellAdvance     = fontCellMetrics.charWidth.toFloat * sampleText.length
-      math.abs(measuredAdvance - cellAdvance) > 0.5f
-
-  private def normalizeCollapsedCarets(rawXs: Vector[Float]): Vector[Float] =
-    if rawXs.length < 3 then rawXs
-    else
-      val normalized = rawXs.toArray
-      val epsilon    = 0.01f
-
-      @annotation.tailrec
-      def plateauEndFrom(index: Int, plateauValue: Float): Int =
-        if index + 1 < normalized.length && math.abs(normalized(index + 1) - plateauValue) <= epsilon then
-          plateauEndFrom(index + 1, plateauValue)
-        else index
-
-      @annotation.tailrec
-      def normalizeFrom(index: Int): Unit =
-        if index < normalized.length - 1 then
-          val plateauValue = normalized(index)
-          if math.abs(normalized(index + 1) - plateauValue) <= epsilon then
-            val plateauEnd = plateauEndFrom(index + 1, plateauValue)
-
-            val plateauStart = index - 1
-            val startX       = normalized(plateauStart)
-            val endX         = normalized(plateauEnd)
-            val segmentCount = plateauEnd - plateauStart
-
-            if endX > startX && segmentCount > 0 then
-              val step = (endX - startX) / segmentCount.toFloat
-              (plateauStart + 1 to plateauEnd).foreach { pointIndex =>
-                normalized(pointIndex) = startX + step * (pointIndex - plateauStart)
-              }
-
-            normalizeFrom(plateauEnd + 1)
-          else normalizeFrom(index + 1)
-
-      normalizeFrom(1)
-
-      normalized.toVector
-
   def defaultFontRenderContext(): FontRenderContext =
-    val image = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
-    val g     = image.createGraphics()
-    try
-      g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-      g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
-      g.getFontRenderContext
-    finally g.dispose()
+    TextMeasurement.defaultFontRenderContext()

@@ -70,7 +70,7 @@ final private[manager] class StateManagerConfigEffects(
   private def updateMotionAccessibility(accessibility: com.serenity.config.MotionAccessibility): IO[AppConfig] =
     updateMotionConfig(_.withMotionAccessibility(accessibility))
 
-  private def updateWindowSitterConfig(
+  private[manager] def updateWindowSitterConfig(
     update: com.serenity.animation.WindowSitterConfig => com.serenity.animation.WindowSitterConfig
   ): IO[Unit] =
     updateAppearanceConfig(config => config.withWindowSitterConfig(update(config.windowSitterConfig))).flatTap { config =>
@@ -83,12 +83,12 @@ final private[manager] class StateManagerConfigEffects(
       }
     }.void
 
-  private def updateCompanionSpriteConfig(update: CompanionSpriteConfig => CompanionSpriteConfig): IO[Unit] =
+  private[manager] def updateCompanionSpriteConfig(update: CompanionSpriteConfig => CompanionSpriteConfig): IO[Unit] =
     updateAppearanceConfig(config => config.withCompanionSpriteConfig(update(config.companionSpriteConfig)))
       .flatTap(config => stateRef.update(state => syncCompanionSpritePanel(state, config)))
       .void
 
-  private def updateVisualFlairLevel(level: VisualFlairLevel): IO[Unit] =
+  private[manager] def updateVisualFlairLevel(level: VisualFlairLevel): IO[Unit] =
     updateAppearanceConfig(_.withVisualFlairLevel(level))
       .flatTap(config => stateRef.update(state => syncCompanionSpritePanel(state, config)))
       .void
@@ -241,7 +241,7 @@ final private[manager] class StateManagerConfigEffects(
   private def updateCustomMotionConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     updateMotionConfig(config => update(config).withCustomMotionBaseline)
 
-  private def updateTextDisplayConfig(update: AppConfig => AppConfig): IO[AppConfig] =
+  private[manager] def updateTextDisplayConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     applyConfigUpdate(update)
 
   /** Applies a configuration change to live state, persists it, and auto-saves the session. */
@@ -471,6 +471,20 @@ final private[manager] class StateManagerConfigEffects(
         ).void
       case PanelChromeIntent.SetLineNumbers(enabled) =>
         updateTextDisplayConfig(config => config.withLineNumbers(enabled)).void
+      case PanelChromeIntent.SetLineNumberSide(side) =>
+        updateTextDisplayConfig(config => config.withLineNumberLayout(config.lineNumberLayout.copy(side = side))).void
+      case PanelChromeIntent.SetLineNumberMarginLeft(cells) =>
+        updateTextDisplayConfig(config =>
+          config.withLineNumberLayout(config.lineNumberLayout.copy(marginLeft = cells))
+        ).void
+      case PanelChromeIntent.SetLineNumberMarginRight(cells) =>
+        updateTextDisplayConfig(config =>
+          config.withLineNumberLayout(config.lineNumberLayout.copy(marginRight = cells))
+        ).void
+      case PanelChromeIntent.SetLineNumberPadding(cells) =>
+        updateTextDisplayConfig(config =>
+          config.withLineNumberLayout(config.lineNumberLayout.copy(padding = cells))
+        ).void
       case PanelChromeIntent.SetGutter(enabled) =>
         updateTextDisplayConfig(config => config.withGutter(enabled)).void
       case PanelChromeIntent.SetWordWrap(enabled) =>
@@ -497,34 +511,10 @@ final private[manager] class StateManagerConfigEffects(
         updateAppearanceConfig(_.withInterfaceDensity(density)).void
       case PanelChromeIntent.SetWindowChromeMode(mode) =>
         updateAppearanceConfig(_.withWindowChromeMode(mode)).void
-      case PanelChromeIntent.SetWindowSitterEnabled(enabled) =>
-        updateWindowSitterConfig(_.copy(enabled = enabled))
-      case PanelChromeIntent.SetWindowSitterAction(action) =>
-        updateWindowSitterConfig(_.copy(action = action))
-      case PanelChromeIntent.SetWindowSitterFrames(frames) =>
-        updateWindowSitterConfig(_.copy(frames = frames))
-      case PanelChromeIntent.SetWindowSitterActiveTicks(ticks) =>
-        updateWindowSitterConfig(_.copy(activeTicks = ticks))
-      case PanelChromeIntent.SetWindowSitterFastActiveTicks(ticks) =>
-        updateWindowSitterConfig(_.copy(fastActiveTicks = ticks))
-      case PanelChromeIntent.SetWindowSitterFastTypingThresholdMs(ms) =>
-        updateWindowSitterConfig(_.copy(fastTypingThresholdMs = ms))
-      case PanelChromeIntent.SetCompanionSpriteEnabled(enabled) =>
-        updateCompanionSpriteConfig(_.copy(enabled = enabled))
-      case PanelChromeIntent.SetVisualFlairLevel(level) =>
-        updateVisualFlairLevel(level)
-      case PanelChromeIntent.SetWheelScrollLines(lines) =>
-        updateConfig(_.withWheelScrollLines(lines)).void
-      case PanelChromeIntent.SetTextAreaLeftInset(value) =>
-        updateTextDisplayConfig(_.withTextAreaLeftInset(value)).void
-      case PanelChromeIntent.SetTextAreaRightInset(value) =>
-        updateTextDisplayConfig(_.withTextAreaRightInset(value)).void
-      case PanelChromeIntent.SetTextAreaTopInset(value) =>
-        updateTextDisplayConfig(_.withTextAreaTopInset(value)).void
-      case PanelChromeIntent.SetTextAreaBottomInset(value) =>
-        updateTextDisplayConfig(_.withTextAreaBottomInset(value)).void
-      case PanelChromeIntent.SetShowWordCount(enabled) =>
-        updateTextDisplayConfig(_.withWordCount(enabled)).void
+      // Window sitter / companion sprite / visual flair / wheel scroll / text-area insets / word count -- none need
+      // the editor port, so they live in a sibling to keep this file under the architecture size target.
+      case other =>
+        StateManagerPanelWindowEffects.interpret(this, other)
 
   private def interpretSpellCheckIntent(intent: SpellCheckIntent): IO[Unit] =
     intent match

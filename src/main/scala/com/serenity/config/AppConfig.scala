@@ -124,6 +124,13 @@ final case class AppConfig(
   def withLineNumbers(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(showLineNumbers = enabled))
 
+  /** Placement and spacing of the line-number counter (independent of interface density). Clamps margins/padding. */
+  def withLineNumberLayout(layout: LineNumberLayout): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(lineNumberLayout = layout.normalized))
+
+  def lineNumberLayout: LineNumberLayout =
+    surfaceConfig.lineNumberLayout
+
   /** Create a new config with gutter toggled */
   def withGutter(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(showGutter = enabled))

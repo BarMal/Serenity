@@ -6,22 +6,63 @@ import com.serenity.richtext.{InlineMark, ParagraphRole, RichTextDocument}
 
 object RichTextStyling:
 
+  /** The prose font size at which the zoom is neutral (1x): documents render at their authored sizes. This is the
+    * default `FontConfig.textFontSize`; raising the Prose Font Size setting above it zooms every non-code format up
+    * proportionally. See [[proseZoom]].
+    */
+  val ProseZoomBaselinePx: Float = 12.0f
+
+  /** The zoom factor a base prose font size implies, anchored so the default (12pt) is 1x. */
+  def proseZoom(baseProseFontSizePx: Float): Float =
+    if baseProseFontSizePx > 0.0f then baseProseFontSizePx / ProseZoomBaselinePx else 1.0f
+
+  /** One resolved rich-text span: the text and the concrete style it is drawn/measured with (font size already
+    * multiplied by the prose zoom). Colour is added only by [[styledLine]] for the draw path.
+    */
+  final case class RichSpan(text: String, style: TextStyle)
+
   def styledLine(
     document: RichTextDocument,
     bufferLine: Int,
     startColumn: Int,
     endColumn: Int,
-    theme: Theme
+    theme: Theme,
+    scale: Float = 1.0f
   ): List[StyledText] =
+    slices(document, bufferLine, startColumn, endColumn).map {
+      case (content, style, role) =>
+        StyledText(content, scaledTextStyle(style, role, scale), foregroundColor(style, theme), theme.background)
+    }
+
+  /** The font-only view of a rich line, shared with the measured layout so caret advances and per-line heights are
+    * computed from the very same per-run styles the draw path paints with. No theme/colour needed.
+    */
+  def styledFontSpans(
+    document: RichTextDocument,
+    bufferLine: Int,
+    startColumn: Int,
+    endColumn: Int,
+    scale: Float = 1.0f
+  ): List[RichSpan] =
+    slices(document, bufferLine, startColumn, endColumn).map {
+      case (content, style, role) => RichSpan(content, scaledTextStyle(style, role, scale))
+    }
+
+  private def slices(
+    document: RichTextDocument,
+    bufferLine: Int,
+    startColumn: Int,
+    endColumn: Int
+  ): List[(String, com.serenity.richtext.RichTextStyle, ParagraphRole)] =
     document
       .paragraphAt(bufferLine)
       .map { paragraph =>
         paragraph.runs
-          .foldLeft((0, List.empty[StyledText])) {
+          .foldLeft((0, List.empty[(String, com.serenity.richtext.RichTextStyle, ParagraphRole)])) {
             case ((offset, acc), run) =>
               val nextOffset = offset + run.text.length
-              val segment    = sliceRun(run, paragraph.role, offset, startColumn, endColumn, theme)
-              (nextOffset, segment.fold(acc)(_ :: acc))
+              val slice      = sliceRun(run, paragraph.role, offset, startColumn, endColumn)
+              (nextOffset, slice.fold(acc)(_ :: acc))
           }
           ._2
           .reverse
@@ -33,23 +74,23 @@ object RichTextStyling:
     role: ParagraphRole,
     runStart: Int,
     startColumn: Int,
-    endColumn: Int,
-    theme: Theme
-  ): Option[StyledText] =
+    endColumn: Int
+  ): Option[(String, com.serenity.richtext.RichTextStyle, ParagraphRole)] =
     val runEnd = runStart + run.text.length
     if runEnd <= startColumn || runStart >= endColumn then None
     else
       val localStart = (startColumn - runStart).max(0).min(run.text.length)
       val localEnd   = (endColumn - runStart).max(localStart).min(run.text.length)
       val content    = run.text.slice(localStart, localEnd)
-      Option.when(content.nonEmpty)(
-        StyledText(
-          content,
-          textStyle(run.style, role),
-          foregroundColor(run.style, theme),
-          theme.background
-        )
-      )
+      Option.when(content.nonEmpty)((content, run.style, role))
+
+  private def scaledTextStyle(
+    style: com.serenity.richtext.RichTextStyle,
+    role: ParagraphRole,
+    scale: Float
+  ): TextStyle =
+    val resolved = textStyle(style, role)
+    resolved.copy(fontSize = resolved.fontSize.map(_ * scale))
 
   private def textStyle(style: com.serenity.richtext.RichTextStyle, role: ParagraphRole): TextStyle =
     headingStyle(role).combine(

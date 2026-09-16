@@ -30,7 +30,8 @@ final case class EditorWorkspaceLayout(
     editorPanelRect: LayoutRect,
     lineNumberRect: Option[LayoutRect],
     gutterRect: Option[LayoutRect],
-    paneLayouts: Map[PaneId, EditorPaneLayout]
+    paneLayouts: Map[PaneId, EditorPaneLayout],
+    rightLineNumberRect: Option[LayoutRect] = None
 ):
   def activePaneLayout(state: AppState): Option[EditorPaneLayout] =
     state.persisted.layout.activeEditorPaneId.flatMap(paneLayouts.get)
@@ -42,7 +43,13 @@ final case class EditorWorkspaceLayout(
     activePaneLayout(state).map(_.contentRect)
 
   def lineNumberRowSlots(itemCount: Int): List[SurfaceContentRowSlot] =
-    lineNumberRect.toList.flatMap(rect =>
+    rowSlotsFor(lineNumberRect, itemCount)
+
+  def rightLineNumberRowSlots(itemCount: Int): List[SurfaceContentRowSlot] =
+    rowSlotsFor(rightLineNumberRect, itemCount)
+
+  private def rowSlotsFor(rect: Option[LayoutRect], itemCount: Int): List[SurfaceContentRowSlot] =
+    rect.toList.flatMap(rect =>
       SurfaceFrameLayout.contentRowSlotsFor(
         content = rect,
         itemCount = itemCount,
@@ -68,6 +75,7 @@ final case class CalculatedLayout(
     collapsedFloatingSurfaceIds: Set[SurfaceId] = Set.empty,
     floatingOverlayOffsetRows: Map[SurfaceId, Double] = Map.empty,
     lineNumberRect: Option[LayoutRect] = None,
+    rightLineNumberRect: Option[LayoutRect] = None,
     gutterRect: Option[LayoutRect] = None
 )
 
@@ -111,13 +119,28 @@ object LayoutEngine:
     val textAreaInsets =
       if spacerPercentage == DefaultSpacerPercentage then state.persisted.config.surfaceConfig.textAreaInsets.normalized
       else TextAreaInsets(spacerPercentage, spacerPercentage).normalized
-    val lineNumberWidth =
-      if state.persisted.config.surfaceConfig.showLineNumbers then calculateLineNumberWidth(state)
+    val lineNumbersOn    = state.persisted.config.surfaceConfig.showLineNumbers
+    val lineNumberLayout = state.persisted.config.surfaceConfig.lineNumberLayout.normalized
+    val counterWidth     = if lineNumbersOn then calculateLineNumberWidth(state) else 0
+    val hasLeftCounter   = lineNumbersOn && lineNumberLayout.side.showsLeft
+    val hasRightCounter  = lineNumbersOn && lineNumberLayout.side.showsRight
+    // Margins apply to their side while line numbers are enabled -- even a side with no counter -- so toggling a
+    // side's counter does not shift content. Padding sits between a counter and the content, so only on counter sides.
+    val leftBlock =
+      if lineNumbersOn then
+        lineNumberLayout.marginLeft + (if hasLeftCounter then counterWidth + lineNumberLayout.padding else 0)
+      else 0
+    val rightBlock =
+      if lineNumbersOn then
+        lineNumberLayout.marginRight + (if hasRightCounter then counterWidth + lineNumberLayout.padding else 0)
       else 0
     val horizontalTextFraction = (1.0 - textAreaInsets.left - textAreaInsets.right).max(0.01)
     val minimumEditorWorkspaceWidth =
       math
-        .ceil((state.persisted.config.editorConfig.minimumPaneWidth.max(1) + lineNumberWidth) / horizontalTextFraction)
+        .ceil(
+          (state.persisted.config.editorConfig.minimumPaneWidth
+            .max(1) + leftBlock + rightBlock) / horizontalTextFraction
+        )
         .toInt
     // An expanded/maximized panel (issue #817: `Layout.maximizedWorkspaceNodeId`, not a separate presentation) takes
     // over the whole central editor workspace via `expandedPanelRect` below, so its own dock space is excluded here
@@ -170,23 +193,42 @@ object LayoutEngine:
     val bottomSpacerHeight     = (contentAreaHeight * textAreaInsets.bottom).toInt
 
     // Adjust editor area to accommodate UI elements
-    val availableWidth  = math.max(1, workspaceWidth - leftSpacerWidth - rightSpacerWidth - lineNumberWidth)
+    val availableWidth  = math.max(1, workspaceWidth - leftSpacerWidth - rightSpacerWidth - leftBlock - rightBlock)
     val availableHeight = workspaceHeight
+
+    val lineNumberY      = workspaceY + editorPaneHeaderHeight + topSpacerHeight
+    val lineNumberHeight = math.max(1, contentAreaHeight - topSpacerHeight - bottomSpacerHeight)
+    val editorPanelX     = workspaceX + leftSpacerWidth + leftBlock
 
     val leftSpacerRect = LayoutRect(workspaceX, workspaceY, leftSpacerWidth, availableHeight)
     val lineNumberRect =
-      if state.persisted.config.surfaceConfig.showLineNumbers then
-        val lineNumberY      = workspaceY + editorPaneHeaderHeight + topSpacerHeight
-        val lineNumberHeight = math.max(1, contentAreaHeight - topSpacerHeight - bottomSpacerHeight)
+      if hasLeftCounter then
         Some(
-          LayoutRect(workspaceX + leftSpacerWidth, lineNumberY, lineNumberWidth, lineNumberHeight)
+          LayoutRect(
+            workspaceX + leftSpacerWidth + lineNumberLayout.marginLeft,
+            lineNumberY,
+            counterWidth,
+            lineNumberHeight
+          )
+        )
+      else None
+    val rightLineNumberRect =
+      if hasRightCounter then
+        Some(
+          LayoutRect(
+            editorPanelX + availableWidth + lineNumberLayout.padding,
+            lineNumberY,
+            counterWidth,
+            lineNumberHeight
+          )
         )
       else None
 
+    val textBandWidth = leftBlock + availableWidth + rightBlock
     val topSpacerRect = LayoutRect(
       workspaceX + leftSpacerWidth,
       workspaceY + editorPaneHeaderHeight,
-      lineNumberWidth + availableWidth,
+      textBandWidth,
       topSpacerHeight
     )
     val bottomSpacerRect = LayoutRect(
@@ -195,18 +237,18 @@ object LayoutEngine:
         1,
         contentAreaHeight - topSpacerHeight - bottomSpacerHeight
       ),
-      lineNumberWidth + availableWidth,
+      textBandWidth,
       bottomSpacerHeight
     )
     val editorPanelRect = LayoutRect(
-      x = workspaceX + leftSpacerWidth + lineNumberWidth,
+      x = editorPanelX,
       y = workspaceY,
       width = availableWidth,
       height = availableHeight
     )
     val rightSpacerRect =
       LayoutRect(
-        workspaceX + leftSpacerWidth + lineNumberWidth + availableWidth,
+        editorPanelX + availableWidth + rightBlock,
         workspaceY,
         rightSpacerWidth,
         availableHeight
@@ -227,6 +269,7 @@ object LayoutEngine:
       pinnedSurfaceRects = pinnedPanelLayout.surfaceRects,
       expandedPanelRect = state.expandedPanelSurface.map(_ => editorPanelRect),
       lineNumberRect = lineNumberRect,
+      rightLineNumberRect = rightLineNumberRect,
       gutterRect = gutterRect
     )
 

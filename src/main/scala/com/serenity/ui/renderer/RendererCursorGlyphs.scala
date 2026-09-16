@@ -37,18 +37,20 @@ object RendererCursorGlyphs:
             val effectiveCursorColor = cursorColorFor(config, theme, context, isPrimaryCursor)
             val caretWidthPx         = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
             val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
-            val screenYPx =
-              RendererPaneContent.textRowMetrics(rect, context, snapshot).cursorTopPx(visualLine)
+            val rowMetrics           = RendererPaneContent.textRowMetrics(rect, context, snapshot)
+            val screenYPx            = rowMetrics.cursorTopPx(visualLine)
+            // Caret is as tall as the row it sits on, so on a heading line it grows with the heading (#1542 prose scale).
+            val caretHeightPx = rowMetrics.rowHeightPx(visualLine)
             caretWithin(rect, context.cellMetrics, screenXPx, caretWidthPx) match
               case Some((caretXPx, widthPx)) =>
                 context.surface.pixels.fillPixelRect(
                   caretXPx,
                   screenYPx,
                   widthPx,
-                  snapshot.lineHeightPx,
+                  caretHeightPx,
                   effectiveCursorColor
                 )
-                List(PixelRect(caretXPx, screenYPx, widthPx, snapshot.lineHeightPx))
+                List(PixelRect(caretXPx, screenYPx, widthPx, caretHeightPx))
               case None => Nil
           else Nil
         case _ => Nil

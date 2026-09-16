@@ -288,6 +288,12 @@ final case class RichTextDocument(paragraphs: List[RichTextParagraph]):
   def setFontSize(range: RichTextRange, size: Float): RichTextDocument =
     updateInlineStyle(range)(_.withFontSize(size))
 
+  /** Nudge the font size of every inline run touched by the range by `deltaPt`, treating an un-sized (body) run as
+    * `defaultSize`. Used by the increase/decrease authored-size commands.
+    */
+  def adjustFontSize(range: RichTextRange, deltaPt: Float, defaultSize: Float): RichTextDocument =
+    updateInlineStyle(range)(style => style.withFontSize(style.fontSize.getOrElse(defaultSize) + deltaPt))
+
   /** Set the text colour for every inline run touched by the range. */
   def setColor(range: RichTextRange, color: String): RichTextDocument =
     updateInlineStyle(range)(_.withColor(color))

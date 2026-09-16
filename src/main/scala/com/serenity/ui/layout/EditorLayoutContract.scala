@@ -3,6 +3,7 @@ package com.serenity.ui.layout
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.InterfaceDensityMetrics
 import com.serenity.state.models.*
+import com.serenity.ui.layout.LayoutContractChecks.*
 
 /** Named layout ownership violation for editor and surface rectangles. */
 final case class LayoutContractViolation(
@@ -64,8 +65,14 @@ final case class EditorLayoutContract(
   def lineNumberRect: Option[LayoutRect] =
     workspace.lineNumberRect
 
+  def rightLineNumberRect: Option[LayoutRect] =
+    workspace.rightLineNumberRect
+
   def lineNumberRowSlots(itemCount: Int): List[SurfaceContentRowSlot] =
     workspace.lineNumberRowSlots(itemCount)
+
+  def rightLineNumberRowSlots(itemCount: Int): List[SurfaceContentRowSlot] =
+    workspace.rightLineNumberRowSlots(itemCount)
 
   def panelRect(surfaceId: SurfaceId): Option[LayoutRect] =
     expandedSurfaceRects.get(surfaceId).orElse(pinnedSurfaceRects.get(surfaceId))
@@ -111,12 +118,13 @@ final case class EditorLayoutContract(
       "content area",
       contentAreaRect,
       List(
-        "editor panel"  -> Some(workspace.editorPanelRect),
-        "line numbers"  -> workspace.lineNumberRect,
-        "left spacer"   -> Some(leftSpacerRect),
-        "right spacer"  -> Some(rightSpacerRect),
-        "top spacer"    -> Some(topSpacerRect),
-        "bottom spacer" -> Some(bottomSpacerRect)
+        "editor panel"       -> Some(workspace.editorPanelRect),
+        "line numbers"       -> workspace.lineNumberRect,
+        "right line numbers" -> workspace.rightLineNumberRect,
+        "left spacer"        -> Some(leftSpacerRect),
+        "right spacer"       -> Some(rightSpacerRect),
+        "top spacer"         -> Some(topSpacerRect),
+        "bottom spacer"      -> Some(bottomSpacerRect)
       )
     )
 
@@ -278,53 +286,6 @@ final case class EditorLayoutContract(
         viewportRect.containsRect(gutter)
       }
       .map(gutter => LayoutContractViolation("viewport", "gutter", viewportRect, gutter))
-
-  private def containedBy(
-    ownerName: String,
-    ownerRect: LayoutRect,
-    children: List[(String, Option[LayoutRect])]
-  ): List[LayoutContractViolation] =
-    children.collect {
-      case (childName, Some(childRect)) if !ownerRect.containsRect(childRect) =>
-        LayoutContractViolation(ownerName, childName, ownerRect, childRect)
-    }
-
-  private def rowSlotViolations(
-    ownerPrefix: String,
-    ownerRects: Map[SurfaceId, LayoutRect],
-    rowSlotsBySurface: Map[SurfaceId, List[SurfaceContentRowSlot]]
-  ): List[LayoutContractViolation] =
-    rowSlotsBySurface.toList.flatMap {
-      case (surfaceId, rowSlots) =>
-        ownerRects.get(surfaceId).toList.flatMap { ownerRect =>
-          rowSlots.collect {
-            case rowSlot
-                if !ownerRect.containsRect(
-                  LayoutRect(ownerRect.x, rowSlot.y, ownerRect.width.max(0), if ownerRect.height > 0 then 1 else 0)
-                ) =>
-              LayoutContractViolation(
-                s"$ownerPrefix ${surfaceId.value} content",
-                s"$ownerPrefix ${surfaceId.value} ${rowSlot.kind} row slot",
-                ownerRect,
-                LayoutRect(ownerRect.x, rowSlot.y, ownerRect.width.max(0), 1)
-              )
-          }
-        }
-    }
-
-  private def titleContentOverlapViolations(
-    surfaceName: String,
-    titleRect: Option[LayoutRect],
-    contentRect: Option[LayoutRect]
-  ): List[LayoutContractViolation] =
-    (titleRect, contentRect) match
-      case (Some(title), Some(content)) if rectanglesOverlap(title, content) =>
-        List(LayoutContractViolation(s"$surfaceName title", s"$surfaceName content", title, content))
-      case _ =>
-        Nil
-
-  private def rectanglesOverlap(first: LayoutRect, second: LayoutRect): Boolean =
-    first.x < second.right && second.x < first.right && first.y < second.bottom && second.y < first.bottom
 
 object EditorLayoutContract:
 
