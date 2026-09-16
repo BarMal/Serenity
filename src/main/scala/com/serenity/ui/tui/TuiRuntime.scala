@@ -81,18 +81,21 @@ object TuiRuntime:
           _ <- AppRuntime.run(
             initialViewportSize = initialViewportSize,
             makeInputHandler = router =>
-              TerminalInputHandler
-                .create(
-                  terminalShell.terminal,
-                  router,
-                  systemClipboard,
-                  terminalShell.pendingInputPrefix,
-                  terminalConfig.inputConfig.wheelScrollLines
-                )
-                .map { handler =>
-                  inputHandlerHolder.set(Some(handler))
-                  handler
-                },
+              TerminalInputMetrics.create(logger).flatMap { metrics =>
+                TerminalInputHandler
+                  .create(
+                    terminalShell.terminal,
+                    router,
+                    systemClipboard,
+                    terminalShell.pendingInputPrefix,
+                    terminalConfig.inputConfig.wheelScrollLines,
+                    metrics = metrics
+                  )
+                  .map { handler =>
+                    inputHandlerHolder.set(Some(handler))
+                    handler
+                  }
+              },
             checkResize = terminalShell.checkResize,
             renderFull = renderFullFn(
               surfaceHolder,
