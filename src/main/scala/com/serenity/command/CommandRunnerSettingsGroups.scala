@@ -36,7 +36,10 @@ object CommandRunnerSettingsGroups:
     // every setting's current value reaches this builder, so mode filtering can't drift from what the app-mode
     // toggle itself displays as selected.
     val appMode = if optionSelections.getOrElse("app-mode", 0) == 1 then AppMode.Prose else AppMode.Code
-    val showAllSettingsRegardlessOfMode = optionSelections.getOrElse("settings-show-all", 0) == 1
+    // issue #1044: "settings-show-all" now encodes On=0/Off=1 (`CommandRunnerOptionSelections.enabledIndex`), like
+    // every other boolean toggle -- was On=1/Off=0 (the one hand-rolled encoding `showAllSettingsOptionItem` used
+    // before being normalized onto the shared `enabledOptionItem` convention).
+    val showAllSettingsRegardlessOfMode = optionSelections.getOrElse("settings-show-all", 1) == 0
     val showProseSettings               = showAllSettingsRegardlessOfMode || appMode == AppMode.Prose
     val showCodeSettings                = showAllSettingsRegardlessOfMode || appMode == AppMode.Code
     def input(ids: String*): List[CommandSurfaceItem.InputItem] =
@@ -149,10 +152,13 @@ object CommandRunnerSettingsGroups:
     // issue #1046: command-runner row count/spacing (visible rows, item gap, cursor gap) is not editable here as
     // three separate knobs -- Interface Density is the one control that governs all three; the underlying config
     // keys still parse as explicit overrides for back-compat, they just aren't palette rows.
+    // issue #1549: that consolidation also buried the setting from a single-word settings search (a query short
+    // enough to match by group rather than leaf) -- naming it in this group's own hint, which
+    // `CommandRunnerSearch.directGroupSearchText` already searches, is what makes "palette" alone find this group.
     val interfaceLayoutGroup = group(
       "settings-interface-layout",
       "Interface Layout",
-      "Density, window chrome, key hints",
+      "Density, window chrome, key hints, and how many command runner/palette items are visible",
       List(
         CommandRunnerSettingsAppearanceItems.interfaceDensityOptionItem(optionSelections),
         CommandRunnerSettingsAppearanceItems.windowChromeOptionItem(optionSelections),

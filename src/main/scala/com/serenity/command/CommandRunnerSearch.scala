@@ -33,14 +33,30 @@ private[command] object CommandRunnerSearch:
       case _ => false
 
   private[command] def settingSearchRank(item: CommandSurfaceItem, breadcrumb: String, term: String): Option[Int] =
-    val label         = normalizedSearchTerm(itemLabel(item))
-    val id            = normalizedSearchTerm(item.id)
-    val scope         = normalizedSearchTerm(breadcrumb)
-    val terms         = term.split(" ").filter(_.nonEmpty).toList
-    val allTermsMatch = terms.nonEmpty && terms.forall(token => s"$label $id $scope".contains(token))
+    val label = normalizedSearchTerm(itemLabel(item))
+    val id    = normalizedSearchTerm(item.id)
+    val scope = normalizedSearchTerm(breadcrumb)
+    // issue #1549: an item's hint (rendered next to it, e.g. "also controls how many command runner/palette items
+    // are visible at once") is real, user-facing text describing what the setting does, but was silently excluded
+    // from this rank -- a query for exactly the words a hint uses to describe a setting (when its label/id/breadcrumb
+    // don't) found nothing. `directItemSearchText`/`directGroupSearchText` already fold hints into the group-level
+    // search below; this leaf-level rank now does the same.
+    //
+    // Label/hint and id/scope are scored separately, not merged into one haystack: a keymap row's `id` is namespaced
+    // by its binding context (e.g. `keymap-command-runner-delete_backward`, where "command-runner" names the context
+    // a Delete Word Backward binding fires in, not what the row is about) -- that naming convention alone let a query
+    // for "command runner" match a wall of unrelated key bindings ahead of Interface Density, whose *hint* actually
+    // describes the command runner/palette's visible-item count. A match against the human-facing label/hint is real
+    // relevance; a match that only exists via id/breadcrumb namespacing is a weaker, tie-breaking signal.
+    val terms              = term.split(" ").filter(_.nonEmpty).toList
+    def allMatch(haystack: String) = terms.nonEmpty && terms.forall(haystack.contains)
+    val hint                = normalizedSearchTerm(itemHint(item).getOrElse(""))
+    val labelOrHintMatch    = allMatch(s"$label $hint")
+    val idOrScopeAlsoMatch  = allMatch(s"$label $id $scope $hint")
     if label == term || id == term then Some(0)
     else if label.startsWith(term) || id.startsWith(term) then Some(1)
-    else if allTermsMatch then Some(2)
+    else if labelOrHintMatch then Some(2)
+    else if idOrScopeAlsoMatch then Some(3)
     else None
 
   private[command] def itemLabel(item: CommandSurfaceItem): String =

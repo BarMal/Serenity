@@ -49,25 +49,29 @@ object CommandRunnerSurfaceComposition:
     itemTargetRows: Int,
     showKeyHints: Boolean
   ): ResolvedSurfaceComposition =
-    val content      = SurfaceFrameLayout.forContent(frameRect, SurfaceContent.CommandPalette(runner)).contentRect
-    val allItems     = runner.visibleItems
-    val preview      = SettingsSurfaceState.previewRows(allItems, runner.selectedIndex)
-    val groupPreview = CommandPaletteContentResolver.groupPreviewRows(preview)
-    val hasKeyHint   = showKeyHints && allItems.nonEmpty
-    val hasFooter    = allItems.nonEmpty || runner.statusMessage.nonEmpty
+    val frameLayout      = SurfaceFrameLayout.forContent(frameRect, SurfaceContent.CommandPalette(runner))
+    val content          = frameLayout.contentRect
+    val allItems         = runner.visibleItems
+    val preview          = SettingsSurfaceState.previewRows(allItems, runner.selectedIndex)
+    val groupPreviewFull = CommandPaletteContentResolver.groupPreviewRows(preview)
+    val hasKeyHint       = showKeyHints && allItems.nonEmpty
+    val hasFooter        = allItems.nonEmpty || runner.statusMessage.nonEmpty
+    // Capped to the same claim `itemWindow` itself enforces (issue #1548) -- otherwise the rows rendered here
+    // (windowItems.size + groupPreview.size) would exceed the frame's actual row budget once itemWindow's own cap
+    // kicks in, since these two computations must agree on how many rows the preview is allowed.
+    val groupPreview =
+      groupPreviewFull.take(frameLayout.cappedReservedContentRows(allItems.size, groupPreviewFull.size))
 
-    val itemWindow = SurfaceFrameLayout
-      .forContent(frameRect, SurfaceContent.CommandPalette(runner))
-      .itemWindow(
-        itemCount = allItems.size,
-        selectedIndex = runner.selectedIndex,
-        hasHeader = true,
-        hasFooter = hasFooter,
-        reservedContentRows = groupPreview.size,
-        itemGapRows = itemGapRows,
-        itemTargetRows = itemTargetRows,
-        hasKeyHint = hasKeyHint
-      )
+    val itemWindow = frameLayout.itemWindow(
+      itemCount = allItems.size,
+      selectedIndex = runner.selectedIndex,
+      hasHeader = true,
+      hasFooter = hasFooter,
+      reservedContentRows = groupPreview.size,
+      itemGapRows = itemGapRows,
+      itemTargetRows = itemTargetRows,
+      hasKeyHint = hasKeyHint
+    )
     val windowItems           = itemWindow.slice(allItems)
     val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(runner.selectedIndex)
 
@@ -109,24 +113,25 @@ object CommandRunnerSurfaceComposition:
     itemTargetRows: Int,
     showKeyHints: Boolean
   ): ResolvedSurfaceComposition =
-    val content       = SurfaceFrameLayout.forContent(frameRect, SurfaceContent.CommandPalette(runner)).contentRect
-    val items         = runner.settingsSurfaceItems
-    val selectedIndex = runner.settingsSurfaceSelectedIndex
-    val preview       = SettingsSurfaceState.previewRows(items, selectedIndex)
-    val groupPreview  = CommandPaletteContentResolver.groupPreviewRows(preview)
+    val frameLayout      = SurfaceFrameLayout.forContent(frameRect, SurfaceContent.CommandPalette(runner))
+    val content          = frameLayout.contentRect
+    val items            = runner.settingsSurfaceItems
+    val selectedIndex    = runner.settingsSurfaceSelectedIndex
+    val preview          = SettingsSurfaceState.previewRows(items, selectedIndex)
+    val groupPreviewFull = CommandPaletteContentResolver.groupPreviewRows(preview)
+    // Capped to the same claim `itemWindow` itself enforces -- see `forPalette`'s identical note (issue #1548).
+    val groupPreview = groupPreviewFull.take(frameLayout.cappedReservedContentRows(items.size, groupPreviewFull.size))
 
-    val itemWindow = SurfaceFrameLayout
-      .forContent(frameRect, SurfaceContent.CommandPalette(runner))
-      .itemWindow(
-        itemCount = items.size,
-        selectedIndex = selectedIndex,
-        hasHeader = true,
-        hasFooter = true,
-        reservedContentRows = groupPreview.size,
-        itemGapRows = itemGapRows,
-        itemTargetRows = itemTargetRows,
-        hasKeyHint = showKeyHints
-      )
+    val itemWindow = frameLayout.itemWindow(
+      itemCount = items.size,
+      selectedIndex = selectedIndex,
+      hasHeader = true,
+      hasFooter = true,
+      reservedContentRows = groupPreview.size,
+      itemGapRows = itemGapRows,
+      itemTargetRows = itemTargetRows,
+      hasKeyHint = showKeyHints
+    )
     val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(selectedIndex)
 
     val entries: List[(OverlayRow, Option[Int])] = itemWindow.slice(items).zipWithIndex.flatMap {
