@@ -113,7 +113,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       sm <- IO.pure(makeStateManager())
       _ <- sm.updateState(current =>
         current.copy(persisted =
-          current.persisted.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false))
+          current.persisted.copy(config = AppConfig.default.withLineNumbers(false).withoutStatusLine)
         )
       )
       bufferId <- sm.bufferManager.createBuffer("iiiiiiiiWW", None)
@@ -152,7 +152,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       sm <- IO.pure(makeStateManager())
       _ <- sm.updateState(current =>
         current.copy(persisted =
-          current.persisted.copy(config = AppConfig.default.withLineNumbers(false).withGutter(false))
+          current.persisted.copy(config = AppConfig.default.withLineNumbers(false).withoutStatusLine)
         )
       )
       bufferId <- sm.bufferManager.createBuffer("iiiiiiiiWW", None)

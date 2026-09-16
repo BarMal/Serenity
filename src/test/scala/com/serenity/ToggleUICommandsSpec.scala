@@ -3,7 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.config.ToolbarDisplayMode
+import com.serenity.config.{StatusLinePlacement, ToolbarDisplayMode}
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.SurfaceContent
@@ -104,37 +104,37 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     val gutterResults = registry.searchCommands("gutter")
     val statusResults = registry.searchCommands("status")
     val toggleResults = registry.searchCommands("toggle", maxResults = 50)
-    val command       = registry.findCommand("toggle-gutter").get
+    val command       = registry.findCommand("toggle-status-line").get
 
-    gutterResults.map(_.name) should contain("toggle-gutter")
-    statusResults.map(_.name) should contain("toggle-gutter")
-    toggleResults.map(_.name) should contain("toggle-gutter")
-    command.intent shouldBe CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleGutter))
+    gutterResults.map(_.name) should contain("toggle-status-line")
+    statusResults.map(_.name) should contain("toggle-status-line")
+    toggleResults.map(_.name) should contain("toggle-status-line")
+    command.intent shouldBe CommandIntent.Settings(SettingsIntent.StatusLine(StatusLineIntent.ToggleVisibility))
   }
 
   it should "toggle gutter from enabled to disabled" in {
     val stateManager = createStateManager()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.showGutter shouldBe true
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.statusLine.isPinned shouldBe true
 
-    executeCommandThroughRunner(stateManager, "toggle-gutter", "toggle-gutter")
+    executeCommandThroughRunner(stateManager, "toggle-status-line", "toggle-status-line")
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.persisted.config.surfaceConfig.showGutter shouldBe false
+    finalState.persisted.config.statusLine.isPinned shouldBe false
   }
 
   it should "toggle gutter from disabled to enabled" in {
     val stateManager = createStateManager()
 
     stateManager
-      .updateState(s => s.copy(persisted = s.persisted.copy(config = s.persisted.config.withGutter(false))))
+      .updateState(s => s.copy(persisted = s.persisted.copy(config = s.persisted.config.withoutStatusLine)))
       .unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.showGutter shouldBe false
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.statusLine.isPinned shouldBe false
 
-    executeCommandThroughRunner(stateManager, "toggle-gutter", "toggle-gutter")
+    executeCommandThroughRunner(stateManager, "toggle-status-line", "toggle-status-line")
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.persisted.config.surfaceConfig.showGutter shouldBe true
+    finalState.persisted.config.statusLine.isPinned shouldBe true
   }
 
   behavior of "Toggle Pane Headers Command"
@@ -284,33 +284,33 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
     val initialState = stateManager.getCurrentState.unsafeRunSync()
     initialState.persisted.config.surfaceConfig.showLineNumbers shouldBe true
-    initialState.persisted.config.surfaceConfig.showGutter shouldBe true
+    initialState.persisted.config.statusLine.isPinned shouldBe true
 
     executeCommandThroughRunner(stateManager, "toggle-line-numbers", "toggle-line-numbers")
 
     val midState = stateManager.getCurrentState.unsafeRunSync()
     midState.persisted.config.surfaceConfig.showLineNumbers shouldBe false
-    midState.persisted.config.surfaceConfig.showGutter shouldBe true
+    midState.persisted.config.statusLine.isPinned shouldBe true
     midState.commandRunnerSurface shouldBe None
 
-    executeCommandThroughRunner(stateManager, "toggle-gutter", "toggle-gutter")
+    executeCommandThroughRunner(stateManager, "toggle-status-line", "toggle-status-line")
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     finalState.persisted.config.surfaceConfig.showLineNumbers shouldBe false
-    finalState.persisted.config.surfaceConfig.showGutter shouldBe false
+    finalState.persisted.config.statusLine.isPinned shouldBe false
   }
 
   it should "have descriptive command names and descriptions" in {
     val registry      = CommandRegistry.withToggleUI
     val lineCommand   = registry.findCommand("toggle-line-numbers").get
-    val gutterCommand = registry.findCommand("toggle-gutter").get
+    val gutterCommand = registry.findCommand("toggle-status-line").get
 
     lineCommand.name shouldBe "toggle-line-numbers"
     lineCommand.label shouldBe "Toggle Line Numbers"
     lineCommand.description should include("line numbers")
 
-    gutterCommand.name shouldBe "toggle-gutter"
-    gutterCommand.label shouldBe "Toggle Gutter"
+    gutterCommand.name shouldBe "toggle-status-line"
+    gutterCommand.label shouldBe "Toggle Status Line"
     gutterCommand.description should include("gutter")
   }
 
@@ -452,7 +452,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "gutter-off",
           "Set gutter off",
-          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetGutter(false))),
+          CommandIntent.Settings(SettingsIntent.StatusLine(StatusLineIntent.SetPlacement(StatusLinePlacement.Off))),
           CommandCategory.Settings
         )
       )
@@ -502,7 +502,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
     val disabledState = stateManager.getCurrentState.unsafeRunSync()
     disabledState.persisted.config.surfaceConfig.showLineNumbers shouldBe false
-    disabledState.persisted.config.surfaceConfig.showGutter shouldBe false
+    disabledState.persisted.config.statusLine.isPinned shouldBe false
     disabledState.persisted.config.surfaceConfig.wordWrapEnabled shouldBe false
     disabledState.persisted.config.surfaceConfig.focusedTextBodyEnabled shouldBe true
     disabledState.persisted.config.surfaceConfig.contextualToolbarEnabled shouldBe false
@@ -524,7 +524,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "gutter-on",
           "Set gutter on",
-          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetGutter(true))),
+          CommandIntent.Settings(SettingsIntent.StatusLine(StatusLineIntent.SetPlacement(StatusLinePlacement.Pinned))),
           CommandCategory.Settings
         )
       )
@@ -576,7 +576,7 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
     val enabledState = stateManager.getCurrentState.unsafeRunSync()
     enabledState.persisted.config.surfaceConfig.showLineNumbers shouldBe true
-    enabledState.persisted.config.surfaceConfig.showGutter shouldBe true
+    enabledState.persisted.config.statusLine.isPinned shouldBe true
     enabledState.persisted.config.surfaceConfig.wordWrapEnabled shouldBe true
     enabledState.persisted.config.surfaceConfig.focusedTextBodyEnabled shouldBe false
     enabledState.persisted.config.surfaceConfig.contextualToolbarEnabled shouldBe true

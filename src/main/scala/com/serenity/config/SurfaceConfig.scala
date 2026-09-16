@@ -9,14 +9,9 @@ final case class SurfaceConfig(
     // Placement and spacing of the line-number counter (independent of interface density). `showLineNumbers` remains the
     // master on/off; this only takes effect while that is on.
     lineNumberLayout: LineNumberLayout = LineNumberLayout(),
-    showGutter: Boolean = true,
     showPaneHeaders: Boolean = true,
-    // Opt-in (like `cursorInfoBarMode`): the status bar's default text (position/language/file) is covered by
-    // exact-string assertions elsewhere, so this ships off and callers turn it on explicitly (#1203).
-    showWordCount: Boolean = false,
-    // Opt-in like `showWordCount`/`cursorInfoBarMode`: existing click/mouse-hit-testing and comment-lens behaviour
-    // is covered by exact-state assertions elsewhere, so this defaults to the smaller, non-disruptive mode and
-    // callers opt into margin mode explicitly once it ships (#1222).
+    // Opt-in: the click/mouse-hit-testing and comment-lens behaviour is covered by exact-state assertions elsewhere,
+    // so this defaults to the smaller, non-disruptive mode and callers opt into margin mode explicitly (#1222).
     commentDisplayMode: CommentDisplayMode = CommentDisplayMode.Floating,
     wordWrapEnabled: Boolean = true,
     // Whether Up/Down under word wrap follow visual rows (the wrapped screen line) rather than jumping straight to
@@ -51,7 +46,7 @@ final case class SurfaceConfig(
     // which already fall back to a density-derived default when unset.
     commandRunnerItemGapRows: Option[Double] = None,
     commandRunnerCursorGapRows: Option[Double] = None,
-    // Opt-out (unlike `showWordCount`/`commentDisplayMode`): the persistent key-hint footer (issue #931, Stage 3) is
+    // Opt-out (unlike `commentDisplayMode`): the persistent key-hint footer (issue #931, Stage 3) is
     // the discoverability fix the stage exists to deliver, so it ships on by default; callers who want the old
     // dynamic-footer-only behaviour turn it off explicitly.
     commandRunnerShowKeyHints: Boolean = true,
@@ -75,10 +70,6 @@ final case class SurfaceConfig(
     motionConfiguration: Option[MotionConfig] = None,
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
     viewportSizing: ViewportSizing = ViewportSizing(),
-    // None (default) keeps the active theme's own panel alpha, matching every other floating panel. Some overrides
-    // just the cursor info bar's background alpha, independent of theme -- see `TextOverlayRenderer`'s per-row
-    // background colour, the one paint site this is scoped to.
-    cursorInfoBarBackgroundAlpha: Option[Double] = None,
     // Per-cache capacity for RendererFrameState's bounded-LRU caches (issue #1433): a Ref-backed Map can't observe
     // GC reachability the way the WeakHashMap it replaced could, so growth is bounded by recency instead. 64 is a
     // conservative default for a single window; tune it up if a session with many concurrently open surfaces (or a
@@ -104,8 +95,7 @@ final case class SurfaceConfig(
         AppConfig.clampCommandRunnerCursorPeekTapWindowMillis(commandRunnerCursorPeekTapWindowMillis),
       lineNumberLayout = lineNumberLayout.normalized,
       textAreaInsets = textAreaInsets.normalized,
-      viewportSizing = viewportSizing.normalized,
-      cursorInfoBarBackgroundAlpha = cursorInfoBarBackgroundAlpha.map(AppConfig.clampCursorInfoBarBackgroundAlpha)
+      viewportSizing = viewportSizing.normalized
     )
 
   /** Speed scales as the legacy fields alone describe them: a per-family override if there is one, otherwise the

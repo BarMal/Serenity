@@ -27,7 +27,7 @@ private[presets] object BuiltInUiPresets:
       config = AppConfig.default
         .withAppMode(AppMode.Prose)
         .withLineNumbers(false)
-        .withGutter(false)
+        .withStatusLine(StatusLineConfig(List(StatusSegment.Position), StatusLinePlacement.Floating))
         .withPaneHeaders(false)
         .withMotionPreset(MotionPreset.Subtle)
         .withEditorInsertionTransitionKind(TransitionKind.TypedText)
@@ -41,8 +41,7 @@ private[presets] object BuiltInUiPresets:
             textFontSize = 18.0f,
             uiFontSize = 13.0f
           )
-        )
-        .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position)),
+        ),
       themeName = Theme.dark.name,
       targetEditorPaneCount = Some(1)
     )
@@ -53,7 +52,7 @@ private[presets] object BuiltInUiPresets:
       config = AppConfig.default
         .withAppMode(AppMode.Prose)
         .withLineNumbers(true)
-        .withGutter(false)
+        .withoutStatusLine
         .withPaneHeaders(false)
         .withMotionPreset(MotionPreset.Subtle)
         .withEditorInsertionTransitionKind(TransitionKind.LineAndCharacterTandem)
@@ -76,7 +75,6 @@ private[presets] object BuiltInUiPresets:
       config = AppConfig.default
         .withAppMode(AppMode.Code)
         .withLineNumbers(true)
-        .withGutter(true)
         .withMotionPreset(MotionPreset.Reduced)
         .withEditorInsertionTransitionKind(TransitionKind.Disabled)
         .withInterfaceDensity(InterfaceDensity.Compact)
@@ -101,7 +99,6 @@ private[presets] object BuiltInUiPresets:
       config = AppConfig.default
         .withAppMode(AppMode.Code)
         .withLineNumbers(true)
-        .withGutter(true)
         .withPaneHeaders(true)
         .withWordWrap(false)
         .withContextualToolbarEnabled(false)
@@ -120,11 +117,10 @@ private[presets] object BuiltInUiPresets:
       config = AppConfig.default
         .withAppMode(AppMode.Code)
         .withLineNumbers(true)
-        .withGutter(true)
         .withMotionPreset(MotionPreset.Reduced)
         .withEditorInsertionTransitionKind(TransitionKind.Disabled)
         .withInterfaceDensity(InterfaceDensity.Comfortable)
-        .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)),
+        .withStatusLineSegments(List(StatusSegment.Position, StatusSegment.Title, StatusSegment.Mode)),
       themeName = Theme.dark.name,
       dockedPanels = List(
         SessionDockedPanel(

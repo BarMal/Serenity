@@ -5,7 +5,7 @@ import java.nio.file.Paths
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.{CursorInfoBarColorConfig, CursorInfoBarPlacement, CursorInfoBarSegment, InterfaceDensity}
+import com.serenity.config.{InterfaceDensity, StatusLineColors, StatusLinePlacement, StatusSegment}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -54,7 +54,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
     RendererEntryPoints.render(state, cursorVisible = true, surface, viewport)
 
-    surface.drawRunPxCalls.map(_.s).mkString should include("Language: Markdown")
+    surface.drawRunPxCalls.map(_.s).mkString should include("Markdown")
   }
 
   it should "preserve active document metadata while transient surfaces hold focus" in {
@@ -93,7 +93,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       runtime = AppState.initial.runtime.copy(uiSurfaces = surfaces)
     )
     // #1307: the mode indicator's glyph is folded into the gutter row for the default bottom-right corner.
-    val expected = " Line 3, Col 5 | Language: Markdown | active.md [C] "
+    val expected = " Line 3, Col 5 | Markdown | active.md | Code "
 
     (Focus.EditorPane(paneId) :: surfaces.map(surface => Focus.Surface(surface.id))).foreach { focus =>
       val surface = new MockRenderSurface(100, 30)
@@ -191,7 +191,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       initialState <- stateManager.getCurrentState
       stateWithLineNumbers = initialState.copy(
         persisted = initialState.persisted.copy(
-          config = initialState.persisted.config.withLineNumbers(true).withGutter(true)
+          config =
+            initialState.persisted.config.withLineNumbers(true).withStatusLinePlacement(StatusLinePlacement.Pinned)
         )
       )
 
@@ -201,7 +202,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
       // Calculate expected dimensions based on actual buffer content (3 lines = 1 digit + 1 space = min 3 chars)
       lineNumberWidth = 3 // Based on actual LayoutEngine calculation for 3-line buffer
-      gutterHeight    = if stateWithLineNumbers.persisted.config.surfaceConfig.showGutter then 1 else 0
+      gutterHeight    = if stateWithLineNumbers.persisted.config.statusLine.isPinned then 1 else 0
     yield
       // Then: Layout should allocate space for line numbers and gutter
       if stateWithLineNumbers.persisted.config.surfaceConfig.showLineNumbers then
@@ -209,7 +210,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         layout.lineNumberRect should be(defined)
         layout.lineNumberRect.get.width should be(lineNumberWidth)
 
-      if stateWithLineNumbers.persisted.config.surfaceConfig.showGutter then
+      if stateWithLineNumbers.persisted.config.statusLine.isPinned then
         layout.gutterRect should be(defined)
         layout.gutterRect.get.height should be(gutterHeight)
         // Gutter should be at bottom of terminal
@@ -419,7 +420,9 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
       // When: Calculate layout with gutter enabled
       stateWithGutter = initialState.copy(
-        persisted = initialState.persisted.copy(config = initialState.persisted.config.withGutter(true))
+        persisted = initialState.persisted.copy(config =
+          initialState.persisted.config.withStatusLinePlacement(StatusLinePlacement.Pinned)
+        )
       )
       viewportSize = ViewportSize(80, 24)
       layout       = LayoutEngine.calculateLayoutWithUI(stateWithGutter, viewportSize)
@@ -453,9 +456,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.EditorPane(PaneId(0)),
         config = AppState.initial.persisted.config
-          .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position))
-          .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
-          .withGutter(false),
+          .withStatusLineSegments(List(StatusSegment.Position))
+          .withStatusLinePlacement(StatusLinePlacement.Pinned),
         theme = Theme.light
       )
     )
@@ -467,7 +469,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     RendererEntryPoints.render(state, cursorVisible = true, surface, viewport)
 
     surface.drawRunPxCalls.map(_.s).mkString should include("Line 2, Col 3")
-    layout.pinnedSurfaceRects.get(SurfaceId("cursor-info-bar")) shouldBe None
+    layout.pinnedSurfaceRects.get(SurfaceId("status-line")) shouldBe None
   }
 
   // #1295: the pinned-bottom cursor info bar bypasses TextOverlayRenderer entirely (it paints straight into the
@@ -489,10 +491,9 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.EditorPane(PaneId(0)),
         config = AppState.initial.persisted.config
-          .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position))
-          .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
-          .withCursorInfoBarColors(CursorInfoBarColorConfig(Some(foreground), Some(background)))
-          .withGutter(false),
+          .withStatusLineSegments(List(StatusSegment.Position))
+          .withStatusLinePlacement(StatusLinePlacement.Pinned)
+          .withStatusLineColors(StatusLineColors(Some(foreground), Some(background))),
         theme = Theme.light
       )
     )
@@ -522,9 +523,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.EditorPane(PaneId(0)),
         config = AppState.initial.persisted.config
-          .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position))
-          .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
-          .withGutter(false),
+          .withStatusLineSegments(List(StatusSegment.Position))
+          .withStatusLinePlacement(StatusLinePlacement.Pinned),
         theme = Theme.light
       )
     )
@@ -554,9 +554,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.EditorPane(PaneId(0)),
         config = AppState.initial.persisted.config
-          .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position))
-          .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
-          .withGutter(false),
+          .withStatusLineSegments(List(StatusSegment.Position))
+          .withStatusLinePlacement(StatusLinePlacement.Pinned),
         theme = Theme.light
       )
     )
@@ -586,8 +585,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       surface.drawRunPxCalls.find(_.s.contains("Line 1, Col 5")).getOrElse(fail("Expected measured gutter text"))
     val gutterTopPx    = cellMetrics.toPixelY(gutter.y)
     val gutterHeightPx = gutter.height * cellMetrics.lineHeight
-    // #1307: the mode indicator's glyph is folded into the gutter row for the default bottom-right corner.
-    val expectedText = " Line 1, Col 5 [C] "
+    val expectedText   = " Line 1, Col 5 "
     val expectedPlacement = TextAlignment.placeLine(
       text = expectedText,
       area = TextAreaPx(

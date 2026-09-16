@@ -129,52 +129,6 @@ object CursorMode:
       case "breathe" | "breathing" => Some(CursorMode.Breathe)
       case _                       => None
 
-/** One piece of text the cursor info bar can show, in the order the user has chosen to include them. Replaces the old
-  * fixed Off/Position/Detailed presets (#1261) with an ordered, independently toggleable list.
-  *
-  * WritingSpeed (words typed per minute) is deliberately not a segment here: computing it needs edit-timestamp tracking
-  * that doesn't exist anywhere in the app yet, so it's out of scope for this change and left as a follow-up rather than
-  * half-built.
-  */
-enum CursorInfoBarSegment(val configKey: String):
-  case Title       extends CursorInfoBarSegment("title")
-  case Position    extends CursorInfoBarSegment("position")
-  case WordCount   extends CursorInfoBarSegment("word_count")
-  case CharCount   extends CursorInfoBarSegment("char_count")
-  case ReadingTime extends CursorInfoBarSegment("reading_time")
-
-object CursorInfoBarSegment:
-
-  def fromConfigKey(value: String): Option[CursorInfoBarSegment] =
-    values.find(_.configKey == value.trim.toLowerCase)
-
-  /** Parses `cursor.info_bar`'s value: a comma-separated segment list (`"position,title"`), or one of the retired
-    * Off/Minimal/Detailed shorthands for config.conf files written before segments existed.
-    */
-  def parseList(value: String): Option[List[CursorInfoBarSegment]] =
-    value.trim.toLowerCase match
-      case "" | "off" | "false" | "disabled" => Some(Nil)
-      case "minimal"                         => Some(List(Position))
-      case "detailed" | "full"               => Some(List(Position, Title))
-      case trimmed =>
-        val parsed = trimmed.split(",").toList.map(_.trim).filter(_.nonEmpty).map(fromConfigKey)
-        Option.when(parsed.nonEmpty && parsed.forall(_.isDefined))(parsed.flatten)
-
-enum CursorInfoBarPlacement(val configKey: String):
-  case Floating     extends CursorInfoBarPlacement("floating")
-  case PinnedBottom extends CursorInfoBarPlacement("pinned-bottom")
-
-object CursorInfoBarPlacement:
-
-  def fromConfigKey(value: String): Option[CursorInfoBarPlacement] =
-    value.trim.toLowerCase match
-      case "floating" | "float" =>
-        Some(CursorInfoBarPlacement.Floating)
-      case "pinned-bottom" | "bottom" | "pinned" =>
-        Some(CursorInfoBarPlacement.PinnedBottom)
-      case _ =>
-        None
-
 /** Selects how a buffer's `DocumentComment`s become visible (#1222).
   *
   * `Floating`: comments stay hidden until a highlighted range is clicked, opening the existing above-cursor lens
@@ -285,10 +239,7 @@ object AppMode:
       case "prose" | "writing" => Some(AppMode.Prose)
       case _                   => None
 
-/** A window corner the mode/tab widget can be addressed to (issue #1307). Distinct from `CursorInfoBarPlacement`, which
-  * only chooses between a floating overlay and folding into the full-width bottom bar -- this widget is always its own
-  * small corner element, so it needs an actual corner, not an on/off-bar toggle.
-  */
+/** A window corner a corner-anchored overlay stack can be addressed to (issue #1307). */
 enum CornerPosition(val configKey: String):
   case TopLeft     extends CornerPosition("top-left")
   case TopRight    extends CornerPosition("top-right")

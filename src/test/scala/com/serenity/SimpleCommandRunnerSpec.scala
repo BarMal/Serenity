@@ -60,7 +60,11 @@ class SimpleCommandRunnerSpec extends AnyFlatSpec with Matchers:
         CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleLineNumbers))
       ),
       com.serenity.command.Command
-        .typed("cmd3", "Command 3", CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleGutter)))
+        .typed(
+          "cmd3",
+          "Command 3",
+          CommandIntent.Settings(SettingsIntent.StatusLine(StatusLineIntent.ToggleVisibility))
+        )
     )
     val runner = CommandRunner.withCommands(commands)
 

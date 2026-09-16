@@ -420,8 +420,8 @@ object AccessibilitySnapshot:
     content match
       case _: SurfaceContent.CommandPalette | _: SurfaceContent.ModalWorkflow =>
         AccessibilityRole.Dialog
-      case _: SurfaceContent.CursorInfoBar => AccessibilityRole.Status
-      case _                               => AccessibilityRole.Panel
+      case _: SurfaceContent.StatusLine => AccessibilityRole.Status
+      case _                            => AccessibilityRole.Panel
 
   private def surfaceName(content: SurfaceContent): String =
     content match
@@ -429,7 +429,7 @@ object AccessibilitySnapshot:
       case _: SurfaceContent.CommandPalette            => "Command runner"
       case _: SurfaceContent.CommandRunnerPeek         => "Command runner preview"
       case SurfaceContent.ModalWorkflow(modal)         => modal.toString
-      case SurfaceContent.CursorInfoBar(_)             => "Document status"
+      case SurfaceContent.StatusLine(_)                => "Document status"
       case SurfaceContent.MarkdownPreview(_, title)    => s"Preview: $title"
       case SurfaceContent.QuickInfo(_)                 => "Quick information"
       case SurfaceContent.FilePreview(path, _)         => s"Preview: ${path.getFileName}"
@@ -454,9 +454,9 @@ object AccessibilitySnapshot:
 
   private def surfaceValue(content: SurfaceContent): Option[String] =
     content match
-      case SurfaceContent.StartPage(page)     => page.statusMessage
-      case SurfaceContent.CursorInfoBar(text) => Some(text)
-      case _                                  => None
+      case SurfaceContent.StartPage(page)  => page.statusMessage
+      case SurfaceContent.StatusLine(text) => Some(text)
+      case _                               => None
 
   private def statusMessage(content: SurfaceContent): Option[String] =
     content match

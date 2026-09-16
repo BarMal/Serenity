@@ -1,7 +1,7 @@
 package com.serenity.ui.tui
 
 import cats.syntax.all.*
-import com.serenity.config.{CursorInfoBarPlacement, CursorInfoBarSegment}
+import com.serenity.config.{StatusLinePlacement, StatusSegment}
 import com.serenity.state.models.CursorPosition
 
 /** Regression cover for the three TUI cursor/word-wrap defects fixed in #1266, each of which was invisible to
@@ -24,15 +24,20 @@ class TuiWrappedNavigationSpec extends TuiSpec:
 
   private val prose = (0 until 24).map(index => s"Paragraph $index. $paragraph").mkString("\n\n")
 
+  /** Navigation reads the status line pinned in the bottom row, where `TuiScreen.statusBar` looks. */
   private val environment =
     TuiEnvironment
       .withFile(prose)
       .withConfig(
-        _.withCursorInfoBarSegments(List(CursorInfoBarSegment.Position, CursorInfoBarSegment.WordCount))
-          .withCursorInfoBarPlacement(CursorInfoBarPlacement.Floating)
+        _.withStatusLineSegments(List(StatusSegment.Position, StatusSegment.WordCount))
+          .withStatusLinePlacement(StatusLinePlacement.Pinned)
           .withWordWrap(true)
           .withVisualLineCursorNavigation(true)
       )
+
+  /** The trail tests need the same status line floating at the caret instead, since that is the row that moves. */
+  private val floatingEnvironment =
+    environment.withConfig(_.withStatusLinePlacement(StatusLinePlacement.Floating))
 
   /** The floating info bar is the only thing on screen carrying a word count, which is what distinguishes its rows from
     * the status bar's own "Line n, Col n" readout.
@@ -60,7 +65,7 @@ class TuiWrappedNavigationSpec extends TuiSpec:
 
   // -- The info bar's trail (#1266, first defect) --------------------------------------------------------------------
 
-  "the floating cursor info bar" should "be drawn below the caret, over the document" in runTui(environment) {
+  "the floating cursor info bar" should "be drawn below the caret, over the document" in runTui(floatingEnvironment) {
     for _ <- verify("info bar present") { screen =>
           val rows = infoBarRows(screen)
           rows should have size 1
@@ -71,7 +76,9 @@ class TuiWrappedNavigationSpec extends TuiSpec:
     yield ()
   }
 
-  it should "clear the row it vacates on the very next incremental frame, leaving no trail" in runTui(environment) {
+  it should "clear the row it vacates on the very next incremental frame, leaving no trail" in runTui(
+    floatingEnvironment
+  ) {
     for
       before <- settledScreen
       vacatedRow     = infoBarRows(before).headOption.getOrElse(fail("expected the info bar on screen"))
@@ -88,7 +95,7 @@ class TuiWrappedNavigationSpec extends TuiSpec:
     yield vacatedColumns should not be empty
   }
 
-  it should "leave no trail when the bar moves across a blank paragraph-break row" in runTui(environment) {
+  it should "leave no trail when the bar moves across a blank paragraph-break row" in runTui(floatingEnvironment) {
     // Paragraph 0 wraps over several rows and is followed by a blank line; walking the caret down through that gap is
     // where the stale background was most visible, since there is no text to repaint over it.
     for
@@ -106,7 +113,7 @@ class TuiWrappedNavigationSpec extends TuiSpec:
     yield ()
   }
 
-  it should "follow the caret back up again without leaving a trail behind it" in runTui(environment) {
+  it should "follow the caret back up again without leaving a trail behind it" in runTui(floatingEnvironment) {
     for
       _      <- pressAll(List.fill(8)(TuiKeys.ArrowDown)*)
       before <- settledScreen

@@ -90,6 +90,9 @@ object FloatingSurfaceLayout:
       case SurfaceContent.CommandPalette(_) | SurfaceContent.ShortcutsHelp(_) |
           SurfaceContent.ModalWorkflow(Modal.FileWorkflow(_)) =>
         calculateFloatingSurfaceWidth(contentRect.width)
+      // A quiet single row: as wide as its text (plus a cell of padding each side), never the whole pane.
+      case SurfaceContent.StatusLine(text) =>
+        math.min(contentRect.width, text.length + 2)
       case _ =>
         contentRect.width
     val preferredHeight = calculateFloatingSurfaceHeight(surface.content, preferredWidth, contentRect.height, state)
@@ -240,7 +243,7 @@ object FloatingSurfaceLayout:
       case SurfaceContent.QuickInfo(text)         => math.max(3, text.linesIterator.size + 2)
       case SurfaceContent.FilePreview(_, content) => math.max(4, math.min(6, content.linesIterator.take(4).size + 2))
       case SurfaceContent.SymbolDefinition(_, _)  => 4
-      case SurfaceContent.CursorInfoBar(_)        => 3
+      case SurfaceContent.StatusLine(_)           => 1
       case SurfaceContent.DirectoryListing(_, entries, _) => math.max(4, math.min(6, entries.take(4).size + 2))
       case SurfaceContent.DirectoryTree(tree, _) =>
         math.max(4, math.min(8, DirectoryTreeData.visibleRows(tree).size + 2))
@@ -306,7 +309,10 @@ object FloatingSurfaceLayout:
       case SurfaceContent.GhostOverlay(_, cachedRect) =>
         cachedRect.height
 
-    math.max(3, math.min(maxHeight, preferredHeight))
+    val floor = content match
+      case SurfaceContent.StatusLine(_) => 1
+      case _                            => 3
+    math.max(floor, math.min(maxHeight, preferredHeight))
 
   private def surfaceAnchor(surface: UiSurface): Option[CursorPosition] =
     surface.presentation match

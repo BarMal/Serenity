@@ -179,8 +179,7 @@ object RendererPaneContent:
               if buf.document.isDirty then s"Buffer ${buf.id.value} - unsaved" else s"Buffer ${buf.id.value}"
         case None =>
           "No Buffer"
-      val bufferTitle =
-        if isActive then RendererGutter.applyModeTabWidgetToTopCorner(state, bufferTitleBase) else bufferTitleBase
+      val bufferTitle = bufferTitleBase
 
       val maxTitleWidth = math.max(1, titleRect.width - 2)
       val displayTitle =

@@ -4,7 +4,7 @@ import java.awt.Font
 import java.util.LinkedHashMap
 
 import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.{AppConfig, CursorInfoBarPlacement, CursorInfoBarSegment, InterfaceDensity, TextAreaInsets}
+import com.serenity.config.{AppConfig, InterfaceDensity, StatusLineConfig, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.RichTextDocument
 import com.serenity.rope.Rope
@@ -62,7 +62,6 @@ private[manager] object SurfaceGeometryKey:
 final private[manager] case class MouseTargetLayoutKey(
     viewportSize: ViewportSize,
     fontConfig: FontConfig,
-    showGutter: Boolean,
     showLineNumbers: Boolean,
     wordWrapEnabled: Boolean,
     minimumPaneWidth: Int,
@@ -70,8 +69,7 @@ final private[manager] case class MouseTargetLayoutKey(
     interfaceDensity: InterfaceDensity,
     uiElementGap: Double,
     showPaneHeaders: Boolean,
-    cursorInfoBarSegments: List[CursorInfoBarSegment],
-    cursorInfoBarPlacement: CursorInfoBarPlacement,
+    statusLine: StatusLineConfig,
     commandRunnerVisibleRows: Int,
     commandRunnerItemGapRows: Double,
     commandRunnerCursorGapRows: Double,
@@ -91,7 +89,7 @@ final private[manager] case class MouseTargetLayoutKey(
     // which dialog is open share a scene key -- reopening a dialog after dismissing one returns the first's cached
     // scene, whose node references the now-gone surface id, and the renderer paints an empty frame (blank screen).
     modalStack: List[ModalDialog],
-    derivedCursorInfoBarSurface: Option[UiSurface],
+    derivedStatusLineSurface: Option[UiSurface],
     pinnedPanels: List[(SurfaceId, PanelPosition, Int)],
     lineNumberContent: List[(BufferId, RopeIdentity)]
 )
@@ -99,7 +97,7 @@ final private[manager] case class MouseTargetLayoutKey(
 private[manager] object MouseTargetLayoutKey:
 
   /** The state fields [[from]] actually reads. Everything else it derives (focusPaneId, orderedPaneIds, paneBuffers,
-    * paneSnapshotInputs, pinnedPanels, lineNumberContent, derivedCursorInfoBarSurface) is a pure function of these plus
+    * paneSnapshotInputs, pinnedPanels, lineNumberContent, derivedStatusLineSurface) is a pure function of these plus
     * viewportSize, so if none of these references changed since the last call, the previously computed key is still
     * correct and the full pane/buffer/surface walk can be skipped.
     */
@@ -158,7 +156,6 @@ private[manager] object MouseTargetLayoutKey:
     MouseTargetLayoutKey(
       viewportSize = viewportSize,
       fontConfig = state.persisted.config.editorConfig.fontConfig,
-      showGutter = state.persisted.config.surfaceConfig.showGutter,
       showLineNumbers = state.persisted.config.surfaceConfig.showLineNumbers,
       wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled,
       minimumPaneWidth = state.persisted.config.editorConfig.minimumPaneWidth,
@@ -166,8 +163,7 @@ private[manager] object MouseTargetLayoutKey:
       interfaceDensity = state.persisted.config.interfaceDensity,
       uiElementGap = state.persisted.config.uiElementGap,
       showPaneHeaders = state.persisted.config.surfaceConfig.showPaneHeaders,
-      cursorInfoBarSegments = state.persisted.config.cursorInfoBarSegments,
-      cursorInfoBarPlacement = state.persisted.config.cursorInfoBarPlacement,
+      statusLine = state.persisted.config.statusLine,
       commandRunnerVisibleRows = state.persisted.config.effectiveCommandRunnerVisibleRows,
       commandRunnerItemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
       commandRunnerCursorGapRows = state.persisted.config.effectiveCommandRunnerCursorGapRows,
@@ -197,7 +193,7 @@ private[manager] object MouseTargetLayoutKey:
       },
       uiSurfaces = state.runtime.uiSurfaces.map(SurfaceGeometryKey.from),
       modalStack = state.runtime.modalStack,
-      derivedCursorInfoBarSurface = state.cursorInfoBarSurface,
+      derivedStatusLineSurface = state.floatingStatusLineSurface,
       pinnedPanels = state.persisted.layout.workspaceTree.toList.flatMap { tree =>
         tree.dockedSurfaceIds.flatMap { id =>
           for

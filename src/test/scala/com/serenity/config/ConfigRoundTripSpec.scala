@@ -9,6 +9,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig}
 import com.serenity.animation.{AnimationConfig, TransitionKind, WindowSitterAction, WindowSitterConfig}
 import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.{StatusLineColors, StatusLinePlacement, StatusSegment}
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
 import com.serenity.ui.fonts.FontLoader
@@ -67,9 +68,8 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withSyntaxHighlighting(true)
     .withLineNumbers(false)
     .withLineNumberLayout(LineNumberLayout(side = LineNumberSide.Both, marginLeft = 2, marginRight = 3, padding = 1))
-    .withGutter(false)
+    .withoutStatusLine
     .withPaneHeaders(false)
-    .withWordCount(true)
     .withCommentDisplayMode(CommentDisplayMode.Margin)
     .withWordWrap(false)
     .withVisualLineCursorNavigation(false)
@@ -92,15 +92,13 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withRenderFpsTarget(RenderFpsTarget.Fps30)
     .withRenderDamageGranularity(RenderDamageGranularity.Cells)
     .withRendererFrameStateCacheCapacity(96)
-    .withCursorInfoBarBackgroundAlpha(Some(0.5))
     .withCursorMode(CursorMode.Breathe)
-    .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position, CursorInfoBarSegment.WordCount))
-    .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+    .withStatusLineSegments(List(StatusSegment.Position, StatusSegment.WordCount))
+    .withStatusLinePlacement(StatusLinePlacement.Floating)
     .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
     .withDefaultDocumentMode(DefaultDocumentMode.Markdown)
     .withAppMode(AppMode.Prose)
     .withShowAllSettingsRegardlessOfMode(true)
-    .withModeTabWidgetCornerPosition(CornerPosition.TopLeft)
     .withInterfaceDensity(InterfaceDensity.Compact)
     .withUiElementGap(2.0)
     .withUiCornerRadiusPx(6)
@@ -131,8 +129,12 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withCursorColors(
       CursorColorConfig(active = Some(Color(0x11, 0x22, 0x33)), inactive = Some(Color(0x44, 0x55, 0x66)))
     )
-    .withCursorInfoBarColors(
-      CursorInfoBarColorConfig(foreground = Some(Color(0x77, 0x88, 0x99)), background = Some(Color(0xaa, 0xbb, 0xcc)))
+    .withStatusLineColors(
+      StatusLineColors(
+        foreground = Some(Color(0x77, 0x88, 0x99)),
+        background = Some(Color(0xaa, 0xbb, 0xcc)),
+        backgroundAlpha = Some(0.5)
+      )
     )
     .withSpellCheck(
       SpellCheckConfig(
@@ -317,14 +319,14 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
 
   it should "survive a cursor info bar with several segments, which needs quoting to stay parseable" in {
     val configured = AppConfig.default
-      .withCursorInfoBarSegments(
-        List(CursorInfoBarSegment.Position, CursorInfoBarSegment.WordCount, CursorInfoBarSegment.CharCount)
+      .withStatusLineSegments(
+        List(StatusSegment.Position, StatusSegment.WordCount, StatusSegment.CharCount)
       )
       .withPaneHeaders(false)
 
     val reloaded = savedAndReloaded(configured)
 
-    reloaded.cursorInfoBarSegments shouldBe configured.cursorInfoBarSegments
+    reloaded.statusLine.segments shouldBe configured.statusLine.segments
     // The bug this pins: the unquoted comma made the whole file unparseable, so every *other* setting reset too.
     reloaded.surfaceConfig.showPaneHeaders shouldBe false
   }

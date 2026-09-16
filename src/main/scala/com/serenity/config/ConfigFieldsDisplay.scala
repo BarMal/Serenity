@@ -40,17 +40,6 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.rendererFrameStateCacheCapacity,
       (config, value) => config.withRendererFrameStateCacheCapacity(value)
     ),
-    field(
-      "display.cursor_info_bar_background_alpha",
-      "display.cursor_info_bar.background_alpha",
-      "display_cursor_info_bar_background_alpha"
-    )(
-      double
-        .filtered(alpha =>
-          alpha >= AppConfig.MinCursorInfoBarBackgroundAlpha && alpha <= AppConfig.MaxCursorInfoBarBackgroundAlpha
-        )
-        .orAuto
-    )(_.surfaceConfig.cursorInfoBarBackgroundAlpha, (config, value) => config.withCursorInfoBarBackgroundAlpha(value)),
     named("display.word_wrap", "wordWrapEnabled", "display.word.wrap", "display_word_wrap")(boolean)(
       _.surfaceConfig.wordWrapEnabled,
       (config, value) => config.withWordWrap(value)
@@ -100,14 +89,6 @@ private[config] object ConfigFieldsDisplay:
     )(
       _.surfaceConfig.lineNumberLayout.padding,
       (config, value) => config.withLineNumberLayout(config.lineNumberLayout.copy(padding = value))
-    ),
-    named("display.gutter", "showGutter", "display_gutter")(boolean)(
-      _.surfaceConfig.showGutter,
-      (config, value) => config.withGutter(value)
-    ),
-    named("display.word_count", "showWordCount", "display.word.count", "display_word_count")(boolean)(
-      _.surfaceConfig.showWordCount,
-      (config, value) => config.withWordCount(value)
     ),
     field("display.comments", "display_comments")(
       enumerated(

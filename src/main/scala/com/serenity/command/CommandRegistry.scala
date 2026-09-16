@@ -89,11 +89,11 @@ object CommandRegistry:
       label = "Toggle Line Numbers"
     ),
     Command.typed(
-      "toggle-gutter",
-      "Show or hide the status gutter.",
-      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleGutter)),
+      "toggle-status-line",
+      "Show or hide the status line: the pinned gutter row at the bottom, or the floating row at the caret.",
+      CommandIntent.Settings(SettingsIntent.StatusLine(StatusLineIntent.ToggleVisibility)),
       CommandCategory.View,
-      label = "Toggle Gutter"
+      label = "Toggle Status Line"
     ),
     Command.typed(
       "toggle-pane-headers",

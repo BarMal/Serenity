@@ -162,7 +162,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
           workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         theme = Theme.light,
-        config = AppConfig.default.withLineNumbers(false).withGutter(false)
+        config = AppConfig.default.withLineNumbers(false).withoutStatusLine
       )
     )
 
@@ -273,7 +273,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
-        config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+        config = AppConfig.default.withLineNumbers(false).withoutStatusLine.withWordWrap(false)
       )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
@@ -305,7 +305,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
-        config = AppConfig.default.withLineNumbers(true).withGutter(false).withWordWrap(false)
+        config = AppConfig.default.withLineNumbers(true).withoutStatusLine.withWordWrap(false)
       )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
@@ -344,7 +344,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
-        config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+        config = AppConfig.default.withLineNumbers(false).withoutStatusLine.withWordWrap(false)
       )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
@@ -380,7 +380,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
-        config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+        config = AppConfig.default.withLineNumbers(false).withoutStatusLine.withWordWrap(false)
       )
     )
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
@@ -419,7 +419,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
         theme = Theme.light,
         config = AppConfig.default
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withWordWrap(false)
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )
@@ -467,7 +467,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
         theme = Theme.light,
         config = AppConfig.default
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withWordWrap(false)
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )
@@ -510,7 +510,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
         theme = Theme.light,
         config = AppConfig.default
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withWordWrap(false)
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )
@@ -551,7 +551,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
         theme = Theme.light,
         config = AppConfig.default
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withWordWrap(false)
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )
@@ -596,7 +596,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
         theme = Theme.light,
         config = AppConfig.default
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withWordWrap(false)
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )

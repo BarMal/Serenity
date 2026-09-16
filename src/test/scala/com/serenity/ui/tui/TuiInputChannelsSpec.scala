@@ -1,7 +1,7 @@
 package com.serenity.ui.tui
 
 import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.CursorInfoBarSegment
+import com.serenity.config.{StatusLinePlacement, StatusSegment}
 
 import TuiScenarios.*
 
@@ -33,8 +33,8 @@ class TuiInputChannelsSpec extends TuiSpec:
     }
 
   /** The floating cursor info bar sits over the document, right where the caret is -- which is exactly where a reader
-    * clicks next. It is `AppState.cursorInfoBarSurface`, derived per frame rather than stored in `runtime.uiSurfaces`,
-    * so the guard that stops a click falling through a floating surface
+    * clicks next. It is `AppState.floatingStatusLineSurface`, derived per frame rather than stored in
+    * `runtime.uiSurfaces`, so the guard that stops a click falling through a floating surface
     * (`MouseHitTestGeometry.isInsideFloatingSurface`, which reads `state.floatingSurfaces`) never saw it: clicking the
     * bar placed the caret on whatever hidden text the bar was covering (#1292).
     */
@@ -43,7 +43,8 @@ class TuiInputChannelsSpec extends TuiSpec:
       TuiEnvironment
         .withFile(Array.fill(12)("a line of text to click on").mkString("\n"))
         .withConfig(
-          _.withCursorInfoBarSegments(List(CursorInfoBarSegment.Title, CursorInfoBarSegment.Position))
+          _.withStatusLineSegments(List(StatusSegment.Title, StatusSegment.Position))
+            .withStatusLinePlacement(StatusLinePlacement.Floating)
         )
     ) {
       for
@@ -60,7 +61,8 @@ class TuiInputChannelsSpec extends TuiSpec:
       TuiEnvironment
         .withFile(Array.fill(12)("a line of text to click on").mkString("\n"))
         .withConfig(
-          _.withCursorInfoBarSegments(List(CursorInfoBarSegment.Title, CursorInfoBarSegment.Position))
+          _.withStatusLineSegments(List(StatusSegment.Title, StatusSegment.Position))
+            .withStatusLinePlacement(StatusLinePlacement.Floating)
         )
     ) {
       for

@@ -5,14 +5,15 @@ import com.serenity.config.{
   AppConfig,
   ConfigRegistry,
   CursorColorConfig,
-  CursorInfoBarColorConfig,
-  CursorInfoBarSegment,
   FocusedKeymapConfig,
   HotkeyConfig,
+  LegacyStatusLineKeys,
   MotionConfig,
   MotionPreset,
   PreferredWindowSize,
   SpellCheckConfig,
+  StatusLinePlacement,
+  StatusSegment,
   TextAreaInsets
 }
 import com.serenity.lsp.config.LspUserConfig
@@ -185,11 +186,6 @@ object SessionConfigCodec:
       _.cursorColors,
       (config, value) => config.withCursorColors(value)
     ),
-    SessionField[CursorInfoBarColorConfig](
-      "cursorInfoBarColors",
-      _.cursorInfoBarColors,
-      (config, value) => config.withCursorInfoBarColors(value)
-    ),
     SessionField[TextAreaInsets](
       "textAreaInsets",
       _.surfaceConfig.textAreaInsets,
@@ -255,25 +251,40 @@ object SessionConfigCodec:
     val withComposite = composites.foldLeft(withFields)((config, field) => field.decode(cursor, config))
     readSupersededShapes(cursor, withComposite)
 
-  /** The one shape an older session file used that nothing reads any more.
+  /** Shapes older session files used for the status line, read onto today's one model.
     *
-    * Sessions before #1261 stored a single `cursorInfoBarMode` string instead of an ordered segment list. The old
-    * "detailed" preset (position + language + filename) has no exact equivalent since language was dropped from the
-    * segment set, so it maps to the closest available pair.
+    * Sessions before #1261 stored a single `cursorInfoBarMode` string; sessions after it stored the info bar's own
+    * `cursorInfoBarSegments`/`cursorInfoBarPlacement` next to a separate `showGutter` and `showWordCount`. Both are
+    * folded through the same rules the config file's legacy keys use, so a restored session looks the way it did.
     */
   private def readSupersededShapes(cursor: HCursor, config: AppConfig): AppConfig =
-    if cursor.downField("cursorInfoBarSegments").succeeded then config
+    if cursor.downField("statusSegments").succeeded || cursor.downField("statusPlacement").succeeded then config
     else
-      cursor
-        .downField("cursorInfoBarMode")
-        .as[String]
+      val segments = cursor
+        .downField("cursorInfoBarSegments")
+        .as[List[String]]
         .toOption
-        .flatMap(legacyCursorInfoBarMode)
-        .fold(config)(config.withCursorInfoBarSegments)
+        .map(_.flatMap(StatusSegment.fromConfigKey))
+        .orElse(cursor.downField("cursorInfoBarMode").as[String].toOption.flatMap(legacyCursorInfoBarMode))
+      val placement =
+        cursor.downField("cursorInfoBarPlacement").as[String].toOption.flatMap(StatusLinePlacement.fromConfigKey)
+      val showGutter    = cursor.downField("showGutter").as[Boolean].toOption
+      val showWordCount = cursor.downField("showWordCount").as[Boolean].toOption
+      LegacyStatusLineKeys
+        .resolve(
+          base = config.statusLine,
+          legacySegments = segments,
+          legacyPlacement = placement,
+          gutterOff = showGutter.contains(false),
+          wordCount = showWordCount.contains(true),
+          anyLegacyKeyPresent =
+            segments.isDefined || placement.isDefined || showGutter.isDefined || showWordCount.isDefined
+        )
+        .fold(config)(config.withStatusLine)
 
-  private def legacyCursorInfoBarMode(value: String): Option[List[CursorInfoBarSegment]] =
+  private def legacyCursorInfoBarMode(value: String): Option[List[StatusSegment]] =
     value.trim.toLowerCase match
       case "off" | "false" | "disabled" => Some(Nil)
-      case "position" | "minimal"       => Some(List(CursorInfoBarSegment.Position))
-      case "detailed" | "full"          => Some(List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title))
+      case "position" | "minimal"       => Some(List(StatusSegment.Position))
+      case "detailed" | "full"          => Some(List(StatusSegment.Position, StatusSegment.Title))
       case _                            => None

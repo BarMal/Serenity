@@ -184,11 +184,9 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         "line-number-margin-left",
         "line-number-margin-right",
         "line-number-padding",
-        "gutter",
         "line-wrap",
         "visual-line-navigation",
         "typewriter-scrolling",
-        "show-word-count",
         "focused-text-body",
         "contextual-toolbar",
         "contextual-toolbar-display"
@@ -210,59 +208,47 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       ) shouldBe Some("Text Only" -> List("Icon Only", "Text Only", "Icon + Text"))
   }
 
-  it should "expose cursor info bar segment toggles in the appearance settings group" in {
-    val config = AppConfig.default.withCursorInfoBarSegments(List(CursorInfoBarSegment.Position))
+  private val statusToggleIds = List(
+    "status-position",
+    "status-title",
+    "status-language",
+    "status-mode",
+    "status-word-count",
+    "status-char-count",
+    "status-reading-time"
+  )
+
+  it should "expose the status line's placement and one toggle per segment in its own settings group" in {
+    val config = AppConfig.default.withStatusLineSegments(List(StatusSegment.Position))
     val runner = CommandRunner.empty.activate(registry, config)
 
-    runner.optionSelections.get("cursor-info-bar-position") shouldBe Some(0)
-    runner.optionSelections.get("cursor-info-bar-title") shouldBe Some(1)
-    settingsGroup(runner, "settings-cursor").map(_.children.map(_.id)) should contain(
-      List(
-        "cursor-mode",
-        "cursor-info-bar-title",
-        "cursor-info-bar-position",
-        "cursor-info-bar-word-count",
-        "cursor-info-bar-char-count",
-        "cursor-info-bar-reading-time",
-        "cursor-info-bar-placement"
-      )
-    )
+    runner.optionSelections.get("status-position") shouldBe Some(0)
+    runner.optionSelections.get("status-title") shouldBe Some(1)
+    settingsGroup(runner, "settings-status-line").map(_.children.map(_.id)) shouldBe
+      Some("status-placement" :: statusToggleIds)
   }
 
   // #1298: reorder commands are listed in the segments' real current order (Position, then Title) and only offer
   // the direction that would actually move the segment -- Position (first) has no "earlier", Title (last) has no
-  // "later" -- rather than the fixed segmentDefinitions order with both directions always offered.
-  it should "expose reorder commands, in current order and gated by position, once 2+ cursor info bar segments are included" in {
-    val config = AppConfig.default.withCursorInfoBarSegments(
-      List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
-    )
+  // "later" -- rather than the fixed definition order with both directions always offered.
+  it should "expose reorder commands, in current order and gated by position, once 2+ status segments are shown" in {
+    val config = AppConfig.default.withStatusLineSegments(List(StatusSegment.Position, StatusSegment.Title))
     val runner = CommandRunner.empty.activate(registry, config)
 
-    settingsGroup(runner, "settings-cursor").map(_.children.map(_.id)) should contain(
-      List(
-        "cursor-mode",
-        "cursor-info-bar-title",
-        "cursor-info-bar-position",
-        "cursor-info-bar-word-count",
-        "cursor-info-bar-char-count",
-        "cursor-info-bar-reading-time",
-        "move-cursor-info-bar-position-later",
-        "move-cursor-info-bar-title-earlier",
-        "cursor-info-bar-placement"
-      )
-    )
+    settingsGroup(runner, "settings-status-line").map(_.children.map(_.id)) shouldBe
+      Some("status-placement" :: statusToggleIds ++ List("move-status-position-later", "move-status-title-earlier"))
   }
 
-  it should "expose cursor info bar placement in the appearance settings group" in {
-    val config = AppConfig.default.withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+  it should "expose the status line placement as pinned, floating or off" in {
+    val config = AppConfig.default.withStatusLinePlacement(StatusLinePlacement.Floating)
     val runner = CommandRunner.empty.activate(registry, config)
 
-    runner.optionSelections.get("cursor-info-bar-placement") shouldBe Some(1)
-    settingsGroup(runner, "settings-cursor")
+    runner.optionSelections.get("status-placement") shouldBe Some(1)
+    settingsGroup(runner, "settings-status-line")
       .map(_.children.collect {
-        case item: CommandSurfaceItem.OptionItem if item.id == "cursor-info-bar-placement" =>
+        case item: CommandSurfaceItem.OptionItem if item.id == "status-placement" =>
           item.selectedOption -> item.options.map(_.label)
-      }) should contain(List("Pinned Bottom" -> List("Floating", "Pinned Bottom")))
+      }) should contain(List("Floating" -> List("Pinned", "Floating", "Off")))
   }
 
   it should "expose material and motion presets with current selections" in {

@@ -321,9 +321,7 @@ object LayoutEngine:
     )
 
   private[layout] def usesBottomGutter(state: AppState): Boolean =
-    state.persisted.config.surfaceConfig.showGutter ||
-      (state.persisted.config.cursorInfoBarSegments.nonEmpty &&
-        state.persisted.config.cursorInfoBarPlacement == com.serenity.config.CursorInfoBarPlacement.PinnedBottom)
+    state.persisted.config.statusLine.isPinned
 
   private[layout] def paneHeaderHeight(state: AppState): Int =
     if state.persisted.config.surfaceConfig.showPaneHeaders then EditorPaneHeaderHeight else 0

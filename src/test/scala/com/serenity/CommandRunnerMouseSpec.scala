@@ -140,13 +140,13 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
   // issue #1059: a drilled-in settings group renders on the one command-runner surface now (no second floating
   // submenu surface), so this hit-tests against that surface directly.
   // issue #1057: previously entered the (now-removed) "settings-language" group via a "language" search; retargeted
-  // to "settings-cursor" (still present, 3 plain OptionItem children -- unlike "settings-ui-font", none of them is
+  // to "settings-status-line" (still present, plain OptionItem children -- unlike "settings-ui-font", none of them is
   // itself an expandable group, so there's no inline group-preview row competing for space in the capped floating
   // surface height, issue #1045).
   it should "highlight the focused submenu row under the pointer" in {
     val stateManager = createStateManager("CommandRunnerMouseSpec")
 
-    openCursorSubmenu(stateManager)
+    openStatusLineSubmenu(stateManager)
     // See the equivalent comment on "highlight the command row under the pointer" above.
     disableCommandRunnerKeyHints(stateManager)
 
@@ -260,7 +260,9 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
   private def floatingMetrics(state: AppState): CellMetrics =
     CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.editorConfig.fontConfig))
 
-  /** Enters "settings-cursor" (search "cursor" exact-matches its label; issue #1057 -- was "settings-language"). */
+  /** Enters "settings-status-line" (search "status line" exact-matches its label; issue #1057 -- was
+    * "settings-language", then "settings-cursor" until the status line took over its segment rows).
+    */
   private def disableCommandRunnerKeyHints(stateManager: com.serenity.state.manager.StateManager): Unit =
     stateManager
       .updateState(state =>
@@ -269,10 +271,10 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
       )
       .unsafeRunSync()
 
-  private def openCursorSubmenu(stateManager: com.serenity.state.manager.StateManager): Unit =
+  private def openStatusLineSubmenu(stateManager: com.serenity.state.manager.StateManager): Unit =
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    "cursor".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    "status line".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
 
   /** Enters "settings-ui-font" (search "ui font" exact-matches its label), then descends one level further into its

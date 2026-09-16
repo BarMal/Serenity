@@ -84,7 +84,7 @@ private[manager] object FocusHandlerRouting:
       case SurfaceContent.QuickInfo(_)              => peekOverlay
       case SurfaceContent.FilePreview(_, _)         => peekOverlay
       case SurfaceContent.SymbolDefinition(_, _)    => peekOverlay
-      case SurfaceContent.CursorInfoBar(_)          => peekOverlay
+      case SurfaceContent.StatusLine(_)             => peekOverlay
       case SurfaceContent.DirectoryListing(_, _, _) => peekOverlay
       case SurfaceContent.ContextMenu(_)            => peekOverlay
       case SurfaceContent.MarkdownPreview(_, _)     => peekOverlay

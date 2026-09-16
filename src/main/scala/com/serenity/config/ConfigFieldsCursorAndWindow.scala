@@ -28,43 +28,6 @@ private[config] object ConfigFieldsCursorAndWindow:
       _.cursorColors.inactive,
       (config, value) => config.withCursorColors(config.cursorColors.copy(inactive = value))
     ),
-    // #1295: independent of the active theme -- `None` (default) keeps the theme's own panel colour for the cursor
-    // info bar, matching every other floating panel.
-    named("cursor.info_bar.foreground_color", "cursor_info_bar_foreground_color")(color.orEmpty)(
-      _.cursorInfoBarColors.foreground,
-      (config, value) => config.withCursorInfoBarColors(config.cursorInfoBarColors.copy(foreground = value))
-    ),
-    named("cursor.info_bar.background_color", "cursor_info_bar_background_color")(color.orEmpty)(
-      _.cursorInfoBarColors.background,
-      (config, value) => config.withCursorInfoBarColors(config.cursorInfoBarColors.copy(background = value))
-    ),
-    named(
-      "cursor.info_bar.segments",
-      "cursorInfoBarSegments",
-      "cursor.info_bar",
-      "cursor.info.bar",
-      "cursor_info_bar",
-      "cursor.info.bar.segments"
-    )(infoBarSegments)(
-      _.cursorInfoBarSegments,
-      (config, value) => config.withCursorInfoBarSegments(value)
-    ),
-    named(
-      "cursor.info_bar.placement",
-      "cursorInfoBarPlacement",
-      "cursor.info.bar.placement",
-      "cursor_info_bar_placement"
-    )(
-      enumerated(
-        CursorInfoBarPlacement.fromConfigKey,
-        _.configKey,
-        text => CursorInfoBarPlacement.values.find(_.toString == text)
-      )
-    )(
-      _.cursorInfoBarPlacement,
-      (config, value) => config.withCursorInfoBarPlacement(value)
-    ),
-
     // -- Interface -------------------------------------------------------------------------------------------------------
     named("interface.density", "interfaceDensity", "interface_density")(
       enumerated(InterfaceDensity.fromConfigKey, _.configKey, text => InterfaceDensity.values.find(_.toString == text))

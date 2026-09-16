@@ -152,31 +152,8 @@ object ConfigManager:
                 else None
               }
               .getOrElse(config)
-          case keymapKey if keymapKey.startsWith("keymap.editor.") =>
-            EditorKeyAction.values
-              .find(action => s"keymap.editor.${action.configKey}" == keymapKey)
-              .map(action => config.withKeymapBinding(KeymapGroup.Editor)(action, value.trim))
-              .getOrElse(config)
-          case keymapKey if keymapKey.startsWith("keymap.command_runner.") =>
-            CommandRunnerKeyAction.values
-              .find(action => s"keymap.command_runner.${action.configKey}" == keymapKey)
-              .map(action => config.withKeymapBinding(KeymapGroup.CommandRunner)(action, value.trim))
-              .getOrElse(config)
-          case keymapKey if keymapKey.startsWith("keymap.modal.") =>
-            ModalKeyAction.values
-              .find(action => s"keymap.modal.${action.configKey}" == keymapKey)
-              .map(action => config.withKeymapBinding(KeymapGroup.Modal)(action, value.trim))
-              .getOrElse(config)
-          case keymapKey if keymapKey.startsWith("keymap.panel.") =>
-            PanelKeyAction.values
-              .find(action => s"keymap.panel.${action.configKey}" == keymapKey)
-              .map(action => config.withKeymapBinding(KeymapGroup.Panel)(action, value.trim))
-              .getOrElse(config)
-          case keymapKey if keymapKey.startsWith("keymap.peek.") =>
-            PeekKeyAction.values
-              .find(action => s"keymap.peek.${action.configKey}" == keymapKey)
-              .map(action => config.withKeymapBinding(KeymapGroup.Peek)(action, value.trim))
-              .getOrElse(config)
+          case keymapKey if keymapKey.startsWith("keymap.") =>
+            parseKeymapEntry(config, keymapKey, value.trim).getOrElse(config)
           case "config.version" =>
             config
           case _ =>
@@ -184,7 +161,8 @@ object ConfigManager:
     }
 
     val scaled       = inferTextScaleMode(parsed, entries)
-    val withLists    = applyHoconLists(scaled, source)
+    val withStatus   = LegacyStatusLineKeys.applied(scaled, entries.map(entry => entry.key -> entry.value))
+    val withLists    = applyHoconLists(withStatus, source)
     val withLspLists = PreferredWindowSizeParsing.applied(applyHoconLspLists(withLists, source), source)
     HotkeyConfig
       .fromBindings(withLspLists.inputConfig.hotkeyConfig.bindings)
@@ -425,6 +403,8 @@ object ConfigManager:
               value.trim.toIntOption.forall(_ <= 0)
             case key if SurfaceConfigSchemaKeys.handles(key) =>
               SurfaceConfigSchemaParser.invalidValue(key, value)
+            case key if LegacyStatusLineKeys.handles(key) =>
+              LegacyStatusLineKeys.rejects(key, value)
             case key if key.startsWith("hotkey.") || key.startsWith("keymap.") =>
               value.split(",").toList.map(_.trim).filter(_.nonEmpty).exists(HotkeyTrigger.parse(_).isEmpty)
             case key if key.startsWith("lsp.") =>
@@ -437,6 +417,23 @@ object ConfigManager:
               false
 
     Option.when(invalid)(InvalidConfigEntry(key, value, "Invalid value for supported config key"))
+
+  /** One `keymap.<group>.<action> = binding` entry, for whichever of the five focused keymap groups the key names. */
+  private def parseKeymapEntry(config: AppConfig, key: String, binding: String): Option[AppConfig] =
+    def bind[A <: KeymapEventAction[E], E <: com.serenity.keystroke.events.Event](
+      prefix: String,
+      actions: Array[A],
+      group: KeymapGroup[A, E]
+    ): Option[AppConfig] =
+      Option
+        .when(key.startsWith(prefix))(actions.find(action => s"$prefix${action.configKey}" == key))
+        .flatten
+        .map(action => config.withKeymapBinding(group)(action, binding))
+    bind("keymap.editor.", EditorKeyAction.values, KeymapGroup.Editor)
+      .orElse(bind("keymap.command_runner.", CommandRunnerKeyAction.values, KeymapGroup.CommandRunner))
+      .orElse(bind("keymap.modal.", ModalKeyAction.values, KeymapGroup.Modal))
+      .orElse(bind("keymap.panel.", PanelKeyAction.values, KeymapGroup.Panel))
+      .orElse(bind("keymap.peek.", PeekKeyAction.values, KeymapGroup.Peek))
 
   /** A config that carries a text scale but never says which mode it is in means manual scaling -- that is what the
     * multiplier was for before `font.scale.mode` existed. A config that does say is taken at its word, including when

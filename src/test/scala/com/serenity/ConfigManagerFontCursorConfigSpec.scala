@@ -113,12 +113,12 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
-    config.cursorInfoBarSegments shouldBe List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
-    config.cursorInfoBarPlacement shouldBe CursorInfoBarPlacement.PinnedBottom
-    // The segment list is written under its own leaf and quoted: a bare comma made the file invalid HOCON, and
-    // `cursor.info_bar` as a leaf on a path that also has children (`.placement`) is a value HOCON drops.
-    ConfigManager.configToString(config) should include("cursor.info_bar.segments = \"position,title\"")
-    ConfigManager.configToString(config) should include("cursor.info_bar.placement = pinned-bottom")
+    // The old "detailed" preset plus the mode the corner glyph always showed alongside it, on today's status line.
+    config.statusLine.segments shouldBe List(StatusSegment.Position, StatusSegment.Title, StatusSegment.Mode)
+    config.statusLine.placement shouldBe StatusLinePlacement.Pinned
+    // Written back under the current keys, with the segment list quoted: a bare comma made the file invalid HOCON.
+    ConfigManager.configToString(config) should include("status.segments = \"position, title, mode\"")
+    ConfigManager.configToString(config) should include("status.placement = pinned")
   }
 
   it should "ignore invalid cursor colour overrides" in {

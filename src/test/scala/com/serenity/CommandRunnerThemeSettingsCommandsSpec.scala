@@ -261,7 +261,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.commandRunnerSurface shouldBe None
     updatedState.persisted.config.editorConfig.fontConfig.textFontFamily shouldBe Font.SERIF
     updatedState.persisted.config.surfaceConfig.showLineNumbers shouldBe false
-    updatedState.persisted.config.surfaceConfig.showGutter shouldBe false
+    updatedState.persisted.config.statusLine.isPinned shouldBe false
     updatedState.persisted.config.surfaceConfig.showPaneHeaders shouldBe false
     updatedState.pinnedSurfaces shouldBe Nil
   }
@@ -276,12 +276,12 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
     val persisted = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     updated.surfaceConfig.showLineNumbers shouldBe true
-    updated.surfaceConfig.showGutter shouldBe true
+    updated.statusLine.isPinned shouldBe true
     updated.surfaceConfig.showPaneHeaders shouldBe true
     updated.surfaceConfig.wordWrapEnabled shouldBe false
     updated.surfaceConfig.contextualToolbarEnabled shouldBe false
     persisted.surfaceConfig.showLineNumbers shouldBe updated.surfaceConfig.showLineNumbers
-    persisted.surfaceConfig.showGutter shouldBe updated.surfaceConfig.showGutter
+    persisted.statusLine.isPinned shouldBe updated.statusLine.isPinned
     persisted.surfaceConfig.showPaneHeaders shouldBe updated.surfaceConfig.showPaneHeaders
     persisted.surfaceConfig.wordWrapEnabled shouldBe updated.surfaceConfig.wordWrapEnabled
     persisted.surfaceConfig.contextualToolbarEnabled shouldBe updated.surfaceConfig.contextualToolbarEnabled

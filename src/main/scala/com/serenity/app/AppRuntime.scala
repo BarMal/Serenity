@@ -9,7 +9,7 @@ import cats.effect.*
 import cats.effect.std.Dispatcher
 import cats.syntax.parallel.*
 import cats.syntax.semigroup.*
-import com.serenity.config.{AppConfig, CursorMode, MotionFamily, RenderFpsTarget}
+import com.serenity.config.{AppConfig, CursorMode, RenderFpsTarget}
 import com.serenity.diagnostics.Trace
 import com.serenity.input.*
 import com.serenity.keystroke.KeyboardFidelityTier
@@ -394,17 +394,9 @@ object AppRuntime:
   ): IO[Unit] =
     event match
       case _: com.serenity.keystroke.events.InsertChar =>
-        stateManager.updateState { state =>
-          val motion =
-            state.persisted.config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
-          if motion.enabled && state.persisted.config.windowSitterConfig.enabled then
-            state.copy(runtime =
-              state.runtime.copy(windowSitter =
-                state.runtime.windowSitter.observeTyping(System.nanoTime(), state.persisted.config.windowSitterConfig)
-              )
-            )
-          else state
-        }
+        stateManager.updateState(state =>
+          state.copy(runtime = state.runtime.observeTyping(System.nanoTime(), state.persisted.config))
+        )
       case _ => IO.unit
 
   private def checkResizeBeforeInput(event: Event, checkResizeAndHandle: IO[Unit]): IO[Unit] =
@@ -687,7 +679,8 @@ object AppRuntime:
     state: AppState,
     bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
   ): Boolean =
-    needsFullContentRender(state, bufferAnimations) || state.runtime.windowSitter.isActive
+    needsFullContentRender(state, bufferAnimations) || state.runtime.windowSitter.isActive ||
+      state.runtime.typingActivity.isActive
 
   /** Whether the fast render loop's current frame needs a full content repaint, as opposed to the cheaper cursor-only
     * overlay path. Character-reveal animations paint into document glyphs, and a theme transition cross-fades every

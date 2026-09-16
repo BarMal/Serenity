@@ -111,7 +111,7 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
         Command.typed(
           "third",
           "Third command",
-          CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleGutter))
+          CommandIntent.Settings(SettingsIntent.StatusLine(StatusLineIntent.ToggleVisibility))
         )
       )
       val registry  = CommandRegistry(commands)

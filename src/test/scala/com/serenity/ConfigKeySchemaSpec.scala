@@ -27,7 +27,7 @@ class ConfigKeySchemaSpec extends AnyFlatSpec with Matchers:
 
   it should "report deprecated key replacements from the central schema" in {
     ConfigKeySchema.deprecatedReplacement("cursor_mode").shouldBe(Some("cursor.mode"))
-    ConfigKeySchema.deprecatedReplacement("cursor_info_bar") shouldBe Some("cursor.info_bar.segments")
+    ConfigKeySchema.deprecatedReplacement("cursor_info_bar") shouldBe Some("status.segments")
     ConfigKeySchema.deprecatedReplacement("document_markdown_view").shouldBe(Some("document.markdown_view"))
     ConfigKeySchema.deprecatedReplacement("ui_motion_cursor_speed_scale") shouldBe Some(
       "ui.motion.cursor.speed_scale"

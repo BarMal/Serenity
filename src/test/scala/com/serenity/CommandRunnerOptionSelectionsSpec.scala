@@ -46,15 +46,11 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
         backgroundStyle = BackgroundStyle.GlassLike,
         contextualToolbarDisplayMode = ToolbarDisplayMode.TextOnly,
         showLineNumbers = false,
-        showGutter = false,
         wordWrapEnabled = false,
         contextualToolbarEnabled = false
       ),
-      cursorConfig = CursorConfig(
-        mode = CursorMode.Breathe,
-        infoBarSegments = List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title),
-        infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
-      ),
+      cursorConfig = CursorConfig(mode = CursorMode.Breathe),
+      statusLine = StatusLineConfig(List(StatusSegment.Position, StatusSegment.Title), StatusLinePlacement.Pinned),
       documentConfig = DocumentConfig(
         markdownViewMode = MarkdownViewMode.InlineLens,
         defaultMode = DefaultDocumentMode.RichText
@@ -89,12 +85,12 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("panel-open-transition") shouldBe 3
     selections("panel-close-transition") shouldBe 1
     selections("cursor-mode") shouldBe 1
-    selections("cursor-info-bar-title") shouldBe 0
-    selections("cursor-info-bar-position") shouldBe 0
-    selections("cursor-info-bar-word-count") shouldBe 1
-    selections("cursor-info-bar-char-count") shouldBe 1
-    selections("cursor-info-bar-reading-time") shouldBe 1
-    selections("cursor-info-bar-placement") shouldBe 1
+    selections("status-title") shouldBe 0
+    selections("status-position") shouldBe 0
+    selections("status-word-count") shouldBe 1
+    selections("status-char-count") shouldBe 1
+    selections("status-reading-time") shouldBe 1
+    selections("status-placement") shouldBe 0
     selections("background-style") shouldBe 3
     selections("interface-density") shouldBe 0
     selections("window-chrome") shouldBe 2
@@ -103,7 +99,9 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("contextual-toolbar-display") shouldBe 1
     selections("spellcheck-enabled") shouldBe 1
     selections("line-numbers") shouldBe 1
-    selections("gutter") shouldBe 1
+    selections("status-placement") shouldBe 0
+    selections("status-position") shouldBe 0
+    selections("status-language") shouldBe 1
     selections("line-wrap") shouldBe 1
     selections("word-wrap") shouldBe 1
     selections("contextual-toolbar") shouldBe 1

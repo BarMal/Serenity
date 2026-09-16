@@ -38,24 +38,20 @@ private[config] object ConfigFieldSyntax:
     FieldCodec.of(colorFromHex, value => HoconValue.string(colorToHex(value)))
 
   /** The segment list, which also accepts the older single-word presets (`minimal`, `detailed`) it replaced. */
-  private[config] val infoBarSegments: FieldCodec[List[CursorInfoBarSegment]] =
-    given io.circe.Encoder[List[CursorInfoBarSegment]] =
+  private[config] val statusSegments: FieldCodec[List[StatusSegment]] =
+    given io.circe.Encoder[List[StatusSegment]] =
       io.circe.Encoder.encodeList(using io.circe.Encoder.encodeString.contramap(_.configKey))
-    given io.circe.Decoder[List[CursorInfoBarSegment]] =
+    given io.circe.Decoder[List[StatusSegment]] =
       io.circe.Decoder.decodeList(using
         io.circe.Decoder.decodeString.emap(key =>
-          CursorInfoBarSegment
+          StatusSegment
             .fromConfigKey(key)
-            .orElse(CursorInfoBarSegment.values.find(_.toString == key))
-            .toRight(s"Unknown cursor info bar segment: $key")
+            .orElse(StatusSegment.values.find(_.toString == key))
+            .toRight(s"Unknown status segment: $key")
         )
       )
-    FieldCodec.of(
-      CursorInfoBarSegment.parseList,
-      values => HoconValue.string(if values.isEmpty then "off" else values.map(_.configKey).mkString(","))
-    )
+    FieldCodec.of(StatusSegment.parseList, segments => HoconValue.string(StatusSegment.renderList(segments)))
 
-  /** Font sizes are clamped rather than refused: a file asking for 400pt is a file that means "as big as you allow". */
   private[config] val fontSize: FieldCodec[Float] =
     FieldCodec.of(text => text.trim.toFloatOption.map(size => size.max(8.0f).min(48.0f)), HoconValue.number)
 

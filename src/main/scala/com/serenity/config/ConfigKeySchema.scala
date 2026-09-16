@@ -21,7 +21,7 @@ object ConfigKeySchema:
   val deprecatedKeys: Map[String, String] =
     ConfigRegistry.fields.flatMap { field =>
       field.aliases.filterNot(currentKeys.contains).map(_ -> field.key)
-    }.toMap ++ ConfigGroups.deprecatedKeys
+    }.toMap ++ ConfigGroups.deprecatedKeys ++ LegacyStatusLineKeys.replacements
 
   def deprecatedReplacement(key: String): Option[String] =
     deprecatedKeys.get(key)

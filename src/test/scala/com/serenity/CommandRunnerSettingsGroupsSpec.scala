@@ -109,6 +109,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     )
     group("settings-editor-view").children.map(_.id) shouldBe List(
       "settings-text-display",
+      "settings-status-line",
       "settings-text-area",
       "settings-text-scale"
     )
@@ -125,11 +126,9 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "settings-animation"
     )
     nestedGroup("settings-cursor").label shouldBe "Cursor"
-    nestedGroup("settings-cursor").children.map(_.id) should contain allOf (
-      "cursor-mode",
-      "cursor-info-bar-title",
-      "cursor-info-bar-placement"
-    )
+    nestedGroup("settings-cursor").children.map(_.id) shouldBe List("cursor-mode")
+    nestedGroup("settings-status-line").label shouldBe "Status Line"
+    nestedGroup("settings-status-line").children.map(_.id) should contain allOf ("status-placement", "status-title")
     nestedGroup("settings-surface-appearance").label shouldBe "Surface Appearance"
     nestedGroup("settings-surface-appearance").children.map(_.id) shouldBe List(
       "background-style",
@@ -173,11 +172,9 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "line-number-margin-left",
       "line-number-margin-right",
       "line-number-padding",
-      "gutter",
       "line-wrap",
       "visual-line-navigation",
       "typewriter-scrolling",
-      "show-word-count",
       "focused-text-body",
       "contextual-toolbar",
       "contextual-toolbar-display"
@@ -273,7 +270,6 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       .copy(surfaceConfig =
         AppConfig.default.surfaceConfig.copy(
           showLineNumbers = false,
-          showGutter = false,
           wordWrapEnabled = false,
           contextualToolbarEnabled = false,
           contextualToolbarDisplayMode = ToolbarDisplayMode.TextOnly
@@ -288,11 +284,9 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     options.map(option => option.id -> option.selectedOption) shouldBe List(
       "line-numbers"               -> "Off",
       "line-number-side"           -> "Left",
-      "gutter"                     -> "Off",
       "line-wrap"                  -> "Off",
       "visual-line-navigation"     -> "On",
       "typewriter-scrolling"       -> "Off",
-      "show-word-count"            -> "Off",
       "focused-text-body"          -> "Off",
       "contextual-toolbar"         -> "Off",
       "contextual-toolbar-display" -> "Text Only"
@@ -300,11 +294,9 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     options.flatMap(_.selectedIntent) shouldBe List(
       CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetLineNumbers(false))),
       CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetLineNumberSide(LineNumberSide.Left))),
-      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetGutter(false))),
       CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetWordWrap(false))),
       CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetVisualLineCursorNavigation(true))),
       CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTypewriterScrolling(false))),
-      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetShowWordCount(false))),
       CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetFocusedTextBody(false))),
       CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetContextualToolbarEnabled(false))),
       CommandIntent.Settings(

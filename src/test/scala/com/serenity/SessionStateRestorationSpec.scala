@@ -275,8 +275,8 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
   it should "decode a session file written by the current release using old toString enum spellings" in {
     val config = AppConfig.default
       .withCursorMode(CursorMode.Breathe)
-      .withCursorInfoBarSegments(List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title))
-      .withCursorInfoBarPlacement(CursorInfoBarPlacement.PinnedBottom)
+      .withStatusLineSegments(List(StatusSegment.Position, StatusSegment.Title))
+      .withStatusLinePlacement(StatusLinePlacement.Pinned)
       .withWindowChromeMode(WindowChromeMode.NativeThemed)
       .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       .withDefaultDocumentMode(DefaultDocumentMode.RichText)
@@ -312,7 +312,8 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
     // `configKey` (e.g. "NativeThemed" instead of "native-themed"). This rebuilds that old shape from a
     // current-format encode so the fixture stays in sync with the schema instead of being hand-typed JSON.
     val legacyConfigObject = configObject
-      .remove("cursorInfoBarSegments")
+      .remove("statusSegments")
+      .remove("statusPlacement")
       .add("cursorMode", Json.fromString("Breathe"))
       .add("cursorInfoBarMode", Json.fromString("Detailed"))
       .add("cursorInfoBarPlacement", Json.fromString("PinnedBottom"))
@@ -338,9 +339,9 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
 
     decoded.isRight shouldBe true
     decoded.toOption.get.config.cursorMode shouldBe CursorMode.Breathe
-    decoded.toOption.get.config.cursorInfoBarSegments shouldBe
-      List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
-    decoded.toOption.get.config.cursorInfoBarPlacement shouldBe CursorInfoBarPlacement.PinnedBottom
+    decoded.toOption.get.config.statusLine.segments shouldBe
+      List(StatusSegment.Position, StatusSegment.Title, StatusSegment.Mode)
+    decoded.toOption.get.config.statusLine.placement shouldBe StatusLinePlacement.Pinned
     decoded.toOption.get.config.windowChromeMode shouldBe WindowChromeMode.NativeThemed
     decoded.toOption.get.config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
     decoded.toOption.get.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
@@ -368,10 +369,10 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
       rewrittenJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
 
     rewrittenConfigObject("cursorMode") shouldBe Some(Json.fromString("breathe"))
-    rewrittenConfigObject("cursorInfoBarSegments") shouldBe Some(
-      Json.arr(Json.fromString("position"), Json.fromString("title"))
+    rewrittenConfigObject("statusSegments") shouldBe Some(
+      Json.arr(Json.fromString("position"), Json.fromString("title"), Json.fromString("mode"))
     )
-    rewrittenConfigObject("cursorInfoBarPlacement") shouldBe Some(Json.fromString("pinned-bottom"))
+    rewrittenConfigObject("statusPlacement") shouldBe Some(Json.fromString("pinned"))
     rewrittenConfigObject("windowChromeMode") shouldBe Some(Json.fromString("native-themed"))
     rewrittenConfigObject("markdownViewMode") shouldBe Some(Json.fromString("inline-lens"))
     rewrittenConfigObject("defaultDocumentMode") shouldBe Some(Json.fromString("rich-text"))

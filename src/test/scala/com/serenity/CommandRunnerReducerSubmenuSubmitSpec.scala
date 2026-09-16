@@ -101,24 +101,24 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
     submitted.state.commandRunnerSurface shouldBe None
   }
 
-  // #1298: reordering the cursor info bar's segments used to close the whole settings menu on every single move,
+  // #1298: reordering the status line's segments used to close the whole settings menu on every single move,
   // forcing a full re-open/re-navigate round trip to nudge one segment more than one step. Moving a segment now
-  // leaves the "Cursor" group open so the next move can be submitted immediately.
-  it should "keep the settings submenu open after moving a cursor info bar segment" in {
+  // leaves the "Status Line" group open so the next move can be submitted immediately.
+  it should "keep the settings submenu open after moving a status line segment" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val config = AppConfig.default.withCursorInfoBarSegments(
-      List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title)
+    val config = AppConfig.default.withStatusLineSegments(
+      List(StatusSegment.Position, StatusSegment.Title)
     )
     // Mirrors settingsStateOnItem's own navigation: search narrows visibleItems to the target group before
     // indexing into it, exactly as reaching any other settings group does elsewhere in this spec.
     val searched = CommandRunner.empty
       .activate(registry, config)
       .openSettings
-      .updateSearchTerm(settingsGroupSearchTerm("settings-cursor"))
-    val groupIndex = searched.visibleItems.indexWhere(_.id == "settings-cursor")
+      .updateSearchTerm(settingsGroupSearchTerm("settings-status-line"))
+    val groupIndex = searched.visibleItems.indexWhere(_.id == "settings-status-line")
     val entered    = searched.withSelectedVisibleIndex(groupIndex).enterSelectedGroup
-    val moveIndex  = entered.submenuItems("settings-cursor").indexWhere(_.id == "move-cursor-info-bar-position-later")
+    val moveIndex  = entered.submenuItems("settings-status-line").indexWhere(_.id == "move-status-position-later")
     val positioned = entered.withSelectedFocusedSubmenuIndex(moveIndex)
     val surface = UiSurface(
       SurfaceId("command-runner"),
@@ -133,9 +133,9 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
     val submitted = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
 
     submitted.state.commandRunnerSurface shouldBe defined
-    runnerFrom(submitted.state).activeSubmenuGroupId shouldBe Some("settings-cursor")
+    runnerFrom(submitted.state).activeSubmenuGroupId shouldBe Some("settings-status-line")
     submitted.effects.collectFirst { case AppEffect.ExecuteCommand(command) => command.name } shouldBe
-      Some("move-cursor-info-bar-position-later")
+      Some("move-status-position-later")
   }
 
   it should "fire SetAnimationSteps intent on Enter with valid value" in {

@@ -45,7 +45,7 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
         config = AppState.empty.persisted.config
           .withSyntaxHighlighting(true)
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )
     )
@@ -103,7 +103,7 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
         config = AppState.empty.persisted.config
           .withSyntaxHighlighting(true)
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )
     )
@@ -505,7 +505,7 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
         config = AppState.empty.persisted.config
           .withSyntaxHighlighting(true)
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )
     )

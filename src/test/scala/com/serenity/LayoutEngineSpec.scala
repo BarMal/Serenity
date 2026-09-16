@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
+import com.serenity.config.{AppConfig, InterfaceDensity, StatusLinePlacement, TextAreaInsets}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -83,7 +83,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       AppState.initial.persisted.copy(
         config = AppConfig.default
           .withLineNumbers(true)
-          .withGutter(true)
+          .withStatusLinePlacement(StatusLinePlacement.Pinned)
           .withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.20))
       )
     )

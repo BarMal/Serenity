@@ -106,38 +106,25 @@ final case class AppState(
 
   def editingContext: EditingContext = EditingContext.of(this)
 
-  def cursorInfoBarSurface: Option[UiSurface] =
-    if persisted.config.cursorInfoBarSegments.isEmpty then None
-    else
-      persisted.config.cursorInfoBarPlacement match
-        case CursorInfoBarPlacement.Floating =>
-          for
-            paneId   <- persisted.layout.activeEditorPaneId
-            pane     <- persisted.layout.editorPanes.get(paneId)
-            bufferId <- pane.bufferId
-            buffer   <- persisted.buffers.get(bufferId)
-            cursor   <- buffer.editing.cursors.headOption
-          yield UiSurface(
-            id = UiSurface.CursorInfoBarSurfaceId,
-            content = SurfaceContent.CursorInfoBar(
-              formatCursorInfoBarSegments(persisted.config.cursorInfoBarSegments, cursor, buffer)
-            ),
-            presentation = SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
-          )
-        case CursorInfoBarPlacement.PinnedBottom =>
-          None
+  /** The status text both placements show, or `None` when the status line is off or nothing is open. */
+  def statusLineText: Option[String] =
+    if !persisted.config.statusLine.isShown then None
+    else StatusLineText.render(this, persisted.config.statusLine.segments)
 
-  def cursorInfoBarText: Option[String] =
-    val segments = persisted.config.cursorInfoBarSegments
-    if segments.isEmpty then None
+  /** The floating status row, derived each frame rather than stored: it follows the caret and steps aside for the
+    * length of a typing burst (`runtime.typingActivity`) so nothing near the caret moves while text is going in.
+    */
+  def floatingStatusLineSurface: Option[UiSurface] =
+    if !persisted.config.statusLine.isFloating || runtime.typingActivity.isActive then None
     else
       for
-        paneId   <- persisted.layout.activeEditorPaneId
-        pane     <- persisted.layout.editorPanes.get(paneId)
-        bufferId <- pane.bufferId
-        buffer   <- persisted.buffers.get(bufferId)
-        cursor   <- buffer.editing.cursors.headOption
-      yield formatCursorInfoBarSegments(segments, cursor, buffer)
+        text   <- statusLineText
+        cursor <- activeCursorPosition
+      yield UiSurface(
+        id = UiSurface.StatusLineSurfaceId,
+        content = SurfaceContent.StatusLine(text),
+        presentation = SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
+      )
 
   /** The active editor pane's buffer, if any. */
   def activeBuffer: Option[Buffer] =
@@ -166,45 +153,6 @@ final case class AppState(
       if endOffset > startOffset
     yield TextStatistics.ofString(content.sliceString(startOffset, endOffset))
 
-  /** Status-bar text for the word/character-count and reading-time display (#1203), or `None` when the feature is off
-    * (`surfaceConfig.showWordCount`) or there is no active buffer. Selection-scoped when a non-empty selection is
-    * active, whole-buffer otherwise -- mirrors `cursorInfoBarText`'s shape for the status-bar convention.
-    */
-  def wordCountStatusText: Option[String] =
-    if !persisted.config.surfaceConfig.showWordCount then None
-    else
-      activeBufferTextStatistics.map { total =>
-        activeSelectionTextStatistics match
-          case Some(selection) =>
-            s"${selection.wordCount} of ${total.wordCount} words selected, ${selection.characterCount} chars"
-          case None =>
-            s"${total.wordCount} words, ${total.characterCount} chars, ~${total.readingTimeMinutes} min read"
-      }
-
-  private def formatCursorInfoBarSegments(
-    segments: List[CursorInfoBarSegment],
-    cursor: CursorPosition,
-    buffer: Buffer
-  ): String =
-    segments.map(formatCursorInfoBarSegment(_, cursor, buffer)).mkString(" | ")
-
-  private def formatCursorInfoBarSegment(
-    segment: CursorInfoBarSegment,
-    cursor: CursorPosition,
-    buffer: Buffer
-  ): String =
-    segment match
-      case CursorInfoBarSegment.Position =>
-        s"Line ${cursor.line + 1}, Col ${cursor.column + 1}"
-      case CursorInfoBarSegment.Title =>
-        buffer.document.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Unsaved")
-      case CursorInfoBarSegment.WordCount =>
-        s"${TextStatistics.of(buffer.document.content).wordCount} words"
-      case CursorInfoBarSegment.CharCount =>
-        s"${TextStatistics.of(buffer.document.content).characterCount} chars"
-      case CursorInfoBarSegment.ReadingTime =>
-        s"~${TextStatistics.of(buffer.document.content).readingTimeMinutes} min read"
-
   def floatingSurfaces: List[UiSurface] =
     runtime.uiSurfaces.filter {
       _.presentation match
@@ -213,7 +161,7 @@ final case class AppState(
     }
 
   /** Every floating surface a frame actually paints, including the ones derived per frame rather than stored in
-    * `runtime.uiSurfaces` -- today that is the cursor info bar in `Floating` placement ([[cursorInfoBarSurface]]).
+    * `runtime.uiSurfaces` -- today that is the floating status row ([[floatingStatusLineSurface]]).
     *
     * [[floatingSurfaces]] answers a narrower question ("which floating surfaces does this state *hold*"), which is what
     * the layout wants: it composes the derived bar itself, as the fallback in
@@ -222,7 +170,7 @@ final case class AppState(
     * through to whatever it covers (#1292).
     */
   def visibleFloatingSurfaces: List[UiSurface] =
-    floatingSurfaces ++ cursorInfoBarSurface.filter {
+    floatingSurfaces ++ floatingStatusLineSurface.filter {
       _.presentation match
         case SurfacePresentation.Floating(_, _) => true
         case _                                  => false
@@ -245,7 +193,7 @@ final case class AppState(
     yield surface
 
   def surfaceById(surfaceId: SurfaceId): Option[UiSurface] =
-    runtime.uiSurfaces.find(_.id == surfaceId).orElse(cursorInfoBarSurface.filter(_.id == surfaceId))
+    runtime.uiSurfaces.find(_.id == surfaceId).orElse(floatingStatusLineSurface.filter(_.id == surfaceId))
 
   def activeSurface: Option[UiSurface] =
     persisted.focus match

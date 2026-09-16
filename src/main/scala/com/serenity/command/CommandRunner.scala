@@ -33,9 +33,9 @@ final case class CommandRunner(
     // override this with a deterministic catalog so results don't depend on what's installed on the machine running
     // them -- see `FontLoader.FontFamilyCatalog`'s doc.
     fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system,
-    // The cursor info bar segments' actual current order, refreshed alongside `optionSelections` in `activate`/
+    // The status line's actual current segment order, refreshed alongside `optionSelections` in `activate`/
     // `updateInputItems` -- threaded into `settingsGroups` so its reorder commands reflect it (issue #1298).
-    cursorInfoBarSegments: List[CursorInfoBarSegment] = Nil,
+    statusSegments: List[StatusSegment] = Nil,
     // issue #1048: MRU (most-recently-used) tracking for palette commands -- keyed by `Command.name`, valued by an
     // incrementing "recency generation" (higher = used more recently), bumped by `recordCommandUsage` whenever a
     // command executes from the palette. A generation counter rather than wall-clock time: recency-*ordering* is all
@@ -165,7 +165,7 @@ final case class CommandRunner(
       editingPresetName = editingPresetName,
       isTuiMode = isTuiMode,
       fontFamilies = fontFamilies,
-      cursorInfoBarSegments = cursorInfoBarSegments
+      statusSegments = statusSegments
     )
 
   def openSettings: CommandRunner =

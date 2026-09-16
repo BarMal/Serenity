@@ -40,26 +40,6 @@ private[command] object CommandRunnerSettingsTextDisplayItems:
       hint = Some("Show line numbers on the left, right, or both edges")
     )
 
-  private[command] def wordCountOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
-    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
-      id = "show-word-count",
-      label = "Word Count",
-      selectedIndex = optionSelections.getOrElse("show-word-count", 1),
-      enabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetShowWordCount(true))),
-      disabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetShowWordCount(false))),
-      hint = "Show word count, character count, and reading time in the status bar"
-    )
-
-  private[command] def gutterOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
-    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
-      id = "gutter",
-      label = "Gutter",
-      selectedIndex = optionSelections.getOrElse("gutter", 0),
-      enabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetGutter(true))),
-      disabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetGutter(false))),
-      hint = "Show or hide the status gutter"
-    )
-
   private[command] def lineWrapOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "line-wrap",

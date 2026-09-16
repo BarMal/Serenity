@@ -70,7 +70,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
         config = AppConfig.default
           .withSyntaxHighlighting(true)
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(mode)
       )
     )
@@ -224,7 +224,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
         ),
         config = AppConfig.default
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
       ),
       runtime = AppState.empty.runtime
@@ -453,7 +453,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
         config = AppConfig.default
           .withSyntaxHighlighting(true)
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       )
     )
@@ -507,7 +507,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
         focus = Focus.EditorPane(paneId),
         config = AppConfig.default
           .withLineNumbers(false)
-          .withGutter(false)
+          .withoutStatusLine
           .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
       ),
       runtime = AppState.empty.runtime

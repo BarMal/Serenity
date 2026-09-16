@@ -6,7 +6,7 @@ import com.serenity.animation.AnimationConfig
 import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.command.*
 import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.{AppConfig, CursorInfoBarSegments, LineNumberLayout, VisualFlairLevel}
+import com.serenity.config.{AppConfig, LineNumberLayout, StatusLinePlacement, StatusSegment, VisualFlairLevel}
 import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CommandRunnerPanelSelections, CommandRunnerReducer}
@@ -300,6 +300,7 @@ final private[manager] class StateManagerConfigEffects(
     intent match
       case SettingsIntent.Font(fontIntent)               => interpretFontIntent(fontIntent)
       case SettingsIntent.Motion(motionIntent)           => interpretMotionIntent(motionIntent)
+      case SettingsIntent.StatusLine(statusLineIntent)   => interpretStatusLineIntent(statusLineIntent)
       case SettingsIntent.Cursor(cursorIntent)           => interpretCursorIntent(cursorIntent)
       case SettingsIntent.TextDisplay(textDisplayIntent) => interpretTextDisplayIntent(textDisplayIntent)
       case SettingsIntent.InterfaceChrome(interfaceChromeIntent) =>
@@ -399,31 +400,38 @@ final private[manager] class StateManagerConfigEffects(
     intent match
       case CursorIntent.SetCursorMode(mode) =>
         updateAppearanceConfig(_.withCursorMode(mode)).void
-      case CursorIntent.SetCursorInfoBarSegmentIncluded(segment, included) =>
-        updateAppearanceConfig { config =>
-          val current = config.cursorInfoBarSegments
-          val updated =
-            if included then CursorInfoBarSegments.include(current, segment)
-            else current.filterNot(_ == segment)
-          config.withCursorInfoBarSegments(updated)
+
+  private def interpretStatusLineIntent(intent: StatusLineIntent): IO[Unit] =
+    intent match
+      case StatusLineIntent.SetSegmentIncluded(segment, included) =>
+        updateTextDisplayConfig { config =>
+          val current = config.statusLine.segments
+          config.withStatusLineSegments(
+            if included then StatusSegment.include(current, segment) else current.filterNot(_ == segment)
+          )
         }.void
-      case CursorIntent.MoveCursorInfoBarSegmentEarlier(segment) =>
-        updateAppearanceConfig(config =>
-          config.withCursorInfoBarSegments(CursorInfoBarSegments.move(config.cursorInfoBarSegments, segment, -1))
+      case StatusLineIntent.MoveSegmentEarlier(segment) =>
+        updateTextDisplayConfig(config =>
+          config.withStatusLineSegments(StatusSegment.move(config.statusLine.segments, segment, -1))
         ).void
-      case CursorIntent.MoveCursorInfoBarSegmentLater(segment) =>
-        updateAppearanceConfig(config =>
-          config.withCursorInfoBarSegments(CursorInfoBarSegments.move(config.cursorInfoBarSegments, segment, 1))
+      case StatusLineIntent.MoveSegmentLater(segment) =>
+        updateTextDisplayConfig(config =>
+          config.withStatusLineSegments(StatusSegment.move(config.statusLine.segments, segment, 1))
         ).void
-      case CursorIntent.SetCursorInfoBarPlacement(placement) =>
-        updateAppearanceConfig(_.withCursorInfoBarPlacement(placement)).void
+      case StatusLineIntent.SetPlacement(placement) =>
+        updateTextDisplayConfig(_.withStatusLinePlacement(placement)).void
+      case StatusLineIntent.ToggleVisibility =>
+        updateTextDisplayConfig { config =>
+          val next =
+            if config.statusLine.placement == StatusLinePlacement.Off then StatusLinePlacement.Pinned
+            else StatusLinePlacement.Off
+          config.withStatusLinePlacement(next)
+        }.void
 
   private def interpretTextDisplayIntent(intent: TextDisplayIntent): IO[Unit] =
     intent match
       case TextDisplayIntent.ToggleLineNumbers =>
         updateTextDisplayConfig(config => config.withLineNumbers(!config.surfaceConfig.showLineNumbers)).void
-      case TextDisplayIntent.ToggleGutter =>
-        updateTextDisplayConfig(config => config.withGutter(!config.surfaceConfig.showGutter)).void
       case TextDisplayIntent.ToggleWordWrap =>
         updateTextDisplayConfig(config => config.withWordWrap(!config.surfaceConfig.wordWrapEnabled)).void
       case TextDisplayIntent.ToggleFocusedTextBody =>
@@ -450,8 +458,6 @@ final private[manager] class StateManagerConfigEffects(
         updateLineNumberLayout(_.copy(marginRight = cells))
       case TextDisplayIntent.SetLineNumberPadding(cells) =>
         updateLineNumberLayout(_.copy(padding = cells))
-      case TextDisplayIntent.SetGutter(enabled) =>
-        updateTextDisplayConfig(config => config.withGutter(enabled)).void
       case TextDisplayIntent.SetWordWrap(enabled) =>
         updateTextDisplayConfig(config => config.withWordWrap(enabled)).void
       case TextDisplayIntent.SetVisualLineCursorNavigation(enabled) =>
@@ -472,8 +478,6 @@ final private[manager] class StateManagerConfigEffects(
         updateTextDisplayConfig(_.withTextAreaTopInset(value)).void
       case TextDisplayIntent.SetTextAreaBottomInset(value) =>
         updateTextDisplayConfig(_.withTextAreaBottomInset(value)).void
-      case TextDisplayIntent.SetShowWordCount(enabled) =>
-        updateTextDisplayConfig(_.withWordCount(enabled)).void
 
   private def updateLineNumberLayout(update: LineNumberLayout => LineNumberLayout): IO[Unit] =
     updateTextDisplayConfig(config => config.withLineNumberLayout(update(config.lineNumberLayout))).void

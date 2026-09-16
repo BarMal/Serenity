@@ -127,7 +127,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     writing.config.editorConfig.fontConfig.textFontFamily shouldBe Font.SERIF
     writing.config.editorConfig.fontConfig.textFontSize should be > AppConfig.default.editorConfig.fontConfig.textFontSize
     writing.config.surfaceConfig.showLineNumbers shouldBe false
-    writing.config.surfaceConfig.showGutter shouldBe false
+    writing.config.statusLine.isPinned shouldBe false
     writing.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
     writing.config.surfaceConfig.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
     writing.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
@@ -150,7 +150,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     code.pinnedPanels.map(_.position) should contain(PanelPosition.Left)
 
     compact.config.surfaceConfig.showLineNumbers shouldBe true
-    compact.config.surfaceConfig.showGutter shouldBe true
+    compact.config.statusLine.isPinned shouldBe true
     compact.config.surfaceConfig.showPaneHeaders shouldBe true
     compact.config.interfaceDensity shouldBe InterfaceDensity.Compact
     compact.config.surfaceConfig.wordWrapEnabled shouldBe false
@@ -397,7 +397,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       name = "Drafting",
       config = AppConfig.default
         .withLineNumbers(true)
-        .withGutter(true)
+        .withStatusLinePlacement(StatusLinePlacement.Pinned)
         .withWordWrap(true),
       themeName = Theme.dark.name,
       dockedPanels = List(SessionDockedPanel("panel-1", panel)),
@@ -405,7 +405,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     )
     val sourceConfig = AppConfig.default
       .withLineNumbers(false)
-      .withGutter(false)
+      .withoutStatusLine
       .withWordWrap(false)
       .withTextAreaInsets(TextAreaInsets.fromPercent(20.0, 10.0))
       .withViewportSizing(
@@ -418,7 +418,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val patched = UiPreset.Patch.TextDisplay(sourceConfig).applyTo(preset)
 
     patched.config.surfaceConfig.showLineNumbers shouldBe false
-    patched.config.surfaceConfig.showGutter shouldBe false
+    patched.config.statusLine.isPinned shouldBe false
     patched.config.surfaceConfig.wordWrapEnabled shouldBe false
     patched.config.surfaceConfig.textAreaInsets shouldBe TextAreaInsets.fromPercent(20.0, 10.0)
     patched.config.surfaceConfig.viewportSizing shouldBe sourceConfig.surfaceConfig.viewportSizing

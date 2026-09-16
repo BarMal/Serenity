@@ -76,18 +76,16 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
             commandRunnerItemGapRows = Some(1),
             commandRunnerCursorGapRows = Some(3),
             renderFpsTarget = RenderFpsTarget.Fps120,
-            showLineNumbers = false,
-            showGutter = false
+            showLineNumbers = false
           ),
           cursorConfig = CursorConfig(
             mode = CursorMode.Breathe,
             colors = CursorColorConfig(
               active = Some(Color(0x22, 0x44, 0x88)),
               inactive = Some(Color(0x88, 0x44, 0x22, 0x99))
-            ),
-            infoBarSegments = List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title),
-            infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
+            )
           ),
+          statusLine = StatusLineConfig(List(StatusSegment.Position, StatusSegment.Title), StatusLinePlacement.Pinned),
           windowConfig = WindowConfig(
             chromeMode = WindowChromeMode.Custom,
             preferredSize = Some(PreferredWindowSize(1400, 900))
@@ -150,10 +148,10 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
       colors = CursorColorConfig(
         active = Some(Color(0x22, 0x44, 0x88)),
         inactive = Some(Color(0x88, 0x44, 0x22, 0x99))
-      ),
-      infoBarSegments = List(CursorInfoBarSegment.Position, CursorInfoBarSegment.Title),
-      infoBarPlacement = CursorInfoBarPlacement.PinnedBottom
+      )
     )
+    decoded.config.statusLine shouldBe
+      StatusLineConfig(List(StatusSegment.Position, StatusSegment.Title), StatusLinePlacement.Pinned)
     decoded.config.windowConfig shouldBe WindowConfig(
       chromeMode = WindowChromeMode.Custom,
       preferredSize = Some(PreferredWindowSize(1400, 900))
@@ -178,7 +176,6 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
     decoded.config.editorConfig.fontConfig.textLigatures shouldBe true
     decoded.config.editorConfig.fontConfig.uiLigatures shouldBe true
     decoded.config.surfaceConfig.showLineNumbers shouldBe false
-    decoded.config.surfaceConfig.showGutter shouldBe false
     decoded.config.languageToolsConfig.lspUserConfig.servers.map(_(LanguageId.Scala.id)) shouldBe Some(
       LspServerOverride(
         command = Some("custom-metals"),

@@ -33,7 +33,7 @@ object OverlayStackLayout:
         case _ =>
           if belowSurfaces.nonEmpty then belowSurfaces.headOption.toList
           else
-            state.cursorInfoBarSurface.filter {
+            state.floatingStatusLineSurface.filter {
               _.presentation match
                 case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) => true
                 case _                                                             => false

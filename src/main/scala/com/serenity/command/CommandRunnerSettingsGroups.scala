@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.config.{AppMode, CursorInfoBarSegment}
+import com.serenity.config.{AppMode, StatusSegment}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.UiPreset
 
@@ -24,10 +24,8 @@ object CommandRunnerSettingsGroups:
     // Desktop Publish release-blocker -- a Windows-only font whose family name happened to contain a search term
     // used in a settings-search test).
     fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system,
-    // The segments' actual current order (`AppConfig.cursorInfoBarSegments`) -- threaded through so the reorder
-    // commands `cursorInfoBarSegmentItems` builds reflect it (issue #1298). `Nil` falls back to that function's own
-    // fixed-order, ungated default.
-    cursorInfoBarSegments: List[CursorInfoBarSegment] = Nil
+    // The status line's actual current segment order, so its reorder commands reflect what is on screen (#1298).
+    statusSegments: List[StatusSegment] = Nil
   ): List[CommandSurfaceItem.GroupItem] =
     // Read off `optionSelections` rather than taking a separate `AppConfig` parameter: it is already the one place
     // every setting's current value reaches this builder, so mode filtering can't drift from what the app-mode
@@ -35,9 +33,8 @@ object CommandRunnerSettingsGroups:
     val appMode = if optionSelections.getOrElse("app-mode", 0) == 1 then AppMode.Prose else AppMode.Code
     val showAllSettingsRegardlessOfMode = optionSelections.getOrElse("settings-show-all", 0) == 1
     val cursorModeItem                  = CommandRunnerSettingsCursorItems.cursorModeOptionItem(optionSelections)
-    val cursorInfoBarItems =
-      CommandRunnerSettingsCursorItems.cursorInfoBarSegmentItems(optionSelections, cursorInfoBarSegments)
-    val cursorInfoPlacement     = CommandRunnerSettingsCursorItems.cursorInfoBarPlacementOptionItem(optionSelections)
+    val statusLineItems = CommandRunnerSettingsStatusLineItems.placementOptionItem(optionSelections) ::
+      CommandRunnerSettingsStatusLineItems.segmentItems(optionSelections, statusSegments)
     val backgroundStyleItem     = CommandRunnerSettingsAppearanceItems.backgroundStyleOptionItem(optionSelections)
     val interfaceDensityItem    = CommandRunnerSettingsAppearanceItems.interfaceDensityOptionItem(optionSelections)
     val windowChromeItem        = CommandRunnerSettingsAppearanceItems.windowChromeOptionItem(optionSelections)
@@ -67,8 +64,6 @@ object CommandRunnerSettingsGroups:
     val textScaleModeItem   = CommandRunnerSettingsItems.textScaleModeOptionItem(optionSelections)
     val lineNumbersItem     = CommandRunnerSettingsTextDisplayItems.lineNumbersOptionItem(optionSelections)
     val lineNumberSideItem  = CommandRunnerSettingsTextDisplayItems.lineNumberSideOptionItem(optionSelections)
-    val wordCountItem       = CommandRunnerSettingsTextDisplayItems.wordCountOptionItem(optionSelections)
-    val gutterItem          = CommandRunnerSettingsTextDisplayItems.gutterOptionItem(optionSelections)
     val lineWrapItem        = CommandRunnerSettingsTextDisplayItems.lineWrapOptionItem(optionSelections)
     val visualLineNavigationItem =
       CommandRunnerSettingsTextDisplayItems.visualLineNavigationOptionItem(optionSelections)
@@ -109,11 +104,9 @@ object CommandRunnerSettingsGroups:
           item.id == "line-number-margin-right" ||
           item.id == "line-number-padding"
       ) ++ List(
-        gutterItem,
         lineWrapItem,
         visualLineNavigationItem,
         typewriterScrollingItem,
-        wordCountItem,
         focusedTextBodyItem,
         contextualToolbarItem,
         contextualToolbarDisplayItem
@@ -157,9 +150,16 @@ object CommandRunnerSettingsGroups:
     val cursorGroup = CommandSurfaceItem.GroupItem(
       id = "settings-cursor",
       label = "Cursor",
-      children = List(cursorModeItem) ++ cursorInfoBarItems ++ List(cursorInfoPlacement),
+      children = List(cursorModeItem),
       category = CommandCategory.Settings,
-      hint = Some("Cursor style, info bar, placement")
+      hint = Some("Blink or breathe")
+    )
+    val statusLineGroup = CommandSurfaceItem.GroupItem(
+      id = "settings-status-line",
+      label = "Status Line",
+      children = statusLineItems,
+      category = CommandCategory.Settings,
+      hint = Some("Placement, segments, and their order")
     )
     val surfaceAppearanceGroup = CommandSurfaceItem.GroupItem(
       id = "settings-surface-appearance",
@@ -282,9 +282,9 @@ object CommandRunnerSettingsGroups:
     val editorViewGroup = CommandSurfaceItem.GroupItem(
       id = "settings-editor-view",
       label = "Editor View",
-      children = List(textDisplayGroup, textAreaGroup, textScaleGroup),
+      children = List(textDisplayGroup, statusLineGroup, textAreaGroup, textScaleGroup),
       category = CommandCategory.Settings,
-      hint = Some("Wrap, gutters, margins, display scale")
+      hint = Some("Wrap, status line, margins, display scale")
     )
     val typographyGroup = CommandSurfaceItem.GroupItem(
       id = "settings-typography",

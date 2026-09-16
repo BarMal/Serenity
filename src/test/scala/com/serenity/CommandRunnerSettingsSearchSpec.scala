@@ -240,7 +240,7 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "cmd3",
         "Command 3",
-        CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleGutter))
+        CommandIntent.Settings(SettingsIntent.StatusLine(StatusLineIntent.ToggleVisibility))
       )
     )
     val runner = CommandRunner.withCommands(commands).activate(CommandRegistry(commands), AppConfig.default)

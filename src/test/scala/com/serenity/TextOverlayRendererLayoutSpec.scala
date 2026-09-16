@@ -2,7 +2,7 @@ package com.serenity
 
 import java.awt.{Color, Font}
 
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, StatusLineColors}
 import com.serenity.rope.Balance
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{
@@ -346,11 +346,11 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(24, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val metrics = CellMetrics.fromFont(font)
-    val config  = AppConfig.default.withCursorInfoBarBackgroundAlpha(Some(0.5))
+    val config  = AppConfig.default.withStatusLineColors(StatusLineColors(backgroundAlpha = Some(0.5)))
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 18, 4),
       rows = List(OverlayRow(plainText = "12:1")),
-      surfaceId = Some(com.serenity.state.models.UiSurface.CursorInfoBarSurfaceId)
+      surfaceId = Some(com.serenity.state.models.UiSurface.StatusLineSurfaceId)
     )
 
     TextOverlayRenderer.render(surface, overlay, Theme.light, config, cursorVisible = false, font, metrics)
@@ -369,7 +369,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 18, 4),
       rows = List(OverlayRow(plainText = "12:1")),
-      surfaceId = Some(com.serenity.state.models.UiSurface.CursorInfoBarSurfaceId)
+      surfaceId = Some(com.serenity.state.models.UiSurface.StatusLineSurfaceId)
     )
 
     TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
@@ -381,7 +381,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(24, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val metrics = CellMetrics.fromFont(font)
-    val config  = AppConfig.default.withCursorInfoBarBackgroundAlpha(Some(0.5))
+    val config  = AppConfig.default.withStatusLineColors(StatusLineColors(backgroundAlpha = Some(0.5)))
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 18, 4),
       rows = List(OverlayRow(plainText = "some panel")),
@@ -400,13 +400,13 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
     val metrics    = CellMetrics.fromFont(font)
     val foreground = new Color(0x11, 0x22, 0x33)
     val background = new Color(0x44, 0x55, 0x66)
-    val config = AppConfig.default.withCursorInfoBarColors(
-      com.serenity.config.CursorInfoBarColorConfig(Some(foreground), Some(background))
+    val config = AppConfig.default.withStatusLineColors(
+      com.serenity.config.StatusLineColors(Some(foreground), Some(background))
     )
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 18, 4),
       rows = List(OverlayRow(plainText = "12:1")),
-      surfaceId = Some(com.serenity.state.models.UiSurface.CursorInfoBarSurfaceId)
+      surfaceId = Some(com.serenity.state.models.UiSurface.StatusLineSurfaceId)
     )
 
     TextOverlayRenderer.render(surface, overlay, Theme.light, config, cursorVisible = false, font, metrics)
@@ -422,7 +422,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 18, 4),
       rows = List(OverlayRow(plainText = "12:1")),
-      surfaceId = Some(com.serenity.state.models.UiSurface.CursorInfoBarSurfaceId)
+      surfaceId = Some(com.serenity.state.models.UiSurface.StatusLineSurfaceId)
     )
 
     TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
@@ -435,8 +435,8 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(24, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val metrics = CellMetrics.fromFont(font)
-    val config = AppConfig.default.withCursorInfoBarColors(
-      com.serenity.config.CursorInfoBarColorConfig(Some(new Color(0x11, 0x22, 0x33)), Some(new Color(0x44, 0x55, 0x66)))
+    val config = AppConfig.default.withStatusLineColors(
+      com.serenity.config.StatusLineColors(Some(new Color(0x11, 0x22, 0x33)), Some(new Color(0x44, 0x55, 0x66)))
     )
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 18, 4),

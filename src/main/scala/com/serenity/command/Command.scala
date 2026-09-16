@@ -203,16 +203,21 @@ enum MotionIntent:
 /** Cursor rendering mode and its info-bar presentation. */
 enum CursorIntent:
   case SetCursorMode(mode: CursorMode)
-  case SetCursorInfoBarSegmentIncluded(segment: CursorInfoBarSegment, included: Boolean)
-  case MoveCursorInfoBarSegmentEarlier(segment: CursorInfoBarSegment)
-  case MoveCursorInfoBarSegmentLater(segment: CursorInfoBarSegment)
-  case SetCursorInfoBarPlacement(placement: CursorInfoBarPlacement)
+
+/** The status line: which segments it shows, in what order, and where it lives. */
+enum StatusLineIntent:
+  case SetSegmentIncluded(segment: StatusSegment, included: Boolean)
+  case MoveSegmentEarlier(segment: StatusSegment)
+  case MoveSegmentLater(segment: StatusSegment)
+  case SetPlacement(placement: StatusLinePlacement)
+
+  /** Off when shown (either placement), back to pinned when off. */
+  case ToggleVisibility
 
 /** Panel/text-area chrome: line numbers, gutter, word wrap, toolbar, spacing, window chrome and sitter, insets. */
 /** What the editor surface itself shows around and inside the text: chrome rows, wrap, scrolling, insets. */
 enum TextDisplayIntent:
   case ToggleLineNumbers
-  case ToggleGutter
   case ToggleWordWrap
   case ToggleFocusedTextBody
   case ToggleContextualToolbar
@@ -224,7 +229,6 @@ enum TextDisplayIntent:
   case SetLineNumberMarginLeft(cells: Int)
   case SetLineNumberMarginRight(cells: Int)
   case SetLineNumberPadding(cells: Int)
-  case SetGutter(enabled: Boolean)
   case SetWordWrap(enabled: Boolean)
   case SetVisualLineCursorNavigation(enabled: Boolean)
   case SetTypewriterScrolling(enabled: Boolean)
@@ -235,7 +239,6 @@ enum TextDisplayIntent:
   case SetTextAreaRightInset(value: Double)
   case SetTextAreaTopInset(value: Double)
   case SetTextAreaBottomInset(value: Double)
-  case SetShowWordCount(enabled: Boolean)
 
 /** How interface surfaces are sized and spaced: density, gaps, corner radius, window chrome, key hints. */
 enum InterfaceChromeIntent:
@@ -287,6 +290,7 @@ enum SettingsIntent:
   case Font(intent: FontIntent)
   case Motion(intent: MotionIntent)
   case Cursor(intent: CursorIntent)
+  case StatusLine(intent: StatusLineIntent)
   case TextDisplay(intent: TextDisplayIntent)
   case InterfaceChrome(intent: InterfaceChromeIntent)
   case Decoration(intent: DecorationIntent)

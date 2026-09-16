@@ -38,7 +38,7 @@ private[perf] object BenchmarkFixtures:
           workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         theme = Theme.light,
-        config = AppConfig.default.withLineNumbers(false).withGutter(false).withWordWrap(false)
+        config = AppConfig.default.withLineNumbers(false).withoutStatusLine.withWordWrap(false)
       )
     )
 
