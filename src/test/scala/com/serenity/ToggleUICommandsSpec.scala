@@ -277,49 +277,8 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     finalState.persisted.config.surfaceConfig.typewriterScrollingEnabled shouldBe false
   }
 
-  behavior of "Toggle Column Mode Command"
-
-  it should "be found in command registry by search terms" in {
-    val registry = CommandRegistry.withToggleUI
-
-    val columnResults = registry.searchCommands("column")
-    val command       = registry.findCommand("toggle-column-mode").get
-
-    columnResults.map(_.name) should contain("toggle-column-mode")
-    command.intent shouldBe CommandIntent.Settings(
-      SettingsIntent.TextDisplay(TextDisplayIntent.ToggleColumnMode)
-    )
-  }
-
-  it should "toggle column mode from disabled to enabled" in {
-    val stateManager = createStateManager()
-
-    stateManager.getCurrentState
-      .unsafeRunSync()
-      .persisted
-      .config
-      .surfaceConfig
-      .columnModeEnabled shouldBe false
-
-    executeCommandThroughRunner(stateManager, "toggle-column-mode", "toggle-column-mode")
-
-    val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.persisted.config.surfaceConfig.columnModeEnabled shouldBe true
-  }
-
-  it should "toggle column mode from enabled to disabled" in {
-    val stateManager = createStateManager()
-
-    stateManager
-      .updateState(s => s.copy(persisted = s.persisted.copy(config = s.persisted.config.withColumnMode(true))))
-      .unsafeRunSync()
-
-    executeCommandThroughRunner(stateManager, "toggle-column-mode", "toggle-column-mode")
-
-    val finalState = stateManager.getCurrentState.unsafeRunSync()
-    finalState.persisted.config.surfaceConfig.columnModeEnabled shouldBe false
-  }
-
+  // Toggle Column Mode Command coverage lives in ToggleColumnModeCommandSpec.scala, to keep this file under the
+  // architecture ratchet's file-length target.
 
   behavior of "Combined Toggle UI Command Integration"
 
