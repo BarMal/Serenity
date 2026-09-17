@@ -174,7 +174,17 @@ lazy val root = (project in file("."))
       // stack trace, for either the failed or the canceled test alongside it -- which makes them undiagnosable from
       // the log as things stand. This does not itself explain that failure; it exists so the next occurrence prints
       // one.
-      Tests.Argument(TestFrameworks.ScalaTest, "-oF")
+      Tests.Argument(TestFrameworks.ScalaTest, "-oF"),
+      // Investigating the #1213-class failures directly against `desktop-publish`'s CI job logs (run 35203534197)
+      // found that even with -oF, the GitHub Actions console log for a Windows/macOS `sbt test` run does not carry
+      // the per-test assertion/stack-trace detail through to what the API serves back -- only suite names and the
+      // aggregate pass/fail/canceled counts survive, for reasons that appear to sit in how that console output is
+      // captured/relayed rather than in ScalaTest's own reporting. A JUnit XML report is a second, independent sink
+      // for the same failure detail that does not depend on the console log at all -- see the corresponding
+      // "Upload test reports" step in .github/workflows/desktop-publish.yml, which uploads this directory as a build
+      // artifact on every run (`if: always()`) so a future failure's full detail is recoverable even when the
+      // console log again comes back summary-only.
+      Tests.Argument(TestFrameworks.ScalaTest, "-u", "target/test-reports")
     ),
     // Real-OS-boundary specs (a genuine loopback socket, a genuine sun.misc.Signal.raise -- see
     // com.serenity.testkit.RealBoundaryTest's doc comment) are excluded from `sbt test`'s discovery of the whole

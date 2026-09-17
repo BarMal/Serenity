@@ -49,6 +49,20 @@ jobs:
         shell: bash
         run: sbt -v clean test assembly
 
+      # Windows/macOS `sbt test` failures on this workflow have repeatedly come back from the GitHub Actions API as a
+      # bare suite-name summary with no assertion message or stack trace, even with ScalaTest's "-oF" full-stack-trace
+      # flag -- see build.sbt's Test/testOptions comment. The JUnit XML report configured there is a second sink for
+      # the same failure detail that survives independently of console log capture; upload it unconditionally so a
+      # failing run's full diagnostics are recoverable as a build artifact.
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ matrix.artifact_suffix }}
+          path: target/test-reports/**
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Prepare app image
         shell: bash
         run: |
