@@ -280,8 +280,14 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
     "fall back to the Legacy tier and revert the modifyOtherKeys/formatOtherKeys enable sequences" in {
       val harness = dumbTerminal()
 
-      val tier =
-        TerminalShell.forTerminal(harness.terminal).use(shell => IO(shell.keyboardProtocolTier)).unsafeRunSync()
+      // Pinned off Windows: this test is exercising the "neither negotiation confirmed" ladder in isolation from
+      // #1320's Windows-only Win32Input fallback (covered separately below) -- without this, the tier this test
+      // observes silently depends on the JVM's actual host OS via forTerminal's osName default
+      // (System.getProperty("os.name")), which is exactly what broke this test on Windows CI runners.
+      val tier = TerminalShell
+        .forTerminal(harness.terminal, osName = "Linux")
+        .use(shell => IO(shell.keyboardProtocolTier))
+        .unsafeRunSync()
 
       tier shouldBe TerminalShell.KeyboardProtocolTier.Legacy
       val written = harness.written
@@ -301,8 +307,13 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
       val harness     = liveTerminal()
       replyAfterModifyOtherKeysQuery(harness, bytes(wrongValues))
 
-      val tier =
-        TerminalShell.forTerminal(harness.terminal).use(shell => IO(shell.keyboardProtocolTier)).unsafeRunSync()
+      // Pinned off Windows for the same reason as the "answers neither query" test above -- an unconfirmed
+      // negotiation falls through to Win32Input rather than Legacy on a real Windows host (#1320), so this test must
+      // fix osName rather than inherit it from the actual CI runner.
+      val tier = TerminalShell
+        .forTerminal(harness.terminal, osName = "Linux")
+        .use(shell => IO(shell.keyboardProtocolTier))
+        .unsafeRunSync()
 
       tier shouldBe TerminalShell.KeyboardProtocolTier.Legacy
     }
