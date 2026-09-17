@@ -64,21 +64,30 @@ final private[manager] class StateManagerEditorCapability(
             !hasCompanionSprite && !hasTypingActivity
         then IO.pure(false)
         else
-          val updatedTransition = state.runtime.themeTransition.map(_.advance).filterNot(_.isComplete)
-          val advancedCompanionSprite =
-            if hasCompanionSprite then
-              state.runtime.companionSprite
-                .tick(companionSpriteRandom, reducedRate = flairLevel == VisualFlairLevel.Reduced)
-            else state.runtime.companionSprite
-          val stateWithAdvancedBuffers = state.copy(
-            runtime = state.runtime.copy(
-              themeTransition = updatedTransition,
-              typingActivity = state.runtime.typingActivity.advance,
-              companionSprite = advancedCompanionSprite
-            )
-          )
-          val newState = animations.advanceSurfaceAnimations(stateWithAdvancedBuffers)
+          // `stateRef.modify`, not a `set` built from the `state` read above: this tick runs on the render loop's own
+          // fiber, concurrently with `AppRuntime.inputEventPhase`'s fiber applying a keystroke (or the quit
+          // transition) to the same ref (#1564). A `set` computed from a stale snapshot would silently overwrite
+          // whatever the input fiber committed in the meantime -- observed as a dropped keystroke, or the whole
+          // runtime wedged because the quit signal it clobbered never landed. Recomputing from `current` inside
+          // `modify` keeps this tick's write atomic with that concurrent one instead of blindly replacing it.
           for
+            newState <- stateRef.modify { current =>
+              val updatedTransition = current.runtime.themeTransition.map(_.advance).filterNot(_.isComplete)
+              val advancedCompanionSprite =
+                if hasCompanionSprite then
+                  current.runtime.companionSprite
+                    .tick(companionSpriteRandom, reducedRate = flairLevel == VisualFlairLevel.Reduced)
+                else current.runtime.companionSprite
+              val stateWithAdvancedBuffers = current.copy(
+                runtime = current.runtime.copy(
+                  themeTransition = updatedTransition,
+                  typingActivity = current.runtime.typingActivity.advance,
+                  companionSprite = advancedCompanionSprite
+                )
+              )
+              val next = animations.advanceSurfaceAnimations(stateWithAdvancedBuffers)
+              (next, next)
+            }
             updatedBufferAnimations <- bufferAnimationsRef.updateAndGet(_.map {
               case (id, animations) =>
                 val advanced = newState.persisted.buffers.get(id) match
@@ -86,7 +95,6 @@ final private[manager] class StateManagerEditorCapability(
                   case None         => animations
                 id -> advanced
             })
-            _ <- stateRef.set(newState)
           yield newState.persisted.buffers.keys
             .exists(id => updatedBufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
             newState.runtime.themeTransition.isDefined ||
