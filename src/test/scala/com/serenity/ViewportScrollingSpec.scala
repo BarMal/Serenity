@@ -360,13 +360,33 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
       buffer.viewport.visibleColumns,
       finalState.persisted.config.editorConfig.fontConfig
     )
-    val snapshot       = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
-    val lastLineIndex  = buffer.document.content.lineCount - 1
-    val lastVisualLine = snapshot.visualLines.lastOption
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
 
-    withClue(s"viewport=${buffer.viewport} lastVisualLine=$lastVisualLine lastLineIndex=$lastLineIndex") {
-      snapshot.visualLines.length shouldBe buffer.viewport.visibleLines
-      lastVisualLine.map(_.bufferLine) shouldBe Some(lastLineIndex)
+    // How many "word" tokens fit per wrapped row -- and so how many total visual rows the six paragraphs produce --
+    // is font-metric-dependent (word wrap is measured against the real, platform-resolved `previewTextFont`, not a
+    // fixed cell grid). Asserting a specific row count or "the last visual line is buffer line N" against a number
+    // computed by hand would be re-deriving that same font-dependent arithmetic by inspection and baking today's
+    // platform's answer into the test. Instead, lay out the *entire* document with the identical wrap computation
+    // the production snapshot uses, and check that what's on screen is exactly that layout's tail -- which is what
+    // "scrolled to the document's end, no blank trailing rows" actually means, regardless of how many rows the
+    // resolved font happens to wrap the text into.
+    val fullDocumentSnapshot = TextLayoutSnapshot.fromBuffer(
+      buffer.copy(viewport = buffer.viewport.copy(topLine = 0, topVisualLine = 0, visibleLines = Int.MaxValue - 1)),
+      wrapPx,
+      font
+    )
+    val expectedVisibleCount    = math.min(buffer.viewport.visibleLines, fullDocumentSnapshot.visualLines.length)
+    val expectedTailVisualLines = fullDocumentSnapshot.visualLines.takeRight(expectedVisibleCount)
+    def shape(line: com.serenity.state.models.TextVisualLine) = (line.bufferLine, line.startColumn, line.endColumn)
+
+    withClue(
+      s"viewport=${buffer.viewport} " +
+        s"snapshot=${snapshot.visualLines.map(shape)} " +
+        s"expectedTail=${expectedTailVisualLines.map(shape)} " +
+        s"totalVisualLines=${fullDocumentSnapshot.visualLines.length}"
+    ) {
+      snapshot.visualLines.length shouldBe expectedVisibleCount
+      snapshot.visualLines.map(shape) shouldBe expectedTailVisualLines.map(shape)
     }
   }
 
