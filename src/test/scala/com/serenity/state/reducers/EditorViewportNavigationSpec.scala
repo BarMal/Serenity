@@ -124,7 +124,11 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(topLine = 3, visibleLines = 2)
             )
         )
-      )
+      ),
+      // Pin TUI mode so ensureVisibleCursors uses viewport.visibleLines directly rather than converting it through
+      // AWT-measured font metrics (CursorViewport.adjustForCursor's GUI-mode branch), whose real, OS-resolved line
+      // heights for the default logical "SansSerif" font are not deterministic across platforms.
+      runtime = AppState.initial.runtime.copy(isTuiMode = true)
     )
 
     val reducedState = EditorEventReducer.reduce(PageUp, paneId, initialState).state
@@ -153,7 +157,8 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(topLine = 4, visibleLines = 2)
             )
         )
-      )
+      ),
+      runtime = AppState.initial.runtime.copy(isTuiMode = true)
     )
 
     // The cursor is already on the last line, so PageDown moves nothing -- and a viewport the reducer computed for
@@ -185,7 +190,8 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(topLine = 2)
             )
         )
-      )
+      ),
+      runtime = AppState.initial.runtime.copy(isTuiMode = true)
     )
 
     val reducedState = EditorEventReducer.reduce(MoveToStartOfFile, paneId, initialState).state
@@ -214,7 +220,8 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(visibleLines = 2)
             )
         )
-      )
+      ),
+      runtime = AppState.initial.runtime.copy(isTuiMode = true)
     )
 
     val reducedState = EditorEventReducer.reduce(MoveToEndOfFile, paneId, initialState).state
@@ -243,7 +250,8 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(visibleLines = 2)
             )
         )
-      )
+      ),
+      runtime = AppState.initial.runtime.copy(isTuiMode = true)
     )
 
     val reducedState = EditorEventReducer.reduce(PageDown, paneId, initialState).state

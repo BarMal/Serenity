@@ -356,7 +356,11 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(topLine = 2, visibleLines = 2)
             )
         )
-      )
+      ),
+      // Pin TUI mode so ensureVisibleCursors uses viewport.visibleLines directly rather than converting it through
+      // AWT-measured font metrics (CursorViewport.adjustForCursor's GUI-mode branch), whose real, OS-resolved line
+      // heights for the default logical "SansSerif" font are not deterministic across platforms.
+      runtime = AppState.initial.runtime.copy(isTuiMode = true)
     )
 
     // The reducer moves the cursors; the viewport is the effect boundary's to place, exactly as it is for every other
