@@ -116,6 +116,13 @@ object CommandRegistry:
       label = "Toggle Typewriter Scrolling"
     ),
     Command.typed(
+      "toggle-column-mode",
+      "Lay wrapped text out in e-reader-style columns instead of scrolling vertically (requires word wrap).",
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleColumnMode)),
+      CommandCategory.View,
+      label = "Toggle Column Mode"
+    ),
+    Command.typed(
       "toggle-line-wrap",
       "Soft-wrap long logical lines to the editor width (word wrap).",
       CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleWordWrap)),

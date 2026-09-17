@@ -189,3 +189,63 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
 
       cursorRowFromTop should be < actuallyVisibleRows
     }
+
+  // Column mode (issue #1338, Phase 1): fixed/discrete snapping only -- `topVisualLine` always lands on an exact
+  // `activeColumnIndex * visibleLines` boundary, never a fractional/partial scroll position.
+  "CursorViewport.adjustForCursorColumnMode" should
+    "snap topVisualLine to the column boundary containing the cursor's visual row" in {
+      // 30 single-row lines, 8 rows per column -> columns are [0,8) [8,16) [16,24) [24,30).
+      val content = (0 until 30).map(i => s"line $i").mkString("\n")
+      val buffer = Buffer
+        .fromString(bufferId, content)
+        .copy(
+          viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 8),
+          editing = Buffer.fromString(bufferId, content).editing.copy(cursors = List(CursorPosition(20, 0)))
+        )
+      val state = tuiStateWith(buffer)
+
+      val adjusted = CursorViewport.adjustForCursorColumnMode(buffer, state, CursorPosition(20, 0))
+
+      adjusted.topLine shouldBe 16
+      adjusted.topVisualLine shouldBe 0
+    }
+
+  it should "snap to the first column when the cursor is within it" in {
+    val content = (0 until 30).map(i => s"line $i").mkString("\n")
+    val buffer = Buffer
+      .fromString(bufferId, content)
+      .copy(
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 8),
+        editing = Buffer.fromString(bufferId, content).editing.copy(cursors = List(CursorPosition(3, 0)))
+      )
+    val state = tuiStateWith(buffer)
+
+    val adjusted = CursorViewport.adjustForCursorColumnMode(buffer, state, CursorPosition(3, 0))
+
+    adjusted.topLine shouldBe 0
+    adjusted.topVisualLine shouldBe 0
+  }
+
+  "CursorViewport.ensureVisibleCursors" should
+    "dispatch to the column-mode placement when column mode and word wrap are both on" in {
+      val content = (0 until 30).map(i => s"line $i").mkString("\n")
+      val buffer = Buffer
+        .fromString(bufferId, content)
+        .copy(
+          viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 8),
+          editing = Buffer.fromString(bufferId, content).editing.copy(cursors = List(CursorPosition(0, 0)))
+        )
+      val before = tuiStateWith(buffer).copy(persisted =
+        tuiStateWith(buffer).persisted.copy(config =
+          tuiStateWith(buffer).persisted.config.withColumnMode(true)
+        )
+      )
+      val movedBuffer = buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(20, 0))))
+      val after       = before.copy(persisted = before.persisted.copy(buffers = Map(bufferId -> movedBuffer)))
+
+      val result = CursorViewport.ensureVisibleCursors(before, after)
+
+      val resultViewport = result.persisted.buffers(bufferId).viewport
+      resultViewport.topLine shouldBe 16
+      resultViewport.topVisualLine shouldBe 0
+    }

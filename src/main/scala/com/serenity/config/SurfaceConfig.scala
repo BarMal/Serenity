@@ -23,6 +23,14 @@ final case class SurfaceConfig(
     // stays at its centred row even while typing at the very end of the document, padding with blank rows below it
     // the way iA Writer/Ulysses-style typewriter scrolling does (#1204, #1293).
     typewriterScrollingEnabled: Boolean = false,
+    // E-reader-style column layout (issue #1338, Phase 1): global toggle, no per-document/per-pane settings
+    // infrastructure exists today. Only takes effect while `wordWrapEnabled` is also on -- otherwise a no-op, falling
+    // back to ordinary vertical scrolling.
+    columnModeEnabled: Boolean = false,
+    // Target column width in cells; the actual column count is however many of this width (plus `columnGap`) fit the
+    // pane, not a fixed user-picked count.
+    columnTargetWidthCells: Int = 80,
+    columnGap: Int = 2,
     focusedTextBodyEnabled: Boolean = false,
     contextualToolbarEnabled: Boolean = true,
     contextualToolbarDisplayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText,
@@ -86,6 +94,8 @@ final case class SurfaceConfig(
     copy(
       blurRadius = blurRadius.max(0.0f).min(1.0f),
       rendererFrameStateCacheCapacity = AppConfig.clampRendererFrameStateCacheCapacity(rendererFrameStateCacheCapacity),
+      columnGap = columnGap.max(0),
+      columnTargetWidthCells = columnTargetWidthCells.max(1),
       elementTransitionSpeedScale = AppConfig.clampElementTransitionSpeedScale(elementTransitionSpeedScale),
       editorTextTransitionSpeedScale = editorTextTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
       commandRunnerTransitionSpeedScale =
