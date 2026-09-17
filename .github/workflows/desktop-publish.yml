@@ -49,6 +49,31 @@ jobs:
         shell: bash
         run: sbt -v clean test assembly
 
+      # The console log capture for this workflow's Windows/macOS jobs has repeatedly dropped the actual assertion
+      # message and stack trace for a failing test, surfacing only a bare suite-name summary -- true even with
+      # ScalaTest's "-oF" full-stack-trace flag (see build.sbt's Test/testOptions comment), and the JUnit XML artifact
+      # uploaded below isn't reachable from every environment that reads this log. Print each report's own <failure>
+      # element straight into this step's own console output on failure, so the real diagnostic text survives
+      # whatever the log relay does to the test step's own output.
+      - name: Print test failure detail
+        if: failure()
+        shell: bash
+        run: |
+          set -uo pipefail
+          shopt -s nullglob
+          reports=(target/test-reports/*.xml)
+          if [ ${#reports[@]} -eq 0 ]; then
+            echo "::warning::No JUnit XML test reports found under target/test-reports/"
+            exit 0
+          fi
+          for report in "${reports[@]}"; do
+            if grep -q '<failure' "$report" || grep -q '<error' "$report"; then
+              echo "::group::$report"
+              cat "$report"
+              echo "::endgroup::"
+            fi
+          done
+
       # Windows/macOS `sbt test` failures on this workflow have repeatedly come back from the GitHub Actions API as a
       # bare suite-name summary with no assertion message or stack trace, even with ScalaTest's "-oF" full-stack-trace
       # flag -- see build.sbt's Test/testOptions comment. The JUnit XML report configured there is a second sink for
