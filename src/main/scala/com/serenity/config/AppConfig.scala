@@ -15,7 +15,6 @@ final case class AppConfig(
     surfaceConfig: SurfaceConfig = SurfaceConfig(),
     cursorConfig: CursorConfig = CursorConfig(),
     windowConfig: WindowConfig = WindowConfig(),
-    windowSitterConfig: WindowSitterConfig = WindowSitterConfig.default,
     companionSpriteConfig: CompanionSpriteConfig = CompanionSpriteConfig.default,
     visualFlairLevel: VisualFlairLevel = VisualFlairLevel.default,
     documentConfig: DocumentConfig = DocumentConfig(),
@@ -311,9 +310,6 @@ final case class AppConfig(
 
   def withPreferredWindowSize(size: PreferredWindowSize): AppConfig =
     withWindowConfig(windowConfig.copy(preferredSize = Some(size.normalized)))
-
-  def withWindowSitterConfig(config: WindowSitterConfig): AppConfig =
-    copy(windowSitterConfig = config.normalized)
 
   def withCompanionSpriteConfig(config: CompanionSpriteConfig): AppConfig =
     copy(companionSpriteConfig = config.normalized)

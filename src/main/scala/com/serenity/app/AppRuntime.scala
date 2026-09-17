@@ -243,8 +243,7 @@ object AppRuntime:
                   animationTickCadence,
                   currentStateForDiagnostics,
                   checkResizeAndHandle,
-                  renderFull,
-                  renderCursorOnly
+                  renderFull
                 )
 
                 val renderLoop: Stream[IO, Unit] =
@@ -372,7 +371,7 @@ object AppRuntime:
         _ <-
           checkResizeBeforeInput(event, checkResizeAndHandle) >>
             ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
-            observeWindowSitterTyping(event, stateManager) >>
+            observeCompanionSpriteTyping(event, stateManager) >>
             stateManager.applyEvent(event) >>
             ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
             refreshFocusedInputTranslator(stateManager, inputRouter, translatorCache) >>
@@ -388,7 +387,7 @@ object AppRuntime:
     */
   private[serenity] type FocusedTranslatorCacheEntry = (AppConfig, FocusedInputTranslator.TranslatorSet)
 
-  private[serenity] def observeWindowSitterTyping(
+  private[serenity] def observeCompanionSpriteTyping(
     event: Event,
     stateManager: StateUpdater
   ): IO[Unit] =
@@ -432,7 +431,6 @@ object AppRuntime:
     currentStateForDiagnostics: IO[Option[AppState]],
     checkResizeAndHandle: IO[Unit],
     renderFull: RenderFn,
-    renderCursorOnly: RenderFn,
     sleep: FiniteDuration => IO[Unit] = IO.sleep
   )(using logger: Logger[IO], balance: com.serenity.rope.Balance): Stream[IO, Unit] =
     Stream.eval(pendingDamage.getAndSet(Damage.Nothing)).flatMap { _ =>
@@ -465,15 +463,9 @@ object AppRuntime:
               )
               bufferAnimations <- stateManager.getBufferAnimations
               paintDamage      <- pendingPaintDamage.getAndSet(Damage.Nothing)
-              _ <-
-                if canStandDownToCursorOnly(state, bufferAnimations, paintDamage) then
-                  withRuntimeDiagnostics("render loop", "fast.cursor-only-render", IO.pure(Some(state)))(
-                    renderCursorOnly(state, true, None, paintDamage, bufferAnimations)
-                  )
-                else
-                  withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(state)))(
-                    renderFull(state, true, None, paintDamage, bufferAnimations)
-                  )
+              _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(state)))(
+                renderFull(state, true, None, paintDamage, bufferAnimations)
+              )
             yield active
         }
         .takeWhile(identity)
@@ -679,17 +671,20 @@ object AppRuntime:
     state: AppState,
     bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
   ): Boolean =
-    needsFullContentRender(state, bufferAnimations) || state.runtime.windowSitter.isActive ||
-      state.runtime.typingActivity.isActive
+    needsFullContentRender(state, bufferAnimations) || state.runtime.typingActivity.isActive
 
   /** Whether the fast render loop's current frame needs a full content repaint, as opposed to the cheaper cursor-only
     * overlay path. Character-reveal animations paint into document glyphs, and a theme transition cross-fades every
     * visible glyph/background colour (see RendererEntryPoints.withEffectiveTheme) -- both require the full canvas.
     * Surface animations (command palette, panel fades) are drawn through the same overlay-scene machinery as full
-    * renders, not the cursor-only path, so they need it too. The window sitter is the one exception: its glyph lives
-    * entirely in the window chrome (SwingWindow.updateWindowSitter, driven by syncChromeTheme, which runs before either
-    * render path every frame regardless) and never touches the canvas -- so it alone keeps the fast loop running (see
-    * hasActiveAnimations) without forcing a full repaint each frame.
+    * renders, not the cursor-only path, so they need it too.
+    *
+    * The retired window sitter (issue #934 v2) used to be the one exception here: its glyph lived entirely in the
+    * window chrome and never touched the canvas, so `canStandDownToCursorOnly` could skip a full repaint while it
+    * alone was animating. Its typing-reactivity now lives in the companion sprite panel instead, which paints into
+    * panel content like any other pinned panel -- there is no longer a canvas-free animation source, so that
+    * cursor-only shortcut no longer applies to anything and has been removed rather than left checking a condition
+    * nothing can satisfy.
     */
   private[serenity] def needsFullContentRender(
     state: AppState,
@@ -698,23 +693,6 @@ object AppRuntime:
     state.persisted.buffers.keys.exists(id => bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
       state.runtime.themeTransition.isDefined ||
       state.runtime.surfaceAnimations.nonEmpty
-
-  /** Whether this frame may take the cheap cursor-only path instead of repainting content. The window sitter's glyph
-    * lives in the window chrome and needs no canvas work, so a frame that only advances it can stand down -- but only
-    * when the frame has nothing else to paint. Typing arms the sitter for its whole activity window
-    * (`WindowSitterConfig.activeTicks`), so gating on the sitter alone held every keystroke's own glyphs and wrapped
-    * reflow off screen until that window expired: the cursor moved immediately and the text caught up a fraction of a
-    * second later. Any pending paint damage means content changed, and content is exactly what `renderCursorOnly` does
-    * not draw.
-    */
-  private[serenity] def canStandDownToCursorOnly(
-    state: AppState,
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState],
-    paintDamage: Damage
-  ): Boolean =
-    paintDamage == Damage.Nothing &&
-      state.runtime.windowSitter.isActive &&
-      !needsFullContentRender(state, bufferAnimations)
 
   private[serenity] def describeStateForDiagnostics(state: AppState): String =
     val viewport   = state.runtime.viewportSize.map(size => s"${size.width}x${size.height}").getOrElse("unknown")

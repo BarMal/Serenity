@@ -4,7 +4,8 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.{AnimationConfig, TransitionKind, WindowSitter, WindowSitterConfig}
+import com.serenity.animation.sprite.{CompanionSpriteState, SpriteFrameCycle}
+import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.command.{
   Command,
   CommandCategory,
@@ -86,11 +87,13 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
     motion.baseline shouldBe MotionPreset.Expressive
   }
 
-  it should "settle the window sitter when accessibility disables UI motion" in {
+  it should "settle the companion sprite's typing reaction when accessibility disables UI motion" in {
     val stateManager = createStateManager()
     stateManager
       .updateState(state =>
-        state.copy(runtime = state.runtime.copy(windowSitter = WindowSitter.default.observeTyping(1_000_000_000L)))
+        state.copy(runtime =
+          state.runtime.copy(companionSprite = CompanionSpriteState.default.observeTyping(1_000_000_000L))
+        )
       )
       .unsafeRunSync()
 
@@ -105,14 +108,15 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    val sitter = stateManager.getCurrentState.unsafeRunSync().runtime.windowSitter
-    sitter.isActive shouldBe false
-    sitter.glyph shouldBe "·"
+    val sprite = stateManager.getCurrentState.unsafeRunSync().runtime.companionSprite
+    sprite.isTypingActive shouldBe false
+    sprite.action shouldBe com.serenity.animation.sprite.CompanionSpriteAction.Idle
   }
 
-  it should "restore configured resting sitter frames when UI motion is re-enabled" in {
-    val initialConfig = AppConfig.default.withWindowSitterConfig(WindowSitterConfig(frames = Vector("rest", "active")))
-    val stateManager  = createStateManager(initialConfig)
+  it should "react to typing again once UI motion is re-enabled" in {
+    val stateManager = createStateManager(AppConfig.default.withCompanionSpriteConfig(
+      AppConfig.default.companionSpriteConfig.copy(enabled = true)
+    ))
 
     stateManager.commandExecutor
       .executeCommand(
@@ -137,38 +141,39 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().runtime.windowSitter.glyph shouldBe "rest"
+    val stateBefore = stateManager.getCurrentState.unsafeRunSync()
+    val observed = stateBefore.runtime.observeTyping(1_000_000_000L, stateBefore.persisted.config)
+    observed.companionSprite.isTypingActive shouldBe true
   }
 
-  it should "update persisted window sitter controls through settings commands" in {
+  it should "update persisted companion sprite typing-reactivity controls through settings commands" in {
     val stateManager = createStateManager()
     val commands = List(
-      CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterEnabled(false))),
+      CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteEnabled(false))),
       CommandIntent.Settings(
-        SettingsIntent.Decoration(
-          DecorationIntent.SetWindowSitterAction(com.serenity.animation.WindowSitterAction.Blink)
-        )
+        SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingCycle(SpriteFrameCycle.Blink))
       ),
-      CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterFrames(Vector(".", "x")))),
-      CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterActiveTicks(4))),
-      CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterFastActiveTicks(9))),
-      CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterFastTypingThresholdMs(275)))
+      CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingActiveTicks(4))),
+      CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingFastActiveTicks(9))),
+      CommandIntent.Settings(
+        SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingFastThresholdMs(275))
+      )
     )
     commands.zipWithIndex.foreach {
       case (intent, index) =>
         stateManager.commandExecutor
-          .executeCommand(Command.typed(s"window-sitter-$index", "Set sitter option", intent, CommandCategory.Settings))
+          .executeCommand(
+            Command.typed(s"companion-sprite-$index", "Set companion sprite option", intent, CommandCategory.Settings)
+          )
           .unsafeRunSync()
     }
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.windowSitterConfig shouldBe WindowSitterConfig(
-      enabled = false,
-      action = com.serenity.animation.WindowSitterAction.Blink,
-      frames = Vector(".", "x"),
-      activeTicks = 4,
-      fastActiveTicks = 9,
-      fastTypingThresholdMs = 275
-    )
+    val companionSpriteConfig = stateManager.getCurrentState.unsafeRunSync().persisted.config.companionSpriteConfig
+    companionSpriteConfig.enabled shouldBe false
+    companionSpriteConfig.typingCycle shouldBe SpriteFrameCycle.Blink
+    companionSpriteConfig.typingActiveTicks shouldBe 4
+    companionSpriteConfig.typingFastActiveTicks shouldBe 9
+    companionSpriteConfig.typingFastThresholdMs shouldBe 275
   }
 
   it should "mark the motion preset custom when an explicit motion speed is edited" in {

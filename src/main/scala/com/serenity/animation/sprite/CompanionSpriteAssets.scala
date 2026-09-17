@@ -66,4 +66,15 @@ object CompanionSpriteFrames:
     state: CompanionSpriteState
   ): Option[BufferedImage] =
     val frames = framesFor(clipsByName, state.action)
-    if frames.isEmpty then None else Some(frames(state.frameIndex % frames.length))
+    if frames.isEmpty then None else Some(frames(spriteFrameIndex(state, frames.length)))
+
+  /** Resolves `state`'s stored `frameIndex` to an actual index into a clip of `frameCount` frames. A typing-triggered
+    * `Walk` reaction (issue #934 v2) stores a position within its configured [[SpriteFrameCycle]]'s selected subset,
+    * not a raw sheet index -- mirroring the retired `WindowSitter.spriteFrameIndex` -- so it is resolved through
+    * [[SpriteFrameSelection]]; every other action still indexes the clip directly.
+    */
+  private def spriteFrameIndex(state: CompanionSpriteState, frameCount: Int): Int =
+    if state.action == CompanionSpriteAction.Walk && state.isTypingActive then
+      SpriteFrameSelection.resolve(state.typingCycle, frameCount, state.frameIndex)
+    else if frameCount <= 0 then 0
+    else state.frameIndex % frameCount

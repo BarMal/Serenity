@@ -1,6 +1,5 @@
 package com.serenity.state.models
 
-import com.serenity.animation.WindowSitter
 import com.serenity.animation.sprite.CompanionSpriteState
 import com.serenity.config.{AppConfig, MotionFamily}
 import com.serenity.input.CursorPeekState
@@ -24,11 +23,10 @@ final case class Runtime(
     focusHistory: List[Focus] = List.empty,
     navigation: NavigationHistory = NavigationHistory(),
     hoveredEditorTarget: Option[HoveredEditorTarget] = None,
-    windowSitter: WindowSitter = WindowSitter.default,
     typingActivity: TypingActivity = TypingActivity.idle,
     // The theme names the theme manager found on disk, listed at startup and after a reload or save; never persisted.
     availableThemeNames: List[String] = Nil,
-    companionSprite: CompanionSpriteState = CompanionSpriteState(),
+    companionSprite: CompanionSpriteState = CompanionSpriteState.default,
     diagnosticsState: DiagnosticsState = DiagnosticsState(),
     semanticTokensState: SemanticTokensState = SemanticTokensState(),
     // Never persisted -- set once at startup from the launch mode (see AppRuntime.run/AppStartup.initializeState) so
@@ -64,13 +62,14 @@ final case class Runtime(
     commandUsage: Map[String, Int] = Map.empty
 ):
 
-  /** A typed character: the quiet window for cursor-adjacent surfaces always restarts; the window sitter reacts only
-    * when its motion family and its own switch are on.
+  /** A typed character: the quiet window for cursor-adjacent surfaces always restarts; the companion sprite panel
+    * reacts (issue #934 v2, merged in from the retired window sitter) only when its motion family and its own switch
+    * are on.
     */
   def observeTyping(nowNanos: Long, config: AppConfig): Runtime =
     val motion = config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
-    val sitter =
-      if motion.enabled && config.windowSitterConfig.enabled then
-        windowSitter.observeTyping(nowNanos, config.windowSitterConfig)
-      else windowSitter
-    copy(windowSitter = sitter, typingActivity = typingActivity.observed)
+    val sprite =
+      if motion.enabled && config.companionSpriteConfig.enabled then
+        companionSprite.observeTyping(nowNanos, config.companionSpriteConfig)
+      else companionSprite
+    copy(companionSprite = sprite, typingActivity = typingActivity.observed)

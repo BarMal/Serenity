@@ -355,16 +355,7 @@ object ConfigManager:
       dictionaryPaths = strings("spellcheck.dictionary_paths").getOrElse(spellCheck.dictionaryPaths),
       additionalWords = strings("spellcheck.words").getOrElse(spellCheck.additionalWords)
     )
-    val withSpellCheck = config.withSpellCheck(updatedSpellCheck)
-    source
-      .entrySet()
-      .asScala
-      .find(_.getKey.stripPrefix("\"").stripSuffix("\"") == "window.sitter.frames")
-      .filter(_.getValue.valueType == ConfigValueType.LIST)
-      .map(entry => source.getList(entry.getKey).asScala.map(_.unwrapped().toString).toVector)
-      .fold(withSpellCheck)(frames =>
-        withSpellCheck.withWindowSitterConfig(withSpellCheck.windowSitterConfig.copy(frames = frames))
-      )
+    config.withSpellCheck(updatedSpellCheck)
 
   private def applyHoconLspLists(config: AppConfig, source: Config): AppConfig =
     source.entrySet().asScala.foldLeft(config) { (current, entry) =>

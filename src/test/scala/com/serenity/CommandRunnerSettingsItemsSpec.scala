@@ -11,14 +11,13 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
   // issue #1299/#1044: three boolean settings toggles -- "Menu & Panel Shadows", "Show All Settings", and
   // "Spell Check" -- were built inline with their options ordered Off/On, the one encoding in the settings tree that
   // disagreed with `CommandRunnerSettingsOptionItemHelpers.enabledOptionItem`'s On/Off convention every other
-  // boolean toggle follows (`window-sitter-enabled`, `companion-sprite-enabled`, `code-ligatures`, the three
-  // `enabledOptionItem`-built toggles, etc). All three are normalized onto that one shared pattern now.
+  // boolean toggle follows (`companion-sprite-enabled`, `code-ligatures`, the three `enabledOptionItem`-built
+  // toggles, etc). All three are normalized onto that one shared pattern now.
   "boolean toggle settings" should "all order their options On, Off, matching the shared enabledOptionItem convention" in {
     val onOffToggles = List(
       CommandRunnerSettingsAppearanceItems.uiShadowsOptionItem(Map.empty),
       CommandRunnerSettingsItems.showAllSettingsOptionItem(Map.empty),
       CommandRunnerSettingsItems.spellCheckOptionItem(Map.empty),
-      CommandRunnerSettingsAppearanceItems.windowSitterEnabledOptionItem(Map.empty),
       CommandRunnerSettingsAppearanceItems.companionSpriteEnabledOptionItem(Map.empty)
     )
 

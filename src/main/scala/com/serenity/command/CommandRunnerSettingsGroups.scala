@@ -179,7 +179,8 @@ object CommandRunnerSettingsGroups:
         CommandRunnerSettingsMotionItems.renderFpsOptionItem(optionSelections),
         CommandRunnerSettingsMotionItems.renderDamageGranularityOptionItem(optionSelections),
         CommandRunnerSettingsAppearanceItems.visualFlairLevelOptionItem(optionSelections),
-        CommandRunnerSettingsAppearanceItems.companionSpriteEnabledOptionItem(optionSelections)
+        CommandRunnerSettingsAppearanceItems.companionSpriteEnabledOptionItem(optionSelections),
+        CommandRunnerSettingsAppearanceItems.companionSpriteTypingCycleOptionItem(optionSelections)
       )
     )
     val customMotionInputIds =
@@ -187,7 +188,7 @@ object CommandRunnerSettingsGroups:
     val motionAdvancedGroup = group(
       "settings-motion-advanced",
       "Advanced",
-      "Per-family speed, custom timing, window sitter tuning",
+      "Per-family speed, custom timing, companion sprite typing tuning",
       input(
         "cursor-speed-scale",
         "element-transition-speed-scale",
@@ -195,16 +196,15 @@ object CommandRunnerSettingsGroups:
         "command-runner-speed-scale",
         "ui-speed-scale"
       ) ++ input(customMotionInputIds*) ++ input(
-        "window-sitter-frames",
-        "window-sitter-active-ticks",
-        "window-sitter-fast-active-ticks",
-        "window-sitter-fast-threshold-ms"
+        "companion-sprite-typing-active-ticks",
+        "companion-sprite-typing-fast-active-ticks",
+        "companion-sprite-typing-fast-threshold-ms"
       )
     )
     val motionGroup = group(
       "settings-animation",
       "Motion",
-      "Accessibility, preset, reveal style, window sitter",
+      "Accessibility, preset, reveal style",
       List(
         CommandRunnerSettingsMotionItems.motionAccessibilityOptionItem(optionSelections),
         CommandRunnerSettingsMotionItems.motionPresetOptionItem(optionSelections),
@@ -214,8 +214,6 @@ object CommandRunnerSettingsGroups:
         CommandRunnerSettingsMotionItems.commandRunnerTransitionOptionItem(optionSelections),
         CommandRunnerSettingsMotionItems.commandRunnerFadeOptionItem(optionSelections),
         CommandRunnerSettingsMotionItems.uiAnimationOptionItem(optionSelections),
-        CommandRunnerSettingsAppearanceItems.windowSitterEnabledOptionItem(optionSelections),
-        CommandRunnerSettingsAppearanceItems.windowSitterActionOptionItem(optionSelections),
         motionAdvancedGroup
       )
     )

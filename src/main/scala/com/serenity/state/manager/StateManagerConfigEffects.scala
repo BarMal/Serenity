@@ -70,19 +70,6 @@ final private[manager] class StateManagerConfigEffects(
   private def updateMotionAccessibility(accessibility: com.serenity.config.MotionAccessibility): IO[AppConfig] =
     updateMotionConfig(_.withMotionAccessibility(accessibility))
 
-  private[manager] def updateWindowSitterConfig(
-    update: com.serenity.animation.WindowSitterConfig => com.serenity.animation.WindowSitterConfig
-  ): IO[Unit] =
-    updateAppearanceConfig(config => config.withWindowSitterConfig(update(config.windowSitterConfig))).flatTap { config =>
-      stateRef.update { state =>
-        val sitter =
-          if config.windowSitterConfig.enabled then
-            com.serenity.animation.WindowSitter.fromConfig(config.windowSitterConfig)
-          else com.serenity.animation.WindowSitter.default
-        state.copy(runtime = state.runtime.copy(windowSitter = sitter))
-      }
-    }.void
-
   private[manager] def updateCompanionSpriteConfig(update: CompanionSpriteConfig => CompanionSpriteConfig): IO[Unit] =
     updateAppearanceConfig(config => config.withCompanionSpriteConfig(update(config.companionSpriteConfig)))
       .flatTap(config => stateRef.update(state => syncCompanionSpritePanel(state, config)))
@@ -136,7 +123,7 @@ final private[manager] class StateManagerConfigEffects(
             themeTransition = None,
             uiSurfaces = state.runtime.uiSurfaces.filterNot(isGhostOverlay),
             surfaceAnimations = Map.empty,
-            windowSitter = com.serenity.animation.WindowSitter.default
+            companionSprite = state.runtime.companionSprite.resetTyping
           )
         )
       )
@@ -149,20 +136,7 @@ final private[manager] class StateManagerConfigEffects(
     else
       com.serenity.config.MotionFamily.values.toList
         .filter(family => previousFamilies.family(family).enabled && !currentFamilies.family(family).enabled)
-        .traverse_(cancelMotionFamily) >>
-        IO.whenA(
-          !previousFamilies.family(com.serenity.config.MotionFamily.UiTransitions).enabled &&
-            currentFamilies.family(com.serenity.config.MotionFamily.UiTransitions).enabled &&
-            current.windowSitterConfig.enabled
-        )(
-          stateRef.update(state =>
-            state.copy(runtime =
-              state.runtime.copy(windowSitter =
-                com.serenity.animation.WindowSitter.fromConfig(current.windowSitterConfig)
-              )
-            )
-          )
-        )
+        .traverse_(cancelMotionFamily)
 
   private def cancelMotionFamily(family: com.serenity.config.MotionFamily): IO[Unit] =
     family match
@@ -178,7 +152,7 @@ final private[manager] class StateManagerConfigEffects(
             state.copy(runtime =
               state.runtime.copy(
                 themeTransition = None,
-                windowSitter = com.serenity.animation.WindowSitter.default
+                companionSprite = state.runtime.companionSprite.resetTyping
               )
             )
           )
@@ -501,20 +475,16 @@ final private[manager] class StateManagerConfigEffects(
 
   private def interpretDecorationIntent(intent: DecorationIntent): IO[Unit] =
     intent match
-      case DecorationIntent.SetWindowSitterEnabled(enabled) =>
-        updateWindowSitterConfig(_.copy(enabled = enabled))
-      case DecorationIntent.SetWindowSitterAction(action) =>
-        updateWindowSitterConfig(_.copy(action = action))
-      case DecorationIntent.SetWindowSitterFrames(frames) =>
-        updateWindowSitterConfig(_.copy(frames = frames))
-      case DecorationIntent.SetWindowSitterActiveTicks(ticks) =>
-        updateWindowSitterConfig(_.copy(activeTicks = ticks))
-      case DecorationIntent.SetWindowSitterFastActiveTicks(ticks) =>
-        updateWindowSitterConfig(_.copy(fastActiveTicks = ticks))
-      case DecorationIntent.SetWindowSitterFastTypingThresholdMs(ms) =>
-        updateWindowSitterConfig(_.copy(fastTypingThresholdMs = ms))
       case DecorationIntent.SetCompanionSpriteEnabled(enabled) =>
         updateCompanionSpriteConfig(_.copy(enabled = enabled))
+      case DecorationIntent.SetCompanionSpriteTypingCycle(cycle) =>
+        updateCompanionSpriteConfig(_.copy(typingCycle = cycle))
+      case DecorationIntent.SetCompanionSpriteTypingActiveTicks(ticks) =>
+        updateCompanionSpriteConfig(_.copy(typingActiveTicks = ticks))
+      case DecorationIntent.SetCompanionSpriteTypingFastActiveTicks(ticks) =>
+        updateCompanionSpriteConfig(_.copy(typingFastActiveTicks = ticks))
+      case DecorationIntent.SetCompanionSpriteTypingFastThresholdMs(ms) =>
+        updateCompanionSpriteConfig(_.copy(typingFastThresholdMs = ms))
       case DecorationIntent.SetVisualFlairLevel(level) =>
         updateVisualFlairLevel(level)
 

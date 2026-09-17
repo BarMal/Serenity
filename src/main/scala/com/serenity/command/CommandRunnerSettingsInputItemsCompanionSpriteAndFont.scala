@@ -1,81 +1,69 @@
 package com.serenity.command
 
-import com.serenity.animation.WindowSitterConfig
+import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.config.AppConfig
 import com.serenity.ui.fonts.FontLoader
 
-/** Window-sitter behavior and font-size input items. Split out of `CommandRunnerSettingsInputItems.build` to keep both
-  * under the architecture size targets -- see that object's doc.
+/** Companion sprite typing-reactivity and font-size input items. Split out of `CommandRunnerSettingsInputItems.build`
+  * to keep both under the architecture size targets -- see that object's doc. The typing-cadence items absorbed the
+  * retired `com.serenity.animation.WindowSitterConfig`'s own input items (issue #934 v2).
   */
-private[command] object CommandRunnerSettingsInputItemsWindowSitterAndFont:
+private[command] object CommandRunnerSettingsInputItemsCompanionSpriteAndFont:
 
-  private[command] def windowSitterAndInputItems(
-    sitterConfig: WindowSitterConfig,
+  private[command] def companionSpriteAndInputItems(
+    companionSpriteConfig: CompanionSpriteConfig,
     wheelScrollLines: Int
   ): List[CommandSurfaceItem.InputItem] = List(
     CommandSurfaceItem.InputItem(
-      id = "window-sitter-frames",
-      label = "Sitter Frames",
-      hint = "Comma-separated glyphs",
-      currentValue = sitterConfig.frames.mkString(","),
-      kind = CommandSurfaceItem.InputKind.FreeText,
-      parse = text =>
-        CommandRunnerSettingsTextParsing
-          .nonEmptyCommaList(text)
-          .map(values =>
-            CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterFrames(values.toVector)))
-          ),
-      category = CommandCategory.Settings
-    ),
-    CommandSurfaceItem.InputItem(
-      id = "window-sitter-active-ticks",
-      label = "Sitter Duration",
+      id = "companion-sprite-typing-active-ticks",
+      label = "Typing Reaction Duration",
       hint = "Animation ticks (1-120)",
-      currentValue = sitterConfig.activeTicks.toString,
+      currentValue = companionSpriteConfig.typingActiveTicks.toString,
       kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
       parse = text =>
         text.toIntOption
           .filter(value => value >= 1 && value <= 120)
           .map(commandIntentArg =>
-            CommandIntent
-              .Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterActiveTicks(commandIntentArg)))
+            CommandIntent.Settings(
+              SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingActiveTicks(commandIntentArg))
+            )
           ),
       category = CommandCategory.Settings,
-      defaultValue = Some(AppConfig.default.windowSitterConfig.activeTicks.toString)
+      defaultValue = Some(CompanionSpriteConfig.default.typingActiveTicks.toString)
     ),
     CommandSurfaceItem.InputItem(
-      id = "window-sitter-fast-active-ticks",
-      label = "Fast Sitter Duration",
+      id = "companion-sprite-typing-fast-active-ticks",
+      label = "Fast Typing Reaction Duration",
       hint = "Fast-typing ticks (1-240)",
-      currentValue = sitterConfig.fastActiveTicks.toString,
+      currentValue = companionSpriteConfig.typingFastActiveTicks.toString,
       kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
       parse = text =>
         text.toIntOption
           .filter(value => value >= 1 && value <= 240)
           .map(commandIntentArg =>
             CommandIntent.Settings(
-              SettingsIntent.Decoration(DecorationIntent.SetWindowSitterFastActiveTicks(commandIntentArg))
+              SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingFastActiveTicks(commandIntentArg))
             )
           ),
       category = CommandCategory.Settings,
-      defaultValue = Some(AppConfig.default.windowSitterConfig.fastActiveTicks.toString)
+      defaultValue = Some(CompanionSpriteConfig.default.typingFastActiveTicks.toString)
     ),
     CommandSurfaceItem.InputItem(
-      id = "window-sitter-fast-threshold-ms",
+      id = "companion-sprite-typing-fast-threshold-ms",
       label = "Fast Typing Threshold",
       hint = "Milliseconds (1-5000)",
-      currentValue = sitterConfig.fastTypingThresholdMs.toString,
+      currentValue = companionSpriteConfig.typingFastThresholdMs.toString,
       kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
       parse = text =>
         text.toIntOption
           .filter(value => value >= 1 && value <= 5000)
           .map(commandIntentArg =>
             CommandIntent.Settings(
-              SettingsIntent.Decoration(DecorationIntent.SetWindowSitterFastTypingThresholdMs(commandIntentArg))
+              SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingFastThresholdMs(commandIntentArg))
             )
           ),
       category = CommandCategory.Settings,
-      defaultValue = Some(AppConfig.default.windowSitterConfig.fastTypingThresholdMs.toString)
+      defaultValue = Some(CompanionSpriteConfig.default.typingFastThresholdMs.toString)
     ),
     CommandSurfaceItem.InputItem(
       id = "wheel-scroll-lines",

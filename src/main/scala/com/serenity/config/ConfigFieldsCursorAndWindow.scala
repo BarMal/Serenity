@@ -2,8 +2,7 @@ package com.serenity.config
 
 import java.util.Locale
 
-import com.serenity.animation.WindowSitterAction
-import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig}
+import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig, SpriteFrameCycle}
 import com.serenity.ui.layout.PanelPosition
 
 /** Cursor, interface density, window chrome and companion sprite. */
@@ -52,38 +51,11 @@ private[config] object ConfigFieldsCursorAndWindow:
     named("window.chrome", "windowChromeMode", "window.chrome.mode", "window_chrome", "window_chrome_mode")(
       enumerated(WindowChromeMode.fromConfigKey, _.configKey, text => WindowChromeMode.values.find(_.toString == text))
     )(_.windowChromeMode, (config, value) => config.withWindowChromeMode(value)),
-    field("motion.window_sitter.enabled", "window.sitter.enabled")(boolean)(
-      _.windowSitterConfig.enabled,
-      (config, value) => config.withWindowSitterConfig(config.windowSitterConfig.copy(enabled = value))
-    ),
-    field("motion.window_sitter.action", "window.sitter.action")(
-      enumerated(
-        WindowSitterAction.fromConfigKey,
-        _.configKey,
-        text => WindowSitterAction.values.find(_.toString == text)
-      )
-    )(
-      _.windowSitterConfig.action,
-      (config, value) => config.withWindowSitterConfig(config.windowSitterConfig.copy(action = value))
-    ),
-    field("motion.window_sitter.frames", "window.sitter.frames")(stringList)(
-      _.windowSitterConfig.frames.toList,
-      (config, value) => config.withWindowSitterConfig(config.windowSitterConfig.copy(frames = value.toVector))
-    ),
-    field("motion.window_sitter.active_ticks", "window.sitter.active_ticks")(int)(
-      _.windowSitterConfig.activeTicks,
-      (config, value) => config.withWindowSitterConfig(config.windowSitterConfig.copy(activeTicks = value))
-    ),
-    field("motion.window_sitter.fast_active_ticks", "window.sitter.fast_active_ticks")(int)(
-      _.windowSitterConfig.fastActiveTicks,
-      (config, value) => config.withWindowSitterConfig(config.windowSitterConfig.copy(fastActiveTicks = value))
-    ),
-    field("motion.window_sitter.fast_typing_threshold_ms", "window.sitter.fast_typing_threshold_ms")(int)(
-      _.windowSitterConfig.fastTypingThresholdMs,
-      (config, value) => config.withWindowSitterConfig(config.windowSitterConfig.copy(fastTypingThresholdMs = value))
-    ),
-
     // -- Companion sprite ------------------------------------------------------------------------------------------------
+    // motion.window_sitter.* (#934) is gone: the companion sprite panel absorbed the window sitter's
+    // typing-reactivity (#934 v2), so those keys are no longer registered here. An old config file naming them reads
+    // as unknown keys (`ConfigKeySchema.isKnownKey`) rather than erroring -- the same precedent this feature's own
+    // now-removed `frames` field set.
     field("ui.companion_sprite.enabled", "companion.sprite.enabled")(boolean)(
       _.companionSpriteConfig.enabled,
       (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(enabled = value))
@@ -105,6 +77,31 @@ private[config] object ConfigFieldsCursorAndWindow:
     )(
       _.companionSpriteConfig.size,
       (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(size = value))
+    ),
+    field("ui.companion_sprite.typing_cycle", "companion.sprite.typing.cycle")(
+      enumerated(
+        SpriteFrameCycle.fromConfigKey,
+        _.configKey,
+        text => SpriteFrameCycle.values.find(_.toString == text)
+      )
+    )(
+      _.companionSpriteConfig.typingCycle,
+      (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(typingCycle = value))
+    ),
+    field("ui.companion_sprite.typing_active_ticks", "companion.sprite.typing.active_ticks")(int)(
+      _.companionSpriteConfig.typingActiveTicks,
+      (config, value) =>
+        config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(typingActiveTicks = value))
+    ),
+    field("ui.companion_sprite.typing_fast_active_ticks", "companion.sprite.typing.fast_active_ticks")(int)(
+      _.companionSpriteConfig.typingFastActiveTicks,
+      (config, value) =>
+        config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(typingFastActiveTicks = value))
+    ),
+    field("ui.companion_sprite.typing_fast_threshold_ms", "companion.sprite.typing.fast_threshold_ms")(int)(
+      _.companionSpriteConfig.typingFastThresholdMs,
+      (config, value) =>
+        config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(typingFastThresholdMs = value))
     ),
     field("ui.visual_flair", "visual.flair.level")(
       enumerated(VisualFlairLevel.fromConfigKey, _.configKey)

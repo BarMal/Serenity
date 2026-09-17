@@ -4,9 +4,8 @@ import cats.effect.*
 import cats.effect.unsafe.IORuntimeConfig
 import cats.syntax.all.*
 import com.serenity.BuildInfo
-import com.serenity.animation.WindowSitter
 import com.serenity.app.*
-import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning, MotionFamily}
+import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning}
 import com.serenity.diagnostics.{Trace, TuiConsoleLogFilter}
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
@@ -117,10 +116,7 @@ object Main extends IOApp:
           initialDisplay.codeMetrics,
           initialDisplay.uiMetrics,
           appConfig.windowChromeMode,
-          appConfig.preferredWindowSize,
-          initialWindowSitter = WindowSitter.fromConfig(appConfig.windowSitterConfig),
-          initialWindowSitterVisible = appConfig.windowSitterConfig.enabled &&
-            appConfig.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions).enabled
+          appConfig.preferredWindowSize
         ),
         PaintExecutionContext.resource
       ).tupled
@@ -149,11 +145,6 @@ object Main extends IOApp:
             Trace.timed("render.syncChromeTheme") {
               IO {
                 swingWin.updateChromeTheme(state.persisted.theme)
-                val sitterVisible = state.persisted.config.windowSitterConfig.enabled &&
-                  state.persisted.config.surfaceConfig.effectiveMotionConfiguration
-                    .family(MotionFamily.UiTransitions)
-                    .enabled
-                swingWin.updateWindowSitter(state.runtime.windowSitter, sitterVisible)
               }.evalOn(paintEc)
             }
 

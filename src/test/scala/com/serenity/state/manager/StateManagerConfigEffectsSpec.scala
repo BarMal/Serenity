@@ -166,7 +166,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
             SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
         ),
-        windowSitter = com.serenity.animation.WindowSitter.fromConfig(AppConfig.default.windowSitterConfig)
+        companionSprite = com.serenity.animation.sprite.CompanionSpriteState.default.observeTyping(1_000_000_000L)
       )
     )
     val fixture = harness(motionState)
@@ -182,6 +182,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
     after.runtime.uiSurfaces.map(_.id) should not contain ghostId
     after.runtime.themeTransition shouldBe None
     after.runtime.surfaceAnimations shouldBe Map.empty
+    after.runtime.companionSprite.isTypingActive shouldBe false
   }
 
   it should "propagate a contextual toolbar display mode change into the live toolbar surface" in {

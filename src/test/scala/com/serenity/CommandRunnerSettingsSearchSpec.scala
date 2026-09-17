@@ -86,8 +86,6 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
       "command-runner-transition",
       "command-runner-fade",
       "ui-animation",
-      "window-sitter-enabled",
-      "window-sitter-action",
       "settings-motion-advanced"
     )
   }

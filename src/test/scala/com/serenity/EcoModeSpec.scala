@@ -38,7 +38,7 @@ class EcoModeSpec extends AnyFlatSpec with Matchers:
     eco.inputConfig shouldBe customized.inputConfig
     eco.cursorConfig shouldBe customized.cursorConfig
     eco.windowConfig shouldBe customized.windowConfig
-    eco.windowSitterConfig shouldBe customized.windowSitterConfig
+    eco.companionSpriteConfig shouldBe customized.companionSpriteConfig
     eco.documentConfig shouldBe customized.documentConfig
     eco.interfaceConfig shouldBe customized.interfaceConfig
     eco.languageToolsConfig shouldBe customized.languageToolsConfig

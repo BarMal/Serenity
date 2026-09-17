@@ -27,7 +27,7 @@ class AlphaModeSpec extends AnyFlatSpec with Matchers:
     alpha.inputConfig shouldBe customized.inputConfig
     alpha.cursorConfig shouldBe customized.cursorConfig
     alpha.windowConfig shouldBe customized.windowConfig
-    alpha.windowSitterConfig shouldBe customized.windowSitterConfig
+    alpha.companionSpriteConfig shouldBe customized.companionSpriteConfig
     alpha.documentConfig shouldBe customized.documentConfig
     alpha.interfaceConfig shouldBe customized.interfaceConfig
     alpha.languageToolsConfig shouldBe customized.languageToolsConfig
