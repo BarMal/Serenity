@@ -106,7 +106,7 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
     // being far longer than Linux's `/tmp/` (`TuiFileWorkflowSpec`, "should prefill the form with the current file
     // and its own workspace").
     val macLikePrefix = "/var/folders/36/tjdph2t965j8snz9_vkdnw0r0000gn/T/"
-    val sessionDir     = "tui-session1234567890123456789"
+    val sessionDir    = "tui-session1234567890123456789"
     val workflow = FileWorkflowState(
       mode = FileWorkflowMode.SaveAs,
       filename = "notes.md",

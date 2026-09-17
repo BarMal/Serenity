@@ -207,8 +207,8 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     // `Files.createTempDirectory` sits under a `/var/folders/.../T/` prefix far longer than Linux's `/tmp/`), so the
     // fix is proven independent of the actual OS's temp-directory convention.
     val macLikePrefix = "/var/folders/36/tjdph2t965j8snz9_vkdnw0r0000gn/T/"
-    val sessionDir     = "tui-session1234567890123456789"
-    val longPath       = macLikePrefix + sessionDir
+    val sessionDir    = "tui-session1234567890123456789"
+    val longPath      = macLikePrefix + sessionDir
     val workflow = FileWorkflowState(
       mode = FileWorkflowMode.SaveAs,
       filename = "notes.md",
