@@ -137,36 +137,28 @@ object CommandRunnerSettingsItems:
       hint = Some("Code or prose workspace -- filters which settings are shown below")
     )
 
+  // issue #1044: was ordered Off/On, one of three toggles in the settings tree still encoding "On" as index 1
+  // instead of the `enabledOptionItem` convention (index 0) every other boolean toggle follows -- normalized to
+  // that helper, matching `CommandRunnerOptionSelections.default`'s corresponding `enabledIndex` computation.
   private[command] def showAllSettingsOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
-    CommandSurfaceItem.OptionItem(
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "settings-show-all",
       label = "Show All Settings",
-      options = List(
-        CommandOption("Off", CommandIntent.View(ViewIntent.SetShowAllSettingsRegardlessOfMode(false))),
-        CommandOption("On", CommandIntent.View(ViewIntent.SetShowAllSettingsRegardlessOfMode(true)))
-      ),
-      selectedIndex = optionSelections.getOrElse("settings-show-all", 0),
-      category = CommandCategory.Settings,
-      hint = Some("Show settings hidden by the app mode filter above")
+      selectedIndex = optionSelections.getOrElse("settings-show-all", 1),
+      enabledIntent = CommandIntent.View(ViewIntent.SetShowAllSettingsRegardlessOfMode(true)),
+      disabledIntent = CommandIntent.View(ViewIntent.SetShowAllSettingsRegardlessOfMode(false)),
+      hint = "Show settings hidden by the app mode filter above"
     )
 
+  // issue #1044: same normalization as `showAllSettingsOptionItem` above -- was ordered Off/On.
   private[command] def spellCheckOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
-    CommandSurfaceItem.OptionItem(
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "spellcheck-enabled",
       label = "Spell Check",
-      options = List(
-        CommandOption(
-          "Off",
-          CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(false)))
-        ),
-        CommandOption(
-          "On",
-          CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(true)))
-        )
-      ),
-      selectedIndex = optionSelections.getOrElse("spellcheck-enabled", 0),
-      category = CommandCategory.Settings,
-      hint = Some("Check prose buffers")
+      selectedIndex = optionSelections.getOrElse("spellcheck-enabled", 1),
+      enabledIntent = CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(true))),
+      disabledIntent = CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckEnabled(false))),
+      hint = "Check prose buffers"
     )
 
   private[command] def normalizedUiPresetNames(names: List[String]): List[String] =

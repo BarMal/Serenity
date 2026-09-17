@@ -47,22 +47,26 @@ private[layout] object CommandPaletteContentResolver:
         val allItems = runner.visibleItems
         // Same capped, expand-in-place group preview as resolveSettingsSurface, for a settings group still sitting
         // in this mixed list (browsing the Settings tab before drilling into any group) -- issue #1059.
-        val groupPreview = groupPreviewRows(SettingsSurfaceState.previewRows(allItems, runner.selectedIndex))
+        val groupPreviewFull = groupPreviewRows(SettingsSurfaceState.previewRows(allItems, runner.selectedIndex))
         // The persistent key-hint row (issue #931, Stage 3) only ever shows when there is a list to navigate --
         // mirrors the existing dynamic footer's own `allItems.nonEmpty` gate.
-        val hasKeyHint = showKeyHints && allItems.nonEmpty
-        val itemWindow = SurfaceFrameLayout
-          .forContent(rect, SurfaceContent.CommandPalette(runner))
-          .itemWindow(
-            itemCount = allItems.size,
-            selectedIndex = runner.selectedIndex,
-            hasHeader = true,
-            hasFooter = allItems.nonEmpty || runner.statusMessage.nonEmpty,
-            reservedContentRows = groupPreview.size,
-            itemGapRows = itemGapRows,
-            itemTargetRows = itemTargetRows,
-            hasKeyHint = hasKeyHint
-          )
+        val hasKeyHint  = showKeyHints && allItems.nonEmpty
+        val hasFooter   = allItems.nonEmpty || runner.statusMessage.nonEmpty
+        val frameLayout = SurfaceFrameLayout.forContent(rect, SurfaceContent.CommandPalette(runner))
+        // Capped to the same claim `itemWindow` itself enforces (issue #1548) -- see the note on
+        // `resolveSettingsSurface`'s identical computation below.
+        val groupPreview =
+          groupPreviewFull.take(frameLayout.cappedReservedContentRows(allItems.size, groupPreviewFull.size))
+        val itemWindow = frameLayout.itemWindow(
+          itemCount = allItems.size,
+          selectedIndex = runner.selectedIndex,
+          hasHeader = true,
+          hasFooter = hasFooter,
+          reservedContentRows = groupPreview.size,
+          itemGapRows = itemGapRows,
+          itemTargetRows = itemTargetRows,
+          hasKeyHint = hasKeyHint
+        )
         val windowItems           = itemWindow.slice(allItems)
         val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(runner.selectedIndex)
 
@@ -129,19 +133,22 @@ private[layout] object CommandPaletteContentResolver:
     // Capped, expand-in-place group preview (issue #1059): when the selected row is itself a group, up to four of
     // its children render as indented, de-emphasized rows immediately under it, in this same list -- replacing the
     // second floating surface `CommandPaletteSubmenu` used to show for a hovered-but-not-yet-entered group.
-    val groupPreview = groupPreviewRows(SettingsSurfaceState.previewRows(items, selectedIndex))
-    val itemWindow = SurfaceFrameLayout
-      .forContent(rect, SurfaceContent.CommandPalette(runner))
-      .itemWindow(
-        itemCount = items.size,
-        selectedIndex = selectedIndex,
-        hasHeader = true,
-        hasFooter = true,
-        reservedContentRows = groupPreview.size,
-        itemGapRows = itemGapRows,
-        itemTargetRows = itemTargetRows,
-        hasKeyHint = showKeyHints
-      )
+    val groupPreviewFull = groupPreviewRows(SettingsSurfaceState.previewRows(items, selectedIndex))
+    val frameLayout      = SurfaceFrameLayout.forContent(rect, SurfaceContent.CommandPalette(runner))
+    // The preview's actual row count is capped to whatever `itemWindow` itself will allow it to claim from the
+    // shared sibling budget (issue #1548) -- without this, the rows built below (windowItems + groupPreview) would
+    // outgrow the frame's real row budget once itemWindow's own cap reduces its reservation independently.
+    val groupPreview = groupPreviewFull.take(frameLayout.cappedReservedContentRows(items.size, groupPreviewFull.size))
+    val itemWindow = frameLayout.itemWindow(
+      itemCount = items.size,
+      selectedIndex = selectedIndex,
+      hasHeader = true,
+      hasFooter = true,
+      reservedContentRows = groupPreview.size,
+      itemGapRows = itemGapRows,
+      itemTargetRows = itemTargetRows,
+      hasKeyHint = showKeyHints
+    )
     val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(selectedIndex)
     val rows = itemWindow.slice(items).zipWithIndex.flatMap {
       case (item, index) =>

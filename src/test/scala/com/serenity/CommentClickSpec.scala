@@ -30,6 +30,9 @@ class CommentClickSpec extends AnyFlatSpec with Matchers:
 
   private val comment = DocumentComment(CursorPosition(0, 0), CursorPosition(0, 5), "A note about hello")
 
+  // Cursor starts at column 8 ("world"), outside the comment's `[0, 5]` range -- #1550 made the floating lens track
+  // the cursor for every state transition (not only a click), so a buffer set up with its cursor already inside the
+  // comment would open the lens as a side effect of this fixture's own `ResizeEvent`, before a test's click runs.
   private def withCommentedBuffer(sm: StateManager): BufferId =
     val bufferId = sm.bufferManager.createBuffer("hello world", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
@@ -41,7 +44,8 @@ class CommentClickSpec extends AnyFlatSpec with Matchers:
             bufferId,
             buffer.copy(
               document = buffer.document.copy(language = Some(LanguageId.Scala)),
-              annotations = buffer.annotations.copy(documentComments = List(comment))
+              annotations = buffer.annotations.copy(documentComments = List(comment)),
+              editing = buffer.editing.copy(cursors = List(CursorPosition(0, 8)))
             )
           )
         )

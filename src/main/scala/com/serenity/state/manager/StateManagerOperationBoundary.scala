@@ -8,6 +8,7 @@ import cats.syntax.foldable.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.SpellCheckConfig
 import com.serenity.diagnostics.Trace
+import com.serenity.document.CommentRendering
 import com.serenity.spellcheck.{DictionaryLoader, SpellChecker}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CommandRunnerPanelSelections, ModalEventReducer}
@@ -77,15 +78,19 @@ final private[manager] class StateManagerOperationBoundary private (
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
     AppStateValidation.validated(normalizeCommandRunnerFocus(newState)) match
       case Right(validState) =>
+        // #1550: every state transition passes through here, so this is the one place that can keep the floating
+        // comment lens in sync with the cursor regardless of what moved it -- a keyboard cursor move opens/closes it
+        // exactly as a mouse click already did, without each event source having to remember to call it itself.
+        val syncedState = CommentRendering.syncFloatingLensWithCursor(validState, fallbackState)
         val modalTransitionLog =
-          (currentModalId(fallbackState), currentModalId(validState)) match
+          (currentModalId(fallbackState), currentModalId(syncedState)) match
             case (before, after) if before != after =>
               logger.info(
                 s"[STATE MODAL] before=${before.getOrElse("none")} " +
-                  s"after=${after.getOrElse("none")} focus=${validState.persisted.focus}"
+                  s"after=${after.getOrElse("none")} focus=${syncedState.persisted.focus}"
               )
             case _ => IO.unit
-        modalTransitionLog >> stateRef.set(validState) >> scheduleDocumentAnalysis()
+        modalTransitionLog >> stateRef.set(syncedState) >> scheduleDocumentAnalysis()
       case Left(errors) =>
         logger.error(s"State validation failed: ${errors.mkString(", ")}") >>
           stateRef.set(fallbackState)

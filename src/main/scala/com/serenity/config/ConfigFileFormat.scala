@@ -158,6 +158,8 @@ object ConfigFileFormat:
     field("ui.background_style"),
     comment("Blur strength behind translucent surfaces (0.0-1.0)"),
     field("ui.blur_radius"),
+    comment("How strongly a misspelled-word/diagnostic highlight's severity colour shows through (0.0-1.0)"),
+    field("ui.diagnostic_highlight_blend_weight"),
     field("ui.element_gap"),
     field("ui.corner_radius"),
     field("ui.outline_thickness"),

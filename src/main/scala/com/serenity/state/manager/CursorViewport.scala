@@ -38,10 +38,25 @@ object CursorViewport:
     val typewriterScrollingEnabled = currentState.persisted.config.surfaceConfig.typewriterScrollingEnabled
     val isTui                      = currentState.runtime.isTuiMode
     val viewport                   = buffer.viewport
-    val halfVisibleLines           = viewport.visibleLines / 2
-    val font                       = previewFontForBuffer(buffer, currentState.persisted.config.editorConfig.fontConfig)
-    val gridWidthPx =
-      TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, currentState.persisted.config.editorConfig.fontConfig)
+    val fontConfig                 = currentState.persisted.config.editorConfig.fontConfig
+    val font                       = previewFontForBuffer(buffer, fontConfig)
+    val gridWidthPx                = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, fontConfig)
+    // `viewport.visibleLines` is a code-grid row count (`LayoutEngine.updateViewportDimensions` sets it from the
+    // panel's grid rows, the same convention `gridWrapWidthPx` uses for columns) -- it does not vary with which font a
+    // pane actually draws with. A document-font pane whose font has a taller line height than the code font fits fewer
+    // of its own rows into that same pixel height than a code-font pane would, exactly what
+    // `RendererPaneSetup.snapshotForBuffer`'s own `visibleLines = panelHeightPx / bufferMetrics.lineHeight` computes
+    // for the pane actually painted. Using the code-grid count unadjusted let this centred/bottom-aligned scroll math
+    // assume more rows fit than the pane's own font renders, scrolling the cursor below the pane's real bottom edge on
+    // a long wrapped line (#1041).
+    val effectiveVisibleLines =
+      if isTui then viewport.visibleLines
+      else
+        val codeLineHeightPx =
+          CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).lineHeight
+        val panelHeightPx = viewport.visibleLines * codeLineHeightPx
+        math.max(1, panelHeightPx / math.max(1, CellMetrics.fromFont(font).lineHeight))
+    val halfVisibleLines = effectiveVisibleLines / 2
     // Count wrapped rows the way the terminal actually drew them: TUI wraps on a fixed 1px-per-cell grid
     // (`CellMetrics.cellUnit` + forceCellLayout), never a pixel measurement of the inert proportional prose font, which
     // folds each line across a different number of rows and so mis-places the centred viewport. Mirrors
@@ -110,7 +125,7 @@ object CursorViewport:
       if remaining <= rows || line == 0 then (line, math.max(0, rows - remaining))
       else bottomAlignedWindow(line - 1, remaining - rows)
     val (bottomLine, bottomVisualLine) =
-      if lineCount <= 0 then (0, 0) else bottomAlignedWindow(lineCount - 1, viewport.visibleLines)
+      if lineCount <= 0 then (0, 0) else bottomAlignedWindow(lineCount - 1, effectiveVisibleLines)
 
     val exceedsBottom =
       rawTopLine > bottomLine || (rawTopLine == bottomLine && rawTopVisualLine > bottomVisualLine)

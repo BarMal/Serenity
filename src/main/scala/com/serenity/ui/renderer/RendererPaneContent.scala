@@ -350,7 +350,9 @@ object RendererPaneContent:
               state.persisted.theme,
               context,
               snapshot,
-              styledSegments
+              styledSegments,
+              dimmed = !activeBodyLines(visualLine.bufferLine),
+              blendWeight = state.persisted.config.surfaceConfig.diagnosticHighlightBlendWeight
             )
 
             RendererHighlights.renderSelectionHighlights(

@@ -91,6 +91,17 @@ object TuiRuntime:
                     terminalConfig.inputConfig.wheelScrollLines,
                     metrics = metrics
                   )
+                  .flatTap { handler =>
+                    // #1532: graceful degradation, discoverable the same way the keyboard-protocol tier above is --
+                    // stdin isn't a real console/pty (e.g. Git Bash/mintty on Windows without winpty), so mouse
+                    // tracking was never enabled; bracketed paste still works.
+                    IO.whenA(!handler.mouseTrackingSupported)(
+                      logger.warn(
+                        "[TUI] Mouse tracking unavailable: stdin isn't a real console/pty (seen on Git Bash/mintty on " +
+                          "Windows without winpty) -- mouse clicks/drags/scrolling will not work this session"
+                      )
+                    )
+                  }
                   .map { handler =>
                     inputHandlerHolder.set(Some(handler))
                     handler

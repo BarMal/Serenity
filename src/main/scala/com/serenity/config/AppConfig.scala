@@ -179,6 +179,9 @@ final case class AppConfig(
   def withRendererFrameStateCacheCapacity(capacity: Int): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(rendererFrameStateCacheCapacity = capacity))
 
+  def withDiagnosticHighlightBlendWeight(weight: Double): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(diagnosticHighlightBlendWeight = weight))
+
   // #1316: re-assigning a setting its own current value is not customising it -- flip the preset only when the value
   // actually changes, so putting back what was already there is a no-op.
   def withBlurRadius(r: Float): AppConfig =
@@ -326,20 +329,22 @@ final case class AppConfig(
 
 object AppConfig:
 
-  val MinElementTransitionSpeedScale: Double = 0.0
-  val MaxElementTransitionSpeedScale: Double = 4.0
-  val MinUiElementGap: Double                = 0.0
-  val MaxUiElementGap: Double                = 8.0
-  val MinUiCornerRadiusPx: Int               = 0
-  val MaxUiCornerRadiusPx: Int               = 32
-  val MinUiOutlineThicknessPx: Int           = 1
-  val MaxUiOutlineThicknessPx: Int           = 8
-  val MinCommandRunnerVisibleRows: Int       = 1
-  val MaxCommandRunnerVisibleRows: Int       = 20
-  val MinCommandRunnerItemGapRows: Double    = 0.0
-  val MaxCommandRunnerItemGapRows: Double    = 8.0
-  val MinCommandRunnerCursorGapRows: Double  = 0.0
-  val MaxCommandRunnerCursorGapRows: Double  = 8.0
+  val MinElementTransitionSpeedScale: Double    = 0.0
+  val MaxElementTransitionSpeedScale: Double    = 4.0
+  val MinUiElementGap: Double                   = 0.0
+  val MaxUiElementGap: Double                   = 8.0
+  val MinUiCornerRadiusPx: Int                  = 0
+  val MaxUiCornerRadiusPx: Int                  = 32
+  val MinUiOutlineThicknessPx: Int              = 1
+  val MaxUiOutlineThicknessPx: Int              = 8
+  val MinCommandRunnerVisibleRows: Int          = 1
+  val MaxCommandRunnerVisibleRows: Int          = 20
+  val MinCommandRunnerItemGapRows: Double       = 0.0
+  val MaxCommandRunnerItemGapRows: Double       = 8.0
+  val MinCommandRunnerCursorGapRows: Double     = 0.0
+  val MaxCommandRunnerCursorGapRows: Double     = 8.0
+  val MinDiagnosticHighlightBlendWeight: Double = 0.0
+  val MaxDiagnosticHighlightBlendWeight: Double = 1.0
   // Wide enough to allow a deliberately slow "hold" feel while still rejecting nonsensical (near-zero or
   // multi-second) values; 200 (the default, matching `ModifierTapDetector.WindowMillis`) sits well inside it.
   val MinCommandRunnerCursorPeekTapWindowMillis: Long = 50L
@@ -380,6 +385,10 @@ object AppConfig:
 
   def clampRendererFrameStateCacheCapacity(capacity: Int): Int =
     capacity.max(MinRendererFrameStateCacheCapacity).min(MaxRendererFrameStateCacheCapacity)
+
+  def clampDiagnosticHighlightBlendWeight(weight: Double): Double =
+    if weight.isFinite then weight.max(MinDiagnosticHighlightBlendWeight).min(MaxDiagnosticHighlightBlendWeight)
+    else MinDiagnosticHighlightBlendWeight
 
   def scaledAnimation(animation: Option[AnimationConfig], speedScale: Double): Option[AnimationConfig] =
     animation.flatMap(_.scaledBy(clampElementTransitionSpeedScale(speedScale)))

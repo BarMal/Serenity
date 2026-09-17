@@ -14,6 +14,39 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     PostProcessingEffect.fromConfigKey("glow") shouldBe Some(PostProcessingEffect.Glow)
   }
 
+  // #1529: the diagnostic-highlight blend weight was a hardcoded literal in `RendererHighlights`; it's a config value
+  // now, clamped to [0, 1] like the other alpha-shaped settings.
+  "SurfaceConfig.normalized" should "clamp diagnosticHighlightBlendWeight to [0, 1]" in {
+    SurfaceConfig(diagnosticHighlightBlendWeight = 5.0).normalized.diagnosticHighlightBlendWeight shouldBe 1.0
+    SurfaceConfig(diagnosticHighlightBlendWeight = -5.0).normalized.diagnosticHighlightBlendWeight shouldBe 0.0
+    SurfaceConfig(diagnosticHighlightBlendWeight = 0.6).normalized.diagnosticHighlightBlendWeight shouldBe 0.6
+  }
+
+  "AppConfig.default" should "default the diagnostic highlight blend weight to 0.45" in {
+    AppConfig.default.surfaceConfig.diagnosticHighlightBlendWeight shouldBe 0.45
+  }
+
+  "AppConfig.withDiagnosticHighlightBlendWeight" should "change only the blend weight" in {
+    val updated = AppConfig.default.withDiagnosticHighlightBlendWeight(0.75)
+
+    updated.surfaceConfig.diagnosticHighlightBlendWeight shouldBe 0.75
+  }
+
+  "ConfigRegistry" should "read and validate the diagnostic highlight blend weight setting" in {
+    ConfigRegistry
+      .read(AppConfig.default, "ui.diagnostic_highlight_blend_weight", "0.2")
+      .getOrElse(fail("ui.diagnostic_highlight_blend_weight parse"))
+      .surfaceConfig
+      .diagnosticHighlightBlendWeight shouldBe 0.2
+
+    ConfigRegistry.rejects("ui.diagnostic_highlight_blend_weight", "0.2") shouldBe false
+    ConfigRegistry.rejects("ui.diagnostic_highlight_blend_weight", "not-a-number") shouldBe true
+  }
+
+  "ConfigKeySchema" should "know the diagnostic highlight blend weight key" in {
+    ConfigKeySchema.isKnownKey("ui.diagnostic_highlight_blend_weight") shouldBe true
+  }
+
   "SurfaceConfig.normalized" should "clamp rendererFrameStateCacheCapacity to AppConfig's configured bounds" in {
     SurfaceConfig(rendererFrameStateCacheCapacity = Int.MaxValue).normalized.rendererFrameStateCacheCapacity shouldBe
       AppConfig.MaxRendererFrameStateCacheCapacity

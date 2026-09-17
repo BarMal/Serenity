@@ -140,6 +140,71 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     SpellChecker.check("id parse_json v2 ok", config) shouldBe Nil
   }
 
+  /** Regression cover for #1528: the tokenizer's `WordPattern` had no digit support, so a hyphenated numeric compound
+    * like "COVID-19" only matched the "COVID" prefix -- the "-19" suffix could not extend the token at all -- and the
+    * orphaned "COVID" fragment then failed the dictionary lookup and was flagged as a typo. The fix keeps digits
+    * attached to a hyphen/apostrophe-joined compound so it tokenizes as one "COVID-19" word, and skips spell-checking
+    * any token that contains a digit at all (hunspell dictionaries have no notion of digits, so a mixed alphanumeric
+    * token like this is never going to be "in the dictionary" no matter how it is spelled).
+    */
+  it should "not flag a numeric compound word as a broken-token typo" in {
+    val config = SpellCheckConfig(enabled = true)
+
+    SpellChecker.check("The COVID-19 world is ok.", config) shouldBe Nil
+  }
+
+  it should "still flag a genuine typo alongside an accepted numeric compound" in {
+    val config = SpellCheckConfig(enabled = true)
+
+    val diagnostics = SpellChecker.check("The COVID-19 wrld is ok.", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: wrld")
+  }
+
+  /** Regression cover for #1528: a capitalized word that is not the first word of its sentence is, by far, more often a
+    * proper noun (a name, a place, a product) than a genuine misspelling -- hunspell-style dictionaries cannot
+    * enumerate every proper noun, so `isAccepted` flagged every one of them that was not coincidentally also a common
+    * word. The fix exempts a capitalized, non-sentence-initial word from spell-check entirely.
+    */
+  it should "not flag a capitalized word that is not the first word of its sentence" in {
+    val config = SpellCheckConfig(enabled = true)
+
+    SpellChecker.check("Serenity is a document with Zabrinsky in code.", config) shouldBe Nil
+  }
+
+  it should "still flag a lowercase misspelling in the same sentence as an exempted proper noun" in {
+    val config = SpellCheckConfig(enabled = true)
+
+    val diagnostics = SpellChecker.check("Serenity is a wurld with Zabrinsky in code.", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: wurld")
+  }
+
+  it should "still flag a misspelled word at the start of a sentence" in {
+    val config = SpellCheckConfig(enabled = true)
+
+    val diagnostics = SpellChecker.check("Wurld is a document with serenity.", config)
+
+    diagnostics.map(_.message) shouldBe List("Possible spelling issue: Wurld")
+  }
+
+  it should "not flag an all-caps acronym" in {
+    val config = SpellCheckConfig(enabled = true)
+
+    SpellChecker.check("The NASA document is in code.", config) shouldBe Nil
+  }
+
+  /** Documents a known limitation (#1528): once a word is capitalized and not sentence-initial, this exemption cannot
+    * tell a genuine misspelling of a proper noun apart from a correctly-spelled one it has simply never seen --
+    * dictionaries do not enumerate proper nouns, so there is no signal left to distinguish the two cases. A misspelled
+    * proper noun in that position is therefore a false negative (silently accepted) rather than flagged.
+    */
+  it should "silently accept a misspelled proper noun when it is capitalized and not sentence-initial (known limitation)" in {
+    val config = SpellCheckConfig(enabled = true)
+
+    SpellChecker.check("Serenity is a document with Zabrinksy in code.", config) shouldBe Nil
+  }
+
   it should "accept words loaded from configured Hunspell dictionaries" in {
     val dictionary = writeDic("serenity-en", List("external", "serenity/AB", "calm"))
     val config = SpellCheckConfig(

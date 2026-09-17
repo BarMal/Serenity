@@ -55,9 +55,13 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       .headOption
       .getOrElse(fail("Expected interface density option row"))
 
+    // issue #1549: this hint now also names "command runner"/"palette" so the setting is findable by search --
+    // see CommandRunnerSettingsAppearanceItems.interfaceDensityOptionItem's own note.
+    val expectedHint =
+      "Compact, comfortable, or spacious -- also controls how many command runner and palette items are visible at once"
     row.layout shouldBe OverlayRowLayout.Columns
-    row.plainText shouldBe "Interface Density: Compact, comfortable, or spacious Comfortable"
-    row.segments.map(_.text) shouldBe List("Interface Density", "Compact, comfortable, or spacious", "Comfortable")
+    row.plainText shouldBe s"Interface Density: $expectedHint Comfortable"
+    row.segments.map(_.text) shouldBe List("Interface Density", expectedHint, "Comfortable")
     row.segments.filter(_.selected).map(_.text) shouldBe List("Comfortable")
   }
 
@@ -292,7 +296,12 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
     resolved.keyHintRow.map(_.plainText) shouldBe Some("Esc cancel")
   }
 
-  it should "reserve group preview rows without clipping available submenu items or footer" in {
+  // issue #1548: the inline group preview's *actual* row count is capped to at most 1, even in a frame with room to
+  // spare for the full (pre-cap) preview computed below -- `SurfaceFrameLayout.cappedReservedContentRows`'s own doc
+  // explains why the cap must be this tight (1, not merely smaller): the whole point is that no settings-root group's
+  // preview, however many children it lists, may shift `itemWindow`'s `maxRows`/`half` by more than a neighbouring
+  // group's would, or a single up/down press between them can still scroll the visible window by more than one row.
+  it should "reserve at most one group preview row, even in a frame with room for the full preview" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
@@ -301,9 +310,10 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
         CommandRunnerSurface
           .Settings(drilled = Some(SettingsSurfaceState(SettingsPage.Group("settings-ui-presets", 1))))
       )
-    val items        = runner.submenuItems("settings-ui-presets")
-    val preview      = SettingsSurfaceState.previewRows(items, 1)
-    val previewCount = preview.rows.size + (if preview.overflowCount > 0 then 1 else 0)
+    val items            = runner.submenuItems("settings-ui-presets")
+    val preview          = SettingsSurfaceState.previewRows(items, 1)
+    val fullPreviewCount = preview.rows.size + (if preview.overflowCount > 0 then 1 else 0)
+    fullPreviewCount should be > 1
     val rect = LayoutRect(
       x = 0,
       y = 0,
@@ -312,7 +322,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
         itemRows = items.size,
         hasHeader = true,
         hasFooter = true,
-        reservedContentRows = previewCount
+        reservedContentRows = fullPreviewCount
       )
     )
 
@@ -324,7 +334,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
 
     floating.header shouldBe defined
     floating.rows.count(row => row.leadingPadding == 0) shouldBe items.size
-    floating.rows.count(row => row.leadingPadding > 0) shouldBe previewCount
+    floating.rows.count(row => row.leadingPadding > 0) shouldBe 1
     floating.footer shouldBe defined
   }
 

@@ -231,6 +231,32 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  /** Regression cover for #1527: the file workflow modal's header (its `operationLabel`, "Open" or "Save As") was never
+    * announced to accessibility tooling at all -- it carries no `focusId`, and `modalControls` only ever emitted nodes
+    * for interactive hit regions, so a non-interactive heading fell through with no representation whatsoever.
+    */
+  it should "expose the Open dialog's heading in the accessibility tree with the Heading role" in {
+    val surfaceId = SurfaceId("open-file")
+    val workflow = OpenFileWorkflowState(
+      path = "/tmp/project",
+      activeField = FileWorkflowField.Path
+    )
+    val initialState = AppState.initial
+    val state = initialState.copy(
+      persisted = initialState.persisted.copy(focus = Focus.Modal),
+      runtime = initialState.runtime.copy(
+        modalStack = List(ModalDialog(surfaceId, Modal.FileWorkflow(workflow), ModalPlacement.Centered)),
+        viewportSize = Some(viewport)
+      )
+    )
+
+    val snapshot = AccessibilitySnapshot.from(state, viewport)
+    val heading  = snapshot.nodes.find(_.id == s"surface:${surfaceId.value}/heading")
+
+    heading.map(_.role) shouldBe Some(AccessibilityRole.Heading)
+    heading.map(_.name) shouldBe Some("Open")
+  }
+
   it should "expose only the top modal and its controls while a modal is active" in {
     val floatingId   = SurfaceId("runner")
     val modalId      = SurfaceId("replace")

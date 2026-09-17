@@ -34,6 +34,19 @@ private[config] object ConfigFieldsSurface:
       float.filtered(radius => radius >= 0.0f && radius <= 1.0f)
     )(_.surfaceConfig.blurRadius, (config, value) => config.withBlurRadius(value))
       .restoredBy((config, value) => config.withSurfaceConfig(config.surfaceConfig.copy(blurRadius = value))),
+    // issue #1530/#1529: how strongly a diagnostic's severity colour shows through its highlight, versus the colour
+    // it's painted over -- was a hardcoded literal in `RendererHighlights`.
+    named("ui.diagnostic_highlight_blend_weight", "diagnosticHighlightBlendWeight")(
+      double.filtered(weight =>
+        weight >= AppConfig.MinDiagnosticHighlightBlendWeight && weight <= AppConfig.MaxDiagnosticHighlightBlendWeight
+      )
+    )(
+      _.surfaceConfig.diagnosticHighlightBlendWeight,
+      (config, value) => config.withDiagnosticHighlightBlendWeight(value)
+    )
+      .restoredBy((config, value) =>
+        config.withSurfaceConfig(config.surfaceConfig.copy(diagnosticHighlightBlendWeight = value))
+      ),
     // -- Text area and viewport ------------------------------------------------------------------------------------------
     named(
       "editor.text_area.left",

@@ -73,7 +73,13 @@ private[command] object CommandRunnerSettingsAppearanceItems:
       ),
       selectedIndex = optionSelections.getOrElse("interface-density", 1),
       category = CommandCategory.Settings,
-      hint = Some("Compact, comfortable, or spacious")
+      // issue #1046 folded the command runner/palette's standalone "visible rows" setting into this one density
+      // control; issue #1549 is that folding it in also made it unfindable by search, since nothing about this
+      // item's label or id ever said so. Naming it here (searched via `CommandRunnerSearch.settingSearchRank`) is
+      // what lets a search for "command runner", "palette", or "visible items" surface this row.
+      hint = Some(
+        "Compact, comfortable, or spacious -- also controls how many command runner and palette items are visible at once"
+      )
     )
 
   private[command] def windowChromeOptionItem(
@@ -291,21 +297,15 @@ private[command] object CommandRunnerSettingsAppearanceItems:
       hint = Some("Frame-wide scanlines, glow, or both")
     )
 
+  // issue #1044: was ordered Off/On (the one boolean toggle in this file built inline instead of through
+  // `CommandRunnerSettingsOptionItemHelpers.enabledOptionItem`) -- normalized to that helper's On/Off convention,
+  // the one every other boolean toggle in the settings tree already follows.
   private[command] def uiShadowsOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
-    CommandSurfaceItem.OptionItem(
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
       id = "ui-shadows",
       label = "Menu & Panel Shadows",
-      options = List(
-        CommandOption(
-          "Off",
-          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetUiShadowsEnabled(false)))
-        ),
-        CommandOption(
-          "On",
-          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetUiShadowsEnabled(true)))
-        )
-      ),
-      selectedIndex = optionSelections.getOrElse("ui-shadows", 1),
-      category = CommandCategory.Settings,
-      hint = Some("Draw soft depth shadows behind menus and panels")
+      selectedIndex = optionSelections.getOrElse("ui-shadows", 0),
+      enabledIntent = CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetUiShadowsEnabled(true))),
+      disabledIntent = CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetUiShadowsEnabled(false))),
+      hint = "Draw soft depth shadows behind menus and panels"
     )
