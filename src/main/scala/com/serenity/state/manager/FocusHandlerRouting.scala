@@ -105,3 +105,6 @@ private[manager] object FocusHandlerRouting:
       // toggle-only pattern as ShortcutsHelp above.
       case SurfaceContent.TabList(_, _)           => peekOverlay
       case SurfaceContent.RecentFilesInMode(_, _) => peekOverlay
+      // Tab strip (issue #1075/#1076): click behaviour (switch/close/reorder) is #1077-1081, out of this slice's
+      // scope -- routed here only so this table stays exhaustive, same "look but don't touch" pattern as TabList.
+      case SurfaceContent.TabBar(_, _) => peekOverlay

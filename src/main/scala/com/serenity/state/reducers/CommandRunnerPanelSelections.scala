@@ -56,6 +56,7 @@ private[serenity] object CommandRunnerPanelSelections:
       case SurfaceContent.ShortcutsHelp(_)          => None
       case SurfaceContent.TabList(_, _)             => None
       case SurfaceContent.RecentFilesInMode(_, _)   => None
+      case SurfaceContent.TabBar(_, _)              => None
       case SurfaceContent.GhostOverlay(_, _)        => None
       case SurfaceContent.CompanionSprite           => None
 

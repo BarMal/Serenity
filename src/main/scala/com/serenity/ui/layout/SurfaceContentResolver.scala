@@ -157,6 +157,10 @@ object SurfaceContentResolver:
         PickerContentResolver.resolveFileSearch(state, rect, mode)
       case SurfaceContent.ContextualToolbar(_) =>
         ResolvedSurfaceContent()
+      case SurfaceContent.TabBar(_, _) =>
+        // Painted entirely via `TabBarSurfaceComposition` (issue #1075/#1076), not this plain-rows path -- mirrors
+        // `ContextualToolbar`'s own empty fallback just above.
+        ResolvedSurfaceContent()
       case SurfaceContent.ContextMenu(menu) =>
         PickerContentResolver.resolveContextMenu(menu, rect, mode, itemGapRows)
       case SurfaceContent.CommentLens(lens) =>

@@ -487,3 +487,34 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
     surface.getFg(1, 1) shouldBe Theme.light.panel.foreground
     surface.getBg(1, 1) shouldBe Theme.light.panel.background
   }
+
+  it should "paint a TabBarSurfaceComposition's tabs at their allocated columns, with the dirty glyph in an unsaved tab's label and the active tab highlighted (issues #1075/#1076)" in {
+    val surface = new MockRenderSurface(24, 4)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val entries = List(
+      com.serenity.state.models.TabListEntry(com.serenity.state.models.BufferId(0), "one", isDirty = false),
+      com.serenity.state.models.TabListEntry(com.serenity.state.models.BufferId(1), "two", isDirty = true)
+    )
+    // 20 columns, 1 separator reserved -> 19 content columns split 10/9.
+    val composition = com.serenity.ui.layout.TabBarSurfaceComposition.forTabBar(
+      entries,
+      activeBufferId = Some(com.serenity.state.models.BufferId(1)),
+      rect = LayoutRect(0, 0, 20, 1)
+    )
+    val overlay = TextOverlayView(rect = LayoutRect(0, 0, 20, 3), composition = Some(composition))
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    // Tab 0 ("one") is centered in its 9-column cell at [0,9): (9-3)/2 = 3 columns of left padding, so "one" lands
+    // at [3,6). The separator glyph sits at column 9 (the end of that cell), then tab 1's cell starts at column 11
+    // (one column for the glyph, one blank column after it) and is itself centered: (9-5)/2 = 2 columns of left
+    // padding for "two ●", landing at [13,18).
+    val row = surface.getRow(0)
+    row.slice(3, 6) shouldBe "one"
+    row.charAt(9) shouldBe '│'
+    row.slice(13, 16) shouldBe "two"
+    row.charAt(17) shouldBe '●'
+    surface.getBg(3, 0) shouldBe Theme.light.panel.background
+    surface.getBg(13, 0) shouldBe Theme.light.highlighted.background
+  }

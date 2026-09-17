@@ -262,6 +262,7 @@ object OverlayViewModel:
     content match
       case SurfaceContent.ModalWorkflow(_) => true
       case SurfaceContent.ContextMenu(_)   => true
+      case SurfaceContent.TabBar(_, _)     => true
       case _                               => false
 
   private def collapsedContentView(content: com.serenity.state.models.SurfaceContent): ResolvedSurfaceContent =
@@ -317,6 +318,8 @@ object OverlayViewModel:
             showKeyHintsFor(content, state)
           )
         )
+      case SurfaceContent.TabBar(entries, activeBufferId) =>
+        Some(TabBarSurfaceComposition.forTabBar(entries, activeBufferId, rect))
       case _ => None
 
   private def alphaMultiplierFor(surface: com.serenity.state.models.UiSurface, state: AppState): Float =

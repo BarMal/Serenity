@@ -448,3 +448,43 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     stack(1).header.map(_.plainText) shouldBe Some("search: op")
     stack.head.rect.y should be < stack(1).rect.y
   }
+
+  it should "resolve a TabBar surface's composition through the same compositionFor dispatch as every other composed surface (issues #1075/#1076)" in {
+    val buffer = Buffer
+      .fromString(bufferId, "one\ntwo\nthree")
+      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val entries = List(
+      TabListEntry(BufferId(1), "one.txt", isDirty = false),
+      TabListEntry(BufferId(2), "two.txt", isDirty = true)
+    )
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+        ),
+        focus = Focus.Surface(SurfaceId("tab-bar"))
+      ),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("tab-bar"),
+            SurfaceContent.TabBar(entries, activeBufferId = Some(BufferId(2))),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
+        )
+      )
+    )
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
+
+    val overlay = OverlayViewModel.fromState(state, layout).belowCursor.getOrElse(fail("Expected a tab bar overlay"))
+
+    overlay.composition shouldBe defined
+    val composition = overlay.composition.get
+    composition.paintBoxes.head.layout shouldBe SurfacePaintLayout.Distributed
+    composition.hitRegions.map(_.focusId) shouldBe entries.map(e => TabBarSurfaceComposition.focusId(e.bufferId))
+  }
