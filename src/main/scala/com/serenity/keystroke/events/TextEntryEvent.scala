@@ -37,6 +37,11 @@ case object PageDown                    extends NavigationEvent
 case object PageUp                      extends NavigationEvent
 case object MoveToEndOfFile             extends NavigationEvent
 case object MoveToStartOfFile           extends NavigationEvent
+// Column-based document layout (issue #1338, Phase 1): PageUp/PageDown's column-mode counterparts, jumping exactly
+// one column's worth of visual rows in the given direction. Only reached while column mode and word wrap are both on
+// -- see the key-resolution site.
+case object ColumnLeft                  extends NavigationEvent
+case object ColumnRight                 extends NavigationEvent
 final case class ScrollDown(lines: Int) extends ScrollEvent
 final case class ScrollUp(lines: Int)   extends ScrollEvent
 case object OpenGotoLine                extends ModalRequestEvent

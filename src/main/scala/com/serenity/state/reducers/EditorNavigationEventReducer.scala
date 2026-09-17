@@ -56,6 +56,12 @@ private[reducers] object EditorNavigationEventReducer:
       case PageUp   => applyBuffer(target => pageNavigate(target, ctx, direction = -1))
       case PageDown => applyBuffer(target => pageNavigate(target, ctx, direction = 1))
 
+      // Column-based document layout (issue #1338, Phase 1): reached only via the key-resolution site's
+      // columnModeEnabled branch, so no gating is needed here -- by the time this reducer sees a ColumnLeft/
+      // ColumnRight event, column mode is already known to be on.
+      case ColumnLeft  => applyBuffer(target => columnNavigate(target, ctx, direction = -1))
+      case ColumnRight => applyBuffer(target => columnNavigate(target, ctx, direction = 1))
+
       case MoveToEndOfFile => reduceMoveToEndOfFile(ctx, applyBuffer, navigate)
       case SelectAll       => reduceSelectAll(ctx)
 
@@ -68,7 +74,18 @@ private[reducers] object EditorNavigationEventReducer:
       if hasSelection then collapseSelectionsToFocus(target) else target,
       currentState,
       paneId,
-      direction
+      direction,
+      pageTarget
+    )
+
+  private def columnNavigate(target: Buffer, ctx: CursorEventContext, direction: Int): Buffer =
+    import ctx.*
+    applyMultiCursorPageNavigation(
+      if hasSelection then collapseSelectionsToFocus(target) else target,
+      currentState,
+      paneId,
+      direction,
+      columnTarget
     )
 
   /** `MoveToEndOfFile` keeps its own single-cursor body: it scrolls the viewport to keep the new cursor visible where
@@ -144,9 +161,10 @@ private[reducers] object EditorNavigationEventReducer:
     buffer: Buffer,
     currentState: AppState,
     paneId: PaneId,
-    direction: Int
+    direction: Int,
+    target: (Buffer, AppState, PaneId, Int) => CursorPosition => CursorPosition
   ): Buffer =
-    val move = pageTarget(buffer, currentState, paneId, direction)
+    val move = target(buffer, currentState, paneId, direction)
 
     val finalCursors = buffer.editing.cursors
       .map(move)
