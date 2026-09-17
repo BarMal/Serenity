@@ -8,7 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{TextLayoutSnapshot, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -355,12 +355,28 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val buffer     = finalState.persisted.buffers(bufferId)
-    val font       = FontLoader.previewTextFont(finalState.persisted.config.editorConfig.fontConfig)
-    val wrapPx = TextLayoutSnapshot.gridWrapWidthPx(
-      buffer.viewport.visibleColumns,
-      finalState.persisted.config.editorConfig.fontConfig
-    )
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
+    val fontConfig = finalState.persisted.config.editorConfig.fontConfig
+    val font       = FontLoader.previewTextFont(fontConfig)
+    val wrapPx     = TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, fontConfig)
+
+    // `buffer.viewport.visibleLines` is a code-grid row count (`LayoutEngine.updateViewportDimensions` sets it from
+    // the pane's grid rows) and is never itself resized for this buffer's own (proportional, Prose-role) font --
+    // that resize only happens at render time (`RendererPaneSetup.snapshotForBuffer`'s
+    // `visibleLines = panelHeightPx / bufferMetrics.lineHeight`) and when `CursorViewport.adjustForCursor` placed
+    // this buffer's `topLine`/`topVisualLine` after the cursor moved (its own, equivalent `effectiveVisibleLines`).
+    // Calling `fromBuffer` on the raw, un-resized viewport -- as this test did before -- asks it for the code-grid
+    // row count from a position CursorViewport computed for a *different* (font-adjusted) row count; the two only
+    // coincide when the buffer's own font happens to share the code font's line height, which is not guaranteed
+    // across platforms. Mirroring the same resize here measures what production actually renders (#1041's
+    // `effectiveVisibleLines`), not an incidental platform coincidence.
+    val codeLineHeightPx =
+      CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).lineHeight
+    val panelHeightPx = buffer.viewport.visibleLines * codeLineHeightPx
+    val renderedVisibleLines =
+      math.max(1, panelHeightPx / math.max(1, CellMetrics.fromFont(font).lineHeight))
+    val renderBuffer = buffer.copy(viewport = buffer.viewport.copy(visibleLines = renderedVisibleLines))
+
+    val snapshot = TextLayoutSnapshot.fromBuffer(renderBuffer, wrapPx, font)
 
     // How many "word" tokens fit per wrapped row -- and so how many total visual rows the six paragraphs produce --
     // is font-metric-dependent (word wrap is measured against the real, platform-resolved `previewTextFont`, not a
@@ -371,16 +387,18 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     // "scrolled to the document's end, no blank trailing rows" actually means, regardless of how many rows the
     // resolved font happens to wrap the text into.
     val fullDocumentSnapshot = TextLayoutSnapshot.fromBuffer(
-      buffer.copy(viewport = buffer.viewport.copy(topLine = 0, topVisualLine = 0, visibleLines = Int.MaxValue - 1)),
+      renderBuffer.copy(viewport =
+        renderBuffer.viewport.copy(topLine = 0, topVisualLine = 0, visibleLines = Int.MaxValue - 1)
+      ),
       wrapPx,
       font
     )
-    val expectedVisibleCount    = math.min(buffer.viewport.visibleLines, fullDocumentSnapshot.visualLines.length)
+    val expectedVisibleCount    = math.min(renderedVisibleLines, fullDocumentSnapshot.visualLines.length)
     val expectedTailVisualLines = fullDocumentSnapshot.visualLines.takeRight(expectedVisibleCount)
     def shape(line: com.serenity.state.models.TextVisualLine) = (line.bufferLine, line.startColumn, line.endColumn)
 
     withClue(
-      s"viewport=${buffer.viewport} " +
+      s"viewport=${buffer.viewport} renderedVisibleLines=$renderedVisibleLines " +
         s"snapshot=${snapshot.visualLines.map(shape)} " +
         s"expectedTail=${expectedTailVisualLines.map(shape)} " +
         s"totalVisualLines=${fullDocumentSnapshot.visualLines.length}"
