@@ -100,6 +100,60 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
     formatLine should include("Scala")
   }
 
+  it should "keep the tail of a long workspace path on screen, not the OS temp-dir boilerplate at its head" in {
+    // Built explicitly rather than a real filesystem temp path, so this is deterministic regardless of the actual
+    // OS's temp-directory convention -- the bug this guards was a macOS-only CI failure caused by `/var/folders/.../T/`
+    // being far longer than Linux's `/tmp/` (`TuiFileWorkflowSpec`, "should prefill the form with the current file
+    // and its own workspace").
+    val macLikePrefix = "/var/folders/36/tjdph2t965j8snz9_vkdnw0r0000gn/T/"
+    val sessionDir    = "tui-session1234567890123456789"
+    val workflow = FileWorkflowState(
+      mode = FileWorkflowMode.SaveAs,
+      filename = "notes.md",
+      path = macLikePrefix + sessionDir,
+      activeField = FileWorkflowField.Path
+    )
+    val buffer = Buffer
+      .fromString(bufferId, "alpha\nbeta\ngamma")
+      .copy(
+        editing = EditingState(cursors = List(CursorPosition(1, 2)))
+      )
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+        ),
+        focus = Focus.Surface(SurfaceId("file-modal")),
+        theme = Theme.light
+      ),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("file-modal"),
+            SurfaceContent.ModalWorkflow(Modal.FileWorkflow(workflow)),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
+        )
+      )
+    )
+    val surface = new MockRenderSurface(200, 56)
+    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(200, 56))
+    val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(200, 56))
+
+    val pathLine =
+      (overlay.x + 1 until overlay.right - 1).map(x => surface.getChar(x, overlay.y + 3)).mkString.trim
+
+    pathLine should include(sessionDir)
+    pathLine should not include "folders"
+  }
+
   it should "paint file workflow status messages when a target cannot be opened" in {
     val workflow = FileWorkflowState(
       mode = FileWorkflowMode.Open,

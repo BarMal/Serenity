@@ -202,6 +202,31 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     plan.paintBoxes.filter(_.focusId.nonEmpty).map(_.rect) shouldBe plan.hitRegions.map(_.rect)
   }
 
+  it should "keep the tail of a long path visible, eliding the head, when it does not fit the row" in {
+    // Deliberately built rather than a real filesystem temp path (issue traced to macOS CI, where
+    // `Files.createTempDirectory` sits under a `/var/folders/.../T/` prefix far longer than Linux's `/tmp/`), so the
+    // fix is proven independent of the actual OS's temp-directory convention.
+    val macLikePrefix = "/var/folders/36/tjdph2t965j8snz9_vkdnw0r0000gn/T/"
+    val sessionDir    = "tui-session1234567890123456789"
+    val longPath      = macLikePrefix + sessionDir
+    val workflow = FileWorkflowState(
+      mode = FileWorkflowMode.SaveAs,
+      filename = "notes.md",
+      path = longPath,
+      activeField = FileWorkflowField.Path
+    )
+
+    val plan     = planFor(Modal.FileWorkflow(workflow))
+    val pathBox  = plan.paintBoxes.find(_.text.contains(s"Path $longPath")).getOrElse(fail("expected path box"))
+    val rendered = pathBox.segments.map(_.text).mkString
+
+    // The deepest, most useful segment (the actual session directory) survives in full.
+    rendered should include(sessionDir)
+    // The far-less useful OS temp-dir boilerplate at the head is the part that gets dropped.
+    rendered should not include "folders"
+    rendered should startWith("Path ...")
+  }
+
   it should "scroll the file suggestion window to keep the selected suggestion visible" in {
     val suggestions =
       (0 until 10).toList.map(index => FileWorkflowSuggestion(s"/tmp/project/file-$index.scala", isDirectory = false))
