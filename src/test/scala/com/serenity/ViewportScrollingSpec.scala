@@ -375,7 +375,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
       wrapPx,
       font
     )
-    val expectedVisibleCount = math.min(buffer.viewport.visibleLines, fullDocumentSnapshot.visualLines.length)
+    val expectedVisibleCount    = math.min(buffer.viewport.visibleLines, fullDocumentSnapshot.visualLines.length)
     val expectedTailVisualLines = fullDocumentSnapshot.visualLines.takeRight(expectedVisibleCount)
     def shape(line: com.serenity.state.models.TextVisualLine) = (line.bufferLine, line.startColumn, line.endColumn)
 
