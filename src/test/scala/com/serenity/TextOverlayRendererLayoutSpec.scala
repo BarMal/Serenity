@@ -8,10 +8,16 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{
   CellMetrics,
   LayoutRect,
+  LogicalPixelRect,
   OverlayRow,
   OverlayRowLayout,
   OverlaySegment,
-  SurfaceContentRowKind
+  ResolvedSurfaceComposition,
+  SurfaceContentRowKind,
+  SurfaceIntrinsicSize,
+  SurfacePaintBox,
+  SurfacePaintKind,
+  SurfacePaintLayout
 }
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
@@ -319,6 +325,38 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
     surface.putStringCalls.map(_.s) should contain("Bold")
     surface.setFontCalls.map(_.getFamily) should contain(iconFontFamily)
     surface.setFontCalls.last.getFamily shouldBe font.getFamily
+  }
+
+  it should "paint a SurfacePaintLayout.Distributed composition box the same way OverlaySegmentRowRenderer.renderCompactDistributedRow paints an equivalent OverlayRowLayout.Distributed row: per-segment allocated width plus an inter-segment separator glyph owned by neither segment" in {
+    val surface = new MockRenderSurface(24, 6)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val segments = List(
+      OverlaySegment("Ax", allocatedWidth = Some(3), trailingSeparator = true),
+      OverlaySegment("By", allocatedWidth = Some(3))
+    )
+    val box = SurfacePaintBox(
+      kind = SurfacePaintKind.Text,
+      rect = LogicalPixelRect(1, 1, 10, 1),
+      text = Some("Ax By"),
+      segments = segments,
+      layout = SurfacePaintLayout.Distributed
+    )
+    val composition = ResolvedSurfaceComposition(
+      bounds = LogicalPixelRect(0, 0, 20, 3),
+      intrinsicSize = SurfaceIntrinsicSize(20, 3),
+      paintBoxes = List(box),
+      hitRegions = Nil,
+      focusOrder = Nil
+    )
+    val overlay = TextOverlayView(rect = LayoutRect(0, 0, 20, 4), composition = Some(composition))
+
+    TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
+
+    val row = surface.getRow(1)
+    row.slice(1, 3) shouldBe "Ax"
+    row.charAt(4) shouldBe '│'
+    row.slice(6, 8) shouldBe "By"
   }
 
   it should "use theme panel colours for rows without animation overrides" in {

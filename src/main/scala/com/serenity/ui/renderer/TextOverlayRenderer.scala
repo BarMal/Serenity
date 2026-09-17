@@ -218,10 +218,11 @@ object TextOverlayRenderer:
           cursorColumn = box.cursorOffset,
           segments = box.segments,
           layout = box.layout match
-            case SurfacePaintLayout.Plain   => OverlayRowLayout.Plain
-            case SurfacePaintLayout.Split   => OverlayRowLayout.Split
-            case SurfacePaintLayout.Inline  => OverlayRowLayout.Plain
-            case SurfacePaintLayout.Columns => OverlayRowLayout.Columns
+            case SurfacePaintLayout.Plain       => OverlayRowLayout.Plain
+            case SurfacePaintLayout.Split       => OverlayRowLayout.Split
+            case SurfacePaintLayout.Inline      => OverlayRowLayout.Plain
+            case SurfacePaintLayout.Columns     => OverlayRowLayout.Columns
+            case SurfacePaintLayout.Distributed => OverlayRowLayout.Distributed
         )
         renderRow(
           surface,
