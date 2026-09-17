@@ -225,6 +225,7 @@ enum TextDisplayIntent:
   case TogglePaneHeaders
   case ToggleVisualLineCursorNavigation
   case ToggleTypewriterScrolling
+  case ToggleColumnMode
   case SetLineNumbers(enabled: Boolean)
   case SetLineNumberSide(side: LineNumberSide)
   case SetLineNumberMarginLeft(cells: Int)
@@ -233,6 +234,9 @@ enum TextDisplayIntent:
   case SetWordWrap(enabled: Boolean)
   case SetVisualLineCursorNavigation(enabled: Boolean)
   case SetTypewriterScrolling(enabled: Boolean)
+  case SetColumnMode(enabled: Boolean)
+  case SetColumnTargetWidth(cells: Int)
+  case SetColumnGap(cells: Int)
   case SetFocusedTextBody(enabled: Boolean)
   case SetContextualToolbarEnabled(enabled: Boolean)
   case SetContextualToolbarDisplayMode(mode: ToolbarDisplayMode)

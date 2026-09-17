@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-import com.serenity.config.{InterfaceDensityMetrics, TextAreaInsets}
+import com.serenity.config.{InterfaceDensityMetrics, SurfaceConfig, TextAreaInsets}
 import com.serenity.state.models.*
 
 final case class ViewportSize(width: Int, height: Int)
@@ -377,12 +377,53 @@ object LayoutEngine:
     )
 
   def updateBufferViewportDimensions(buffer: Buffer, panelRect: LayoutRect, wordWrapEnabled: Boolean): Viewport =
-    val resizedViewport = updateViewportDimensions(buffer.viewport, panelRect)
+    updateBufferViewportDimensions(
+      buffer,
+      panelRect,
+      wordWrapEnabled,
+      columnModeEnabled = false,
+      columnTargetWidthCells = SurfaceConfig().columnTargetWidthCells,
+      columnGap = SurfaceConfig().columnGap
+    )
+
+  /** Column-based document layout (issue #1338, Phase 1): "as many columns as fit" at a configured target width, not a
+    * fixed user-picked count -- only takes effect while `wordWrapEnabled` is also on, otherwise this is exactly the
+    * three-argument overload above.
+    */
+  def updateBufferViewportDimensions(
+    buffer: Buffer,
+    panelRect: LayoutRect,
+    wordWrapEnabled: Boolean,
+    columnModeEnabled: Boolean,
+    columnTargetWidthCells: Int,
+    columnGap: Int
+  ): Viewport =
+    val effectivePanelRect =
+      if columnModeEnabled && wordWrapEnabled then
+        panelRect.copy(width = columnWidthCells(panelRect.width, columnTargetWidthCells, columnGap))
+      else panelRect
+    val resizedViewport = updateViewportDimensions(buffer.viewport, effectivePanelRect)
     val clampedLeftColumn =
       if wordWrapEnabled then 0
       else clampLeftColumnForBuffer(buffer, resizedViewport)
 
     resizedViewport.copy(leftColumn = clampedLeftColumn)
+
+  /** How many columns of `columnTargetWidthCells` (plus `columnGap` between them) fit `contentWidthCells` -- e-reader
+    * style "as many as fit", never fewer than one.
+    */
+  def columnCount(contentWidthCells: Int, columnTargetWidthCells: Int, columnGap: Int): Int =
+    val gap    = columnGap.max(0)
+    val target = columnTargetWidthCells.max(1)
+    math.max(1, (contentWidthCells + gap) / (target + gap))
+
+  /** The width of a single column once `columnCount` columns (and the gaps between them) are fitted into
+    * `contentWidthCells`.
+    */
+  def columnWidthCells(contentWidthCells: Int, columnTargetWidthCells: Int, columnGap: Int): Int =
+    val gap   = columnGap.max(0)
+    val count = columnCount(contentWidthCells, columnTargetWidthCells, columnGap)
+    math.max(1, (contentWidthCells - (count - 1) * gap) / count)
 
   private def clampLeftColumnForBuffer(buffer: Buffer, viewport: Viewport): Int =
     val visibleColumns = math.max(1, viewport.visibleColumns)
@@ -409,16 +450,20 @@ object LayoutEngine:
         case ((buffers, panes), (paneId, pane)) =>
           val paneRect =
             workspaceLayout.paneLayouts.get(paneId).map(_.paneRect).getOrElse(calculatedLayout.editorPanelRect)
-          val contentRect  = workspaceLayout.paneLayouts.get(paneId).map(_.contentRect).getOrElse(paneRect)
-          val paneViewport = updateViewportDimensions(pane.viewport, contentRect)
-          val nextPanes    = panes + (paneId -> pane.copy(viewport = paneViewport))
+          val contentRect   = workspaceLayout.paneLayouts.get(paneId).map(_.contentRect).getOrElse(paneRect)
+          val paneViewport  = updateViewportDimensions(pane.viewport, contentRect)
+          val nextPanes     = panes + (paneId -> pane.copy(viewport = paneViewport))
+          val surfaceConfig = state.persisted.config.surfaceConfig
           val updatedBuffer = pane.bufferId.flatMap(buffers.get).map { buffer =>
             buffer.id -> buffer
               .copy(viewport =
                 updateBufferViewportDimensions(
                   buffer,
                   contentRect,
-                  state.persisted.config.surfaceConfig.wordWrapEnabled
+                  surfaceConfig.wordWrapEnabled,
+                  columnModeEnabled = surfaceConfig.columnModeEnabled,
+                  columnTargetWidthCells = surfaceConfig.columnTargetWidthCells,
+                  columnGap = surfaceConfig.columnGap
                 )
               )
           }

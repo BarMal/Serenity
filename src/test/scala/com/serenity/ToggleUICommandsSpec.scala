@@ -277,6 +277,9 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     finalState.persisted.config.surfaceConfig.typewriterScrollingEnabled shouldBe false
   }
 
+  // Toggle Column Mode Command coverage lives in ToggleColumnModeCommandSpec.scala, to keep this file under the
+  // architecture ratchet's file-length target.
+
   behavior of "Combined Toggle UI Command Integration"
 
   it should "allow toggling both line numbers and gutter independently" in {

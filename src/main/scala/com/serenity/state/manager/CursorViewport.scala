@@ -22,7 +22,12 @@ object CursorViewport:
         else
           buffer.editing.cursors.headOption match
             case Some(cursor) =>
-              val updatedBuffer = buffer.copy(viewport = adjustForCursor(buffer, state, cursor))
+              val surfaceConfig = state.persisted.config.surfaceConfig
+              val placement =
+                if surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled then
+                  adjustForCursorColumnMode(buffer, state, cursor)
+                else adjustForCursor(buffer, state, cursor)
+              val updatedBuffer = buffer.copy(viewport = placement)
               state.copy(persisted =
                 state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
               )
@@ -155,6 +160,72 @@ object CursorViewport:
       leftColumn = clampedLeftColumn,
       topVisualLine = topVisualLine
     )
+
+  /** Column-based document layout (issue #1338, Phase 1): fixed/discrete snapping only -- `topVisualLine` always lands
+    * on an exact `activeColumnIndex * visibleLines` boundary (`activeColumnIndex` derived here as
+    * `absoluteCursorRow / visibleLines`, never stored), so the column holding the cursor's visual row is always shown
+    * from its own top row. A sibling to [[adjustForCursor]] rather than a branch inside it -- that function's centring/
+    * typewriter/bottom-clamp logic does not apply here at all, so branching it in would only add complexity to both
+    * paths for no shared benefit.
+    */
+  def adjustForCursorColumnMode(
+    buffer: Buffer,
+    currentState: AppState,
+    cursor: CursorPosition
+  ): Viewport =
+    val isTui               = currentState.runtime.isTuiMode
+    val viewport            = buffer.viewport
+    val fontConfig          = currentState.persisted.config.editorConfig.fontConfig
+    val font                = previewFontForBuffer(buffer, fontConfig)
+    val gridWidthPx         = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, fontConfig)
+    val cellMetricsOverride = if isTui then Some(CellMetrics.cellUnit) else None
+    val forceCellLayout     = isTui
+    val wrapWidthPx         = if isTui then viewport.visibleColumns * CellMetrics.cellUnit.charWidth else gridWidthPx
+
+    def visualRowCountForLine(lineIndex: Int): Int =
+      val text = buffer.document.content.getLine(lineIndex).getOrElse("")
+      TextLayoutSnapshot
+        .boundedVisualLinesForText(
+          text,
+          lineIndex,
+          wrapWidthPx,
+          font,
+          cellMetricsOverride = cellMetricsOverride,
+          forceCellLayout = forceCellLayout
+        )
+        .length
+        .max(1)
+
+    val lineText = buffer.document.content.getLine(cursor.line).getOrElse("")
+    val cursorVisualRowInLine =
+      TextLayoutSnapshot.visualLineIndexForCursor(
+        lineText,
+        cursor.column,
+        wrapWidthPx,
+        font,
+        wordWrapEnabled = true,
+        cellMetricsOverride = cellMetricsOverride,
+        forceCellLayout = forceCellLayout,
+        rowAffinity = cursor.rowAffinity
+      )
+    val cumulativeRowsBeforeCursorLine = (0 until cursor.line).map(visualRowCountForLine).sum
+    val absoluteCursorRow              = cumulativeRowsBeforeCursorLine + cursorVisualRowInLine
+
+    val visibleLines      = math.max(1, viewport.visibleLines)
+    val activeColumnIndex = absoluteCursorRow / visibleLines
+    val targetVisualRow   = activeColumnIndex * visibleLines
+    val lineCount         = buffer.document.content.lineCount
+
+    @annotation.tailrec
+    def findTop(line: Int, consumedRows: Int): (Int, Int) =
+      if line >= lineCount then (math.max(0, lineCount - 1), 0)
+      else
+        val rows = visualRowCountForLine(line)
+        if consumedRows + rows > targetVisualRow then (line, targetVisualRow - consumedRows)
+        else findTop(line + 1, consumedRows + rows)
+    val (topLine, topVisualLine) = if lineCount <= 0 then (0, 0) else findTop(0, 0)
+
+    viewport.copy(topLine = topLine, leftColumn = 0, topVisualLine = topVisualLine)
 
   private def previewFontForBuffer(
     buffer: Buffer,

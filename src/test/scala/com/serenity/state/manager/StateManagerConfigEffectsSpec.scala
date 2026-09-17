@@ -210,6 +210,39 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
       Some(SurfaceContent.ContextualToolbar(toolbar.copy(displayMode = mode)))
   }
 
+  it should "toggle column mode" in {
+    val fixture = harness()
+
+    fixture.config
+      .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleColumnMode), AppState.initial)
+      .unsafeRunSync()
+    fixture.currentConfig.surfaceConfig.columnModeEnabled shouldBe true
+
+    fixture.config
+      .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.ToggleColumnMode), AppState.initial)
+      .unsafeRunSync()
+    fixture.currentConfig.surfaceConfig.columnModeEnabled shouldBe false
+  }
+
+  it should "set column mode, target width, and gap directly" in {
+    val fixture = harness()
+
+    fixture.config
+      .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnMode(true)), AppState.initial)
+      .unsafeRunSync()
+    fixture.currentConfig.surfaceConfig.columnModeEnabled shouldBe true
+
+    fixture.config
+      .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnTargetWidth(60)), AppState.initial)
+      .unsafeRunSync()
+    fixture.currentConfig.surfaceConfig.columnTargetWidthCells shouldBe 60
+
+    fixture.config
+      .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnGap(4)), AppState.initial)
+      .unsafeRunSync()
+    fixture.currentConfig.surfaceConfig.columnGap shouldBe 4
+  }
+
   it should "write the current config to disk on an explicit save without touching the session" in {
     val fixture = harness()
 

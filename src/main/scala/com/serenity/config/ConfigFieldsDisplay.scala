@@ -68,6 +68,38 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.typewriterScrollingEnabled,
       (config, value) => config.withTypewriterScrolling(value)
     ),
+    // Column-based document layout (issue #1338, Phase 1): global toggle, only takes effect while word wrap is also
+    // on. `columnTargetWidthCells`/`columnGap` are clamped by `SurfaceConfig.normalized`, not filtered here.
+    named(
+      "editor.column_mode",
+      "columnModeEnabled",
+      "display.column_mode",
+      "display.column.mode",
+      "display_column_mode"
+    )(boolean)(
+      _.surfaceConfig.columnModeEnabled,
+      (config, value) => config.withColumnMode(value)
+    ),
+    named(
+      "editor.column_target_width",
+      "columnTargetWidthCells",
+      "display.column_target_width",
+      "display.column.target.width",
+      "display_column_target_width"
+    )(int)(
+      _.surfaceConfig.columnTargetWidthCells,
+      (config, value) => config.withColumnTargetWidth(value)
+    ),
+    named(
+      "editor.column_gap",
+      "columnGap",
+      "display.column_gap",
+      "display.column.gap",
+      "display_column_gap"
+    )(int)(
+      _.surfaceConfig.columnGap,
+      (config, value) => config.withColumnGap(value)
+    ),
     named(
       "editor.line_numbers",
       "showLineNumbers",

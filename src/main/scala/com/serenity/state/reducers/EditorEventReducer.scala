@@ -208,7 +208,7 @@ object EditorEventReducer:
             EditorTextEditReducer.reduce(event, ctx)
 
           case MoveLeft | MoveRight | MoveWordLeft | MoveWordRight | MoveToStart | MoveToEnd | MoveToStartOfFile |
-              PageUp | PageDown | MoveToEndOfFile | SelectAll =>
+              PageUp | PageDown | ColumnLeft | ColumnRight | MoveToEndOfFile | SelectAll =>
             EditorNavigationEventReducer.reduce(event, ctx)
 
           case OpenGotoLine | OpenFind | OpenReplace | FindNext =>

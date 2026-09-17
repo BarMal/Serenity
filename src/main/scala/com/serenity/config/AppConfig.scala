@@ -145,6 +145,15 @@ final case class AppConfig(
   def withTypewriterScrolling(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(typewriterScrollingEnabled = enabled))
 
+  def withColumnMode(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(columnModeEnabled = enabled))
+
+  def withColumnTargetWidth(cells: Int): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(columnTargetWidthCells = cells))
+
+  def withColumnGap(cells: Int): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(columnGap = cells))
+
   def withFocusedTextBody(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(focusedTextBodyEnabled = enabled))
 

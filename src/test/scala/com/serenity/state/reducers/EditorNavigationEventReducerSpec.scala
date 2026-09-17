@@ -149,6 +149,30 @@ class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
     bufferAfter(PageUp, before).editing.cursors shouldBe List(CursorPosition(0, 0))
   }
 
+  // Column-based document layout (issue #1338, Phase 1): ColumnRight/ColumnLeft jump exactly one column's worth of
+  // visual rows, the same distance PageDown/PageUp already jump -- they reuse `pageTarget`'s visual-row-walk branch.
+  "ColumnRight" should "scroll the topLine forward and move the cursor down by exactly one column's rows" in {
+    val manyLines = (0 until 200).map(i => s"line$i").mkString("\n")
+    val before    = stateWith(manyLines, List(CursorPosition(0, 0)))
+
+    val after = bufferAfter(ColumnRight, before)
+    after.editing.cursors.head.line should be > 0
+  }
+
+  "ColumnLeft at the top of the document" should "leave the cursor at line 0" in {
+    val manyLines = (0 until 200).map(i => s"line$i").mkString("\n")
+    val before    = stateWith(manyLines, List(CursorPosition(0, 0)))
+
+    bufferAfter(ColumnLeft, before).editing.cursors shouldBe List(CursorPosition(0, 0))
+  }
+
+  "ColumnRight and PageDown" should "move a cursor by exactly the same amount" in {
+    val manyLines = (0 until 200).map(i => s"line$i").mkString("\n")
+    val before    = stateWith(manyLines, List(CursorPosition(0, 0)))
+
+    bufferAfter(ColumnRight, before).editing.cursors shouldBe bufferAfter(PageDown, before).editing.cursors
+  }
+
   "An event outside this reducer's family" should "fall through to the no-op default, unchanged" in {
     val before = stateWith("hello", List(CursorPosition(0, 0)))
     val buffer = before.persisted.buffers(bufferId)

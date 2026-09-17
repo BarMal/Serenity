@@ -47,6 +47,26 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     ConfigKeySchema.isKnownKey("ui.diagnostic_highlight_blend_weight") shouldBe true
   }
 
+  // Column-based document layout (issue #1338, Phase 1): a global toggle -- no per-document/per-pane settings
+  // infrastructure exists today -- that only takes effect while word wrap is also on.
+  "SurfaceConfig" should "default column mode off, with a sensible target width and gap" in {
+    val default = SurfaceConfig()
+    default.columnModeEnabled.shouldBe(false)
+    default.columnTargetWidthCells.shouldBe(80)
+    default.columnGap.shouldBe(2)
+  }
+
+  "SurfaceConfig.normalized" should "clamp columnGap to non-negative" in {
+    SurfaceConfig(columnGap = -5).normalized.columnGap.shouldBe(0)
+    SurfaceConfig(columnGap = 5).normalized.columnGap.shouldBe(5)
+  }
+
+  it should "clamp columnTargetWidthCells to at least 1" in {
+    SurfaceConfig(columnTargetWidthCells = -5).normalized.columnTargetWidthCells.shouldBe(1)
+    SurfaceConfig(columnTargetWidthCells = 0).normalized.columnTargetWidthCells.shouldBe(1)
+    SurfaceConfig(columnTargetWidthCells = 100).normalized.columnTargetWidthCells.shouldBe(100)
+  }
+
   "SurfaceConfig.normalized" should "clamp rendererFrameStateCacheCapacity to AppConfig's configured bounds" in {
     SurfaceConfig(rendererFrameStateCacheCapacity = Int.MaxValue).normalized.rendererFrameStateCacheCapacity shouldBe
       AppConfig.MaxRendererFrameStateCacheCapacity
