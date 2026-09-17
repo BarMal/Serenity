@@ -46,6 +46,7 @@ object RendererFloatingPanels:
           RendererFramePlanner.paintPanelLayer(context, surfaceId, overlay.rect, panelIsDirty(surfaceId))(paint)
         case None => paint(context)
 
+    overlays.tabBar.foreach(paintOverlay)
     overlays.aboveCursor.foreach(paintOverlay)
     val belowOverlays =
       if overlays.belowCursorStack.nonEmpty then overlays.belowCursorStack else overlays.belowCursor.toList

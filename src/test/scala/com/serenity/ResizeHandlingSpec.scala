@@ -41,8 +41,12 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val initialState  = stateManager.getCurrentState.unsafeRunSync()
     val initialLayout = LayoutEngine.calculateLayout(initialState, ViewportSize(80, 24))
 
+    // `StateManager.apply` already starts from `AppState.initial` (one buffer), and `createBuffer` above adds a
+    // second one without closing the first -- so this fixture has 2 buffers open throughout, reserving the
+    // always-visible tab bar's one row (issue #1074/#1075/#1076/#1077) on top of the pinned status line's own
+    // bottom-gutter row, one row less than a single-buffer session would get.
     initialLayout.editorPanelRect.width shouldBe 77
-    initialLayout.editorPanelRect.height shouldBe 23
+    initialLayout.editorPanelRect.height shouldBe 22
 
     // Apply resize event
     val newSize     = ViewportSize(120, 40)
@@ -54,7 +58,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val newLayout    = LayoutEngine.calculateLayout(updatedState, newSize)
 
     newLayout.editorPanelRect.width shouldBe 117
-    newLayout.editorPanelRect.height shouldBe 39
+    newLayout.editorPanelRect.height shouldBe 38
 
     updatedState.persisted.buffers.get(bufferId) match
       case Some(buffer) =>

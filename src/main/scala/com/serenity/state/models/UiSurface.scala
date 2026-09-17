@@ -342,6 +342,12 @@ object UiSurface:
     */
   val StatusLineSurfaceId: SurfaceId = SurfaceId("status-line")
 
+  /** Identity of the derived tab strip `AppState.tabBarSurface` synthesizes each frame -- the one, fixed id
+    * `TextOverlayRenderer` (and anything else that needs to recognize this specific surface rather than any floating
+    * panel in general) keys off, the same role [[StatusLineSurfaceId]] plays for the status row.
+    */
+  val TabBarSurfaceId: SurfaceId = SurfaceId("tab-bar")
+
   def fromPanelContent(id: SurfaceId, content: PanelContent): UiSurface =
     UiSurface(
       id = id,

@@ -488,3 +488,41 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     composition.paintBoxes.head.layout shouldBe SurfacePaintLayout.Distributed
     composition.hitRegions.map(_.focusId) shouldBe entries.map(e => TabBarSurfaceComposition.focusId(e.bufferId))
   }
+
+  it should "paint the always-visible tab strip end to end once 2+ buffers are open, using the reserved layout row (issue #1074/#1075/#1076/#1077)" in {
+    val firstBuffer  = Buffer.fromString(BufferId(0), "one")
+    val secondBuffer = Buffer.fromString(BufferId(1), "two")
+    val pane         = EditorPane.withBuffer(paneId, BufferId(0))
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(firstBuffer.id -> firstBuffer, secondBuffer.id -> secondBuffer),
+        bufferOrder = List(firstBuffer.id, secondBuffer.id),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+        ),
+        focus = Focus.EditorPane(paneId)
+      )
+    )
+    val viewportSize = ViewportSize(100, 24)
+    val layout       = LayoutEngine.calculateLayout(state, viewportSize)
+
+    val overlays = OverlayViewModel.fromState(state, layout)
+    val tabBar   = overlays.tabBar.getOrElse(fail("Expected a tab bar overlay once 2+ buffers are open"))
+
+    tabBar.rect shouldBe layout.tabBarRect.getOrElse(fail("expected a reserved tab bar rect"))
+    tabBar.surfaceId shouldBe Some(UiSurface.TabBarSurfaceId)
+    tabBar.composition shouldBe defined
+    val composition = tabBar.composition.get
+    composition.paintBoxes.head.layout shouldBe SurfacePaintLayout.Distributed
+    composition.hitRegions.map(_.semanticLabel) shouldBe List(firstBuffer.id, secondBuffer.id).map(id =>
+      TabListContent.build(state).entries.find(_.bufferId == id).map(_.title).getOrElse(fail("missing tab entry"))
+    )
+  }
+
+  it should "carry no tab bar overlay with only a single buffer open" in {
+    val overlays = OverlayViewModel.fromState(AppState.initial, LayoutEngine.calculateLayout(AppState.initial, ViewportSize(100, 24)))
+
+    overlays.tabBar shouldBe None
+  }

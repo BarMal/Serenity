@@ -76,7 +76,8 @@ final case class CalculatedLayout(
     floatingOverlayOffsetRows: Map[SurfaceId, Double] = Map.empty,
     lineNumberRect: Option[LayoutRect] = None,
     rightLineNumberRect: Option[LayoutRect] = None,
-    gutterRect: Option[LayoutRect] = None
+    gutterRect: Option[LayoutRect] = None,
+    tabBarRect: Option[LayoutRect] = None
 )
 
 object LayoutEngine:
@@ -84,6 +85,11 @@ object LayoutEngine:
   private[layout] val DefaultSpacerPercentage   = 0.0
   private[layout] val MinimumVerticalPaneHeight = 5
   private[layout] val EditorPaneHeaderHeight    = 1
+
+  /** The always-visible tab strip's fixed height (issue #1074 epic, #1075-1077) -- one row, matching
+    * `TabBarSurfaceComposition`'s single-row `Distributed` composition.
+    */
+  private[layout] val TabBarHeight = 1
 
   // Public API for panel placement/resize, floating-surface stacking, and pane splitting lives in these
   // sibling objects (600-line architecture ratchet split); exported here so existing `LayoutEngine.foo`
@@ -114,7 +120,8 @@ object LayoutEngine:
   ): CalculatedLayout =
     val densityMetrics = InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity)
     val gutterHeight   = if usesBottomGutter(state) then densityMetrics.gutterHeight else 0
-    val contentHeight  = math.max(1, viewportSize.height - gutterHeight)
+    val tabBarHeight   = if showsTabBar(state) then TabBarHeight else 0
+    val contentHeight  = math.max(1, viewportSize.height - gutterHeight - tabBarHeight)
     val uiElementGap   = math.ceil(math.max(0.0, state.persisted.config.uiElementGap)).toInt
     val textAreaInsets =
       if spacerPercentage == DefaultSpacerPercentage then state.persisted.config.surfaceConfig.textAreaInsets.normalized
@@ -155,7 +162,10 @@ object LayoutEngine:
           PinnedPanelLayoutEngine.calculateDockedPanelLayout(
             _,
             state.pinnedSurfaces,
-            LayoutRect(0, 0, viewportSize.width, contentHeight),
+            // Bounds start below the reserved tab bar strip (issue #1074/#1075/#1076/#1077), not at the frame's own
+            // top -- unlike the bottom gutter (which only shrinks a total nothing sits below), a top strip must shift
+            // everything beneath it down by its own height.
+            LayoutRect(0, tabBarHeight, viewportSize.width, contentHeight),
             minimumEditorWorkspaceWidth,
             MinimumVerticalPaneHeight,
             uiElementGap
@@ -179,7 +189,7 @@ object LayoutEngine:
     val bottomGap = if bottomPinnedHeight > 0 then uiElementGap else 0
 
     val workspaceX = leftPinnedWidth + leftGap
-    val workspaceY = topPinnedHeight + topGap
+    val workspaceY = tabBarHeight + topPinnedHeight + topGap
     val workspaceWidth =
       math.max(1, viewportSize.width - leftPinnedWidth - rightPinnedWidth - leftGap - rightGap)
     val workspaceHeight =
@@ -259,6 +269,9 @@ object LayoutEngine:
         Some(LayoutRect(0, viewportSize.height - gutterHeight, viewportSize.width, gutterHeight))
       else None
 
+    val tabBarRect =
+      if tabBarHeight > 0 then Some(LayoutRect(0, 0, viewportSize.width, tabBarHeight)) else None
+
     val baseLayout = CalculatedLayout(
       editorPanelRect = editorPanelRect,
       leftSpacerRect = leftSpacerRect,
@@ -270,7 +283,8 @@ object LayoutEngine:
       expandedPanelRect = state.expandedPanelSurface.map(_ => editorPanelRect),
       lineNumberRect = lineNumberRect,
       rightLineNumberRect = rightLineNumberRect,
-      gutterRect = gutterRect
+      gutterRect = gutterRect,
+      tabBarRect = tabBarRect
     )
 
     val paneLayouts = calculateEditorPaneLayouts(state, baseLayout)
@@ -322,6 +336,13 @@ object LayoutEngine:
 
   private[layout] def usesBottomGutter(state: AppState): Boolean =
     state.persisted.config.statusLine.isPinned
+
+  /** Whether the always-visible tab strip (issue #1074 epic, #1075-1077) reserves its own row. Only once 2+ buffers
+    * are open -- with a single buffer there is nothing to switch between, so no strip is reserved or painted (issue
+    * #1074 decision).
+    */
+  private[layout] def showsTabBar(state: AppState): Boolean =
+    state.persisted.bufferOrder.size >= 2
 
   private[layout] def paneHeaderHeight(state: AppState): Int =
     if state.persisted.config.surfaceConfig.showPaneHeaders then EditorPaneHeaderHeight else 0
