@@ -386,8 +386,8 @@ object LayoutEngine:
       columnGap = SurfaceConfig().columnGap
     )
 
-  /** Column-based document layout (issue #1338, Phase 1): "as many columns as fit" at a configured target width, not
-    * a fixed user-picked count -- only takes effect while `wordWrapEnabled` is also on, otherwise this is exactly the
+  /** Column-based document layout (issue #1338, Phase 1): "as many columns as fit" at a configured target width, not a
+    * fixed user-picked count -- only takes effect while `wordWrapEnabled` is also on, otherwise this is exactly the
     * three-argument overload above.
     */
   def updateBufferViewportDimensions(
@@ -450,9 +450,9 @@ object LayoutEngine:
         case ((buffers, panes), (paneId, pane)) =>
           val paneRect =
             workspaceLayout.paneLayouts.get(paneId).map(_.paneRect).getOrElse(calculatedLayout.editorPanelRect)
-          val contentRect  = workspaceLayout.paneLayouts.get(paneId).map(_.contentRect).getOrElse(paneRect)
-          val paneViewport = updateViewportDimensions(pane.viewport, contentRect)
-          val nextPanes    = panes + (paneId -> pane.copy(viewport = paneViewport))
+          val contentRect   = workspaceLayout.paneLayouts.get(paneId).map(_.contentRect).getOrElse(paneRect)
+          val paneViewport  = updateViewportDimensions(pane.viewport, contentRect)
+          val nextPanes     = panes + (paneId -> pane.copy(viewport = paneViewport))
           val surfaceConfig = state.persisted.config.surfaceConfig
           val updatedBuffer = pane.bufferId.flatMap(buffers.get).map { buffer =>
             buffer.id -> buffer

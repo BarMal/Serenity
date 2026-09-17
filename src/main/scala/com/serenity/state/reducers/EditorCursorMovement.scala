@@ -180,8 +180,8 @@ private[reducers] object EditorCursorMovement:
 
   /** Column-based document layout (issue #1338, Phase 1): where one cursor lands after a `ColumnLeft`/`ColumnRight`
     * move of `direction` -- fixed/discrete jumps of exactly `visibleLines` visual rows, identical to `pageTarget`'s own
-    * distance. Kept as its own named entry point (reusing `pageTarget`'s visual-row-walk branch rather than
-    * duplicating it) so the two can diverge later without one masquerading as the other.
+    * distance. Kept as its own named entry point (reusing `pageTarget`'s visual-row-walk branch rather than duplicating
+    * it) so the two can diverge later without one masquerading as the other.
     */
   def columnTarget(
     buffer: Buffer,

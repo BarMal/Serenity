@@ -236,9 +236,7 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
           editing = Buffer.fromString(bufferId, content).editing.copy(cursors = List(CursorPosition(0, 0)))
         )
       val before = tuiStateWith(buffer).copy(persisted =
-        tuiStateWith(buffer).persisted.copy(config =
-          tuiStateWith(buffer).persisted.config.withColumnMode(true)
-        )
+        tuiStateWith(buffer).persisted.copy(config = tuiStateWith(buffer).persisted.config.withColumnMode(true))
       )
       val movedBuffer = buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(20, 0))))
       val after       = before.copy(persisted = before.persisted.copy(buffers = Map(bufferId -> movedBuffer)))

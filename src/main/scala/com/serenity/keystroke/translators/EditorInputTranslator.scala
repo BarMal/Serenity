@@ -21,6 +21,8 @@ class EditorInputTranslator(appConfig: AppConfig = AppConfig.default) extends Tr
         case other    => other
 
   override lazy val converters = List(
-    LocalKeymapConverters.converter(appConfig.inputConfig.focusedKeymapConfig.editor.bindings).andThen(remapForColumnMode),
+    LocalKeymapConverters
+      .converter(appConfig.inputConfig.focusedKeymapConfig.editor.bindings)
+      .andThen(remapForColumnMode),
     TextCharacterConverters.characterConverter
   )

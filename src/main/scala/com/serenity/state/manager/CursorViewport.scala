@@ -173,11 +173,11 @@ object CursorViewport:
     currentState: AppState,
     cursor: CursorPosition
   ): Viewport =
-    val isTui       = currentState.runtime.isTuiMode
-    val viewport    = buffer.viewport
-    val fontConfig  = currentState.persisted.config.editorConfig.fontConfig
-    val font        = previewFontForBuffer(buffer, fontConfig)
-    val gridWidthPx = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, fontConfig)
+    val isTui               = currentState.runtime.isTuiMode
+    val viewport            = buffer.viewport
+    val fontConfig          = currentState.persisted.config.editorConfig.fontConfig
+    val font                = previewFontForBuffer(buffer, fontConfig)
+    val gridWidthPx         = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, fontConfig)
     val cellMetricsOverride = if isTui then Some(CellMetrics.cellUnit) else None
     val forceCellLayout     = isTui
     val wrapWidthPx         = if isTui then viewport.visibleColumns * CellMetrics.cellUnit.charWidth else gridWidthPx
@@ -211,10 +211,10 @@ object CursorViewport:
     val cumulativeRowsBeforeCursorLine = (0 until cursor.line).map(visualRowCountForLine).sum
     val absoluteCursorRow              = cumulativeRowsBeforeCursorLine + cursorVisualRowInLine
 
-    val visibleLines       = math.max(1, viewport.visibleLines)
-    val activeColumnIndex  = absoluteCursorRow / visibleLines
-    val targetVisualRow    = activeColumnIndex * visibleLines
-    val lineCount          = buffer.document.content.lineCount
+    val visibleLines      = math.max(1, viewport.visibleLines)
+    val activeColumnIndex = absoluteCursorRow / visibleLines
+    val targetVisualRow   = activeColumnIndex * visibleLines
+    val lineCount         = buffer.document.content.lineCount
 
     @annotation.tailrec
     def findTop(line: Int, consumedRows: Int): (Int, Int) =

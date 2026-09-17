@@ -6,9 +6,9 @@ import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Column-based document layout (issue #1338, Phase 1): "as many columns as fit" at a configured target width
-  * (e-reader style), not a fixed user-picked count. Split out of LayoutEngineSpec to keep that file under the
-  * architecture ratchet's file-length target (following LayoutEngineTabBarSpec's precedent).
+/** Column-based document layout (issue #1338, Phase 1): "as many columns as fit" at a configured target width (e-reader
+  * style), not a fixed user-picked count. Split out of LayoutEngineSpec to keep that file under the architecture
+  * ratchet's file-length target (following LayoutEngineTabBarSpec's precedent).
   */
 class LayoutEngineColumnModeSpec extends AnyFlatSpec with Matchers:
 

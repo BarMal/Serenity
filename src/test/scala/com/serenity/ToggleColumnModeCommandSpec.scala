@@ -12,8 +12,8 @@ import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Column-based document layout (issue #1338, Phase 1): the global `columnModeEnabled` toggle command, mirroring
-  * `ToggleUICommandsSpec`'s "Toggle Typewriter Scrolling Command" coverage. Split into its own file (rather than
-  * grown onto `ToggleUICommandsSpec`) to keep that file under the architecture ratchet's file-length target.
+  * `ToggleUICommandsSpec`'s "Toggle Typewriter Scrolling Command" coverage. Split into its own file (rather than grown
+  * onto `ToggleUICommandsSpec`) to keep that file under the architecture ratchet's file-length target.
   */
 class ToggleColumnModeCommandSpec extends AnyFlatSpec with Matchers:
 
