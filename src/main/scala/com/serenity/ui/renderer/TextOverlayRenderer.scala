@@ -36,9 +36,11 @@ object TextOverlayRenderer:
     val rect = overlay.rect
 
     val isStatusLine = overlay.surfaceId.contains(UiSurface.StatusLineSurfaceId)
+    val isTabBar     = overlay.surfaceId.contains(UiSurface.TabBarSurfaceId)
 
-    // The status row is a quiet single line, not a panel: no shadow, and (via SurfaceFrameLayout) no border.
-    if config.surfaceConfig.uiShadowsEnabled && !isStatusLine then
+    // The status row and the tab strip are both quiet single lines, not floating panels: no shadow, and (via
+    // SurfaceFrameLayout) no border.
+    if config.surfaceConfig.uiShadowsEnabled && !isStatusLine && !isTabBar then
       surface.roundedRects.foreach(
         _.drawRoundRectShadow(rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx, new Color(0, 0, 0))
       )

@@ -125,6 +125,22 @@ final case class AppState(
         presentation = SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
       )
 
+  /** The always-visible tab strip (issue #1074 epic, #1075-1077), derived each frame like [[floatingStatusLineSurface]]
+    * rather than stored -- carries the same `TabListContent.build` snapshot the mode/tab corner widget's own popup list
+    * uses, so there is no separate "open tabs" state to keep in sync. Only appears with 2+ open buffers: with one
+    * buffer there is nothing to switch between, so `LayoutEngine` reserves no strip (`LayoutEngine.showsTabBar`) and
+    * this returns `None` to match (issue #1074 decision).
+    */
+  def tabBarSurface: Option[UiSurface] =
+    Option.when(persisted.bufferOrder.size >= 2) {
+      val tabList = TabListContent.build(this)
+      UiSurface(
+        id = UiSurface.TabBarSurfaceId,
+        content = SurfaceContent.TabBar(tabList.entries, tabList.activeBufferId),
+        presentation = SurfacePresentation.Docked
+      )
+    }
+
   def commandRunnerContext: com.serenity.command.CommandRunnerContext =
     com.serenity.command.CommandRunnerContext(
       bufferLanguage = activeBuffer.flatMap(_.document.language),
@@ -200,7 +216,10 @@ final case class AppState(
     yield surface
 
   def surfaceById(surfaceId: SurfaceId): Option[UiSurface] =
-    runtime.uiSurfaces.find(_.id == surfaceId).orElse(floatingStatusLineSurface.filter(_.id == surfaceId))
+    runtime.uiSurfaces
+      .find(_.id == surfaceId)
+      .orElse(floatingStatusLineSurface.filter(_.id == surfaceId))
+      .orElse(tabBarSurface.filter(_.id == surfaceId))
 
   def activeSurface: Option[UiSurface] =
     persisted.focus match

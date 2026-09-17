@@ -448,3 +448,84 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     stack(1).header.map(_.plainText) shouldBe Some("search: op")
     stack.head.rect.y should be < stack(1).rect.y
   }
+
+  it should "resolve a TabBar surface's composition through the same compositionFor dispatch as every other composed surface (issues #1075/#1076)" in {
+    val buffer = Buffer
+      .fromString(bufferId, "one\ntwo\nthree")
+      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
+    val pane = EditorPane.withBuffer(paneId, bufferId)
+    val entries = List(
+      TabListEntry(BufferId(1), "one.txt", isDirty = false),
+      TabListEntry(BufferId(2), "two.txt", isDirty = true)
+    )
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(bufferId -> buffer),
+        bufferOrder = List(bufferId),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+        ),
+        focus = Focus.Surface(SurfaceId("tab-bar"))
+      ),
+      runtime = AppState.initial.runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            SurfaceId("tab-bar"),
+            SurfaceContent.TabBar(entries, activeBufferId = Some(BufferId(2))),
+            SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
+          )
+        )
+      )
+    )
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
+
+    val overlay = OverlayViewModel.fromState(state, layout).belowCursor.getOrElse(fail("Expected a tab bar overlay"))
+
+    overlay.composition shouldBe defined
+    val composition = overlay.composition.get
+    composition.paintBoxes.head.layout shouldBe SurfacePaintLayout.Distributed
+    composition.hitRegions.map(_.focusId) shouldBe entries.map(e => TabBarSurfaceComposition.focusId(e.bufferId))
+  }
+
+  it should "paint the always-visible tab strip end to end once 2+ buffers are open, using the reserved layout row (issue #1074/#1075/#1076/#1077)" in {
+    val firstBuffer  = Buffer.fromString(BufferId(0), "one")
+    val secondBuffer = Buffer.fromString(BufferId(1), "two")
+    val pane         = EditorPane.withBuffer(paneId, BufferId(0))
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        buffers = Map(firstBuffer.id -> firstBuffer, secondBuffer.id -> secondBuffer),
+        bufferOrder = List(firstBuffer.id, secondBuffer.id),
+        layout = Layout(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+        ),
+        focus = Focus.EditorPane(paneId)
+      )
+    )
+    val viewportSize = ViewportSize(100, 24)
+    val layout       = LayoutEngine.calculateLayout(state, viewportSize)
+
+    val overlays = OverlayViewModel.fromState(state, layout)
+    val tabBar   = overlays.tabBar.getOrElse(fail("Expected a tab bar overlay once 2+ buffers are open"))
+
+    tabBar.rect shouldBe layout.tabBarRect.getOrElse(fail("expected a reserved tab bar rect"))
+    tabBar.surfaceId shouldBe Some(UiSurface.TabBarSurfaceId)
+    tabBar.composition shouldBe defined
+    val composition = tabBar.composition.get
+    composition.paintBoxes.head.layout shouldBe SurfacePaintLayout.Distributed
+    composition.hitRegions.map(_.semanticLabel) shouldBe List(firstBuffer.id, secondBuffer.id).map(id =>
+      TabListContent.build(state).entries.find(_.bufferId == id).map(_.title).getOrElse(fail("missing tab entry"))
+    )
+  }
+
+  it should "carry no tab bar overlay with only a single buffer open" in {
+    val overlays = OverlayViewModel.fromState(
+      AppState.initial,
+      LayoutEngine.calculateLayout(AppState.initial, ViewportSize(100, 24))
+    )
+
+    overlays.tabBar shouldBe None
+  }

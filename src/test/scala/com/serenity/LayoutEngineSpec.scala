@@ -110,6 +110,9 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     gutter.bottom shouldBe viewportSize.height
   }
 
+  // Tab bar reservation tests split into LayoutEngineTabBarSpec.scala to keep this file under the architecture
+  // ratchet's file-length target.
+
   it should "derive reusable line-number row slots from the shared workspace contract" in {
     val buffer = Buffer.fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
     val state = AppState.initial.copy(persisted =

@@ -33,6 +33,12 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
   //   editorPanelRect = LayoutRect(x=15, y=0, width=53, height=23)
   //   PaneId(0) → LayoutRect(x=15, y=0, width=53, height=23)
   //   contentRow starts at y=1 (header at y=0)
+  //
+  // `makeStateManager()` seeds `AppState.initial`'s own buffer, and every test below adds a *second* one via
+  // `createBuffer` without closing the first -- so every fixture here has 2 buffers open, reserving the
+  // always-visible tab bar's row (issue #1074/#1075/#1076/#1077) above everything the comment above describes:
+  // row 0 is the tab bar, row 1 is the pane header, and content starts at row 2 -- one row lower than this file's
+  // original geometry notes, everywhere a click's row is asserted below.
 
   "MouseClick" should "move cursor to the clicked buffer position" in {
     val sm       = makeStateManager()
@@ -52,8 +58,9 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    // Click at (18, 3): bufferLine = topLine(0) + (3-1) = 2, bufferCol = leftCol(0) + (18-15) = 3
-    sm.applyEvent(MouseClick(6, 3)).unsafeRunSync()
+    // Click at row 4: content now starts at row 2 (tab bar at row 0, pane header at row 1), so bufferLine =
+    // topLine(0) + (4-2) = 2, bufferCol = leftCol(0) + 3 = 3.
+    sm.applyEvent(MouseClick(6, 4)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     buffer.editing.cursors.headOption.map(_.line) shouldBe Some(2)
@@ -78,8 +85,8 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    // Click at (15, 1): first cell of content area → bufferLine=0, bufferCol=0
-    sm.applyEvent(MouseClick(3, 1)).unsafeRunSync()
+    // First cell of the content area is now row 2 (tab bar at row 0, pane header at row 1) → bufferLine=0, bufferCol=0
+    sm.applyEvent(MouseClick(3, 2)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     buffer.editing.cursors.headOption.map(_.line) shouldBe Some(0)
@@ -131,8 +138,9 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    // Click at (35, 1): bufferLine=0, bufferCol = 35-15 = 20, "hi" length=2 → clamp to 2
-    sm.applyEvent(MouseClick(35, 1)).unsafeRunSync()
+    // Row 2 is the content area's first row (tab bar at row 0, pane header at row 1): bufferLine=0,
+    // bufferCol = 35-15 = 20, "hi" length=2 → clamp to 2
+    sm.applyEvent(MouseClick(35, 2)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     buffer.editing.cursors.headOption.map(_.line) shouldBe Some(0)
@@ -157,7 +165,8 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    sm.applyEvent(MouseMove(6, 2)).unsafeRunSync()
+    // Row 3 is content row 1 now that content starts at row 2 (tab bar at row 0, pane header at row 1).
+    sm.applyEvent(MouseMove(6, 3)).unsafeRunSync()
 
     sm.getCurrentState.unsafeRunSync().runtime.hoveredEditorTarget shouldBe Some(
       HoveredEditorTarget(PaneId(0), bufferId, CursorPosition(1, 3))

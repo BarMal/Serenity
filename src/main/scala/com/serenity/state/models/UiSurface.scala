@@ -304,6 +304,13 @@ enum SurfaceContent:
     */
   case TabList(entries: List[TabListEntry], activeBufferId: Option[BufferId])
 
+  /** The always-visible, mouse-interactive tab strip (issue #1074 epic, #1075/#1076) -- distinct from [[TabList]] (that
+    * popup stays a keyboard-toggled vertical list). Carries the same `TabListEntry` snapshot data as `TabList`, but is
+    * resolved into a `SurfaceComposition` (`TabBarSurfaceComposition`) painted as one horizontal `Distributed` row
+    * rather than a bordered panel of rows.
+    */
+  case TabBar(entries: List[TabListEntry], activeBufferId: Option[BufferId])
+
   /** The mode/tab corner widget's "recent in this mode" summon (issue #1307) -- a snapshot of
     * `RecentFilesInModeContent.build` for whichever `AppMode` was active when it was opened.
     */
@@ -334,6 +341,12 @@ object UiSurface:
     * general) keys off, e.g. `TextOverlayRenderer`'s colour override and its shadow-free painting.
     */
   val StatusLineSurfaceId: SurfaceId = SurfaceId("status-line")
+
+  /** Identity of the derived tab strip `AppState.tabBarSurface` synthesizes each frame -- the one, fixed id
+    * `TextOverlayRenderer` (and anything else that needs to recognize this specific surface rather than any floating
+    * panel in general) keys off, the same role [[StatusLineSurfaceId]] plays for the status row.
+    */
+  val TabBarSurfaceId: SurfaceId = SurfaceId("tab-bar")
 
   def fromPanelContent(id: SurfaceId, content: PanelContent): UiSurface =
     UiSurface(

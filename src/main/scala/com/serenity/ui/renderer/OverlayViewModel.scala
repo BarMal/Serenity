@@ -42,7 +42,8 @@ final case class OverlayViews(
     aboveCursor: Option[TextOverlayView] = None,
     belowCursor: Option[TextOverlayView] = None,
     belowCursorStack: List[TextOverlayView] = Nil,
-    modal: List[TextOverlayView] = Nil
+    modal: List[TextOverlayView] = Nil,
+    tabBar: Option[TextOverlayView] = None
 )
 
 object OverlayViewModel:
@@ -84,11 +85,16 @@ object OverlayViewModel:
       case _ => None
     }
 
+    val tabBar = state.tabBarSurface.flatMap(surface =>
+      buildView(surface, state, layout.tabBarRect, collapsed = false, verticalOffsetRows = 0.0)
+    )
+
     OverlayViews(
       aboveCursor = aboveCursor,
       belowCursor = belowCursor,
       belowCursorStack = belowCursorStack,
-      modal = modal
+      modal = modal,
+      tabBar = tabBar
     )
 
   private def overlayRect(
@@ -262,6 +268,7 @@ object OverlayViewModel:
     content match
       case SurfaceContent.ModalWorkflow(_)     => true
       case SurfaceContent.ContextMenu(_)       => true
+      case SurfaceContent.TabBar(_, _)         => true
       case SurfaceContent.ContextualToolbar(_) => true
       case _                                   => false
 
@@ -318,6 +325,8 @@ object OverlayViewModel:
             showKeyHintsFor(content, state)
           )
         )
+      case SurfaceContent.TabBar(entries, activeBufferId) =>
+        Some(TabBarSurfaceComposition.forTabBar(entries, activeBufferId, rect))
       case SurfaceContent.ContextualToolbar(toolbarState) =>
         Some(ContextualToolbarSurfaceComposition.forToolbar(toolbarState, state, rect))
       case _ => None

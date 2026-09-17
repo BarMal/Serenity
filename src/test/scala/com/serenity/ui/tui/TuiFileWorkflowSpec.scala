@@ -73,12 +73,32 @@ class TuiFileWorkflowSpec extends TuiSpec:
         _ <- newTab
         _ <- typeText("second buffer")
         _ <- verify("second buffer") { screen =>
-          screen.titleBar should include("unsaved")
-          screen.rowText(1).stripTrailing shouldBe " 1 second buffer"
+          // Row 0 is now the reserved tab strip (issue #1074/#1075/#1076/#1077, 2+ buffers open); the pane header
+          // and content each shift down by the one row it reserves.
+          screen.rowText(1) should include("unsaved")
+          screen.rowText(2).stripTrailing shouldBe " 1 second buffer"
           screen.statusBar should include("Unsaved")
         }
         _ <- verifyState("two buffers")(current => current.persisted.bufferOrder should have size 2)
       yield ()
+    }
+
+  it should "reserve a tab strip row across the top once a second buffer is open, showing both tabs" in
+    runTui(TuiEnvironment.withFile("first file")) {
+      for
+        beforeSecondTab <- screen
+        _               <- newTab
+        afterSecondTab  <- screen
+      yield
+        // A single buffer reserves no strip: the pane header is still row 0.
+        beforeSecondTab.rowText(0) should include("scratch.md")
+
+        // With 2 buffers open, row 0 is the tab strip (both filenames visible), and the pane header/content that
+        // used to start at row 0 now start one row lower -- showing the newly-focused second buffer's own header
+        // (`newTab` focuses the buffer it creates), not the first file's.
+        afterSecondTab.rowText(0) should include("scratch.md")
+        afterSecondTab.rowText(0) should include("Buffer 1")
+        afterSecondTab.rowText(1) should include("Buffer 1")
     }
 
   "Ctrl+Tab" should "switch back to the first buffer, restoring its content and status" in
@@ -88,8 +108,8 @@ class TuiFileWorkflowSpec extends TuiSpec:
         _ <- typeText("second buffer")
         _ <- nextTab
         _ <- verify("back on the first file") { screen =>
-          screen.titleBar should include("scratch.md")
-          screen.rowText(1).stripTrailing shouldBe " 1 first file"
+          screen.rowText(1) should include("scratch.md")
+          screen.rowText(2).stripTrailing shouldBe " 1 first file"
           screen.statusBar should include("scratch.md")
         }
         first <- state
@@ -102,7 +122,7 @@ class TuiFileWorkflowSpec extends TuiSpec:
       _ <- typeText("second buffer")
       _ <- nextTab
       _ <- nextTab
-      _ <- verify("second buffer again")(screen => screen.rowText(1).stripTrailing shouldBe " 1 second buffer")
+      _ <- verify("second buffer again")(screen => screen.rowText(2).stripTrailing shouldBe " 1 second buffer")
     yield ()
   }
 
