@@ -522,7 +522,10 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "carry no tab bar overlay with only a single buffer open" in {
-    val overlays = OverlayViewModel.fromState(AppState.initial, LayoutEngine.calculateLayout(AppState.initial, ViewportSize(100, 24)))
+    val overlays = OverlayViewModel.fromState(
+      AppState.initial,
+      LayoutEngine.calculateLayout(AppState.initial, ViewportSize(100, 24))
+    )
 
     overlays.tabBar shouldBe None
   }

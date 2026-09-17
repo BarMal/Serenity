@@ -10,8 +10,8 @@ import com.serenity.ui.layout.{LayoutRect, TabBarSurfaceComposition}
   *
   * Scope note: this object only defines *where* each tab's hit region is. Turning a hit into a switch/close/reorder
   * action -- and resolving `rect`/`entries` from live `AppState` the way every other `*MouseHitTesting` sibling
-  * resolves its surface's on-screen frame from a placed `UiSurface` -- is issue #1077 onward, deliberately out of
-  * this slice.
+  * resolves its surface's on-screen frame from a placed `UiSurface` -- is issue #1077 onward, deliberately out of this
+  * slice.
   */
 private[manager] object TabBarMouseHitTesting:
 

@@ -5,10 +5,10 @@ import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** The always-visible tab strip surface (issue #1074 epic, #1075-1077): derived each frame from `bufferOrder`, the
-  * same "no separate open-tabs state to keep in sync" trade-off `AppState.floatingStatusLineSurface` and
-  * `TabListContent.build` already make. Only appears once 2+ buffers are open -- with a single buffer there is
-  * nothing to switch between (issue #1074 decision).
+/** The always-visible tab strip surface (issue #1074 epic, #1075-1077): derived each frame from `bufferOrder`, the same
+  * "no separate open-tabs state to keep in sync" trade-off `AppState.floatingStatusLineSurface` and
+  * `TabListContent.build` already make. Only appears once 2+ buffers are open -- with a single buffer there is nothing
+  * to switch between (issue #1074 decision).
   */
 class TabBarSurfaceSpec extends AnyFlatSpec with Matchers:
 

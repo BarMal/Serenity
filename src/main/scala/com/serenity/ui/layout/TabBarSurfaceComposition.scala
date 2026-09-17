@@ -47,9 +47,10 @@ object TabBarSurfaceComposition:
       val contentWidth = math.max(0, availableWidth - gapCount * GapColumns)
       val baseWidth    = contentWidth / entries.size
       val remainder    = contentWidth % entries.size
-      entries.zipWithIndex.map { case (entry, index) =>
-        val width = math.max(1, baseWidth + (if index < remainder then 1 else 0))
-        TabAllocation(entry, width, truncate(labelFor(entry), width))
+      entries.zipWithIndex.map {
+        case (entry, index) =>
+          val width = math.max(1, baseWidth + (if index < remainder then 1 else 0))
+          TabAllocation(entry, width, truncate(labelFor(entry), width))
       }
 
   private def labelFor(entry: TabListEntry): String =
@@ -84,13 +85,14 @@ object TabBarSurfaceComposition:
       val allocations = allocate(entries, rect.width)
       val positions   = tabPositions(rect.x, allocations)
 
-      val segments = allocations.zipWithIndex.map { case (allocation, index) =>
-        OverlaySegment(
-          text = allocation.displayTitle,
-          selected = activeBufferId.contains(allocation.entry.bufferId),
-          trailingSeparator = index < allocations.size - 1,
-          allocatedWidth = Some(allocation.allocatedWidth)
-        )
+      val segments = allocations.zipWithIndex.map {
+        case (allocation, index) =>
+          OverlaySegment(
+            text = allocation.displayTitle,
+            selected = activeBufferId.contains(allocation.entry.bufferId),
+            trailingSeparator = index < allocations.size - 1,
+            allocatedWidth = Some(allocation.allocatedWidth)
+          )
       }
 
       val rowBox = SurfacePaintBox(
@@ -101,14 +103,15 @@ object TabBarSurfaceComposition:
         layout = SurfacePaintLayout.Distributed
       )
 
-      val hitRegions = allocations.zip(positions).map { case (allocation, (startX, width)) =>
-        val id = focusId(allocation.entry.bufferId)
-        SurfaceHitRegion(
-          rect = LogicalPixelRect(startX.toDouble, rect.y.toDouble, width.toDouble, math.min(1.0, bounds.height)),
-          focusId = id,
-          actionId = Some(SurfaceActionId(id.value)),
-          semanticLabel = allocation.entry.title
-        )
+      val hitRegions = allocations.zip(positions).map {
+        case (allocation, (startX, width)) =>
+          val id = focusId(allocation.entry.bufferId)
+          SurfaceHitRegion(
+            rect = LogicalPixelRect(startX.toDouble, rect.y.toDouble, width.toDouble, math.min(1.0, bounds.height)),
+            focusId = id,
+            actionId = Some(SurfaceActionId(id.value)),
+            semanticLabel = allocation.entry.title
+          )
       }
 
       ResolvedSurfaceComposition(
@@ -125,11 +128,12 @@ object TabBarSurfaceComposition:
     */
   private def tabPositions(x: Int, allocations: List[TabAllocation]): List[(Int, Int)] =
     allocations.zipWithIndex
-      .foldLeft((x, List.empty[(Int, Int)])) { case ((cursorX, acc), (allocation, index)) =>
-        val cellWidth   = allocation.allocatedWidth
-        val afterCell   = cursorX + cellWidth
-        val hasTrailing = index < allocations.size - 1
-        val nextCursorX = if hasTrailing then afterCell + GapColumns else afterCell
-        (nextCursorX, acc :+ (cursorX, cellWidth))
+      .foldLeft((x, List.empty[(Int, Int)])) {
+        case ((cursorX, acc), (allocation, index)) =>
+          val cellWidth   = allocation.allocatedWidth
+          val afterCell   = cursorX + cellWidth
+          val hasTrailing = index < allocations.size - 1
+          val nextCursorX = if hasTrailing then afterCell + GapColumns else afterCell
+          (nextCursorX, acc :+ (cursorX, cellWidth))
       }
       ._2

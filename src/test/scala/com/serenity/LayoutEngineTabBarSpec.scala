@@ -28,7 +28,7 @@ class LayoutEngineTabBarSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "reserve a one-row strip at the top of the frame once 2+ buffers are open, shrinking the workspace beneath it by exactly that row" in {
-    val secondBuffer = Buffer.fromString(BufferId(1), "second")
+    val secondBuffer      = Buffer.fromString(BufferId(1), "second")
     val singleBufferState = AppState.initial
     val twoBufferState = singleBufferState.copy(persisted =
       singleBufferState.persisted.copy(

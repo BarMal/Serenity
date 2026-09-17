@@ -304,10 +304,10 @@ enum SurfaceContent:
     */
   case TabList(entries: List[TabListEntry], activeBufferId: Option[BufferId])
 
-  /** The always-visible, mouse-interactive tab strip (issue #1074 epic, #1075/#1076) -- distinct from [[TabList]]
-    * (that popup stays a keyboard-toggled vertical list). Carries the same `TabListEntry` snapshot data as `TabList`,
-    * but is resolved into a `SurfaceComposition` (`TabBarSurfaceComposition`) painted as one horizontal `Distributed`
-    * row rather than a bordered panel of rows.
+  /** The always-visible, mouse-interactive tab strip (issue #1074 epic, #1075/#1076) -- distinct from [[TabList]] (that
+    * popup stays a keyboard-toggled vertical list). Carries the same `TabListEntry` snapshot data as `TabList`, but is
+    * resolved into a `SurfaceComposition` (`TabBarSurfaceComposition`) painted as one horizontal `Distributed` row
+    * rather than a bordered panel of rows.
     */
   case TabBar(entries: List[TabListEntry], activeBufferId: Option[BufferId])
 
