@@ -266,10 +266,11 @@ object OverlayViewModel:
 
   private def isComposedContent(content: SurfaceContent): Boolean =
     content match
-      case SurfaceContent.ModalWorkflow(_) => true
-      case SurfaceContent.ContextMenu(_)   => true
-      case SurfaceContent.TabBar(_, _)     => true
-      case _                               => false
+      case SurfaceContent.ModalWorkflow(_)     => true
+      case SurfaceContent.ContextMenu(_)       => true
+      case SurfaceContent.TabBar(_, _)         => true
+      case SurfaceContent.ContextualToolbar(_) => true
+      case _                                   => false
 
   private def collapsedContentView(content: com.serenity.state.models.SurfaceContent): ResolvedSurfaceContent =
     content match
@@ -326,6 +327,8 @@ object OverlayViewModel:
         )
       case SurfaceContent.TabBar(entries, activeBufferId) =>
         Some(TabBarSurfaceComposition.forTabBar(entries, activeBufferId, rect))
+      case SurfaceContent.ContextualToolbar(toolbarState) =>
+        Some(ContextualToolbarSurfaceComposition.forToolbar(toolbarState, state, rect))
       case _ => None
 
   private def alphaMultiplierFor(surface: com.serenity.state.models.UiSurface, state: AppState): Float =
