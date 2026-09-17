@@ -213,6 +213,34 @@ object ModalSurfaceComposition:
     val status = workflow.statusMessage.toList.map(message => textBox(message, rowRect(bounds, 2 + actionRows * 2)))
     plan(bounds, fields ++ actionBoxes ++ scopeBoxes ++ status)
 
+  /** Keeps the tail of a path's segments on screen when they do not all fit `maxWidth`, eliding the head behind a
+    * leading "..." segment instead. The segments nearest the file -- not an OS-specific temp-directory prefix, which
+    * can run far longer on macOS (`/var/folders/.../T/`) than on Linux (`/tmp/`) -- are what tells a user where the
+    * file actually lives, so dropping the tail (as plain left-to-right truncation does) hides exactly the part that
+    * matters. Width is measured the same way [[OverlaySegmentRowRenderer.renderInlineSegments]] spends it: each
+    * segment's text plus one gap cell after it (none after the last), so this never overshoots what actually fits.
+    */
+  private def visiblePathSegments(
+    label: OverlaySegment,
+    segments: List[OverlaySegment],
+    maxWidth: Int
+  ): List[OverlaySegment] =
+    def widthOf(segs: List[OverlaySegment]): Int =
+      segs.map(_.text.length).sum + math.max(0, segs.size - 1)
+
+    if widthOf(label :: segments) <= maxWidth then label :: segments
+    else
+      val ellipsis = OverlaySegment("...")
+      @annotation.tailrec
+      def keepTailThatFits(remaining: List[OverlaySegment], kept: List[OverlaySegment]): List[OverlaySegment] =
+        remaining match
+          case Nil => kept
+          case lastSegment :: earlierSegments =>
+            val candidate = lastSegment :: kept
+            if widthOf(label :: ellipsis :: candidate) <= maxWidth then keepTailThatFits(earlierSegments, candidate)
+            else kept
+      label :: ellipsis :: keepTailThatFits(segments.reverse, Nil)
+
   private def filePlan(
     workflow: FileWorkflowState,
     frameRect: LayoutRect,
@@ -238,6 +266,7 @@ object ModalSurfaceComposition:
       ),
       layout = SurfacePaintLayout.Split
     )
+    val pathLabelSegment = OverlaySegment("Path ")
     val pathSegments =
       if workflow.path.isEmpty then List(OverlaySegment(""))
       else
@@ -260,7 +289,7 @@ object ModalSurfaceComposition:
       rowRect(bounds, 2, rowHeight),
       selected = workflow.activeField == FileWorkflowField.Path,
       cursorAtEnd = false,
-      segments = OverlaySegment("Path ") :: pathSegments,
+      segments = visiblePathSegments(pathLabelSegment, pathSegments, bounds.width.toInt),
       layout = SurfacePaintLayout.Inline
     )
     val formatLabel = workflow.detectedFileType.displayName
