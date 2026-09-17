@@ -130,7 +130,7 @@ final private[manager] class StateManagerOperationBoundary private (
   def scheduleFindSearch(request: FindSearchRequest): IO[Unit] =
     findSearchFiberRef.getAndSet(None).flatMap(_.traverse_(_.cancel)) >>
       (IO.sleep(FindSearchDebounce) >>
-        IO.blocking(FindSearch.results(request.content, request.query)).flatMap { results =>
+        IO.delay(FindSearch.results(request.content, request.query)).flatMap { results =>
           stateRef.update { before =>
             val after = ModalEventReducer.applyFindSearchResults(before, request, results)
             CursorViewport.ensureVisibleCursors(before, after)

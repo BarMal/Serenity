@@ -4,12 +4,14 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import cats.syntax.all.*
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.VirtualTime
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
@@ -306,56 +308,70 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     buffer.viewport.topLine should be >= (249 - 12) // Center line in viewport
     buffer.viewport.topLine should be <= 249
 
-  it should "handle find and scroll to search results" in new ScrollFixture:
+  it should "handle find and scroll to search results" in {
     // Given: File with searchable content
-    val content = (1 to 200)
-      .map { i =>
-        if i % 50 == 0 then s"Line $i SPECIAL_MARKER content"
-        else s"Line $i normal content"
+    val program = for
+      sm <- IO.pure(makeStateManager())
+      content <- IO.pure(
+        (1 to 200)
+          .map { i =>
+            if i % 50 == 0 then s"Line $i SPECIAL_MARKER content"
+            else s"Line $i normal content"
+          }
+          .mkString("\n")
+      )
+      bufferId <- sm.bufferManager.createBuffer(content, None)
+      state    <- sm.getCurrentState
+      paneId   <- IO.pure(state.persisted.layout.editorPanes.keys.head)
+      _        <- sm.setBufferForPane(paneId, bufferId)
+      _        <- sm.setCursorPosition(paneId, 0, 0)
+      _        <- sm.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
+
+      // When: Open find dialog (Ctrl+F)
+      _ <- sm.applyEvent(OpenFind)
+
+      // Type search term
+      _ <- "SPECIAL_MARKER".toList.traverse_(char => sm.applyEvent(InsertChar(char)))
+      // The debounced find search runs on a background fiber (`scheduleFindSearch`); this sleep only needs to
+      // outlast `FindSearchDebounce` -- under the virtual clock it resolves as soon as every other fiber is
+      // parked, rather than racing real wall-clock time.
+      _ <- IO.sleep(150.millis)
+
+      // Then: Live find should scroll to first occurrence (line 50)
+      afterFindState <- sm.getCurrentState
+      _ <- IO {
+        val pane1   = afterFindState.persisted.layout.editorPanes(paneId)
+        val buffer1 = pane1.bufferId.flatMap(afterFindState.persisted.buffers.get).get
+        buffer1.editing.cursors.head.line shouldBe 49   // Line 50 (0-indexed)
+        buffer1.viewport.topLine should be >= (49 - 12) // Should be visible
+        buffer1.viewport.topLine should be <= 49
       }
-      .mkString("\n")
-    val bufferId = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
 
-    val state  = stateManager.getCurrentState.unsafeRunSync()
-    val paneId = state.persisted.layout.editorPanes.keys.head
-    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
-    stateManager
-      .setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
-      .unsafeRunSync()
+      // When: Enter advances within the open find overlay
+      _ <- sm.applyEvent(Enter)
 
-    // When: Open find dialog (Ctrl+F)
-    stateManager.applyEvent(OpenFind).unsafeRunSync()
+      // Then: Should scroll to next occurrence (line 100)
+      afterNextState <- sm.getCurrentState
+      _ <- IO {
+        val pane2   = afterNextState.persisted.layout.editorPanes(paneId)
+        val buffer2 = pane2.bufferId.flatMap(afterNextState.persisted.buffers.get).get
+        buffer2.editing.cursors.head.line shouldBe 99 // Line 100 (0-indexed)
+      }
 
-    // Type search term
-    "SPECIAL_MARKER".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    IO.sleep(150.millis).unsafeRunSync()
+      // When: Find next again while the overlay remains open
+      _ <- sm.applyEvent(FindNext)
 
-    // Then: Live find should scroll to first occurrence (line 50)
-    val afterFindState = stateManager.getCurrentState.unsafeRunSync()
-    val pane1          = afterFindState.persisted.layout.editorPanes(paneId)
-    val buffer1        = pane1.bufferId.flatMap(afterFindState.persisted.buffers.get).get
-    buffer1.editing.cursors.head.line shouldBe 49   // Line 50 (0-indexed)
-    buffer1.viewport.topLine should be >= (49 - 12) // Should be visible
-    buffer1.viewport.topLine should be <= 49
+      // Then: Should scroll to line 150
+      afterNext2State <- sm.getCurrentState
+      _ <- IO {
+        val pane3   = afterNext2State.persisted.layout.editorPanes(paneId)
+        val buffer3 = pane3.bufferId.flatMap(afterNext2State.persisted.buffers.get).get
+        buffer3.editing.cursors.head.line shouldBe 149 // Line 150 (0-indexed)
+      }
+    yield ()
 
-    // When: Enter advances within the open find overlay
-    stateManager.applyEvent(Enter).unsafeRunSync()
-
-    // Then: Should scroll to next occurrence (line 100)
-    val afterNextState = stateManager.getCurrentState.unsafeRunSync()
-    val pane2          = afterNextState.persisted.layout.editorPanes(paneId)
-    val buffer2        = pane2.bufferId.flatMap(afterNextState.persisted.buffers.get).get
-    buffer2.editing.cursors.head.line shouldBe 99 // Line 100 (0-indexed)
-
-    // When: Find next again while the overlay remains open
-    stateManager.applyEvent(FindNext).unsafeRunSync()
-
-    // Then: Should scroll to line 150
-    val afterNext2State = stateManager.getCurrentState.unsafeRunSync()
-    val pane3           = afterNext2State.persisted.layout.editorPanes(paneId)
-    val buffer3         = pane3.bufferId.flatMap(afterNext2State.persisted.buffers.get).get
-    buffer3.editing.cursors.head.line shouldBe 149 // Line 150 (0-indexed)
+    VirtualTime.runVirtual(program)
+  }
 
   it should "handle viewport synchronization across split panes" in new ScrollFixture:
     // Given: Same file in multiple panes
