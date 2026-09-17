@@ -680,11 +680,11 @@ object AppRuntime:
     * renders, not the cursor-only path, so they need it too.
     *
     * The retired window sitter (issue #934 v2) used to be the one exception here: its glyph lived entirely in the
-    * window chrome and never touched the canvas, so `canStandDownToCursorOnly` could skip a full repaint while it
-    * alone was animating. Its typing-reactivity now lives in the companion sprite panel instead, which paints into
-    * panel content like any other pinned panel -- there is no longer a canvas-free animation source, so that
-    * cursor-only shortcut no longer applies to anything and has been removed rather than left checking a condition
-    * nothing can satisfy.
+    * window chrome and never touched the canvas, so `canStandDownToCursorOnly` could skip a full repaint while it alone
+    * was animating. Its typing-reactivity now lives in the companion sprite panel instead, which paints into panel
+    * content like any other pinned panel -- there is no longer a canvas-free animation source, so that cursor-only
+    * shortcut no longer applies to anything and has been removed rather than left checking a condition nothing can
+    * satisfy.
     */
   private[serenity] def needsFullContentRender(
     state: AppState,

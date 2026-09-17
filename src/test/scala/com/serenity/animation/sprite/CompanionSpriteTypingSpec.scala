@@ -26,8 +26,9 @@ class CompanionSpriteTypingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "settle back to Idle once the typing activity window completes" in {
-    val active  = CompanionSpriteState.default.observeTyping(1_000_000_000L)
-    val settled = Iterator.iterate(active)(_.advance(new scala.util.Random(0L), actionChance = 0.0))
+    val active = CompanionSpriteState.default.observeTyping(1_000_000_000L)
+    val settled = Iterator
+      .iterate(active)(_.advance(new scala.util.Random(0L), actionChance = 0.0))
       .dropWhile(_.isTypingActive)
       .next()
 

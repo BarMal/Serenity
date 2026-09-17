@@ -93,8 +93,8 @@ final class TuiSession private (
 
   def screenWithoutCaret: IO[TuiScreen] = renderFrame(cursorVisible = false)
 
-  /** One frame painted the way `AppRuntime`'s fast render phase paints it: always the full content path (issue #934
-    * v2 removed the fast phase's one cursor-only shortcut along with the window sitter it existed for -- see
+  /** One frame painted the way `AppRuntime`'s fast render phase paints it: always the full content path (issue #934 v2
+    * removed the fast phase's one cursor-only shortcut along with the window sitter it existed for -- see
     * `AppRuntime.needsFullContentRender`'s doc).
     *
     * [[screen]] always paints the full frame too, which is what most scenarios want -- what is on screen once the
@@ -107,10 +107,10 @@ final class TuiSession private (
       current    <- state
       animations <- stateManager.getBufferAnimations
       pending    <- damage.getAndSet(Damage.Nothing)
-      surface    = surfaces.forSize(size)
-      _          <- IO(TuiRuntime.paintFrame(current, surface, size, true, None, pending))
-      emitted    <- drainOutput
-      updated    <- screenRef.get
+      surface = surfaces.forSize(size)
+      _       <- IO(TuiRuntime.paintFrame(current, surface, size, true, None, pending))
+      emitted <- drainOutput
+      updated <- screenRef.get
     yield TuiScreen(updated, emitted)
 
   /** One frame of the *idle* render phase: the cursor-only paint `AppRuntime.runIdleRenderStep` makes on each tick of

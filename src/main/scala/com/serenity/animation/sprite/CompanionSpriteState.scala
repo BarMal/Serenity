@@ -16,8 +16,8 @@ enum CompanionSpriteAction:
   * The transition policy between clips is deliberately explicit rather than "pick uniformly at random every tick",
   * which would look visually chaotic:
   *   1. Typing takes priority over everything else: [[observeTyping]] forces the `Walk` action for a dual-cadence
-  *      activity window (mirroring the retired `com.serenity.animation.WindowSitter`'s typing reaction, issue #934
-  *      v2), stepped via [[SpriteFrameSelection]] per the configured [[CompanionSpriteConfig.typingCycle]]. While that
+  *      activity window (mirroring the retired `com.serenity.animation.WindowSitter`'s typing reaction, issue #934 v2),
+  *      stepped via [[SpriteFrameSelection]] per the configured [[CompanionSpriteConfig.typingCycle]]. While that
   *      window is open ([[isTypingActive]]), the idle-roll policy below does not run.
   *   2. Otherwise, only idling rolls for a new action, and only once at least
   *      [[CompanionSpriteState.MinIdleTicksBeforeAction]] ticks have passed in the current idle run.
@@ -121,8 +121,8 @@ final case class CompanionSpriteState(
       else copy(frameIndex = nextFrame, ticksInAction = nextTicks)
 
   /** Ends any in-progress typing-triggered `Walk` reaction immediately, returning to `Idle` -- used when motion is
-    * disabled or all active motion is cancelled (mirrors what resetting `WindowSitter` to its default used to do).
-    * A no-op when no typing reaction is playing, since the idle-roll trick animation it would otherwise clobber has
+    * disabled or all active motion is cancelled (mirrors what resetting `WindowSitter` to its default used to do). A
+    * no-op when no typing reaction is playing, since the idle-roll trick animation it would otherwise clobber has
     * nothing to do with typing.
     */
   def resetTyping: CompanionSpriteState =
@@ -156,10 +156,10 @@ object CompanionSpriteState:
   def default(frameCounts: Map[CompanionSpriteAction, Int]): CompanionSpriteState =
     CompanionSpriteState(frameCounts = frameCounts)
 
-  /** The state a fresh session starts with: every action's frame count seeded from the bundled sheet's real idle
-    * frame count (issue #934 v2) -- before this merge, `Runtime`'s bare `CompanionSpriteState()` left every non-idle
-    * action's frame count at the case class's own `1` default, so a random roll into `Walk`/`Shoot`/`Morph` completed
-    * its "loop" in a single tick and never visibly animated.
+  /** The state a fresh session starts with: every action's frame count seeded from the bundled sheet's real idle frame
+    * count (issue #934 v2) -- before this merge, `Runtime`'s bare `CompanionSpriteState()` left every non-idle action's
+    * frame count at the case class's own `1` default, so a random roll into `Walk`/`Shoot`/`Morph` completed its "loop"
+    * in a single tick and never visibly animated.
     */
   val default: CompanionSpriteState =
     CompanionSpriteState(frameCounts =

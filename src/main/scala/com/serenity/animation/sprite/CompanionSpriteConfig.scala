@@ -3,8 +3,8 @@ package com.serenity.animation.sprite
 import com.serenity.ui.layout.PanelPosition
 
 /** Persisted controls for the companion sprite pane: an enabled toggle, the settings that shape it once on, and (issue
-  * #934 v2) the typing-reactivity settings absorbed from the retired `com.serenity.animation.WindowSitterConfig` --
-  * the companion sprite panel is now the one typing-reactive mascot, so there is no separate sitter config surface.
+  * #934 v2) the typing-reactivity settings absorbed from the retired `com.serenity.animation.WindowSitterConfig` -- the
+  * companion sprite panel is now the one typing-reactive mascot, so there is no separate sitter config surface.
   */
 final case class CompanionSpriteConfig(
     enabled: Boolean = false,

@@ -251,9 +251,9 @@ enum InterfaceChromeIntent:
   case SetWindowChromeMode(mode: WindowChromeMode)
   case SetWheelScrollLines(lines: Int)
 
-/** Purely decorative extras (companion sprite, flair tier) that never change what is edited. The companion sprite
-  * panel absorbed the retired window sitter's typing-reactivity (issue #934 v2), so its typing-cadence settings live
-  * here alongside the panel's own enabled toggle instead of a separate sitter config surface.
+/** Purely decorative extras (companion sprite, flair tier) that never change what is edited. The companion sprite panel
+  * absorbed the retired window sitter's typing-reactivity (issue #934 v2), so its typing-cadence settings live here
+  * alongside the panel's own enabled toggle instead of a separate sitter config surface.
   */
 enum DecorationIntent:
   case SetCompanionSpriteEnabled(enabled: Boolean)

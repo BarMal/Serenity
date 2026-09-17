@@ -74,9 +74,8 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
 
   it should "not recompute when only the decorative companion sprite ticked" in {
     val stateA = AppState.initial
-    val stateB = stateA.copy(runtime =
-      stateA.runtime.copy(companionSprite = stateA.runtime.companionSprite.copy(frameIndex = 2))
-    )
+    val stateB =
+      stateA.copy(runtime = stateA.runtime.copy(companionSprite = stateA.runtime.companionSprite.copy(frameIndex = 2)))
     val program = for
       sync      <- AccessibilitySync.empty
       callCount <- IO.ref(0)

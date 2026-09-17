@@ -4,8 +4,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Migrated from the retired `WindowSitterFrameSelectionSpec` (issue #934) -- the pure per-cycle frame-selection math
-  * is unchanged, only relocated and renamed to serve the companion sprite panel's typing-reactive frame stepping
-  * (issue #934 v2) instead of a title-bar decoration.
+  * is unchanged, only relocated and renamed to serve the companion sprite panel's typing-reactive frame stepping (issue
+  * #934 v2) instead of a title-bar decoration.
   */
 class SpriteFrameSelectionSpec extends AnyFlatSpec with Matchers:
 
@@ -21,12 +21,11 @@ class SpriteFrameSelectionSpec extends AnyFlatSpec with Matchers:
     SpriteFrameSelection.indices(SpriteFrameCycle.Blink, 4) shouldBe Vector(0, 3)
   }
 
-  it should "never be empty, even for a degenerate 0-or-1-frame sheet" in {
+  it should "never be empty, even for a degenerate 0-or-1-frame sheet" in
     SpriteFrameCycle.values.foreach { cycle =>
       SpriteFrameSelection.indices(cycle, 0) should not be empty
       SpriteFrameSelection.indices(cycle, 1) should not be empty
     }
-  }
 
   "SpriteFrameSelection.next" should "wrap Cycle back to the first frame after the last" in {
     SpriteFrameSelection.next(SpriteFrameCycle.Cycle, 4, currentIndex = 3, ascending = true) shouldBe

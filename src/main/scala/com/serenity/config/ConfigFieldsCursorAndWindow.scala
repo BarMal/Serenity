@@ -90,8 +90,7 @@ private[config] object ConfigFieldsCursorAndWindow:
     ),
     field("ui.companion_sprite.typing_active_ticks", "companion.sprite.typing.active_ticks")(int)(
       _.companionSpriteConfig.typingActiveTicks,
-      (config, value) =>
-        config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(typingActiveTicks = value))
+      (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(typingActiveTicks = value))
     ),
     field("ui.companion_sprite.typing_fast_active_ticks", "companion.sprite.typing.fast_active_ticks")(int)(
       _.companionSpriteConfig.typingFastActiveTicks,

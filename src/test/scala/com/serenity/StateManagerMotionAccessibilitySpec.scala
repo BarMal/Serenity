@@ -114,9 +114,11 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "react to typing again once UI motion is re-enabled" in {
-    val stateManager = createStateManager(AppConfig.default.withCompanionSpriteConfig(
-      AppConfig.default.companionSpriteConfig.copy(enabled = true)
-    ))
+    val stateManager = createStateManager(
+      AppConfig.default.withCompanionSpriteConfig(
+        AppConfig.default.companionSpriteConfig.copy(enabled = true)
+      )
+    )
 
     stateManager.commandExecutor
       .executeCommand(
@@ -142,7 +144,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     val stateBefore = stateManager.getCurrentState.unsafeRunSync()
-    val observed = stateBefore.runtime.observeTyping(1_000_000_000L, stateBefore.persisted.config)
+    val observed    = stateBefore.runtime.observeTyping(1_000_000_000L, stateBefore.persisted.config)
     observed.companionSprite.isTypingActive shouldBe true
   }
 

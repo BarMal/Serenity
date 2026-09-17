@@ -88,8 +88,8 @@ final private[terminal] class ChromeControlButton(
 
 /** Builds the custom-chrome title bar: control buttons, spacer, title label, and drag-to-move/double-click-to-maximize
   * wiring. Extracted out of [[SwingWindow]]'s constructor to keep that file within the architecture ratchet's line
-  * targets; every piece of window state it touches (palette, metrics, the frame itself, maximize toggling) is passed
-  * in explicitly.
+  * targets; every piece of window state it touches (palette, metrics, the frame itself, maximize toggling) is passed in
+  * explicitly.
   */
 final private[terminal] class ChromeTitleBar(
     chromePaletteRef: AtomicReference[SwingWindow.ChromePalette],
