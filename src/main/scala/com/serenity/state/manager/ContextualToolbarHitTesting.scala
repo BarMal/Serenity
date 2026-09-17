@@ -90,10 +90,12 @@ final private[manager] class ContextualToolbarHitTesting(port: ContextualToolbar
       scene    = AuthoritativeUiScene.forState(state, viewportSize)
       layout   = scene.calculatedLayout
       contract = scene.editorContract
+      frameRect   <- contract.overlayRect(surface.id)
       contentRect <- contract.overlayContentRect(surface.id)
       hit <- contextualToolbarItemHit(
         event,
         contentRect,
+        frameRect,
         state,
         toolbarState,
         contract.overlayRowSlots(surface.id),
@@ -101,21 +103,31 @@ final private[manager] class ContextualToolbarHitTesting(port: ContextualToolbar
       )
     yield (surface, toolbarState, hit)
 
+  /** Resolves hover/click against the toolbar's own `ResolvedSurfaceComposition` (issue #819, slice 1) for the ordinary
+    * cell-coordinate case -- the same composition `OverlayViewModel` paints from, via `SurfaceHitRegion`, rather than a
+    * parallel `MouseHitTestGeometry.overlayDisplayedRowIndexAt` row lookup followed by `ContextualToolbarLayout.hitAt`.
+    * Mirrors `CommandRunnerMouseHitTesting.commandRunnerSelectionForSurface`.
+    *
+    * The sub-cell fractional-pixel path (`event.pixelX`/`pixelY` defined -- `ContextualToolbarMouseSpec`'s "fractional
+    * code-metric pixel offset" test) is a distinct, already-tested feature this migration does not touch, so it still
+    * resolves a row via `FloatingSurfaceGeometry` and then `ContextualToolbarLayout.hitAt` unchanged.
+    */
   private def contextualToolbarItemHit(
     event: MouseInputEvent,
     contentRect: LayoutRect,
+    frameRect: LayoutRect,
     state: AppState,
     toolbarState: ContextualToolbarState,
     rowSlots: List[SurfaceContentRowSlot],
     floatingOffsetRows: Double
   ): Option[ContextualToolbarHit] =
-    val rowIndex =
-      if event.pixelX.isDefined && event.pixelY.isDefined then
-        val metrics = MouseHitTestGeometry.floatingCellMetrics(state)
-        val rowCount = rowSlots.count {
-          case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), _) => true
-          case _                                                       => false
-        }
+    if event.pixelX.isDefined && event.pixelY.isDefined then
+      val metrics = MouseHitTestGeometry.floatingCellMetrics(state)
+      val rowCount = rowSlots.count {
+        case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), _) => true
+        case _                                                       => false
+      }
+      val rowIndex =
         for
           pixelX <- event.pixelX
           pixelY <- event.pixelY
@@ -136,25 +148,20 @@ final private[manager] class ContextualToolbarHitTesting(port: ContextualToolbar
             .translated(0.0, FloatingSurfaceGeometry.signedRowOffsetPixels(floatingOffsetRows, metrics))
           index <- geometry.itemIndexAt(pixelX, pixelY)
         yield index
-      else
-        MouseHitTestGeometry.overlayDisplayedRowIndexAt(
-          event,
-          contentRect,
-          rowSlots,
-          SurfaceFrameLayout.itemTargetRowsFor(
-            SurfaceContent.ContextualToolbar(toolbarState),
-            state.persisted.config.interfaceDensity
-          )
+      rowIndex.flatMap { rowIndex =>
+        ContextualToolbarLayout.hitAt(
+          rowIndex = rowIndex,
+          columnOffset = event.col - contentRect.x,
+          contentWidth = contentRect.width.max(1),
+          toolbarState = toolbarState,
+          state = state
         )
-    rowIndex.flatMap { rowIndex =>
-      ContextualToolbarLayout.hitAt(
-        rowIndex = rowIndex,
-        columnOffset = event.col - contentRect.x,
-        contentWidth = contentRect.width.max(1),
-        toolbarState = toolbarState,
-        state = state
-      )
-    }
+      }
+    else
+      ContextualToolbarSurfaceComposition
+        .forToolbar(toolbarState, state, frameRect)
+        .hitAt(event.col.toDouble, event.row.toDouble)
+        .flatMap(region => ContextualToolbarSurfaceComposition.hitFromFocusId(region.focusId))
 
   private def replaceContextualToolbar(
     state: AppState,
