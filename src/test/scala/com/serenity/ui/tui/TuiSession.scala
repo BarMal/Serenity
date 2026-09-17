@@ -93,12 +93,13 @@ final class TuiSession private (
 
   def screenWithoutCaret: IO[TuiScreen] = renderFrame(cursorVisible = false)
 
-  /** One frame painted the way `AppRuntime`'s fast render phase paints it, branch included: the cursor-only path while
-    * the window sitter is active and nothing else needs a full content repaint, the full path otherwise.
+  /** One frame painted the way `AppRuntime`'s fast render phase paints it: always the full content path (issue #934 v2
+    * removed the fast phase's one cursor-only shortcut along with the window sitter it existed for -- see
+    * `AppRuntime.needsFullContentRender`'s doc).
     *
-    * [[screen]] always paints the full frame, which is what most scenarios want -- what is on screen once the runtime
-    * has caught up. This one reproduces the runtime's own per-frame choice, and so can show a frame the user would
-    * actually see mid-typing.
+    * [[screen]] always paints the full frame too, which is what most scenarios want -- what is on screen once the
+    * runtime has caught up. This one reproduces the runtime's own per-frame choice explicitly, so a future change to
+    * that choice shows up here instead of leaving the harness describing a branch production no longer takes.
     */
   def runtimeScreen: IO[TuiScreen] =
     for
@@ -106,12 +107,8 @@ final class TuiSession private (
       current    <- state
       animations <- stateManager.getBufferAnimations
       pending    <- damage.getAndSet(Damage.Nothing)
-      surface    = surfaces.forSize(size)
-      cursorOnly = AppRuntime.canStandDownToCursorOnly(current, animations, pending)
-      _ <- IO(
-        if cursorOnly then TuiRuntime.paintCursorOnly(current, surface, size, true, None, animations)
-        else TuiRuntime.paintFrame(current, surface, size, true, None, pending)
-      )
+      surface = surfaces.forSize(size)
+      _       <- IO(TuiRuntime.paintFrame(current, surface, size, true, None, pending))
       emitted <- drainOutput
       updated <- screenRef.get
     yield TuiScreen(updated, emitted)
@@ -136,28 +133,6 @@ final class TuiSession private (
       emitted          <- drainOutput
       updated          <- screenRef.get
     yield TuiScreen(updated, emitted)
-
-  /** Advance the animation clock until the runtime would paint content again -- that is, until the window sitter has
-    * finished its run. How many ticks that takes depends on how fast the keystrokes arrived
-    * (`WindowSitterConfig.fastActiveTicks` against `activeTicks`), so scenarios wait for the branch rather than
-    * guessing a count.
-    */
-  def advanceUntilFullRepaint: IO[Unit] =
-    def loop(remaining: Int): IO[Unit] =
-      paintsCursorOnly.flatMap {
-        case false => IO.unit
-        case _ if remaining <= 0 =>
-          IO.raiseError(new AssertionError(s"Window sitter still active after $AnimationTickLimit animation ticks"))
-        case _ => tickAnimations >> loop(remaining - 1)
-      }
-    loop(AnimationTickLimit)
-
-  /** Whether the runtime's fast phase would paint the cursor-only path on the next frame -- asked of `AppRuntime`
-    * itself rather than restated here, so a change to that decision shows up in these scenarios instead of leaving the
-    * harness describing a branch production no longer takes.
-    */
-  def paintsCursorOnly: IO[Boolean] =
-    (state, stateManager.getBufferAnimations, damage.get).mapN(AppRuntime.canStandDownToCursorOnly)
 
   /** Let the interface finish moving, then paint until the frame stops changing.
     *

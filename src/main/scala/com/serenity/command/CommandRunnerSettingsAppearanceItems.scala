@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.animation.WindowSitterAction
+import com.serenity.animation.sprite.SpriteFrameCycle
 import com.serenity.config.*
 
 /** Background, material, window-chrome, and window-sitter appearance settings items. Split out of
@@ -119,27 +119,6 @@ private[command] object CommandRunnerSettingsAppearanceItems:
       hint = Some("Applies after restart; auto uses Serenity chrome on Linux")
     )
 
-  private[command] def windowSitterEnabledOptionItem(
-    optionSelections: Map[String, Int]
-  ): CommandSurfaceItem.OptionItem =
-    CommandSurfaceItem.OptionItem(
-      id = "window-sitter-enabled",
-      label = "Window Sitter",
-      options = List(
-        CommandOption(
-          "On",
-          CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterEnabled(true)))
-        ),
-        CommandOption(
-          "Off",
-          CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetWindowSitterEnabled(false)))
-        )
-      ),
-      selectedIndex = optionSelections.getOrElse("window-sitter-enabled", 0),
-      category = CommandCategory.Settings,
-      hint = Some("Typing-reactive window decoration")
-    )
-
   private[command] def companionSpriteEnabledOptionItem(
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =
@@ -158,7 +137,9 @@ private[command] object CommandRunnerSettingsAppearanceItems:
       ),
       selectedIndex = optionSelections.getOrElse("companion-sprite-enabled", 1),
       category = CommandCategory.Settings,
-      hint = Some("A small pixel-art companion pane, idling and occasionally performing an action")
+      hint = Some(
+        "A small pixel-art companion pane, idling, occasionally performing a trick, and reacting to typing"
+      )
     )
 
   private[command] def visualFlairLevelOptionItem(
@@ -192,35 +173,35 @@ private[command] object CommandRunnerSettingsAppearanceItems:
       hint = Some("Performance/battery tier for purely decorative extras -- the companion sprite, background blur")
     )
 
-  private[command] def windowSitterActionOptionItem(
+  private[command] def companionSpriteTypingCycleOptionItem(
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
-      id = "window-sitter-action",
-      label = "Sitter Action",
+      id = "companion-sprite-typing-cycle",
+      label = "Typing Cycle",
       options = List(
         CommandOption(
           "Cycle",
           CommandIntent.Settings(
-            SettingsIntent.Decoration(DecorationIntent.SetWindowSitterAction(WindowSitterAction.Cycle))
+            SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingCycle(SpriteFrameCycle.Cycle))
           )
         ),
         CommandOption(
           "Pulse",
           CommandIntent.Settings(
-            SettingsIntent.Decoration(DecorationIntent.SetWindowSitterAction(WindowSitterAction.Pulse))
+            SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingCycle(SpriteFrameCycle.Pulse))
           )
         ),
         CommandOption(
           "Blink",
           CommandIntent.Settings(
-            SettingsIntent.Decoration(DecorationIntent.SetWindowSitterAction(WindowSitterAction.Blink))
+            SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingCycle(SpriteFrameCycle.Blink))
           )
         )
       ),
-      selectedIndex = optionSelections.getOrElse("window-sitter-action", 1),
+      selectedIndex = optionSelections.getOrElse("companion-sprite-typing-cycle", 1),
       category = CommandCategory.Settings,
-      hint = Some("Frame action after typing")
+      hint = Some("Frame cycle style while the companion sprite reacts to typing")
     )
 
   private[command] def materialPresetOptionItem(

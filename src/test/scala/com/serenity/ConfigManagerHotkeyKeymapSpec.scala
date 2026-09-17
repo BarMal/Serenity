@@ -2,7 +2,7 @@ package com.serenity
 
 import java.nio.file.Files
 
-import com.serenity.animation.WindowSitterConfig
+import com.serenity.animation.sprite.{CompanionSpriteConfig, SpriteFrameCycle}
 import com.serenity.config.*
 import com.serenity.keystroke.events.EditorEvent
 import com.serenity.keystroke.{InputKey, Modifier}
@@ -13,27 +13,25 @@ import org.scalatest.matchers.should.Matchers
 /** Hotkey overrides, keymap parsing/round-tripping, and the focused keymap JSON codec. */
 class ConfigManagerHotkeyKeymapSpec extends AnyFlatSpec with Matchers with OptionValues:
 
-  "ConfigManager" should "persist window sitter controls" in {
-    val config = AppConfig.default.withWindowSitterConfig(
-      WindowSitterConfig(
+  "ConfigManager" should "persist companion sprite typing-reactivity controls" in {
+    val config = AppConfig.default.withCompanionSpriteConfig(
+      CompanionSpriteConfig(
         enabled = false,
-        action = com.serenity.animation.WindowSitterAction.Blink,
-        frames = Vector(".", "x"),
-        activeTicks = 4,
-        fastActiveTicks = 9,
-        fastTypingThresholdMs = 275
+        typingCycle = SpriteFrameCycle.Blink,
+        typingActiveTicks = 4,
+        typingFastActiveTicks = 9,
+        typingFastThresholdMs = 275
       )
     )
-    val configFile = Files.createTempFile("serenity-sitter-config", ".conf")
+    val configFile = Files.createTempFile("serenity-companion-sprite-config", ".conf")
     Files.writeString(configFile, ConfigManager.configToString(config))
 
-    val reloaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString)).windowSitterConfig
+    val reloaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString)).companionSpriteConfig
     reloaded.enabled shouldBe false
-    reloaded.action shouldBe com.serenity.animation.WindowSitterAction.Blink
-    reloaded.frames shouldBe Vector(".", "x")
-    reloaded.activeTicks shouldBe 4
-    reloaded.fastActiveTicks shouldBe 9
-    reloaded.fastTypingThresholdMs shouldBe 275
+    reloaded.typingCycle shouldBe SpriteFrameCycle.Blink
+    reloaded.typingActiveTicks shouldBe 4
+    reloaded.typingFastActiveTicks shouldBe 9
+    reloaded.typingFastThresholdMs shouldBe 275
   }
 
   "ConfigManager" should "load configured hotkey overrides from a config file" in {

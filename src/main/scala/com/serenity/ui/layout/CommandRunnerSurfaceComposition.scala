@@ -249,7 +249,7 @@ object CommandRunnerSurfaceComposition:
 
     plan(bounds, headerBoxes ++ itemBoxes ++ keyHintBoxes ++ footerBoxes)
 
-  private def toBox(row: OverlayRow, rect: LogicalPixelRect, id: Option[SurfaceFocusId]): SurfacePaintBox =
+  private[layout] def toBox(row: OverlayRow, rect: LogicalPixelRect, id: Option[SurfaceFocusId]): SurfacePaintBox =
     SurfacePaintBox(
       kind = if id.isDefined then SurfacePaintKind.ActionItem else SurfacePaintKind.Text,
       rect = rect,
@@ -264,7 +264,7 @@ object CommandRunnerSurfaceComposition:
         case OverlayRowLayout.Plain           => SurfacePaintLayout.Plain
         case OverlayRowLayout.Split           => SurfacePaintLayout.Split
         case OverlayRowLayout.Columns         => SurfacePaintLayout.Columns
-        case OverlayRowLayout.Distributed     => SurfacePaintLayout.Plain
+        case OverlayRowLayout.Distributed     => SurfacePaintLayout.Distributed
         case OverlayRowLayout.PriorityColumns => SurfacePaintLayout.Plain
     )
 

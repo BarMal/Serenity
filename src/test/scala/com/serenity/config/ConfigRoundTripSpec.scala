@@ -6,8 +6,8 @@ import java.nio.file.{Files, Path}
 import scala.concurrent.duration.DurationInt
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig}
-import com.serenity.animation.{AnimationConfig, TransitionKind, WindowSitterAction, WindowSitterConfig}
+import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig, SpriteFrameCycle}
+import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{StatusLineColors, StatusLinePlacement, StatusSegment}
 import com.serenity.keystroke.Modifier
@@ -161,22 +161,16 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withViewportHeightSizing(ViewportAxisSizing(percent = 0.9, maxCells = Some(60)))
     .withPreferredWindowSize(PreferredWindowSize(1280, 800))
     .withWheelScrollLines(5)
-    .withWindowSitterConfig(
-      WindowSitterConfig(
-        enabled = false,
-        action = WindowSitterAction.Blink,
-        frames = Vector("-", "+"),
-        activeTicks = 9,
-        fastActiveTicks = 17,
-        fastTypingThresholdMs = 175
-      )
-    )
     .withCompanionSpriteConfig(
       CompanionSpriteConfig(
         enabled = true,
         character = CompanionCharacter.PixelWizard,
         position = PanelPosition.Bottom,
-        size = 14
+        size = 14,
+        typingCycle = SpriteFrameCycle.Blink,
+        typingActiveTicks = 9,
+        typingFastActiveTicks = 17,
+        typingFastThresholdMs = 175
       )
     )
     .withVisualFlairLevel(VisualFlairLevel.Reduced)

@@ -70,6 +70,10 @@ enum SurfacePaintLayout:
   case Split
   case Inline
   case Columns
+  // Multiple child boxes in one row, each carrying its own `allocatedWidth` on its `SurfacePaintBox.segments` entry,
+  // with an inter-segment `│` glyph drawn where `trailingSeparator` is set -- owned by the gap between segments, not
+  // by either one. Mirrors `OverlayRowLayout.Distributed` (issue #819 prep).
+  case Distributed
 
 /** One clipped paint box. Interactive boxes carry the same identity and rectangle as their hit region. */
 final case class SurfacePaintBox(

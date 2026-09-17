@@ -56,12 +56,11 @@ final private[manager] class StateManagerEditorCapability(
       )
       hasThemeTransition   = state.runtime.themeTransition.isDefined
       hasSurfaceAnimations = state.runtime.surfaceAnimations.nonEmpty
-      hasWindowSitter      = state.runtime.windowSitter.isActive
       hasTypingActivity    = state.runtime.typingActivity.isActive
       flairLevel           = state.persisted.config.visualFlairLevel
       hasCompanionSprite   = state.persisted.config.companionSpriteConfig.enabled && flairLevel != VisualFlairLevel.Off
       stillActive <-
-        if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations && !hasWindowSitter &&
+        if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations &&
             !hasCompanionSprite && !hasTypingActivity
         then IO.pure(false)
         else
@@ -74,7 +73,6 @@ final private[manager] class StateManagerEditorCapability(
           val stateWithAdvancedBuffers = state.copy(
             runtime = state.runtime.copy(
               themeTransition = updatedTransition,
-              windowSitter = state.runtime.windowSitter.advance,
               typingActivity = state.runtime.typingActivity.advance,
               companionSprite = advancedCompanionSprite
             )
@@ -93,7 +91,6 @@ final private[manager] class StateManagerEditorCapability(
             .exists(id => updatedBufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
             newState.runtime.themeTransition.isDefined ||
             newState.runtime.surfaceAnimations.nonEmpty ||
-            newState.runtime.windowSitter.isActive ||
             newState.runtime.typingActivity.isActive ||
             hasCompanionSprite
     yield stillActive

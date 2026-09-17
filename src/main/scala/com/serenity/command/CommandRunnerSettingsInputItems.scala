@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.animation.WindowSitterConfig
+import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 
@@ -50,7 +50,7 @@ object CommandRunnerSettingsInputItems:
       lineNumberMarginRightValue: String,
       lineNumberPaddingValue: String,
       spellCheck: SpellCheckConfig,
-      sitterConfig: WindowSitterConfig
+      companionSpriteConfig: CompanionSpriteConfig
   )
 
   private def derivedValues(config: AppConfig): DerivedValues =
@@ -83,7 +83,7 @@ object CommandRunnerSettingsInputItems:
       lineNumberMarginRightValue = surfaceConfig.lineNumberLayout.marginRight.toString,
       lineNumberPaddingValue = surfaceConfig.lineNumberLayout.padding.toString,
       spellCheck = languageToolsConfig.spellCheck.normalized,
-      sitterConfig = config.windowSitterConfig
+      companionSpriteConfig = config.companionSpriteConfig
     )
 
   def build(config: AppConfig): List[CommandSurfaceItem.InputItem] =
@@ -137,11 +137,11 @@ object CommandRunnerSettingsInputItems:
         v.lineNumberMarginRightValue,
         v.lineNumberPaddingValue
       ) ++
-      CommandRunnerSettingsInputItemsWindowSitterAndFont.windowSitterAndInputItems(
-        v.sitterConfig,
+      CommandRunnerSettingsInputItemsCompanionSpriteAndFont.companionSpriteAndInputItems(
+        v.companionSpriteConfig,
         v.inputConfig.wheelScrollLines
       ) ++
-      CommandRunnerSettingsInputItemsWindowSitterAndFont.fontSizeItems(
+      CommandRunnerSettingsInputItemsCompanionSpriteAndFont.fontSizeItems(
         v.codeFontSizeValue,
         v.textFontSizeValue,
         v.uiFontSizeValue,

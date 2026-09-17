@@ -4,8 +4,8 @@ import java.awt.Color
 
 import scala.concurrent.duration.DurationInt
 
-import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig}
-import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope, WindowSitterAction, WindowSitterConfig}
+import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig, SpriteFrameCycle}
+import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.Modifier
@@ -131,25 +131,26 @@ object ConfigGenerators:
       size <- Gen.option(for w <- Gen.choose(400, 4000); h <- Gen.choose(300, 4000) yield PreferredWindowSize(w, h))
     yield WindowConfig(chrome, size)
 
-  val genWindowSitterConfig: Gen[WindowSitterConfig] =
-    for
-      enabled <- Gen.oneOf(true, false)
-      action  <- oneOfEnum(WindowSitterAction.values)
-      // `WindowSitterConfig.normalized` keeps at most 32 frames; `·` is in the shipped default, and is the character
-      // that showed the config file was being read back with the platform charset rather than UTF-8.
-      frames    <- Gen.nonEmptyListOf(Gen.oneOf("-", "+", "o", "O", "·")).map(_.take(32).toVector)
-      ticks     <- Gen.choose(1, 120)
-      fastTicks <- Gen.choose(1, 240)
-      threshold <- Gen.choose(1, 5000)
-    yield WindowSitterConfig(enabled, action, frames, ticks, fastTicks, threshold)
-
   val genCompanionSpriteConfig: Gen[CompanionSpriteConfig] =
     for
-      enabled   <- Gen.oneOf(true, false)
-      character <- oneOfEnum(CompanionCharacter.values)
-      position  <- oneOfEnum(PanelPosition.values)
-      size      <- Gen.choose(CompanionSpriteConfig.MinSize, CompanionSpriteConfig.MaxSize)
-    yield CompanionSpriteConfig(enabled, character, position, size)
+      enabled         <- Gen.oneOf(true, false)
+      character       <- oneOfEnum(CompanionCharacter.values)
+      position        <- oneOfEnum(PanelPosition.values)
+      size            <- Gen.choose(CompanionSpriteConfig.MinSize, CompanionSpriteConfig.MaxSize)
+      typingCycle     <- oneOfEnum(SpriteFrameCycle.values)
+      typingTicks     <- Gen.choose(1, 120)
+      typingFastTicks <- Gen.choose(1, 240)
+      typingThreshold <- Gen.choose(1, 5000)
+    yield CompanionSpriteConfig(
+      enabled,
+      character,
+      position,
+      size,
+      typingCycle,
+      typingTicks,
+      typingFastTicks,
+      typingThreshold
+    )
 
   val genDocumentConfig: Gen[DocumentConfig] =
     for
@@ -363,7 +364,6 @@ object ConfigGenerators:
       surface   <- genSurfaceConfig
       cursor    <- genCursorConfig
       window    <- genWindowConfig
-      sitter    <- genWindowSitterConfig
       companion <- genCompanionSpriteConfig
       flair     <- oneOfEnum(VisualFlairLevel.values)
       document  <- genDocumentConfig
@@ -382,7 +382,6 @@ object ConfigGenerators:
         surfaceConfig = surface,
         cursorConfig = cursor,
         windowConfig = window,
-        windowSitterConfig = sitter,
         companionSpriteConfig = companion,
         visualFlairLevel = flair,
         documentConfig = document,

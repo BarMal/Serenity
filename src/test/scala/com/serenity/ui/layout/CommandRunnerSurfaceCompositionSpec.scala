@@ -148,6 +148,19 @@ class CommandRunnerSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "map an OverlayRowLayout.Distributed row to SurfacePaintLayout.Distributed, preserving its segments faithfully (issue #819 prep)" in {
+    val segments = List(
+      OverlaySegment("Bold", allocatedWidth = Some(6), trailingSeparator = true),
+      OverlaySegment("Italic", allocatedWidth = Some(8))
+    )
+    val row = OverlayRow(plainText = "Bold Italic", segments = segments, layout = OverlayRowLayout.Distributed)
+
+    val box = CommandRunnerSurfaceComposition.toBox(row, LogicalPixelRect(0, 0, 20, 1), None)
+
+    box.layout shouldBe SurfacePaintLayout.Distributed
+    box.segments shouldBe segments
+  }
+
   it should "never make a group's preview rows independently selectable or focusable" in {
     val runner = settingsRootRunner
     val resolved = CommandRunnerSurfaceComposition.forRunner(

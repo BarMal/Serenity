@@ -46,7 +46,7 @@ class ConfigKeySchemaSpec extends AnyFlatSpec with Matchers:
     ConfigKeySchema.deprecatedReplacement("render.fps") shouldBe Some("ui.render.fps")
     ConfigKeySchema.deprecatedReplacement("app.mode") shouldBe Some("workspace.mode")
     ConfigKeySchema.deprecatedReplacement("document.default_mode") shouldBe Some("editor.default_document_mode")
-    ConfigKeySchema.deprecatedReplacement("window.sitter.enabled") shouldBe Some("motion.window_sitter.enabled")
+    ConfigKeySchema.deprecatedReplacement("companion.sprite.enabled") shouldBe Some("ui.companion_sprite.enabled")
     ConfigKeySchema.deprecatedReplacement("ui.motion.preset") shouldBe Some("motion.preset")
     ConfigKeySchema.deprecatedReplacement("ui.motion.family.cursor.transition") shouldBe
       Some("motion.family.cursor.transition")

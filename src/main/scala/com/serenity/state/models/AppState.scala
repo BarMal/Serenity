@@ -2,7 +2,6 @@ package com.serenity.state.models
 
 import java.util.concurrent.atomic.AtomicReference
 
-import com.serenity.animation.WindowSitter
 import com.serenity.config.*
 import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.text.TextStatistics
@@ -406,7 +405,6 @@ object AppState:
         config = config
       ),
       runtime = Runtime(
-        windowSitter = WindowSitter.fromConfig(config.windowSitterConfig),
         uiSurfaces = companionSpriteSurfaces(config),
         nextBufferId = BufferId(1),
         nextPaneId = PaneId(1),
@@ -424,10 +422,7 @@ object AppState:
         focus = Focus.EditorPane(PaneId(0)),
         config = config
       ),
-      runtime = Runtime(
-        windowSitter = WindowSitter.fromConfig(config.windowSitterConfig),
-        uiSurfaces = companionSpriteSurfaces(config)
-      )
+      runtime = Runtime(uiSurfaces = companionSpriteSurfaces(config))
     )
 
   /** The companion sprite's pinned panel surface, present exactly when a freshly-started or freshly-restored session

@@ -1,7 +1,7 @@
 package com.serenity.ui.accessibility
 
 import cats.effect.{IO, Ref}
-import com.serenity.animation.WindowSitter
+import com.serenity.animation.sprite.CompanionSpriteState
 import com.serenity.state.models.AppState
 
 /** Memoizes the accessibility snapshot against the `AppState` last synced, so the O(document-size) projection in
@@ -10,7 +10,7 @@ import com.serenity.state.models.AppState
   *
   * A plain `AppState` reference check only catches the case where nothing at all was dispatched (e.g. a caret-blink
   * cursor-only tick with no pending animation). It's defeated the moment a decorative *state* animation is active
-  * (window sitter, theme transition, surface fade), since advancing those always produces a new top-level `AppState`
+  * (companion sprite, theme transition, surface fade), since advancing those always produces a new top-level `AppState`
   * even though none of them are read by `AccessibilitySnapshot.from`. Per-character reveal animations don't have this
   * problem at all -- `AnimationState` lives in a `StateManager`-owned side table (`#1001`), not on `AppState`/`Buffer`,
   * so advancing them never invalidates this cache's `eq` check in the first place. So a cache hit here is either an
@@ -57,7 +57,7 @@ object AccessibilitySync:
           .toMap
       ),
       runtime = state.runtime.copy(
-        windowSitter = WindowSitter.default,
+        companionSprite = CompanionSpriteState.default,
         themeTransition = None,
         surfaceAnimations = Map.empty
       )

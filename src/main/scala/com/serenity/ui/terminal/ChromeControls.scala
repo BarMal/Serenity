@@ -5,8 +5,6 @@ import java.awt.event.*
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import javax.swing.*
 
-import com.serenity.animation.WindowSitter
-
 /** A single custom-chrome title-bar button (minimize/maximize/restore/close).
   *
   * Decoupled from [[SwingWindow]] itself -- it takes the palette, preferred size, and activation behaviour it needs as
@@ -88,14 +86,12 @@ final private[terminal] class ChromeControlButton(
 
   private def activate(): Unit = onActivate(kindRef.get())
 
-/** Builds the custom-chrome title bar: control buttons, spacer, decorative title label, and drag-to-move/
-  * double-click-to-maximize wiring. Extracted out of [[SwingWindow]]'s constructor to keep that file within the
-  * architecture ratchet's line targets; every piece of window state it touches (palette, metrics, the frame itself,
-  * maximize toggling) is passed in explicitly.
+/** Builds the custom-chrome title bar: control buttons, spacer, title label, and drag-to-move/double-click-to-maximize
+  * wiring. Extracted out of [[SwingWindow]]'s constructor to keep that file within the architecture ratchet's line
+  * targets; every piece of window state it touches (palette, metrics, the frame itself, maximize toggling) is passed in
+  * explicitly.
   */
 final private[terminal] class ChromeTitleBar(
-    initialWindowSitter: WindowSitter,
-    initialWindowSitterVisible: Boolean,
     chromePaletteRef: AtomicReference[SwingWindow.ChromePalette],
     maximizedRef: AtomicBoolean,
     frame: () => JFrame,
@@ -124,8 +120,8 @@ final private[terminal] class ChromeTitleBar(
     setBackground(chromePaletteRef.get().titleBackground)
     setPreferredSize(spacerSize())
 
-  val titleLabel: SwingWindow.DecorativeTitleLabel =
-    new SwingWindow.DecorativeTitleLabel(initialWindowSitter.glyph, initialWindowSitterVisible)
+  val titleLabel: JLabel = new JLabel(SwingWindow.WindowTitle, SwingConstants.CENTER)
+  SwingWindow.setAccessibleNameIfAvailable(titleLabel, SwingWindow.WindowTitle)
   titleLabel.setForeground(chromePaletteRef.get().titleForeground)
   titleLabel.setFont(controlFont())
 

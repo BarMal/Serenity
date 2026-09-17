@@ -72,11 +72,10 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync() shouldBe 1
   }
 
-  it should "not recompute when only the decorative window sitter ticked" in {
+  it should "not recompute when only the decorative companion sprite ticked" in {
     val stateA = AppState.initial
-    val stateB = stateA.copy(runtime =
-      stateA.runtime.copy(windowSitter = stateA.runtime.windowSitter.copy(activeTicks = 5, frameIndex = 2))
-    )
+    val stateB =
+      stateA.copy(runtime = stateA.runtime.copy(companionSprite = stateA.runtime.companionSprite.copy(frameIndex = 2)))
     val program = for
       sync      <- AccessibilitySync.empty
       callCount <- IO.ref(0)
@@ -174,13 +173,13 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync() shouldBe 1
   }
 
-  it should "still recompute a real change even while the window sitter is also ticking" in {
+  it should "still recompute a real change even while the companion sprite is also ticking" in {
     val stateA = AppState.initial
     val stateB = AppState.initial
       .copy(
         persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("changed"))),
         runtime =
-          AppState.initial.runtime.copy(windowSitter = AppState.initial.runtime.windowSitter.copy(activeTicks = 5))
+          AppState.initial.runtime.copy(companionSprite = AppState.initial.runtime.companionSprite.copy(frameIndex = 2))
       )
     val program = for
       sync      <- AccessibilitySync.empty

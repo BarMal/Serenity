@@ -17,9 +17,9 @@ class AppStateEqualitySpec extends AnyFlatSpec with Matchers:
     AppState.initial shouldBe AppState.initial
   }
 
-  it should "detect a difference confined to its last declared field (windowSitter)" in {
+  it should "detect a difference confined to its last declared field (commandUsage)" in {
     val base    = AppState.initial
-    val changed = base.copy(runtime = base.runtime.copy(windowSitter = base.runtime.windowSitter.copy(activeTicks = 1)))
+    val changed = base.copy(runtime = base.runtime.copy(commandUsage = Map("changed" -> 1)))
 
     (base == changed) shouldBe false
   }
