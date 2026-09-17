@@ -88,6 +88,13 @@ object ConfigFileFormat:
     field("editor.visual_line_navigation"),
     comment("Keep the cursor's line vertically centred (typewriter scrolling), padding past the document's end"),
     field("editor.typewriter_scrolling"),
+    comment(
+      "E-reader-style column layout: as many columns as fit the target width (in cells) plus the gap between " +
+        "them. Only takes effect while word wrap is also on"
+    ),
+    field("editor.column_mode"),
+    field("editor.column_target_width"),
+    field("editor.column_gap"),
     field("editor.line_numbers"),
     comment(
       "Line-number placement (left, right, both) and cell spacing: margin from the panel edge to the counter, " +

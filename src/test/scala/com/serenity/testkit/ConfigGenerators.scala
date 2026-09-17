@@ -277,6 +277,9 @@ object ConfigGenerators:
         AppConfig.MinDiagnosticHighlightBlendWeight,
         AppConfig.MaxDiagnosticHighlightBlendWeight
       )
+      columnMode        <- Gen.oneOf(true, false)
+      columnTargetWidth <- Gen.choose(1, 400)
+      columnGap         <- Gen.choose(0, 40)
     yield SurfaceConfig(
       showLineNumbers = lineNumbers,
       showPaneHeaders = paneHeaders,
@@ -303,7 +306,10 @@ object ConfigGenerators:
       lineNumberLayout = lineNumberLayout,
       viewportSizing = ViewportSizing(width, height),
       rendererFrameStateCacheCapacity = frameStateCacheCapacity,
-      diagnosticHighlightBlendWeight = diagnosticBlendWeight
+      diagnosticHighlightBlendWeight = diagnosticBlendWeight,
+      columnModeEnabled = columnMode,
+      columnTargetWidthCells = columnTargetWidth,
+      columnGap = columnGap
     )
 
   /** The material settings, applied through the setters for the same reason as the motion ones: choosing a blur or a
