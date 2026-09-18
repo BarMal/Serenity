@@ -76,7 +76,7 @@ object PerformanceBenchmarks:
   /** Reducer benchmarks, extracted so `benchmarks` is not a single monolith and so the per-family coverage #993 depends
     * on is visible in one place.
     */
-  private def reducerBenchmarks(
+  private[perf] def reducerBenchmarks(
     editingState: AppState,
     plainScrollState: AppState,
     richScrollState: AppState,
@@ -116,7 +116,7 @@ object PerformanceBenchmarks:
       BenchmarkRunner.Benchmark(
         "reducer.normal_editing",
         3,
-        20,
+        BenchmarkIterationCounts.Reducer,
         () =>
           assert(
             expectedEditedLine.exists(line => editedLine(normalEditingResult).contains(line))
@@ -126,7 +126,7 @@ object PerformanceBenchmarks:
       BenchmarkRunner.Benchmark(
         "reducer.backspace",
         3,
-        20,
+        BenchmarkIterationCounts.Reducer,
         () =>
           assert(
             expectedBackspacedLine.exists(line => editedLine(backspaceResult).contains(line))
@@ -136,7 +136,7 @@ object PerformanceBenchmarks:
       BenchmarkRunner.Benchmark(
         "reducer.delete_word_backward",
         3,
-        20,
+        BenchmarkIterationCounts.Reducer,
         () =>
           assert(
             editedLine(wordDeleteResult).exists(_.length < expectedBackspacedLine.fold(0)(_.length))
@@ -146,49 +146,49 @@ object PerformanceBenchmarks:
       BenchmarkRunner.Benchmark(
         "reducer.arrow_navigation",
         3,
-        20,
+        BenchmarkIterationCounts.Reducer,
         () => assert(reducedCursor(moveRightResult).exists(_.column == 13)),
         () => EditorEventReducer.reduce(MoveRight, PaneId(0), editingState)
       ),
       BenchmarkRunner.Benchmark(
         "reducer.extend_selection",
         3,
-        20,
+        BenchmarkIterationCounts.Reducer,
         () => assert(reducedSelection(extendRightResult).exists(_.focus.column == 13)),
         () => EditorEventReducer.reduce(ExtendSelectionRight, PaneId(0), editingState)
       ),
       BenchmarkRunner.Benchmark(
         "reducer.multi_cursor_insert",
         3,
-        20,
+        BenchmarkIterationCounts.Reducer,
         () => assert(reducedBuffer(multiInsertResult).exists(_.editing.cursors.sizeIs == 50)),
         () => EditorEventReducer.reduce(InsertChar('x'), PaneId(0), multiCursorState)
       ),
       BenchmarkRunner.Benchmark(
         "reducer.multi_cursor_move",
         3,
-        20,
+        BenchmarkIterationCounts.Reducer,
         () => assert(reducedBuffer(multiMoveResult).exists(_.editing.cursors.forall(_.column == 5))),
         () => EditorEventReducer.reduce(MoveRight, PaneId(0), multiCursorState)
       ),
       BenchmarkRunner.Benchmark(
         "reducer.multi_cursor_move_down",
         3,
-        20,
+        BenchmarkIterationCounts.Reducer,
         () => assert(reducedBuffer(multiMoveDownResult).exists(_.editing.cursors.sizeIs == 50)),
         () => com.serenity.VerticalNavSupport.dispatch(MoveDown, PaneId(0), multiCursorWrapState)
       ),
       BenchmarkRunner.Benchmark(
         "reducer.deep_scroll.plain",
         3,
-        20,
+        BenchmarkIterationCounts.Reducer,
         () => assert(reducedTopLine(plainScrollResult) == Some(deepViewport.topLine + 40)),
         () => EditorEventReducer.reduce(ScrollDown(40), PaneId(0), plainScrollState)
       ),
       BenchmarkRunner.Benchmark(
         "reducer.deep_scroll.rich_text",
         3,
-        20,
+        BenchmarkIterationCounts.Reducer,
         () => assert(reducedTopLine(richScrollResult) == Some(deepViewport.topLine + 40)),
         () => EditorEventReducer.reduce(ScrollDown(40), PaneId(0), richScrollState)
       )
@@ -467,7 +467,7 @@ object PerformanceBenchmarks:
       BenchmarkRunner.Benchmark(
         "lsp.framer.large_batch",
         3,
-        12,
+        BenchmarkIterationCounts.LspFramer,
         () => assert(decodedLspMessages == lspMessages),
         () => decodeLspMessages(framedLspMessages)
       ),
@@ -501,7 +501,7 @@ object PerformanceBenchmarks:
       BenchmarkRunner.Benchmark(
         "render.markdown.inline_lens",
         2,
-        8,
+        BenchmarkIterationCounts.RenderMarkdown,
         () => assert(renderedFrameHasPixels(markdownLensFrame)),
         () => renderedFrame(markdownState, deviceScale = 1.0)
       ),

@@ -112,14 +112,14 @@ private[perf] object DamageBenchmarks:
       BenchmarkRunner.Benchmark(
         s"damage.$name.rows",
         3,
-        30,
+        BenchmarkIterationCounts.Damage,
         () => verifyRows(DamageProducer.forTransition(rowsBefore, rowsAfter)),
         () => DamageProducer.forTransition(rowsBefore, rowsAfter)
       ),
       BenchmarkRunner.Benchmark(
         s"damage.$name.cells",
         3,
-        30,
+        BenchmarkIterationCounts.Damage,
         () => verifyCells(DamageProducer.forTransition(cellsBefore, cellsAfter)),
         () => DamageProducer.forTransition(cellsBefore, cellsAfter)
       )

@@ -22,7 +22,60 @@ Scenarios cover:
 - Markdown preview and inline-lens rendering
 - visible animation tick advancement
 
-This remains a manual comparison tool. CI runs correctness tests but has no absolute timing gate.
+This remains a manual comparison tool for local before/after investigation. CI additionally runs this harness on every
+push/PR and gates on it: `scripts/check_perf_regression.py` compares the run's p50 against a stored baseline and
+fails the build when a benchmark both exceeds the ratio threshold (default 2x) and moves by more than an absolute
+p50 delta floor (default 0.05ms) -- see that script's module docstring for the full rationale, including why both
+guards are required together.
+
+## Iteration-count derivation: false-positive audit -- 2026-09-18
+
+An audit of CI's regression gate (`scripts/check_perf_regression.py`, #1453/#1503) found five spurious "regression"
+flags across recent runs, all on benchmarks in the `reducer.*`, `damage.*`, `lsp.framer.large_batch`, and
+`render.markdown.inline_lens` families -- the CI job's own harness runs are the only historical p50 data this
+project retains (the raw per-run CSVs are not archived beyond CI's artifact retention window), so this derivation
+instead measures the same effect directly: twelve local `PerformanceBenchmarks` runs under `xvfb-run`, on the same
+class of shared, low-core-count CPU the CI runner uses -- six at each family's previous iteration count, six at the
+candidate count -- comparing each scenario's own run-to-run p50 coefficient of variation (CV) and max/min spread.
+
+Before (previous counts: `reducer.*` 20, `damage.*` 30, `lsp.framer.large_batch` 12, `render.markdown.inline_lens` 8):
+
+| Scenario | mean p50 (ms) | CV | max/min spread |
+| --- | ---: | ---: | ---: |
+| `reducer.multi_cursor_move` (worst in family) | 0.084 | 23.72% | 1.74x |
+| `damage.single_char_short_line.rows` (worst in family) | 0.005 | 6.99% | 1.23x |
+| `lsp.framer.large_batch` | 0.826 | 6.43% | 1.22x |
+| `render.markdown.inline_lens` | 1.374 | 1.46% | 1.04x |
+
+After (candidate counts: `reducer.*` 60, `damage.*` 60, `lsp.framer.large_batch` 48, `render.markdown.inline_lens` 24):
+
+| Scenario | mean p50 (ms) | CV | max/min spread |
+| --- | ---: | ---: | ---: |
+| `reducer.normal_editing` (worst in family; `multi_cursor_move` fell to 0.58% CV / 1.02x) | 0.014 | 11.59% | 1.38x |
+| `damage.single_char_short_line.cells` (worst in family) | 0.007 | 2.85% | 1.10x |
+| `lsp.framer.large_batch` | 0.760 | 5.25% | 1.16x |
+| `render.markdown.inline_lens` | 1.396 | 1.83% | 1.06x |
+
+None of the twelve runs, at either the old or new counts, pushed any scenario's max/min spread to 2x on its own --
+these are the *worst-case within-family* scenarios, not proof that a real baseline-vs-current comparison could never
+land two unlucky draws far enough apart to clear the ratio gate. What the data shows is that the most volatile
+scenarios got markedly less volatile (`reducer.multi_cursor_move`'s 23.7% CV, traced to
+`BenchmarkRunner.calibrate`'s batch-size doubling locking in an unlucky batch size for an entire run, fell to 0.58%),
+while a few small-absolute-magnitude scenarios (`reducer.normal_editing` at ~0.014ms mean) still show real
+percentage swings that a 3x-4x iteration bump does not fully remove -- their absolute swings stay in the thousandths
+of a millisecond, which is exactly what `check_perf_regression.py --min-regression-delta-ms` (default 0.05ms) exists
+to absorb. The two changes are a matched pair: iteration counts reduce how often a scenario's own noise gets close
+to the ratio gate, and the absolute-delta floor stops whatever noise remains from being read as a regression on
+benchmarks too small in absolute terms for a ratio to mean anything. Full per-family reasoning, including why
+`damage.*` and `render.markdown.inline_lens` use one count for their whole family while `reducer.*`'s ten scenarios
+needed a single shared count sized to their worst case, is in
+`src/test/scala/com/serenity/perf/BenchmarkIterationCounts.scala`.
+
+**CI job runtime impact:** the bump adds the extra iterations' own p50 cost across all touched scenarios -- computed
+from the "before" table above, roughly 0.5s of pure added computation. Measured end-to-end (the `Test/runMain`
+step's own wall-clock time, six runs each side, JIT/sbt already warm): before averaged ~31s/run, after averaged
+~39s/run, so call it a ~8s increase to that one CI step, comfortably inside the run-to-run noise the ~4-minute perf
+job already has from checkout, dependency resolution, and Xvfb setup on shared runners.
 
 ## Repeatable before/after workflow
 
