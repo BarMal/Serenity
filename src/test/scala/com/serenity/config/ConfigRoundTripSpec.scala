@@ -236,7 +236,14 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     // CompanionCharacter has exactly one bundled value today (the placeholder sprite sheet), so there is no other
     // value `mutated` could move this field to -- CompanionCharacterSpec covers fromConfigKey/id round-tripping
     // directly instead.
-    "companionSpriteConfig.character"
+    "companionSpriteConfig.character",
+    // `AnimationConfig.curve` (issues #1082/#1083): nothing in the settings surface can choose a curve yet (see
+    // `ConfigFileFormat`/`ConfigGroups.animationEntries`, which only ever write a preset name or `steps`/
+    // `duration_ms`) -- wiring a curve picker into settings is separate follow-up work, not part of adding the
+    // primitive. `editorConfig.characterAnimation`'s own `.curve` doesn't show up here at all: its default is `None`
+    // rather than a populated `AnimationConfig`, so this suite's `defaults` map has no leaf for it to compare against.
+    "surfaceConfig.commandRunnerAnimation.value.curve",
+    "surfaceConfig.uiAnimation.value.curve"
   )
 
   private def leafValues(config: AppConfig): Map[String, Any] =

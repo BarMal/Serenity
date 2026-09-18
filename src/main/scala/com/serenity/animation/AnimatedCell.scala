@@ -7,13 +7,14 @@ final case class ColorTimeline(
     endColor: Color,
     steps: Int,
     delayFrames: Int = 0,
-    currentFrame: Int = 0
+    currentFrame: Int = 0,
+    curve: EasingCurve = EasingCurve.Linear
 ):
 
   def currentColor: Option[Color] =
     if steps <= 0 then None
     else if currentFrame < delayFrames.max(0) then Some(startColor)
-    else RgbInterpolator.interpolateRgbaAt(startColor, endColor, steps, currentFrame - delayFrames.max(0))
+    else RgbInterpolator.interpolateRgbaAt(startColor, endColor, steps, currentFrame - delayFrames.max(0), curve)
 
   def advance: ColorTimeline =
     copy(currentFrame = currentFrame + 1)
@@ -99,13 +100,14 @@ object AnimatedCell:
     startColor: Color,
     endColor: Color,
     steps: Int,
-    delayFrames: Int = 0
+    delayFrames: Int = 0,
+    curve: EasingCurve = EasingCurve.Linear
   ): AnimatedCell =
     AnimatedCell(
       content = Some(char),
       foregroundSteps = List.empty,
       backgroundSteps = List.empty,
       foregroundAnimation = Option.when(steps > 0)(
-        ColorTimeline(startColor, endColor, steps, delayFrames.max(0))
+        ColorTimeline(startColor, endColor, steps, delayFrames.max(0), curve = curve)
       )
     )

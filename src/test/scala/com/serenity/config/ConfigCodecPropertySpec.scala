@@ -80,7 +80,18 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
     "inputConfig.focusedKeymapConfig.peek.bindings",
     // CompanionCharacter has exactly one bundled value today (the placeholder sprite sheet), so a generator has
     // nothing else to pick -- CompanionCharacterSpec covers fromConfigKey/id round-tripping directly instead.
-    "companionSpriteConfig.character"
+    "companionSpriteConfig.character",
+    // `AnimationConfig.curve` (issues #1082/#1083): the text config format only ever writes a preset name
+    // (quick/smooth/subtle) or, under "custom", `steps`/`duration_ms` -- there is no `animation.curve` key in the
+    // schema, because nothing in the settings surface can choose a curve yet (wiring a curve picker into settings is
+    // separate follow-up work, not part of adding the primitive). `genAnimationConfig` correctly never varies it, so
+    // there is nothing to lose on a round trip either -- see `EasingSpec`/`TweenSpec`/`ColorTimelineSpec` for this
+    // field's own coverage. Same reasoning for the other two places an `AnimationConfig` sits directly on the config
+    // tree (rather than buried in the `motionConfiguration` families map, which is compared as a single opaque
+    // value and so raises no leaf path of its own here).
+    "editorConfig.characterAnimation.value.curve",
+    "surfaceConfig.commandRunnerAnimation.value.curve",
+    "surfaceConfig.uiAnimation.value.curve"
   )
 
   /** Every field of the config tree, by path.

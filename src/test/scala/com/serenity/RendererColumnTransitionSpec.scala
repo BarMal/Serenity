@@ -2,7 +2,7 @@ package com.serenity
 
 import java.awt.Font
 
-import com.serenity.animation.{ScalarTimeline, TransitionDirection}
+import com.serenity.animation.{EasingCurve, Tween, TransitionDirection}
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -75,7 +75,7 @@ class RendererColumnTransitionSpec extends AnyFlatSpec with Matchers:
     val context           = renderContext(surface)
     val (buf, activeSnap) = activeSnapshot(state, context)
     val transition = ColumnTransitionState(
-      timeline = ScalarTimeline(steps = 4),
+      tween = Tween(start = 0.0, end = 1.0, curve = EasingCurve.Linear, steps = 4),
       direction = TransitionDirection.RightToLeft,
       previousTopLine = 0,
       previousTopVisualLine = 0
@@ -93,7 +93,7 @@ class RendererColumnTransitionSpec extends AnyFlatSpec with Matchers:
     val context           = renderContext(surface)
     val (buf, activeSnap) = activeSnapshot(state, context)
     val transition = ColumnTransitionState(
-      timeline = ScalarTimeline(steps = 1, currentFrame = 1),
+      tween = Tween(start = 0.0, end = 1.0, curve = EasingCurve.Linear, steps = 1, currentFrame = 1),
       direction = TransitionDirection.RightToLeft,
       previousTopLine = 0,
       previousTopVisualLine = 0
@@ -115,7 +115,13 @@ class RendererColumnTransitionSpec extends AnyFlatSpec with Matchers:
       val ctx     = renderContext(surface)
       val steps   = 4
       val transition = ColumnTransitionState(
-        timeline = ScalarTimeline(steps = steps, currentFrame = math.round(progress * steps).toInt),
+        tween = Tween(
+          start = 0.0,
+          end = 1.0,
+          curve = EasingCurve.Linear,
+          steps = steps,
+          currentFrame = math.round(progress * steps).toInt
+        ),
         direction = TransitionDirection.RightToLeft,
         previousTopLine = 0,
         previousTopVisualLine = 0

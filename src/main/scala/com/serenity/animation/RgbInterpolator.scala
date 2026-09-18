@@ -22,14 +22,20 @@ object RgbInterpolator:
           new Color(r, g, b, a)
       }.toList
 
-  def interpolateRgbaAt(startColor: Color, endColor: Color, steps: Int, step: Int): Option[Color] =
+  def interpolateRgbaAt(
+    startColor: Color,
+    endColor: Color,
+    steps: Int,
+    step: Int,
+    curve: EasingCurve = EasingCurve.Linear
+  ): Option[Color] =
     if steps <= 0 || step < 0 || step >= steps then None
     else if steps == 1 then Some(endColor)
     else if startColor == endColor then Some(startColor)
     else if step == 0 then Some(startColor)
     else if step == steps - 1 then Some(endColor)
     else
-      val t = step.toDouble / (steps - 1).toDouble
+      val t = curve(step.toDouble / (steps - 1).toDouble)
       Some(
         new Color(
           interpolateComponent(startColor.getRed, endColor.getRed, t),

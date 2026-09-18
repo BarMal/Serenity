@@ -68,3 +68,43 @@ class RgbInterpolatorSpec extends AnyFlatSpec with Matchers:
 
     interpolated.forall(_.getAlpha == 255) should be(true)
   }
+
+  "RgbInterpolator.interpolateRgbaAt" should "default to Linear, unchanged from before curves existed" in {
+    val startColor = new Color(0, 0, 0)
+    val endColor   = new Color(100, 100, 100)
+
+    RgbInterpolator.interpolateRgbaAt(startColor, endColor, steps = 5, step = 2) shouldEqual
+      RgbInterpolator.interpolateRgbaAt(startColor, endColor, steps = 5, step = 2, curve = EasingCurve.Linear)
+  }
+
+  it should "apply the given curve to the normalized t before interpolating components" in {
+    val startColor = new Color(0, 0, 0)
+    val endColor   = new Color(100, 0, 0)
+
+    // steps=3, step=1 -> linear t = 0.5; EaseIn(0.5) = 0.125
+    val eased = RgbInterpolator.interpolateRgbaAt(startColor, endColor, steps = 3, step = 1, curve = EasingCurve.EaseIn)
+
+    eased.map(_.getRed) shouldBe Some(math.round(100 * 0.125).toInt)
+  }
+
+  it should "still return the exact start/end colors at the first/last step under a non-linear curve" in {
+    val startColor = new Color(10, 20, 30)
+    val endColor   = new Color(200, 150, 100)
+
+    RgbInterpolator.interpolateRgbaAt(
+      startColor,
+      endColor,
+      steps = 4,
+      step = 0,
+      curve = EasingCurve.EaseInOut
+    ) shouldEqual
+      Some(startColor)
+    RgbInterpolator.interpolateRgbaAt(
+      startColor,
+      endColor,
+      steps = 4,
+      step = 3,
+      curve = EasingCurve.EaseInOut
+    ) shouldEqual
+      Some(endColor)
+  }
