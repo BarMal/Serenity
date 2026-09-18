@@ -14,9 +14,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Locks in the per-family iteration counts derived in `BenchmarkIterationCounts` -- a benchmark's `iterations` field
-  * silently drifting back to a noisy count (via a misplaced literal, or a new scenario added by copy-paste from the
-  * old value) would reopen the exact spurious-regression risk that audit measured, with no other test able to catch
-  * it.
+  * silently drifting back to a noisy count (via a misplaced literal, or a new scenario added by copy-paste from the old
+  * value) would reopen the exact spurious-regression risk that audit measured, with no other test able to catch it.
   */
 class BenchmarkIterationsSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
@@ -54,7 +53,7 @@ class BenchmarkIterationsSpec extends AnyFlatSpec with Matchers:
     * spec runs under plain `sbt test` (headless, no Xvfb) rather than only under the CI job that has one.
     */
   private def reducerFixtureBenchmarks(): List[BenchmarkRunner.Benchmark] =
-    val findText = largeFindDocument(matches = 12_000)
+    val findText  = largeFindDocument(matches = 12_000)
     val findState = editorState(findText, None)
     val editingState = findState.copy(persisted =
       findState.persisted.copy(buffers =
