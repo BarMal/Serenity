@@ -1,7 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.animation.Interpolator.given
-import com.serenity.animation.{EasingCurve, Tween, TransitionDirection}
+import com.serenity.animation.{EasingCurve, TransitionDirection, Tween}
 
 /** Column-based document layout (issue #1338, Phase 1 animation): mid-flight state for the transition painted between
   * one column's content and the next, keyed by the buffer whose active column just moved (`Runtime.columnTransitions`).

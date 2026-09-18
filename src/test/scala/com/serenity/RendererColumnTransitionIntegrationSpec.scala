@@ -2,7 +2,7 @@ package com.serenity
 
 import java.awt.Font
 
-import com.serenity.animation.{EasingCurve, Tween, TransitionDirection}
+import com.serenity.animation.{EasingCurve, TransitionDirection, Tween}
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*

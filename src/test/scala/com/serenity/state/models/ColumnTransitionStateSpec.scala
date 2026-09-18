@@ -1,6 +1,6 @@
 package com.serenity.state.models
 
-import com.serenity.animation.{EasingCurve, Tween, TransitionDirection}
+import com.serenity.animation.{EasingCurve, TransitionDirection, Tween}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

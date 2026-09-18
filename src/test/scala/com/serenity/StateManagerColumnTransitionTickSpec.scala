@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.{EasingCurve, Tween, TransitionDirection}
+import com.serenity.animation.{EasingCurve, TransitionDirection, Tween}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.ColumnTransitionState
