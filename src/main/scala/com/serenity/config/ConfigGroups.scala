@@ -71,11 +71,12 @@ object ConfigGroups:
       val family_ = settings.families(family)
       val prefix  = s"$motionFamilyPrefix${family.configKey}"
       val speedScale = family match
-        case MotionFamily.EditorText      => surface.editorTextTransitionSpeedScale.getOrElse(family_.speedScale)
-        case MotionFamily.CommandSurfaces => surface.commandRunnerTransitionSpeedScale.getOrElse(family_.speedScale)
-        case MotionFamily.UiTransitions   => surface.uiTransitionSpeedScale.getOrElse(family_.speedScale)
-        case MotionFamily.Cursor          => surface.cursorTransitionSpeedScale.getOrElse(family_.speedScale)
-        case MotionFamily.PinnedPanels    => family_.speedScale
+        case MotionFamily.EditorText        => surface.editorTextTransitionSpeedScale.getOrElse(family_.speedScale)
+        case MotionFamily.CommandSurfaces   => surface.commandRunnerTransitionSpeedScale.getOrElse(family_.speedScale)
+        case MotionFamily.UiTransitions     => surface.uiTransitionSpeedScale.getOrElse(family_.speedScale)
+        case MotionFamily.Cursor            => surface.cursorTransitionSpeedScale.getOrElse(family_.speedScale)
+        case MotionFamily.PinnedPanels      => family_.speedScale
+        case MotionFamily.ColumnTransitions => family_.speedScale
       val scopedTransitions =
         if family != MotionFamily.PinnedPanels then Nil
         else

@@ -677,7 +677,8 @@ object AppRuntime:
     * overlay path. Character-reveal animations paint into document glyphs, and a theme transition cross-fades every
     * visible glyph/background colour (see RendererEntryPoints.withEffectiveTheme) -- both require the full canvas.
     * Surface animations (command palette, panel fades) are drawn through the same overlay-scene machinery as full
-    * renders, not the cursor-only path, so they need it too.
+    * renders, not the cursor-only path, so they need it too. A column-to-column sweep (issue #1338) repaints the whole
+    * pane's content for as long as it is mid-flight, for the same reason.
     *
     * The retired window sitter (issue #934 v2) used to be the one exception here: its glyph lived entirely in the
     * window chrome and never touched the canvas, so `canStandDownToCursorOnly` could skip a full repaint while it alone
@@ -692,7 +693,8 @@ object AppRuntime:
   ): Boolean =
     state.persisted.buffers.keys.exists(id => bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
       state.runtime.themeTransition.isDefined ||
-      state.runtime.surfaceAnimations.nonEmpty
+      state.runtime.surfaceAnimations.nonEmpty ||
+      state.runtime.columnTransitions.nonEmpty
 
   private[serenity] def describeStateForDiagnostics(state: AppState): String =
     val viewport   = state.runtime.viewportSize.map(size => s"${size.width}x${size.height}").getOrElse("unknown")

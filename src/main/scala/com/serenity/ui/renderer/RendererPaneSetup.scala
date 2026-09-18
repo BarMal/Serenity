@@ -135,16 +135,30 @@ object RendererPaneSetup:
     val panelWidthPx         = contentRect.width * context.cellMetrics.charWidth
     val panelHeightPx        = contentRect.height * context.cellMetrics.lineHeight
     val bufferMetrics        = CellMetrics.fromFont(bufferFont)
+    val surfaceConfig        = state.persisted.config.surfaceConfig
+    // Column-based document layout (issue #1338): narrows the viewport (and so `baseViewport.visibleColumns`) to one
+    // column's width, the same math `LayoutEngine.columnWidthCells` uses, whenever column mode and word wrap are both
+    // on -- otherwise this is exactly the three-argument overload every pane used before, so off-path rendering is
+    // unaffected.
     val baseViewport =
       LayoutEngine.updateBufferViewportDimensions(
         buffer,
         contentRect,
-        state.persisted.config.surfaceConfig.wordWrapEnabled
+        surfaceConfig.wordWrapEnabled,
+        columnModeEnabled = surfaceConfig.columnModeEnabled,
+        columnTargetWidthCells = surfaceConfig.columnTargetWidthCells,
+        columnGap = surfaceConfig.columnGap
       )
+    val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
     val fontRenderContext =
       context.surface.text.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
     val visibleColumns =
-      if bufferFont == context.codeFont then baseViewport.visibleColumns
+      // Column mode's `baseViewport.visibleColumns` is already the authoritative column width in cells (the same
+      // value `CursorViewport.adjustForCursorColumnMode`'s snapping assumes) -- the measured-font overscan estimate
+      // below answers a different question ("how many columns of this proportional font fit the whole pane") and
+      // would disagree with it, so it is skipped entirely while a column is what is being wrapped/painted.
+      if columnModeActive then baseViewport.visibleColumns
+      else if bufferFont == context.codeFont then baseViewport.visibleColumns
       else visibleColumnsFor(bufferFont, fontRenderContext, panelWidthPx, baseViewport.visibleColumns)
     val visibleLines = math.max(1, panelHeightPx / math.max(1, bufferMetrics.lineHeight))
     val sizedViewport = baseViewport.copy(
@@ -158,7 +172,7 @@ object RendererPaneSetup:
     )
     val leftColumn =
       if visibleColumns == baseViewport.visibleColumns then baseViewport.leftColumn
-      else renderedLeftColumn(buffer, scrollViewport, state.persisted.config.surfaceConfig.wordWrapEnabled)
+      else renderedLeftColumn(buffer, scrollViewport, surfaceConfig.wordWrapEnabled)
     val renderedViewport = sizedViewport.copy(
       leftColumn = leftColumn
     )
@@ -166,27 +180,66 @@ object RendererPaneSetup:
       viewport = renderedViewport
     )
     context.surface.text.setFont(bufferFont)
+    val cellMetricsForSnapshot = if hasFontRenderContext then Some(bufferMetrics) else Some(context.cellMetrics)
+    val proseScale             = com.serenity.ui.theme.RichTextStyling.proseZoom(bufferFont.getSize2D)
     // A surface with a real FontRenderContext keeps deriving cell-based advances from the buffer's own font, same as
     // always. A surface with none (a terminal, #1105) has no real font metrics to derive from at all -- its own
     // declared `context.cellMetrics` (TUI's CellMetricsOne, 1 pixel == 1 terminal cell) is the only legitimate scale,
     // so this is what must reach the cell-based layout path instead of `TextLayoutSnapshot` re-deriving
     // `CellMetrics.fromFont(bufferFont)` (a real AWT measurement of a font this surface never actually draws) (#1215).
-    val snapshot = TextLayoutSnapshot.fromBuffer(
-      renderBuffer,
-      panelWidthPx,
-      bufferFont,
-      fontRenderContext,
-      wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled,
-      cellMetricsOverride = if hasFontRenderContext then Some(bufferMetrics) else Some(context.cellMetrics),
-      // #1215: forces the cell path during construction (not just the flag below) -- otherwise a "monospaced" font
-      // whose measured-vs-cell auto-detection trips on this environment's own font-rendering quirks would still bake
-      // real (and here, meaningless -- #1105) measured advances into the snapshot, discarding `context.cellMetrics`.
-      forceCellLayout = !hasFontRenderContext,
-      // Prose zoom for rich-text runs: the buffer's text-font size relative to the 12pt authored baseline. Its glyph
-      // sizes (and thus advances/heights) scale with the Prose Font Size setting; unused for code (no rich runs).
-      proseScale = com.serenity.ui.theme.RichTextStyling.proseZoom(bufferFont.getSize2D)
-    )
+    val snapshot =
+      if columnModeActive then
+        // Column-based document layout (issue #1338, Phase 1 rendering): wraps at the (narrower) column's own width
+        // and paints only the active column's chunk of visual lines -- `renderedViewport.visibleColumns` is already
+        // that column's width in cells (from the column-aware `baseViewport` above), so its pixel width is exactly
+        // what `fromBufferColumn` should wrap at.
+        val columnWidthPx = math.max(1, renderedViewport.visibleColumns * context.cellMetrics.charWidth)
+        TextLayoutSnapshot.fromBufferColumn(
+          renderBuffer,
+          columnWidthPx,
+          bufferFont,
+          fontRenderContext,
+          cellMetricsOverride = cellMetricsForSnapshot,
+          forceCellLayout = !hasFontRenderContext,
+          proseScale = proseScale
+        )
+      else
+        TextLayoutSnapshot.fromBuffer(
+          renderBuffer,
+          panelWidthPx,
+          bufferFont,
+          fontRenderContext,
+          wordWrapEnabled = surfaceConfig.wordWrapEnabled,
+          cellMetricsOverride = cellMetricsForSnapshot,
+          // #1215: forces the cell path during construction (not just the flag below) -- otherwise a "monospaced"
+          // font whose measured-vs-cell auto-detection trips on this environment's own font-rendering quirks would
+          // still bake real (and here, meaningless -- #1105) measured advances into the snapshot, discarding
+          // `context.cellMetrics`.
+          forceCellLayout = !hasFontRenderContext,
+          proseScale = proseScale
+        )
     if hasFontRenderContext then snapshot else snapshot.copy(usesMeasuredLayout = false)
+
+  /** Column-based document layout (issue #1338, Phase 1 animation): the snapshot for a column OTHER than the buffer's
+    * own current one -- anchored at `topLine`/`topVisualLine` instead of `buffer.viewport`'s -- used by
+    * `RendererColumnTransition` to rebuild the outgoing column's content for as long as it is still mid-sweep.
+    * Delegates to [[snapshotForBuffer]]'s own column-aware sizing, so the two columns are always measured identically;
+    * callers only ever use this while `columnModeEnabled && wordWrapEnabled`, same as the transition itself requires.
+    */
+  def snapshotForBufferColumnAt(
+    buffer: Buffer,
+    topLine: Int,
+    topVisualLine: Int,
+    contentRect: LayoutRect,
+    state: AppState,
+    context: RenderContext
+  ): TextLayoutSnapshot =
+    snapshotForBuffer(
+      buffer.copy(viewport = buffer.viewport.copy(topLine = topLine, topVisualLine = topVisualLine)),
+      contentRect,
+      state,
+      context
+    )
 
   private def visibleColumnsFor(
     font: Font,

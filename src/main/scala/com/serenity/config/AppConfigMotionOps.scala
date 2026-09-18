@@ -282,6 +282,15 @@ object AppConfigMotionOps:
       val motion = appConfig.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
       Option.when(motion.enabled)(AppConfig.scaledAnimation(motion.animation, motion.speedScale)).flatten
 
+    /** Column-to-column sweep timing (issue #1338, Phase 1 animation) after applying the effective column-transitions
+      * motion speed -- `None` when the family is disabled (including by accessibility, or under `MotionPreset.Reduced`,
+      * both already folded into `effectiveMotionConfiguration` by `MotionConfig.effective`), which callers read as
+      * "snap instantly, no animation."
+      */
+    def scaledColumnTransitionAnimation: Option[AnimationConfig] =
+      val motion = appConfig.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.ColumnTransitions)
+      Option.when(motion.enabled)(AppConfig.scaledAnimation(motion.animation, motion.speedScale)).flatten
+
     def withEditorInsertionTransitionKind(kind: TransitionKind): AppConfig =
       appConfig.updateAuthoritativeMotion(_.copy(editorInsertionTransitionKind = kind)) { configuration =>
         updateMotionFamily(configuration, MotionFamily.EditorText)(_.copy(transitionKind = kind))

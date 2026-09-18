@@ -19,6 +19,10 @@ final case class Runtime(
     nextSurfaceId: Int = 0,
     themeTransition: Option[ThemeTransition] = None,
     surfaceAnimations: Map[SurfaceId, SurfaceAnimationState] = Map.empty,
+    // Column-based document layout (issue #1338, Phase 1 animation): the in-flight column-to-column transition for
+    // each buffer whose active column just moved, if `MotionFamily.ColumnTransitions` is enabled. See
+    // `ColumnTransitionState`'s doc comment for who seeds and advances it.
+    columnTransitions: Map[BufferId, ColumnTransitionState] = Map.empty,
     clipboard: Option[String] = None,
     focusHistory: List[Focus] = List.empty,
     navigation: NavigationHistory = NavigationHistory(),

@@ -407,3 +407,39 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
       .family(com.serenity.config.MotionFamily.EditorText)
       .enabled shouldBe false
   }
+
+  // Column-based document layout (issue #1338, Phase 1 animation): `ColumnTransitions` cancels the same way every
+  // other motion family does when accessibility turns it off mid-flight.
+  it should "clear an in-flight column transition when motion accessibility turns ColumnTransitions off" in {
+    val stateManager = createStateManager()
+    val bufferId     = com.serenity.state.models.BufferId(0)
+    stateManager
+      .updateState(state =>
+        state.copy(runtime =
+          state.runtime.copy(columnTransitions =
+            Map(
+              bufferId -> com.serenity.state.models.ColumnTransitionState(
+                timeline = com.serenity.animation.ScalarTimeline(steps = 4),
+                direction = com.serenity.animation.TransitionDirection.RightToLeft,
+                previousTopLine = 0,
+                previousTopVisualLine = 0
+              )
+            )
+          )
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.commandExecutor
+      .executeCommand(
+        Command.typed(
+          "motion-accessibility",
+          "Set motion accessibility",
+          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(MotionAccessibility.Off))),
+          CommandCategory.Settings
+        )
+      )
+      .unsafeRunSync()
+
+    stateManager.getCurrentState.unsafeRunSync().runtime.columnTransitions shouldBe empty
+  }

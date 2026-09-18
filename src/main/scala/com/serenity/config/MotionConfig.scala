@@ -24,6 +24,12 @@ enum MotionFamily(val configKey: String):
   case CommandSurfaces extends MotionFamily("command_surfaces")
   case PinnedPanels    extends MotionFamily("pinned_panels")
   case UiTransitions   extends MotionFamily("ui_transitions")
+  // Column-based document layout (issue #1338, Phase 1 animation): the transition painted between one column's
+  // content and the next when `ColumnLeft`/`ColumnRight` moves the active column. A genuinely new family rather than
+  // folded into `EditorText` or `UiTransitions` -- it has its own on/off switch, speed and transition-kind, exactly
+  // like every sibling family, and nothing about it is really "editor text" (no glyphs change) or a generic UI
+  // transition (it is specific to column-mode paging).
+  case ColumnTransitions extends MotionFamily("column_transitions")
 
 /** Motion policy for one family before accessibility policy is applied.
   *
@@ -165,6 +171,14 @@ object MotionConfig:
           transitionKind = TransitionKind.Fade,
           animation = uiAnimation,
           speedScale = config.legacyUiTransitionSpeedScale
+        ),
+        // No legacy field mirrors this one (it postdates the legacy per-family fields entirely), so it always takes
+        // the baseline animation and a neutral 1.0 speed scale -- a directional sweep reads as the natural shape for
+        // a page-to-page transition (see `AnimationChoreography`/`RendererColumnTransition` for how it is lowered).
+        MotionFamily.ColumnTransitions -> MotionFamilyConfig(
+          transitionKind = TransitionKind.DirectionalSweep,
+          animation = base,
+          speedScale = 1.0
         )
       )
     )

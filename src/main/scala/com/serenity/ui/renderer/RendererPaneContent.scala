@@ -117,6 +117,14 @@ object RendererPaneContent:
             annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty, SemanticTokensAvailability.Pending)),
             dirtyRows
           )
+          // Column-based document layout (issue #1338, Phase 1 animation): while a column-to-column sweep is
+          // mid-flight for this buffer, paint the outgoing column's receding sliver on top of the incoming column's
+          // content `renderBufferContent` just painted in full. Skipped for the markdown lens, whose content isn't
+          // plain wrapped text to begin with.
+          if !RendererMarkdownLens.isInlineMarkdownLens(buf, state) then
+            state.runtime.columnTransitions.get(buf.id).foreach { transition =>
+              RendererColumnTransition.render(buf, contentRect, state, context, snap, transition)
+            }
         }
       case None =>
         RendererStartPage.renderEmptyPane(contentRect, state.persisted.theme, context)

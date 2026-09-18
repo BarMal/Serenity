@@ -100,3 +100,48 @@ class TextLayoutSnapshotColumnChunkingSpec extends AnyFlatSpec with Matchers:
     chunks.length shouldBe 1
     chunks.head.map(_.bufferLine) shouldBe (0 until 8).toList
   }
+
+  behavior of "TextLayoutSnapshot.fromBufferColumn"
+
+  it should "produce a snapshot showing only the active column's chunk of visual lines" in {
+    val buffer = bufferOfLines(count = 30, visibleLines = 8)
+
+    val snapshot = TextLayoutSnapshot.fromBufferColumn(
+      buffer,
+      columnWidthPx = 2000,
+      font = font,
+      cellMetricsOverride = Some(CellMetrics.cellUnit),
+      forceCellLayout = true
+    )
+
+    snapshot.visualLines.map(_.bufferLine) shouldBe (0 until 8).toList
+    snapshot.panelWidthPx shouldBe 2000
+  }
+
+  it should "start from the viewport's own topLine/topVisualLine, matching columnChunksForBuffer's first chunk" in {
+    val buffer = bufferOfLines(count = 30, visibleLines = 8, topLine = 16, topVisualLine = 0)
+
+    val snapshot = TextLayoutSnapshot.fromBufferColumn(
+      buffer,
+      columnWidthPx = 2000,
+      font = font,
+      cellMetricsOverride = Some(CellMetrics.cellUnit),
+      forceCellLayout = true
+    )
+
+    snapshot.visualLines.map(_.bufferLine) shouldBe (16 until 24).toList
+  }
+
+  it should "produce a shorter final chunk when the document runs out of lines" in {
+    val buffer = bufferOfLines(count = 20, visibleLines = 8, topLine = 16)
+
+    val snapshot = TextLayoutSnapshot.fromBufferColumn(
+      buffer,
+      columnWidthPx = 2000,
+      font = font,
+      cellMetricsOverride = Some(CellMetrics.cellUnit),
+      forceCellLayout = true
+    )
+
+    snapshot.visualLines.map(_.bufferLine) shouldBe (16 until 20).toList
+  }
