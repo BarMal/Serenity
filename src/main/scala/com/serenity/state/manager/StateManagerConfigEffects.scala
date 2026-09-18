@@ -124,7 +124,8 @@ final private[manager] class StateManagerConfigEffects(
             uiSurfaces = state.runtime.uiSurfaces.filterNot(isGhostOverlay),
             surfaceAnimations = Map.empty,
             companionSprite = state.runtime.companionSprite.resetTyping,
-            columnTransitions = Map.empty
+            columnTransitions = Map.empty,
+            panelGeometry = Map.empty
           )
         )
       )
@@ -161,6 +162,23 @@ final private[manager] class StateManagerConfigEffects(
         IO.unit
       case com.serenity.config.MotionFamily.ColumnTransitions =>
         stateRef.update(state => state.copy(runtime = state.runtime.copy(columnTransitions = Map.empty)))
+      case com.serenity.config.MotionFamily.PanelGeometry =>
+        // Clears every in-flight scale-in/out, then drops any close ghost that existed only for this geometry (no
+        // `surfaceAnimations` entry of its own) -- otherwise, with its geometry gone and no colour fade left to
+        // eventually remove it (`AnimationChoreography.advancePanelGeometry`'s ordinary path), it would sit in
+        // `uiSurfaces` forever.
+        stateRef.update { state =>
+          val orphanedGhostIds = state.runtime.panelGeometry.keySet.filterNot(state.runtime.surfaceAnimations.contains)
+          val ghostIdsToDrop = state.runtime.uiSurfaces.collect {
+            case UiSurface(id, SurfaceContent.GhostOverlay(_, _), _, _) if orphanedGhostIds.contains(id) => id
+          }.toSet
+          state.copy(runtime =
+            state.runtime.copy(
+              panelGeometry = Map.empty,
+              uiSurfaces = state.runtime.uiSurfaces.filterNot(surface => ghostIdsToDrop.contains(surface.id))
+            )
+          )
+        }
 
   private def clearBufferAnimations(): IO[Unit] =
     bufferAnimationsRef.update(

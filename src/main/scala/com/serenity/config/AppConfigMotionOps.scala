@@ -291,6 +291,16 @@ object AppConfigMotionOps:
       val motion = appConfig.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.ColumnTransitions)
       Option.when(motion.enabled)(AppConfig.scaledAnimation(motion.animation, motion.speedScale)).flatten
 
+    /** Panel scale-in/out timing (issue #1085 phase 1) after applying the effective `PanelGeometry` motion speed --
+      * `None` when the family is disabled (including by accessibility, or under `MotionPreset.Reduced`), which
+      * `PinnedPanelAnimations` reads as "don't seed a geometry tween, panels open/close at their full rect instantly."
+      * Independent of [[scaledUiAnimation]]/the `PinnedPanels` family's colour fade -- both may be on, off, or one
+      * without the other.
+      */
+    def scaledPanelGeometryAnimation: Option[AnimationConfig] =
+      val motion = appConfig.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.PanelGeometry)
+      Option.when(motion.enabled)(AppConfig.scaledAnimation(motion.animation, motion.speedScale)).flatten
+
     def withEditorInsertionTransitionKind(kind: TransitionKind): AppConfig =
       appConfig.updateAuthoritativeMotion(_.copy(editorInsertionTransitionKind = kind)) { configuration =>
         updateMotionFamily(configuration, MotionFamily.EditorText)(_.copy(transitionKind = kind))

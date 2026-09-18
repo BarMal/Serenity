@@ -23,6 +23,12 @@ final case class Runtime(
     // each buffer whose active column just moved, if `MotionFamily.ColumnTransitions` is enabled. See
     // `ColumnTransitionState`'s doc comment for who seeds and advances it.
     columnTransitions: Map[BufferId, ColumnTransitionState] = Map.empty,
+    // Panel scale-in/out (issue #1085 phase 1): the in-flight grow/shrink geometry for a pinned/docked panel opening
+    // or closing, if `MotionFamily.PanelGeometry` is enabled -- keyed by the real panel's `SurfaceId` while opening, or
+    // the transient close ghost's `SurfaceId` while closing. Independent of `surfaceAnimations`' colour fade, which is
+    // gated by the separate `PinnedPanels` family; see `PinnedPanelAnimations` for who seeds this and
+    // `AnimationChoreography.advancePanelGeometry` for who advances it and reclaims a completed close ghost.
+    panelGeometry: Map[SurfaceId, PanelGeometryState] = Map.empty,
     clipboard: Option[String] = None,
     focusHistory: List[Focus] = List.empty,
     navigation: NavigationHistory = NavigationHistory(),

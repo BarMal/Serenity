@@ -57,12 +57,13 @@ final private[manager] class StateManagerEditorCapability(
       hasThemeTransition   = state.runtime.themeTransition.isDefined
       hasSurfaceAnimations = state.runtime.surfaceAnimations.nonEmpty
       hasColumnTransitions = state.runtime.columnTransitions.nonEmpty
+      hasPanelGeometry     = state.runtime.panelGeometry.nonEmpty
       hasTypingActivity    = state.runtime.typingActivity.isActive
       flairLevel           = state.persisted.config.visualFlairLevel
       hasCompanionSprite   = state.persisted.config.companionSpriteConfig.enabled && flairLevel != VisualFlairLevel.Off
       stillActive <-
         if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations && !hasColumnTransitions &&
-            !hasCompanionSprite && !hasTypingActivity
+            !hasPanelGeometry && !hasCompanionSprite && !hasTypingActivity
         then IO.pure(false)
         else
           // `stateRef.modify`, not a `set` built from the `state` read above: this tick runs on the render loop's own
@@ -89,7 +90,7 @@ final private[manager] class StateManagerEditorCapability(
                   columnTransitions = updatedColumnTransitions
                 )
               )
-              val next = animations.advanceSurfaceAnimations(stateWithAdvancedBuffers)
+              val next = animations.advancePanelGeometry(animations.advanceSurfaceAnimations(stateWithAdvancedBuffers))
               (next, next)
             }
             updatedBufferAnimations <- bufferAnimationsRef.updateAndGet(_.map {
@@ -104,6 +105,7 @@ final private[manager] class StateManagerEditorCapability(
             newState.runtime.themeTransition.isDefined ||
             newState.runtime.surfaceAnimations.nonEmpty ||
             newState.runtime.columnTransitions.nonEmpty ||
+            newState.runtime.panelGeometry.nonEmpty ||
             newState.runtime.typingActivity.isActive ||
             hasCompanionSprite
     yield stillActive

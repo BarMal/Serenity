@@ -1,5 +1,6 @@
 package com.serenity.ui.renderer
 
+import com.serenity.animation.{EasingCurve, Tween}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -125,6 +126,77 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
 
     val key = SurfaceContentIdentity(surface)
     RendererFrameState.previousFloatingSurfaceRectsFor(key) shouldBe Map(surfaceId -> expectedRect)
+  }
+
+  "renderPinnedPanels" should "clip an opening docked panel to its in-flight scale-in rect" in {
+    val surfaceId = SurfaceId("diagnostics")
+    val docked = DockedPanelFixtures.dock(
+      baseState(),
+      surfaceId,
+      SurfaceContent.Diagnostics(Nil),
+      PanelPosition.Right,
+      22
+    )
+    val geometry = PanelGeometryState(
+      Tween(
+        start = LayoutRect(3, 4, 0, 6),
+        end = LayoutRect(3, 4, 22, 6),
+        curve = EasingCurve.Linear,
+        steps = 4
+      ).advance
+    )
+    val geometryRect = geometry.currentRect
+    val state        = docked.copy(runtime = docked.runtime.copy(panelGeometry = Map(surfaceId -> geometry)))
+    val surface      = new MockRenderSurface(100, 30)
+
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+
+    surface.roundRectClipCalls.map(c => LayoutRect(c.x, c.y, c.width, c.height)) should contain(geometryRect)
+  }
+
+  it should "not clip a docked panel once it has no in-flight panel geometry" in {
+    val surfaceId = SurfaceId("diagnostics")
+    val state = DockedPanelFixtures.dock(
+      baseState(),
+      surfaceId,
+      SurfaceContent.Diagnostics(Nil),
+      PanelPosition.Right,
+      22
+    )
+    val surface = new MockRenderSurface(100, 30)
+
+    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+
+    surface.roundRectClipCalls shouldBe empty
+  }
+
+  "renderFloatingPanels" should "clip a closing ghost panel to its in-flight scale-out rect" in {
+    val ghostId    = SurfaceId("ghost-outline")
+    val cachedRect = LayoutRect(2, 2, 20, 10)
+    val geometry = PanelGeometryState(
+      Tween(start = cachedRect, end = LayoutRect(2, 2, 0, 10), curve = EasingCurve.Linear, steps = 5, currentFrame = 3)
+    )
+    val geometryRect = geometry.currentRect
+    val state = baseState().copy(
+      runtime = baseState().runtime.copy(
+        uiSurfaces = List(
+          UiSurface(
+            ghostId,
+            SurfaceContent.GhostOverlay(
+              SurfaceContent.Outline(List(Symbol("example", SymbolKind.Function, Location(0, 0)))),
+              cachedRect
+            ),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+        ),
+        panelGeometry = Map(ghostId -> geometry)
+      )
+    )
+    val surface = new MockRenderSurface(100, 30)
+
+    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+
+    surface.roundRectClipCalls.map(c => LayoutRect(c.x, c.y, c.width, c.height)) should contain(geometryRect)
   }
 
   it should "forget a floating surface's remembered rect once it stops being painted" in {

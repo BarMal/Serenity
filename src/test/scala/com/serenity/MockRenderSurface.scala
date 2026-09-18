@@ -246,13 +246,20 @@ class MockRenderSurface(
 
   def roundRectShadowCalls: List[RoundRectShadowCall] = roundRectShadowCallsBuffer.toList
 
+  final case class RoundRectClipCall(x: Int, y: Int, width: Int, height: Int, arcPx: Int)
+  private val roundRectClipCallsBuffer = scala.collection.mutable.ListBuffer.empty[RoundRectClipCall]
+
   override def withRoundRectClip(
-    _x: Int,
-    _y: Int,
-    _width: Int,
-    _height: Int,
-    _arcPx: Int
-  )(render: => Unit): Unit = render
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    arcPx: Int
+  )(render: => Unit): Unit =
+    roundRectClipCallsBuffer += RoundRectClipCall(x, y, width, height, arcPx)
+    render
+
+  def roundRectClipCalls: List[RoundRectClipCall] = roundRectClipCallsBuffer.toList
 
   override def setAlpha(alpha: Float): Unit =
     currentAlpha.set(alpha)
@@ -330,6 +337,7 @@ class MockRenderSurface(
     pixelTranslationCallsBuffer.clear()
     strokeRoundRectCallsBuffer.clear()
     roundRectShadowCallsBuffer.clear()
+    roundRectClipCallsBuffer.clear()
     blurRegionCallsBuffer.clear()
     blurRegionTranslationsBuffer.clear()
     postProcessingCallsBuffer.clear()

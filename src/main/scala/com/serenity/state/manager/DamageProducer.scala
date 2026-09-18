@@ -280,6 +280,7 @@ object DamageProducer:
     if before.runtime.themeTransition != after.runtime.themeTransition ||
         before.runtime.surfaceAnimations != after.runtime.surfaceAnimations ||
         before.runtime.columnTransitions != after.runtime.columnTransitions ||
+        before.runtime.panelGeometry != after.runtime.panelGeometry ||
         before.persisted.focus != after.persisted.focus
     then Damage.Everything
     else
