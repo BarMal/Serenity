@@ -5,7 +5,7 @@ import java.awt.{Color, Font}
 import scala.concurrent.duration.FiniteDuration
 
 import cats.syntax.all.*
-import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
+import com.serenity.animation.{AnimationConfig, EasingCurve, TransitionKind, TransitionScope}
 import com.serenity.config.*
 import com.serenity.lsp.config.{LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
@@ -20,8 +20,60 @@ import io.circe.syntax.given
 given Encoder[FiniteDuration] = Encoder.encodeLong.contramap(_.toNanos)
 given Decoder[FiniteDuration] = Decoder.decodeLong.map(scala.concurrent.duration.Duration.fromNanos)
 
-given Encoder[AnimationConfig] = deriveEncoder
-given Decoder[AnimationConfig] = deriveDecoder
+// Tagged rather than derived: `EasingCurve.CubicBezier` carries data the named cases don't, so a plain
+// `deriveEncoder`/`deriveDecoder` sum-type encoding (Scala 3's default: the case name as the sole object key) would
+// work too, but this spells out the tag explicitly so a session file stays readable and the shape doesn't shift
+// silently if a future case is added with different field names.
+given Encoder[EasingCurve] = Encoder.instance {
+  case EasingCurve.Linear    => Json.obj("type" -> Json.fromString("linear"))
+  case EasingCurve.EaseIn    => Json.obj("type" -> Json.fromString("easeIn"))
+  case EasingCurve.EaseOut   => Json.obj("type" -> Json.fromString("easeOut"))
+  case EasingCurve.EaseInOut => Json.obj("type" -> Json.fromString("easeInOut"))
+  case EasingCurve.CubicBezier(p1x, p1y, p2x, p2y) =>
+    Json.obj(
+      "type" -> Json.fromString("cubicBezier"),
+      "p1x"  -> p1x.asJson,
+      "p1y"  -> p1y.asJson,
+      "p2x"  -> p2x.asJson,
+      "p2y"  -> p2y.asJson
+    )
+}
+
+given Decoder[EasingCurve] = Decoder.instance { cursor =>
+  cursor.get[String]("type").flatMap {
+    case "linear"    => Right(EasingCurve.Linear)
+    case "easeIn"    => Right(EasingCurve.EaseIn)
+    case "easeOut"   => Right(EasingCurve.EaseOut)
+    case "easeInOut" => Right(EasingCurve.EaseInOut)
+    case "cubicBezier" =>
+      for
+        p1x <- cursor.get[Double]("p1x")
+        p1y <- cursor.get[Double]("p1y")
+        p2x <- cursor.get[Double]("p2x")
+        p2y <- cursor.get[Double]("p2y")
+      yield EasingCurve.CubicBezier(p1x, p1y, p2x, p2y)
+    case other => Left(DecodingFailure(s"Unknown EasingCurve: $other", cursor.history))
+  }
+}
+
+// A manual instance rather than `deriveEncoder`/`deriveDecoder`, so that a session file written before `curve`
+// existed (issues #1082/#1083) keeps loading: `getOrElse` defaults the missing field to `EasingCurve.Linear`, the
+// same default `AnimationConfig` itself uses in code, rather than failing to decode the whole animation.
+given Encoder[AnimationConfig] = Encoder.instance { config =>
+  Json.obj(
+    "steps"         -> config.steps.asJson,
+    "totalDuration" -> config.totalDuration.asJson,
+    "curve"         -> config.curve.asJson
+  )
+}
+
+given Decoder[AnimationConfig] = Decoder.instance { cursor =>
+  for
+    steps         <- cursor.get[Int]("steps")
+    totalDuration <- cursor.get[FiniteDuration]("totalDuration")
+    curve         <- cursor.getOrElse[EasingCurve]("curve")(EasingCurve.Linear)
+  yield AnimationConfig(steps, totalDuration, curve)
+}
 
 /** Builds the codec for an enum that carries a `configKey` -- the same spelling `ConfigManager` already writes to the
   * config file. The encoder always writes `configKey`, so a value looks identical whether it came from a session file

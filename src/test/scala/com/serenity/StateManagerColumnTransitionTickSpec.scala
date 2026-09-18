@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.{ScalarTimeline, TransitionDirection}
+import com.serenity.animation.{EasingCurve, TransitionDirection, Tween}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.ColumnTransitionState
@@ -30,7 +30,7 @@ class StateManagerColumnTransitionTickSpec extends AnyFlatSpec with Matchers:
         state.runtime.copy(columnTransitions =
           Map(
             bufferId -> ColumnTransitionState(
-              timeline = ScalarTimeline(steps = steps),
+              tween = Tween(start = 0.0, end = 1.0, curve = EasingCurve.Linear, steps = steps),
               direction = TransitionDirection.RightToLeft,
               previousTopLine = 0,
               previousTopVisualLine = 0

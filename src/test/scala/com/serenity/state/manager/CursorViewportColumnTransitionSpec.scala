@@ -112,6 +112,42 @@ class CursorViewportColumnTransitionSpec extends AnyFlatSpec with Matchers:
     result.persisted.buffers(bufferId).viewport.topLine shouldBe 16
   }
 
+  // Issue #1083's `Tween.retarget`, exercised through `CursorViewport.seedColumnTransition`: the known gap this
+  // refactor fixes as a side effect (see `ColumnTransitionState`'s doc comment) is that crossing another column
+  // boundary before the current sweep finishes used to snap the sweep back to progress 0, a visible jump-cut.
+  it should "retarget an in-flight transition rather than reseeding it at progress zero when the column changes again" in {
+    val before = stateWith(bufferAt(0))
+    val afterFirstMove = before.copy(persisted =
+      before.persisted.copy(buffers = Map(bufferId -> movedTo(before.persisted.buffers(bufferId), 20)))
+    )
+    val firstResult = CursorViewport.ensureVisibleCursors(before, afterFirstMove)
+    val firstTransition =
+      firstResult.runtime.columnTransitions.getOrElse(bufferId, fail("expected a seeded column transition"))
+
+    // Advance the sweep partway, mirroring `StateManagerEditorCapability.advanceAnimationsOnTick`.
+    val midFlight = firstTransition.advance.advance
+    midFlight.progress should be > 0.0
+    midFlight.isComplete shouldBe false
+    val midFlightState = firstResult.copy(runtime =
+      firstResult.runtime.copy(columnTransitions = firstResult.runtime.columnTransitions.updated(bufferId, midFlight))
+    )
+
+    // The cursor crosses into a further column before the first sweep finishes.
+    val afterSecondMove = midFlightState.copy(persisted =
+      midFlightState.persisted.copy(buffers = Map(bufferId -> movedTo(midFlightState.persisted.buffers(bufferId), 28)))
+    )
+    val secondResult = CursorViewport.ensureVisibleCursors(midFlightState, afterSecondMove)
+
+    val retargeted =
+      secondResult.runtime.columnTransitions.getOrElse(bufferId, fail("expected a retargeted column transition"))
+    // No jump-cut: progress continues from where the in-flight sweep already was, not from zero.
+    retargeted.progress shouldBe midFlight.progress
+    retargeted.direction shouldBe firstTransition.direction
+    retargeted.previousTopLine shouldBe firstTransition.previousTopLine
+    retargeted.previousTopVisualLine shouldBe firstTransition.previousTopVisualLine
+    retargeted.isComplete shouldBe false
+  }
+
   it should "not seed a transition when column mode is off" in {
     val before = stateWith(bufferAt(0), config = _.withColumnMode(false))
     val after = before.copy(persisted =

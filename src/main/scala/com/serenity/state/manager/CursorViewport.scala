@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import com.serenity.animation.{ScalarTimeline, TransitionDirection}
+import com.serenity.animation.TransitionDirection
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
@@ -45,6 +45,12 @@ object CursorViewport:
     * (`AppConfig.scaledColumnTransitionAnimation` already folds in accessibility and the `Reduced` preset): a `None`
     * there means "snap instantly," so no transition is recorded at all -- the viewport still moves to the new column,
     * there is just nothing to animate between.
+    *
+    * If a transition for this buffer is already in flight, this retargets it (issue #1083's `Tween.retarget`) rather
+    * than reseeding at progress 0: the previous behaviour snapped the sweep back to its start whenever the cursor
+    * crossed another column boundary before the current sweep finished, a visible jump-cut. Retargeting keeps the
+    * in-flight transition's own `direction`/`previousTop*` -- the column being swept away is still the same one -- and
+    * just lets the sweep continue smoothly the rest of the way to full progress.
     */
   private def seedColumnTransition(
     bufferId: BufferId,
@@ -59,16 +65,21 @@ object CursorViewport:
       state.persisted.config.scaledColumnTransitionAnimation match
         case None => state
         case Some(animation) =>
-          val movedForward =
-            placedViewport.topLine > previousViewport.topLine ||
-              (placedViewport.topLine == previousViewport.topLine &&
-                placedViewport.topVisualLine > previousViewport.topVisualLine)
-          val transition = ColumnTransitionState(
-            timeline = ScalarTimeline(steps = animation.steps),
-            direction = if movedForward then TransitionDirection.RightToLeft else TransitionDirection.LeftToRight,
-            previousTopLine = previousViewport.topLine,
-            previousTopVisualLine = previousViewport.topVisualLine
-          )
+          val inFlight = state.runtime.columnTransitions.get(bufferId).filterNot(_.isComplete)
+          val transition = inFlight match
+            case Some(existing) => existing.retarget
+            case None =>
+              val movedForward =
+                placedViewport.topLine > previousViewport.topLine ||
+                  (placedViewport.topLine == previousViewport.topLine &&
+                    placedViewport.topVisualLine > previousViewport.topVisualLine)
+              ColumnTransitionState.seeded(
+                steps = animation.steps,
+                curve = animation.curve,
+                direction = if movedForward then TransitionDirection.RightToLeft else TransitionDirection.LeftToRight,
+                previousTopLine = previousViewport.topLine,
+                previousTopVisualLine = previousViewport.topVisualLine
+              )
           state.copy(runtime =
             state.runtime.copy(columnTransitions = state.runtime.columnTransitions.updated(bufferId, transition))
           )

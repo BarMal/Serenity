@@ -419,7 +419,12 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
           state.runtime.copy(columnTransitions =
             Map(
               bufferId -> com.serenity.state.models.ColumnTransitionState(
-                timeline = com.serenity.animation.ScalarTimeline(steps = 4),
+                tween = com.serenity.animation.Tween(
+                  start = 0.0,
+                  end = 1.0,
+                  curve = com.serenity.animation.EasingCurve.Linear,
+                  steps = 4
+                ),
                 direction = com.serenity.animation.TransitionDirection.RightToLeft,
                 previousTopLine = 0,
                 previousTopVisualLine = 0

@@ -2,7 +2,7 @@ package com.serenity
 
 import java.awt.Font
 
-import com.serenity.animation.{ScalarTimeline, TransitionDirection}
+import com.serenity.animation.{EasingCurve, TransitionDirection, Tween}
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -52,7 +52,7 @@ class RendererColumnTransitionIntegrationSpec extends AnyFlatSpec with Matchers:
       state.runtime.copy(columnTransitions =
         Map(
           bufferId -> ColumnTransitionState(
-            timeline = ScalarTimeline(steps = 4, currentFrame = 1),
+            tween = Tween(start = 0.0, end = 1.0, curve = EasingCurve.Linear, steps = 4, currentFrame = 1),
             direction = TransitionDirection.RightToLeft,
             previousTopLine = 0,
             previousTopVisualLine = 0

@@ -2,10 +2,17 @@ package com.serenity.animation
 
 import scala.concurrent.duration.FiniteDuration
 
-/** Animation configuration for list-based color interpolation system */
+/** Animation configuration for list-based color interpolation system.
+  *
+  * `curve` (issues #1082/#1083) defaults to `EasingCurve.Linear` so every existing colour animation is byte-for-byte
+  * unchanged unless a caller explicitly picks a different one -- nothing in the settings surface can do that yet
+  * (deliberately out of scope here; see `ConfigCodecPropertySpec`'s notes on this field), so today it is only ever set
+  * in code.
+  */
 final case class AnimationConfig(
     steps: Int,
-    totalDuration: FiniteDuration
+    totalDuration: FiniteDuration,
+    curve: EasingCurve = EasingCurve.Linear
 ):
   /** Calculate the tick rate in milliseconds based on total duration and steps */
   def tickRateMs: Int = (totalDuration.toMillis / steps.max(1)).toInt.max(1)
