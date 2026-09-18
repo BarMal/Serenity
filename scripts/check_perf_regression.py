@@ -6,13 +6,23 @@ runner, not a dedicated perf box, but a 3x bar (the original #1503 wiring) let a
 accidentally reintroduced O(n^2) path, a lost fast path -- through silently; 2x keeps that same noise tolerance while
 actually catching that class of regression.
 
+A regression must clear the ratio threshold AND an absolute p50 delta floor (`--min-regression-delta-ms`) before it is
+flagged. The ratio alone over-fires on benchmarks whose baseline is small in absolute terms: a false-positive audit
+found `reducer.*`, `damage.*`, `lsp.framer.large_batch`, and `render.markdown.inline_lens` flagging on baselines in
+the low single-digit milliseconds where ordinary run-to-run jitter (a few hundred microseconds on a shared CI runner)
+is itself enough to clear 2x. `--min-baseline-ms` (below) is a different guard -- it ignores a benchmark whose
+*baseline* sits at the timer-resolution floor; this floor ignores a regression whose *delta* is too small to be
+anything but noise, regardless of how large the baseline is. Both guards must pass for a ratio-flagged benchmark to
+actually fail the build.
+
 A missing baseline (a cache-cold run: cache eviction, or a branch with none yet) fails loudly by default rather than
 silently passing with nothing compared -- that silence was the second gap an audit of #1503 found. Pass
 `--allow-missing-baseline` only for the run that is meant to establish a fresh baseline (a push to master, where the
 CI workflow saves this run's results as the new baseline regardless); every other caller should leave it unset.
 
 Usage:
-    check_perf_regression.py <baseline.csv> <current.csv> [--threshold 2.0] [--allow-missing-baseline]
+    check_perf_regression.py <baseline.csv> <current.csv> [--threshold 2.0] [--min-regression-delta-ms 0.05]
+        [--allow-missing-baseline]
 
 Exit codes:
     0 - no regression past the threshold
@@ -74,6 +84,22 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.001,
         help="Ignore benchmarks whose baseline p50_ms is below this floor (default: 0.001ms = 1us)",
     )
+    # The false-positive audit (issue #1453 follow-up) found five ratio-only flags on `reducer.*`, `damage.*`,
+    # `lsp.framer.large_batch`, and `render.markdown.inline_lens` -- all benchmarks whose baseline p50 sits in the
+    # low single-digit milliseconds or below, where run-to-run jitter on a shared CI runner is itself on the order of
+    # tens to a couple hundred microseconds. 0.05ms (50us) sits above that jitter band (see the empirical multi-run
+    # analysis in docs/performance-benchmarks.md) while still catching a real regression: a benchmark would need to
+    # both clear the ratio threshold *and* move by at least 50us in absolute terms, which noise alone should not do.
+    parser.add_argument(
+        "--min-regression-delta-ms",
+        type=float,
+        default=0.05,
+        help=(
+            "Ignore a ratio-flagged regression whose absolute p50 delta (current - baseline) is below this floor "
+            "(default: 0.05ms = 50us). This is a separate guard from --min-baseline-ms: that one ignores benchmarks "
+            "with a tiny baseline, this one ignores regressions with a tiny delta regardless of the baseline size."
+        ),
+    )
     parser.add_argument(
         "--allow-missing-baseline",
         action="store_true",
@@ -120,9 +146,11 @@ def main_with_args(argv: list[str]) -> int:
         if baseline_row.p50_ms < args.min_baseline_ms:
             continue
         ratio = current_row.p50_ms / baseline_row.p50_ms
-        flag = " <-- REGRESSION" if ratio > args.threshold else ""
+        delta_ms = current_row.p50_ms - baseline_row.p50_ms
+        is_regression = ratio > args.threshold and delta_ms > args.min_regression_delta_ms
+        flag = " <-- REGRESSION" if is_regression else ""
         print(f"{name:<55} {baseline_row.p50_ms:>14.5f} {current_row.p50_ms:>14.5f} {ratio:>7.2f}x{flag}")
-        if ratio > args.threshold:
+        if is_regression:
             regressions.append((name, baseline_row.p50_ms, current_row.p50_ms, ratio))
 
     if regressions:

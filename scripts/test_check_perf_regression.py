@@ -95,6 +95,35 @@ class CheckPerfRegressionTests(unittest.TestCase):
         _write_csv(self.current_path, [("rope.search", 10.0, 12.0), ("new.scenario", 5.0, 6.0)])
         self.assertEqual(self._run([]), 0)
 
+    def test_ratio_past_threshold_but_tiny_absolute_delta_does_not_fail(self) -> None:
+        # A benchmark near the noise floor (sub-microsecond baseline) can swing past the ratio threshold on jitter
+        # alone even though the absolute cost barely moved -- e.g. 0.010ms -> 0.025ms is 2.5x but only +0.015ms. The
+        # ratio guard alone flags this as a regression; the absolute-ms-delta floor exists to catch exactly this case.
+        _write_csv(self.baseline_path, [("tiny.op", 0.010, 0.012)])
+        _write_csv(self.current_path, [("tiny.op", 0.025, 0.030)])  # 2.5x ratio, +0.015ms absolute
+        self.assertEqual(self._run(["--min-regression-delta-ms", "0.02"]), 0)
+
+    def test_ratio_past_threshold_and_absolute_delta_past_floor_fails(self) -> None:
+        _write_csv(self.baseline_path, [("real.op", 10.0, 12.0)])
+        _write_csv(self.current_path, [("real.op", 25.0, 27.0)])  # 2.5x ratio, +15ms absolute
+        self.assertEqual(self._run(["--min-regression-delta-ms", "0.02"]), 1)
+
+    def test_absolute_delta_floor_defaults_to_a_value_that_does_not_relax_existing_behaviour(self) -> None:
+        # No explicit --min-regression-delta-ms passed: the existing ratio-only regression tests above must still
+        # fail exactly as before, so the default floor must not be so large it swallows a genuine 15ms regression.
+        _write_csv(self.baseline_path, [("rope.search", 10.0, 12.0)])
+        _write_csv(self.current_path, [("rope.search", 25.0, 27.0)])  # 2.5x ratio, +15ms absolute
+        self.assertEqual(self._run([]), 1)
+
+    def test_absolute_delta_floor_is_a_separate_guard_from_min_baseline_ms(self) -> None:
+        # --min-baseline-ms ignores benchmarks with a tiny *baseline*; --min-regression-delta-ms ignores regressions
+        # with a tiny *delta* even when the baseline itself is well above the min-baseline-ms floor. A benchmark whose
+        # baseline is comfortably above min-baseline-ms can still be pure noise in absolute terms.
+        _write_csv(self.baseline_path, [("borderline.op", 1.0, 1.2)])
+        _write_csv(self.current_path, [("borderline.op", 2.5, 3.0)])  # 2.5x ratio, +1.5ms absolute
+        self.assertEqual(self._run(["--min-baseline-ms", "0.001", "--min-regression-delta-ms", "2.0"]), 0)
+        self.assertEqual(self._run(["--min-baseline-ms", "0.001", "--min-regression-delta-ms", "1.0"]), 1)
+
 
 if __name__ == "__main__":
     sys.path.insert(0, str(_MODULE_PATH.parent.parent))
