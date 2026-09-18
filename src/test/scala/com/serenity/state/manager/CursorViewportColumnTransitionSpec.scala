@@ -2,8 +2,8 @@ package com.serenity.state.manager
 
 import com.serenity.TestWorkspaceTrees
 import com.serenity.animation.TransitionDirection
-import com.serenity.config.{AppConfig, MotionAccessibility}
 import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.{AppConfig, MotionAccessibility}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
