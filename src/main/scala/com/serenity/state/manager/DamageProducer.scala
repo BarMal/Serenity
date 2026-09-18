@@ -279,6 +279,7 @@ object DamageProducer:
   private def fullRenderDamage(before: AppState, after: AppState): Damage =
     if before.runtime.themeTransition != after.runtime.themeTransition ||
         before.runtime.surfaceAnimations != after.runtime.surfaceAnimations ||
+        before.runtime.columnTransitions != after.runtime.columnTransitions ||
         before.persisted.focus != after.persisted.focus
     then Damage.Everything
     else

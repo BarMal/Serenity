@@ -59,6 +59,33 @@ final case class TextVisualLine(
   private def closer(first: TextCaretStop, second: TextCaretStop, xPx: Float): TextCaretStop =
     if math.abs(second.xPx - xPx) < math.abs(first.xPx - xPx) then second else first
 
+  /** The visible slice of `text` whose glyphs fall (at least partially) within `[minXPx, maxXPx)`, given in the same
+    * pixel frame `caretStops`' own `xPx` values use (local to this line's drawing origin), together with that slice's
+    * own starting local xPx and pixel width -- i.e. where and how wide a caller should actually draw it. Clips at the
+    * nearest grapheme boundary (`caretStops` has one entry per boundary, `text.length + 1` if none are multi-`Char`
+    * graphemes) rather than a fractional pixel cut, so no glyph is ever drawn half-formed. `None` when nothing in this
+    * line falls in the window at all, or the window itself is empty/inverted.
+    *
+    * Column-based document layout (issue #1338, Phase 1 animation): this is `RendererColumnTransition`'s sweep clip,
+    * confining a still-receding column's content to the sliver of the pane it hasn't swept out of yet. It works equally
+    * for the measured pixel path and the cell/TUI path -- both build `caretStops` the same way, just in a different
+    * unit (real pixels vs. grid cells) -- so the sweep needs no path-specific clipping logic of its own.
+    */
+  def visibleSlice(minXPx: Float, maxXPx: Float): Option[(String, Float, Float)] =
+    if caretStops.length < 2 || maxXPx <= minXPx then None
+    else
+      val kept = caretStops.indices
+        .dropRight(1)
+        .filter(i => caretStops(i + 1).xPx > minXPx && caretStops(i).xPx < maxXPx)
+      kept.headOption.map { firstIndex =>
+        val lastIndex = kept.lastOption.getOrElse(firstIndex)
+        val fromLocal = (caretStops(firstIndex).column - startColumn).max(0).min(text.length)
+        val toLocal   = (caretStops(lastIndex + 1).column - startColumn).max(0).min(text.length)
+        val startXPx  = caretStops(firstIndex).xPx
+        val endXPx    = caretStops(lastIndex + 1).xPx
+        (text.substring(fromLocal, toLocal), startXPx, endXPx - startXPx)
+      }
+
 /** The immutable geometry a vertical cursor move needs, produced once at the effect boundary and handed to the pure
   * reducer. `charWidthPx` and `panelWidthColumns` back the monospace fallbacks used when the measured layout has no
   * caret stop for a cursor or when word wrap is off.

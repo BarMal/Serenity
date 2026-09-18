@@ -123,7 +123,8 @@ final private[manager] class StateManagerConfigEffects(
             themeTransition = None,
             uiSurfaces = state.runtime.uiSurfaces.filterNot(isGhostOverlay),
             surfaceAnimations = Map.empty,
-            companionSprite = state.runtime.companionSprite.resetTyping
+            companionSprite = state.runtime.companionSprite.resetTyping,
+            columnTransitions = Map.empty
           )
         )
       )
@@ -158,6 +159,8 @@ final private[manager] class StateManagerConfigEffects(
           )
       case com.serenity.config.MotionFamily.Cursor =>
         IO.unit
+      case com.serenity.config.MotionFamily.ColumnTransitions =>
+        stateRef.update(state => state.copy(runtime = state.runtime.copy(columnTransitions = Map.empty)))
 
   private def clearBufferAnimations(): IO[Unit] =
     bufferAnimationsRef.update(

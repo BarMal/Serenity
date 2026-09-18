@@ -56,11 +56,12 @@ final private[manager] class StateManagerEditorCapability(
       )
       hasThemeTransition   = state.runtime.themeTransition.isDefined
       hasSurfaceAnimations = state.runtime.surfaceAnimations.nonEmpty
+      hasColumnTransitions = state.runtime.columnTransitions.nonEmpty
       hasTypingActivity    = state.runtime.typingActivity.isActive
       flairLevel           = state.persisted.config.visualFlairLevel
       hasCompanionSprite   = state.persisted.config.companionSpriteConfig.enabled && flairLevel != VisualFlairLevel.Off
       stillActive <-
-        if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations &&
+        if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations && !hasColumnTransitions &&
             !hasCompanionSprite && !hasTypingActivity
         then IO.pure(false)
         else
@@ -78,11 +79,14 @@ final private[manager] class StateManagerEditorCapability(
                   current.runtime.companionSprite
                     .tick(companionSpriteRandom, reducedRate = flairLevel == VisualFlairLevel.Reduced)
                 else current.runtime.companionSprite
+              val updatedColumnTransitions =
+                current.runtime.columnTransitions.view.mapValues(_.advance).toMap.filterNot(_._2.isComplete)
               val stateWithAdvancedBuffers = current.copy(
                 runtime = current.runtime.copy(
                   themeTransition = updatedTransition,
                   typingActivity = current.runtime.typingActivity.advance,
-                  companionSprite = advancedCompanionSprite
+                  companionSprite = advancedCompanionSprite,
+                  columnTransitions = updatedColumnTransitions
                 )
               )
               val next = animations.advanceSurfaceAnimations(stateWithAdvancedBuffers)
@@ -99,6 +103,7 @@ final private[manager] class StateManagerEditorCapability(
             .exists(id => updatedBufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
             newState.runtime.themeTransition.isDefined ||
             newState.runtime.surfaceAnimations.nonEmpty ||
+            newState.runtime.columnTransitions.nonEmpty ||
             newState.runtime.typingActivity.isActive ||
             hasCompanionSprite
     yield stillActive

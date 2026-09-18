@@ -1,5 +1,7 @@
 package com.serenity.state.manager
 
+import com.serenity.animation.{ScalarTimeline, TransitionDirection}
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
@@ -22,17 +24,54 @@ object CursorViewport:
         else
           buffer.editing.cursors.headOption match
             case Some(cursor) =>
-              val surfaceConfig = state.persisted.config.surfaceConfig
+              val surfaceConfig    = state.persisted.config.surfaceConfig
+              val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
               val placement =
-                if surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled then
-                  adjustForCursorColumnMode(buffer, state, cursor)
+                if columnModeActive then adjustForCursorColumnMode(buffer, state, cursor)
                 else adjustForCursor(buffer, state, cursor)
               val updatedBuffer = buffer.copy(viewport = placement)
-              state.copy(persisted =
+              val updatedState = state.copy(persisted =
                 state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
               )
+              if columnModeActive then seedColumnTransition(bufferId, buffer.viewport, placement, updatedState)
+              else updatedState
             case None => state
     }
+
+  /** Column-based document layout (issue #1338, Phase 1 animation): seeds `Runtime.columnTransitions` whenever
+    * [[adjustForCursorColumnMode]] actually moved which column is showing -- whatever moved the cursor there, not only
+    * `ColumnLeft`/`ColumnRight`, since this effect boundary has no narrower notion of "why" the cursor moved than any
+    * other placement it applies. Gated by the `ColumnTransitions` motion family
+    * (`AppConfig.scaledColumnTransitionAnimation` already folds in accessibility and the `Reduced` preset): a `None`
+    * there means "snap instantly," so no transition is recorded at all -- the viewport still moves to the new column,
+    * there is just nothing to animate between.
+    */
+  private def seedColumnTransition(
+    bufferId: BufferId,
+    previousViewport: Viewport,
+    placedViewport: Viewport,
+    state: AppState
+  ): AppState =
+    val columnChanged =
+      previousViewport.topLine != placedViewport.topLine || previousViewport.topVisualLine != placedViewport.topVisualLine
+    if !columnChanged then state
+    else
+      state.persisted.config.scaledColumnTransitionAnimation match
+        case None => state
+        case Some(animation) =>
+          val movedForward =
+            placedViewport.topLine > previousViewport.topLine ||
+              (placedViewport.topLine == previousViewport.topLine &&
+                placedViewport.topVisualLine > previousViewport.topVisualLine)
+          val transition = ColumnTransitionState(
+            timeline = ScalarTimeline(steps = animation.steps),
+            direction = if movedForward then TransitionDirection.RightToLeft else TransitionDirection.LeftToRight,
+            previousTopLine = previousViewport.topLine,
+            previousTopVisualLine = previousViewport.topVisualLine
+          )
+          state.copy(runtime =
+            state.runtime.copy(columnTransitions = state.runtime.columnTransitions.updated(bufferId, transition))
+          )
 
   def adjustForCursor(
     buffer: Buffer,
