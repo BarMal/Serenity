@@ -77,6 +77,7 @@ object ConfigGroups:
         case MotionFamily.Cursor            => surface.cursorTransitionSpeedScale.getOrElse(family_.speedScale)
         case MotionFamily.PinnedPanels      => family_.speedScale
         case MotionFamily.ColumnTransitions => family_.speedScale
+        case MotionFamily.PanelGeometry     => family_.speedScale
       val scopedTransitions =
         if family != MotionFamily.PinnedPanels then Nil
         else

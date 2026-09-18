@@ -30,6 +30,13 @@ enum MotionFamily(val configKey: String):
   // like every sibling family, and nothing about it is really "editor text" (no glyphs change) or a generic UI
   // transition (it is specific to column-mode paging).
   case ColumnTransitions extends MotionFamily("column_transitions")
+  // Panel scale-in/out (issue #1085 phase 1): a pinned/docked panel growing from a collapsed rect at its anchor edge
+  // to its full rect on open, and shrinking back on close. A genuinely new family, not folded into `PinnedPanels`'
+  // `transitionOverrides` -- it has its own on/off switch and speed, so a user can turn off the colour fade
+  // `PinnedPanels` already does while keeping this geometric grow/shrink, or vice versa (`PinnedPanelAnimations` seeds
+  // each independently). `transitionKind` here is a nominal enabled/disabled marker only: the shape of this motion
+  // (grow/shrink from the panel's docked edge) is fixed by `PanelPosition`, not chosen from `TransitionKind`'s cases.
+  case PanelGeometry extends MotionFamily("panel_geometry")
 
 /** Motion policy for one family before accessibility policy is applied.
   *
@@ -177,6 +184,14 @@ object MotionConfig:
         // a page-to-page transition (see `AnimationChoreography`/`RendererColumnTransition` for how it is lowered).
         MotionFamily.ColumnTransitions -> MotionFamilyConfig(
           transitionKind = TransitionKind.DirectionalSweep,
+          animation = base,
+          speedScale = 1.0
+        ),
+        // No legacy field mirrors this one either (see `ColumnTransitions`' note just above) -- `transitionKind` is
+        // only the enabled/disabled marker `MotionFamilyConfig.enabled` derives from, not a chosen visual shape (see
+        // `MotionFamily.PanelGeometry`'s doc comment), so `Fade` here means nothing beyond "on".
+        MotionFamily.PanelGeometry -> MotionFamilyConfig(
+          transitionKind = TransitionKind.Fade,
           animation = base,
           speedScale = 1.0
         )

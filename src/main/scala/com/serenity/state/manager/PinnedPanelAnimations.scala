@@ -17,47 +17,56 @@ private[manager] object PinnedPanelAnimations:
     val viewportSize = state.runtime.viewportSize.getOrElse(ViewportSize(80, 24))
     val layout       = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
     val contract     = EditorLayoutContract.from(state, viewportSize, layout)
-    val maybeAnimation =
+    val maybeContext =
       for
-        position  <- panelPosition(surface, state)
-        rect      <- contract.panelRect(surface.id)
-        animation <- openAnimation(position, rect, state)
-      yield animation
+        position <- panelPosition(surface, state)
+        rect     <- contract.panelRect(surface.id)
+      yield (position, rect)
 
-    maybeAnimation
-      .map(animation =>
-        state.copy(runtime =
-          state.runtime.copy(surfaceAnimations = state.runtime.surfaceAnimations + (surface.id -> animation))
+    maybeContext.fold(state) {
+      case (position, rect) =>
+        val withFade = openAnimation(position, rect, state).fold(state)(animation =>
+          state.copy(runtime =
+            state.runtime.copy(surfaceAnimations = state.runtime.surfaceAnimations + (surface.id -> animation))
+          )
         )
-      )
-      .getOrElse(state)
+        openGeometry(position, rect, withFade).fold(withFade)(geometry =>
+          withFade.copy(runtime =
+            withFade.runtime.copy(panelGeometry = withFade.runtime.panelGeometry + (surface.id -> geometry))
+          )
+        )
+    }
 
   def close(closedSurface: UiSurface, prevState: AppState, state: AppState): AppState =
     val tSize = prevState.runtime.viewportSize.orElse(state.runtime.viewportSize).getOrElse(ViewportSize(80, 24))
     val previousLayout = LayoutEngine.calculateLayoutWithUI(prevState, tSize)
     val contract       = EditorLayoutContract.from(prevState, tSize, previousLayout)
-    val maybeGhost =
+    val maybeContext =
       for
-        position  <- panelPosition(closedSurface, prevState)
-        rect      <- contract.panelRect(closedSurface.id)
-        animation <- closeAnimation(position, rect, state)
-      yield
-        val (stateWithId, ghostId) = state.allocateSurfaceId
-        val ghostSurface = UiSurface(
-          id = ghostId,
-          content = SurfaceContent.GhostOverlay(closedSurface.content, rect),
-          presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-        )
-        stateWithId.copy(runtime =
-          stateWithId.runtime.copy(
-            uiSurfaces = stateWithId.runtime.uiSurfaces :+ ghostSurface,
-            surfaceAnimations = stateWithId.runtime.surfaceAnimations
-              - closedSurface.id
-              + (ghostId -> animation)
-          )
-        )
+        position <- panelPosition(closedSurface, prevState)
+        rect     <- contract.panelRect(closedSurface.id)
+      yield (position, rect)
 
-    maybeGhost.getOrElse(state)
+    maybeContext.fold(state) {
+      case (position, rect) =>
+        val fade     = closeAnimation(position, rect, state)
+        val geometry = closeGeometry(position, rect, state)
+        if fade.isEmpty && geometry.isEmpty then state
+        else
+          val (stateWithId, ghostId) = state.allocateSurfaceId
+          val ghostSurface = UiSurface(
+            id = ghostId,
+            content = SurfaceContent.GhostOverlay(closedSurface.content, rect),
+            presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+          stateWithId.copy(runtime =
+            stateWithId.runtime.copy(
+              uiSurfaces = stateWithId.runtime.uiSurfaces :+ ghostSurface,
+              surfaceAnimations = (stateWithId.runtime.surfaceAnimations - closedSurface.id) ++ fade.map(ghostId -> _),
+              panelGeometry = (stateWithId.runtime.panelGeometry - closedSurface.id) ++ geometry.map(ghostId -> _)
+            )
+          )
+    }
 
   private def openAnimation(
     position: PanelPosition,
@@ -98,6 +107,46 @@ private[manager] object PinnedPanelAnimations:
         phaseTick = 0
       )
     )
+
+  /** Panel scale-in (issue #1085 phase 1): grows from a collapsed rect at `position`'s anchor edge to the panel's full
+    * `rect`, gated by the independent `MotionFamily.PanelGeometry` family -- `None` when it is off (including by
+    * accessibility, or `MotionPreset.Reduced`), which callers read as "open at the full rect immediately."
+    */
+  private def openGeometry(position: PanelPosition, rect: LayoutRect, state: AppState): Option[PanelGeometryState] =
+    state.persisted.config.scaledPanelGeometryAnimation.map(animation =>
+      PanelGeometryState.seeded(
+        start = collapsedRect(position, rect),
+        end = rect,
+        curve = animation.curve,
+        steps = animation.steps
+      )
+    )
+
+  /** Panel scale-out (issue #1085 phase 1): mirrors [[openGeometry]], shrinking from the panel's full `rect` back to
+    * the collapsed rect at `position`'s anchor edge.
+    */
+  private def closeGeometry(position: PanelPosition, rect: LayoutRect, state: AppState): Option[PanelGeometryState] =
+    state.persisted.config.scaledPanelGeometryAnimation.map(animation =>
+      PanelGeometryState.seeded(
+        start = rect,
+        end = collapsedRect(position, rect),
+        curve = animation.curve,
+        steps = animation.steps
+      )
+    )
+
+  /** `rect` collapsed to zero width or height at `position`'s docked edge -- the anchor a panel scales in from or out
+    * to. Lerping `LayoutRect`'s independent `x`/`width` (or `y`/`height`) fields between this and the full `rect` keeps
+    * the opposite, non-anchor edge fixed for every frame in between (issue #1085 phase 1's chosen "grow/shrink from the
+    * dock edge" shape): e.g. for `Right`, `x` moves from `rect.right` down to `rect.x` exactly as fast as `width` grows
+    * from `0` to `rect.width`, so `x + width == rect.right` throughout.
+    */
+  private def collapsedRect(position: PanelPosition, rect: LayoutRect): LayoutRect =
+    position match
+      case PanelPosition.Left   => rect.copy(width = 0)
+      case PanelPosition.Right  => rect.copy(x = rect.right, width = 0)
+      case PanelPosition.Top    => rect.copy(height = 0)
+      case PanelPosition.Bottom => rect.copy(y = rect.bottom, height = 0)
 
   private def openCells(rect: LayoutRect, state: AppState): ElementTransitionCells =
     val transparentPanelForeground = transparent(state.persisted.theme.panel.foreground)

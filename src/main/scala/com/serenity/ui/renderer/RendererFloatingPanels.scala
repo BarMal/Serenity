@@ -43,7 +43,9 @@ object RendererFloatingPanels:
         )
       overlay.surfaceId match
         case Some(surfaceId) =>
-          RendererFramePlanner.paintPanelLayer(context, surfaceId, overlay.rect, panelIsDirty(surfaceId))(paint)
+          def clippedPaint(layerContext: RenderContext): Unit =
+            withPanelGeometryClip(state, surfaceId, layerContext)(paint(layerContext))
+          RendererFramePlanner.paintPanelLayer(context, surfaceId, overlay.rect, panelIsDirty(surfaceId))(clippedPaint)
         case None => paint(context)
 
     overlays.tabBar.foreach(paintOverlay)
@@ -113,6 +115,24 @@ object RendererFloatingPanels:
       case Some(rounded) => rounded.withRoundRectClip(x, y, width, height, arcPx)(render)
       case None          => render
 
+  /** Panel scale-in/out (issue #1085 phase 1): a new render step alongside the existing colour-cell motion model
+    * (`ElementTransitionLowerer`/`AnimatedCell`, which never touches geometry). Reads `surfaceId`'s in-flight
+    * `Tween[LayoutRect].currentValue` from `Runtime.panelGeometry` and clips `render`'s output to it, constraining the
+    * panel's already-computed content -- laid out for its full, final rect either way -- to whatever fraction of that
+    * rect the animation has grown or shrunk to so far. A no-op once the geometry is gone (not animating, or the family
+    * is disabled), or when the surface can't clip at all (falls through to [[withOptionalRoundRectClip]]'s own
+    * unclipped fallback).
+    */
+  private def withPanelGeometryClip(state: AppState, surfaceId: SurfaceId, context: RenderContext)(
+    render: => Unit
+  ): Unit =
+    state.runtime.panelGeometry.get(surfaceId) match
+      case None => render
+      case Some(geometry) =>
+        val rect  = geometry.currentRect
+        val arcPx = state.persisted.config.uiCornerRadiusPx
+        withOptionalRoundRectClip(context.surface, rect.x, rect.y, rect.width, rect.height, arcPx)(render)
+
   private val ModalBackdropEffect = LayerEffect(0.4f)
 
   def renderModalLayer(state: AppState, context: RenderContext, scene: UiSceneSnapshot): Unit =
@@ -161,7 +181,7 @@ object RendererFloatingPanels:
             .map(_.animationState)
             .getOrElse(com.serenity.animation.AnimationState.empty)
 
-        def paint(layerContext: RenderContext): Unit =
+        def paintContent(layerContext: RenderContext): Unit =
           if blurRadius > 0f then
             layerContext.surface.effects.foreach(_.blurRegion(rect.x, rect.y, rect.width, rect.height, blurRadius))
           surface.content match
@@ -177,6 +197,9 @@ object RendererFloatingPanels:
                 state.persisted.config,
                 animationState
               )
+
+        def paint(layerContext: RenderContext): Unit =
+          withPanelGeometryClip(state, surface.id, layerContext)(paintContent(layerContext))
 
         RendererFramePlanner.paintPanelLayer(context, surface.id, rect, panelIsDirty(surface.id))(paint)
       }
