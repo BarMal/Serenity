@@ -69,7 +69,8 @@ object RendererPaneContent:
           state.persisted.theme,
           state.persisted.config,
           context,
-          snapshot
+          snapshot,
+          state.runtime.isTuiMode
         ))
           .getOrElse(Nil)
     }
@@ -151,7 +152,8 @@ object RendererPaneContent:
             state.persisted.theme,
             state.persisted.config,
             cursorContext,
-            snap
+            snap,
+            state.runtime.isTuiMode
           )
       case _ => ()
 
