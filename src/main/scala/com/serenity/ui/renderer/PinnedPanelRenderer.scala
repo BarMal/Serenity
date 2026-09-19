@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import com.serenity.animation.AnimationState
 import com.serenity.config.AppConfig
-import com.serenity.ui.layout.SurfaceContentRowKind
+import com.serenity.ui.layout.{ResolvedSurfaceComposition, SurfaceContentRowKind}
 import com.serenity.ui.theme.Theme
 
 object PinnedPanelRenderer:
@@ -39,7 +39,9 @@ object PinnedPanelRenderer:
     applyGlassSheen(surface, panel, theme, config)
     drawBorder(surface, panel, theme, config, animationState)
     drawTitle(surface, panel, theme, animationState)
-    drawLines(surface, panel, theme, animationState)
+    panel.composition match
+      case Some(composition) => drawComposition(surface, panel, composition, theme, animationState)
+      case None              => drawLines(surface, panel, theme, animationState)
 
     surface.effects.foreach(_.setAlpha(1.0f))
     surface.setForegroundColor(theme.foreground)
@@ -121,6 +123,37 @@ object PinnedPanelRenderer:
           if row.selected then surface.disableStyle(theme.focusStyle)
         }
       }
+
+  /** Paints a composed plan's boxes in place of `drawLines`'s plain rows -- box rects are already whole-cell granular
+    * (built from the same integer content-rect coordinates `contentRowSlotsFor` uses), so no font-metric or sub-cell
+    * mapping is needed, unlike `TextOverlayRenderer.drawComposition`'s pixel-measured floating layout.
+    */
+  private def drawComposition(
+    surface: RenderSurface,
+    panel: TextPanelView,
+    composition: ResolvedSurfaceComposition,
+    theme: Theme,
+    animationState: AnimationState
+  ): Unit =
+    composition.paintBoxes.foreach { box =>
+      box.text.foreach { text =>
+        val x      = math.round(box.rect.x).toInt
+        val y      = math.round(box.rect.y).toInt
+        val width  = math.round(box.rect.width).toInt
+        val padded = text.take(width).padTo(width, ' ')
+        if box.selected then
+          surface.setForegroundColor(theme.highlighted.foreground)
+          surface.setBackgroundColor(theme.highlighted.background)
+          surface.enableStyle(theme.focusStyle)
+        else
+          surface.setForegroundColor(theme.panel.foreground)
+          surface.setBackgroundColor(theme.panel.background)
+        val baseForeground =
+          if box.selected then theme.highlighted.foreground else theme.panel.foreground
+        renderAnimatedText(surface, x, y, padded, y - panel.rect.y, baseForeground, animationState)
+        if box.selected then surface.disableStyle(theme.focusStyle)
+      }
+    }
 
   private def renderAnimatedText(
     surface: RenderSurface,

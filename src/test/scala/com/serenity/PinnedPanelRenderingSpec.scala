@@ -169,6 +169,72 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getFg(panel.rect.x + 1, panel.rect.y + 1) shouldBe animatedForeground
   }
 
+  it should "paint from a composition when present, taking priority over the plain rows" in {
+    val surface     = new MockRenderSurface(40, 12)
+    val contentRect = SurfaceFrameLayout(LayoutRect(2, 2, 20, 6)).contentRect
+    val composition = ResolvedSurfaceComposition(
+      bounds = LogicalPixelRect(contentRect.x, contentRect.y, contentRect.width, contentRect.height),
+      intrinsicSize = SurfaceIntrinsicSize(contentRect.width, contentRect.height),
+      paintBoxes = List(
+        SurfacePaintBox(
+          kind = SurfacePaintKind.Text,
+          rect = LogicalPixelRect(contentRect.x, contentRect.y, contentRect.width, 1),
+          text = Some("from composition")
+        )
+      ),
+      hitRegions = Nil,
+      focusOrder = Nil
+    )
+    val panel = TextPanelView(
+      rect = LayoutRect(2, 2, 20, 6),
+      title = "outline",
+      rows = List(TextPanelRow("from rows")),
+      composition = Some(composition)
+    )
+
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default)
+
+    surface.getRow(contentRect.y).slice(contentRect.x, contentRect.x + "from composition".length) shouldBe
+      "from composition"
+  }
+
+  it should "highlight a selected composition row using the theme highlight colors" in {
+    val surface     = new MockRenderSurface(40, 12)
+    val contentRect = SurfaceFrameLayout(LayoutRect(2, 2, 20, 6)).contentRect
+    val composition = ResolvedSurfaceComposition(
+      bounds = LogicalPixelRect(contentRect.x, contentRect.y, contentRect.width, contentRect.height),
+      intrinsicSize = SurfaceIntrinsicSize(contentRect.width, contentRect.height),
+      paintBoxes = List(
+        SurfacePaintBox(
+          kind = SurfacePaintKind.Text,
+          rect = LogicalPixelRect(contentRect.x, contentRect.y, contentRect.width, 1),
+          text = Some("plain"),
+          selected = false
+        ),
+        SurfacePaintBox(
+          kind = SurfacePaintKind.Text,
+          rect = LogicalPixelRect(contentRect.x, contentRect.y + 1, contentRect.width, 1),
+          text = Some("picked"),
+          selected = true
+        )
+      ),
+      hitRegions = Nil,
+      focusOrder = Nil
+    )
+    val panel = TextPanelView(
+      rect = LayoutRect(2, 2, 20, 6),
+      title = "outline",
+      rows = Nil,
+      composition = Some(composition)
+    )
+
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default)
+
+    surface.getBg(contentRect.x + 1, contentRect.y + 1) shouldBe Theme.light.highlighted.background
+    surface.getFg(contentRect.x + 1, contentRect.y + 1) shouldBe Theme.light.highlighted.foreground
+    surface.getBg(contentRect.x + 1, contentRect.y) shouldBe Theme.light.panel.background
+  }
+
   it should "request backdrop blur for pinned panels using the configured blur radius" in {
     val baseState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(

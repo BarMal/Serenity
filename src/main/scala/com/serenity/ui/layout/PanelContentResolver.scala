@@ -39,15 +39,20 @@ private[layout] object PanelContentResolver:
       rows = lines.map(OverlayRow(_))
     )
 
-  def resolveDirectoryTree(
+  /** One rendered directory-tree row paired with the filesystem path it represents -- shared by `resolveDirectoryTree`
+    * (which only needs `row`) and `DirectoryTreeSurfaceComposition` (issue #819, slice 4), which also needs `path` to
+    * build the row's hit region, so both build the exact same row text and clipping from one place.
+    */
+  final private[layout] case class DirectoryTreeRowView(row: OverlayRow, path: java.nio.file.Path)
+
+  private[layout] def directoryTreeRowViews(
     rect: LayoutRect,
-    mode: SurfaceRenderMode,
     tree: com.serenity.ui.layout.DirectoryTreeData,
     selectedPath: Option[java.nio.file.Path]
-  ): ResolvedSurfaceContent =
+  ): List[DirectoryTreeRowView] =
     val visibleRows = com.serenity.ui.layout.DirectoryTreeData.visibleRows(tree)
     val maxRows     = math.max(1, rect.height - 2)
-    val rows = visibleRows.take(maxRows).map { row =>
+    visibleRows.take(maxRows).map { row =>
       val marker =
         if row.isDirectory then
           if row.isExpanded then "▾ "
@@ -55,15 +60,24 @@ private[layout] object PanelContentResolver:
           else "▹ "
         else ""
       val indent = "  " * row.depth
-      OverlayRow(
-        plainText = s"$indent$marker${row.name}",
-        selected = selectedPath.contains(row.path)
+      DirectoryTreeRowView(
+        row = OverlayRow(
+          plainText = s"$indent$marker${row.name}",
+          selected = selectedPath.contains(row.path)
+        ),
+        path = row.path
       )
     }
 
+  def resolveDirectoryTree(
+    rect: LayoutRect,
+    mode: SurfaceRenderMode,
+    tree: com.serenity.ui.layout.DirectoryTreeData,
+    selectedPath: Option[java.nio.file.Path]
+  ): ResolvedSurfaceContent =
     ResolvedSurfaceContent(
       title = SurfaceContentResolver.titleFor(mode, tree.rootPath.getFileName.toString),
-      rows = rows
+      rows = directoryTreeRowViews(rect, tree, selectedPath).map(_.row)
     )
 
   def resolveTerminal(
@@ -85,13 +99,20 @@ private[layout] object PanelContentResolver:
 
     ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "terminal"), rows = shaped.map(OverlayRow(_)))
 
-  def resolveOutline(
+  /** One rendered outline row paired with the index into `symbols` it represents, when the row is addressable at all --
+    * `None` for the `Horizontal`/`Compact` summary rows, which have never been mouse-selectable
+    * (`PinnedPanelMouseHitTesting.pinnedOutlineMouseHitAt` only ever resolves a hit for `Vertical`/`Square`). Shared by
+    * `resolveOutline` (which only needs `row`) and `OutlineSurfaceComposition` (issue #819, slice 4), which also needs
+    * `symbolIndex` to build a row's hit region, so both build the exact same row text from one place.
+    */
+  final private[layout] case class OutlineRowView(row: OverlayRow, symbolIndex: Option[Int])
+
+  private[layout] def outlineRowViews(
     rect: LayoutRect,
-    mode: SurfaceRenderMode,
     symbols: List[Symbol],
     activeLocation: Option[Location]
-  ): ResolvedSurfaceContent =
-    val shaped: List[OverlayRow] = SurfaceLayoutKind.classify(rect) match
+  ): List[OutlineRowView] =
+    SurfaceLayoutKind.classify(rect) match
       case SurfaceLayoutKind.Horizontal =>
         val visibleSymbols = symbols.take(4)
         val activeVisible  = visibleSymbols.exists(symbol => activeLocation.contains(symbol.location))
@@ -99,26 +120,42 @@ private[layout] object PanelContentResolver:
           visibleSymbols
             .map(symbol => if activeLocation.contains(symbol.location) then s"[${symbol.name}]" else symbol.name)
             .mkString(" | ")
-        ).filter(_.nonEmpty).map(text => OverlayRow(text, selected = activeVisible))
+        ).filter(_.nonEmpty).map(text => OutlineRowView(OverlayRow(text, selected = activeVisible), None))
       case SurfaceLayoutKind.Vertical =>
-        symbols.take(math.max(1, rect.height - 2)).map { symbol =>
-          val active = activeLocation.contains(symbol.location)
-          val prefix = if active then "> " else ""
-          OverlayRow(s"$prefix${symbol.kind} ${symbol.name}", selected = active)
+        symbols.take(math.max(1, rect.height - 2)).zipWithIndex.map {
+          case (symbol, index) =>
+            val active = activeLocation.contains(symbol.location)
+            val prefix = if active then "> " else ""
+            OutlineRowView(OverlayRow(s"$prefix${symbol.kind} ${symbol.name}", selected = active), Some(index))
         }
       case SurfaceLayoutKind.Square =>
-        symbols.take(math.max(1, rect.height - 2)).map { symbol =>
-          val active = activeLocation.contains(symbol.location)
-          val prefix = if active then "> " else ""
-          OverlayRow(s"$prefix${symbol.name}", selected = active)
+        symbols.take(math.max(1, rect.height - 2)).zipWithIndex.map {
+          case (symbol, index) =>
+            val active = activeLocation.contains(symbol.location)
+            val prefix = if active then "> " else ""
+            OutlineRowView(OverlayRow(s"$prefix${symbol.name}", selected = active), Some(index))
         }
       case SurfaceLayoutKind.Compact =>
         val current = activeLocation.flatMap(location => symbols.find(_.location == location)).map(_.name)
         current match
-          case Some(name) => List(OverlayRow(s"${symbols.length} symbols", selected = true), OverlayRow(name))
-          case None       => List(OverlayRow(s"${symbols.length} symbols"))
+          case Some(name) =>
+            List(
+              OutlineRowView(OverlayRow(s"${symbols.length} symbols", selected = true), None),
+              OutlineRowView(OverlayRow(name), None)
+            )
+          case None =>
+            List(OutlineRowView(OverlayRow(s"${symbols.length} symbols"), None))
 
-    ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "outline"), rows = shaped)
+  def resolveOutline(
+    rect: LayoutRect,
+    mode: SurfaceRenderMode,
+    symbols: List[Symbol],
+    activeLocation: Option[Location]
+  ): ResolvedSurfaceContent =
+    ResolvedSurfaceContent(
+      SurfaceContentResolver.titleFor(mode, "outline"),
+      rows = outlineRowViews(rect, symbols, activeLocation).map(_.row)
+    )
 
   def resolveComments(
     rect: LayoutRect,
@@ -149,37 +186,62 @@ private[layout] object PanelContentResolver:
 
     ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "comments"), rows = shaped)
 
-  def resolveDiagnostics(
+  /** One rendered diagnostics row paired with the index into `issues` it represents, when the row is addressable at all
+    * -- `None` for `Horizontal`/`Compact`'s summary-only rows and `Square`'s leading count row, which have never been
+    * mouse-selectable (`PinnedPanelMouseHitTesting.pinnedDiagnosticsMouseHitAt` only ever resolves a hit for `Vertical`
+    * rows, or `Square` rows past the first). Shared by `resolveDiagnostics` (which only needs `row`) and
+    * `DiagnosticsSurfaceComposition` (issue #819, slice 4), which also needs `issueIndex` to build a row's hit region,
+    * so both build the exact same row text from one place.
+    */
+  final private[layout] case class DiagnosticsRowView(row: OverlayRow, issueIndex: Option[Int])
+
+  private[layout] def diagnosticsRowViews(
     rect: LayoutRect,
-    mode: SurfaceRenderMode,
     issues: List[com.serenity.ui.layout.Diagnostic],
     activeLocation: Option[Location]
-  ): ResolvedSurfaceContent =
+  ): List[DiagnosticsRowView] =
     val errorCount   = issues.count(_.severity == com.serenity.ui.layout.DiagnosticSeverity.Error)
     val warningCount = issues.count(_.severity == com.serenity.ui.layout.DiagnosticSeverity.Warning)
     val infoCount = issues.count(issue =>
       issue.severity == com.serenity.ui.layout.DiagnosticSeverity.Info ||
         issue.severity == com.serenity.ui.layout.DiagnosticSeverity.Hint
     )
-    val shaped = SurfaceLayoutKind.classify(rect) match
+    SurfaceLayoutKind.classify(rect) match
       case SurfaceLayoutKind.Horizontal =>
-        List(OverlayRow(s"$errorCount error | $warningCount warning | $infoCount info"))
+        List(DiagnosticsRowView(OverlayRow(s"$errorCount error | $warningCount warning | $infoCount info"), None))
       case SurfaceLayoutKind.Vertical =>
-        issues.take(math.max(1, rect.height - 2)).map { issue =>
-          OverlayRow(
-            s"${issue.severity}: ${issue.message}",
-            selected = activeLocation.contains(issue.location)
-          )
+        issues.take(math.max(1, rect.height - 2)).zipWithIndex.map {
+          case (issue, index) =>
+            DiagnosticsRowView(
+              OverlayRow(s"${issue.severity}: ${issue.message}", selected = activeLocation.contains(issue.location)),
+              Some(index)
+            )
         }
       case SurfaceLayoutKind.Square =>
-        OverlayRow(s"$errorCount error, $warningCount warning") ::
-          issues.take(math.max(0, rect.height - 3)).map { issue =>
-            OverlayRow(issue.message, selected = activeLocation.contains(issue.location))
+        DiagnosticsRowView(OverlayRow(s"$errorCount error, $warningCount warning"), None) ::
+          issues.take(math.max(0, rect.height - 3)).zipWithIndex.map {
+            case (issue, index) =>
+              DiagnosticsRowView(
+                OverlayRow(issue.message, selected = activeLocation.contains(issue.location)),
+                Some(index)
+              )
           }
       case SurfaceLayoutKind.Compact =>
-        List(OverlayRow(s"${issues.length} issues"), OverlayRow(s"$errorCount error"))
+        List(
+          DiagnosticsRowView(OverlayRow(s"${issues.length} issues"), None),
+          DiagnosticsRowView(OverlayRow(s"$errorCount error"), None)
+        )
 
-    ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "diagnostics"), rows = shaped)
+  def resolveDiagnostics(
+    rect: LayoutRect,
+    mode: SurfaceRenderMode,
+    issues: List[com.serenity.ui.layout.Diagnostic],
+    activeLocation: Option[Location]
+  ): ResolvedSurfaceContent =
+    ResolvedSurfaceContent(
+      SurfaceContentResolver.titleFor(mode, "diagnostics"),
+      rows = diagnosticsRowViews(rect, issues, activeLocation).map(_.row)
+    )
 
   /** The toggleable keyboard-shortcuts reference (issue #1247). Deliberately not layout-kind-branched like
     * `resolveOutline`/`resolveDiagnostics` above -- there is no "current" entry to highlight or compact down to a

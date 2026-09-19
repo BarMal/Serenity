@@ -16,7 +16,10 @@ final case class TextPanelView(
     rows: List[TextPanelRow],
     header: Option[TextPanelRow] = None,
     footer: Option[TextPanelRow] = None,
-    surfaceId: Option[SurfaceId] = None
+    surfaceId: Option[SurfaceId] = None,
+    // Painted in place of `rows`/`header`/`footer` whenever set (issue #819, slice 4) -- mirrors
+    // `TextOverlayView.composition`'s precedence in `TextOverlayRenderer`.
+    composition: Option[ResolvedSurfaceComposition] = None
 ):
   def lines: List[String] = (header.toList ++ rows ++ footer.toList).map(_.plainText)
 
@@ -82,8 +85,25 @@ object PinnedPanelViewModel:
       rows = resolved.rows.map(toPanelRow),
       header = resolved.header.map(toPanelRow),
       footer = resolved.footer.map(toPanelRow),
-      surfaceId = Some(surface.id)
+      surfaceId = Some(surface.id),
+      composition = compositionFor(surface, rect, state)
     )
+
+  private def compositionFor(
+    surface: UiSurface,
+    rect: LayoutRect,
+    state: Option[AppState]
+  ): Option[ResolvedSurfaceComposition] =
+    surface.content match
+      case SurfaceContent.DirectoryTree(tree, selectedPath) =>
+        Some(DirectoryTreeSurfaceComposition.forTree(tree, selectedPath, rect))
+      case SurfaceContent.Outline(symbols, activeLocation) =>
+        Some(
+          OutlineSurfaceComposition.forOutline(symbols, activeSymbolLocation(symbols, activeLocation, state), rect)
+        )
+      case SurfaceContent.Diagnostics(issues, activeLocation) =>
+        Some(DiagnosticsSurfaceComposition.forDiagnostics(issues, activeLocation, rect))
+      case _ => None
 
   private def toPanelRow(row: OverlayRow): TextPanelRow =
     TextPanelRow(
