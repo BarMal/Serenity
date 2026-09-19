@@ -133,8 +133,10 @@ object SurfaceContentResolver:
           itemTargetRows,
           showKeyHints
         )
-      case SurfaceContent.ModalWorkflow(modal) =>
-        ModalWorkflowContentResolver.resolve(modal, rect, mode)
+      case SurfaceContent.ModalWorkflow(_) =>
+        // Painted entirely via `ModalSurfaceComposition` (issue #819), not this plain-rows path -- mirrors
+        // `TabBar`'s own empty fallback above.
+        ResolvedSurfaceContent()
       case SurfaceContent.Terminal(buffer, cursor) =>
         PanelContentResolver.resolveTerminal(rect, mode, buffer, cursor)
       case SurfaceContent.Outline(symbols, activeLocation) =>

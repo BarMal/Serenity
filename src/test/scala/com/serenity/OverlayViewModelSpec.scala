@@ -96,7 +96,11 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     overlays.belowCursor shouldBe defined
 
     val overlay = overlays.belowCursor.get
-    overlay.rows.map(_.plainText) shouldBe List("replace", "needle")
+    // `ModalWorkflow` paints via composition (issue #819), not the plain `rows` path -- a `Modal.Custom` resolves to
+    // one input field labelled by its name, painting "<name> <value>".
+    overlay.composition shouldBe defined
+    overlay.composition.toList.flatMap(_.paintBoxes).flatMap(_.text) shouldBe List("replace needle")
+    overlay.composition.toList.flatMap(_.hitRegions).map(_.semanticLabel) shouldBe List("replace")
     overlay.rect shouldBe layout.belowCursorOverlayRect.get
   }
 
@@ -171,12 +175,9 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val overlays = OverlayViewModel.fromState(state, layout)
     val overlay  = overlays.belowCursor.getOrElse(fail("Expected find overlay"))
 
-    overlay.header.map(_.plainText) shouldBe Some("find")
-    overlay.rows.map(_.plainText) shouldBe List("Find two", "1. 2:1")
-    overlay.rows.head.cursorColumn shouldBe Some("Find two".length)
-    overlay.rows(1).selected shouldBe true
-    overlay.footer.map(_.plainText) shouldBe Some("1 match, 1/1 at 2:1")
     overlay.rect shouldBe layout.belowCursorOverlayRect.get
+    // `ModalWorkflow` now paints entirely through its composition (issue #819); the plain `rows`/`header`/`footer`
+    // path is empty for it, so the modal's content is asserted via the composition's hit regions instead.
     overlay.composition shouldBe defined
     overlay.composition.toList.flatMap(_.hitRegions).map(_.semanticLabel) shouldBe List("Find", "1. 2:1")
   }
@@ -370,9 +371,10 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val overlays = OverlayViewModel.fromState(state, layout)
     val overlay  = overlays.belowCursor.getOrElse(fail("Expected focused modal overlay"))
 
-    overlay.rows.exists(_.plainText.startsWith("Filename")) shouldBe true
-    overlay.rows.exists(_.plainText.startsWith("Path")) shouldBe true
-    overlay.header.map(_.plainText) should not contain "search: op"
+    // The focused file-workflow modal wins over the earlier command-palette surface: its composition (issue #819)
+    // is the one surfaced, carrying the file workflow's own Filename/Path fields rather than the palette's items.
+    overlay.composition shouldBe defined
+    overlay.composition.toList.flatMap(_.hitRegions).map(_.semanticLabel) shouldBe List("Filename", "Path")
   }
 
   it should "attach the shared close workflow composition to a modal overlay" in {
