@@ -186,8 +186,7 @@ final private[manager] class StateManagerEffectHandlers(
     lifecycleEffects.interpret
 
   private def interpretCommandEffect(command: Command): IO[Unit] =
-    logger.info(s"[COMMAND] ${StateManager.describeCommandExecution(command)}") >>
-      stateRef.get.flatMap(state => interpretCommand(command, state))
+    stateRef.get.flatMap(state => interpretCommand(command, state))
 
   private def interpretThemeEffect(effect: ThemeEffect): IO[Unit] =
     effect match
@@ -237,6 +236,11 @@ final private[manager] class StateManagerEffectHandlers(
   ): IO[com.serenity.config.AppConfig] =
     configEffects.updateConfig(update)
 
+  // The single command execution+observability chokepoint: every entry path (reducer/keybinding via
+  // interpretCommandEffect, the command palette via ComponentResult.ExecuteCommand, and mouse menus via the
+  // executeCommand port) calls this, so logging the [COMMAND] line here logs each command exactly once regardless of
+  // how it was triggered -- rather than only on the effect path, which used to leave palette/mouse-driven commands
+  // silent.
   private[manager] def interpretCommand(command: Command, state: AppState): IO[Unit] =
     val dispatch = command.intent match
       case CommandIntent.Lifecycle(intent)   => interpretLifecycleIntent(intent, state)
@@ -256,7 +260,8 @@ final private[manager] class StateManagerEffectHandlers(
     // issue #1048: MRU tracking -- every executed command counts toward its recency, regardless of what triggered
     // it (palette, mouse click, contextual toolbar, ...), living on `runtime` since `CommandRunner` itself is
     // reconstructed fresh each time the palette opens (`CommandRunner.recordCommandUsage`'s own doc).
-    stateRef.update(recordCommandUsage(command.name)) >> dispatch
+    logger.info(s"[COMMAND] ${StateManager.describeCommandExecution(command)}") >>
+      stateRef.update(recordCommandUsage(command.name)) >> dispatch
 
   private def recordCommandUsage(name: String)(state: AppState): AppState =
     val nextGeneration = state.runtime.commandUsage.values.maxOption.getOrElse(0) + 1
