@@ -36,13 +36,6 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
       row: DirectoryTreeRow
   )
 
-  final private case class PinnedPanelRowHit(
-      surface: UiSurface,
-      position: PanelPosition,
-      rowIndex: Int,
-      layoutKind: SurfaceLayoutKind
-  )
-
   private enum TextAreaInsetDrag:
     case Left(value: Double)
     case Right(value: Double)
@@ -202,10 +195,10 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
     )
 
   /** Resolves hover/click against the directory tree's own `ResolvedSurfaceComposition` (issue #819, slice 4) -- the
-    * same composition `PinnedPanelViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than
-    * `pinnedPanelRowHitAt`'s generic row-index walk. A hit region is addressed by the filesystem path it represents
-    * (mirroring `EditorContextMenuHitTesting.contextMenuHitAt`'s use of `ResolvedSurfaceComposition.hitAt`), so the
-    * matching visible row is looked up by path rather than by row index.
+    * same composition `PinnedPanelViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than a generic row-index
+    * walk. A hit region is addressed by the filesystem path it represents (mirroring
+    * `EditorContextMenuHitTesting.contextMenuHitAt`'s use of `ResolvedSurfaceComposition.hitAt`), so the matching
+    * visible row is looked up by path rather than by row index.
     */
   private def pinnedDirectoryMouseHitAt(
     event: MouseInputEvent,
@@ -237,11 +230,11 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
     }
 
   /** Resolves hover/click against the outline's own `ResolvedSurfaceComposition` (issue #819, slice 4) -- the same
-    * composition `PinnedPanelViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than `pinnedPanelRowHitAt`'s
-    * generic row-index walk. Mirrors `EditorContextMenuHitTesting.contextMenuSelectionAt`'s `focusId` parsing for
-    * addressing which symbol was hit; `OutlineSurfaceComposition` only emits a hit region for a row
-    * `PanelContentResolver.outlineRowViews` marked addressable, so `Horizontal`/`Compact` summary rows are unreachable
-    * here exactly as they were pre-migration.
+    * composition `PinnedPanelViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than a generic row-index
+    * walk. Mirrors `EditorContextMenuHitTesting.contextMenuSelectionAt`'s `focusId` parsing for addressing which symbol
+    * was hit; `OutlineSurfaceComposition` only emits a hit region for a row `PanelContentResolver.outlineRowViews`
+    * marked addressable, so `Horizontal`/`Compact` summary rows are unreachable here exactly as they were
+    * pre-migration.
     */
   private def pinnedOutlineMouseHitAt(
     event: MouseInputEvent,
@@ -271,28 +264,45 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
         .collectFirst { case hit => hit }
     }
 
+  /** Resolves hover/click against the comments panel's own `ResolvedSurfaceComposition` (issue #819, slice 5) -- the
+    * same composition `PinnedPanelViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than a generic row-index
+    * walk. Mirrors `pinnedOutlineMouseHitAt`'s `focusId` parsing for addressing which symbol was hit;
+    * `CommentsSurfaceComposition` only emits a hit region for a row `PanelContentResolver.commentsRowViews` marked
+    * addressable, so `Horizontal`/`Compact` summary rows are unreachable here exactly as they were pre-migration.
+    */
   private def pinnedCommentsMouseHitAt(
     event: MouseInputEvent,
     state: AppState
   ): Option[(UiSurface, List[Symbol], Location)] =
-    for
-      hit <- pinnedPanelRowHitAt(event, state)
-      locationHit <- hit.surface.content match
-        case SurfaceContent.Comments(symbols, _) =>
-          hit.layoutKind match
-            case SurfaceLayoutKind.Vertical | SurfaceLayoutKind.Square =>
-              symbols.lift(hit.rowIndex).map(symbol => (hit.surface, symbols, symbol.location))
-            case SurfaceLayoutKind.Horizontal | SurfaceLayoutKind.Compact =>
-              None
-        case _ =>
-          None
-    yield locationHit
+    state.runtime.viewportSize.flatMap { viewportSize =>
+      val scene = AuthoritativeUiScene.forState(state, viewportSize)
+      scene.workspace.reverseIterator
+        .flatMap {
+          case SceneNode(SceneNodeId.Surface(surfaceId), _, frameRect, _, _, _) =>
+            for
+              surface <- state.surfaceById(surfaceId)
+              symbols <- surface.content match
+                case SurfaceContent.Comments(symbols, _) => Some(symbols)
+                case _                                   => None
+              activeLocation = surface.content match
+                case SurfaceContent.Comments(_, activeLocation) => activeLocation
+                case _                                          => None
+              hitRegion <- CommentsSurfaceComposition
+                .forComments(symbols, activeLocation, frameRect)
+                .hitAt(event.col.toDouble, event.row.toDouble)
+              index  <- hitRegion.focusId.value.stripPrefix("comments-symbol-").toIntOption
+              symbol <- symbols.lift(index)
+            yield (surface, symbols, symbol.location)
+          case _ => None
+        }
+        .collectFirst { case hit => hit }
+    }
 
   /** Resolves hover/click against the diagnostics panel's own `ResolvedSurfaceComposition` (issue #819, slice 4) -- the
-    * same composition `PinnedPanelViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than
-    * `pinnedPanelRowHitAt`'s generic row-index walk. `DiagnosticsSurfaceComposition` only emits a hit region for a row
-    * `PanelContentResolver.diagnosticsRowViews` marked addressable, so `Horizontal`/`Compact`'s summary rows and
-    * `Square`'s leading summary row are unreachable here exactly as they were pre-migration.
+    * same composition `PinnedPanelViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than a generic row-index
+    * walk. `DiagnosticsSurfaceComposition` only emits a hit region for a row `PanelContentResolver.diagnosticsRowViews`
+    * marked addressable, so `Horizontal`/`Compact`'s summary rows and `Square`'s leading summary row are unreachable
+    * here exactly as they were pre-migration.
     */
   private def pinnedDiagnosticsMouseHitAt(
     event: MouseInputEvent,
@@ -365,44 +375,6 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
     surface.presentation match
       case SurfacePresentation.Docked => state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id))
       case _                          => None
-
-  private def pinnedPanelRowHitAt(event: MouseInputEvent, state: AppState): Option[PinnedPanelRowHit] =
-    state.runtime.viewportSize.flatMap { viewportSize =>
-      val scene = AuthoritativeUiScene.forState(state, viewportSize)
-      scene.workspace.reverseIterator
-        .flatMap {
-          case SceneNode(SceneNodeId.Surface(surfaceId), _, frameRect, _, hitRegions, _) =>
-            for
-              surface  <- state.surfaceById(surfaceId)
-              position <- panelPosition(surface, state)
-              contentRect <- hitRegions.collectFirst {
-                case SceneHitRegion(SceneHitKind.Content, rect) if rect.contains(event.col, event.row) => rect
-              }
-              rowIndex <- pinnedPanelItemRowIndexAt(
-                event,
-                contentRect,
-                scene.editorContract.panelRowSlots(surface.id)
-              )
-            yield PinnedPanelRowHit(surface, position, rowIndex, SurfaceLayoutKind.classify(frameRect))
-          case _ => None
-        }
-        .collectFirst { case hit => hit }
-    }
-
-  private def pinnedPanelItemRowIndexAt(
-    event: MouseInputEvent,
-    contentRect: LayoutRect,
-    rowSlots: List[SurfaceContentRowSlot]
-  ): Option[Int] =
-    val insideColumns = event.col >= contentRect.x && event.col < contentRect.right
-    Option
-      .when(insideColumns)(())
-      .flatMap(_ =>
-        rowSlots.collectFirst {
-          case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) if y == event.row =>
-            index
-        }
-      )
 
   private def textAreaInsetFromDrag(drag: MouseDrag, state: AppState): Option[TextAreaInsetDrag] =
     state.runtime.viewportSize.flatMap { viewportSize =>

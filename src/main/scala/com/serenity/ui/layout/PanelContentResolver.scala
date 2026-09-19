@@ -157,13 +157,20 @@ private[layout] object PanelContentResolver:
       rows = outlineRowViews(rect, symbols, activeLocation).map(_.row)
     )
 
-  def resolveComments(
+  /** One rendered comments row paired with the index into `symbols` it represents, when the row is addressable at all
+    * -- `None` for the `Horizontal`/`Compact` summary rows, which have never been mouse-selectable
+    * (`PinnedPanelMouseHitTesting.pinnedCommentsMouseHitAt` only ever resolves a hit for `Vertical`/`Square`). Shared
+    * by `resolveComments` (which only needs `row`) and `CommentsSurfaceComposition` (issue #819, slice 5), which also
+    * needs `symbolIndex` to build a row's hit region, so both build the exact same row text from one place.
+    */
+  final private[layout] case class CommentsRowView(row: OverlayRow, symbolIndex: Option[Int])
+
+  private[layout] def commentsRowViews(
     rect: LayoutRect,
-    mode: SurfaceRenderMode,
     symbols: List[Symbol],
     activeLocation: Option[Location]
-  ): ResolvedSurfaceContent =
-    val shaped: List[OverlayRow] = SurfaceLayoutKind.classify(rect) match
+  ): List[CommentsRowView] =
+    SurfaceLayoutKind.classify(rect) match
       case SurfaceLayoutKind.Horizontal =>
         val visibleSymbols = symbols.take(4)
         val activeVisible  = visibleSymbols.exists(symbol => activeLocation.contains(symbol.location))
@@ -171,20 +178,35 @@ private[layout] object PanelContentResolver:
           visibleSymbols
             .map(symbol => if activeLocation.contains(symbol.location) then s"[${symbol.name}]" else symbol.name)
             .mkString(" | ")
-        ).filter(_.nonEmpty).map(text => OverlayRow(text, selected = activeVisible))
+        ).filter(_.nonEmpty).map(text => CommentsRowView(OverlayRow(text, selected = activeVisible), None))
       case SurfaceLayoutKind.Vertical | SurfaceLayoutKind.Square =>
-        symbols.take(math.max(1, rect.height - 2)).map { symbol =>
-          val active = activeLocation.contains(symbol.location)
-          val prefix = if active then "> " else ""
-          OverlayRow(s"$prefix${symbol.name}", selected = active)
+        symbols.take(math.max(1, rect.height - 2)).zipWithIndex.map {
+          case (symbol, index) =>
+            val active = activeLocation.contains(symbol.location)
+            val prefix = if active then "> " else ""
+            CommentsRowView(OverlayRow(s"$prefix${symbol.name}", selected = active), Some(index))
         }
       case SurfaceLayoutKind.Compact =>
         val current = activeLocation.flatMap(location => symbols.find(_.location == location)).map(_.name)
         current match
-          case Some(name) => List(OverlayRow(s"${symbols.length} comments", selected = true), OverlayRow(name))
-          case None       => List(OverlayRow(s"${symbols.length} comments"))
+          case Some(name) =>
+            List(
+              CommentsRowView(OverlayRow(s"${symbols.length} comments", selected = true), None),
+              CommentsRowView(OverlayRow(name), None)
+            )
+          case None =>
+            List(CommentsRowView(OverlayRow(s"${symbols.length} comments"), None))
 
-    ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "comments"), rows = shaped)
+  def resolveComments(
+    rect: LayoutRect,
+    mode: SurfaceRenderMode,
+    symbols: List[Symbol],
+    activeLocation: Option[Location]
+  ): ResolvedSurfaceContent =
+    ResolvedSurfaceContent(
+      SurfaceContentResolver.titleFor(mode, "comments"),
+      rows = commentsRowViews(rect, symbols, activeLocation).map(_.row)
+    )
 
   /** One rendered diagnostics row paired with the index into `issues` it represents, when the row is addressable at all
     * -- `None` for `Horizontal`/`Compact`'s summary-only rows and `Square`'s leading count row, which have never been
