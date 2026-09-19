@@ -39,7 +39,7 @@ class RendererHighlightsSelectionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "prefer the in-flight geometry's animated extent over the live selection for a matching visual line" in {
-    val tween    = Tween(start = rect(0, 0), end = rect(0, 4), curve = EasingCurve.Linear, steps = 4)
+    val tween    = Tween(start = rect(0, 2), end = rect(0, 8), curve = EasingCurve.Linear, steps = 4)
     val geometry = SelectionGeometryState(List(SelectionLineGeometry(SelectionLineKey(0, 0), tween)))
     val cursor = Cursor(
       CursorPosition(0, 8),
@@ -47,7 +47,7 @@ class RendererHighlightsSelectionSpec extends AnyFlatSpec with Matchers:
       selectionGeometry = Some(geometry)
     )
 
-    RendererHighlights.selectionColumnsForVisualLine(cursor, visualLine(0, 0, 10)) shouldBe Some(0 -> 1)
+    RendererHighlights.selectionColumnsForVisualLine(cursor, visualLine(0, 0, 10)) shouldBe Some(0 -> 2)
   }
 
   it should "paint nothing for a visual line whose animated extent is still a zero-width sliver" in {
