@@ -58,12 +58,13 @@ final private[manager] class StateManagerEditorCapability(
       hasSurfaceAnimations = state.runtime.surfaceAnimations.nonEmpty
       hasColumnTransitions = state.runtime.columnTransitions.nonEmpty
       hasPanelGeometry     = state.runtime.panelGeometry.nonEmpty
+      hasCursorGlide       = state.persisted.buffers.values.exists(hasInFlightGlide)
       hasTypingActivity    = state.runtime.typingActivity.isActive
       flairLevel           = state.persisted.config.visualFlairLevel
       hasCompanionSprite   = state.persisted.config.companionSpriteConfig.enabled && flairLevel != VisualFlairLevel.Off
       stillActive <-
         if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations && !hasColumnTransitions &&
-            !hasPanelGeometry && !hasCompanionSprite && !hasTypingActivity
+            !hasPanelGeometry && !hasCursorGlide && !hasCompanionSprite && !hasTypingActivity
         then IO.pure(false)
         else
           // `stateRef.modify`, not a `set` built from the `state` read above: this tick runs on the render loop's own
@@ -83,6 +84,9 @@ final private[manager] class StateManagerEditorCapability(
               val updatedColumnTransitions =
                 current.runtime.columnTransitions.view.mapValues(_.advance).toMap.filterNot(_._2.isComplete)
               val stateWithAdvancedBuffers = current.copy(
+                persisted = current.persisted.copy(
+                  buffers = current.persisted.buffers.view.mapValues(advanceCursorGlides).toMap
+                ),
                 runtime = current.runtime.copy(
                   themeTransition = updatedTransition,
                   typingActivity = current.runtime.typingActivity.advance,
@@ -106,9 +110,31 @@ final private[manager] class StateManagerEditorCapability(
             newState.runtime.surfaceAnimations.nonEmpty ||
             newState.runtime.columnTransitions.nonEmpty ||
             newState.runtime.panelGeometry.nonEmpty ||
+            newState.persisted.buffers.values.exists(hasInFlightGlide) ||
             newState.runtime.typingActivity.isActive ||
             hasCompanionSprite
     yield stillActive
+
+  /** Caret-glide (issue #1085 phase 2): whether `buffer` has any cursor with a glide still mid-flight -- checked before
+    * paying the cost of advancing every buffer's cursors on a tick that has nothing else to do either.
+    */
+  private def hasInFlightGlide(buffer: Buffer): Boolean =
+    buffer.editing.cursors.exists(_.glide.exists(!_.isComplete))
+
+  /** Advances every cursor's `glide` by one tick, dropping it once complete -- the per-cursor equivalent of
+    * `Runtime.columnTransitions`'/`Runtime.panelGeometry`'s tick-driven advance, except this state lives on `Cursor`
+    * inside `Buffer.editing.cursors` (`#1577`) rather than a top-level `Runtime` map, so it advances by rebuilding each
+    * buffer's cursor list instead of updating a `Runtime` field.
+    */
+  private def advanceCursorGlides(buffer: Buffer): Buffer =
+    val advancedCursors = buffer.editing.cursors.map { cursor =>
+      cursor.glide match
+        case Some(glide) =>
+          val advanced = glide.advance
+          if advanced.isComplete then cursor.copy(glide = None) else cursor.copy(glide = Some(advanced))
+        case None => cursor
+    }
+    if advancedCursors == buffer.editing.cursors then buffer else buffer.withCursorList(advancedCursors)
 
   /** A cell outside the buffer's currently visible viewport isn't rendered, so there's no need to pay its
     * interpolation/allocation cost on every tick -- it simply resumes advancing once scrolled back into view.
