@@ -7,6 +7,10 @@ import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+// `SurfaceContentResolver.resolve` still resolves `ContextMenu` for real (issue #819, slice 2): its own
+// `OverlayViewModel.contentView` call site bypasses it (composition paints instead), but `EditorLayoutContract`
+// calls this dispatcher independently and genuinely needs real, item-count-accurate rows/header/footer for its own
+// row-slot/header-rect geometry -- see the comment on `SurfaceContentResolver`'s own `ContextMenu` case.
 class SurfaceContentResolverModalWorkflowSpec extends AnyFlatSpec with Matchers:
 
   "SurfaceContentResolver" should "resolve context menus into a selected command list" in {

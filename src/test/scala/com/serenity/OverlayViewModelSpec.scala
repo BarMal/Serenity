@@ -133,9 +133,13 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
     val overlay = OverlayViewModel.fromState(state, layout).belowCursor.getOrElse(fail("Expected command overlay"))
 
+    // Content is painted entirely from `CommandRunnerSurfaceComposition` (issue #819, slice 2); item row spacing is
+    // read from its paint boxes, not the plain-rows `contentRowSlots` path this content no longer populates.
     overlay.itemGapRows shouldBe 1
-    overlay.contentRowSlots
-      .collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(_), y) => y }
+    overlay.composition.toList
+      .flatMap(_.paintBoxes)
+      .filter(_.focusId.isDefined)
+      .map(_.rect.y)
       .sliding(2)
       .foreach {
         case List(first, second) => second - first shouldBe 3
@@ -232,11 +236,14 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
       hasFooter = true,
       itemGapRows = 1
     )
-    overlay.contentRowSlots.map(_.kind) shouldBe List(
-      SurfaceContentRowKind.Header,
-      SurfaceContentRowKind.Item(0),
-      SurfaceContentRowKind.Item(1),
-      SurfaceContentRowKind.Footer
+    // Content is painted entirely from `ContextMenuSurfaceComposition` (issue #819, slice 2); row layout is read from
+    // its paint boxes, not the plain-rows `contentRowSlots` path this content no longer populates.
+    val composition = overlay.composition.getOrElse(fail("Expected a context menu composition"))
+    composition.paintBoxes.map(_.kind) shouldBe List(
+      SurfacePaintKind.Text,
+      SurfacePaintKind.ActionItem,
+      SurfacePaintKind.ActionItem,
+      SurfacePaintKind.Text
     )
   }
 
@@ -279,14 +286,29 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val overlays = OverlayViewModel.fromState(state, layout)
     val overlay  = overlays.belowCursor.getOrElse(fail("Expected command runner overlay"))
 
-    overlay.header.map(_.plainText) shouldBe Some("search: op")
-    overlay.header.flatMap(_.cursorColumn) shouldBe Some("search: op".length)
-    overlay.rows.exists(_.selected) shouldBe true
-    overlay.rows.map(_.plainText).head should include("Open")
-    overlay.rows.map(_.plainText).head should include("Open file")
+    // Content is painted entirely from `CommandRunnerSurfaceComposition` (issue #819, slice 2); header/row text and
+    // selection are read from its paint boxes, not the plain-rows `header`/`rows` fields this content no longer
+    // populates.
+    val composition = overlay.composition.getOrElse(fail("Expected a command palette composition"))
+    val header      = composition.paintBoxes.headOption.getOrElse(fail("Expected a header box"))
+    header.text shouldBe Some("search: op")
+    header.cursorOffset shouldBe Some("search: op".length)
+
+    val itemBoxes = composition.paintBoxes.filter(_.focusId.isDefined)
+    itemBoxes.exists(_.selected) shouldBe true
+    itemBoxes.headOption.flatMap(_.text).exists(_.contains("Open file")) shouldBe true
   }
 
-  it should "skip inactive command palettes so closed overlays do not linger" in {
+  // Renamed from "should skip inactive command palettes so closed overlays do not linger" (issue #819, slice 2):
+  // `CommandPalette` is now unconditionally composed the same way `ModalWorkflow`/`ContextMenu`/`TabBar` already are
+  // (`OverlayViewModel.isComposedContent`), so a *present* palette surface always yields an overlay view regardless of
+  // `CommandRunner.isActive` -- matching every other composed surface kind, none of which gate on an inner "is this
+  // really active" flag either. "Closed overlays do not linger" is still true in production: dismissing the command
+  // runner removes its `UiSurface` from `state.runtime.uiSurfaces` entirely (`AppEventReducer`'s `ToggleCommandRunner`
+  // handling), so an inactive-but-present palette surface, as constructed here, is a shape the reducers never actually
+  // produce. What this test still pins down: even in that shape, an inactive runner's composition paints only its
+  // (empty) header shell -- no selectable items or actions -- so nothing interactive leaks through.
+  it should "paint only a header shell, no items, for a command palette whose runner is inactive" in {
     val buffer = Buffer
       .fromString(bufferId, "one\ntwo\nthree")
       .copy(editing = EditingState(List(CursorPosition(1, 2))))
@@ -315,8 +337,10 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
 
     val overlays = OverlayViewModel.fromState(state, layout)
+    val overlay  = overlays.belowCursor.getOrElse(fail("Expected a command palette overlay"))
 
-    overlays.belowCursor shouldBe None
+    overlay.composition.toList.flatMap(_.paintBoxes).flatMap(_.focusId) shouldBe Nil
+    overlay.composition.toList.flatMap(_.hitRegions) shouldBe Nil
   }
 
   it should "prefer the focused modal surface over earlier below-cursor floating surfaces" in {
@@ -447,7 +471,9 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     stack should have size 2
     stack.head.rows.flatMap(_.segments).exists(_.text.contains("Bold")) shouldBe true
     stack.head.itemGapRows shouldBe 0.25
-    stack(1).header.map(_.plainText) shouldBe Some("search: op")
+    // `stack(1)` is the command palette, painted entirely from `CommandRunnerSurfaceComposition` (issue #819, slice
+    // 2) -- its header text is read from the composition's paint boxes, not the plain-rows `header` field.
+    stack(1).composition.toList.flatMap(_.paintBoxes).headOption.flatMap(_.text) shouldBe Some("search: op")
     stack.head.rect.y should be < stack(1).rect.y
   }
 

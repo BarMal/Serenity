@@ -335,7 +335,11 @@ class EditorLayoutContractSurfacesSpec extends AnyFlatSpec with Matchers:
         1
       )
     )
-    contract.overlayRowSlots(commandRunner.id) shouldBe overlaysById(commandRunner.id).contentRowSlots
+    // `OverlayViewModel` paints CommandPalette entirely via `CommandRunnerSurfaceComposition` (issue #819, slice 2)
+    // and so resolves no plain rows of its own -- but `contract` still needs the real, item-count-accurate rows for
+    // its own row-slot geometry, and calls `SurfaceContentResolver.resolve` directly to get them.
+    overlaysById(commandRunner.id).contentRowSlots shouldBe empty
+    contract.overlayRowSlots(commandRunner.id) should not be empty
     assertInside(
       contract.overlayContentRect(commandRunner.id).getOrElse(fail("expected command runner content")),
       contract.overlayHeaderRect(commandRunner.id).getOrElse(fail("expected command runner header")),
@@ -486,7 +490,10 @@ class EditorLayoutContractSurfacesSpec extends AnyFlatSpec with Matchers:
 
     contract.pinnedSurfaceRowSlots(pinnedPanel.id).shouldBe(pinnedView.contentRowSlots)
     contract.floatingOverlayRowSlots(quickInfo.id).shouldBe(overlaysById(quickInfo.id).contentRowSlots)
-    contract.floatingOverlayRowSlots(commandRunner.id).shouldBe(overlaysById(commandRunner.id).contentRowSlots)
+    // See the equivalent assertion above ("shared overlay lookups for floating surfaces") for why these diverge for
+    // a composed surface like CommandPalette.
+    overlaysById(commandRunner.id).contentRowSlots.shouldBe(Nil)
+    contract.floatingOverlayRowSlots(commandRunner.id) should not be empty
 
     contract.pinnedSurfaceRowSlots.foreach {
       case (surfaceId, slots) =>

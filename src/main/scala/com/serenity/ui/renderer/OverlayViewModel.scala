@@ -245,6 +245,14 @@ object OverlayViewModel:
         content match
           case SurfaceContent.ContextualToolbar(toolbarState) =>
             SurfaceContentResolver.resolveContextualToolbar(toolbarState, state, rect, SurfaceRenderMode.Floating)
+          // Painted entirely via `ContextMenuSurfaceComposition`/`CommandRunnerSurfaceComposition` (issue #819,
+          // slice 2) -- `TextOverlayRenderer` ignores `rows` whenever `composition` is set below, which it always is
+          // for these two, so resolving real rows here would be dead computation on this specific call site. Scoped
+          // to just this call site, not `SurfaceContentResolver.resolve`'s own dispatch: `EditorLayoutContract`
+          // (`floatingGeometry`) calls that dispatcher independently and genuinely still needs the real, item-count
+          // accurate rows/header/footer it produces -- see its own doc comment.
+          case SurfaceContent.ContextMenu(_) | SurfaceContent.CommandPalette(_) =>
+            ResolvedSurfaceContent()
           case _ =>
             SurfaceContentResolver.resolve(
               content,
@@ -268,6 +276,7 @@ object OverlayViewModel:
     content match
       case SurfaceContent.ModalWorkflow(_)     => true
       case SurfaceContent.ContextMenu(_)       => true
+      case SurfaceContent.CommandPalette(_)    => true
       case SurfaceContent.TabBar(_, _)         => true
       case SurfaceContent.ContextualToolbar(_) => true
       case _                                   => false

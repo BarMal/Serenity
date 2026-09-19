@@ -1,7 +1,8 @@
 package com.serenity.ui.layout
 
 import com.serenity.command.*
-import com.serenity.state.models.SurfaceContent
+import com.serenity.config.InterfaceDensityMetrics
+import com.serenity.state.models.{AppState, SurfaceContent}
 
 /** Declarative composition plan for the command runner (issue #819, slice 2: command runner and submenu) -- the palette
   * and the settings surface it also hosts (issue #1059), resolved into one paint/hit-test/focus plan the same way
@@ -28,6 +29,16 @@ object CommandRunnerSurfaceComposition:
 
   /** Recovers the absolute item index a `hitAt` hit's focus id addresses, the inverse of `focusId`. */
   def absoluteIndexOf(id: SurfaceFocusId): Option[Int] = id.value.stripPrefix(FocusIdPrefix).toIntOption
+
+  /** The command runner's frame height: the palette and the settings surface (submenu) it also hosts size identically
+    * today -- both cap at [[FloatingSurfaceLayout.commandSurfaceMaxHeight]] and floor at the density's own
+    * `commandSurfaceMinHeight` -- so this one method, not a `CommandRunnerSurface.Palette`/`.Settings` match, covers
+    * both, mirroring `ModalSurfaceComposition.frameHeight`'s role for blocking workflows.
+    */
+  def frameHeight(state: AppState, maxHeight: Int, roomOnPreferredSide: Int = Int.MaxValue): Int =
+    val densityMetrics   = InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity)
+    val commandMaxHeight = FloatingSurfaceLayout.commandSurfaceMaxHeight(state, maxHeight, roomOnPreferredSide)
+    math.min(commandMaxHeight, math.max(densityMetrics.commandSurfaceMinHeight, maxHeight - 1))
 
   def forRunner(
     runner: CommandRunner,
