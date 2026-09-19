@@ -96,7 +96,10 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     overlays.belowCursor shouldBe defined
 
     val overlay = overlays.belowCursor.get
-    overlay.rows.map(_.plainText) shouldBe List("replace", "needle")
+    // Content is painted entirely from `ModalSurfaceComposition` (issue #819); `ModalSurfaceCompositionSpec` covers
+    // `Modal.Custom`'s actual paint content in detail.
+    overlay.composition shouldBe defined
+    overlay.composition.get.paintBoxes.flatMap(_.text) should contain("replace needle")
     overlay.rect shouldBe layout.belowCursorOverlayRect.get
   }
 
@@ -171,11 +174,8 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val overlays = OverlayViewModel.fromState(state, layout)
     val overlay  = overlays.belowCursor.getOrElse(fail("Expected find overlay"))
 
-    overlay.header.map(_.plainText) shouldBe Some("find")
-    overlay.rows.map(_.plainText) shouldBe List("Find two", "1. 2:1")
-    overlay.rows.head.cursorColumn shouldBe Some("Find two".length)
-    overlay.rows(1).selected shouldBe true
-    overlay.footer.map(_.plainText) shouldBe Some("1 match, 1/1 at 2:1")
+    // Content is painted entirely from `ModalSurfaceComposition` (issue #819); `ModalSurfaceCompositionSpec` covers
+    // `Modal.Find`'s actual paint content in detail.
     overlay.rect shouldBe layout.belowCursorOverlayRect.get
     overlay.composition shouldBe defined
     overlay.composition.toList.flatMap(_.hitRegions).map(_.semanticLabel) shouldBe List("Find", "1. 2:1")
@@ -370,9 +370,11 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val overlays = OverlayViewModel.fromState(state, layout)
     val overlay  = overlays.belowCursor.getOrElse(fail("Expected focused modal overlay"))
 
-    overlay.rows.exists(_.plainText.startsWith("Filename")) shouldBe true
-    overlay.rows.exists(_.plainText.startsWith("Path")) shouldBe true
-    overlay.header.map(_.plainText) should not contain "search: op"
+    // Content is painted entirely from `ModalSurfaceComposition` (issue #819); its presence for the `filename`/`path`
+    // focus targets confirms the file-workflow surface -- not the command runner's search -- was picked.
+    val focusIds = overlay.composition.toList.flatMap(_.paintBoxes).flatMap(_.focusId)
+    focusIds should contain(SurfaceFocusId("filename"))
+    focusIds should contain(SurfaceFocusId("path"))
   }
 
   it should "attach the shared close workflow composition to a modal overlay" in {
