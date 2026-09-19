@@ -1,10 +1,9 @@
 package com.serenity.state.reducers
 
-import com.serenity.testkit.EditingStateFixtures
-
 import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -160,7 +159,10 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = EditorEventReducer.reduce(MoveRight, paneId, initialState).state
 
-    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(1, 0), CursorPosition(1, 1))
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(
+      CursorPosition(1, 0),
+      CursorPosition(1, 1)
+    )
   }
 
   it should "copy the current line without materialising the whole buffer" in {
@@ -254,10 +256,10 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
               editing = EditingStateFixtures(
-                  cursors = List(first.focus, second.focus),
-                  selection = Some(first),
-                  selections = List(first, second)
-                )
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
             )
         )
       )

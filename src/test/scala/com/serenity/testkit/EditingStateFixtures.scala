@@ -4,9 +4,9 @@ import cats.data.NonEmptyList
 import com.serenity.state.models.*
 
 /** A single cursor's preferred vertical-navigation state, as it existed as `EditingState`'s own
-  * `multiCursorVerticalStates: List[VerticalCursorState]` field before `#1577` folded it into each [[Cursor]]
-  * directly. Specs written against that five-field shape still build fixtures with it; kept here, rather than in
-  * `Buffer.scala`, so it is clear this is a test-fixture compatibility shape, not part of the current model.
+  * `multiCursorVerticalStates: List[VerticalCursorState]` field before `#1577` folded it into each [[Cursor]] directly.
+  * Specs written against that five-field shape still build fixtures with it; kept here, rather than in `Buffer.scala`,
+  * so it is clear this is a test-fixture compatibility shape, not part of the current model.
   */
 final case class VerticalCursorState(cursor: CursorPosition, preferredColumn: Int, preferredXPx: Float)
 
@@ -17,6 +17,7 @@ final case class VerticalCursorState(cursor: CursorPosition, preferredColumn: In
   * did before -- only the fixture's own construction call changes, not what it asserts.
   */
 object EditingStateFixtures:
+
   def apply(
     cursors: List[CursorPosition] = List(CursorPosition(0, 0)),
     selection: Option[Selection] = None,

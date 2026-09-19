@@ -664,19 +664,22 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(MoveToStartOfFile).unsafeRunSync()
     val targetColumn = middleRow.startColumn + 2
     for _ <- 0 until targetColumn do stateManager.applyEvent(MoveRight).unsafeRunSync()
-    val beforeCursor = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
+    val beforeCursor =
+      stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
     beforeCursor.column shouldBe targetColumn
 
     // Home lands on the middle visual row's own start column, not the logical line's column 0.
     stateManager.applyEvent(MoveToStart).unsafeRunSync()
-    val afterHomeCursor = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
+    val afterHomeCursor =
+      stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
     afterHomeCursor.line shouldBe 0
     afterHomeCursor.column shouldBe middleRow.startColumn
     middleRow.startColumn should be > 0
 
     // From there, End lands on that same visual row's own end column, not the logical line's true end.
     stateManager.applyEvent(MoveToEnd).unsafeRunSync()
-    val afterEndCursor = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
+    val afterEndCursor =
+      stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
     afterEndCursor.line shouldBe 0
     afterEndCursor.column shouldBe middleRow.endColumn
     middleRow.endColumn should be < longLine.length

@@ -7,9 +7,9 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.propspec.AnyPropSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-/** `Buffer.cursorList`/`withCursorList` became trivial identity conversions once `EditingState` itself stores
-  * cursors as `NonEmptyList[Cursor]` (`#1577`) -- this now exercises that identity directly, rather than the
-  * five-field round trip `cursorList`/`withCursorList` used to perform before storage itself was per-cursor.
+/** `Buffer.cursorList`/`withCursorList` became trivial identity conversions once `EditingState` itself stores cursors
+  * as `NonEmptyList[Cursor]` (`#1577`) -- this now exercises that identity directly, rather than the five-field round
+  * trip `cursorList`/`withCursorList` used to perform before storage itself was per-cursor.
   */
 class CursorListSpec extends AnyPropSpec with ScalaCheckPropertyChecks with Matchers:
   private given Balance = Balance.default
@@ -51,9 +51,7 @@ class CursorListSpec extends AnyPropSpec with ScalaCheckPropertyChecks with Matc
     Gen.oneOf(genSingleCursorBuffer, genMultiCursorBuffer, genMultiSelectionBuffer)
 
   property("cursorList is exactly the buffer's own cursors") {
-    forAll(genCanonicalBuffer) { buffer =>
-      buffer.cursorList shouldBe buffer.editing.cursors
-    }
+    forAll(genCanonicalBuffer)(buffer => buffer.cursorList shouldBe buffer.editing.cursors)
   }
 
   property("withCursorList(cursorList(buffer)) reproduces the buffer's cursors") {

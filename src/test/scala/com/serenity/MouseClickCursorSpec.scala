@@ -191,7 +191,8 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    val initialCursor = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.headOption
+    val initialCursor =
+      sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.headOption
 
     // Click at row=0 (header row of pane at y=0) — should be ignored
     sm.applyEvent(MouseClick(20, 0)).unsafeRunSync()
@@ -211,7 +212,8 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    val initialCursor = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.headOption
+    val initialCursor =
+      sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.headOption
 
     // Click at col=5 (left spacer, pane starts at col=15) — should be ignored
     sm.applyEvent(MouseClick(5, 5)).unsafeRunSync()
@@ -226,7 +228,8 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     // No ResizeEvent applied — ViewportSize is None
 
-    val initialCursor = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.headOption
+    val initialCursor =
+      sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.headOption
 
     sm.applyEvent(MouseClick(20, 5)).unsafeRunSync()
 

@@ -1,11 +1,10 @@
 package com.serenity
 
-import com.serenity.testkit.EditingStateFixtures
-
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.ToolbarDisplayMode
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -132,8 +131,7 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope(List.fill(12)("toolbar target").mkString("\n"))),
-            editing =
-              EditingStateFixtures(selection = None, cursors = List(CursorPosition(8, 4)))
+            editing = EditingStateFixtures(selection = None, cursors = List(CursorPosition(8, 4)))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }

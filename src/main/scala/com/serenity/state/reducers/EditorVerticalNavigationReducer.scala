@@ -118,8 +118,8 @@ private[reducers] object EditorVerticalNavigationReducer:
       )
     )
 
-  /** Each cursor's preferred column/x travels with it directly (`#1577`), so unlike before `#1577` there is no
-    * separate collection whose membership can drift out of sync with the live cursor set -- a cursor's own
+  /** Each cursor's preferred column/x travels with it directly (`#1577`), so unlike before `#1577` there is no separate
+    * collection whose membership can drift out of sync with the live cursor set -- a cursor's own
     * `preferredColumn`/`preferredXPx` is either set (from a still-in-flight vertical move) or `None` (fresh from a
     * non-vertical edit or movement), in which case it falls back to that cursor's own current column/measured x.
     */

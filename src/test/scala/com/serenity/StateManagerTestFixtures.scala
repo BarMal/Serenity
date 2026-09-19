@@ -1,7 +1,5 @@
 package com.serenity
 
-import com.serenity.testkit.EditingStateFixtures
-
 import cats.effect.IO
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.keystroke.events.Direction
@@ -9,6 +7,7 @@ import com.serenity.state.core.EditorState
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.state.reducers.CommandRunnerPanelSelections
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.*
 
 /** Pure `AppState` fixtures for positioning test scenarios -- assigning a buffer to a pane, placing a cursor or

@@ -1,13 +1,12 @@
 package com.serenity.state.manager
 
-import com.serenity.testkit.EditingStateFixtures
-
 import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -67,9 +66,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
           bufferId,
           before.persisted
             .buffers(bufferId)
-            .copy(editing =
-              EditingState(List(CursorPosition(1, 2), CursorPosition(2, 0)))
-            )
+            .copy(editing = EditingState(List(CursorPosition(1, 2), CursorPosition(2, 0))))
         )
       )
     )

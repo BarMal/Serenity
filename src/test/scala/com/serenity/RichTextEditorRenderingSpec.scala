@@ -1,13 +1,12 @@
 package com.serenity
 
-import com.serenity.testkit.EditingStateFixtures
-
 import java.awt.{Color, Font}
 
 import com.serenity.config.AppConfig
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, CursorPosition}
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
 import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.{RichTextStyling, TextStyle, Theme}

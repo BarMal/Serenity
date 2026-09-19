@@ -16,9 +16,9 @@ private[reducers] object EditorCursorMovement:
       case Nil       => List(newPrimary)
 
   /** Since `#1577`, each cursor carries its own preferred-column/x state directly, so there is nothing left to clear
-    * that a fresh primary-cursor write (`EditingState.withPrimary`) doesn't already replace on its own. Kept as a
-    * named no-op so call sites that clear stale multi-cursor vertical state ahead of an event that might turn
-    * genuinely multi-cursor again don't need to know that distinction disappeared.
+    * that a fresh primary-cursor write (`EditingState.withPrimary`) doesn't already replace on its own. Kept as a named
+    * no-op so call sites that clear stale multi-cursor vertical state ahead of an event that might turn genuinely
+    * multi-cursor again don't need to know that distinction disappeared.
     */
   def clearInFlightMultiCursorVerticalState(buffer: Buffer): Buffer = buffer
 

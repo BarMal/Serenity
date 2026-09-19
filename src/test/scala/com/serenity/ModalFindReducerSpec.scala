@@ -420,8 +420,7 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
                   .buffers(bufferId)
                   .document
                   .copy(content = com.serenity.rope.Rope("alpha beta")),
-                editing =
-                  EditingState(List(CursorPosition(0, 5))),
+                editing = EditingState(List(CursorPosition(0, 5))),
                 findState = Some(FindState("alpha", List(matchAt(0, 0)), 0))
               )
           )

@@ -70,7 +70,9 @@ class BufferWithEditedContentSpec extends AnyFlatSpec with Matchers:
 
   it should "always clear every cursor's preferred vertical-navigation state, not just leave it at the caller's mercy" in {
     val edited = original.withEditedContent(Rope("gamma delta"), List(CursorPosition(0, 1)))
-    edited.editing.cursors.toList.forall(cursor => cursor.preferredColumn.isEmpty && cursor.preferredXPx.isEmpty) shouldBe true
+    edited.editing.cursors.toList.forall(cursor =>
+      cursor.preferredColumn.isEmpty && cursor.preferredXPx.isEmpty
+    ) shouldBe true
   }
 
   it should "leave documentComments and richTextDocument unchanged when the caller doesn't supply them" in {

@@ -14,11 +14,11 @@ test/scala/com/serenity/FileHandlingSpec.scala	file length	634
 test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	639
 test/scala/com/serenity/GutterAndLineNumbersSpec.scala	file length	636
 test/scala/com/serenity/LayoutEngineSpec.scala	file length	671
-test/scala/com/serenity/LineWrappingSpec.scala	file length	747
+test/scala/com/serenity/LineWrappingSpec.scala	file length	750
 test/scala/com/serenity/MarkdownDocumentPreviewSpec.scala	file length	745
 test/scala/com/serenity/RendererSnapshotReuseSpec.scala	file length	618
-test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	696
-test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	711
+test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	695
+test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	712
 test/scala/com/serenity/SpellCheckerDictionaryIoSpec.scala	file length	614
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	750
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	320

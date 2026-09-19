@@ -83,9 +83,9 @@ class EditorVerticalNavigationReducerSpec extends AnyFlatSpec with Matchers:
   /** Before `#1577`, a genuinely multi-cursor buffer's per-cursor vertical state lived in a separate
     * `multiCursorVerticalStates` collection that `ExtendSelectionDown` had to explicitly clear before falling back to
     * its single-cursor path, or a later multi-cursor move could reuse state pinned to stale cursor positions. Now that
-    * a cursor's own preferred column/x travels with it directly, there is no second collection left to go stale or
-    * need clearing -- the single remaining cursor's own preferred state is simply whatever this move computes for it,
-    * as the previous test already pins.
+    * a cursor's own preferred column/x travels with it directly, there is no second collection left to go stale or need
+    * clearing -- the single remaining cursor's own preferred state is simply whatever this move computes for it, as the
+    * previous test already pins.
     */
 
   "MoveDown with multiple cursors" should "move every cursor down independently, deduplicating and sorting" in {

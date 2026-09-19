@@ -1,11 +1,10 @@
 package com.serenity
 
-import com.serenity.testkit.EditingStateFixtures
-
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ModalEventReducer, WorkflowEffect}
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -169,7 +168,9 @@ class ModalReplaceWorkflowReducerSpec extends AnyFlatSpec with Matchers:
           .buffers(BufferId(0))
           .document
           .copy(content = com.serenity.rope.Rope("needle one\nneedle two\nplain")),
-        editing = EditingStateFixtures(selection = Some(Selection(CursorPosition(1, 0), CursorPosition(1, "needle two".length))))
+        editing = EditingStateFixtures(selection =
+          Some(Selection(CursorPosition(1, 0), CursorPosition(1, "needle two".length)))
+        )
       )
     val initialState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(

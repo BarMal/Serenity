@@ -1,11 +1,10 @@
 package com.serenity.state.reducers
 
-import com.serenity.testkit.EditingStateFixtures
-
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -35,10 +34,10 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
               editing = EditingStateFixtures(
-                  cursors = List(first.focus, second.focus),
-                  selection = Some(first),
-                  selections = List(first, second)
-                ),
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              ),
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(visibleLines = 2)
             )
         )
@@ -69,10 +68,10 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
               editing = EditingStateFixtures(
-                  cursors = List(first.focus, second.focus),
-                  selection = Some(first),
-                  selections = List(first, second)
-                )
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
             )
         )
       )
@@ -102,10 +101,10 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n45")),
               editing = EditingStateFixtures(
-                  cursors = List(first.focus, second.focus),
-                  selection = Some(first),
-                  selections = List(first, second)
-                )
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
             )
         )
       )
@@ -137,7 +136,10 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     )
 
     val updatedState = EditorEventReducer.reduce(MoveLeft, paneId, initialState).state
-    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(
+      CursorPosition(0, 1),
+      CursorPosition(0, 3)
+    )
   }
 
   it should "move every cursor right when multiple cursors are active" in {
@@ -159,7 +161,10 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     )
 
     val updatedState = EditorEventReducer.reduce(MoveRight, paneId, initialState).state
-    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(
+      CursorPosition(0, 1),
+      CursorPosition(0, 3)
+    )
   }
 
   it should "move every cursor to line start when multiple cursors are active" in {
@@ -229,7 +234,10 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     )
 
     val updatedState = com.serenity.VerticalNavSupport.dispatch(MoveDown, paneId, initialState).state
-    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(1, 1), CursorPosition(1, 3))
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(
+      CursorPosition(1, 1),
+      CursorPosition(1, 3)
+    )
   }
 
   it should "move every cursor up while preserving per-cursor columns when multiple cursors are active" in {
@@ -253,7 +261,10 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     )
 
     val updatedState = com.serenity.VerticalNavSupport.dispatch(MoveUp, paneId, initialState).state
-    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(
+      CursorPosition(0, 1),
+      CursorPosition(0, 3)
+    )
   }
 
   it should "move every cursor to the start of the file when multiple cursors are active" in {
@@ -384,10 +395,10 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha\nbeta")),
               editing = EditingStateFixtures(
-                  cursors = List(first.focus, second.focus),
-                  selection = Some(first),
-                  selections = List(first, second)
-                )
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
             )
         )
       )

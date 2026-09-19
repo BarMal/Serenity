@@ -1,9 +1,8 @@
 package com.serenity
 
-import com.serenity.testkit.EditingStateFixtures
-
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{
   CellMetrics,
   LayoutEngine,
@@ -207,13 +206,15 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     // The cursor's own position is its selection's focus (`#1577`), so `before`'s cursor is seeded at that same focus
     // rather than the document origin, isolating this transition to the selection changing -- otherwise the cursor's
     // position would also read as having moved, correctly damaging its own old/new rows too.
-    val before  = stateWith(lines, CursorPosition(5, 4))
+    val before = stateWith(lines, CursorPosition(5, 4))
     val after = before.copy(persisted =
       before.persisted.copy(
         buffers = before.persisted.buffers.view
           .mapValues(buf =>
             buf
-              .copy(editing = EditingStateFixtures(selection = Some(Selection(CursorPosition(5, 0), CursorPosition(5, 4)))))
+              .copy(editing =
+                EditingStateFixtures(selection = Some(Selection(CursorPosition(5, 0), CursorPosition(5, 4))))
+              )
           )
           .toMap
       )

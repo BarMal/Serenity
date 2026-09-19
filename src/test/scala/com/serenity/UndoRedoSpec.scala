@@ -1,7 +1,5 @@
 package com.serenity
 
-import com.serenity.testkit.EditingStateFixtures
-
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
@@ -11,6 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory

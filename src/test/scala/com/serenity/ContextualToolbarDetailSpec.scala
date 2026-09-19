@@ -1,11 +1,10 @@
 package com.serenity
 
-import com.serenity.testkit.EditingStateFixtures
-
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.richtext.*
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -75,8 +74,7 @@ class ContextualToolbarDetailSpec extends AnyFlatSpec with Matchers with Context
           .copy(
             document =
               state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
-            editing =
-              EditingStateFixtures(selection = None, cursors = List(CursorPosition(0, 10))),
+            editing = EditingStateFixtures(selection = None, cursors = List(CursorPosition(0, 10))),
             richText = state.persisted.buffers(bufferId).richText.copy(richTextDocument = Some(document))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))

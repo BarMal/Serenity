@@ -1,10 +1,9 @@
 package com.serenity.state.reducers
 
-import com.serenity.testkit.EditingStateFixtures
-
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -33,10 +32,10 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope("abc def ghi")),
               editing = EditingStateFixtures(
-                  cursors = List(first.focus, second.focus),
-                  selection = Some(first),
-                  selections = List(first, second)
-                )
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
             )
         )
       )
@@ -67,10 +66,10 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
               editing = EditingStateFixtures(
-                  cursors = List(first.focus, second.focus),
-                  selection = Some(first),
-                  selections = List(first, second)
-                )
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
             )
         )
       )
@@ -101,10 +100,10 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope("abc def ghi")),
               editing = EditingStateFixtures(
-                  cursors = List(first.focus, second.focus),
-                  selection = Some(first),
-                  selections = List(first, second)
-                )
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
             )
         )
       ),
@@ -138,10 +137,10 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope("abc def ghi")),
               editing = EditingStateFixtures(
-                  cursors = List(first.focus, second.focus),
-                  selection = Some(first),
-                  selections = List(first, second)
-                )
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
             )
         )
       )
@@ -172,10 +171,10 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope("    alpha\n  beta\n\tgamma")),
               editing = EditingStateFixtures(
-                  cursors = List(first.focus, second.focus),
-                  selection = Some(first),
-                  selections = List(first, second)
-                )
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
             )
         )
       )
@@ -206,10 +205,10 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope("abc def ghi")),
               editing = EditingStateFixtures(
-                  cursors = List(first.focus, second.focus),
-                  selection = Some(first),
-                  selections = List(first, second)
-                )
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
             )
         )
       )
@@ -240,10 +239,10 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
                 .document
                 .copy(content = com.serenity.rope.Rope("abc def ghi")),
               editing = EditingStateFixtures(
-                  cursors = List(first.focus, second.focus),
-                  selection = Some(first),
-                  selections = List(first, second)
-                )
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
             )
         )
       )

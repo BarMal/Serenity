@@ -1,8 +1,7 @@
 package com.serenity.state.models
 
-import com.serenity.testkit.EditingStateFixtures
-
 import com.serenity.rope.Balance
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

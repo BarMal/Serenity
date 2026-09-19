@@ -107,9 +107,7 @@ final private[manager] class MouseHitTesting(
             s.persisted.copy(
               buffers = s.persisted.buffers.updated(
                 buffer.id,
-                current.copy(editing =
-                  EditingState.fromCursors(List(Cursor(focusCursor, selection.map(_.anchor))))
-                )
+                current.copy(editing = EditingState.fromCursors(List(Cursor(focusCursor, selection.map(_.anchor)))))
               ),
               focus = Focus.EditorPane(paneId),
               layout = s.persisted.layout.copy(activeEditorPaneId = Some(paneId))

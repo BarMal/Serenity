@@ -1,7 +1,5 @@
 package com.serenity
 
-import com.serenity.testkit.EditingStateFixtures
-
 import java.awt.Font
 
 import com.serenity.config.MarkdownViewMode
@@ -9,6 +7,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.RendererEntryPoints
 import org.scalatest.flatspec.AnyFlatSpec

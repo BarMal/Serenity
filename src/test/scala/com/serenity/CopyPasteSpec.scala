@@ -1,7 +1,5 @@
 package com.serenity
 
-import com.serenity.testkit.EditingStateFixtures
-
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
@@ -10,6 +8,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -211,7 +210,10 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
     getClipboard shouldBe Some("alpha\ngamma")
     getContent(bufferId) shouldBe " beta "
     getState.persisted.buffers(bufferId).allSelections shouldBe Nil
-    getState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 0), CursorPosition(0, 6))
+    getState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(
+      CursorPosition(0, 0),
+      CursorPosition(0, 6)
+    )
 
   it should "cut the current line for every distinct cursor line when multiple cursors are present" in new ClipFixture:
     val bufferId = setupBuffer("alpha\nbeta\ngamma\ndelta")
@@ -221,7 +223,10 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
 
     getClipboard shouldBe Some("alpha\ngamma")
     getContent(bufferId) shouldBe "beta\ndelta"
-    getState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 0), CursorPosition(1, 0))
+    getState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(
+      CursorPosition(0, 0),
+      CursorPosition(1, 0)
+    )
 
   it should "round-trip: cut then paste restores the line" in new ClipFixture:
     val bufferId = setupBuffer("original")
@@ -264,9 +269,9 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
                   .buffers(activeBufferId.get())
                   .copy(editing =
                     EditingStateFixtures(
-                        cursors = List(selection.start),
-                        selection = Some(selection)
-                      )
+                      cursors = List(selection.start),
+                      selection = Some(selection)
+                    )
                   )
               )
             )
@@ -286,10 +291,10 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
                   .buffers(activeBufferId.get())
                   .copy(editing =
                     EditingStateFixtures(
-                        cursors = selections.map(_.focus),
-                        selection = Some(primary),
-                        selections = selections
-                      )
+                      cursors = selections.map(_.focus),
+                      selection = Some(primary),
+                      selections = selections
+                    )
                   )
               )
             )
@@ -308,10 +313,10 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
                   .buffers(activeBufferId.get())
                   .copy(editing =
                     EditingStateFixtures(
-                        cursors = cursors,
-                        selection = None,
-                        selections = Nil
-                      )
+                      cursors = cursors,
+                      selection = None,
+                      selections = Nil
+                    )
                   )
               )
             )

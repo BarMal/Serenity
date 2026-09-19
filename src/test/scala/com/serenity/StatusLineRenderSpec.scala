@@ -1,10 +1,9 @@
 package com.serenity
 
-import com.serenity.testkit.EditingStateFixtures
-
 import com.serenity.config.{AppMode, StatusLinePlacement, StatusSegment}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme

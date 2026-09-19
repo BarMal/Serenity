@@ -1,13 +1,12 @@
 package com.serenity
 
-import com.serenity.testkit.EditingStateFixtures
-
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -159,9 +158,9 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 content = com.serenity.rope.Rope(original)
               ),
             editing = EditingStateFixtures(
-                cursors = List(CursorPosition(0, 0)),
-                selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length)))
-              ),
+              cursors = List(CursorPosition(0, 0)),
+              selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length)))
+            ),
             findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
@@ -269,13 +268,13 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three")
               ),
             editing = EditingStateFixtures(
-                selection = Some(
-                  Selection(
-                    CursorPosition(1, 0),
-                    CursorPosition(1, "needle two".length)
-                  )
+              selection = Some(
+                Selection(
+                  CursorPosition(1, 0),
+                  CursorPosition(1, "needle two".length)
                 )
               )
+            )
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -326,13 +325,13 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three")
               ),
             editing = EditingStateFixtures(
-                selection = Some(
-                  Selection(
-                    CursorPosition(1, 0),
-                    CursorPosition(2, "needle three".length)
-                  )
+              selection = Some(
+                Selection(
+                  CursorPosition(1, 0),
+                  CursorPosition(2, "needle three".length)
                 )
               )
+            )
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -368,13 +367,13 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 content = com.serenity.rope.Rope("needle one\nneedle two\nneedle three\noutside needle")
               ),
             editing = EditingStateFixtures(
-                selection = Some(
-                  Selection(
-                    CursorPosition(0, 0),
-                    CursorPosition(2, "needle three".length)
-                  )
+              selection = Some(
+                Selection(
+                  CursorPosition(0, 0),
+                  CursorPosition(2, "needle three".length)
                 )
               )
+            )
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -438,13 +437,13 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 content = com.serenity.rope.Rope("needle one\nneedle two\noutside needle")
               ),
             editing = EditingStateFixtures(
-                selection = Some(
-                  Selection(
-                    CursorPosition(0, 0),
-                    CursorPosition(1, "needle two".length)
-                  )
+              selection = Some(
+                Selection(
+                  CursorPosition(0, 0),
+                  CursorPosition(1, "needle two".length)
                 )
               )
+            )
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -511,9 +510,9 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
                 content = com.serenity.rope.Rope(original)
               ),
             editing = EditingStateFixtures(
-                cursors = List(CursorPosition(0, 0)),
-                selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length)))
-              ),
+              cursors = List(CursorPosition(0, 0)),
+              selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length)))
+            ),
             findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(2, 0)), 0))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
@@ -532,7 +531,9 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     replaced.persisted.buffers(bufferId).document.content.collect() shouldBe "thread one\nmiddle\nthread two"
     replaced.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(2, "thread".length))
     replaced.persisted.buffers(bufferId).primarySelection shouldBe None
-    replaced.persisted.buffers(bufferId).allSelections shouldBe replaced.persisted.buffers(bufferId).primarySelection.toList
+    replaced.persisted
+      .buffers(bufferId)
+      .allSelections shouldBe replaced.persisted.buffers(bufferId).primarySelection.toList
     replaced.persisted.buffers(bufferId).findState shouldBe None
 
     stateManager.applyEvent(Undo).unsafeRunSync()

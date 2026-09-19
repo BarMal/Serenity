@@ -1,11 +1,10 @@
 package com.serenity
 
-import com.serenity.testkit.EditingStateFixtures
-
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -49,9 +48,9 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
           .copy(
             document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
             editing = EditingStateFixtures(
-                selection = Some(selection),
-                cursors = List(selection.focus)
-              )
+              selection = Some(selection),
+              cursors = List(selection.focus)
+            )
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }
@@ -85,9 +84,9 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
           .copy(
             document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
             editing = EditingStateFixtures(
-                selection = Some(selection),
-                cursors = List(selection.focus)
-              )
+              selection = Some(selection),
+              cursors = List(selection.focus)
+            )
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }

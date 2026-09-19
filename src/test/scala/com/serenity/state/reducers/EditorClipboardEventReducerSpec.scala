@@ -1,10 +1,9 @@
 package com.serenity.state.reducers
 
-import com.serenity.testkit.EditingStateFixtures
-
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

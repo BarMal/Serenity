@@ -1,7 +1,5 @@
 package com.serenity
 
-import com.serenity.testkit.EditingStateFixtures
-
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.AppConfig
@@ -10,6 +8,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
@@ -303,9 +302,9 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .copy(editing =
                   EditingStateFixtures(
-                      cursors = List(CursorPosition(0, 6)),
-                      selection = Some(Selection(CursorPosition(0, 6), CursorPosition(0, 11)))
-                    )
+                    cursors = List(CursorPosition(0, 6)),
+                    selection = Some(Selection(CursorPosition(0, 6), CursorPosition(0, 11)))
+                  )
                 )
             )
           )
@@ -330,11 +329,13 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     stateManager.setCursorPosition(paneId, 0, 4).unsafeRunSync()
 
     stateManager.applyEvent(MoveDown).unsafeRunSync()
-    val afterFirstDown = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
+    val afterFirstDown =
+      stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
     afterFirstDown shouldBe CursorPosition(1, 2)
 
     stateManager.applyEvent(MoveDown).unsafeRunSync()
-    val afterSecondDown = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
+    val afterSecondDown =
+      stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
     afterSecondDown shouldBe CursorPosition(2, 4)
 
   it should "preserve measured visual x when moving through proportional text lines" in new EditorFixture:
@@ -385,11 +386,13 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     val expectedCol  = snapshot.visualLines(2).nearestColumnForXPx(preferredXPx)
 
     stateManager.applyEvent(MoveDown).unsafeRunSync()
-    val afterFirstDown = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
+    val afterFirstDown =
+      stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
     afterFirstDown shouldBe CursorPosition(1, 1)
 
     stateManager.applyEvent(MoveDown).unsafeRunSync()
-    val afterSecondDown = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
+    val afterSecondDown =
+      stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
     afterSecondDown shouldBe CursorPosition(2, expectedCol)
 
   /** Before `#1577`, a converged multi-cursor position was deduplicated only in the *visible* `cursors` list;
@@ -485,9 +488,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
               bufferId,
               current.persisted
                 .buffers(bufferId)
-                .copy(editing =
-                  EditingState(List(CursorPosition(0, 3), CursorPosition(0, 4)))
-                )
+                .copy(editing = EditingState(List(CursorPosition(0, 3), CursorPosition(0, 4))))
             )
           )
         )
@@ -515,9 +516,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
               bufferId,
               current.persisted
                 .buffers(bufferId)
-                .copy(editing =
-                  EditingState(List(CursorPosition(0, 3), CursorPosition(0, 4)))
-                )
+                .copy(editing = EditingState(List(CursorPosition(0, 3), CursorPosition(0, 4))))
             )
           )
         )

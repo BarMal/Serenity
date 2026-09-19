@@ -1,7 +1,5 @@
 package com.serenity
 
-import com.serenity.testkit.{EditingStateFixtures, VerticalCursorState}
-
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
@@ -9,6 +7,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Leaf, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.{EditingStateFixtures, VerticalCursorState}
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -318,12 +317,12 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
               .copy(
                 document = state.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)),
                 editing = EditingStateFixtures(
-                    cursors = List(CursorPosition(0, 1), CursorPosition(2, 3)),
-                    multiCursorVerticalStates = List(
-                      VerticalCursorState(CursorPosition(0, 1), 1, 1.0f),
-                      VerticalCursorState(CursorPosition(2, 3), 3, 3.0f)
-                    )
+                  cursors = List(CursorPosition(0, 1), CursorPosition(2, 3)),
+                  multiCursorVerticalStates = List(
+                    VerticalCursorState(CursorPosition(0, 1), 1, 1.0f),
+                    VerticalCursorState(CursorPosition(2, 3), 3, 3.0f)
                   )
+                )
               )
           )
         )
@@ -357,10 +356,10 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
               .copy(
                 document = state.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)),
                 editing = EditingStateFixtures(
-                    cursors = List(first.focus, second.focus),
-                    selection = Some(first),
-                    selections = List(first, second)
-                  )
+                  cursors = List(first.focus, second.focus),
+                  selection = Some(first),
+                  selections = List(first, second)
+                )
               )
           )
         )

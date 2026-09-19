@@ -318,7 +318,8 @@ private[serenity] object AuthoritativeUiScene:
                   .toInt
                   .max(baseViewport.visibleColumns)
                   .max(paneLayout.contentRect.width + 64)
-            val cursorColumn = buffer.editing.cursorPositions.headOption.map(_.column).getOrElse(baseViewport.leftColumn)
+            val cursorColumn =
+              buffer.editing.cursorPositions.headOption.map(_.column).getOrElse(baseViewport.leftColumn)
             val leftColumn =
               if state.persisted.config.surfaceConfig.wordWrapEnabled then 0
               else baseViewport.leftColumn.max(0).max(cursorColumn - visibleColumns + 1)

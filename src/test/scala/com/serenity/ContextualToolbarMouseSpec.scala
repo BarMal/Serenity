@@ -1,7 +1,5 @@
 package com.serenity
 
-import com.serenity.testkit.EditingStateFixtures
-
 import java.awt.Font
 
 import cats.effect.unsafe.implicits.global
@@ -9,6 +7,7 @@ import com.serenity.config.ToolbarDisplayMode
 import com.serenity.keystroke.events.*
 import com.serenity.richtext.*
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

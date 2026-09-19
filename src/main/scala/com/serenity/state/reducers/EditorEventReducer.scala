@@ -149,62 +149,62 @@ object EditorEventReducer:
     val head = rawBuffer.editing.cursors.head.position
 
     if isExtendSelectionEvent(event) then
-        val buffer       = clearInFlightMultiCursorVerticalState(rawBuffer)
-        val currentState = Focused.replaceBuffer(incomingState, buffer)
-        event match
-          case ExtendSelectionLeft      => reduceSelectionExtension(buffer, head, currentState)(leftTarget)
-          case ExtendSelectionRight     => reduceSelectionExtension(buffer, head, currentState)(rightTarget)
-          case ExtendSelectionWordLeft  => reduceSelectionExtension(buffer, head, currentState)(wordLeftTarget)
-          case ExtendSelectionWordRight => reduceSelectionExtension(buffer, head, currentState)(wordRightTarget)
-          // The same landing places Home and End move to, rather than the logical line's own bounds: a shifted key
-          // selects to where its unshifted form goes, and under word wrap that is the cursor's own visual row. Sharing
-          // `homeTarget`/`endTarget` also carries their row affinity, so Shift+End stops at the row's end instead of
-          // reading as the start of the row below (#1292).
-          case ExtendSelectionToLineStart =>
-            reduceSelectionExtension(buffer, head, currentState)((_, from) =>
-              horizontalTarget(homeTarget(currentState, paneId, from))
-            )
-          case ExtendSelectionToLineEnd =>
-            reduceSelectionExtension(buffer, head, currentState)((target, from) =>
-              horizontalTarget(endTarget(currentState, paneId, target, from))
-            )
-          case ExtendSelectionPageUp =>
-            reduceSelectionExtension(buffer, head, currentState)((target, from) =>
-              horizontalTarget(pageTarget(target, currentState, paneId, direction = -1)(from))
-            )
-          case ExtendSelectionPageDown =>
-            reduceSelectionExtension(buffer, head, currentState)((target, from) =>
-              horizontalTarget(pageTarget(target, currentState, paneId, direction = 1)(from))
-            )
-          case _ => ReducerResult.noEffects(currentState)
+      val buffer       = clearInFlightMultiCursorVerticalState(rawBuffer)
+      val currentState = Focused.replaceBuffer(incomingState, buffer)
+      event match
+        case ExtendSelectionLeft      => reduceSelectionExtension(buffer, head, currentState)(leftTarget)
+        case ExtendSelectionRight     => reduceSelectionExtension(buffer, head, currentState)(rightTarget)
+        case ExtendSelectionWordLeft  => reduceSelectionExtension(buffer, head, currentState)(wordLeftTarget)
+        case ExtendSelectionWordRight => reduceSelectionExtension(buffer, head, currentState)(wordRightTarget)
+        // The same landing places Home and End move to, rather than the logical line's own bounds: a shifted key
+        // selects to where its unshifted form goes, and under word wrap that is the cursor's own visual row. Sharing
+        // `homeTarget`/`endTarget` also carries their row affinity, so Shift+End stops at the row's end instead of
+        // reading as the start of the row below (#1292).
+        case ExtendSelectionToLineStart =>
+          reduceSelectionExtension(buffer, head, currentState)((_, from) =>
+            horizontalTarget(homeTarget(currentState, paneId, from))
+          )
+        case ExtendSelectionToLineEnd =>
+          reduceSelectionExtension(buffer, head, currentState)((target, from) =>
+            horizontalTarget(endTarget(currentState, paneId, target, from))
+          )
+        case ExtendSelectionPageUp =>
+          reduceSelectionExtension(buffer, head, currentState)((target, from) =>
+            horizontalTarget(pageTarget(target, currentState, paneId, direction = -1)(from))
+          )
+        case ExtendSelectionPageDown =>
+          reduceSelectionExtension(buffer, head, currentState)((target, from) =>
+            horizontalTarget(pageTarget(target, currentState, paneId, direction = 1)(from))
+          )
+        case _ => ReducerResult.noEffects(currentState)
     else
-        val rawCursors   = rawBuffer.cursorList
-        val hasSelection = rawCursors.head.selectionAnchor.isDefined
-        val isMulti      = rawCursors.tail.nonEmpty
-        // A single bare cursor is the only shape whose event bodies below don't already clear in-flight multi-cursor
-        // vertical state themselves (`applyMultiCursor*`/`applyLine*` all do); clear it here so a later event that
-        // becomes genuinely multi-cursor again doesn't inherit vertical state pinned to stale cursor positions.
-        val buffer = if !hasSelection && !isMulti then clearInFlightMultiCursorVerticalState(rawBuffer) else rawBuffer
-        val currentState = Focused.replaceBuffer(incomingState, buffer)
-        val ctx          = CursorEventContext(buffer, head, hasSelection, isMulti, currentState, paneId)
+      val rawCursors   = rawBuffer.cursorList
+      val hasSelection = rawCursors.head.selectionAnchor.isDefined
+      val isMulti      = rawCursors.tail.nonEmpty
+      // A single bare cursor is the only shape whose event bodies below don't already clear in-flight multi-cursor
+      // vertical state themselves (`applyMultiCursor*`/`applyLine*` all do); clear it here so a later event that
+      // becomes genuinely multi-cursor again doesn't inherit vertical state pinned to stale cursor positions.
+      val buffer = if !hasSelection && !isMulti then clearInFlightMultiCursorVerticalState(rawBuffer) else rawBuffer
+      val currentState = Focused.replaceBuffer(incomingState, buffer)
+      val ctx          = CursorEventContext(buffer, head, hasSelection, isMulti, currentState, paneId)
 
-        event match
-          case InsertChar(_) | TabKey | NewLine | Enter | ReverseTabKey | DeleteBackward | DeleteForward |
-              DeleteWordBackward | DeleteWordForward =>
-            EditorTextEditReducer.reduce(event, ctx)
+      event match
+        case InsertChar(_) | TabKey | NewLine | Enter | ReverseTabKey | DeleteBackward | DeleteForward |
+            DeleteWordBackward | DeleteWordForward =>
+          EditorTextEditReducer.reduce(event, ctx)
 
-          case MoveLeft | MoveRight | MoveWordLeft | MoveWordRight | MoveToStart | MoveToEnd | MoveToStartOfFile |
-              PageUp | PageDown | ColumnLeft | ColumnRight | MoveToEndOfFile | SelectAll =>
-            EditorNavigationEventReducer.reduce(event, ctx)
+        case MoveLeft | MoveRight | MoveWordLeft | MoveWordRight | MoveToStart | MoveToEnd | MoveToStartOfFile |
+            PageUp | PageDown | ColumnLeft | ColumnRight | MoveToEndOfFile | SelectAll =>
+          EditorNavigationEventReducer.reduce(event, ctx)
 
-          case OpenGotoLine | OpenFind | OpenReplace | FindNext =>
-            EditorFindEventReducer.reduce(event, ctx)
+        case OpenGotoLine | OpenFind | OpenReplace | FindNext =>
+          EditorFindEventReducer.reduce(event, ctx)
 
-          case Copy | Cut | Paste =>
-            EditorClipboardEventReducer.reduce(event, ctx)
+        case Copy | Cut | Paste =>
+          EditorClipboardEventReducer.reduce(event, ctx)
 
-          case _ =>
-            ReducerResult.noEffects(currentState)
+        case _ =>
+          ReducerResult.noEffects(currentState)
 
   private def handleEventWithoutBuffer(
     event: TextEntryEvent,

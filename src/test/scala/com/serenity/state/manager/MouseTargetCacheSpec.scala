@@ -1,7 +1,5 @@
 package com.serenity.state.manager
 
-import com.serenity.testkit.EditingStateFixtures
-
 import java.awt.Font
 
 import com.serenity.command.{Command, CommandPaletteState, CommandRegistry, CommandRunner, CommandRunnerSurface}
@@ -9,6 +7,7 @@ import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{
   CellMetrics,
   Layout,

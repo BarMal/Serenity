@@ -1,10 +1,9 @@
 package com.serenity.state.reducers
 
-import com.serenity.testkit.EditingStateFixtures
-
 import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -53,8 +52,12 @@ class EditorEventReducerOffsetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "move left and right across combining-mark accents as one grapheme" in {
-    reduceTextEvent("cafe\u0301!", CursorPosition(0, 5), MoveLeft).editing.cursorPositions shouldBe List(CursorPosition(0, 3))
-    reduceTextEvent("cafe\u0301!", CursorPosition(0, 3), MoveRight).editing.cursorPositions shouldBe List(CursorPosition(0, 5))
+    reduceTextEvent("cafe\u0301!", CursorPosition(0, 5), MoveLeft).editing.cursorPositions shouldBe List(
+      CursorPosition(0, 3)
+    )
+    reduceTextEvent("cafe\u0301!", CursorPosition(0, 3), MoveRight).editing.cursorPositions shouldBe List(
+      CursorPosition(0, 5)
+    )
   }
 
   it should "move left and right by word boundaries" in {

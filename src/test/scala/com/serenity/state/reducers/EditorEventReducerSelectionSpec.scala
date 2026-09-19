@@ -1,10 +1,9 @@
 package com.serenity.state.reducers
 
-import com.serenity.testkit.EditingStateFixtures
-
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -107,7 +106,9 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
   it should "drop secondary selections rather than extending each of them" in {
     val base = bufferOf("foo bar baz", CursorPosition(0, 4))
     val multiSelected =
-      base.copy(editing = EditingStateFixtures(selections = List(Selection(CursorPosition(0, 8), CursorPosition(0, 11)))))
+      base.copy(editing =
+        EditingStateFixtures(selections = List(Selection(CursorPosition(0, 8), CursorPosition(0, 11))))
+      )
 
     val result = reduce(multiSelected, ExtendSelectionWordRight)
     result.allSelections shouldBe result.primarySelection.toList
@@ -130,7 +131,9 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
   it should "drop secondary selections rather than extending each of them" in {
     val base = bufferOf("abcdef", CursorPosition(0, 1))
     val multiSelected =
-      base.copy(editing = EditingStateFixtures(selections = List(Selection(CursorPosition(0, 3), CursorPosition(0, 5)))))
+      base.copy(editing =
+        EditingStateFixtures(selections = List(Selection(CursorPosition(0, 3), CursorPosition(0, 5))))
+      )
 
     val result = reduce(multiSelected, ExtendSelectionRight)
     result.allSelections shouldBe result.primarySelection.toList
@@ -180,7 +183,8 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
     * Before `#1577` this leftover vertical state lived in a separate `multiCursorVerticalStates` collection that could
     * go stale independently of the cursor it was for; now that a cursor's own preferred column/x travels with it
     * directly, staleness of that kind is impossible by construction -- these pin that every single-cursor op still
-    * replaces the primary cursor's preferred state outright, a sentinel value included, rather than somehow retaining it.
+    * replaces the primary cursor's preferred state outright, a sentinel value included, rather than somehow retaining
+    * it.
     */
   "Adjustments made on the way into a single-cursor arm" should "survive the arm reading the buffer back" in {
     val staleBase = bufferOf("abc", CursorPosition(0, 1))

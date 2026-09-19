@@ -1,7 +1,5 @@
 package com.serenity
 
-import com.serenity.testkit.EditingStateFixtures
-
 import java.nio.file.Path
 
 import cats.effect.IO
@@ -12,6 +10,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -133,9 +132,9 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
               .document
               .copy(content = com.serenity.rope.Rope("Opening paragraph\nSecond paragraph")),
             editing = EditingStateFixtures(
-                cursors = List(CursorPosition(0, 2)),
-                selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 7)))
-              )
+              cursors = List(CursorPosition(0, 2)),
+              selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 7)))
+            )
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -168,8 +167,7 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            editing =
-              EditingStateFixtures(cursors = List(CursorPosition(1, 0)), selection = None)
+            editing = EditingStateFixtures(cursors = List(CursorPosition(1, 0)), selection = None)
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -247,9 +245,9 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
             document =
               state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("Opening paragraph")),
             editing = EditingStateFixtures(
-                cursors = List(CursorPosition(0, 3)),
-                selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 7)))
-              )
+              cursors = List(CursorPosition(0, 3)),
+              selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 7)))
+            )
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -275,8 +273,7 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
         val buffer = state.persisted
           .buffers(bufferId)
           .copy(
-            editing =
-              EditingStateFixtures(cursors = List(CursorPosition(0, 3)), selection = None)
+            editing = EditingStateFixtures(cursors = List(CursorPosition(0, 3)), selection = None)
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -309,9 +306,9 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
           .copy(
             document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("cafe\u0301!")),
             editing = EditingStateFixtures(
-                cursors = List(CursorPosition(0, 5)),
-                selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 5)))
-              )
+              cursors = List(CursorPosition(0, 5)),
+              selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 5)))
+            )
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -339,8 +336,7 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
           .copy(
             document =
               state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("a\uD83D\uDE42b")),
-            editing =
-              EditingStateFixtures(cursors = List(CursorPosition(0, 2)), selection = None),
+            editing = EditingStateFixtures(cursors = List(CursorPosition(0, 2)), selection = None),
             annotations = state.persisted.buffers(bufferId).annotations.copy(documentComments = Nil)
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
@@ -376,8 +372,7 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope("a\uD83C\uDDFA\uD83C\uDDF8b")),
-            editing =
-              EditingStateFixtures(cursors = List(CursorPosition(0, 3)), selection = None),
+            editing = EditingStateFixtures(cursors = List(CursorPosition(0, 3)), selection = None),
             annotations = state.persisted.buffers(bufferId).annotations.copy(documentComments = Nil)
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))

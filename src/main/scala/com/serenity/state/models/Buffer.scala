@@ -67,8 +67,8 @@ final case class Document(
 /** A buffer's cursor/selection state: one entry per live cursor, each carrying its own position, in-flight selection
   * anchor and preferred vertical-navigation column/pixel-x (`#1577`). Before `#1577` this was five separate parallel
   * lists/options (`cursors`, `selection`, `selections`, `preferredColumn`, `preferredXPx`,
-  * `multiCursorVerticalStates`), which let a single cursor's own state drift across collections that had to be kept
-  * in sync by hand; `NonEmptyList[Cursor]` makes that drift impossible by construction.
+  * `multiCursorVerticalStates`), which let a single cursor's own state drift across collections that had to be kept in
+  * sync by hand; `NonEmptyList[Cursor]` makes that drift impossible by construction.
   */
 final case class EditingState(cursors: NonEmptyList[Cursor] = NonEmptyList.one(Cursor(CursorPosition(0, 0)))):
   def cursorPositions: List[CursorPosition] = cursors.toList.map(_.position)
@@ -77,6 +77,7 @@ final case class EditingState(cursors: NonEmptyList[Cursor] = NonEmptyList.one(C
   def withPrimary(cursor: Cursor): EditingState = EditingState(NonEmptyList(cursor, cursors.tail))
 
 object EditingState:
+
   /** Bare cursor positions, with no selection or preferred-column/x state -- the shape session restore and most
     * post-edit cursor placement need.
     */
@@ -154,10 +155,10 @@ final case class Buffer(
   def hasUnsavedChanges: Boolean =
     document.isDirty || (document.filePath.isEmpty && !document.isNewEmpty)
 
-  /** The buffer state after an edit lands: swaps in the new content, marks the document dirty, and replaces the
-    * cursor list with bare positions, clearing every cursor's selection and preferred-column/x state.
-    * `documentComments` and `richTextDocument` default to their current, unadjusted values -- pass the caller's
-    * remapped ones when the edit needs to carry them forward.
+  /** The buffer state after an edit lands: swaps in the new content, marks the document dirty, and replaces the cursor
+    * list with bare positions, clearing every cursor's selection and preferred-column/x state. `documentComments` and
+    * `richTextDocument` default to their current, unadjusted values -- pass the caller's remapped ones when the edit
+    * needs to carry them forward.
     *
     * Centralises the five near-identical post-edit `copy` blocks in `EditorEventReducer` (`#1072`), which had already
     * drifted: the merged-deletion path silently kept a stale `richTextDocument` (and stale `multiCursorVerticalStates`)

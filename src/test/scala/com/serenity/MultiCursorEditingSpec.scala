@@ -1,10 +1,9 @@
 package com.serenity
 
-import com.serenity.testkit.EditingStateFixtures
-
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -27,10 +26,10 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
         document =
           AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(content)),
         editing = EditingStateFixtures(
-            cursors = if selections.nonEmpty then selections.map(_.focus) else cursors,
-            selection = selections.headOption,
-            selections = selections
-          ),
+          cursors = if selections.nonEmpty then selections.map(_.focus) else cursors,
+          selection = selections.headOption,
+          selections = selections
+        ),
         viewport = viewport
       )
     AppState.initial.copy(persisted =
