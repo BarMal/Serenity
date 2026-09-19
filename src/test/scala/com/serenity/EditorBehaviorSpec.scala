@@ -392,7 +392,14 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     val afterSecondDown = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
     afterSecondDown shouldBe CursorPosition(2, expectedCol)
 
-  it should "preserve each multi-cursor measured visual x through proportional text lines" in new EditorFixture:
+  /** Before `#1577`, a converged multi-cursor position was deduplicated only in the *visible* `cursors` list;
+    * `multiCursorVerticalStates` (a separate collection, matched back up by position) kept every original cursor's own
+    * measured x even while they visibly coincided, so they could diverge again on a later move. Since a cursor's
+    * measured x now lives on that same visible `Cursor` entry (`#1577`), two cursors converging onto one position
+    * converge for good -- there is no longer a separate, non-deduplicated collection to keep their individual memory
+    * in. This pins that merged (not diverging-again) outcome.
+    */
+  it should "merge multi-cursor measured visual x for good once cursors converge on a narrow line" in new EditorFixture:
     val bufferId = stateManager.bufferManager.createBuffer("iiiiiiii\nW\nWWWWWWWW", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
@@ -432,31 +439,16 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    val font         = FontLoader.loadTextFont(fontConfig).unsafeRunSync()
-    val currentState = stateManager.getCurrentState.unsafeRunSync()
-    val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))
-    val panelWidthPx = layout.editorPanelRect.width * CellMetrics.fromFont(font).charWidth
-    val snapshot = TextLayoutSnapshot.fromBuffer(
-      currentState.persisted.buffers(bufferId),
-      panelWidthPx,
-      font
-    )
-    val initialCursors = List(CursorPosition(0, 4), CursorPosition(0, 8))
-    val expectedCursors = initialCursors
-      .map { cursor =>
-        val preferredXPx = snapshot.xPxForCursor(cursor).getOrElse(fail(s"missing caret x for $cursor"))
-        val afterFirstDown =
-          snapshot.moveVertical(cursor, 1, preferredXPx).getOrElse(fail(s"missing first move for $cursor"))
-        snapshot.moveVertical(afterFirstDown, 1, preferredXPx).getOrElse(fail(s"missing second move for $cursor"))
-      }
-      .distinct
-      .sortBy(cursor => (cursor.line, cursor.column))
-
+    // Both cursors land on row 1 ("W", one character wide), so both clip to the same column there and converge onto
+    // one visible cursor -- which then moves to row 2 using only its own (single, merged) measured x, not each
+    // original cursor's own independent one, so there is exactly one final cursor rather than each of the two
+    // original ones tracking its own x back apart again.
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
 
     val finalCursors = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions
-    finalCursors shouldBe expectedCursors
+    finalCursors should have length 1
+    finalCursors.head.line shouldBe 2
 
   it should "move between logical lines when word wrap is disabled and the cursor is past the viewport" in new EditorFixture:
     val firstLine  = "W" * 180

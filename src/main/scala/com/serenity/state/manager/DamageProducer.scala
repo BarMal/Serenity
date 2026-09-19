@@ -409,6 +409,6 @@ object DamageProducer:
       pane     <- state.persisted.layout.editorPanes.get(paneId)
       bufferId <- pane.bufferId
       buffer   <- state.persisted.buffers.get(bufferId)
-    yield (buffer.editing.cursors, buffer.document.language, buffer.document.filePath, buffer.viewport)
+    yield (buffer.editing.cursorPositions, buffer.document.language, buffer.document.filePath, buffer.viewport)
 
   private def isSameReference(a: AnyRef, b: AnyRef): Boolean = a eq b
