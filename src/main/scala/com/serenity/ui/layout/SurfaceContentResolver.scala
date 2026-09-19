@@ -192,7 +192,11 @@ object SurfaceContentResolver:
       case SurfaceRenderMode.Floating => None
       case SurfaceRenderMode.Pinned   => Some(title)
 
-  private def commentLensRows(lens: CommentLensState): List[OverlayRow] =
+  /** Shared with `CommentLensSurfaceComposition` (issue #819, slice 3) so the composed paint plan and this dispatcher's
+    * own plain-rows fallback (still the real, live path for `EditorLayoutContract.floatingGeometry`) build identical
+    * rows from one place.
+    */
+  private[layout] def commentLensRows(lens: CommentLensState): List[OverlayRow] =
     val (cursorLine, cursorColumn) = lineAndColumnAt(lens.draft, lens.clampedCursor)
     splitLines(lens.draft).zipWithIndex.map { (line, index) =>
       OverlayRow(
