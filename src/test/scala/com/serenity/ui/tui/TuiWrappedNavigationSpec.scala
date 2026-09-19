@@ -61,7 +61,7 @@ class TuiWrappedNavigationSpec extends TuiSpec:
     columns.filter(col => screen.backgroundAt(col, row) == panel)
 
   private def cursorOf(state: com.serenity.state.models.AppState): Option[CursorPosition] =
-    focusedBuffer(state).flatMap(_.editing.cursors.headOption)
+    focusedBuffer(state).flatMap(_.editing.cursorPositions.headOption)
 
   // -- The info bar's trail (#1266, first defect) --------------------------------------------------------------------
 

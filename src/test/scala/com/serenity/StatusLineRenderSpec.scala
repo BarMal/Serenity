@@ -3,6 +3,7 @@ package com.serenity
 import com.serenity.config.{AppMode, StatusLinePlacement, StatusSegment}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
@@ -26,7 +27,7 @@ class StatusLineRenderSpec extends AnyFlatSpec with Matchers:
     val buffer0 = Buffer.fromString(BufferId(1), text)
     val buffer = buffer0.copy(
       document = buffer0.document.copy(language = language, filePath = title.map(java.nio.file.Paths.get(_))),
-      editing = buffer0.editing.copy(selection = selection)
+      editing = EditingStateFixtures(selection = selection)
     )
     AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(

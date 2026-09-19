@@ -101,7 +101,7 @@ final case class AppState(
       .flatMap(persisted.layout.editorPanes.get)
       .flatMap(_.bufferId)
       .flatMap(persisted.buffers.get)
-      .flatMap(_.editing.cursors.headOption)
+      .flatMap(_.editing.cursorPositions.headOption)
 
   def editingContext: EditingContext = EditingContext.of(this)
 

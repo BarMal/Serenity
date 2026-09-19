@@ -90,7 +90,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
                 content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two\n\nText\n\n### Beat Three"),
                 language = Some(LanguageId.Markdown)
               ),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2)))
+            editing = EditingState(List(CursorPosition(1, 2)))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -99,9 +99,9 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "next-document-symbol", "next-document-symbol")
 
     val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    updatedBuffer.editing.cursors shouldBe List(CursorPosition(4, 0))
-    updatedBuffer.editing.selection shouldBe None
-    updatedBuffer.editing.selections shouldBe Nil
+    updatedBuffer.editing.cursorPositions shouldBe List(CursorPosition(4, 0))
+    updatedBuffer.primarySelection shouldBe None
+    updatedBuffer.allSelections shouldBe updatedBuffer.primarySelection.toList
   }
 
   it should "animate the target buffer after document symbol navigation" in {
@@ -122,7 +122,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
                 ),
                 language = Some(LanguageId.Markdown)
               ),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2))),
+            editing = EditingState(List(CursorPosition(1, 2))),
             viewport = Viewport.default.copy(visibleLines = 4, visibleColumns = 40)
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
@@ -132,7 +132,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "next-document-symbol", "next-document-symbol")
 
     val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    updatedBuffer.editing.cursors shouldBe List(CursorPosition(10, 0))
+    updatedBuffer.editing.cursorPositions shouldBe List(CursorPosition(10, 0))
     updatedBuffer.viewport.topLine should be > 0
     val animations = stateManager.getBufferAnimations.unsafeRunSync().getOrElse(bufferId, AnimationState.empty)
     animations.activeAnimationCount should be > 0
@@ -154,7 +154,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
                 content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
                 language = Some(LanguageId.Markdown)
               ),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0)))
+            editing = EditingState(List(CursorPosition(0, 0)))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -171,7 +171,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors shouldBe List(
+    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions shouldBe List(
       CursorPosition(4, 0)
     )
   }
@@ -192,7 +192,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
                 content = com.serenity.rope.Rope("Opening\nbody\n\nSecond\nbody\n\nThird"),
                 language = None
               ),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0)))
+            editing = EditingState(List(CursorPosition(1, 0)))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -200,7 +200,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "next-document-symbol", "next-document-symbol")
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors shouldBe List(
+    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions shouldBe List(
       CursorPosition(3, 0)
     )
   }
@@ -219,7 +219,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha\nbravo\ncharlie")),
-              editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 4)))
+              editing = EditingState(List(CursorPosition(2, 4)))
             )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -249,7 +249,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope("alpha\nbravo\ncharlie\ndelta\necho")),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 0))),
+            editing = EditingState(List(CursorPosition(2, 0))),
             annotations = state.persisted
               .buffers(bufferId)
               .annotations
@@ -263,13 +263,13 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "next-bookmark", "next-bookmark")
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors shouldBe List(
+    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions shouldBe List(
       CursorPosition(4, 1)
     )
 
     executeCommandThroughRunner(stateManager, "previous-bookmark", "previous-bookmark")
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors shouldBe List(
+    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions shouldBe List(
       CursorPosition(0, 3)
     )
   }
@@ -287,7 +287,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope("alpha\nbravo\ncharlie\ndelta\necho")),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0))),
+            editing = EditingState(List(CursorPosition(1, 0))),
             annotations = state.persisted.buffers(bufferId).annotations.copy(bookmarks = List(CursorPosition(4, 1))),
             viewport = Viewport.default.copy(visibleLines = 8, visibleColumns = 40)
           )
@@ -298,7 +298,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "next-bookmark", "next-bookmark")
 
     val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    updatedBuffer.editing.cursors shouldBe List(CursorPosition(4, 1))
+    updatedBuffer.editing.cursorPositions shouldBe List(CursorPosition(4, 1))
     val animations = stateManager.getBufferAnimations.unsafeRunSync().getOrElse(bufferId, AnimationState.empty)
     animations.activeAnimationCount should be > 0
   }
@@ -316,7 +316,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope("0123456789abcdefghijklmnopqrstuvwxyz")),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
+            editing = EditingState(List(CursorPosition(0, 0))),
             annotations = state.persisted.buffers(bufferId).annotations.copy(bookmarks = List(CursorPosition(0, 12))),
             viewport = Viewport.default.copy(visibleLines = 1, visibleColumns = 5)
           )
@@ -333,7 +333,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     val animations    = stateManager.getBufferAnimations.unsafeRunSync().getOrElse(bufferId, AnimationState.empty)
-    updatedBuffer.editing.cursors.shouldBe(List(CursorPosition(0, 12)))
+    updatedBuffer.editing.cursorPositions.shouldBe(List(CursorPosition(0, 12)))
     updatedBuffer.viewport.leftColumn.should(be > 0)
     animations.animations.should(contain.key(CharacterKey(updatedBuffer.viewport.leftColumn, 0)))
     animations.animations.shouldNot(contain.key(CharacterKey(0, 0)))
@@ -355,7 +355,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
                 content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
                 language = Some(LanguageId.Markdown)
               ),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2)))
+            editing = EditingState(List(CursorPosition(1, 2)))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -364,21 +364,21 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "next-document-symbol", "next-document-symbol")
 
     val afterJump = stateManager.getCurrentState.unsafeRunSync()
-    afterJump.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(4, 0))
+    afterJump.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(4, 0))
     afterJump.runtime.navigation.backStack shouldBe List(NavigationPoint(PaneId(0), bufferId, CursorPosition(1, 2)))
     afterJump.runtime.navigation.forwardStack shouldBe Nil
 
     executeCommandThroughRunner(stateManager, "navigate-back", "navigate-back")
 
     val afterBack = stateManager.getCurrentState.unsafeRunSync()
-    afterBack.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(1, 2))
+    afterBack.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(1, 2))
     afterBack.runtime.navigation.backStack shouldBe Nil
     afterBack.runtime.navigation.forwardStack shouldBe List(NavigationPoint(PaneId(0), bufferId, CursorPosition(4, 0)))
 
     executeCommandThroughRunner(stateManager, "navigate-forward", "navigate-forward")
 
     val afterForward = stateManager.getCurrentState.unsafeRunSync()
-    afterForward.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(4, 0))
+    afterForward.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(4, 0))
     afterForward.runtime.navigation.backStack shouldBe List(NavigationPoint(PaneId(0), bufferId, CursorPosition(1, 2)))
     afterForward.runtime.navigation.forwardStack shouldBe Nil
   }
@@ -394,7 +394,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
           .copy(
             document =
               state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("# Plain text only")),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 7)))
+            editing = EditingState(List(CursorPosition(0, 7)))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -402,7 +402,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "next-document-symbol", "next-document-symbol")
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors shouldBe List(
+    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions shouldBe List(
       CursorPosition(0, 7)
     )
   }

@@ -81,7 +81,7 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
     cursor: CursorPosition
   ): Buffer =
     Buffer(BufferId(0), Document(Rope(content), filePath = path, language = language))
-      .copy(editing = EditingState(cursors = List(cursor)))
+      .copy(editing = EditingState(List(cursor)))
 
   private def stateWithBuffer(buffer: Buffer): AppState =
     AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(BufferId(0) -> buffer)))

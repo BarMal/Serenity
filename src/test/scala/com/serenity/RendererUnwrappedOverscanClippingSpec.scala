@@ -41,7 +41,7 @@ class RendererUnwrappedOverscanClippingSpec extends AnyFlatSpec with Matchers:
     // Cursor at the very end of the line forces the viewport's leftColumn to scroll so the line's tail sits right at
     // the pane's right edge -- exactly the "cursor at the edge of a long line" scenario from the bug report.
     val cursor = CursorPosition(0, lineContent.length)
-    val buffer = bufferBase.copy(editing = bufferBase.editing.copy(cursors = List(cursor)))
+    val buffer = bufferBase.copy(editing = EditingState(List(cursor)))
     val pane   = EditorPane.withBuffer(paneId, bufferId)
 
     val config =

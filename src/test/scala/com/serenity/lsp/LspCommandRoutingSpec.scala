@@ -10,7 +10,7 @@ import com.serenity.command.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{BufferId, CursorPosition}
+import com.serenity.state.models.{BufferId, CursorPosition, EditingState}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -42,7 +42,7 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
           val original = state.persisted.buffers(BufferId(0))
           val buffer = original.copy(
             document = original.document.copy(filePath = Some(file), language = Some(LanguageId.Scala)),
-            editing = original.editing.copy(cursors = List(CursorPosition(3, 7)))
+            editing = EditingState(List(CursorPosition(3, 7)))
           )
           state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (BufferId(0) -> buffer)))
         }
@@ -84,7 +84,7 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
               filePath = Some(file),
               language = Some(LanguageId.Scala)
             ),
-            editing = original.editing.copy(cursors = List(CursorPosition(0, 14)))
+            editing = EditingState(List(CursorPosition(0, 14)))
           )
           state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (BufferId(0) -> buffer)))
         }
@@ -123,7 +123,7 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
           val original = state.persisted.buffers(BufferId(0))
           val buffer = original.copy(
             document = original.document.copy(filePath = Some(file), language = Some(LanguageId.Scala)),
-            editing = original.editing.copy(cursors = List(CursorPosition(2, 5)))
+            editing = EditingState(List(CursorPosition(2, 5)))
           )
           state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (BufferId(0) -> buffer)))
         }

@@ -706,7 +706,7 @@ object AppRuntime:
     val activeBufferSummary = activeBuffer match
       case Some(buffer) =>
         val language = buffer.document.language.map(_.id).getOrElse("plaintext")
-        val cursor   = buffer.editing.cursors.headOption.map(c => s"${c.line}:${c.column}").getOrElse("none")
+        val cursor   = buffer.editing.cursorPositions.headOption.map(c => s"${c.line}:${c.column}").getOrElse("none")
         List(
           s"activeBuffer=${buffer.id}",
           s"chars=${buffer.document.content.weight}",

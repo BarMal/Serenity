@@ -54,7 +54,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     val buffer = baseBuffer
       .copy(
         document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
-        editing = baseBuffer.editing.copy(cursors = List(CursorPosition(2, 0))),
+        editing = EditingState(List(CursorPosition(2, 0))),
         viewport = Viewport.default.copy(visibleLines = 10)
       )
     AppState.empty.copy(
@@ -447,7 +447,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
             )
             base.copy(
               document = base.document.copy(language = Some(LanguageId.Markdown)),
-              editing = base.editing.copy(cursors = List(CursorPosition(4, 0))),
+              editing = EditingState(List(CursorPosition(4, 0))),
               viewport = Viewport.default.copy(visibleLines = 10)
             )
           }
@@ -502,7 +502,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
             val base = Buffer.fromString(bufferId, source)
             base.copy(
               document = base.document.copy(language = Some(LanguageId.Markdown)),
-              editing = base.editing.copy(cursors = List(cursor)),
+              editing = EditingState(List(cursor)),
               viewport = Viewport.default.copy(visibleLines = 10)
             )
           }

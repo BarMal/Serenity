@@ -61,7 +61,7 @@ class DiagnosticDimmingCompositionSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val buffer = Buffer
       .fromString(bufferId, content)
-      .copy(editing = EditingState(cursors = List(CursorPosition(0, 0))))
+      .copy(editing = EditingState(List(CursorPosition(0, 0))))
     val state = stateWithDiagnosticOnLine(bufferId, buffer, paneId, diagnosticLine = 2, range = (11, 15))
 
     val surface = new MockRenderSurface(100, 30)
@@ -85,7 +85,7 @@ class DiagnosticDimmingCompositionSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val buffer = Buffer
       .fromString(bufferId, content)
-      .copy(editing = EditingState(cursors = List(CursorPosition(0, 0))))
+      .copy(editing = EditingState(List(CursorPosition(0, 0))))
     val state = stateWithDiagnosticOnLine(bufferId, buffer, paneId, diagnosticLine = 0, range = (6, 10))
 
     val surface = new MockRenderSurface(100, 30)

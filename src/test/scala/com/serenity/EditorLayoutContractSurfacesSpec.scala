@@ -27,7 +27,7 @@ class EditorLayoutContractSurfacesSpec extends AnyFlatSpec with Matchers:
     val cursor = CursorPosition(1, 2)
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(editing = EditingState(cursors = List(cursor)))
+      .copy(editing = EditingState(List(cursor)))
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
@@ -77,7 +77,7 @@ class EditorLayoutContractSurfacesSpec extends AnyFlatSpec with Matchers:
     val cursor = CursorPosition(1, 2)
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(editing = EditingState(cursors = List(cursor)))
+      .copy(editing = EditingState(List(cursor)))
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val pinnedPanel = UiSurface(
       SurfaceId("left-panel"),
@@ -284,7 +284,7 @@ class EditorLayoutContractSurfacesSpec extends AnyFlatSpec with Matchers:
     val cursor = CursorPosition(1, 2)
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(editing = EditingState(cursors = List(cursor)))
+      .copy(editing = EditingState(List(cursor)))
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val quickInfo = UiSurface(
       SurfaceId("quick-info"),
@@ -442,7 +442,7 @@ class EditorLayoutContractSurfacesSpec extends AnyFlatSpec with Matchers:
     val cursor = CursorPosition(1, 2)
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(editing = EditingState(cursors = List(cursor)))
+      .copy(editing = EditingState(List(cursor)))
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val pinnedPanel = UiSurface(
       SurfaceId("find-panel"),

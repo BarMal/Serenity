@@ -210,7 +210,10 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
         val newState = f(state)
         newState.fileSearchSurface shouldBe None
         newState.persisted.focus shouldBe a[Focus.EditorPane]
-        newState.persisted.buffers.get(bufferId).flatMap(_.editing.cursors.headOption).map(_.line) shouldBe Some(5)
+        newState.persisted.buffers
+          .get(bufferId)
+          .flatMap(_.editing.cursorPositions.headOption)
+          .map(_.line) shouldBe Some(5)
       case other => fail(s"Expected StateChange, got $other")
   }
 

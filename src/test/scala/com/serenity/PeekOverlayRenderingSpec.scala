@@ -20,7 +20,7 @@ class PeekOverlayRenderingSpec extends AnyFlatSpec with Matchers:
         bufferId,
         List.fill(10)("abcdefghijklmnopqrstuvwxyz").mkString("\n")
       )
-      .copy(editing = EditingState(cursors = List(CursorPosition(4, 12))))
+      .copy(editing = EditingState(List(CursorPosition(4, 12))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
 
     AppState.initial.copy(

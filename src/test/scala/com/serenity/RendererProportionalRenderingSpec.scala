@@ -7,6 +7,7 @@ import com.serenity.config.AppConfig
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
 import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
@@ -138,7 +139,7 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
     val baseBuffer = Buffer.fromString(bufferId, "hello markdown")
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
-      editing = baseBuffer.editing.copy(selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5))))
+      editing = EditingStateFixtures(selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5))))
     )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(

@@ -4,6 +4,7 @@ import com.serenity.TestWorkspaceTrees
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -32,7 +33,7 @@ class ContextualToolbarContentResolverSpec extends AnyFlatSpec with Matchers:
           bufferId -> Buffer
             .fromString(bufferId, "alpha beta")
             .copy(
-              editing = EditingState(selection = Some(selection), cursors = List(selection.focus)),
+              editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus)),
               richText = RichTextState(richTextDocument = Some(document))
             )
         ),

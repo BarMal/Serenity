@@ -1,6 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.rope.Balance
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -104,8 +105,8 @@ class AppStateInvariantsSpec extends AnyFlatSpec with Matchers:
   ): Buffer =
     val base = Buffer.fromString(BufferId(0), content)
     base.copy(
-      editing = base.editing.copy(
-        cursors = if cursors.isEmpty then base.editing.cursors else cursors,
+      editing = EditingStateFixtures(
+        cursors = if cursors.isEmpty then base.editing.cursorPositions else cursors,
         selection = selection
       ),
       annotations = Annotations(bookmarks = bookmarks, documentComments = comments)

@@ -96,13 +96,7 @@ final private[manager] class StateManagerReplaceWorkflow(
         isDirty = true,
         isNewEmpty = false
       ),
-      editing = buffer.editing.copy(
-        cursors = List(newCursor),
-        selection = None,
-        selections = Nil,
-        preferredColumn = Some(newCursor.column),
-        preferredXPx = None
-      ),
+      editing = EditingState(List(newCursor)),
       findState = updatedFindState
     )
     recordWorkflowUndo(state, bufferId, buffer) >> stateRef.get.flatMap { current =>
@@ -196,12 +190,8 @@ final private[manager] class StateManagerReplaceWorkflow(
         isDirty = true,
         isNewEmpty = false
       ),
-      editing = buffer.editing.copy(
-        cursors = List(newCursor),
-        selection = replacementSelection,
-        selections = Nil,
-        preferredColumn = Some(newCursor.column),
-        preferredXPx = None
+      editing = EditingState.fromCursors(
+        List(replacementSelection.fold(Cursor(newCursor))(Cursor(_)))
       ),
       findState = updatedFindState
     )
@@ -217,8 +207,17 @@ final private[manager] class StateManagerReplaceWorkflow(
       workflow.copy(statusMessage = Some("Replaced next match"))
     )
 
+  /** Searches forward from the currently highlighted match's own start, not its end (the cursor position/selection
+    * focus) -- so replacing the match find-next just landed on replaces that match itself rather than skipping past it
+    * to the next one. Before `#1577`'s unification of cursor position with selection focus, `editing.cursors` and
+    * `editing.selection` were independent fields and every write path here happened to leave `cursors` pointed at the
+    * match start while `selection` tracked its full highlighted range; `primarySelection.map(_.start)` is that same
+    * intent made explicit now that a cursor's position and its own selection's focus are the same field.
+    */
   private def nextReplaceMatchOffset(buffer: Buffer, matches: List[Int]): Int =
-    val cursorOffset = buffer.editing.cursors.headOption
+    val cursorOffset = buffer.primarySelection
+      .map(_.start)
+      .orElse(buffer.editing.cursorPositions.headOption)
       .map(cursor => offsetForCursor(buffer.document.content, cursor))
       .getOrElse(0)
     // The only caller checks matches.isEmpty first, so matches is always non-empty here; 0 is an

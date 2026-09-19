@@ -119,7 +119,7 @@ final private[manager] class StateManagerNavigationEffects(
     activeEditorBuffer(state)
       .flatMap {
         case (paneId, buffer) =>
-          val cursor  = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
+          val cursor  = buffer.editing.cursorPositions.headOption.getOrElse(CursorPosition(0, 0))
           val symbols = symbolsForBuffer(buffer)
           chooseSymbol(symbols, cursor).map { symbol =>
             val before = NavigationPoint(paneId, buffer.id, cursor)
@@ -250,7 +250,7 @@ final private[manager] class StateManagerNavigationEffects(
   private def currentNavigationPoint(state: AppState): Option[NavigationPoint] =
     activeEditorBuffer(state).flatMap {
       case (paneId, buffer) =>
-        buffer.editing.cursors.headOption.map(cursor => NavigationPoint(paneId, buffer.id, cursor))
+        buffer.editing.cursorPositions.headOption.map(cursor => NavigationPoint(paneId, buffer.id, cursor))
     }
 
   private def pushNavigationPoint(point: NavigationPoint, stack: List[NavigationPoint]): List[NavigationPoint] =
@@ -263,14 +263,7 @@ final private[manager] class StateManagerNavigationEffects(
       case (Some(pane), Some(buffer)) =>
         val viewport = CursorViewport.adjustForCursor(buffer, state, point.cursor)
         val updatedBuffer = buffer.copy(
-          editing = buffer.editing.copy(
-            cursors = List(point.cursor),
-            selection = None,
-            selections = Nil,
-            preferredColumn = Some(point.cursor.column),
-            preferredXPx = None,
-            multiCursorVerticalStates = Nil
-          ),
+          editing = EditingState(List(point.cursor)),
           viewport = viewport
         )
         state.copy(persisted =
@@ -289,7 +282,7 @@ final private[manager] class StateManagerNavigationEffects(
   private def toggleBookmark(state: AppState): IO[Unit] =
     activeEditorBuffer(state) match
       case Some((_, buffer)) =>
-        val cursor = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
+        val cursor = buffer.editing.cursorPositions.headOption.getOrElse(CursorPosition(0, 0))
         validatedUpdateState { current =>
           current.persisted.buffers.get(buffer.id) match
             case Some(currentBuffer) =>
@@ -314,7 +307,7 @@ final private[manager] class StateManagerNavigationEffects(
   private def addDocumentComment(state: AppState, text: String): IO[Unit] =
     activeEditorBuffer(state) match
       case Some((_, buffer)) =>
-        val cursor           = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
+        val cursor           = buffer.editing.cursorPositions.headOption.getOrElse(CursorPosition(0, 0))
         val normalizedCursor = snapCursorAfterGrapheme(buffer, cursor)
         val range = buffer.primarySelection
           .map(selection => normalizedCommentSelectionRange(buffer, selection))
@@ -369,7 +362,7 @@ final private[manager] class StateManagerNavigationEffects(
   private def deleteDocumentComment(state: AppState): IO[Unit] =
     activeEditorBuffer(state) match
       case Some((_, buffer)) =>
-        val cursor = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
+        val cursor = buffer.editing.cursorPositions.headOption.getOrElse(CursorPosition(0, 0))
         validatedUpdateState: current =>
           current.persisted.buffers.get(buffer.id) match
             case Some(currentBuffer) =>

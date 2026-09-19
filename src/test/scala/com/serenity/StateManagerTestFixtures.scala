@@ -7,6 +7,7 @@ import com.serenity.state.core.EditorState
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.state.reducers.CommandRunnerPanelSelections
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.*
 
 /** Pure `AppState` fixtures for positioning test scenarios -- assigning a buffer to a pane, placing a cursor or
@@ -107,7 +108,7 @@ private[serenity] object StateManagerTestFixtures:
             case Some(buffer) =>
               val newCursor = CursorPosition(line, column)
               val updatedBuffer = buffer.copy(
-                editing = buffer.editing.copy(
+                editing = EditingStateFixtures(
                   cursors = List(newCursor),
                   preferredColumn = Some(column),
                   preferredXPx = None,

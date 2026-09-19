@@ -8,6 +8,7 @@ import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -67,12 +68,9 @@ class CommandRunnerEditCommandsSpec extends AnyFlatSpec with Matchers:
         val selected = state.persisted
           .buffers(bufferId)
           .copy(
-            editing = state.persisted
-              .buffers(bufferId)
-              .editing
-              .copy(
-                selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5)))
-              )
+            editing = EditingStateFixtures(
+              selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5)))
+            )
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> selected)))
       }
@@ -84,7 +82,7 @@ class CommandRunnerEditCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "select-all", "select-all")
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.selection shouldBe Some(
+    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).primarySelection shouldBe Some(
       Selection(CursorPosition(0, 0), CursorPosition(0, "Hello World".length))
     )
 

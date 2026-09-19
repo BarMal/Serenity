@@ -101,7 +101,7 @@ class LayoutEngineGeometrySpec extends AnyFlatSpec with Matchers:
   it should "keep below-cursor overlays inside the active editor content rectangle" in {
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
+      .copy(editing = EditingState(List(CursorPosition(1, 2))))
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
@@ -134,7 +134,7 @@ class LayoutEngineGeometrySpec extends AnyFlatSpec with Matchers:
   it should "keep above-cursor overlays inside the active editor content rectangle" in {
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
+      .copy(editing = EditingState(List(CursorPosition(1, 2))))
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
@@ -170,7 +170,7 @@ class LayoutEngineGeometrySpec extends AnyFlatSpec with Matchers:
     val cursor       = CursorPosition(1, 2)
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(editing = EditingState(cursors = List(cursor)))
+      .copy(editing = EditingState(List(cursor)))
     given CommandRegistry = CommandRegistry.default
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)

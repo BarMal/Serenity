@@ -61,7 +61,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val finalPane  = finalState.persisted.layout.editorPanes(paneId)
     val buffer     = finalPane.bufferId.flatMap(finalState.persisted.buffers.get).get
-    val cursor     = buffer.editing.cursors.head
+    val cursor     = buffer.editing.cursorPositions.head
     val viewport   = buffer.viewport
 
     // Cursor should be at end of text
@@ -114,7 +114,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val finalPane  = finalState.persisted.layout.editorPanes(paneId)
     val buffer     = finalPane.bufferId.flatMap(finalState.persisted.buffers.get).get
-    val cursor     = buffer.editing.cursors.head
+    val cursor     = buffer.editing.cursorPositions.head
     val viewport   = buffer.viewport
 
     // Cursor should be at column 0
@@ -152,7 +152,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val finalPane  = finalState.persisted.layout.editorPanes(paneId)
     val buffer     = finalPane.bufferId.flatMap(finalState.persisted.buffers.get).get
-    val cursor     = buffer.editing.cursors.head
+    val cursor     = buffer.editing.cursorPositions.head
     val viewport   = buffer.viewport
 
     // Cursor should be beyond the original visible area
@@ -195,7 +195,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     // left behind earlier in this test.
     val afterMoveToStart = stateManager.getCurrentState.unsafeRunSync()
     val bufferAtStart    = afterMoveToStart.persisted.buffers(bufferId)
-    bufferAtStart.editing.cursors.head.line shouldBe 0
+    bufferAtStart.editing.cursorPositions.head.line shouldBe 0
     bufferAtStart.viewport.topLine shouldBe 0
 
     // Walk the cursor down one line at a time via the arrow-key event, the same path a real terminal's Down key
@@ -205,7 +205,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val finalPane  = finalState.persisted.layout.editorPanes(paneId)
     val buffer     = finalPane.bufferId.flatMap(finalState.persisted.buffers.get).get
-    val cursor     = buffer.editing.cursors.head
+    val cursor     = buffer.editing.cursorPositions.head
     val viewport   = buffer.viewport
 
     // Cursor should be beyond the original visible area
@@ -237,7 +237,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val buffer     = finalState.persisted.buffers(bufferId)
-    val cursor     = buffer.editing.cursors.head
+    val cursor     = buffer.editing.cursorPositions.head
     val font       = FontLoader.previewTextFont(finalState.persisted.config.editorConfig.fontConfig)
     val wrapPx =
       TextLayoutSnapshot.gridWrapWidthPx(
@@ -308,7 +308,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val buffer     = finalState.persisted.buffers(bufferId)
-    val cursor     = buffer.editing.cursors.head
+    val cursor     = buffer.editing.cursorPositions.head
     val font       = FontLoader.previewTextFont(finalState.persisted.config.editorConfig.fontConfig)
     val wrapPx = TextLayoutSnapshot.gridWrapWidthPx(
       buffer.viewport.visibleColumns,

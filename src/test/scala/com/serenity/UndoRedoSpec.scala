@@ -9,6 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -247,7 +248,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     val beforeBuffer = initialBuffer
       .copy(
         document = initialBuffer.document.copy(isNewEmpty = true),
-        editing = initialBuffer.editing.copy(cursors = List(CursorPosition(2, 0)), preferredColumn = Some(0)),
+        editing = EditingStateFixtures(cursors = List(CursorPosition(2, 0)), preferredColumn = Some(0)),
         viewport = Viewport(topLine = 2, leftColumn = 1, visibleLines = 8, visibleColumns = 40),
         findState = Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
       )
@@ -271,8 +272,8 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
 
     val undone = getState.persisted.buffers(bufferId)
     undone.document.content.collect() shouldBe "alpha\nbeta\nalpha"
-    undone.editing.cursors shouldBe List(CursorPosition(2, 0))
-    undone.editing.preferredColumn shouldBe Some(0)
+    undone.editing.cursorPositions shouldBe List(CursorPosition(2, 0))
+    undone.editing.cursors.head.preferredColumn shouldBe Some(0)
     undone.viewport shouldBe beforeBuffer.viewport
     undone.findState shouldBe Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
     undone.document.isNewEmpty shouldBe true
@@ -359,7 +360,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
       getState.activeCursorPosition.getOrElse(CursorPosition(0, 0))
 
     def getCursors(bufferId: BufferId): List[CursorPosition] =
-      getState.persisted.buffers(bufferId).editing.cursors
+      getState.persisted.buffers(bufferId).editing.cursorPositions
 
     def setCursors(bufferId: BufferId, cursors: List[CursorPosition]): Unit =
       stateManager
@@ -369,7 +370,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
             state.persisted.copy(buffers =
               state.persisted.buffers.updated(
                 bufferId,
-                buffer.copy(editing = buffer.editing.copy(cursors = cursors, selection = None, selections = Nil))
+                buffer.copy(editing = EditingStateFixtures(cursors = cursors, selection = None, selections = Nil))
               )
             )
           )
@@ -385,7 +386,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
               state.persisted.buffers.updated(
                 bufferId,
                 buffer.copy(editing =
-                  buffer.editing.copy(
+                  EditingStateFixtures(
                     cursors = selections.map(_.focus),
                     selection = selections.headOption,
                     selections = selections

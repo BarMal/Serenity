@@ -149,7 +149,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
     val buffer =
-      Buffer.fromString(bufferId, content).copy(editing = EditingState(cursors = List(CursorPosition(0, cursorCol))))
+      Buffer.fromString(bufferId, content).copy(editing = EditingState(List(CursorPosition(0, cursorCol))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val base = AppState.initial
     base.copy(persisted =
@@ -407,7 +407,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val markdown  = (1 to 2_000).map(i => s"# Heading $i").mkString("\n")
     val content   = CountingAccessRope(Rope(markdown), lineReads = lineReads)
     val buffer = Buffer(bufferId, Document(content, language = Some(LanguageId.Markdown))).copy(
-      editing = EditingState(cursors = List(CursorPosition(0, 0))),
+      editing = EditingState(List(CursorPosition(0, 0))),
       viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
     )
     val initial = AppState.initial
@@ -455,7 +455,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
         Vector.fill(5_000)("trailing prose")).mkString("\n")
     val content = CountingAccessRope(Rope(markdown), lineReads = lineReads)
     val buffer = Buffer(bufferId, Document(content, language = Some(LanguageId.Markdown))).copy(
-      editing = EditingState(cursors = List(CursorPosition(5_500, 0))),
+      editing = EditingState(List(CursorPosition(5_500, 0))),
       viewport = Viewport(topLine = 5_500, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
     )
     val initial = AppState.initial
@@ -498,7 +498,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
         Vector.fill(1_000)("trailing prose")).mkString("\n")
     val content = CountingAccessRope(Rope(markdown), lineReads = lineReads)
     val buffer = Buffer(bufferId, Document(content, language = Some(LanguageId.Markdown))).copy(
-      editing = EditingState(cursors = List(CursorPosition(500, 0))),
+      editing = EditingState(List(CursorPosition(500, 0))),
       viewport = Viewport(topLine = 500, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
     )
     val initial = AppState.initial
@@ -539,7 +539,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     val markdown  = Vector.fill(11_000)("ordinary prose without fences").mkString("\n")
     val content   = CountingAccessRope(Rope(markdown), lineReads = lineReads)
     val buffer = Buffer(bufferId, Document(content, language = Some(LanguageId.Markdown))).copy(
-      editing = EditingState(cursors = List(CursorPosition(5_500, 0))),
+      editing = EditingState(List(CursorPosition(5_500, 0))),
       viewport = Viewport(topLine = 5_500, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
     )
     val initial = AppState.initial
@@ -584,7 +584,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
         Vector.fill(1_000)("trailing prose")).mkString("\n")
     val content = CountingAccessRope(Rope(markdown), lineReads = lineReads)
     val buffer = Buffer(bufferId, Document(content, language = Some(LanguageId.Markdown))).copy(
-      editing = EditingState(cursors = List(CursorPosition(1_500, 0))),
+      editing = EditingState(List(CursorPosition(1_500, 0))),
       viewport = Viewport(topLine = 1_500, leftColumn = 0, visibleColumns = 80, visibleLines = 6)
     )
     val initial = AppState.initial

@@ -33,7 +33,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = Rope("alpha beta gamma"), language = Some(LanguageId.JsonLang)),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
+              editing = EditingState(List(CursorPosition(0, 0))),
               viewport = Viewport(0, 0, visibleLines = 5, visibleColumns = 8)
             )
         )
@@ -46,7 +46,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
     val updatedState = com.serenity.VerticalNavSupport.dispatch(MoveDown, paneId, initialState).state
     val buffer       = updatedState.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 6))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 6))
     buffer.viewport.leftColumn shouldBe 0
   }
 
@@ -64,10 +64,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("abcdef\nxy\nabcdef")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 4)))
+              editing = EditingState(List(CursorPosition(0, 1), CursorPosition(0, 4)))
             )
         )
       )
@@ -77,7 +74,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
     val afterSecondMove = com.serenity.VerticalNavSupport.dispatch(MoveDown, paneId, afterFirstMove).state
     val buffer          = afterSecondMove.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(2, 1), CursorPosition(2, 4))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(2, 1), CursorPosition(2, 4))
   }
 
   it should "update viewport position for scroll events" in {
@@ -120,7 +117,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(4, 1))),
+              editing = EditingState(List(CursorPosition(4, 1))),
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(topLine = 3, visibleLines = 2)
             )
         )
@@ -135,7 +132,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
     val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(2, 0))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(2, 0))
     buffer.viewport.topLine shouldBe 1
   }
 
@@ -153,7 +150,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(5, 0))),
+              editing = EditingState(List(CursorPosition(5, 0))),
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(topLine = 4, visibleLines = 2)
             )
         )
@@ -168,7 +165,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
     val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(5, 0))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(5, 0))
     buffer.viewport.topLine shouldBe 4
   }
 
@@ -186,7 +183,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 3))),
+              editing = EditingState(List(CursorPosition(2, 3))),
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(topLine = 2)
             )
         )
@@ -198,7 +195,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
     val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 0))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 0))
     buffer.viewport.topLine shouldBe 0
   }
 
@@ -216,7 +213,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1))),
+              editing = EditingState(List(CursorPosition(0, 1))),
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(visibleLines = 2)
             )
         )
@@ -228,7 +225,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
     val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(2, 5))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(2, 5))
     buffer.viewport.topLine shouldBe 1
   }
 
@@ -246,7 +243,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 1))),
+              editing = EditingState(List(CursorPosition(1, 1))),
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(visibleLines = 2)
             )
         )
@@ -258,7 +255,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
     val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(3, 0))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(3, 0))
     buffer.viewport.topLine shouldBe 2
   }
 

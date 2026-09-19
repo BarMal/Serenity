@@ -119,12 +119,7 @@ private[reducers] object EditorTextEditReducer:
         val newCursor  = newContent.offsetToCursorPosition(start)
         val updated = buffer.copy(
           document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
-          editing = buffer.editing.copy(
-            cursors = replacePrimaryCursor(newCursor, buffer.editing.cursors),
-            selection = None,
-            preferredColumn = Some(newCursor.column),
-            preferredXPx = None
-          ),
+          editing = buffer.editing.withPrimary(Cursor(newCursor)),
           annotations = buffer.annotations.copy(
             documentComments = adjustDocumentComments(
               buffer.annotations.documentComments,
@@ -147,11 +142,7 @@ private[reducers] object EditorTextEditReducer:
         val newCursor  = newContent.offsetToCursorPosition(start)
         val updated = buffer.copy(
           document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
-          editing = buffer.editing.copy(
-            cursors = replacePrimaryCursor(newCursor, buffer.editing.cursors),
-            preferredColumn = Some(newCursor.column),
-            preferredXPx = None
-          ),
+          editing = buffer.editing.withPrimary(Cursor(newCursor)),
           annotations = buffer.annotations.copy(
             documentComments = adjustDocumentComments(
               buffer.annotations.documentComments,
@@ -185,13 +176,7 @@ private[reducers] object EditorTextEditReducer:
     val newCursor  = newContent.offsetToCursorPosition(cursorOffset)
     val baseBuffer = buffer.copy(
       document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
-      editing = buffer.editing.copy(
-        cursors = replacePrimaryCursor(newCursor, buffer.editing.cursors),
-        selection = None,
-        selections = Nil,
-        preferredColumn = Some(newCursor.column),
-        preferredXPx = None
-      ),
+      editing = buffer.editing.withPrimary(Cursor(newCursor)),
       annotations = buffer.annotations.copy(
         documentComments = adjustDocumentComments(
           buffer.annotations.documentComments,
@@ -290,7 +275,7 @@ private[reducers] object EditorTextEditReducer:
         foldEditsWithRichText(buffer, edits.sortBy(edit => (-edit.start, -edit.end))) { (content, edit) =>
           insertOrUnchanged(content, edit.start, edit.insertedText)
         }
-      val finalCursors = buffer.editing.cursors.map { cursor =>
+      val finalCursors = buffer.editing.cursorPositions.map { cursor =>
         if targetSet.contains(cursor.line) then cursor.copy(column = cursor.column + TabInsertion.length)
         else cursor
       }.distinct
@@ -325,7 +310,7 @@ private[reducers] object EditorTextEditReducer:
         foldEditsWithRichText(buffer, edits.sortBy(edit => (-edit.start, -edit.end))) { (content, edit) =>
           deleteOrUnchanged(content, edit.start, edit.end)
         }
-      val finalCursors = buffer.editing.cursors
+      val finalCursors = buffer.editing.cursorPositions
         .map(cursor => cursor.copy(column = math.max(0, cursor.column - removals.getOrElse(cursor.line, 0))))
         .distinct
       val baseBuffer = buffer.withEditedContent(

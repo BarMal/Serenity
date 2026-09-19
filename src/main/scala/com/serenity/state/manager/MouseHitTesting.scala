@@ -107,16 +107,7 @@ final private[manager] class MouseHitTesting(
             s.persisted.copy(
               buffers = s.persisted.buffers.updated(
                 buffer.id,
-                current.copy(editing =
-                  current.editing.copy(
-                    cursors = List(focusCursor),
-                    selection = selection,
-                    selections = Nil,
-                    preferredColumn = Some(focusCursor.column),
-                    preferredXPx = None,
-                    multiCursorVerticalStates = Nil
-                  )
-                )
+                current.copy(editing = EditingState.fromCursors(List(Cursor(focusCursor, selection.map(_.anchor)))))
               ),
               focus = Focus.EditorPane(paneId),
               layout = s.persisted.layout.copy(activeEditorPaneId = Some(paneId))
@@ -173,14 +164,7 @@ final private[manager] class MouseHitTesting(
                                   buffers = s.persisted.buffers.updated(
                                     buffer.id,
                                     current.copy(editing =
-                                      current.editing.copy(
-                                        cursors = List(focusCursor),
-                                        selection = selection,
-                                        selections = Nil,
-                                        preferredColumn = Some(focusCursor.column),
-                                        preferredXPx = None,
-                                        multiCursorVerticalStates = Nil
-                                      )
+                                      EditingState.fromCursors(List(Cursor(focusCursor, selection.map(_.anchor))))
                                     )
                                   ),
                                   focus = Focus.EditorPane(paneId),
@@ -215,7 +199,7 @@ final private[manager] class MouseHitTesting(
                           val anchor =
                             current.primarySelection
                               .map(_.anchor)
-                              .orElse(current.editing.cursors.headOption)
+                              .orElse(Some(current.editing.cursors.head.position))
                               .getOrElse(draggedCursor)
                           val selection =
                             Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
@@ -224,14 +208,7 @@ final private[manager] class MouseHitTesting(
                               buffers = s.persisted.buffers.updated(
                                 buffer.id,
                                 current.copy(editing =
-                                  current.editing.copy(
-                                    cursors = List(draggedCursor),
-                                    selection = selection,
-                                    selections = Nil,
-                                    preferredColumn = Some(draggedCursor.column),
-                                    preferredXPx = None,
-                                    multiCursorVerticalStates = Nil
-                                  )
+                                  EditingState.fromCursors(List(Cursor(draggedCursor, selection.map(_.anchor))))
                                 )
                               ),
                               focus = Focus.EditorPane(paneId),

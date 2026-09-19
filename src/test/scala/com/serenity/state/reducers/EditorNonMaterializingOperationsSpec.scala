@@ -3,6 +3,7 @@ package com.serenity.state.reducers
 import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -29,7 +30,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = NonCollectingRope(Rope("alpha\nbeta"))),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0)))
+              editing = EditingState(List(CursorPosition(0, 0)))
             )
         )
       )
@@ -38,8 +39,8 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(SelectAll, paneId, initialState).state
     val buffer       = updatedState.persisted.buffers(bufferId)
 
-    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
-    buffer.editing.cursors shouldBe List(CursorPosition(1, 4))
+    buffer.primarySelection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(1, 4))
   }
 
   it should "delete words for multiple cursors without materialising the whole buffer" in {
@@ -54,10 +55,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, 8), CursorPosition(0, 10)))
+              editing = EditingState(List(CursorPosition(0, 8), CursorPosition(0, 10)))
             )
         )
       )
@@ -67,7 +65,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
 
     val buffer = updatedState.persisted.buffers(bufferId)
     buffer.document.content.collect() shouldBe "alpha  gamma"
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 6))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 6))
   }
 
   it should "delete the previous word for a single cursor without materialising the whole buffer" in {
@@ -82,7 +80,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 10)))
+              editing = EditingState(List(CursorPosition(0, 10)))
             )
         )
       )
@@ -92,7 +90,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "alpha  gamma"
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 6))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 6))
   }
 
   it should "move horizontally without materialising a large single-line buffer" in {
@@ -103,7 +101,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
       .buffers(bufferId)
       .copy(
         document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-        editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
+        editing = EditingState(List(CursorPosition(0, 0))),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 120, visibleLines = 40)
       )
     val initialState = AppState.initial.copy(
@@ -115,7 +113,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = EditorEventReducer.reduce(MoveRight, paneId, initialState).state
 
-    updatedState.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 1))
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 1))
   }
 
   it should "move across line boundaries without materialising the whole buffer" in {
@@ -126,7 +124,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
       .buffers(bufferId)
       .copy(
         document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-        editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0))),
+        editing = EditingState(List(CursorPosition(1, 0))),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 120, visibleLines = 40)
       )
     val initialState = AppState.initial.copy(
@@ -138,7 +136,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = EditorEventReducer.reduce(MoveLeft, paneId, initialState).state
 
-    updatedState.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 5))
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 5))
   }
 
   it should "move multiple cursors horizontally without materialising the whole buffer" in {
@@ -149,10 +147,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
       .buffers(bufferId)
       .copy(
         document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-        editing = AppState.initial.persisted
-          .buffers(bufferId)
-          .editing
-          .copy(cursors = List(CursorPosition(0, 5), CursorPosition(1, 0))),
+        editing = EditingState(List(CursorPosition(0, 5), CursorPosition(1, 0))),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 120, visibleLines = 40)
       )
     val initialState = AppState.initial.copy(
@@ -164,7 +159,10 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = EditorEventReducer.reduce(MoveRight, paneId, initialState).state
 
-    updatedState.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(1, 1))
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(
+      CursorPosition(1, 0),
+      CursorPosition(1, 1)
+    )
   }
 
   it should "copy the current line without materialising the whole buffer" in {
@@ -179,7 +177,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 2)))
+              editing = EditingState(List(CursorPosition(0, 2)))
             )
         )
       )
@@ -202,7 +200,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 2)))
+              editing = EditingState(List(CursorPosition(0, 2)))
             )
         )
       )
@@ -213,7 +211,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
 
     updatedState.runtime.clipboard shouldBe Some("alpha")
     buffer.document.content.collect() shouldBe "x" * 5000
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 0))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 0))
   }
 
   it should "replace a selection without materialising the whole buffer" in {
@@ -229,10 +227,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(selection.focus), selection = Some(selection))
+              editing = EditingStateFixtures(cursors = List(selection.focus), selection = Some(selection))
             )
         )
       )
@@ -242,7 +237,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "Z\n" + ("x" * 5000)
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 1))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 1))
     buffer.allSelections shouldBe Nil
   }
 
@@ -260,14 +255,11 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(
-                  cursors = List(first.focus, second.focus),
-                  selection = Some(first),
-                  selections = List(first, second)
-                )
+              editing = EditingStateFixtures(
+                cursors = List(first.focus, second.focus),
+                selection = Some(first),
+                selections = List(first, second)
+              )
             )
         )
       )
@@ -291,10 +283,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(selection.focus), selection = Some(selection))
+              editing = EditingStateFixtures(cursors = List(selection.focus), selection = Some(selection))
             )
         )
       )
@@ -306,7 +295,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
     buffer.document.content.getLine(0) shouldBe Some("    alpha")
     buffer.document.content.getLine(1) shouldBe Some("    beta")
     buffer.document.content.getLine(2) shouldBe Some("x" * 5000)
-    buffer.editing.cursors shouldBe List(CursorPosition(1, 6))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(1, 6))
   }
 
   it should "unindent selected lines without materialising the whole buffer" in {
@@ -322,10 +311,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(selection.focus), selection = Some(selection))
+              editing = EditingStateFixtures(cursors = List(selection.focus), selection = Some(selection))
             )
         )
       )
@@ -337,5 +323,5 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
     buffer.document.content.getLine(0) shouldBe Some("alpha")
     buffer.document.content.getLine(1) shouldBe Some("beta")
     buffer.document.content.getLine(2) shouldBe Some("x" * 5000)
-    buffer.editing.cursors shouldBe List(CursorPosition(1, 0))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(1, 0))
   }

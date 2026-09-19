@@ -41,10 +41,9 @@ private[reducers] object EditorVerticalNavigationReducer:
     direction: Int
   ): ReducerResult =
     val currentState = Focused.replaceBuffer(incomingState, buffer)
-    buffer.editing.cursors.headOption match
-      case Some(cursor) =>
-        reduceSelectionExtension(buffer, cursor, currentState)(verticalTarget(currentState, geometry, direction))
-      case None => ReducerResult.noEffects(currentState)
+    reduceSelectionExtension(buffer, buffer.editing.cursors.head.position, currentState)(
+      verticalTarget(currentState, geometry, direction)
+    )
 
   private def moveVerticalForBuffer(
     buffer: Buffer,
@@ -56,8 +55,7 @@ private[reducers] object EditorVerticalNavigationReducer:
       val seeded    = Focused.replaceBuffer(incomingState, buffer)
       val collapsed = collapseSelectionsToFocus(buffer)
       multiVertical(collapsed, seeded, geometry, direction)
-    else if buffer.editing.multiCursorVerticalStates.size > 1 || buffer.editing.cursors.size > 1 then
-      multiVertical(buffer, incomingState, geometry, direction)
+    else if buffer.editing.cursors.size > 1 then multiVertical(buffer, incomingState, geometry, direction)
     else singleVertical(clearInFlightMultiCursorVerticalState(buffer), incomingState, geometry, direction)
 
   private def singleVertical(
@@ -67,12 +65,10 @@ private[reducers] object EditorVerticalNavigationReducer:
     direction: Int
   ): ReducerResult =
     val currentState = Focused.replaceBuffer(incomingState, buffer)
-    buffer.editing.cursors.headOption match
-      case Some(cursor) =>
-        reduceMovement(buffer, selectionFocusOrCursor(buffer, cursor), currentState)(
-          verticalTarget(currentState, geometry, direction)
-        )
-      case None => ReducerResult.noEffects(currentState)
+    val cursor       = buffer.editing.cursors.head.position
+    reduceMovement(buffer, selectionFocusOrCursor(buffer, cursor), currentState)(
+      verticalTarget(currentState, geometry, direction)
+    )
 
   private def multiVertical(
     buffer: Buffer,
@@ -110,43 +106,34 @@ private[reducers] object EditorVerticalNavigationReducer:
     val sortedStates = movedStates.sortBy(cursorState =>
       (cursorState.cursor.line, cursorState.cursor.column, cursorState.preferredColumn, cursorState.preferredXPx)
     )
-    val visibleCursors = sortedStates
-      .map(_.cursor)
-      .distinct
-    val primaryCursor = visibleCursors.primaryCursor
-    val baseBuffer = buffer.copy(
-      editing = buffer.editing.copy(
-        cursors = visibleCursors,
-        selection = None,
-        selections = Nil,
-        preferredColumn = Some(primaryCursor.column),
-        preferredXPx = None,
-        multiCursorVerticalStates = sortedStates.map(cursorState =>
-          VerticalCursorState(cursorState.cursor, cursorState.preferredColumn, cursorState.preferredXPx)
-        )
+    // One entry per distinct landing position, each carrying the preferred column/x it moved with -- deduplicated
+    // by position (a cursor can land where another already is) the same way every multi-cursor write path dedupes.
+    val distinctStates = sortedStates
+      .foldLeft(List.empty[MultiCursorVerticalState]) { (acc, state) =>
+        if acc.exists(_.cursor == state.cursor) then acc else acc :+ state
+      }
+    buffer.copy(
+      editing = EditingState.fromCursors(
+        distinctStates.map(state => Cursor(state.cursor, None, Some(state.preferredColumn), Some(state.preferredXPx)))
       )
     )
-    baseBuffer
 
+  /** Each cursor's preferred column/x travels with it directly (`#1577`), so unlike before `#1577` there is no separate
+    * collection whose membership can drift out of sync with the live cursor set -- a cursor's own
+    * `preferredColumn`/`preferredXPx` is either set (from a still-in-flight vertical move) or `None` (fresh from a
+    * non-vertical edit or movement), in which case it falls back to that cursor's own current column/measured x.
+    */
   private def multiCursorVerticalStates(
     buffer: Buffer,
     geometry: EditorGeometry
   ): List[MultiCursorVerticalState] =
-    val visibleCursors = buffer.editing.cursors.distinct
-      .sortBy(cursor => (cursor.line, cursor.column))
-    val storedVisibleCursors = buffer.editing.multiCursorVerticalStates
-      .map(_.cursor)
-      .distinct
-      .sortBy(cursor => (cursor.line, cursor.column))
-
-    if buffer.editing.multiCursorVerticalStates.nonEmpty && storedVisibleCursors == visibleCursors then
-      buffer.editing.multiCursorVerticalStates.map(cursorState =>
-        MultiCursorVerticalState(cursorState.cursor, cursorState.preferredColumn, cursorState.preferredXPx)
+    buffer.editing.cursors.toList.map(cursor =>
+      MultiCursorVerticalState(
+        cursor.position,
+        cursor.preferredColumn.getOrElse(cursor.position.column),
+        cursor.preferredXPx.getOrElse(measuredCursorXPxFrom(geometry, cursor.position))
       )
-    else
-      visibleCursors.map(cursor =>
-        MultiCursorVerticalState(cursor, cursor.column, measuredCursorXPxFrom(geometry, cursor))
-      )
+    )
 
   private def moveMultiCursorVertical(
     cursor: CursorPosition,
@@ -266,8 +253,9 @@ private[reducers] object EditorVerticalNavigationReducer:
     buffer: Buffer,
     from: CursorPosition
   ): CursorTarget =
-    val preferredColumn = buffer.editing.preferredColumn.getOrElse(from.column)
-    val preferredXPx    = buffer.editing.preferredXPx.getOrElse(measuredCursorXPxFrom(geometry, from))
+    val primary         = buffer.editing.cursors.head
+    val preferredColumn = primary.preferredColumn.getOrElse(from.column)
+    val preferredXPx    = primary.preferredXPx.getOrElse(measuredCursorXPxFrom(geometry, from))
     // Visual-row movement only makes sense with wrap on, and is independently toggleable on top of it (default on,
     // matching wrap-follows-wrap behaviour before this setting existed).
     val useVisualLineNavigation =

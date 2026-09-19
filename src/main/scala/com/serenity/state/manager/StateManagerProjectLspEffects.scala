@@ -152,7 +152,7 @@ final private[manager] class StateManagerProjectLspEffects(
       buffer     <- state.persisted.buffers.get(bufferId)
       path       <- buffer.document.filePath
       languageId <- buffer.document.language
-      cursor     <- buffer.editing.cursors.headOption
+      cursor     <- buffer.editing.cursorPositions.headOption
     yield (path.toUri.toString, languageId, cursor, buffer)
 
   private def showLspUnavailablePeek(state: AppState): IO[Unit] =

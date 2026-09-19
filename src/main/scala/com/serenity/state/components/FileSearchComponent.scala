@@ -75,7 +75,7 @@ class FileSearchComponent extends TypedFocusedComponent[ModalInputEvent]:
   private def navigateToResult(state: AppState, surface: UiSurface, result: FileSearchResult): AppState =
     val updatedBuffers = state.persisted.buffers.get(result.bufferId).fold(state.persisted.buffers) { buffer =>
       state.persisted.buffers + (result.bufferId -> buffer
-        .copy(editing = buffer.editing.copy(cursors = List(CursorPosition(result.line, 0)))))
+        .copy(editing = EditingState(List(CursorPosition(result.line, 0)))))
     }
     val withoutSearch = state.copy(
       persisted = state.persisted.copy(buffers = updatedBuffers),

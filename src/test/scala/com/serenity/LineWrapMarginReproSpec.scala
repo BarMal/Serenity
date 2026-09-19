@@ -41,7 +41,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
       if usesTextFont then baseBuffer
       else baseBuffer.copy(document = baseBuffer.document.copy(language = Some(LanguageId.Scala)))
     val buffer =
-      withLanguage.copy(editing = withLanguage.editing.copy(cursors = List(CursorPosition(0, content.length))))
+      withLanguage.copy(editing = EditingState(List(CursorPosition(0, content.length))))
 
     buffer.usesTextFont shouldBe usesTextFont
 
@@ -158,7 +158,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
 
       val baseBuffer = Buffer.fromString(bufferId, content)
       val buffer =
-        baseBuffer.copy(editing = baseBuffer.editing.copy(cursors = List(CursorPosition(0, content.length))))
+        baseBuffer.copy(editing = EditingState(List(CursorPosition(0, content.length))))
       buffer.usesTextFont shouldBe true
 
       val baseState = AppState.initial.copy(
@@ -181,7 +181,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
       // Give the buffer the viewport dimensions the layout engine derives (visibleColumns/visibleLines in cells).
       val state        = LayoutEngine.syncViewportDimensions(baseState, viewportSize)
       val syncedBuffer = state.persisted.buffers(bufferId)
-      val cursor       = syncedBuffer.editing.cursors.head
+      val cursor       = syncedBuffer.editing.cursorPositions.head
 
       // The caret's true wrapped row: measured at the width the renderer wraps at (the code-font grid width), with
       // the buffer's own prose font for glyph advances.

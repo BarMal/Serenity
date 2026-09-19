@@ -6,6 +6,7 @@ import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspR
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -24,7 +25,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = Rope(text)),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = cursors)
+              editing = EditingState(cursors)
             )
         )
       )
@@ -43,7 +44,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
           bufferId,
           before.persisted
             .buffers(bufferId)
-            .copy(editing = before.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 3))))
+            .copy(editing = EditingState(List(CursorPosition(2, 3))))
         )
       )
     )
@@ -65,12 +66,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
           bufferId,
           before.persisted
             .buffers(bufferId)
-            .copy(editing =
-              before.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(1, 2), CursorPosition(2, 0)))
-            )
+            .copy(editing = EditingState(List(CursorPosition(1, 2), CursorPosition(2, 0))))
         )
       )
     )
@@ -80,7 +76,18 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report the spanned rows for a selection change" in {
-    val before = stateWithContent("first\nsecond\nthird\nfourth")
+    // The cursor's own position is its selection's focus (`#1577`), so `before`'s cursor is seeded at that same focus
+    // (rather than left at the document origin) to isolate this transition to the selection changing -- otherwise the
+    // cursor's position would also read as having moved, correctly damaging its own old/new rows too.
+    val stateWithCursor = stateWithContent("first\nsecond\nthird\nfourth")
+    val before = stateWithCursor.copy(persisted =
+      stateWithCursor.persisted.copy(buffers =
+        stateWithCursor.persisted.buffers.updated(
+          bufferId,
+          stateWithCursor.persisted.buffers(bufferId).copy(editing = EditingState(List(CursorPosition(3, 2))))
+        )
+      )
+    )
     val after = before.copy(persisted =
       before.persisted.copy(buffers =
         before.persisted.buffers.updated(
@@ -88,10 +95,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
           before.persisted
             .buffers(bufferId)
             .copy(editing =
-              before.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(selection = Some(Selection(CursorPosition(1, 0), CursorPosition(3, 2))))
+              EditingStateFixtures(selection = Some(Selection(CursorPosition(1, 0), CursorPosition(3, 2))))
             )
         )
       )
@@ -109,10 +113,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
           before.persisted
             .buffers(bufferId)
             .copy(editing =
-              before.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5))))
+              EditingStateFixtures(selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5))))
             )
         )
       )
@@ -124,16 +125,18 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
           withSelection.persisted
             .buffers(bufferId)
             .copy(editing =
-              withSelection.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(selection = Some(Selection(CursorPosition(2, 0), CursorPosition(2, 5))))
+              EditingStateFixtures(selection = Some(Selection(CursorPosition(2, 0), CursorPosition(2, 5))))
             )
         )
       )
     )
 
-    DamageProducer.forTransition(withSelection, after) shouldBe Damage.BufferRows(bufferId, Set(0, 2))
+    // The selection's focus is this buffer's cursor position (`#1577`), and it moves from row 0 to row 2 along with
+    // the selection here -- a real cursor move, not just a selection change -- so Chrome (the gutter's current-line
+    // indicator) is correctly damaged too, alongside the selection's own old/new rows.
+    DamageProducer.forTransition(withSelection, after) shouldBe Damage.Combined(
+      Set(Damage.BufferRows(bufferId, Set(0, 2)), Damage.Chrome)
+    )
   }
 
   it should "report the spanned rows when a document comment is added" in {

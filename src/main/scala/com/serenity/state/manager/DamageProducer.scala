@@ -138,8 +138,9 @@ object DamageProducer:
     (startLine to endLine).toSet
 
   private def cursorDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
-    if before.editing.cursors == after.editing.cursors then Damage.Nothing
-    else Damage.BufferRows(bufferId, (before.editing.cursors ++ after.editing.cursors).map(_.line).toSet)
+    if before.editing.cursorPositions == after.editing.cursorPositions then Damage.Nothing
+    else
+      Damage.BufferRows(bufferId, (before.editing.cursorPositions ++ after.editing.cursorPositions).map(_.line).toSet)
 
   private def selectionDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
     if before.allSelections == after.allSelections then Damage.Nothing
@@ -222,8 +223,10 @@ object DamageProducer:
   ): Damage =
     if !after.persisted.config.surfaceConfig.focusedTextBodyEnabled then Damage.Nothing
     else
-      val beforeRange = FocusedTextBody.activeRange(beforeBuffer, beforeBuffer.editing.cursors.headOption.map(_.line))
-      val afterRange  = FocusedTextBody.activeRange(afterBuffer, afterBuffer.editing.cursors.headOption.map(_.line))
+      val beforeRange =
+        FocusedTextBody.activeRange(beforeBuffer, beforeBuffer.editing.cursorPositions.headOption.map(_.line))
+      val afterRange =
+        FocusedTextBody.activeRange(afterBuffer, afterBuffer.editing.cursorPositions.headOption.map(_.line))
       if beforeRange == afterRange then Damage.Nothing
       else
         val beforeLines = beforeRange.map(_.toSet).getOrElse((0 until beforeBuffer.document.content.lineCount).toSet)
@@ -409,6 +412,6 @@ object DamageProducer:
       pane     <- state.persisted.layout.editorPanes.get(paneId)
       bufferId <- pane.bufferId
       buffer   <- state.persisted.buffers.get(bufferId)
-    yield (buffer.editing.cursors, buffer.document.language, buffer.document.filePath, buffer.viewport)
+    yield (buffer.editing.cursorPositions, buffer.document.language, buffer.document.filePath, buffer.viewport)
 
   private def isSameReference(a: AnyRef, b: AnyRef): Boolean = a eq b

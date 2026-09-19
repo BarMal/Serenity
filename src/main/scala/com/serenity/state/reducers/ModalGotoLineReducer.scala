@@ -60,7 +60,7 @@ private[reducers] object ModalGotoLineReducer:
         val halfVisible = buffer.viewport.visibleLines / 2
         val newTopLine  = math.max(0, targetLine - halfVisible)
         val updatedBuffer = buffer.copy(
-          editing = buffer.editing.copy(cursors = List(CursorPosition(targetLine, 0))),
+          editing = EditingState(List(CursorPosition(targetLine, 0))),
           viewport = buffer.viewport.copy(topLine = newTopLine)
         )
         val dismissed = state.dismissTopModal

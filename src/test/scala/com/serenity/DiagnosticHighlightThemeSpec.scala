@@ -54,7 +54,7 @@ class DiagnosticHighlightThemeSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val buffer = Buffer
       .fromString(bufferId, "alpha beta gamma")
-      .copy(editing = EditingState(cursors = List(CursorPosition(0, 0))))
+      .copy(editing = EditingState(List(CursorPosition(0, 0))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val diagnostic = Diagnostic(
       range = LspRange(LspPosition(0, 6), LspPosition(0, 10)),
@@ -94,7 +94,7 @@ class DiagnosticHighlightThemeSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val buffer = Buffer
       .fromString(bufferId, "alpha beta gamma")
-      .copy(editing = EditingState(cursors = List(CursorPosition(0, 0))))
+      .copy(editing = EditingState(List(CursorPosition(0, 0))))
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val diagnostic = Diagnostic(
       range = LspRange(LspPosition(0, 6), LspPosition(0, 10)),

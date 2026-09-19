@@ -477,7 +477,7 @@ object RendererPaneContent:
   private def focusedTextBodyLines(buffer: Buffer, state: AppState): Int => Boolean =
     if !state.persisted.config.surfaceConfig.focusedTextBodyEnabled then _ => true
     else
-      val activeLine = buffer.editing.cursors.headOption.map(_.line)
+      val activeLine = buffer.editing.cursorPositions.headOption.map(_.line)
       FocusedTextBody
         .activeRange(buffer, activeLine)
         .map((range: Range.Inclusive) => (line: Int) => range.contains(line))

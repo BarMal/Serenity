@@ -5,6 +5,7 @@ import java.nio.file.Path
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{RendererEntryPoints, RendererHighlights}
 import com.serenity.ui.theme.Theme
@@ -21,7 +22,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "Hello World")
       .copy(editing =
-        EditingState(
+        EditingStateFixtures(
           cursors = List(CursorPosition(0, 6)),
           selection = Some(Selection(CursorPosition(0, 6), CursorPosition(0, 11)))
         )
@@ -167,7 +168,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "alpha beta gamma")
       .copy(editing =
-        EditingState(
+        EditingStateFixtures(
           cursors = List(first.focus, second.focus),
           selection = Some(first),
           selections = List(first, second)
@@ -241,7 +242,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "alpha beta gamma")
       .copy(
-        editing = EditingState(cursors = List(CursorPosition(0, 0))),
+        editing = EditingState(List(CursorPosition(0, 0))),
         annotations = Annotations(documentComments =
           List(DocumentComment(CursorPosition(0, 6), CursorPosition(0, 10), "Review this"))
         )
@@ -283,7 +284,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "alpha beta gamma")
       .copy(
-        editing = EditingState(cursors = List(CursorPosition(0, 7))),
+        editing = EditingState(List(CursorPosition(0, 7))),
         annotations = Annotations(documentComments =
           List(DocumentComment(CursorPosition(0, 6), CursorPosition(0, 10), "Review this"))
         )
@@ -325,7 +326,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "first line\nsecond line\nthird line")
       .copy(
-        editing = EditingState(cursors = List(CursorPosition(0, 0))),
+        editing = EditingState(List(CursorPosition(0, 0))),
         annotations = Annotations(
           documentComments = List(DocumentComment(CursorPosition(0, 6), CursorPosition(2, 5), "Review this section"))
         )
@@ -363,7 +364,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "alpha")
       .copy(
-        editing = EditingState(cursors = List(CursorPosition(0, 0))),
+        editing = EditingState(List(CursorPosition(0, 0))),
         annotations = Annotations(documentComments =
           List(DocumentComment(CursorPosition(0, 5), CursorPosition(0, 5), "Point note"))
         )

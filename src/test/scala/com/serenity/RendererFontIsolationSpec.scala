@@ -30,7 +30,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     val baseBuffer = Buffer.fromString(bufferId, text)
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = language),
-      editing = baseBuffer.editing.copy(cursors = List(CursorPosition(0, cursorCol)))
+      editing = EditingState(List(CursorPosition(0, cursorCol)))
     )
     val pane   = EditorPane.withBuffer(paneId, bufferId)
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)

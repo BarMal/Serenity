@@ -111,7 +111,7 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
     val cursor = CursorPosition(1, 2)
     val bufferBase = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-    val buffer = bufferBase.copy(editing = bufferBase.editing.copy(cursors = List(cursor)))
+    val buffer = bufferBase.copy(editing = EditingState(List(cursor)))
     val first = UiSurface(
       SurfaceId("contextual-toolbar"),
       SurfaceContent.ContextualToolbar(ContextualToolbarState()),

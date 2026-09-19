@@ -132,7 +132,7 @@ class StatusLineSegmentsSpec extends AnyFlatSpec with Matchers:
     val paneId   = PaneId(0)
     val buffer = Buffer
       .fromString(bufferId, "hello world")
-      .copy(editing = EditingState(cursors = List(CursorPosition(0, 3))))
+      .copy(editing = EditingState(List(CursorPosition(0, 3))))
     val state = AppState.initial.copy(persisted =
       AppState.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),

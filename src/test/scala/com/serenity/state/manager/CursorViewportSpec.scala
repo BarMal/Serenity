@@ -43,7 +43,7 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
         .fromString(bufferId, content)
         .copy(
           viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 8),
-          editing = Buffer.fromString(bufferId, content).editing.copy(cursors = List(CursorPosition(10, 0)))
+          editing = EditingState(List(CursorPosition(10, 0)))
         )
       val state = tuiStateWith(buffer)
 
@@ -65,7 +65,7 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
       .fromString(bufferId, content)
       .copy(
         viewport = Viewport(topLine = 5, leftColumn = 0, visibleColumns = 20, visibleLines = 8),
-        editing = Buffer.fromString(bufferId, content).editing.copy(cursors = List(CursorPosition(0, 0)))
+        editing = EditingState(List(CursorPosition(0, 0)))
       )
     val state = tuiStateWith(buffer)
 
@@ -88,7 +88,7 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
       .fromString(bufferId, content)
       .copy(
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 8),
-        editing = Buffer.fromString(bufferId, content).editing.copy(cursors = List(cursor))
+        editing = EditingState(List(cursor))
       )
     val state = tuiStateWith(buffer)
     val configuredState = state.copy(persisted =
@@ -139,7 +139,7 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
         .fromString(bufferId, content)
         .copy(
           viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 10),
-          editing = Buffer.fromString(bufferId, content).editing.copy(cursors = List(cursorPos))
+          editing = EditingState(List(cursorPos))
         )
       val state = AppState.initial.copy(persisted =
         AppState.initial.persisted.copy(
@@ -200,7 +200,7 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
         .fromString(bufferId, content)
         .copy(
           viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 8),
-          editing = Buffer.fromString(bufferId, content).editing.copy(cursors = List(CursorPosition(20, 0)))
+          editing = EditingState(List(CursorPosition(20, 0)))
         )
       val state = tuiStateWith(buffer)
 
@@ -216,7 +216,7 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
       .fromString(bufferId, content)
       .copy(
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 8),
-        editing = Buffer.fromString(bufferId, content).editing.copy(cursors = List(CursorPosition(3, 0)))
+        editing = EditingState(List(CursorPosition(3, 0)))
       )
     val state = tuiStateWith(buffer)
 
@@ -233,12 +233,12 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
         .fromString(bufferId, content)
         .copy(
           viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 8),
-          editing = Buffer.fromString(bufferId, content).editing.copy(cursors = List(CursorPosition(0, 0)))
+          editing = EditingState(List(CursorPosition(0, 0)))
         )
       val before = tuiStateWith(buffer).copy(persisted =
         tuiStateWith(buffer).persisted.copy(config = tuiStateWith(buffer).persisted.config.withColumnMode(true))
       )
-      val movedBuffer = buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(20, 0))))
+      val movedBuffer = buffer.copy(editing = EditingState(List(CursorPosition(20, 0))))
       val after       = before.copy(persisted = before.persisted.copy(buffers = Map(bufferId -> movedBuffer)))
 
       val result = CursorViewport.ensureVisibleCursors(before, after)

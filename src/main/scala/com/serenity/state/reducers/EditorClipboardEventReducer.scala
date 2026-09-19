@@ -81,18 +81,16 @@ private[reducers] object EditorClipboardEventReducer:
         applyEditedBuffer(applyMultiCursorInsertion(_, text))
       case Some(text) =>
         val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(buffer, head, text)
-        val newCursor                         = replacedBuffer.editing.cursors.headOption.getOrElse(head)
+        val replacedCursor                    = replacedBuffer.editing.cursors.head
+        val newCursor                         = replacedCursor.position
         val withoutAnimations = buffer.copy(
           document = buffer.document.copy(
             content = replacedBuffer.document.content,
             isDirty = replacedBuffer.document.isDirty,
             isNewEmpty = replacedBuffer.document.isNewEmpty
           ),
-          editing = buffer.editing.copy(
-            cursors = replacedBuffer.editing.cursors,
-            selection = replacedBuffer.editing.selection,
-            preferredColumn = Some(newCursor.column),
-            preferredXPx = None
+          editing = buffer.editing.withPrimary(
+            Cursor(newCursor, replacedCursor.selectionAnchor, Some(newCursor.column), None)
           ),
           annotations = replacedBuffer.annotations,
           richText = replacedBuffer.richText

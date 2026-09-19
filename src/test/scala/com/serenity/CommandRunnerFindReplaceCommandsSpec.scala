@@ -99,7 +99,7 @@ class CommandRunnerFindReplaceCommandsSpec extends AnyFlatSpec with Matchers:
           .copy(
             document =
               state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha\nbeta\nalpha")),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 0))),
+            editing = EditingState(List(CursorPosition(2, 0))),
             findState = Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))

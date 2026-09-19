@@ -7,6 +7,7 @@ import com.serenity.keystroke.events.{Cut, Paste, ReverseTabKey, TabKey}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{CursorPosition, PaneId, Selection}
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -43,10 +44,7 @@ class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers:
               state.persisted
                 .buffers(bufferId)
                 .copy(editing =
-                  state.persisted
-                    .buffers(bufferId)
-                    .editing
-                    .copy(selection = Some(selection), selections = Nil, cursors = List(selection.focus))
+                  EditingStateFixtures(selection = Some(selection), selections = Nil, cursors = List(selection.focus))
                 )
             )
           )
@@ -70,12 +68,7 @@ class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers:
               bufferId,
               state.persisted
                 .buffers(bufferId)
-                .copy(editing =
-                  state.persisted
-                    .buffers(bufferId)
-                    .editing
-                    .copy(selection = selection, selections = Nil, cursors = List(cursor))
-                )
+                .copy(editing = EditingStateFixtures(selection = selection, selections = Nil, cursors = List(cursor)))
             )
           )
         )

@@ -16,7 +16,7 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = base
       .copy(
         document = base.document.copy(language = Some(LanguageId.Scala)),
-        editing = base.editing.copy(cursors = List(CursorPosition(1, 4)))
+        editing = EditingState(List(CursorPosition(1, 4)))
       )
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
@@ -31,7 +31,7 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = base
       .copy(
         document = base.document.copy(language = Some(LanguageId.JavaScript)),
-        editing = base.editing.copy(cursors = List(CursorPosition(0, 3)))
+        editing = EditingState(List(CursorPosition(0, 3)))
       )
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
@@ -53,7 +53,7 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = base
       .copy(
         document = base.document.copy(language = Some(LanguageId.Scala)),
-        editing = base.editing.copy(cursors = List(CursorPosition(2, 6)))
+        editing = EditingState(List(CursorPosition(2, 6)))
       )
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
@@ -68,7 +68,7 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = base
       .copy(
         document = base.document.copy(language = Some(LanguageId.Markdown)),
-        editing = base.editing.copy(cursors = List(CursorPosition(0, 8)))
+        editing = EditingState(List(CursorPosition(0, 8)))
       )
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
@@ -81,7 +81,7 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
     val base = Buffer.fromString(BufferId(1), "Chapter text")
     val buffer = base
       .copy(
-        editing = base.editing.copy(cursors = List(CursorPosition(0, 4))),
+        editing = EditingState(List(CursorPosition(0, 4))),
         annotations = base.annotations.copy(documentComments =
           List(
             DocumentComment(
@@ -112,7 +112,7 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = base
       .copy(
         document = base.document.copy(language = Some(LanguageId.Markdown)),
-        editing = base.editing.copy(cursors = List(CursorPosition(2, 4)))
+        editing = EditingState(List(CursorPosition(2, 4)))
       )
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
@@ -127,7 +127,7 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = base
       .copy(
         document = base.document.copy(language = Some(LanguageId.Scala)),
-        editing = base.editing.copy(cursors = List(CursorPosition(0, 0)))
+        editing = EditingState(List(CursorPosition(0, 0)))
       )
 
     CommentRendering.atCursor(buffer) shouldBe None
@@ -146,7 +146,7 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = base
       .copy(
         document = base.document.copy(content = guardedContent, language = Some(LanguageId.Scala)),
-        editing = base.editing.copy(cursors = List(CursorPosition(targetLine, 4)))
+        editing = EditingState(List(CursorPosition(targetLine, 4)))
       )
 
     val comment = CommentRendering.atCursor(buffer).getOrElse(fail("Expected comment"))
@@ -170,7 +170,7 @@ class CommentRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer = base
       .copy(
         document = base.document.copy(content = guardedContent, language = Some(LanguageId.Scala)),
-        editing = base.editing.copy(cursors = List(CursorPosition(cursorLine, 4)))
+        editing = EditingState(List(CursorPosition(cursorLine, 4)))
       )
 
     // No block-comment markers anywhere in the buffer, so an unbounded scan would walk to line 0 and to the last

@@ -7,6 +7,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.RendererEntryPoints
 import org.scalatest.flatspec.AnyFlatSpec
@@ -29,7 +30,7 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
     )
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
-      editing = baseBuffer.editing.copy(cursors = List(CursorPosition(1, 0))),
+      editing = EditingState(List(CursorPosition(1, 0))),
       viewport = Viewport.default.copy(visibleLines = 10)
     )
     val state = AppState.empty.copy(persisted =
@@ -87,7 +88,7 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
     )
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
-      editing = baseBuffer.editing.copy(cursors = List(CursorPosition(6, 0))),
+      editing = EditingState(List(CursorPosition(6, 0))),
       viewport = Viewport.default.copy(topLine = 5, visibleLines = 10)
     )
     val state = AppState.empty.copy(persisted =
@@ -489,7 +490,7 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
     val baseBuffer = Buffer.fromString(bufferId, source)
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
-      editing = baseBuffer.editing.copy(cursors = List(cursor), selection = selection),
+      editing = EditingStateFixtures(cursors = List(cursor), selection = selection),
       viewport = Viewport.default.copy(topLine = topLine.getOrElse(cursor.line).max(0), visibleLines = 10)
     )
     val state = AppState.empty.copy(persisted =

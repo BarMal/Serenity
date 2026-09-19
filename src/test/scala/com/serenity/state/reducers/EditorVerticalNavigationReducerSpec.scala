@@ -4,6 +4,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.EditorGeometryProducer
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -22,19 +23,11 @@ class EditorVerticalNavigationReducerSpec extends AnyFlatSpec with Matchers:
     text: String,
     cursors: List[CursorPosition],
     selection: Option[Selection] = None,
-    selections: List[Selection] = Nil,
-    multiCursorVerticalStates: List[VerticalCursorState] = Nil
+    selections: List[Selection] = Nil
   ): AppState =
     val buffer = Buffer
       .fromString(bufferId, text)
-      .copy(editing =
-        EditingState(
-          cursors = cursors,
-          selection = selection,
-          selections = selections,
-          multiCursorVerticalStates = multiCursorVerticalStates
-        )
-      )
+      .copy(editing = EditingStateFixtures(cursors = cursors, selection = selection, selections = selections))
     val base = AppState.initial
     // Word wrap (and the visual-line cursor navigation it enables) defaults to on -- switch it off so MoveUp/MoveDown
     // take the plain logical-line path these tests exercise, rather than wrapping short lines against the real
@@ -58,47 +51,47 @@ class EditorVerticalNavigationReducerSpec extends AnyFlatSpec with Matchers:
   "MoveDown with a single cursor" should "move to the same column on the next line" in {
     val before = stateWith("alpha\nbeta\ngamma", List(CursorPosition(0, 2)))
 
-    bufferAfter(MoveDown, before).editing.cursors shouldBe List(CursorPosition(1, 2))
+    bufferAfter(MoveDown, before).editing.cursorPositions shouldBe List(CursorPosition(1, 2))
   }
 
   it should "clamp to the shorter line's length rather than overshoot" in {
     val before = stateWith("alpha\nb", List(CursorPosition(0, 4)))
 
-    bufferAfter(MoveDown, before).editing.cursors shouldBe List(CursorPosition(1, 1))
+    bufferAfter(MoveDown, before).editing.cursorPositions shouldBe List(CursorPosition(1, 1))
   }
 
   "MoveUp at the top line" should "leave the cursor in place" in {
     val before = stateWith("alpha\nbeta", List(CursorPosition(0, 2)))
 
-    bufferAfter(MoveUp, before).editing.cursors shouldBe List(CursorPosition(0, 2))
+    bufferAfter(MoveUp, before).editing.cursorPositions shouldBe List(CursorPosition(0, 2))
   }
 
   "MoveDown at the last line" should "leave the cursor in place" in {
     val before = stateWith("alpha\nbeta", List(CursorPosition(1, 1)))
 
-    bufferAfter(MoveDown, before).editing.cursors shouldBe List(CursorPosition(1, 1))
+    bufferAfter(MoveDown, before).editing.cursorPositions shouldBe List(CursorPosition(1, 1))
   }
 
   "ExtendSelectionDown" should "extend a selection anchored at the original cursor" in {
     val before = stateWith("alpha\nbeta\ngamma", List(CursorPosition(0, 2)))
 
     val after = bufferAfter(ExtendSelectionDown, before)
-    after.editing.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(1, 2)))
-    after.editing.cursors shouldBe List(CursorPosition(1, 2))
+    after.primarySelection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(1, 2)))
+    after.editing.cursorPositions shouldBe List(CursorPosition(1, 2))
   }
 
-  it should "clear any in-flight multi-cursor vertical state before extending" in {
-    val stale = List(VerticalCursorState(CursorPosition(0, 2), preferredColumn = 2, preferredXPx = 16f))
-    val before =
-      stateWith("alpha\nbeta", List(CursorPosition(0, 2)), multiCursorVerticalStates = stale)
-
-    bufferAfter(ExtendSelectionDown, before).editing.multiCursorVerticalStates shouldBe Nil
-  }
+  /** Before `#1577`, a genuinely multi-cursor buffer's per-cursor vertical state lived in a separate
+    * `multiCursorVerticalStates` collection that `ExtendSelectionDown` had to explicitly clear before falling back to
+    * its single-cursor path, or a later multi-cursor move could reuse state pinned to stale cursor positions. Now that
+    * a cursor's own preferred column/x travels with it directly, there is no second collection left to go stale or need
+    * clearing -- the single remaining cursor's own preferred state is simply whatever this move computes for it, as the
+    * previous test already pins.
+    */
 
   "MoveDown with multiple cursors" should "move every cursor down independently, deduplicating and sorting" in {
     val before = stateWith("alpha\nbeta\ngamma", List(CursorPosition(0, 0), CursorPosition(0, 3)))
 
-    bufferAfter(MoveDown, before).editing.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(1, 3))
+    bufferAfter(MoveDown, before).editing.cursorPositions shouldBe List(CursorPosition(1, 0), CursorPosition(1, 3))
   }
 
   it should "collapse an active multi-selection to its focuses before moving" in {
@@ -112,9 +105,9 @@ class EditorVerticalNavigationReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val after = bufferAfter(MoveDown, before)
-    after.editing.selections shouldBe Nil
-    after.editing.selection shouldBe None
-    after.editing.cursors shouldBe List(CursorPosition(1, 2), CursorPosition(2, 2))
+    after.allSelections shouldBe after.primarySelection.toList
+    after.primarySelection shouldBe None
+    after.editing.cursorPositions shouldBe List(CursorPosition(1, 2), CursorPosition(2, 2))
   }
 
   "MoveDown for a pane with no buffer" should "leave the state untouched" in {

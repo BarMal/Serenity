@@ -6,6 +6,7 @@ import com.serenity.config.AppConfig
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
 import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
@@ -35,7 +36,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
     val baseBuffer = Buffer.fromString(bufferId, content)
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = language),
-      editing = baseBuffer.editing.copy(selection = selection)
+      editing = EditingStateFixtures(selection = selection)
     )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     AppState.initial.copy(

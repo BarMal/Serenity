@@ -7,6 +7,7 @@ import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{
   CellMetrics,
   Layout,
@@ -44,14 +45,14 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
 
   "MouseTargetLayoutKey" should "ignore cursor and selection changes during mouse drags" in {
     val plainBuffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma")
-    val buffer      = plainBuffer.copy(editing = plainBuffer.editing.copy(cursors = List(CursorPosition(0, 1))))
+    val buffer      = plainBuffer.copy(editing = EditingState(List(CursorPosition(0, 1))))
     val state       = stateWith(buffer)
     val draggedState = state.copy(persisted =
       state.persisted.copy(
         buffers = state.persisted.buffers.updated(
           bufferId,
           buffer.copy(
-            editing = buffer.editing.copy(
+            editing = EditingStateFixtures(
               cursors = List(CursorPosition(1, 3)),
               selection = Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
             )
@@ -102,8 +103,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
 
   it should "reuse the prepared scene for cursor-only state changes" in {
     val buffer = Buffer.fromString(bufferId, "alpha beta")
-    val state  = stateWith(buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(0, 1)))))
-    val moved  = stateWith(buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(0, 5)))))
+    val state  = stateWith(buffer.copy(editing = EditingState(List(CursorPosition(0, 1)))))
+    val moved  = stateWith(buffer.copy(editing = EditingState(List(CursorPosition(0, 5)))))
     val size   = ViewportSize(80, 24)
     val scene  = MouseTargetCache.fromState(state, size).scene
 

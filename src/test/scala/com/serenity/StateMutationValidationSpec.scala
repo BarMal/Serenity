@@ -202,7 +202,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
     val after = stateManager.getCurrentState.unsafeRunSync()
     after.isValid shouldBe true
     AppStateValidation.validationErrors(after) shouldBe empty
-    after.persisted.buffers.values.foreach(_.editing.cursors.foreach(_.line shouldBe 0))
+    after.persisted.buffers.values.foreach(_.editing.cursorPositions.foreach(_.line shouldBe 0))
   }
 
   /** #1183's remaining audit: `ViewIntent.SplitPaneHorizontal`/`SplitPaneVertical`/`ClosePane`/`NextTab`/`PreviousTab`
@@ -292,7 +292,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
             state.persisted.copy(buffers =
               state.persisted.buffers.updated(
                 bufferId,
-                buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(1, 0))))
+                buffer.copy(editing = EditingState(List(CursorPosition(1, 0))))
               )
             )
           )

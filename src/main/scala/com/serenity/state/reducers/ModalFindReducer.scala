@@ -140,13 +140,7 @@ private[reducers] object ModalFindReducer:
             val selected = resultSet.results(resultSet.currentIndex)
             val target   = CursorPosition(selected.line, selected.column)
             val updatedBuffer = buffer.copy(
-              editing = buffer.editing.copy(
-                cursors = List(target),
-                selection = None,
-                selections = Nil,
-                preferredColumn = Some(target.column),
-                preferredXPx = None
-              ),
+              editing = EditingState(List(target)),
               findState = Some(FindState.fromResultSet(resultSet))
             )
             state.copy(persisted =

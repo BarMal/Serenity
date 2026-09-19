@@ -20,7 +20,7 @@ class UiSurfaceSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
-        editing = EditingState(cursors = List(cursor))
+        editing = EditingState(List(cursor))
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
 

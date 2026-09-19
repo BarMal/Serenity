@@ -347,7 +347,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val bufferId  = BufferId(42)
     val paneId    = PaneId(0)
     val buffer =
-      Buffer.fromString(bufferId, "toolbar").copy(editing = EditingState(cursors = List(CursorPosition(0, 0))))
+      Buffer.fromString(bufferId, "toolbar").copy(editing = EditingState(List(CursorPosition(0, 0))))
     val toolbarState = ContextualToolbarState()
     val initialState = AppState.initial
     val state = initialState.copy(

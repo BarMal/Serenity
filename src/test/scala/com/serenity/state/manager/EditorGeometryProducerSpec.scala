@@ -84,7 +84,7 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
       val buffer = buffer0.copy(
         viewport =
           buffer0.viewport.copy(topLine = 5, topVisualLine = 0, visibleLines = 3, visibleColumns = panelWidthColumns),
-        editing = buffer0.editing.copy(cursors = List(CursorPosition(6, 0)))
+        editing = EditingState(List(CursorPosition(6, 0)))
       )
       val tuiState = stateWith(buffer, isTuiMode = true)
 
@@ -107,7 +107,7 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
     val buffer = buffer0.copy(
       viewport =
         buffer0.viewport.copy(topLine = 0, topVisualLine = 0, visibleLines = 3, visibleColumns = panelWidthColumns),
-      editing = buffer0.editing.copy(cursors = List(cursor))
+      editing = EditingState(List(cursor))
     )
     val tuiState = stateWith(buffer, isTuiMode = true)
 
@@ -140,7 +140,7 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
     val buffer = buffer0.copy(
       viewport =
         buffer0.viewport.copy(topLine = 0, topVisualLine = 0, visibleLines = 20, visibleColumns = panelWidthColumns),
-      editing = buffer0.editing.copy(cursors = List(cursor))
+      editing = EditingState(List(cursor))
     )
     val tuiState = stateWith(buffer, isTuiMode = true)
 
@@ -164,7 +164,7 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
     val buffer = buffer0.copy(
       viewport =
         buffer0.viewport.copy(topLine = 0, topVisualLine = 0, visibleLines = 20, visibleColumns = panelWidthColumns),
-      editing = buffer0.editing.copy(cursors = List(cursor))
+      editing = EditingState(List(cursor))
     )
     val tuiState = stateWith(buffer, isTuiMode = true)
 
@@ -185,7 +185,7 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
     val buffer = buffer0.copy(
       viewport =
         buffer0.viewport.copy(topLine = 0, topVisualLine = 0, visibleLines = 20, visibleColumns = panelWidthColumns),
-      editing = buffer0.editing.copy(cursors = List(cursor))
+      editing = EditingState(List(cursor))
     )
     val tuiState = stateWith(buffer, isTuiMode = true)
 

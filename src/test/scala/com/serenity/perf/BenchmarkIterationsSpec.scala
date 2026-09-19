@@ -9,7 +9,7 @@ import com.serenity.perf.BenchmarkFixtures.{
   largeRichTextDocument
 }
 import com.serenity.rope.Balance
-import com.serenity.state.models.CursorPosition
+import com.serenity.state.models.{CursorPosition, EditingState}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -58,7 +58,7 @@ class BenchmarkIterationsSpec extends AnyFlatSpec with Matchers:
     val editingState = findState.copy(persisted =
       findState.persisted.copy(buffers =
         findState.persisted.buffers.view
-          .mapValues(buffer => buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(6_000, 12)))))
+          .mapValues(buffer => buffer.copy(editing = EditingState(List(CursorPosition(6_000, 12)))))
           .toMap
       )
     )

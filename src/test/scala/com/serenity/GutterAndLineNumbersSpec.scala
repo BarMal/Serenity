@@ -65,7 +65,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         language = Some(LanguageId.Markdown),
         filePath = Some(Paths.get("/workspace/active.md"))
       ),
-      editing = buffer0.editing.copy(cursors = List(CursorPosition(2, 4)))
+      editing = EditingState(List(CursorPosition(2, 4)))
     )
     val surfaces = List(
       "command-runner",
@@ -444,7 +444,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
   it should "render pinned cursor info in the gutter without a pinned panel shell" in {
     val buffer0 = Buffer.fromString(BufferId(4), "alpha\nbeta")
-    val buffer  = buffer0.copy(editing = buffer0.editing.copy(cursors = List(CursorPosition(1, 2))))
+    val buffer  = buffer0.copy(editing = EditingState(List(CursorPosition(1, 2))))
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
@@ -479,7 +479,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val foreground = new Color(0x11, 0x22, 0x33)
     val background = new Color(0x44, 0x55, 0x66)
     val buffer0    = Buffer.fromString(BufferId(6), "alpha\nbeta")
-    val buffer     = buffer0.copy(editing = buffer0.editing.copy(cursors = List(CursorPosition(1, 2))))
+    val buffer     = buffer0.copy(editing = EditingState(List(CursorPosition(1, 2))))
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
@@ -511,7 +511,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
   it should "keep the theme's own panel colours in the gutter when no cursor info bar colour override is configured" in {
     val buffer0 = Buffer.fromString(BufferId(7), "alpha\nbeta")
-    val buffer  = buffer0.copy(editing = buffer0.editing.copy(cursors = List(CursorPosition(1, 2))))
+    val buffer  = buffer0.copy(editing = EditingState(List(CursorPosition(1, 2))))
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
@@ -542,7 +542,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
   it should "render pinned cursor info with UI font metrics inside the gutter row" in {
     val buffer0 = Buffer.fromString(BufferId(5), "alpha")
-    val buffer  = buffer0.copy(editing = buffer0.editing.copy(cursors = List(CursorPosition(0, 4))))
+    val buffer  = buffer0.copy(editing = EditingState(List(CursorPosition(0, 4))))
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
@@ -617,7 +617,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
   final case class GutterInfo(cursorPosition: String, filePath: String)
 
   private def calculateGutterInfo(buffer: Buffer, pane: EditorPane, filePath: Option[java.nio.file.Path]): GutterInfo =
-    val cursor   = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
+    val cursor   = buffer.editing.cursorPositions.headOption.getOrElse(CursorPosition(0, 0))
     val position = s"Line ${cursor.line + 1}, Col ${cursor.column + 1}" // 1-indexed for display
 
     val path = filePath match

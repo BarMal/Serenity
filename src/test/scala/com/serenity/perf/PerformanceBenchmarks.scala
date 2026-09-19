@@ -107,7 +107,7 @@ object PerformanceBenchmarks:
       result.state.persisted.buffers.get(BufferId(1))
 
     def reducedCursor(result: com.serenity.state.reducers.ReducerResult): Option[CursorPosition] =
-      reducedBuffer(result).flatMap(_.editing.cursors.headOption)
+      reducedBuffer(result).flatMap(_.editing.cursorPositions.headOption)
 
     def reducedSelection(result: com.serenity.state.reducers.ReducerResult): Option[Selection] =
       reducedBuffer(result).flatMap(_.primarySelection)
@@ -161,21 +161,21 @@ object PerformanceBenchmarks:
         "reducer.multi_cursor_insert",
         3,
         BenchmarkIterationCounts.Reducer,
-        () => assert(reducedBuffer(multiInsertResult).exists(_.editing.cursors.sizeIs == 50)),
+        () => assert(reducedBuffer(multiInsertResult).exists(_.editing.cursors.size == 50)),
         () => EditorEventReducer.reduce(InsertChar('x'), PaneId(0), multiCursorState)
       ),
       BenchmarkRunner.Benchmark(
         "reducer.multi_cursor_move",
         3,
         BenchmarkIterationCounts.Reducer,
-        () => assert(reducedBuffer(multiMoveResult).exists(_.editing.cursors.forall(_.column == 5))),
+        () => assert(reducedBuffer(multiMoveResult).exists(_.editing.cursorPositions.forall(_.column == 5))),
         () => EditorEventReducer.reduce(MoveRight, PaneId(0), multiCursorState)
       ),
       BenchmarkRunner.Benchmark(
         "reducer.multi_cursor_move_down",
         3,
         BenchmarkIterationCounts.Reducer,
-        () => assert(reducedBuffer(multiMoveDownResult).exists(_.editing.cursors.sizeIs == 50)),
+        () => assert(reducedBuffer(multiMoveDownResult).exists(_.editing.cursors.size == 50)),
         () => com.serenity.VerticalNavSupport.dispatch(MoveDown, PaneId(0), multiCursorWrapState)
       ),
       BenchmarkRunner.Benchmark(
@@ -267,7 +267,7 @@ object PerformanceBenchmarks:
     val editingState = findState.copy(persisted =
       findState.persisted.copy(buffers =
         findState.persisted.buffers.view
-          .mapValues(buffer => buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(6_000, 12)))))
+          .mapValues(buffer => buffer.copy(editing = EditingState(List(CursorPosition(6_000, 12)))))
           .toMap
       )
     )
@@ -609,7 +609,7 @@ object PerformanceBenchmarks:
     val editedBuffer   = baseSession.persisted.buffers(editedBufferId)
     val oneEditedBuffers = baseSession.persisted.buffers.updated(
       editedBufferId,
-      editedBuffer.copy(editing = editedBuffer.editing.copy(cursors = List(CursorPosition(0, 1))))
+      editedBuffer.copy(editing = EditingState(List(CursorPosition(0, 1))))
     )
     val oneBufferEditedSession = baseSession.copy(persisted = baseSession.persisted.copy(buffers = oneEditedBuffers))
 

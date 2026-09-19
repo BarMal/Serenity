@@ -6,6 +6,7 @@ import com.serenity.command.RichTextIntent
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -42,7 +43,7 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
   private def bufferWithSelection(text: String, selection: Selection): Buffer =
     Buffer
       .fromString(bufferId, text)
-      .copy(editing = EditingState(cursors = List(selection.focus), selection = Some(selection)))
+      .copy(editing = EditingStateFixtures(cursors = List(selection.focus), selection = Some(selection)))
 
   private def selection(startLine: Int, startCol: Int, endLine: Int, endCol: Int): Selection =
     Selection(CursorPosition(startLine, startCol), CursorPosition(endLine, endCol))
@@ -158,7 +159,7 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
   it should "set a paragraph role at the cursor position when there is no selection" in {
     val buffer = Buffer
       .fromString(bufferId, "line one\nline two")
-      .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
+      .copy(editing = EditingState(List(CursorPosition(1, 2))))
     val fixture = harness(buffer)
 
     fixture.richText.interpret(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Heading(2))).unsafeRunSync()

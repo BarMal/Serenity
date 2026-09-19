@@ -43,13 +43,7 @@ private[reducers] object EditorFindEventReducer:
               val target   = CursorPosition(selected.line, selected.column)
               applyBuffer(
                 _.copy(
-                  editing = buffer.editing.copy(
-                    cursors = List(target),
-                    selection = None,
-                    selections = Nil,
-                    preferredColumn = Some(target.column),
-                    preferredXPx = None
-                  ),
+                  editing = EditingState(List(target)),
                   findState = Some(FindState.fromResultSet(resultSet))
                 )
               )

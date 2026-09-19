@@ -125,7 +125,7 @@ class TuiHarnessSpec extends TuiSpec:
     for
       _ <- typeAndSelectAll
       _ <- verifyState("selection")(state =>
-        focusedBuffer(state).flatMap(_.editing.selection).map(_.end.column).shouldBe(Some("composed".length))
+        focusedBuffer(state).flatMap(_.primarySelection).map(_.end.column).shouldBe(Some("composed".length))
       )
     yield ()
   }

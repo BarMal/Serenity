@@ -25,7 +25,7 @@ class RendererCursorRepaintSpec extends AnyFlatSpec with Matchers:
 
   private def stateWith(cursors: List[CursorPosition]): AppState =
     val buffer            = Buffer.fromString(bufferId, lines.mkString("\n"))
-    val bufferWithCursors = buffer.copy(editing = buffer.editing.copy(cursors = cursors))
+    val bufferWithCursors = buffer.copy(editing = EditingState(cursors))
     AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(bufferWithCursors.id -> bufferWithCursors),
@@ -75,6 +75,12 @@ class RendererCursorRepaintSpec extends AnyFlatSpec with Matchers:
     rects should have length 2
   }
 
-  it should "report no rects when the buffer has no cursors" in {
-    cursorRects(Nil) shouldBe empty
+  /** A buffer always keeps at least one cursor -- `EditingState`'s single field is a `NonEmptyList[Cursor]` (`#1577`)
+    * -- so an empty cursor list isn't a state this can be given; `EditingState(Nil)` falls back to the default cursor
+    * at the document origin instead, and that default is what gets a repaint rect.
+    */
+  it should "fall back to a rect for the default cursor when given an empty cursor list" in {
+    val rects = cursorRects(Nil)
+
+    rects should have length 1
   }

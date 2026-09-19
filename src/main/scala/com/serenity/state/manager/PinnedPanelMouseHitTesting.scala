@@ -309,14 +309,7 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
             val cursor   = CursorPosition(line, column)
             val viewport = CursorViewport.adjustForCursor(buffer, state, cursor)
             val updatedBuffer = buffer.copy(
-              editing = buffer.editing.copy(
-                cursors = List(cursor),
-                selection = None,
-                selections = Nil,
-                preferredColumn = Some(cursor.column),
-                preferredXPx = None,
-                multiCursorVerticalStates = Nil
-              ),
+              editing = EditingState(List(cursor)),
               viewport = viewport
             )
             state.copy(persisted =

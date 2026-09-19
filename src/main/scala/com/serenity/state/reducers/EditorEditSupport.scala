@@ -304,13 +304,7 @@ private[reducers] object EditorEditSupport:
     (
       buffer.copy(
         document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
-        editing = buffer.editing.copy(
-          cursors = EditorCursorMovement.replacePrimaryCursor(newCursor, buffer.editing.cursors),
-          selection = None,
-          selections = Nil,
-          preferredColumn = Some(newCursor.column),
-          preferredXPx = None
-        ),
+        editing = buffer.editing.withPrimary(Cursor(newCursor)),
         annotations = buffer.annotations.copy(
           documentComments = adjustDocumentComments(
             buffer.annotations.documentComments,
@@ -352,13 +346,7 @@ private[reducers] object EditorEditSupport:
     val newCursor   = newContent.offsetToCursorPosition(startOffset)
     val baseBuffer = buffer.copy(
       document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
-      editing = buffer.editing.copy(
-        cursors = EditorCursorMovement.replacePrimaryCursor(newCursor, buffer.editing.cursors),
-        selection = None,
-        selections = Nil,
-        preferredColumn = Some(newCursor.column),
-        preferredXPx = None
-      ),
+      editing = buffer.editing.withPrimary(Cursor(newCursor)),
       annotations = buffer.annotations.copy(
         documentComments = adjustDocumentComments(
           buffer.annotations.documentComments,

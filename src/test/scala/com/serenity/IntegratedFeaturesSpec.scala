@@ -29,7 +29,7 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
     val buffer =
       Buffer
         .fromString(bufferId, "function test_func() {\n\treturn 'hello_world';\n}")
-        .copy(editing = EditingState(cursors = List(cursor)))
+        .copy(editing = EditingState(List(cursor)))
     val paneId = PaneId(1)
     val pane   = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
     val state = AppState.empty.copy(
@@ -69,7 +69,7 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = BufferId(1)
     val cursor   = CursorPosition(0, 5)
-    val buffer   = Buffer.fromString(bufferId, "hello").copy(editing = EditingState(cursors = List(cursor)))
+    val buffer   = Buffer.fromString(bufferId, "hello").copy(editing = EditingState(List(cursor)))
     val paneId   = PaneId(1)
     val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
     val state = AppState.empty.copy(

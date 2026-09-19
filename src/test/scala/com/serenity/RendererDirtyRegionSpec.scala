@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{
   CellMetrics,
   LayoutEngine,
@@ -36,7 +37,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
 
   private def stateWith(content: Vector[String], cursor: CursorPosition = CursorPosition(0, 0)): AppState =
     val buffer0 = Buffer.fromString(bufferId, content.mkString("\n"))
-    val buffer  = buffer0.copy(editing = buffer0.editing.copy(cursors = List(cursor)))
+    val buffer  = buffer0.copy(editing = EditingState(List(cursor)))
     AppState.initial.copy(persisted =
       AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
@@ -179,7 +180,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
           bufferId,
           before.persisted
             .buffers(bufferId)
-            .copy(editing = before.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(5, 0))))
+            .copy(editing = EditingState(List(CursorPosition(5, 0))))
         )
       )
     )
@@ -202,13 +203,18 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
 
   it should "draw only the rows a new selection covers again" in {
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
-    val before  = stateWith(lines)
+    // The cursor's own position is its selection's focus (`#1577`), so `before`'s cursor is seeded at that same focus
+    // rather than the document origin, isolating this transition to the selection changing -- otherwise the cursor's
+    // position would also read as having moved, correctly damaging its own old/new rows too.
+    val before = stateWith(lines, CursorPosition(5, 4))
     val after = before.copy(persisted =
       before.persisted.copy(
         buffers = before.persisted.buffers.view
           .mapValues(buf =>
             buf
-              .copy(editing = buf.editing.copy(selection = Some(Selection(CursorPosition(5, 0), CursorPosition(5, 4)))))
+              .copy(editing =
+                EditingStateFixtures(selection = Some(Selection(CursorPosition(5, 0), CursorPosition(5, 4))))
+              )
           )
           .toMap
       )
@@ -328,7 +334,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
           bufferId,
           before.persisted
             .buffers(bufferId)
-            .copy(editing = before.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(3, 2))))
+            .copy(editing = EditingState(List(CursorPosition(3, 2))))
         )
       )
     )

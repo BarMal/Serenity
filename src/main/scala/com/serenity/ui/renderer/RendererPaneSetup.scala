@@ -259,7 +259,7 @@ object RendererPaneSetup:
     if wordWrapEnabled then 0
     else
       val visibleColumns = math.max(1, viewport.visibleColumns)
-      val cursor         = buffer.editing.cursors.headOption.getOrElse(CursorPosition(viewport.topLine, 0))
+      val cursor         = buffer.editing.cursorPositions.headOption.getOrElse(CursorPosition(viewport.topLine, 0))
       val cursorColumn   = cursor.column.max(0)
       val lineLength     = buffer.document.content.getLine(cursor.line).map(_.length).getOrElse(cursorColumn)
       val maxForCursor   = math.max(0, cursorColumn - visibleColumns + 1)

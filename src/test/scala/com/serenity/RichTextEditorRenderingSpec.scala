@@ -6,6 +6,7 @@ import com.serenity.config.AppConfig
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, CursorPosition}
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
 import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.{RichTextStyling, TextStyle, Theme}
@@ -206,7 +207,7 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       )
     val fromStringBuffer = Buffer.fromString(BufferId(1), document.plainText)
     val buffer = fromStringBuffer.copy(
-      editing = fromStringBuffer.editing.copy(cursors = List(CursorPosition(0, 0)), selection = None),
+      editing = EditingStateFixtures(cursors = List(CursorPosition(0, 0)), selection = None),
       richText = fromStringBuffer.richText.copy(richTextDocument = Some(document))
     )
     val state   = buildState(buffer)

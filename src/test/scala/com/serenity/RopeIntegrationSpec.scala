@@ -44,7 +44,7 @@ Final line with medium length content here""".replace("\r\n", "\n")
     // Given: Editor state with buffer
     val initialText = "Hello world"
     val buffer = Buffer(BufferId(1), Document(Rope(initialText), isDirty = false, filePath = None)).copy(
-      editing = EditingState(cursors = List(CursorPosition(0, 6))), // Position at "world"
+      editing = EditingState(List(CursorPosition(0, 6))), // Position at "world"
       viewport = Viewport(0, 0, 80, 24)
     )
     val pane = EditorPane(
@@ -91,7 +91,7 @@ Final line with medium length content here""".replace("\r\n", "\n")
     finalBuffer.document.isDirty shouldBe true
 
     // Cursor should be at end
-    finalBuffer.editing.cursors.head.column shouldBe 23
+    finalBuffer.editing.cursorPositions.head.column shouldBe 23
 
   it should "handle rope operations at chunk boundaries" in new RopeIntegrationFixture:
     // Given: Text that will span multiple rope chunks (leafChunkSize = 30)

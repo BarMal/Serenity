@@ -52,7 +52,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
-        editing = EditingState(cursors = cursors)
+        editing = EditingState(cursors)
       )
 
     val initialState = AppState.initial
@@ -167,7 +167,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     def overlayFor(cursor: CursorPosition): (LayoutRect, LayoutRect) =
       val buffer = Buffer
         .fromString(bufferId, content)
-        .copy(editing = EditingState(cursors = List(cursor)))
+        .copy(editing = EditingState(List(cursor)))
       val initialState = AppState.initial
       val state = initialState.copy(
         persisted = initialState.persisted.copy(
@@ -228,7 +228,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
-        editing = EditingState(cursors = List(CursorPosition(1, 2)))
+        editing = EditingState(List(CursorPosition(1, 2)))
       )
     val initialState = AppState.initial
     val state = initialState.copy(
@@ -313,7 +313,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
-        editing = EditingState(cursors = List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3)))
+        editing = EditingState(List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3)))
       )
     val initialState = AppState.initial
     val state = initialState.copy(
@@ -362,7 +362,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
-        editing = EditingState(cursors = List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3)))
+        editing = EditingState(List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3)))
       )
     val initialState = AppState.initial
     val state = initialState.copy(

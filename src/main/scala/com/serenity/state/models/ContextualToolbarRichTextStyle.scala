@@ -28,7 +28,7 @@ private[models] object ContextualToolbarRichTextStyle:
       case Some(selection) if selection.start != selection.end =>
         styleForSelection(selection, document)
       case _ =>
-        buffer.editing.cursors.headOption
+        buffer.editing.cursorPositions.headOption
           .flatMap(cursor => styleAtCursor(cursor, document))
           .getOrElse(RichTextStyle.empty)
 
@@ -75,7 +75,7 @@ private[models] object ContextualToolbarRichTextStyle:
     buffer.primarySelection
       .map(richTextRange)
       .orElse(
-        buffer.editing.cursors.headOption
+        buffer.editing.cursorPositions.headOption
           .map(cursor => RichTextRange(richTextPosition(cursor, document), richTextPosition(cursor, document)))
       )
       .getOrElse(RichTextRange(RichTextPosition(0, 0), RichTextPosition(0, 0)))

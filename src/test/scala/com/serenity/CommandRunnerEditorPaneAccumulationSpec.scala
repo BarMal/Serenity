@@ -57,7 +57,7 @@ class CommandRunnerEditorPaneAccumulationSpec extends AnyFlatSpec with Matchers:
 
   private val baseBuffer = Buffer
     .fromString(bufferId, (1 to 20).map(i => s"line number $i with some content").mkString("\n"))
-    .copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
+    .copy(editing = EditingState(List(CursorPosition(1, 2))))
 
   // A single base state shared across navigation frames -- only the command-runner surface's content changes between
   // frames, so DamageProducer scopes the transition to that one surface, exactly as a real Up/Down keystroke does.

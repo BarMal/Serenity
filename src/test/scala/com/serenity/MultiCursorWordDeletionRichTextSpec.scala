@@ -7,6 +7,7 @@ import com.serenity.keystroke.events.DeleteWordBackward
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{CursorPosition, PaneId, Selection}
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -44,13 +45,10 @@ class MultiCursorWordDeletionRichTextSpec extends AnyFlatSpec with Matchers:
               state.persisted
                 .buffers(bufferId)
                 .copy(editing =
-                  state.persisted
-                    .buffers(bufferId)
-                    .editing
-                    .copy(
-                      selection = Some(boldSelection),
-                      cursors = List(boldSelection.focus)
-                    )
+                  EditingStateFixtures(
+                    selection = Some(boldSelection),
+                    cursors = List(boldSelection.focus)
+                  )
                 )
             )
           )
@@ -73,14 +71,11 @@ class MultiCursorWordDeletionRichTextSpec extends AnyFlatSpec with Matchers:
               state.persisted
                 .buffers(bufferId)
                 .copy(editing =
-                  state.persisted
-                    .buffers(bufferId)
-                    .editing
-                    .copy(
-                      selection = None,
-                      selections = Nil,
-                      cursors = List(CursorPosition(0, 5), CursorPosition(0, 17))
-                    )
+                  EditingStateFixtures(
+                    selection = None,
+                    selections = Nil,
+                    cursors = List(CursorPosition(0, 5), CursorPosition(0, 17))
+                  )
                 )
             )
           )

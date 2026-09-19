@@ -91,5 +91,5 @@ class EditorLargeJsonNavigationSpec extends AnyFlatSpec with Matchers:
 
     val moved = (1 to 100).foldLeft(state)((current, _) => EditorEventReducer.reduce(MoveRight, paneId, current).state)
 
-    moved.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 100)
+    moved.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(0, 100)
   }
