@@ -37,7 +37,8 @@ object CursorViewport:
                 if columnModeActive then seedColumnTransition(bufferId, buffer.viewport, placement, updatedState)
                 else updatedState
               case None => state
-        beforeBuffer.fold(stateAfterViewport)(seedCursorGlide(bufferId, _, stateAfterViewport))
+        val stateAfterGlide = beforeBuffer.fold(stateAfterViewport)(seedCursorGlide(bufferId, _, stateAfterViewport))
+        beforeBuffer.fold(stateAfterGlide)(seedSelectionGeometry(bufferId, _, stateAfterGlide))
     }
 
   /** Caret-glide (issue #1085 phase 2): seeds/retargets `Cursor.glide` for every cursor in `bufferId` whose position
@@ -92,6 +93,53 @@ object CursorViewport:
                 state.copy(persisted =
                   state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
                 )
+
+  /** Selection grow/settle (issue #1085 phase 3): seeds/retargets `Cursor.selectionGeometry` for every cursor in
+    * `bufferId` whose selection changed between `beforeBuffer` and the buffer now in `state` -- any change (extend,
+    * shrink, create, clear), matched positionally the same way `seedCursorGlide` above does. Gated by the
+    * `SelectionGeometry` motion family (`AppConfig.scaledSelectionGeometryAnimation` already folds in accessibility
+    * and the `Reduced` preset). Unlike `seedCursorGlide`, this runs regardless of `state.runtime.isTuiMode` --
+    * `SelectionGeometryState`'s column-granular model serves both the GUI's measured painting and TUI's cell painting
+    * (see its own doc comment), so there is nothing GUI-only about it here.
+    *
+    * Retargets an in-flight geometry (`SelectionGeometryState.diff`'s own `Tween.retarget` handling) rather than
+    * reseeding at progress zero when a selection changes again before its previous animation finishes -- the same
+    * jump-cut fix `seedCursorGlide`/`seedColumnTransition` already apply to their own tweens.
+    */
+  private def seedSelectionGeometry(bufferId: BufferId, beforeBuffer: Buffer, state: AppState): AppState =
+    state.persisted.config.scaledSelectionGeometryAnimation match
+      case None => state
+      case Some(animation) =>
+        state.persisted.buffers.get(bufferId) match
+          case None => state
+          case Some(afterBuffer) =>
+            val beforeCursors = beforeBuffer.editing.cursors.toList
+            val updatedCursors = afterBuffer.editing.cursors.zipWithIndex.map {
+              case (cursor, index) =>
+                beforeCursors.lift(index) match
+                  case Some(previous) if previous.selection != cursor.selection =>
+                    val beforeRects = previous.selection
+                      .map(SelectionGeometry.rectsForSelection(afterBuffer, state.persisted.config, _))
+                      .getOrElse(Map.empty)
+                    val afterRects = cursor.selection
+                      .map(SelectionGeometry.rectsForSelection(afterBuffer, state.persisted.config, _))
+                      .getOrElse(Map.empty)
+                    val geometry = SelectionGeometryState.diff(
+                      previous.selectionGeometry.filterNot(_.isComplete),
+                      beforeRects,
+                      afterRects,
+                      animation.curve,
+                      animation.steps
+                    )
+                    cursor.copy(selectionGeometry = geometry)
+                  case _ => cursor
+            }
+            if updatedCursors == afterBuffer.editing.cursors then state
+            else
+              val updatedBuffer = afterBuffer.withCursorList(updatedCursors)
+              state.copy(persisted =
+                state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
+              )
 
   /** Column-based document layout (issue #1338, Phase 1 animation): seeds `Runtime.columnTransitions` whenever
     * [[adjustForCursorColumnMode]] actually moved which column is showing -- whatever moved the cursor there, not only
