@@ -250,8 +250,8 @@ object OverlayViewModel:
           // call site, not `SurfaceContentResolver.resolve`'s own dispatch: `EditorLayoutContract`
           // (`floatingGeometry`) calls that dispatcher independently and genuinely still needs the real, item-count
           // accurate rows/header/footer it produces -- see its own doc comment.
-          case SurfaceContent.ContextMenu(_) | SurfaceContent.CommandPalette(_) |
-              SurfaceContent.ContextualToolbar(_) | SurfaceContent.CommentLens(_) =>
+          case SurfaceContent.ContextMenu(_) | SurfaceContent.CommandPalette(_) | SurfaceContent.ContextualToolbar(_) |
+              SurfaceContent.CommentLens(_) =>
             ResolvedSurfaceContent()
           case _ =>
             SurfaceContentResolver.resolve(

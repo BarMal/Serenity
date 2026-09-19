@@ -7,12 +7,11 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Coverage for `CommentLensSurfaceComposition` (issue #819, slice 3): the floating comment lens resolved into one
-  * paint plan, the same pattern `ContextMenuSurfaceComposition`/`ContextualToolbarSurfaceComposition` already
-  * establish for the other migrated surfaces. Row content stays sourced from
-  * `SurfaceContentResolver.commentLensRows` -- the same, separately-tested row builder
-  * `SurfaceContentResolverModalWorkflowSpec` exercises via the dispatcher -- so this object owns row position and
-  * frame sizing only. The lens has no per-row hit targets (see `CommentLensMouseHitTesting`'s own doc comment), so
-  * `forLens` is covered only for its paint boxes here.
+  * paint plan, the same pattern `ContextMenuSurfaceComposition`/`ContextualToolbarSurfaceComposition` already establish
+  * for the other migrated surfaces. Row content stays sourced from `SurfaceContentResolver.commentLensRows` -- the
+  * same, separately-tested row builder `SurfaceContentResolverModalWorkflowSpec` exercises via the dispatcher -- so
+  * this object owns row position and frame sizing only. The lens has no per-row hit targets (see
+  * `CommentLensMouseHitTesting`'s own doc comment), so `forLens` is covered only for its paint boxes here.
   */
 class CommentLensSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
 

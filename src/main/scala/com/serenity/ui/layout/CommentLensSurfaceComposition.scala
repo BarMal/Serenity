@@ -6,8 +6,8 @@ import com.serenity.state.models.{CommentLensState, SurfaceContent}
   * body opened by clicking a highlighted comment range. Mirrors `ContextMenuSurfaceComposition`'s
   * `frameHeight`/`forLens` split.
   *
-  * Row *content* stays sourced from `SurfaceContentResolver.commentLensRows` -- the same, separately-tested row
-  * builder the pre-migration plain-rows path used -- so this object owns row *position* and *frame sizing* only.
+  * Row *content* stays sourced from `SurfaceContentResolver.commentLensRows` -- the same, separately-tested row builder
+  * the pre-migration plain-rows path used -- so this object owns row *position* and *frame sizing* only.
   *
   * Unlike the other migrated surfaces, this composition emits no hit regions: the lens body is one click-anywhere
   * target (`CommentLensMouseHitTesting.handleCommentLensMouseClick` flips a read-only lens to editable on any click
