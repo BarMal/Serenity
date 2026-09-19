@@ -37,6 +37,14 @@ enum MotionFamily(val configKey: String):
   // each independently). `transitionKind` here is a nominal enabled/disabled marker only: the shape of this motion
   // (grow/shrink from the panel's docked edge) is fixed by `PanelPosition`, not chosen from `TransitionKind`'s cases.
   case PanelGeometry extends MotionFamily("panel_geometry")
+  // Selection grow/settle (issue #1085 phase 3): a selection's highlight growing/shrinking across visual lines as it
+  // extends or shrinks, growing in from a zero-width sliver when a selection is created, and settling to nothing when
+  // one is cleared. A genuinely new family, not folded into `Cursor` -- a user can turn off caret glide while keeping
+  // selection-highlight motion, or vice versa, exactly like `PanelGeometry` stays independent of `PinnedPanels`'
+  // colour fade. `transitionKind` here is a nominal enabled/disabled marker only, the same way `PanelGeometry`'s is --
+  // the shape of this motion (per-visual-line grow/shrink) is fixed by `SelectionGeometryState.diff`, not chosen from
+  // `TransitionKind`'s cases.
+  case SelectionGeometry extends MotionFamily("selection_geometry")
 
 /** Motion policy for one family before accessibility policy is applied.
   *
@@ -191,6 +199,13 @@ object MotionConfig:
         // only the enabled/disabled marker `MotionFamilyConfig.enabled` derives from, not a chosen visual shape (see
         // `MotionFamily.PanelGeometry`'s doc comment), so `Fade` here means nothing beyond "on".
         MotionFamily.PanelGeometry -> MotionFamilyConfig(
+          transitionKind = TransitionKind.Fade,
+          animation = base,
+          speedScale = 1.0
+        ),
+        // No legacy field mirrors this one either (see `PanelGeometry`'s note just above) -- always takes the
+        // baseline animation and a neutral 1.0 speed scale.
+        MotionFamily.SelectionGeometry -> MotionFamilyConfig(
           transitionKind = TransitionKind.Fade,
           animation = base,
           speedScale = 1.0
