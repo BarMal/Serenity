@@ -16,7 +16,7 @@ private[manager] trait AnimationChoreographyPort:
 /** Drives command-runner and pinned-panel open/close/transition animations, the buffer sweep animation used for
   * tab-cycling, and advances all in-flight surface animations by one tick. This orchestrates the existing
   * motion/animation model from `com.serenity.animation` (`AnimationState`, `ElementTransitionPlanner`/`Lowerer`,
-  * `RgbInterpolator`, etc. -- landed via #846/#874) against `AppState`'s surface-animation runtime state; it does not
+  * `Tween`, etc. -- landed via #846/#874, #1574) against `AppState`'s surface-animation runtime state; it does not
   * introduce a competing duration/easing/animation abstraction of its own.
   */
 final private[manager] class AnimationChoreography(port: AnimationChoreographyPort):
@@ -154,14 +154,14 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
       val initialBg    = previousCell.flatMap(_.currentBackground).getOrElse(transparent(panelBg))
       val initialFg    = previousCell.flatMap(_.currentForeground).getOrElse(transparent(panelFg))
       val remainingSteps = previousCell
-        .map(cell => completedFadeSteps(rowOffset + steps, cell.backgroundSteps.length))
+        .map(cell =>
+          completedFadeSteps(rowOffset + steps, cell.backgroundAnimation.map(_.remainingFrames).getOrElse(0))
+        )
         .getOrElse(steps)
-      val bgSteps = List.fill(delay)(initialBg) ++ RgbInterpolator.interpolateRgba(initialBg, panelBg, remainingSteps)
-      val fgSteps = List.fill(delay)(initialFg) ++ RgbInterpolator.interpolateRgba(initialFg, panelFg, remainingSteps)
       CharacterKey(0, rowOffset) -> AnimatedCell(
         content = None,
-        foregroundSteps = fgSteps,
-        backgroundSteps = bgSteps
+        foregroundAnimation = Some(Tween(initialFg, panelFg, EasingCurve.Linear, remainingSteps, delayFrames = delay)),
+        backgroundAnimation = Some(Tween(initialBg, panelBg, EasingCurve.Linear, remainingSteps, delayFrames = delay))
       )
     }.toMap
     AnimationState(overlayFadeIn)
@@ -214,15 +214,16 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
             val currentFg = previousCell.flatMap(_.currentForeground).getOrElse(panelFg)
             val reversedSteps = previousCell
               .map(cell =>
-                completedFadeSteps(totalFadeFrames = rowOffset + steps, remainingFrames = cell.backgroundSteps.length)
+                completedFadeSteps(
+                  totalFadeFrames = rowOffset + steps,
+                  remainingFrames = cell.backgroundAnimation.map(_.remainingFrames).getOrElse(0)
+                )
               )
               .getOrElse(steps)
-            val bgSteps = RgbInterpolator.interpolateRgba(currentBg, transpBg, reversedSteps)
-            val fgSteps = RgbInterpolator.interpolateRgba(currentFg, transpFg, reversedSteps)
             CharacterKey(0, rowOffset) -> AnimatedCell(
               content = None,
-              foregroundSteps = fgSteps,
-              backgroundSteps = bgSteps
+              foregroundAnimation = Some(Tween(currentFg, transpFg, EasingCurve.Linear, reversedSteps)),
+              backgroundAnimation = Some(Tween(currentBg, transpBg, EasingCurve.Linear, reversedSteps))
             )
           }.toMap
           val (stateWithId, ghostId) = s.allocateSurfaceId
@@ -303,14 +304,12 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
                     val panelFg  = s.persisted.theme.panel.foreground
                     val transpBg = transparent(panelBg)
                     val transpFg = transparent(panelFg)
-                    val bgSteps = List.fill(delay)(transpBg) ++
-                      RgbInterpolator.interpolateRgba(transpBg, panelBg, config.steps)
-                    val fgSteps = List.fill(delay)(transpFg) ++
-                      RgbInterpolator.interpolateRgba(transpFg, panelFg, config.steps)
                     CharacterKey(0, rowOffset) -> AnimatedCell(
                       content = None,
-                      foregroundSteps = fgSteps,
-                      backgroundSteps = bgSteps
+                      foregroundAnimation =
+                        Some(Tween(transpFg, panelFg, EasingCurve.Linear, config.steps, delayFrames = delay)),
+                      backgroundAnimation =
+                        Some(Tween(transpBg, panelBg, EasingCurve.Linear, config.steps, delayFrames = delay))
                     )
                   }.toMap
                 }

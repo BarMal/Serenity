@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
+import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey, EasingCurve, Tween}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange}
 import com.serenity.rope.{Balance, Rope}
@@ -227,7 +227,10 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
       DamageProducer.forTransition(before, after) shouldBe Damage.Everything
     }
 
-  private val revealCell = AnimatedCell(Some('x'), List(java.awt.Color.WHITE), Nil)
+  private val revealCell = AnimatedCell(
+    Some('x'),
+    foregroundAnimation = Some(Tween(java.awt.Color.WHITE, java.awt.Color.WHITE, EasingCurve.Linear, steps = 1))
+  )
 
   it should "report the changed rows when a character-reveal animation tick advances" in {
     val before   = stateWithContent("first\nsecond\nthird")

@@ -5,6 +5,11 @@ import java.awt.Color
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+/** `AnimatedCell` (issue #1574) now carries its foreground/background colour as `Option[Tween[Color]]` -- the same
+  * primitive every other tweened value in this codebase uses -- rather than the old `ColorTimeline`/step-list pair.
+  * `cycling`/step-list advance (`.drop(1)`/`rotate`) had no production caller (grepped: only this spec constructed
+  * them) and is retired along with the fields it advanced.
+  */
 class AnimatedCellSpec extends AnyFlatSpec with Matchers:
 
   private val black = new Color(0, 0, 0)
@@ -12,96 +17,74 @@ class AnimatedCellSpec extends AnyFlatSpec with Matchers:
   private val red   = new Color(255, 0, 0)
   private val blue  = new Color(0, 0, 255)
 
-  // ── Consuming advance ─────────────────────────────────────────────────────
-
-  "AnimatedCell (consuming)" should "drop the head from both lists on advance" in {
-    val cell = AnimatedCell(Some('a'), List(black, white), List(red, blue))
-    val next = cell.advance()
-    next.foregroundSteps shouldEqual List(white)
-    next.backgroundSteps shouldEqual List(blue)
-  }
-
-  it should "be complete when both lists are empty" in {
-    AnimatedCell(None, List.empty, List.empty).isComplete should be(true)
-  }
-
-  it should "not be complete while foregroundSteps still has entries" in {
-    val cell = AnimatedCell(None, List(black, white), List.empty)
-    cell.isComplete should be(false)
-    cell.advance().isComplete should be(false)
-    cell.advance().advance().isComplete should be(true)
-  }
-
-  it should "not be complete while backgroundSteps still has entries" in {
-    val cell = AnimatedCell(None, List.empty, List(red, blue))
-    cell.isComplete should be(false)
-    cell.advance().isComplete should be(false)
-    cell.advance().advance().isComplete should be(true)
-  }
-
-  it should "advance empty lists without error and remain complete" in {
-    val cell = AnimatedCell(None, List.empty, List.empty)
-    cell.advance() shouldEqual cell
-  }
-
-  it should "become complete after one advance when both lists have one element" in {
-    val cell = AnimatedCell(None, List(black), List(red))
-    cell.advance().isComplete should be(true)
-  }
-
-  // ── Cycling advance ───────────────────────────────────────────────────────
-
-  "AnimatedCell (cycling)" should "rotate both lists on advance" in {
-    val cell = AnimatedCell(None, List(black, white, red), List(blue, black), cycling = true)
-    val next = cell.advance()
-    next.foregroundSteps shouldEqual List(white, red, black)
-    next.backgroundSteps shouldEqual List(black, blue)
-  }
-
-  it should "never be complete regardless of advance count" in {
-    val cell = AnimatedCell(None, List(black), List(red), cycling = true)
-    cell.isComplete should be(false)
-    cell.advance().isComplete should be(false)
-    cell.advance().advance().advance().isComplete should be(false)
-  }
-
-  it should "cycle a single-element list back to itself" in {
-    val cell = AnimatedCell(None, List(black), List.empty, cycling = true)
-    cell.advance().foregroundSteps shouldEqual List(black)
-  }
-
-  it should "leave empty lists unchanged when cycling" in {
-    val cell = AnimatedCell(None, List(black), List.empty, cycling = true)
-    cell.advance().backgroundSteps shouldEqual List.empty
-  }
-
   // ── Current colours ───────────────────────────────────────────────────────
 
-  "AnimatedCell.currentForeground" should "return the head of foregroundSteps" in {
-    AnimatedCell(None, List(black, white), List.empty).currentForeground shouldEqual Some(black)
-    AnimatedCell(None, List(black, white), List.empty).advance().currentForeground shouldEqual Some(white)
+  "AnimatedCell.currentForeground" should "return the tween's current value" in {
+    val cell = AnimatedCell(None, foregroundAnimation = Some(Tween(black, white, EasingCurve.Linear, steps = 1)))
+    cell.currentForeground shouldEqual Some(black)
+    cell.advance().currentForeground shouldEqual Some(white)
   }
 
-  it should "return None when foregroundSteps is empty" in {
-    AnimatedCell(None, List.empty, List(red)).currentForeground shouldEqual None
+  it should "return None when there is no foreground animation" in
+    AnimatedCell(None, backgroundAnimation = Some(Tween(red, blue, EasingCurve.Linear, steps = 1))).currentForeground
+      .shouldEqual(None)
+
+  "AnimatedCell.currentBackground" should "return the tween's current value" in {
+    val cell = AnimatedCell(None, backgroundAnimation = Some(Tween(red, blue, EasingCurve.Linear, steps = 1)))
+    cell.currentBackground shouldEqual Some(red)
+    cell.advance().currentBackground shouldEqual Some(blue)
   }
 
-  "AnimatedCell.currentBackground" should "return the head of backgroundSteps" in {
-    AnimatedCell(None, List.empty, List(red, blue)).currentBackground shouldEqual Some(red)
-    AnimatedCell(None, List.empty, List(red, blue)).advance().currentBackground shouldEqual Some(blue)
+  it should "return None when there is no background animation" in
+    AnimatedCell(None, foregroundAnimation = Some(Tween(black, white, EasingCurve.Linear, steps = 1))).currentBackground
+      .shouldEqual(None)
+
+  // ── isComplete / advance ─────────────────────────────────────────────────
+
+  "AnimatedCell" should "be complete when it carries no animation at all" in {
+    AnimatedCell(None).isComplete should be(true)
   }
 
-  it should "return None when backgroundSteps is empty" in {
-    AnimatedCell(None, List(black), List.empty).currentBackground shouldEqual None
+  it should "not be complete while its foreground tween still has steps left" in {
+    val cell = AnimatedCell(None, foregroundAnimation = Some(Tween(black, white, EasingCurve.Linear, steps = 2)))
+    cell.isComplete should be(false)
+    cell.advance().isComplete should be(false)
+    cell.advance().advance().isComplete should be(true)
+  }
+
+  it should "not be complete while its background tween still has steps left" in {
+    val cell = AnimatedCell(None, backgroundAnimation = Some(Tween(red, blue, EasingCurve.Linear, steps = 2)))
+    cell.isComplete should be(false)
+    cell.advance().isComplete should be(false)
+    cell.advance().advance().isComplete should be(true)
+  }
+
+  it should "require both foreground and background tweens to be complete" in {
+    val cell = AnimatedCell(
+      None,
+      foregroundAnimation = Some(Tween(black, white, EasingCurve.Linear, steps = 1)),
+      backgroundAnimation = Some(Tween(red, blue, EasingCurve.Linear, steps = 2))
+    )
+    cell.advance().isComplete should be(false) // background still has one step left
+    cell.advance().advance().isComplete should be(true)
+  }
+
+  it should "advance an animation-free cell without error and remain complete" in {
+    val cell = AnimatedCell(None)
+    cell.advance() shouldEqual cell
   }
 
   // ── complete() ────────────────────────────────────────────────────────────
 
-  "AnimatedCell.complete()" should "empty both lists and mark the cell complete" in {
-    val cell = AnimatedCell(None, List(black, white), List(red, blue))
+  "AnimatedCell.complete()" should "clear both animations and mark the cell complete" in {
+    val cell = AnimatedCell(
+      None,
+      foregroundAnimation = Some(Tween(black, white, EasingCurve.Linear, steps = 2)),
+      backgroundAnimation = Some(Tween(red, blue, EasingCurve.Linear, steps = 2))
+    )
     val done = cell.complete()
-    done.foregroundSteps shouldEqual List.empty
-    done.backgroundSteps shouldEqual List.empty
+    done.foregroundAnimation shouldEqual None
+    done.backgroundAnimation shouldEqual None
     done.isComplete should be(true)
   }
 
@@ -116,28 +99,36 @@ class AnimatedCellSpec extends AnyFlatSpec with Matchers:
       steps = 4
     )
     cell.content shouldEqual None
-    cell.foregroundSteps shouldEqual RgbInterpolator.interpolateRgba(black, white, 4)
-    cell.backgroundSteps shouldEqual RgbInterpolator.interpolateRgba(red, blue, 4)
-    cell.cycling should be(false)
+    cell.foregroundAnimation shouldEqual Some(Tween(black, white, EasingCurve.Linear, steps = 4))
+    cell.backgroundAnimation shouldEqual Some(Tween(red, blue, EasingCurve.Linear, steps = 4))
   }
 
   "AnimatedCell.completed" should "produce a cell with a single static foreground step" in {
     val cell = AnimatedCell.completed('z', white)
     cell.content shouldEqual Some('z')
     cell.currentForeground shouldEqual Some(white)
-    cell.backgroundSteps shouldEqual List.empty
+    cell.currentBackground shouldEqual None
     cell.isComplete should be(false)
     cell.advance().isComplete should be(true)
+    cell.advance().currentForeground shouldEqual Some(white)
   }
 
-  "AnimatedCell.parametricForeground" should "advance delayed colour interpolation without storing step lists" in {
+  "AnimatedCell.parametricForeground" should "advance delayed colour interpolation via a single Tween" in {
     val cell = AnimatedCell.parametricForeground('a', black, white, steps = 3, delayFrames = 2)
 
-    cell.foregroundSteps shouldBe empty
     cell.currentForeground shouldBe Some(black)
     cell.advance().currentForeground shouldBe Some(black)
     cell.advance().advance().currentForeground shouldBe Some(black)
-    cell.advance().advance().advance().currentForeground shouldBe Some(new Color(128, 128, 128))
-    cell.advance().advance().advance().advance().currentForeground shouldBe Some(white)
+    cell.advance().advance().advance().currentForeground shouldBe Some(new Color(85, 85, 85))
+    cell.advance().advance().advance().advance().currentForeground shouldBe Some(new Color(170, 170, 170))
+    cell.advance().advance().advance().advance().advance().currentForeground shouldBe Some(white)
     cell.advance().advance().advance().advance().advance().isComplete shouldBe true
+  }
+
+  it should "leave backgroundAnimation unset" in {
+    AnimatedCell.parametricForeground('a', black, white, steps = 3).backgroundAnimation shouldBe None
+  }
+
+  it should "produce no foreground animation for zero or fewer steps" in {
+    AnimatedCell.parametricForeground('a', black, white, steps = 0).foregroundAnimation shouldBe None
   }

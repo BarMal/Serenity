@@ -2,7 +2,7 @@ package com.serenity
 
 import java.awt.Color
 
-import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
+import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey, EasingCurve, Tween}
 import com.serenity.config.{AppConfig, BackgroundStyle}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -152,8 +152,14 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     )
     val animationState = AnimationState(
       Map(
-        CharacterKey(-1, -1) -> AnimatedCell(None, List(animatedForeground), Nil),
-        CharacterKey(0, 1)   -> AnimatedCell(Some('I'), List(animatedForeground), Nil)
+        CharacterKey(-1, -1) -> AnimatedCell(
+          None,
+          foregroundAnimation = Some(Tween(animatedForeground, animatedForeground, EasingCurve.Linear, steps = 1))
+        ),
+        CharacterKey(0, 1) -> AnimatedCell(
+          Some('I'),
+          foregroundAnimation = Some(Tween(animatedForeground, animatedForeground, EasingCurve.Linear, steps = 1))
+        )
       )
     )
 

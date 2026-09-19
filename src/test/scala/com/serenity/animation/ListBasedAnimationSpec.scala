@@ -5,6 +5,11 @@ import java.awt.Color
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+/** Exercises `AnimationState`'s advance/cleanup mechanics via `AnimatedCell.parametricForeground`-backed cells (issue
+  * #1574: the direct step-list construction this file originally tested was retired along with
+  * `foregroundSteps`/`backgroundSteps`, since `AnimatedCell.advance()` covers the same ground through `Tween[Color]`
+  * now -- see `AnimatedCellSpec`/`TweenSpec` for that primitive's own coverage).
+  */
 class ListBasedAnimationSpec extends AnyFlatSpec with Matchers:
 
   private val black = Color.BLACK
@@ -12,21 +17,7 @@ class ListBasedAnimationSpec extends AnyFlatSpec with Matchers:
   private val red   = Color.RED
   private val blue  = Color.BLUE
 
-  "AnimatedCell list-based advancement" should "consume foreground steps on advance" in {
-    val cell = AnimatedCell(Some('a'), List(black, white), List.empty)
-
-    cell.currentForeground shouldEqual Some(black)
-    cell.isComplete should be(false)
-
-    val advanced = cell.advance()
-    advanced.currentForeground shouldEqual Some(white)
-    advanced.isComplete should be(false)
-
-    val completed = advanced.advance()
-    completed.isComplete should be(true)
-  }
-
-  "AnimationState list-based advancement" should "advance all animations automatically" in {
+  "AnimationState advancement" should "advance all animations automatically" in {
     val animState = AnimationState.empty
       .addCharacterAnimation('a', 0, 0, black, white, 3)
       .addCharacterAnimation('b', 1, 0, red, blue, 2)

@@ -1,8 +1,8 @@
 package com.serenity.animation
 
 /** A pure remapping of a tween's normalized linear progress `t ∈ [0,1]` to an eased progress, also in `[0,1]` (issues
-  * #1082/#1083). Applied before interpolation -- `Tween.easedProgress`, `RgbInterpolator.interpolateRgbaAt` -- so the
-  * same `start`/`end`/`Interpolator[A]` produce a different-feeling motion depending only on which curve is chosen.
+  * #1082/#1083). Applied before interpolation -- `Tween.easedProgress` -- so the same `start`/`end`/`Interpolator[A]`
+  * produce a different-feeling motion depending only on which curve is chosen.
   *
   * Every curve must satisfy `curve(0) == 0` and `curve(1) == 1`: a tween's first and last frame must still land exactly
   * on `start` and `end`, whatever shape the curve takes in between.

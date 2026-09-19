@@ -178,7 +178,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val state     = sm.getCurrentState.unsafeRunSync()
     val surfaceId = state.commandRunnerSurface.get.id
     val firstCell = state.runtime.surfaceAnimations(surfaceId).animationState.getCell(0, 0).get
-    firstCell.backgroundSteps.length shouldBe AnimationConfig.Enabled.smooth.steps * 2
+    firstCell.backgroundAnimation.map(_.remainingFrames).getOrElse(0) shouldBe AnimationConfig.Enabled.smooth.steps * 2
   }
 
   it should "use the command runner reveal kind for open choreography" in {
@@ -279,10 +279,11 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val ghostAnim    = state.runtime.surfaceAnimations(ghost.id).animationState
     val animatedRows = ghostAnim.animations.keys.map(_.line).toSet.toList.sorted
 
-    val firstRowSteps = ghostAnim.getCell(0, animatedRows.head).map(_.backgroundSteps.length).getOrElse(0)
-    animatedRows.foreach { row =>
-      ghostAnim.getCell(0, row).map(_.backgroundSteps.length).getOrElse(0) shouldBe firstRowSteps
-    }
+    def remainingFrames(row: Int): Int =
+      ghostAnim.getCell(0, row).flatMap(_.backgroundAnimation).map(_.remainingFrames).getOrElse(0)
+
+    val firstRowSteps = remainingFrames(animatedRows.head)
+    animatedRows.foreach(row => remainingFrames(row) shouldBe firstRowSteps)
   }
 
   it should "reverse a partial fade from the command runner's current opacity" in {
@@ -298,7 +299,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val partialFadeCell    = partialState.runtime.surfaceAnimations(surfaceId).animationState.getCell(0, 0).get
     val partialBackground  = partialFadeCell.currentBackground.get
     val totalFadeSteps     = com.serenity.animation.AnimationConfig.Enabled.smooth.steps
-    val remainingFadeSteps = partialFadeCell.backgroundSteps.length
+    val remainingFadeSteps = partialFadeCell.backgroundAnimation.map(_.remainingFrames).getOrElse(0)
 
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
@@ -307,7 +308,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     val ghostCell   = closedState.runtime.surfaceAnimations(ghost.id).animationState.getCell(0, 0).get
 
     ghostCell.currentBackground shouldBe Some(partialBackground)
-    ghostCell.backgroundSteps.length shouldBe (totalFadeSteps - remainingFadeSteps + 1)
+    ghostCell.backgroundAnimation.map(_.remainingFrames).getOrElse(0) shouldBe (totalFadeSteps - remainingFadeSteps + 1)
   }
 
   it should "reverse an exiting ghost into the reopened command runner" in {

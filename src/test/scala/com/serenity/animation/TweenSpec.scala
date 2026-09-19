@@ -1,5 +1,7 @@
 package com.serenity.animation
 
+import java.awt.Color
+
 import com.serenity.ui.layout.{LayoutRect, PixelPoint, PixelRect}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -140,4 +142,95 @@ class TweenSpec extends AnyFlatSpec with Matchers:
     val end   = PixelPoint(20, 0)
     val tween = Tween(start = start, end = end, curve = EasingCurve.Linear, steps = 2, currentFrame = 1)
     tween.currentValue shouldBe PixelPoint(10, 0)
+  }
+
+  // ── Interpolator[Color] (issue #1574: colour joins the generic Tween primitive) ────────────────
+
+  "Interpolator[Color]" should "lerp each RGBA component independently" in {
+    val start = new Color(0, 0, 0, 0)
+    val end   = new Color(255, 100, 50, 200)
+    val mid   = summon[Interpolator[Color]].lerp(start, end, 0.5)
+    mid shouldBe new Color(128, 50, 25, 100)
+  }
+
+  it should "reach start and end exactly at t=0 and t=1" in {
+    val start = new Color(10, 20, 30, 40)
+    val end   = new Color(200, 150, 100, 250)
+    summon[Interpolator[Color]].lerp(start, end, 0.0) shouldBe start
+    summon[Interpolator[Color]].lerp(start, end, 1.0) shouldBe end
+  }
+
+  it should "round to the nearest component value, matching RgbInterpolator's old rounding" in {
+    // t = 1/3 of 0..100 = 33.33 -> rounds to 33
+    summon[Interpolator[Color]].lerp(new Color(0, 0, 0), new Color(100, 0, 0), 1.0 / 3.0) shouldBe new Color(33, 0, 0)
+  }
+
+  it should "clamp components to [0, 255] even if t overshoots" in {
+    summon[Interpolator[Color]].lerp(new Color(0, 0, 0), new Color(255, 255, 255), 2.0) shouldBe
+      new Color(255, 255, 255)
+    summon[Interpolator[Color]].lerp(new Color(0, 0, 0), new Color(255, 255, 255), -1.0) shouldBe
+      new Color(0, 0, 0)
+  }
+
+  "a Tween[Color]" should "interpolate through RGBA components over its steps" in {
+    val start = new Color(0, 0, 0)
+    val end   = new Color(100, 100, 100)
+    val tween = Tween(start = start, end = end, curve = EasingCurve.Linear, steps = 2, currentFrame = 1)
+    tween.currentValue shouldBe new Color(50, 50, 50)
+  }
+
+  it should "apply its curve to the interpolated colour (issue #1574, folded in from ColorTimelineSpec)" in {
+    val start = new Color(0, 0, 0)
+    val end   = new Color(100, 100, 100)
+    val tween = Tween(start = start, end = end, curve = EasingCurve.EaseIn, steps = 2, currentFrame = 1)
+    // progress = 0.5, EaseIn(0.5) = 0.125
+    tween.currentValue shouldBe new Color(13, 13, 13)
+  }
+
+  it should "still land exactly on start and end regardless of curve" in {
+    val start = new Color(0, 0, 0)
+    val end   = new Color(100, 100, 100)
+    val tween = Tween(start = start, end = end, curve = EasingCurve.EaseInOut, steps = 2)
+    tween.currentValue shouldBe start
+    tween.advance.advance.currentValue shouldBe end
+  }
+
+  // ── Tween delay (issue #1574: shared with ColorTimeline's retired `delayFrames`) ──────────────
+
+  "a Tween with delayFrames" should "report the start value and make no progress while inside the delay window" in {
+    val tween = Tween(start = 0.0, end = 10.0, curve = EasingCurve.Linear, steps = 4, delayFrames = 2)
+    tween.currentValue shouldBe 0.0
+    tween.advance.currentValue shouldBe 0.0
+    tween.isComplete shouldBe false
+    tween.advance.isComplete shouldBe false
+  }
+
+  it should "behave exactly like a delay-free tween once the delay has elapsed" in {
+    val tween          = Tween(start = 0.0, end = 10.0, curve = EasingCurve.Linear, steps = 4, delayFrames = 2)
+    val atDelayElapsed = tween.advance.advance // currentFrame = 2, delay just elapsed
+    atDelayElapsed.currentValue shouldBe 0.0
+    atDelayElapsed.advance.currentValue shouldBe 2.5 // one step into a 4-step Linear tween
+  }
+
+  it should "become complete only after delayFrames + steps total advances" in {
+    val tween    = Tween(start = 0.0, end = 10.0, curve = EasingCurve.Linear, steps = 2, delayFrames = 3)
+    val advanced = Iterator.iterate(tween)(_.advance).drop(4).next()
+    advanced.isComplete shouldBe false
+    advanced.advance.isComplete shouldBe true
+    advanced.advance.currentValue shouldBe 10.0
+  }
+
+  it should "default delayFrames to zero, unchanged from before delay existed" in {
+    Tween(start = 0.0, end = 10.0, curve = EasingCurve.Linear, steps = 4).delayFrames shouldBe 0
+  }
+
+  "Tween.remainingFrames" should "count delay and interpolation frames left, matching the old step-list length" in {
+    val tween = Tween(start = 0.0, end = 10.0, curve = EasingCurve.Linear, steps = 3, delayFrames = 2)
+    tween.remainingFrames shouldBe 5
+    tween.advance.remainingFrames shouldBe 4
+    Iterator.iterate(tween)(_.advance).drop(5).next().remainingFrames shouldBe 0
+  }
+
+  it should "be zero for an already-complete (steps <= 0) tween" in {
+    Tween(start = 0.0, end = 10.0, curve = EasingCurve.Linear, steps = 0).remainingFrames shouldBe 0
   }
