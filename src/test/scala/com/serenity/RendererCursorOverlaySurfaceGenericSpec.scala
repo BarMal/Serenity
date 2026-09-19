@@ -24,7 +24,7 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
 
   private def editorState: AppState =
     val buffer =
-      Buffer.fromString(bufferId, "hello world").copy(editing = EditingState(cursors = List(CursorPosition(0, 3))))
+      Buffer.fromString(bufferId, "hello world").copy(editing = EditingState(List(CursorPosition(0, 3))))
     AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),

@@ -90,7 +90,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
                 content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two\n\nText\n\n### Beat Three"),
                 language = Some(LanguageId.Markdown)
               ),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2)))
+            editing = EditingState(List(CursorPosition(1, 2)))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -122,7 +122,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
                 ),
                 language = Some(LanguageId.Markdown)
               ),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2))),
+            editing = EditingState(List(CursorPosition(1, 2))),
             viewport = Viewport.default.copy(visibleLines = 4, visibleColumns = 40)
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
@@ -154,7 +154,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
                 content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
                 language = Some(LanguageId.Markdown)
               ),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0)))
+            editing = EditingState(List(CursorPosition(0, 0)))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -192,7 +192,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
                 content = com.serenity.rope.Rope("Opening\nbody\n\nSecond\nbody\n\nThird"),
                 language = None
               ),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0)))
+            editing = EditingState(List(CursorPosition(1, 0)))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -219,7 +219,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha\nbravo\ncharlie")),
-              editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 4)))
+              editing = EditingState(List(CursorPosition(2, 4)))
             )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -249,7 +249,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope("alpha\nbravo\ncharlie\ndelta\necho")),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 0))),
+            editing = EditingState(List(CursorPosition(2, 0))),
             annotations = state.persisted
               .buffers(bufferId)
               .annotations
@@ -287,7 +287,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope("alpha\nbravo\ncharlie\ndelta\necho")),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0))),
+            editing = EditingState(List(CursorPosition(1, 0))),
             annotations = state.persisted.buffers(bufferId).annotations.copy(bookmarks = List(CursorPosition(4, 1))),
             viewport = Viewport.default.copy(visibleLines = 8, visibleColumns = 40)
           )
@@ -316,7 +316,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope("0123456789abcdefghijklmnopqrstuvwxyz")),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
+            editing = EditingState(List(CursorPosition(0, 0))),
             annotations = state.persisted.buffers(bufferId).annotations.copy(bookmarks = List(CursorPosition(0, 12))),
             viewport = Viewport.default.copy(visibleLines = 1, visibleColumns = 5)
           )
@@ -333,7 +333,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     val animations    = stateManager.getBufferAnimations.unsafeRunSync().getOrElse(bufferId, AnimationState.empty)
-    updatedBuffer.editing.cursors.shouldBe(List(CursorPosition(0, 12)))
+    updatedBuffer.editing.cursorPositions.shouldBe(List(CursorPosition(0, 12)))
     updatedBuffer.viewport.leftColumn.should(be > 0)
     animations.animations.should(contain.key(CharacterKey(updatedBuffer.viewport.leftColumn, 0)))
     animations.animations.shouldNot(contain.key(CharacterKey(0, 0)))
@@ -355,7 +355,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
                 content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
                 language = Some(LanguageId.Markdown)
               ),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2)))
+            editing = EditingState(List(CursorPosition(1, 2)))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
@@ -394,7 +394,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
           .copy(
             document =
               state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("# Plain text only")),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 7)))
+            editing = EditingState(List(CursorPosition(0, 7)))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }

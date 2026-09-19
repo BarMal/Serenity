@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.richtext.*
@@ -27,7 +29,7 @@ class ContextualToolbarDetailSpec extends AnyFlatSpec with Matchers with Context
           .buffers(bufferId)
           .copy(
             document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha")),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 5)))
+            editing = EditingState(List(CursorPosition(0, 5)))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }
@@ -74,7 +76,7 @@ class ContextualToolbarDetailSpec extends AnyFlatSpec with Matchers with Context
             document =
               state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
             editing =
-              state.persisted.buffers(bufferId).editing.copy(selection = None, cursors = List(CursorPosition(0, 10))),
+              EditingStateFixtures(selection = None, cursors = List(CursorPosition(0, 10))),
             richText = state.persisted.buffers(bufferId).richText.copy(richTextDocument = Some(document))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
@@ -102,10 +104,7 @@ class ContextualToolbarDetailSpec extends AnyFlatSpec with Matchers with Context
           .buffers(bufferId)
           .copy(
             document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.persisted
-              .buffers(bufferId)
-              .editing
-              .copy(selection = Some(selection), cursors = List(selection.focus))
+            editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
       }

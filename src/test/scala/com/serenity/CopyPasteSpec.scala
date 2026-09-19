@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
@@ -261,10 +263,7 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
                 state.persisted
                   .buffers(activeBufferId.get())
                   .copy(editing =
-                    state.persisted
-                      .buffers(activeBufferId.get())
-                      .editing
-                      .copy(
+                    EditingStateFixtures(
                         cursors = List(selection.start),
                         selection = Some(selection)
                       )
@@ -286,10 +285,7 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
                 state.persisted
                   .buffers(activeBufferId.get())
                   .copy(editing =
-                    state.persisted
-                      .buffers(activeBufferId.get())
-                      .editing
-                      .copy(
+                    EditingStateFixtures(
                         cursors = selections.map(_.focus),
                         selection = Some(primary),
                         selections = selections
@@ -311,10 +307,7 @@ class CopyPasteSpec extends AnyFlatSpec with Matchers:
                 state.persisted
                   .buffers(activeBufferId.get())
                   .copy(editing =
-                    state.persisted
-                      .buffers(activeBufferId.get())
-                      .editing
-                      .copy(
+                    EditingStateFixtures(
                         cursors = cursors,
                         selection = None,
                         selections = Nil

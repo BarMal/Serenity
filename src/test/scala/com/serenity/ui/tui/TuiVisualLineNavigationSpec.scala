@@ -27,7 +27,7 @@ class TuiVisualLineNavigationSpec extends TuiSpec:
     TuiEnvironment.withFile(prose).withConfig(_.withWordWrap(wrap).withVisualLineCursorNavigation(visualNav))
 
   private def cursorOf(current: AppState): Option[CursorPosition] =
-    focusedBuffer(current).flatMap(_.editing.cursors.headOption)
+    focusedBuffer(current).flatMap(_.editing.cursorPositions.headOption)
 
   private def cursorColumn(current: AppState): Int = cursorOf(current).map(_.column).getOrElse(-1)
   private def cursorLine(current: AppState): Int   = cursorOf(current).map(_.line).getOrElse(-1)

@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import java.nio.file.Path
 
 import cats.effect.IO
@@ -67,10 +69,7 @@ class CommandRunnerEditCommandsSpec extends AnyFlatSpec with Matchers:
         val selected = state.persisted
           .buffers(bufferId)
           .copy(
-            editing = state.persisted
-              .buffers(bufferId)
-              .editing
-              .copy(
+            editing = EditingStateFixtures(
                 selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5)))
               )
           )

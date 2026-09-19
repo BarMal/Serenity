@@ -1,5 +1,7 @@
 package com.serenity.state.reducers
 
+import com.serenity.testkit.{EditingStateFixtures, VerticalCursorState}
+
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -25,7 +27,7 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
 
   private def bufferOf(text: String, cursor: CursorPosition, selection: Option[Selection] = None): Buffer =
     val buffer = Buffer.fromString(bufferId, text)
-    buffer.copy(editing = buffer.editing.copy(cursors = List(cursor), selection = selection))
+    buffer.copy(editing = EditingStateFixtures(cursors = List(cursor), selection = selection))
 
   "ExtendSelectionLeft" should "anchor at the cursor and move the focus left" in {
     val extended = reduce(bufferOf("abcd", CursorPosition(0, 3)), ExtendSelectionLeft)
@@ -105,7 +107,7 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
   it should "drop secondary selections rather than extending each of them" in {
     val base = bufferOf("foo bar baz", CursorPosition(0, 4))
     val multiSelected =
-      base.copy(editing = base.editing.copy(selections = List(Selection(CursorPosition(0, 8), CursorPosition(0, 11)))))
+      base.copy(editing = EditingStateFixtures(selections = List(Selection(CursorPosition(0, 8), CursorPosition(0, 11)))))
 
     reduce(multiSelected, ExtendSelectionWordRight).editing.selections shouldBe Nil
   }
@@ -127,7 +129,7 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
   it should "drop secondary selections rather than extending each of them" in {
     val base = bufferOf("abcdef", CursorPosition(0, 1))
     val multiSelected =
-      base.copy(editing = base.editing.copy(selections = List(Selection(CursorPosition(0, 3), CursorPosition(0, 5)))))
+      base.copy(editing = EditingStateFixtures(selections = List(Selection(CursorPosition(0, 3), CursorPosition(0, 5)))))
 
     reduce(multiSelected, ExtendSelectionRight).editing.selections shouldBe Nil
   }
@@ -173,7 +175,7 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
   "Adjustments made on the way into a single-cursor arm" should "survive the arm reading the buffer back" in {
     val staleBase = bufferOf("abc", CursorPosition(0, 1))
     val stale = staleBase.copy(editing =
-      staleBase.editing.copy(multiCursorVerticalStates = List(VerticalCursorState(CursorPosition(0, 1), 1, 0f)))
+      EditingStateFixtures(multiCursorVerticalStates = List(VerticalCursorState(CursorPosition(0, 1), 1, 0f)))
     )
 
     reduce(stale, InsertChar('x')).editing.multiCursorVerticalStates shouldBe Nil
@@ -184,7 +186,7 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
   it should "collapse secondary selections before select-all rebuilds the selection" in {
     val multiSelectedBase = bufferOf("abc\ndefg", CursorPosition(0, 1))
     val multiSelected = multiSelectedBase.copy(editing =
-      multiSelectedBase.editing.copy(selections = List(Selection(CursorPosition(0, 1), CursorPosition(0, 3))))
+      EditingStateFixtures(selections = List(Selection(CursorPosition(0, 1), CursorPosition(0, 3))))
     )
 
     reduce(multiSelected, SelectAll).allSelections shouldBe

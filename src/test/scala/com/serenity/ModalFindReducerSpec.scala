@@ -86,7 +86,7 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
             .copy(
               document =
                 AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(content)),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(cursor)),
+              editing = EditingState(List(cursor)),
               viewport = viewport
             )
         )
@@ -188,7 +188,7 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
     updatedState.persisted.buffers(bufferId).findState shouldBe Some(
       FindState("needle", List(matchAt(1, 0), matchAt(3, 0)), 0)
     )
-    updatedState.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(1, 0)
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(1, 0)
   }
 
   it should "leave buffer find state unchanged when an empty find query is submitted" in {
@@ -199,7 +199,7 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
 
     activeFindModal(updatedState) shouldBe Some(Modal.Find("", Nil, 0))
     updatedState.persisted.buffers(bufferId).findState shouldBe None
-    updatedState.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 5)
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(0, 5)
   }
 
   it should "update the live find query without searching in the reducer" in {
@@ -212,7 +212,7 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
 
     activeFindModal(withNeedle) shouldBe Some(Modal.Find("needle", Nil, 0))
     withNeedle.persisted.buffers(bufferId).findState shouldBe None
-    withNeedle.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 0)
+    withNeedle.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(0, 0)
     withNeedle.modalSurface shouldBe defined
   }
 
@@ -300,7 +300,7 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
 
     activeFindModal(withNeedle) shouldBe Some(Modal.Find("needle", Nil, 0))
     withNeedle.persisted.buffers(bufferId).findState shouldBe None
-    withNeedle.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 0)
+    withNeedle.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(0, 0)
   }
 
   it should "ignore find queries that would split a grapheme cluster" in {
@@ -311,7 +311,7 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
 
     activeFindModal(withAccent) shouldBe Some(Modal.Find("\u0301", Nil, 0))
     withAccent.persisted.buffers(bufferId).findState shouldBe None
-    withAccent.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 0)
+    withAccent.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(0, 0)
   }
 
   it should "navigate find results forward and backward while the overlay remains open" in {
@@ -324,13 +324,13 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
       ModalEventReducer.reduce(ModalType.Find, ModalNavigate(Direction.Up), third).state
 
     activeFindModal(second) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(2, 0), matchAt(3, 0)), 1))
-    second.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(2, 0)
+    second.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(2, 0)
     activeFindModal(third) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(2, 0), matchAt(3, 0)), 2))
-    third.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(3, 0)
+    third.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(3, 0)
     activeFindModal(secondAgain) shouldBe Some(
       Modal.Find("needle", List(matchAt(0, 0), matchAt(2, 0), matchAt(3, 0)), 1)
     )
-    secondAgain.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(2, 0)
+    secondAgain.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(2, 0)
     secondAgain.modalSurface shouldBe defined
   }
 
@@ -342,11 +342,11 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
     val second = ModalEventReducer.reduce(ModalType.Find, Enter, first).state
 
     activeFindModal(first) shouldBe Some(Modal.Find("needle", List(matchAt(0, 0), matchAt(0, "needle and ".length)), 0))
-    first.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 0)
+    first.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(0, 0)
     activeFindModal(second) shouldBe Some(
       Modal.Find("needle", List(matchAt(0, 0), matchAt(0, "needle and ".length)), 1)
     )
-    second.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, "needle and ".length)
+    second.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(0, "needle and ".length)
   }
 
   it should "track non-overlapping find results as distinct navigable matches" in {
@@ -359,7 +359,7 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
     val expectedResults = List(matchAt(0, 0), matchAt(0, 2))
     activeFindModal(first) shouldBe Some(Modal.Find("aa", expectedResults, 0))
     activeFindModal(second) shouldBe Some(Modal.Find("aa", expectedResults, 1))
-    second.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 2)
+    second.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(0, 2)
   }
 
   it should "advance find results when the explicit find-next event is submitted" in {
@@ -372,7 +372,7 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
     second.persisted.buffers(bufferId).findState shouldBe Some(
       FindState("needle", List(matchAt(0, 0), matchAt(1, 0), matchAt(2, 0)), 1)
     )
-    second.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(1, 0)
+    second.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(1, 0)
     second.persisted.focus shouldBe Focus.Surface(SurfaceId("find"))
   }
 
@@ -386,7 +386,7 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = initialState
     val buffer       = updatedState.persisted.buffers(bufferId)
-    val cursor       = buffer.editing.cursors.head
+    val cursor       = buffer.editing.cursorPositions.head
     val font         = FontLoader.previewTextFont(updatedState.persisted.config.editorConfig.fontConfig)
     val wrapPx =
       TextLayoutSnapshot.gridWrapWidthPx(
@@ -421,7 +421,7 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
                   .document
                   .copy(content = com.serenity.rope.Rope("alpha beta")),
                 editing =
-                  AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 5))),
+                  EditingState(List(CursorPosition(0, 5))),
                 findState = Some(FindState("alpha", List(matchAt(0, 0)), 0))
               )
           )
@@ -434,7 +434,7 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
 
     activeFindModal(noMatch) shouldBe Some(Modal.Find("zzz", Nil, 0))
     noMatch.persisted.buffers(bufferId).findState shouldBe None
-    noMatch.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 5)
+    noMatch.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(0, 5)
   }
 
   it should "delete the previous word in find mode" in {
@@ -464,5 +464,5 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
 
     activeFindModal(updatedState) shouldBe Some(Modal.Find("alpha beta", Nil, 0))
     updatedState.persisted.buffers(bufferId).findState shouldBe None
-    updatedState.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(0, 0)
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(0, 0)
   }

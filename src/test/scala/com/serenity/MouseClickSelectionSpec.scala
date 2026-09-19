@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.{EditingStateFixtures, VerticalCursorState}
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
@@ -102,7 +104,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseDrag(paneRect.x + 3, paneRect.y + 2)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    buffer.editing.cursors.headOption shouldBe Some(CursorPosition(1, 3))
+    buffer.editing.cursorPositions.headOption shouldBe Some(CursorPosition(1, 3))
     buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
     buffer.editing.selections shouldBe Nil
   }
@@ -135,7 +137,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseDrag(paneRect.x + 5, paneRect.y + 2)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    buffer.editing.cursors.headOption shouldBe Some(CursorPosition(1, 5))
+    buffer.editing.cursorPositions.headOption shouldBe Some(CursorPosition(1, 5))
     buffer.editing.selection shouldBe Some(Selection(CursorPosition(1, 2), CursorPosition(1, 5)))
     buffer.editing.selections shouldBe Nil
   }
@@ -165,7 +167,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(paneRect.x + 7, paneRect.y + 1, clickCount = 2)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    buffer.editing.cursors.headOption shouldBe Some(CursorPosition(0, 10))
+    buffer.editing.cursorPositions.headOption shouldBe Some(CursorPosition(0, 10))
     buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
     buffer.editing.selections shouldBe Nil
   }
@@ -200,7 +202,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(paneRect.x + 7, paneRect.y + 1, clickCount = 2)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    buffer.editing.cursors.headOption shouldBe Some(CursorPosition(0, 10))
+    buffer.editing.cursorPositions.headOption shouldBe Some(CursorPosition(0, 10))
     buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
     buffer.editing.selections shouldBe Nil
   }
@@ -230,7 +232,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(paneRect.x + 2, paneRect.y + 2, clickCount = 3)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    buffer.editing.cursors.headOption shouldBe Some(CursorPosition(1, 10))
+    buffer.editing.cursorPositions.headOption shouldBe Some(CursorPosition(1, 10))
     buffer.editing.selection shouldBe Some(Selection(CursorPosition(1, 0), CursorPosition(1, 10)))
     buffer.editing.selections shouldBe Nil
   }
@@ -248,7 +250,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
               .buffers(bufferId)
               .copy(
                 document = state.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)),
-                editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 2)))
+                editing = EditingState(List(CursorPosition(0, 2)))
               )
           )
         )
@@ -263,7 +265,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(paneRect.x + 4, paneRect.y + 2, shiftDown = true)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    buffer.editing.cursors.headOption shouldBe Some(CursorPosition(1, 4))
+    buffer.editing.cursorPositions.headOption shouldBe Some(CursorPosition(1, 4))
     buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(1, 4)))
     buffer.editing.selections shouldBe Nil
   }
@@ -281,7 +283,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
               .buffers(bufferId)
               .copy(
                 document = state.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)),
-                editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 2)))
+                editing = EditingState(List(CursorPosition(0, 2)))
               )
           )
         )
@@ -297,7 +299,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseDrag(paneRect.x + 5, paneRect.y + 3, shiftDown = true)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    buffer.editing.cursors.headOption shouldBe Some(CursorPosition(2, 5))
+    buffer.editing.cursorPositions.headOption shouldBe Some(CursorPosition(2, 5))
     buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(2, 5)))
     buffer.editing.selections shouldBe Nil
   }
@@ -315,10 +317,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
               .buffers(bufferId)
               .copy(
                 document = state.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)),
-                editing = state.persisted
-                  .buffers(bufferId)
-                  .editing
-                  .copy(
+                editing = EditingStateFixtures(
                     cursors = List(CursorPosition(0, 1), CursorPosition(2, 3)),
                     multiCursorVerticalStates = List(
                       VerticalCursorState(CursorPosition(0, 1), 1, 1.0f),
@@ -360,10 +359,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
               .buffers(bufferId)
               .copy(
                 document = state.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)),
-                editing = state.persisted
-                  .buffers(bufferId)
-                  .editing
-                  .copy(
+                editing = EditingStateFixtures(
                     cursors = List(first.focus, second.focus),
                     selection = Some(first),
                     selections = List(first, second)

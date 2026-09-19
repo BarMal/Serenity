@@ -1,5 +1,7 @@
 package com.serenity.state.manager
 
+import com.serenity.testkit.EditingStateFixtures
+
 import java.awt.Font
 
 import com.serenity.command.{Command, CommandPaletteState, CommandRegistry, CommandRunner, CommandRunnerSurface}
@@ -44,14 +46,14 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
 
   "MouseTargetLayoutKey" should "ignore cursor and selection changes during mouse drags" in {
     val plainBuffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma")
-    val buffer      = plainBuffer.copy(editing = plainBuffer.editing.copy(cursors = List(CursorPosition(0, 1))))
+    val buffer      = plainBuffer.copy(editing = EditingState(List(CursorPosition(0, 1))))
     val state       = stateWith(buffer)
     val draggedState = state.copy(persisted =
       state.persisted.copy(
         buffers = state.persisted.buffers.updated(
           bufferId,
           buffer.copy(
-            editing = buffer.editing.copy(
+            editing = EditingStateFixtures(
               cursors = List(CursorPosition(1, 3)),
               selection = Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
             )
@@ -102,8 +104,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
 
   it should "reuse the prepared scene for cursor-only state changes" in {
     val buffer = Buffer.fromString(bufferId, "alpha beta")
-    val state  = stateWith(buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(0, 1)))))
-    val moved  = stateWith(buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(0, 5)))))
+    val state  = stateWith(buffer.copy(editing = EditingState(List(CursorPosition(0, 1)))))
+    val moved  = stateWith(buffer.copy(editing = EditingState(List(CursorPosition(0, 5)))))
     val size   = ViewportSize(80, 24)
     val scene  = MouseTargetCache.fromState(state, size).scene
 

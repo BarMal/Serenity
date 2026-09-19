@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import java.awt.Font
 
 import com.serenity.config.MarkdownViewMode
@@ -21,7 +23,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
     val baseBuffer = Buffer.fromString(bufferId, "# Lens\n\n# Raw\ncontinued")
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
-      editing = baseBuffer.editing.copy(cursors = List(CursorPosition(2, 0))),
+      editing = EditingState(List(CursorPosition(2, 0))),
       viewport = Viewport.default.copy(visibleLines = 10)
     )
     val state = AppState.empty.copy(persisted =
@@ -83,7 +85,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
     val baseBuffer = Buffer.fromString(bufferId, "# One\n# Two")
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
-      editing = baseBuffer.editing.copy(cursors = List(CursorPosition(10, 0))),
+      editing = EditingState(List(CursorPosition(10, 0))),
       viewport = Viewport.default.copy(visibleLines = 10)
     )
     val state = AppState.empty.copy(persisted =
@@ -165,7 +167,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
     val baseBuffer = Buffer.fromString(bufferId, "# First\nfirst body\n\n# Second\nsecond body\n\n# Third")
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
-      editing = baseBuffer.editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(3, 0))),
+      editing = EditingState(List(CursorPosition(0, 0), CursorPosition(3, 0))),
       viewport = Viewport.default.copy(visibleLines = 10)
     )
     val state = AppState.empty.copy(persisted =
@@ -214,7 +216,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
     val baseBuffer = Buffer.fromString(bufferId, "# Title\nParagraph immediately after the heading")
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
-      editing = baseBuffer.editing.copy(cursors = List(CursorPosition(1, 0))),
+      editing = EditingState(List(CursorPosition(1, 0))),
       viewport = Viewport.default.copy(visibleLines = 10)
     )
     val state = AppState.empty.copy(persisted =
@@ -259,7 +261,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
     val baseBuffer = Buffer.fromString(bufferId, "# Preview\n\nRaw paragraph\ncontinued")
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
-      editing = baseBuffer.editing.copy(cursors = List(CursorPosition(2, 0))),
+      editing = EditingState(List(CursorPosition(2, 0))),
       viewport = Viewport.default.copy(visibleLines = 10)
     )
     val state = AppState.empty.copy(persisted =
@@ -362,7 +364,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
     val baseBuffer = Buffer.fromString(bufferId, source)
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
-      editing = baseBuffer.editing.copy(cursors = List(cursor), selection = selection),
+      editing = EditingStateFixtures(cursors = List(cursor), selection = selection),
       viewport = Viewport.default.copy(topLine = topLine.getOrElse(cursor.line).max(0), visibleLines = 10)
     )
     val state = AppState.empty.copy(persisted =

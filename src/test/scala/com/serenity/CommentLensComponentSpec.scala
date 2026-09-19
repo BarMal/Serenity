@@ -22,7 +22,7 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "Opening paragraph")
       .copy(
-        editing = EditingState(cursors = List(CursorPosition(0, 3))),
+        editing = EditingState(List(CursorPosition(0, 3))),
         annotations = Annotations(documentComments = List(comment))
       )
     AppState.initial.copy(

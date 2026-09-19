@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import java.awt.{Color, Font}
 
 import com.serenity.config.AppConfig
@@ -206,7 +208,7 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       )
     val fromStringBuffer = Buffer.fromString(BufferId(1), document.plainText)
     val buffer = fromStringBuffer.copy(
-      editing = fromStringBuffer.editing.copy(cursors = List(CursorPosition(0, 0)), selection = None),
+      editing = EditingStateFixtures(cursors = List(CursorPosition(0, 0)), selection = None),
       richText = fromStringBuffer.richText.copy(richTextDocument = Some(document))
     )
     val state   = buildState(buffer)

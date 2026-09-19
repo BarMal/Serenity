@@ -1,5 +1,7 @@
 package com.serenity.state.reducers
 
+import com.serenity.testkit.EditingStateFixtures
+
 import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
@@ -102,7 +104,7 @@ class EditorEventReducerOffsetSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, "cafe\u0301!")
       .copy(editing =
-        EditingState(
+        EditingStateFixtures(
           cursors = List(CursorPosition(0, 5)),
           selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 5)))
         )
@@ -134,7 +136,7 @@ class EditorEventReducerOffsetSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, text)
       .copy(editing =
-        EditingState(
+        EditingStateFixtures(
           cursors = List(CursorPosition(0, 5)),
           selection = Some(Selection(CursorPosition(0, 2), CursorPosition(0, 4)))
         )
@@ -152,7 +154,7 @@ class EditorEventReducerOffsetSpec extends AnyFlatSpec with Matchers:
   }
 
   private def reduceTextEvent(text: String, cursor: CursorPosition, event: TextEntryEvent): Buffer =
-    val buffer = Buffer.fromString(bufferId, text).copy(editing = EditingState(cursors = List(cursor)))
+    val buffer = Buffer.fromString(bufferId, text).copy(editing = EditingState(List(cursor)))
     val state  = AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
 
     EditorEventReducer.reduce(event, paneId, state).state.persisted.buffers(bufferId)

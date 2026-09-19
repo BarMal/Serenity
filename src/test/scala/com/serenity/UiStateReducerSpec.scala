@@ -57,7 +57,7 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
           bufferId,
           baseState.persisted
             .buffers(bufferId)
-            .copy(editing = baseState.persisted.buffers(bufferId).editing.copy(cursors = List(cursor)))
+            .copy(editing = EditingState(List(cursor)))
         )
       )
     )

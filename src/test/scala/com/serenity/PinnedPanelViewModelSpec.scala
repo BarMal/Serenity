@@ -246,7 +246,7 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
           initialState.persisted
             .buffers(BufferId(0))
             .copy(editing =
-              initialState.persisted.buffers(BufferId(0)).editing.copy(cursors = List(CursorPosition(12, 1)))
+              EditingState(List(CursorPosition(12, 1)))
             )
         )
       )
@@ -271,7 +271,7 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
           initialState.persisted
             .buffers(BufferId(0))
             .copy(editing =
-              initialState.persisted.buffers(BufferId(0)).editing.copy(cursors = List(CursorPosition(12, 1)))
+              EditingState(List(CursorPosition(12, 1)))
             )
         )
       )
@@ -325,7 +325,7 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
           initialState.persisted
             .buffers(BufferId(0))
             .copy(editing =
-              initialState.persisted.buffers(BufferId(0)).editing.copy(cursors = List(CursorPosition(15, 4)))
+              EditingState(List(CursorPosition(15, 4)))
             )
         )
       )

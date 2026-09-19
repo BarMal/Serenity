@@ -1,5 +1,7 @@
 package com.serenity.state.reducers
 
+import com.serenity.testkit.EditingStateFixtures
+
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -26,7 +28,7 @@ class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
   ): AppState =
     val buffer = Buffer
       .fromString(bufferId, text)
-      .copy(editing = EditingState(cursors = cursors, selection = selection, selections = selections))
+      .copy(editing = EditingStateFixtures(cursors = cursors, selection = selection, selections = selections))
     AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
 
   private def bufferAfter(event: TextEntryEvent, state: AppState): Buffer =
@@ -139,7 +141,7 @@ class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
     val before    = stateWith(manyLines, List(CursorPosition(0, 0)))
 
     val after = bufferAfter(PageDown, before)
-    after.editing.cursors.head.line should be > 0
+    after.editing.cursorPositions.head.line should be > 0
   }
 
   "PageUp at the top of the document" should "leave the cursor at line 0" in {
@@ -156,7 +158,7 @@ class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
     val before    = stateWith(manyLines, List(CursorPosition(0, 0)))
 
     val after = bufferAfter(ColumnRight, before)
-    after.editing.cursors.head.line should be > 0
+    after.editing.cursorPositions.head.line should be > 0
   }
 
   "ColumnLeft at the top of the document" should "leave the cursor at line 0" in {

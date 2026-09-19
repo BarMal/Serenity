@@ -84,8 +84,8 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
         .fold(IO.raiseError[Buffer](new RuntimeException("Buffer not found")))(IO.pure)
     yield
       buffer.document.content.collect() shouldBe expected
-      paneBuffer.editing.cursors.head.line shouldBe 1
-      paneBuffer.editing.cursors.head.column shouldBe 9 // After 2 spaces + "Hello"
+      paneBuffer.editing.cursorPositions.head.line shouldBe 1
+      paneBuffer.editing.cursorPositions.head.column shouldBe 9 // After 2 spaces + "Hello"
 
     program.unsafeRunSync()
   }
@@ -416,8 +416,8 @@ Third""".replace("\r\n", "\n")
     yield
       buffer.document.content.collect() shouldBe "AB\nCDE"
       // Cursor should be at end
-      paneBuffer.editing.cursors.head.line shouldBe 1
-      paneBuffer.editing.cursors.head.column shouldBe 3
+      paneBuffer.editing.cursorPositions.head.line shouldBe 1
+      paneBuffer.editing.cursorPositions.head.column shouldBe 3
 
     program.unsafeRunSync()
   }

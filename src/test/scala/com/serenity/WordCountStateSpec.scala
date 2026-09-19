@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.state.manager.StateManager
@@ -45,7 +47,7 @@ class WordCountStateSpec extends AnyFlatSpec with Matchers:
   "activeSelectionTextStatistics" should "reflect only the selected range, not the whole buffer" in {
     val buffer0 = Buffer.fromString(BufferId(1), "alpha beta gamma delta")
     val buffer = buffer0.copy(editing =
-      buffer0.editing.copy(selection = Some(Selection(CursorPosition(0, 6), CursorPosition(0, 16)))) // "beta gamma"
+      EditingStateFixtures(selection = Some(Selection(CursorPosition(0, 6), CursorPosition(0, 16)))) // "beta gamma"
     )
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
@@ -66,7 +68,7 @@ class WordCountStateSpec extends AnyFlatSpec with Matchers:
   it should "report no selection statistics when the selection is empty" in {
     val buffer0 = Buffer.fromString(BufferId(1), "alpha beta")
     val buffer = buffer0.copy(editing =
-      buffer0.editing.copy(selection = Some(Selection(CursorPosition(0, 2), CursorPosition(0, 2))))
+      EditingStateFixtures(selection = Some(Selection(CursorPosition(0, 2), CursorPosition(0, 2))))
     )
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(

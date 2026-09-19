@@ -77,13 +77,13 @@ class MarkdownLensUiScenarioSpec extends AnyFlatSpec with Matchers:
         val firstId = BufferId(50)
         val firstBuffer = original.copy(
           id = firstId,
-          editing = original.editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(4, 0)))
+          editing = EditingState(List(CursorPosition(0, 0), CursorPosition(4, 0)))
         )
         val secondId = BufferId(99)
         val secondBuffer = firstBuffer.copy(
           id = secondId,
           document = firstBuffer.document.copy(content = com.serenity.rope.Rope("# Other\n\nSecond pane paragraph.\n")),
-          editing = firstBuffer.editing.copy(cursors = List(CursorPosition(2, 0)))
+          editing = EditingState(List(CursorPosition(2, 0)))
         )
         state.copy(
           persisted = state.persisted.copy(

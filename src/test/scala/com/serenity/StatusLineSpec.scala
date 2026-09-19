@@ -23,7 +23,7 @@ class StatusLineSpec extends AnyFlatSpec with Matchers:
   private def editorState(cursor: CursorPosition = CursorPosition(0, 0), config: AppConfig = floating): AppState =
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
-      .copy(editing = EditingState(cursors = List(cursor)))
+      .copy(editing = EditingState(List(cursor)))
     val initialState = AppState.initial
     initialState.copy(persisted =
       initialState.persisted.copy(

@@ -134,7 +134,7 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
 
     val baseBuffer = Buffer.fromFile(BufferId(20), tempFile, "json round trip content")
     val buffer = baseBuffer.copy(
-      editing = baseBuffer.editing.copy(cursors = List(CursorPosition(3, 7))),
+      editing = EditingState(List(CursorPosition(3, 7))),
       viewport = Viewport(topLine = 2, leftColumn = 1, visibleLines = 24, visibleColumns = 80),
       findState = Some(FindState("round", List(FindResult(0, 5), FindResult(5, 9)), 1)),
       annotations = baseBuffer.annotations.copy(
@@ -166,7 +166,7 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
     val restoredBuffer = restored.persisted.buffers(buffer.id)
 
     restoredBuffer.document.content.toString shouldBe "json round trip content"
-    restoredBuffer.editing.cursors.head shouldBe CursorPosition(3, 7)
+    restoredBuffer.editing.cursorPositions.head shouldBe CursorPosition(3, 7)
     restoredBuffer.viewport.topLine shouldBe 2
     restoredBuffer.viewport.leftColumn shouldBe 1
     restoredBuffer.findState shouldBe Some(FindState("round", List(FindResult(0, 5), FindResult(5, 9)), 1))

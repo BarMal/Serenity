@@ -50,7 +50,7 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val buffer = Buffer
       .fromString(bufferId, "alpha beta gamma")
-      .copy(editing = EditingState(cursors = List(CursorPosition(0, 0))))
+      .copy(editing = EditingState(List(CursorPosition(0, 0))))
     val state = stateWithDiagnostic(bufferId, buffer, paneId)
 
     val surface = new MockRenderSurface(100, 30)
@@ -69,7 +69,7 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val buffer = Buffer
       .fromString(bufferId, "alpha beta gamma")
-      .copy(editing = EditingState(cursors = List(CursorPosition(0, 0))))
+      .copy(editing = EditingState(List(CursorPosition(0, 0))))
     val state = stateWithDiagnostic(bufferId, buffer, paneId)
 
     // fontRenderContextOverride = None models a terminal surface with no FontRenderContext, forcing the cell-based
@@ -94,7 +94,7 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val buffer = Buffer
       .fromString(bufferId, "alpha beta gamma")
-      .copy(editing = EditingState(cursors = List(CursorPosition(0, 0))))
+      .copy(editing = EditingState(List(CursorPosition(0, 0))))
     val state = stateWithDiagnostic(bufferId, buffer, paneId)
 
     val surface = new MockRenderSurface(100, 30)

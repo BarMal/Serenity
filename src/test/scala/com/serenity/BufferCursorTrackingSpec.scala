@@ -39,8 +39,8 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
 
     // Should have "ABC" and cursor at position 3
     firstBuffer.document.content.collect() shouldBe "ABC"
-    firstBuffer.editing.cursors.head.column shouldBe 3
-    firstBuffer.editing.cursors.head.line shouldBe 0
+    firstBuffer.editing.cursorPositions.head.column shouldBe 3
+    firstBuffer.editing.cursorPositions.head.line shouldBe 0
 
     // Create second buffer and type different content
     stateManager.applyEvent(NewTab).unsafeRunSync()
@@ -53,8 +53,8 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
 
     // Should have "XY" and cursor at position 2
     secondBuffer.document.content.collect() shouldBe "XY"
-    secondBuffer.editing.cursors.head.column shouldBe 2
-    secondBuffer.editing.cursors.head.line shouldBe 0
+    secondBuffer.editing.cursorPositions.head.column shouldBe 2
+    secondBuffer.editing.cursorPositions.head.line shouldBe 0
 
     // When: Switch back to first buffer
     stateManager.applyEvent(PreviousTab).unsafeRunSync()
@@ -64,10 +64,10 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     val secondBufferAfterSwitch = stateAfterSwitch.persisted.buffers(secondBufferId)
 
     // Then: Both buffers should maintain their cursor positions
-    firstBufferAfterSwitch.editing.cursors.head.column shouldBe 3 // Still at end of "ABC"
-    firstBufferAfterSwitch.editing.cursors.head.line shouldBe 0
-    secondBufferAfterSwitch.editing.cursors.head.column shouldBe 2 // Still at end of "XY"
-    secondBufferAfterSwitch.editing.cursors.head.line shouldBe 0
+    firstBufferAfterSwitch.editing.cursorPositions.head.column shouldBe 3 // Still at end of "ABC"
+    firstBufferAfterSwitch.editing.cursorPositions.head.line shouldBe 0
+    secondBufferAfterSwitch.editing.cursorPositions.head.column shouldBe 2 // Still at end of "XY"
+    secondBufferAfterSwitch.editing.cursorPositions.head.line shouldBe 0
 
     // And: Content should be preserved
     firstBufferAfterSwitch.document.content.collect() shouldBe "ABC"
@@ -136,13 +136,13 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     val buffer2 = finalState.persisted.buffers(buffer2Id)
 
     buffer0.document.content.collect() shouldBe "1"
-    buffer0.editing.cursors.head.column shouldBe 1
+    buffer0.editing.cursorPositions.head.column shouldBe 1
 
     buffer1.document.content.collect() shouldBe "23"
-    buffer1.editing.cursors.head.column shouldBe 2
+    buffer1.editing.cursorPositions.head.column shouldBe 2
 
     buffer2.document.content.collect() shouldBe "456"
-    buffer2.editing.cursors.head.column shouldBe 3
+    buffer2.editing.cursorPositions.head.column shouldBe 3
 
     // When: Navigate back through buffers and verify cursor positions remain
     stateManager.applyEvent(PreviousTab).unsafeRunSync() // Go to buffer 1
@@ -154,6 +154,6 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     stateOnBuffer0.focusedBufferId.get shouldBe buffer0Id
 
     // Cursor positions should still be preserved
-    stateOnBuffer0.persisted.buffers(buffer0Id).editing.cursors.head.column shouldBe 1
-    stateOnBuffer1.persisted.buffers(buffer1Id).editing.cursors.head.column shouldBe 2
-    stateOnBuffer0.persisted.buffers(buffer2Id).editing.cursors.head.column shouldBe 3
+    stateOnBuffer0.persisted.buffers(buffer0Id).editing.cursorPositions.head.column shouldBe 1
+    stateOnBuffer1.persisted.buffers(buffer1Id).editing.cursorPositions.head.column shouldBe 2
+    stateOnBuffer0.persisted.buffers(buffer2Id).editing.cursorPositions.head.column shouldBe 3

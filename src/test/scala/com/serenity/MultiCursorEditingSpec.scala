@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -24,10 +26,7 @@ class MultiCursorEditingSpec extends AnyFlatSpec with Matchers:
       .copy(
         document =
           AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(content)),
-        editing = AppState.initial.persisted
-          .buffers(bufferId)
-          .editing
-          .copy(
+        editing = EditingStateFixtures(
             cursors = if selections.nonEmpty then selections.map(_.focus) else cursors,
             selection = selections.headOption,
             selections = selections

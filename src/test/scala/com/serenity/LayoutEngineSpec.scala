@@ -144,7 +144,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
   it should "place cursors using the pane content rectangle owned by editor pane layout" in {
     val buffer =
-      Buffer.fromString(BufferId(0), "abc\ndef").copy(editing = EditingState(cursors = List(CursorPosition(1, 2))))
+      Buffer.fromString(BufferId(0), "abc\ndef").copy(editing = EditingState(List(CursorPosition(1, 2))))
     val state = AppState.initial.copy(persisted =
       AppState.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
@@ -659,7 +659,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val scrolledViewport =
       Viewport.default.copy(leftColumn = cursor.column - visibleColumns + 1, visibleColumns = visibleColumns)
     val buffer =
-      bufferBase.copy(editing = bufferBase.editing.copy(cursors = List(cursor)), viewport = scrolledViewport)
+      bufferBase.copy(editing = EditingState(List(cursor)), viewport = scrolledViewport)
 
     val viewport = LayoutEngine.updateBufferViewportDimensions(buffer, panelRect, wordWrapEnabled = false)
 

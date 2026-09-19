@@ -1,5 +1,7 @@
 package com.serenity.state.reducers
 
+import com.serenity.testkit.EditingStateFixtures
+
 import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
@@ -29,7 +31,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = NonCollectingRope(Rope("alpha\nbeta"))),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0)))
+              editing = EditingState(List(CursorPosition(0, 0)))
             )
         )
       )
@@ -54,10 +56,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, 8), CursorPosition(0, 10)))
+              editing = EditingState(List(CursorPosition(0, 8), CursorPosition(0, 10)))
             )
         )
       )
@@ -82,7 +81,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 10)))
+              editing = EditingState(List(CursorPosition(0, 10)))
             )
         )
       )
@@ -103,7 +102,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
       .buffers(bufferId)
       .copy(
         document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-        editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
+        editing = EditingState(List(CursorPosition(0, 0))),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 120, visibleLines = 40)
       )
     val initialState = AppState.initial.copy(
@@ -126,7 +125,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
       .buffers(bufferId)
       .copy(
         document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-        editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0))),
+        editing = EditingState(List(CursorPosition(1, 0))),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 120, visibleLines = 40)
       )
     val initialState = AppState.initial.copy(
@@ -149,10 +148,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
       .buffers(bufferId)
       .copy(
         document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-        editing = AppState.initial.persisted
-          .buffers(bufferId)
-          .editing
-          .copy(cursors = List(CursorPosition(0, 5), CursorPosition(1, 0))),
+        editing = EditingState(List(CursorPosition(0, 5), CursorPosition(1, 0))),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 120, visibleLines = 40)
       )
     val initialState = AppState.initial.copy(
@@ -179,7 +175,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 2)))
+              editing = EditingState(List(CursorPosition(0, 2)))
             )
         )
       )
@@ -202,7 +198,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 2)))
+              editing = EditingState(List(CursorPosition(0, 2)))
             )
         )
       )
@@ -229,10 +225,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(selection.focus), selection = Some(selection))
+              editing = EditingStateFixtures(cursors = List(selection.focus), selection = Some(selection))
             )
         )
       )
@@ -260,10 +253,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(
+              editing = EditingStateFixtures(
                   cursors = List(first.focus, second.focus),
                   selection = Some(first),
                   selections = List(first, second)
@@ -291,10 +281,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(selection.focus), selection = Some(selection))
+              editing = EditingStateFixtures(cursors = List(selection.focus), selection = Some(selection))
             )
         )
       )
@@ -322,10 +309,7 @@ class EditorNonMaterializingOperationsSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = content),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(selection.focus), selection = Some(selection))
+              editing = EditingStateFixtures(cursors = List(selection.focus), selection = Some(selection))
             )
         )
       )

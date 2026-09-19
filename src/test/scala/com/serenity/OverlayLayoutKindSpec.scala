@@ -19,9 +19,7 @@ class OverlayLayoutKindSpec extends AnyFlatSpec with Matchers:
   private def listingState: AppState =
     val baseBuffer = Buffer.fromString(bufferId, "one\ntwo\nthree")
     val buffer = baseBuffer.copy(
-      editing = baseBuffer.editing.copy(
-        cursors = List(CursorPosition(1, 2))
-      )
+      editing = EditingState(List(CursorPosition(1, 2)))
     )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val entries = List(

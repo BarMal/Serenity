@@ -33,7 +33,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = Rope("alpha beta gamma"), language = Some(LanguageId.JsonLang)),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
+              editing = EditingState(List(CursorPosition(0, 0))),
               viewport = Viewport(0, 0, visibleLines = 5, visibleColumns = 8)
             )
         )
@@ -64,10 +64,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("abcdef\nxy\nabcdef")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 4)))
+              editing = EditingState(List(CursorPosition(0, 1), CursorPosition(0, 4)))
             )
         )
       )
@@ -120,7 +117,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(4, 1))),
+              editing = EditingState(List(CursorPosition(4, 1))),
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(topLine = 3, visibleLines = 2)
             )
         )
@@ -153,7 +150,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(5, 0))),
+              editing = EditingState(List(CursorPosition(5, 0))),
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(topLine = 4, visibleLines = 2)
             )
         )
@@ -186,7 +183,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 3))),
+              editing = EditingState(List(CursorPosition(2, 3))),
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(topLine = 2)
             )
         )
@@ -216,7 +213,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1))),
+              editing = EditingState(List(CursorPosition(0, 1))),
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(visibleLines = 2)
             )
         )
@@ -246,7 +243,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("0\n1\n2\n3\n4\n5")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 1))),
+              editing = EditingState(List(CursorPosition(1, 1))),
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(visibleLines = 2)
             )
         )

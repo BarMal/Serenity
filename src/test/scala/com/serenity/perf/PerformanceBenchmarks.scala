@@ -107,7 +107,7 @@ object PerformanceBenchmarks:
       result.state.persisted.buffers.get(BufferId(1))
 
     def reducedCursor(result: com.serenity.state.reducers.ReducerResult): Option[CursorPosition] =
-      reducedBuffer(result).flatMap(_.editing.cursors.headOption)
+      reducedBuffer(result).flatMap(_.editing.cursorPositions.headOption)
 
     def reducedSelection(result: com.serenity.state.reducers.ReducerResult): Option[Selection] =
       reducedBuffer(result).flatMap(_.primarySelection)
@@ -267,7 +267,7 @@ object PerformanceBenchmarks:
     val editingState = findState.copy(persisted =
       findState.persisted.copy(buffers =
         findState.persisted.buffers.view
-          .mapValues(buffer => buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(6_000, 12)))))
+          .mapValues(buffer => buffer.copy(editing = EditingState(List(CursorPosition(6_000, 12)))))
           .toMap
       )
     )
@@ -609,7 +609,7 @@ object PerformanceBenchmarks:
     val editedBuffer   = baseSession.persisted.buffers(editedBufferId)
     val oneEditedBuffers = baseSession.persisted.buffers.updated(
       editedBufferId,
-      editedBuffer.copy(editing = editedBuffer.editing.copy(cursors = List(CursorPosition(0, 1))))
+      editedBuffer.copy(editing = EditingState(List(CursorPosition(0, 1))))
     )
     val oneBufferEditedSession = baseSession.copy(persisted = baseSession.persisted.copy(buffers = oneEditedBuffers))
 

@@ -23,7 +23,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "x"
-    buffer.editing.cursors.head shouldBe com.serenity.state.models.CursorPosition(0, 1)
+    buffer.editing.cursorPositions.head shouldBe com.serenity.state.models.CursorPosition(0, 1)
     buffer.document.isDirty shouldBe true
   }
 
@@ -39,10 +39,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
             .copy(
               document =
                 AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
+              editing = EditingState(List(CursorPosition(0, 1), CursorPosition(0, 3)))
             )
         )
       )
@@ -67,10 +64,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
             .copy(
               document =
                 AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
+              editing = EditingState(List(CursorPosition(0, 1), CursorPosition(0, 3)))
             )
         )
       )
@@ -95,10 +89,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
             .copy(
               document =
                 AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("abcd")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
+              editing = EditingState(List(CursorPosition(0, 1), CursorPosition(0, 3)))
             )
         )
       )
@@ -123,7 +114,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
             .copy(
               document =
                 AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("    abc")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 6)))
+              editing = EditingState(List(CursorPosition(0, 6)))
             )
         )
       )
@@ -148,10 +139,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
             .copy(
               document =
                 AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("1a2b3")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, 2), CursorPosition(0, 4)))
+              editing = EditingState(List(CursorPosition(0, 2), CursorPosition(0, 4)))
             )
         )
       )
@@ -176,10 +164,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
             .copy(
               document =
                 AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("1a2b3")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, 1), CursorPosition(0, 3)))
+              editing = EditingState(List(CursorPosition(0, 1), CursorPosition(0, 3)))
             )
         )
       )
@@ -206,7 +191,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha beta gamma")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 16)))
+              editing = EditingState(List(CursorPosition(0, 16)))
             )
         )
       )
@@ -233,7 +218,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha beta gamma")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 6)))
+              editing = EditingState(List(CursorPosition(0, 6)))
             )
         )
       )
@@ -260,10 +245,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha beta gamma")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, 8), CursorPosition(0, 10)))
+              editing = EditingState(List(CursorPosition(0, 8), CursorPosition(0, 10)))
             )
         )
       )
@@ -290,10 +272,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha beta gamma")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, 6), CursorPosition(0, 8)))
+              editing = EditingState(List(CursorPosition(0, 6), CursorPosition(0, 8)))
             )
         )
       )
@@ -318,10 +297,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
             .copy(
               document =
                 AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("ab")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 2)))
+              editing = EditingState(List(CursorPosition(0, 0), CursorPosition(0, 2)))
             )
         )
       ),
@@ -351,10 +327,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("    one\n  two\n\tthree")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, 4), CursorPosition(1, 2), CursorPosition(2, 6)))
+              editing = EditingState(List(CursorPosition(0, 4), CursorPosition(1, 2), CursorPosition(2, 6)))
             )
         )
       )

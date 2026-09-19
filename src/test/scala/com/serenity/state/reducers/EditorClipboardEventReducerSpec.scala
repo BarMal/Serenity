@@ -1,5 +1,7 @@
 package com.serenity.state.reducers
 
+import com.serenity.testkit.EditingStateFixtures
+
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -26,7 +28,7 @@ class EditorClipboardEventReducerSpec extends AnyFlatSpec with Matchers:
   ): AppState =
     val buffer = Buffer
       .fromString(bufferId, text)
-      .copy(editing = EditingState(cursors = cursors, selection = selection))
+      .copy(editing = EditingStateFixtures(cursors = cursors, selection = selection))
     val base = AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
     base.copy(runtime = base.runtime.copy(clipboard = clipboard))
 

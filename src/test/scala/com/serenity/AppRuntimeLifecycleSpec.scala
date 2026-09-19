@@ -16,7 +16,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{AppState, BufferId, CursorPosition, Damage}
+import com.serenity.state.models.{AppState, BufferId, CursorPosition, Damage, EditingState}
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
@@ -228,7 +228,7 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
       .buffers(bufferId)
       .copy(
         document = state.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.JsonLang)),
-        editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 4)))
+        editing = EditingState(List(CursorPosition(2, 4)))
       )
     val described = AppRuntime.describeStateForDiagnostics(
       state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))

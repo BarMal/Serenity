@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.ToolbarDisplayMode
 import com.serenity.keystroke.events.*
@@ -42,10 +44,7 @@ trait ContextualToolbarTestSupport extends Matchers with StateManagerTestSupport
           .buffers(bufferId)
           .copy(
             document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.persisted
-              .buffers(bufferId)
-              .editing
-              .copy(selection = Some(selection), cursors = List(selection.focus)),
+            editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus)),
             richText = state.persisted.buffers(bufferId).richText.copy(richTextDocument = Some(document))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))

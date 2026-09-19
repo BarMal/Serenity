@@ -94,7 +94,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
     val midState = stateManager.getCurrentState.unsafeRunSync()
     val buffer   = midState.persisted.buffers(bufferId)
-    val cursor   = buffer.editing.cursors.head
+    val cursor   = buffer.editing.cursorPositions.head
 
     // Buffer should be single line
     buffer.document.content.lineCount shouldBe 1
@@ -113,7 +113,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
     val navState  = stateManager.getCurrentState.unsafeRunSync()
     val navBuffer = navState.persisted.buffers(bufferId)
-    val navCursor = navBuffer.editing.cursors.head
+    val navCursor = navBuffer.editing.cursorPositions.head
 
     navCursor.line shouldBe 0
     navCursor.column shouldBe targetColumn
@@ -242,7 +242,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     val finalState  = stateManager.getCurrentState.unsafeRunSync()
     val finalPane   = finalState.persisted.layout.editorPanes(paneId)
     val finalBuffer = finalPane.bufferId.flatMap(finalState.persisted.buffers.get).get
-    val cursor      = finalBuffer.editing.cursors.head
+    val cursor      = finalBuffer.editing.cursorPositions.head
     val viewport    = finalBuffer.viewport
 
     // Cursor should be at end of content
@@ -339,7 +339,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     val beforeState  = stateManager.getCurrentState.unsafeRunSync()
     val beforePane   = beforeState.persisted.layout.editorPanes(paneId)
     val beforeBuffer = beforePane.bufferId.flatMap(beforeState.persisted.buffers.get).get
-    val beforeCursor = beforeBuffer.editing.cursors.head
+    val beforeCursor = beforeBuffer.editing.cursorPositions.head
 
     // Simulate window resize by recalculating layouts with different terminal sizes
     val smallLayout = LayoutEngine.calculateLayout(beforeState, ViewportSize(50, 20))
@@ -391,7 +391,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
           s.persisted.copy(buffers =
             s.persisted.buffers.updated(
               bufferId,
-              buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(0, startColumn))))
+              buffer.copy(editing = EditingState(List(CursorPosition(0, startColumn))))
             )
           )
         )
@@ -399,7 +399,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     def cursor: CursorPosition =
-      stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.head
+      stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
 
     // The contract is the row the reader sees: whatever the full-document layout says sits below the cursor, measured
     // exactly as the renderer measures it -- not the char-grid step (`+ panelWidth`) the missing-geometry fallback
@@ -466,7 +466,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     val beforeNavState = stateManager.getCurrentState.unsafeRunSync()
     val beforePane     = beforeNavState.persisted.layout.editorPanes(paneId)
     val beforeBuffer   = beforePane.bufferId.flatMap(beforeNavState.persisted.buffers.get).get
-    val beforeCursor   = beforeBuffer.editing.cursors.head
+    val beforeCursor   = beforeBuffer.editing.cursorPositions.head
     beforeCursor.column shouldBe targetColumn
 
     // Move up should go to the same visual column in the first visual line
@@ -474,7 +474,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     val afterUpState  = stateManager.getCurrentState.unsafeRunSync()
     val afterUpPane   = afterUpState.persisted.layout.editorPanes(paneId)
     val afterUpBuffer = afterUpPane.bufferId.flatMap(afterUpState.persisted.buffers.get).get
-    val afterUpCursor = afterUpBuffer.editing.cursors.head
+    val afterUpCursor = afterUpBuffer.editing.cursorPositions.head
 
     info(s"Panel width: $panelWidth")
     info(s"Before navigation: line=${beforeCursor.line}, column=${beforeCursor.column}")
@@ -502,7 +502,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     val afterDownState  = stateManager.getCurrentState.unsafeRunSync()
     val afterDownPane   = afterDownState.persisted.layout.editorPanes(paneId)
     val afterDownBuffer = afterDownPane.bufferId.flatMap(afterDownState.persisted.buffers.get).get
-    val afterDownCursor = afterDownBuffer.editing.cursors.head
+    val afterDownCursor = afterDownBuffer.editing.cursorPositions.head
 
     info(s"After move down: line=${afterDownCursor.line}, column=${afterDownCursor.column}")
 
@@ -541,13 +541,13 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     val beforeState  = stateManager.getCurrentState.unsafeRunSync()
     val beforePane   = beforeState.persisted.layout.editorPanes(paneId)
     val beforeBuffer = beforePane.bufferId.flatMap(beforeState.persisted.buffers.get).get
-    beforeBuffer.editing.cursors.head.line shouldBe 1
+    beforeBuffer.editing.cursorPositions.head.line shouldBe 1
 
     stateManager.applyEvent(MoveUp).unsafeRunSync()
     val afterUpState  = stateManager.getCurrentState.unsafeRunSync()
     val afterUpPane   = afterUpState.persisted.layout.editorPanes(paneId)
     val afterUpBuffer = afterUpPane.bufferId.flatMap(afterUpState.persisted.buffers.get).get
-    afterUpBuffer.editing.cursors.head.line shouldBe 0
+    afterUpBuffer.editing.cursorPositions.head.line shouldBe 0
   }
 
   it should "navigate across multiple buffer lines with wrapped content" in {
@@ -585,7 +585,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     // Position cursor at end of content
     val endPane   = finalState.persisted.layout.editorPanes(paneId)
     val endBuffer = endPane.bufferId.flatMap(finalState.persisted.buffers.get).get
-    val endCursor = endBuffer.editing.cursors.head
+    val endCursor = endBuffer.editing.cursorPositions.head
     endCursor.line shouldBe 1 // Second buffer line
     endCursor.column shouldBe secondLine.length
 
@@ -600,7 +600,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
         val newState     = stateManager.getCurrentState.unsafeRunSync()
         val pane         = newState.persisted.layout.editorPanes(paneId)
         val buffer       = pane.bufferId.flatMap(newState.persisted.buffers.get).get
-        val cursor       = buffer.editing.cursors.head
+        val cursor       = buffer.editing.cursorPositions.head
         val newPosition  = (cursor.line, cursor.column)
         val newPositions = positions :+ newPosition
 
@@ -618,7 +618,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     val afterMoveState = stateManager.getCurrentState.unsafeRunSync()
     val finalPane      = afterMoveState.persisted.layout.editorPanes(paneId)
     val finalBuffer    = finalPane.bufferId.flatMap(afterMoveState.persisted.buffers.get).get
-    val finalCursor    = finalBuffer.editing.cursors.head
+    val finalCursor    = finalBuffer.editing.cursorPositions.head
     finalCursor.line shouldBe 0
     finalCursor.column shouldBe 0
   }
@@ -664,19 +664,19 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(MoveToStartOfFile).unsafeRunSync()
     val targetColumn = middleRow.startColumn + 2
     for _ <- 0 until targetColumn do stateManager.applyEvent(MoveRight).unsafeRunSync()
-    val beforeCursor = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.head
+    val beforeCursor = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
     beforeCursor.column shouldBe targetColumn
 
     // Home lands on the middle visual row's own start column, not the logical line's column 0.
     stateManager.applyEvent(MoveToStart).unsafeRunSync()
-    val afterHomeCursor = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.head
+    val afterHomeCursor = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
     afterHomeCursor.line shouldBe 0
     afterHomeCursor.column shouldBe middleRow.startColumn
     middleRow.startColumn should be > 0
 
     // From there, End lands on that same visual row's own end column, not the logical line's true end.
     stateManager.applyEvent(MoveToEnd).unsafeRunSync()
-    val afterEndCursor = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.head
+    val afterEndCursor = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.head
     afterEndCursor.line shouldBe 0
     afterEndCursor.column shouldBe middleRow.endColumn
     middleRow.endColumn should be < longLine.length
@@ -713,13 +713,13 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(MoveToStart).unsafeRunSync()
     val afterHomeState  = stateManager.getCurrentState.unsafeRunSync()
-    val afterHomeCursor = afterHomeState.persisted.buffers(bufferId).editing.cursors.head
+    val afterHomeCursor = afterHomeState.persisted.buffers(bufferId).editing.cursorPositions.head
     afterHomeCursor.line shouldBe 0
     afterHomeCursor.column shouldBe 0
 
     stateManager.applyEvent(MoveToEnd).unsafeRunSync()
     val afterEndState  = stateManager.getCurrentState.unsafeRunSync()
-    val afterEndCursor = afterEndState.persisted.buffers(bufferId).editing.cursors.head
+    val afterEndCursor = afterEndState.persisted.buffers(bufferId).editing.cursorPositions.head
     afterEndCursor.line shouldBe 0
     afterEndCursor.column shouldBe longLine.length
   }

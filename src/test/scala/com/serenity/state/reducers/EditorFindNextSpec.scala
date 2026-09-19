@@ -31,10 +31,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha\nbeta")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, 1), CursorPosition(1, 2)))
+              editing = EditingState(List(CursorPosition(0, 1), CursorPosition(1, 2)))
             )
         )
       )
@@ -61,10 +58,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha\nbeta")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, 1), CursorPosition(1, 2)))
+              editing = EditingState(List(CursorPosition(0, 1), CursorPosition(1, 2)))
             )
         )
       )
@@ -94,7 +88,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha\nbeta\nalpha")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 0))),
+              editing = EditingState(List(CursorPosition(2, 0))),
               findState = Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
             )
         )
@@ -127,10 +121,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("match alpha\nbeta\nmatch gamma")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, 1), CursorPosition(2, 2))),
+              editing = EditingState(List(CursorPosition(0, 1), CursorPosition(2, 2))),
               findState = Some(FindState("match", List(FindResult(0, 0), FindResult(2, 0)), 0)),
               viewport = AppState.initial.persisted.buffers(bufferId).viewport.copy(visibleLines = 2)
             )
@@ -159,7 +150,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("needle then needle")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
+              editing = EditingState(List(CursorPosition(0, 0))),
               findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(0, "needle then ".length)), 0))
             )
         )
@@ -189,7 +180,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("cafe\u0301!")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
+              editing = EditingState(List(CursorPosition(0, 0))),
               findState = Some(FindState("\u0301", List(FindResult(0, 4)), 0))
             )
         )
@@ -219,7 +210,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope(s"a$flag!")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
+              editing = EditingState(List(CursorPosition(0, 0))),
               findState = Some(FindState(firstIndicator, List(FindResult(0, 1)), 0))
             )
         )
@@ -248,7 +239,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
             .copy(
               document =
                 AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(content)),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
+              editing = EditingState(List(CursorPosition(0, 0))),
               findState = Some(FindState("needle", List(FindResult(0, needleColumn)), 0)),
               viewport = Viewport(0, 0, visibleLines = 3, visibleColumns = 12)
             )
@@ -259,7 +250,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
     val reducedState = EditorEventReducer.reduce(FindNext, paneId, initialState).state
     val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.persisted.buffers(bufferId)
-    val cursor       = buffer.editing.cursors.head
+    val cursor       = buffer.editing.cursorPositions.head
     val font = com.serenity.ui.fonts.FontLoader.previewTextFont(updatedState.persisted.config.editorConfig.fontConfig)
     val wrapPx =
       TextLayoutSnapshot.gridWrapWidthPx(
@@ -294,7 +285,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("needle\nneedle")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
+              editing = EditingState(List(CursorPosition(0, 0))),
               findState = Some(FindState("needle", List(FindResult(0, 0), FindResult(1, 0)), 0))
             )
         )
@@ -320,10 +311,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
             .copy(
               document =
                 AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("needle")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(0, "needle".length))),
+              editing = EditingState(List(CursorPosition(0, "needle".length))),
               findState = Some(FindState("needle", List(FindResult(0, 0)), 0))
             )
         )

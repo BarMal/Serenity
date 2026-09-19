@@ -62,5 +62,5 @@ class ModalGotoLineReducerSpec extends AnyFlatSpec with Matchers:
 
     updatedState.modalSurface shouldBe None
     updatedState.persisted.focus shouldBe Focus.EditorPane(paneId)
-    updatedState.persisted.buffers(bufferId).editing.cursors.head shouldBe CursorPosition(2, 0)
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(2, 0)
   }

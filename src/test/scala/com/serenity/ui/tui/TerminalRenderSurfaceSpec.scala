@@ -479,7 +479,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       val bufferId     = BufferId(1)
       val cursorColumn = 15
       val baseBuffer   = Buffer.fromString(bufferId, "Hello, cursor tracking world!")
-      val buffer = baseBuffer.copy(editing = baseBuffer.editing.copy(cursors = List(CursorPosition(0, cursorColumn))))
+      val buffer = baseBuffer.copy(editing = EditingState(List(CursorPosition(0, cursorColumn))))
       val state = AppState.initial.copy(
         persisted = AppState.initial.persisted.copy(
           config = AppState.initial.persisted.config
@@ -529,7 +529,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val text         = (0 until 6).map(n => s"line number $n").mkString("\n")
     val baseBuffer   = Buffer.fromString(bufferId, text)
     val buffer =
-      baseBuffer.copy(editing = baseBuffer.editing.copy(cursors = List(CursorPosition(cursorLine, cursorColumn))))
+      baseBuffer.copy(editing = EditingState(List(CursorPosition(cursorLine, cursorColumn))))
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         config = AppState.initial.persisted.config

@@ -309,7 +309,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
         buffers =
           val buffer = initialState.persisted.buffers(bufferId)
           initialState.persisted.buffers
-            .updated(bufferId, buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(0, 1)))))
+            .updated(bufferId, buffer.copy(editing = EditingState(List(CursorPosition(0, 1)))))
       )
     )
     val editedState = movedCursorState.copy(

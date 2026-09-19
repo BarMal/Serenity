@@ -1,5 +1,7 @@
 package com.serenity.state.reducers
 
+import com.serenity.testkit.EditingStateFixtures
+
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -21,7 +23,7 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
 
   private def stateWith(text: String, cursor: CursorPosition, selection: Option[Selection] = None): AppState =
     val buffer =
-      Buffer.fromString(bufferId, text).copy(editing = EditingState(cursors = List(cursor), selection = selection))
+      Buffer.fromString(bufferId, text).copy(editing = EditingStateFixtures(cursors = List(cursor), selection = selection))
     AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
 
   private def bufferAfter(event: TextEntryEvent, state: AppState): Buffer =

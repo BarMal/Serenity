@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import java.awt.Font
 
 import com.serenity.config.MarkdownViewMode
@@ -29,7 +31,7 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
     )
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
-      editing = baseBuffer.editing.copy(cursors = List(CursorPosition(1, 0))),
+      editing = EditingState(List(CursorPosition(1, 0))),
       viewport = Viewport.default.copy(visibleLines = 10)
     )
     val state = AppState.empty.copy(persisted =
@@ -87,7 +89,7 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
     )
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
-      editing = baseBuffer.editing.copy(cursors = List(CursorPosition(6, 0))),
+      editing = EditingState(List(CursorPosition(6, 0))),
       viewport = Viewport.default.copy(topLine = 5, visibleLines = 10)
     )
     val state = AppState.empty.copy(persisted =
@@ -489,7 +491,7 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
     val baseBuffer = Buffer.fromString(bufferId, source)
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
-      editing = baseBuffer.editing.copy(cursors = List(cursor), selection = selection),
+      editing = EditingStateFixtures(cursors = List(cursor), selection = selection),
       viewport = Viewport.default.copy(topLine = topLine.getOrElse(cursor.line).max(0), visibleLines = 10)
     )
     val state = AppState.empty.copy(persisted =

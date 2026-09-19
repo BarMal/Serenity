@@ -24,7 +24,7 @@ class EditorLayoutContractViolationsSpec extends AnyFlatSpec with Matchers:
     val cursor   = CursorPosition(1, 2)
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(editing = EditingState(cursors = List(cursor)))
+      .copy(editing = EditingState(List(cursor)))
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .updateSearchTerm("op")(using registry)
@@ -122,7 +122,7 @@ class EditorLayoutContractViolationsSpec extends AnyFlatSpec with Matchers:
     val cursor = CursorPosition(1, 2)
     val buffer = Buffer
       .fromString(BufferId(1), "alpha\nbeta\ngamma\ndelta")
-      .copy(editing = EditingState(cursors = List(cursor)))
+      .copy(editing = EditingState(List(cursor)))
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val toolbar = UiSurface(
       SurfaceId("contextual-toolbar"),

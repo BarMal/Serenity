@@ -97,8 +97,8 @@ class CommandRunnerCursorBugSpec extends AnyFlatSpec with Matchers:
       state2 <- stateManager.getCurrentState
     yield
       // Verify we have different cursor positions
-      val cursor1 = state1.persisted.buffers.values.head.editing.cursors.head
-      val cursor2 = state2.persisted.buffers.values.head.editing.cursors.head
+      val cursor1 = state1.persisted.buffers.values.head.editing.cursorPositions.head
+      val cursor2 = state2.persisted.buffers.values.head.editing.cursorPositions.head
 
       cursor1.line shouldBe 0
       cursor1.column shouldBe 6

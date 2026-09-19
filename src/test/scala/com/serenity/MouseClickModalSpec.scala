@@ -300,7 +300,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
               .buffers(bufferId)
               .copy(
                 document = state.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)),
-                editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1)))
+                editing = EditingState(List(CursorPosition(0, 1)))
               )
           )
         )

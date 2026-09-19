@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import java.awt.Font
 import java.awt.font.TextAttribute
 
@@ -138,7 +140,7 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
     val baseBuffer = Buffer.fromString(bufferId, "hello markdown")
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = Some(LanguageId.Markdown)),
-      editing = baseBuffer.editing.copy(selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5))))
+      editing = EditingStateFixtures(selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5))))
     )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState.initial.copy(

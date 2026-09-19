@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.CommandRegistry
@@ -43,10 +45,7 @@ class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers:
               state.persisted
                 .buffers(bufferId)
                 .copy(editing =
-                  state.persisted
-                    .buffers(bufferId)
-                    .editing
-                    .copy(selection = Some(selection), selections = Nil, cursors = List(selection.focus))
+                  EditingStateFixtures(selection = Some(selection), selections = Nil, cursors = List(selection.focus))
                 )
             )
           )
@@ -71,10 +70,7 @@ class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers:
               state.persisted
                 .buffers(bufferId)
                 .copy(editing =
-                  state.persisted
-                    .buffers(bufferId)
-                    .editing
-                    .copy(selection = selection, selections = Nil, cursors = List(cursor))
+                  EditingStateFixtures(selection = selection, selections = Nil, cursors = List(cursor))
                 )
             )
           )

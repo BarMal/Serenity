@@ -45,7 +45,7 @@ class CommentClickSpec extends AnyFlatSpec with Matchers:
             buffer.copy(
               document = buffer.document.copy(language = Some(LanguageId.Scala)),
               annotations = buffer.annotations.copy(documentComments = List(comment)),
-              editing = buffer.editing.copy(cursors = List(CursorPosition(0, 8)))
+              editing = EditingState(List(CursorPosition(0, 8)))
             )
           )
         )
@@ -92,7 +92,7 @@ class CommentClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(x, y)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    buffer.editing.cursors.headOption shouldBe Some(CursorPosition(0, 2))
+    buffer.editing.cursorPositions.headOption shouldBe Some(CursorPosition(0, 2))
   }
 
   it should "not open a lens for a click outside any commented range" in {

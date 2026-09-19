@@ -53,7 +53,7 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
-        editing = EditingState(cursors = cursors)
+        editing = EditingState(cursors)
       )
 
     val initialState = AppState.initial

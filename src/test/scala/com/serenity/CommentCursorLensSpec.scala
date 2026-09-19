@@ -44,7 +44,7 @@ class CommentCursorLensSpec extends AnyFlatSpec with Matchers:
             buffer.copy(
               document = buffer.document.copy(language = Some(LanguageId.Scala)),
               annotations = buffer.annotations.copy(documentComments = List(comment)),
-              editing = buffer.editing.copy(cursors = List(CursorPosition(0, 6)))
+              editing = EditingState(List(CursorPosition(0, 6)))
             )
           )
         )
@@ -68,7 +68,7 @@ class CommentCursorLensSpec extends AnyFlatSpec with Matchers:
 
     val state  = sm.getCurrentState.unsafeRunSync()
     val buffer = state.persisted.buffers(bufferId)
-    buffer.editing.cursors.headOption shouldBe Some(CursorPosition(0, 5))
+    buffer.editing.cursorPositions.headOption shouldBe Some(CursorPosition(0, 5))
 
     val lens = commentLensState(state).getOrElse(fail("Expected the comment lens to open on keyboard cursor move"))
     lens.mode shouldBe CommentLensMode.ReadOnly
@@ -99,7 +99,7 @@ class CommentCursorLensSpec extends AnyFlatSpec with Matchers:
       sm.applyEvent(MoveRight).unsafeRunSync() // column 5 -> 6, leaving the range
 
       val state = sm.getCurrentState.unsafeRunSync()
-      state.persisted.buffers(bufferId).editing.cursors.headOption shouldBe Some(CursorPosition(0, 6))
+      state.persisted.buffers(bufferId).editing.cursorPositions.headOption shouldBe Some(CursorPosition(0, 6))
       state.commentLensSurface shouldBe None
     }
 
@@ -124,7 +124,7 @@ class CommentCursorLensSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(elsewhereRect.x + 8, elsewhereRect.y + 10)).unsafeRunSync()
 
     val state = sm.getCurrentState.unsafeRunSync()
-    state.persisted.buffers(bufferId).editing.cursors.headOption should not be Some(CursorPosition(0, 2))
+    state.persisted.buffers(bufferId).editing.cursorPositions.headOption should not be Some(CursorPosition(0, 2))
     state.commentLensSurface shouldBe None
   }
 

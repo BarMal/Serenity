@@ -1,5 +1,7 @@
 package com.serenity.state.reducers
 
+import com.serenity.testkit.EditingStateFixtures
+
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -21,7 +23,7 @@ class EditorUndoEffectSpec extends AnyFlatSpec with Matchers with OptionValues:
   private val paneId   = PaneId(0)
 
   private def stateWith(text: String, cursor: CursorPosition): AppState =
-    val buffer = Buffer.fromString(bufferId, text).copy(editing = EditingState(cursors = List(cursor)))
+    val buffer = Buffer.fromString(bufferId, text).copy(editing = EditingState(List(cursor)))
     AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
 
   private def recordedBoundary(effects: List[AppEffect]): Option[UndoEffect.RecordBoundary] =
@@ -65,7 +67,7 @@ class EditorUndoEffectSpec extends AnyFlatSpec with Matchers with OptionValues:
     val buffer = Buffer
       .fromString(bufferId, "line one\nline two")
       .copy(editing =
-        EditingState(
+        EditingStateFixtures(
           cursors = List(CursorPosition(1, 0)),
           selection = Some(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
         )
@@ -89,7 +91,7 @@ class EditorUndoEffectSpec extends AnyFlatSpec with Matchers with OptionValues:
     val buffer = Buffer
       .fromString(bufferId, "alpha beta")
       .copy(editing =
-        EditingState(
+        EditingStateFixtures(
           cursors = List(CursorPosition(0, 5)),
           selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5)))
         )

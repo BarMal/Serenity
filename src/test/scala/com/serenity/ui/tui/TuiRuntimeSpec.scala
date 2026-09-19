@@ -293,7 +293,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
       .copy(viewport = Viewport.default.copy(topLine = 20))
     // A cursor within the window the viewport already implies: firstSourceLine should follow the viewport's top
     // line rather than the cursor recentering it.
-    val buffer = baseBuffer.copy(editing = baseBuffer.editing.copy(cursors = List(CursorPosition(25, 0))))
+    val buffer = baseBuffer.copy(editing = EditingState(List(CursorPosition(25, 0))))
 
     val window = TuiRuntime.markdownPreviewSourceWindow(buffer, heightPx = 320)
 
@@ -306,7 +306,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
     val baseBuffer = Buffer
       .fromString(BufferId(1), lines)
       .copy(viewport = Viewport.default.copy(topLine = 0))
-    val buffer = baseBuffer.copy(editing = baseBuffer.editing.copy(cursors = List(CursorPosition(150, 0))))
+    val buffer = baseBuffer.copy(editing = EditingState(List(CursorPosition(150, 0))))
 
     val window = TuiRuntime.markdownPreviewSourceWindow(buffer, heightPx = 320)
 

@@ -497,7 +497,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     yield
       val buffer = finalState.persisted.buffers(bufferId)
       buffer.editing.cursors.size shouldBe 1
-      val cursor = buffer.editing.cursors.head
+      val cursor = buffer.editing.cursorPositions.head
       cursor.line shouldBe 0
       cursor.column shouldBe 0
 
@@ -521,7 +521,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       finalState <- stateManager.getCurrentState
     yield
       val buffer = finalState.persisted.buffers(bufferId)
-      val cursor = buffer.editing.cursors.head
+      val cursor = buffer.editing.cursorPositions.head
       cursor.column shouldBe 100
       cursor.line shouldBe 0
       buffer.document.content.collect() shouldBe longText
@@ -545,7 +545,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       finalState <- stateManager.getCurrentState
     yield
       val buffer   = finalState.persisted.buffers(bufferId)
-      val cursor   = buffer.editing.cursors.head
+      val cursor   = buffer.editing.cursorPositions.head
       val viewport = buffer.viewport
       cursor.column shouldBe longText.length
       info(

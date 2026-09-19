@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
@@ -46,10 +48,7 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.persisted
-              .buffers(bufferId)
-              .editing
-              .copy(
+            editing = EditingStateFixtures(
                 selection = Some(selection),
                 cursors = List(selection.focus)
               )
@@ -85,10 +84,7 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
           .buffers(bufferId)
           .copy(
             document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.persisted
-              .buffers(bufferId)
-              .editing
-              .copy(
+            editing = EditingStateFixtures(
                 selection = Some(selection),
                 cursors = List(selection.focus)
               )

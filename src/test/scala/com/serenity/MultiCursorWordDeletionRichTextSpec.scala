@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.CommandRegistry
@@ -44,10 +46,7 @@ class MultiCursorWordDeletionRichTextSpec extends AnyFlatSpec with Matchers:
               state.persisted
                 .buffers(bufferId)
                 .copy(editing =
-                  state.persisted
-                    .buffers(bufferId)
-                    .editing
-                    .copy(
+                  EditingStateFixtures(
                       selection = Some(boldSelection),
                       cursors = List(boldSelection.focus)
                     )
@@ -73,10 +72,7 @@ class MultiCursorWordDeletionRichTextSpec extends AnyFlatSpec with Matchers:
               state.persisted
                 .buffers(bufferId)
                 .copy(editing =
-                  state.persisted
-                    .buffers(bufferId)
-                    .editing
-                    .copy(
+                  EditingStateFixtures(
                       selection = None,
                       selections = Nil,
                       cursors = List(CursorPosition(0, 5), CursorPosition(0, 17))

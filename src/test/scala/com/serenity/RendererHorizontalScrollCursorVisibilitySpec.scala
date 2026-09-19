@@ -44,7 +44,7 @@ class RendererHorizontalScrollCursorVisibilitySpec extends AnyFlatSpec with Matc
     val scrolledViewport =
       Viewport.default.copy(leftColumn = cursor.column - visibleColumns + 1, visibleColumns = visibleColumns)
     val buffer =
-      bufferBase.copy(editing = bufferBase.editing.copy(cursors = List(cursor)), viewport = scrolledViewport)
+      bufferBase.copy(editing = EditingState(List(cursor)), viewport = scrolledViewport)
 
     val leftColumn = invokeRenderedLeftColumn(buffer, scrolledViewport, wordWrapEnabled = false)
 

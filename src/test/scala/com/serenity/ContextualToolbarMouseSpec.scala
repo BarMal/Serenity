@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import java.awt.Font
 
 import cats.effect.unsafe.implicits.global
@@ -31,10 +33,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
           .buffers(bufferId)
           .copy(
             document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.persisted
-              .buffers(bufferId)
-              .editing
-              .copy(selection = Some(selection), cursors = List(selection.focus))
+            editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
       }
@@ -149,10 +148,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
           .buffers(bufferId)
           .copy(
             document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.persisted
-              .buffers(bufferId)
-              .editing
-              .copy(selection = Some(selection), cursors = List(selection.focus))
+            editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
       }
@@ -186,10 +182,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
           .buffers(bufferId)
           .copy(
             document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.persisted
-              .buffers(bufferId)
-              .editing
-              .copy(selection = Some(selection), cursors = List(selection.focus))
+            editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
       }
@@ -236,10 +229,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
           .buffers(bufferId)
           .copy(
             document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.persisted
-              .buffers(bufferId)
-              .editing
-              .copy(selection = Some(selection), cursors = List(selection.focus))
+            editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
       }
@@ -280,10 +270,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
           .buffers(bufferId)
           .copy(
             document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = state.persisted
-              .buffers(bufferId)
-              .editing
-              .copy(selection = Some(selection), cursors = List(selection.focus))
+            editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
       }

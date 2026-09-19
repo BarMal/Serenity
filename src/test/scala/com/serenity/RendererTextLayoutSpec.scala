@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import java.awt.{Color, Font}
 import java.nio.file.Path
 
@@ -47,7 +49,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val bufferBase = Buffer.fromString(bufferId, content)
     val buffer = bufferBase.copy(
       document = bufferBase.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown)),
-      editing = bufferBase.editing.copy(cursors = List(cursor)),
+      editing = EditingState(List(cursor)),
       viewport = viewport
     )
     val state = AppState.initial.copy(
@@ -299,7 +301,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       val base = Buffer.fromString(bufferId, text)
       base.copy(
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown)),
-        editing = base.editing.copy(
+        editing = EditingStateFixtures(
           cursors = List(CursorPosition(0, text.length)),
           selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, text.length)))
         )
@@ -338,7 +340,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       val base = Buffer.fromString(bufferId, "iW")
       base.copy(
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown)),
-        editing = base.editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2)))
+        editing = EditingState(List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2)))
       )
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
@@ -376,7 +378,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       val base = Buffer.fromString(bufferId, "iW")
       base.copy(
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown)),
-        editing = base.editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2)))
+        editing = EditingState(List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2)))
       )
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
@@ -430,7 +432,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       val base = Buffer.fromString(bufferId, "iW")
       base.copy(
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown)),
-        editing = base.editing.copy(cursors = List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2)))
+        editing = EditingState(List(CursorPosition(0, 0), CursorPosition(0, 1), CursorPosition(0, 2)))
       )
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
@@ -473,7 +475,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       val base = Buffer.fromString(bufferId, "iW")
       base.copy(
         document = base.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Markdown)),
-        editing = base.editing.copy(cursors = List(CursorPosition(0, 1)))
+        editing = EditingState(List(CursorPosition(0, 1)))
       )
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(

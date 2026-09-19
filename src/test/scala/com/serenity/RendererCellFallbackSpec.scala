@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import java.awt.Font
 
 import com.serenity.config.AppConfig
@@ -35,7 +37,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
     val baseBuffer = Buffer.fromString(bufferId, content)
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(language = language),
-      editing = baseBuffer.editing.copy(selection = selection)
+      editing = EditingStateFixtures(selection = selection)
     )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     AppState.initial.copy(

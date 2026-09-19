@@ -25,7 +25,7 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = Rope(text)),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = cursors)
+              editing = EditingState(cursors)
             )
         )
       )
@@ -56,7 +56,7 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
           bufferId,
           before.persisted
             .buffers(bufferId)
-            .copy(editing = before.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 2))))
+            .copy(editing = EditingState(List(CursorPosition(1, 2))))
         )
       )
     )
@@ -84,7 +84,7 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
             .copy(
               id = otherId,
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = Rope("x\ny")),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0)))
+              editing = EditingState(List(CursorPosition(0, 0)))
             ))
       )
     )
@@ -94,7 +94,7 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
           otherId,
           before.persisted
             .buffers(otherId)
-            .copy(editing = before.persisted.buffers(otherId).editing.copy(cursors = List(CursorPosition(1, 0))))
+            .copy(editing = EditingState(List(CursorPosition(1, 0))))
         )
       )
     )
@@ -366,7 +366,7 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
             bufferId,
             before.persisted
               .buffers(bufferId)
-              .copy(editing = before.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(3, 0))))
+              .copy(editing = EditingState(List(CursorPosition(3, 0))))
           )
         )
       )
@@ -385,7 +385,7 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
           bufferId,
           before.persisted
             .buffers(bufferId)
-            .copy(editing = before.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(3, 0))))
+            .copy(editing = EditingState(List(CursorPosition(3, 0))))
         )
       )
     )
@@ -403,7 +403,7 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
           bufferId,
           before.persisted
             .buffers(bufferId)
-            .copy(editing = before.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(1, 0))))
+            .copy(editing = EditingState(List(CursorPosition(1, 0))))
         )
       )
     )
@@ -436,7 +436,7 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
           bufferId,
           state.persisted
             .buffers(bufferId)
-            .copy(editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(cursor)))
+            .copy(editing = EditingState(List(cursor)))
         )
       )
     )

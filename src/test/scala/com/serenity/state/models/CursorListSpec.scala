@@ -1,14 +1,15 @@
 package com.serenity.state.models
 
 import com.serenity.rope.Balance
-import com.serenity.testkit.Generators
+import com.serenity.testkit.{EditingStateFixtures, Generators, VerticalCursorState}
 import org.scalacheck.Gen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.propspec.AnyPropSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-/** `Buffer.cursorList`/`withCursorList` round-trip a buffer's cursor state through the uniform `Cursor` shape -- see
-  * that method's doc comment for why the conversion exists instead of `Buffer` storing `Cursor`s directly.
+/** `Buffer.cursorList`/`withCursorList` became trivial identity conversions once `EditingState` itself stores
+  * cursors as `NonEmptyList[Cursor]` (`#1577`) -- this now exercises that identity directly, rather than the
+  * five-field round trip `cursorList`/`withCursorList` used to perform before storage itself was per-cursor.
   */
 class CursorListSpec extends AnyPropSpec with ScalaCheckPropertyChecks with Matchers:
   private given Balance = Balance.default
@@ -22,7 +23,7 @@ class CursorListSpec extends AnyPropSpec with ScalaCheckPropertyChecks with Matc
       preferredColumn <- Gen.option(Gen.chooseNum(0, 500))
       preferredXPx    <- Gen.option(Gen.chooseNum(0f, 2000f))
     yield emptyBuffer.copy(editing =
-      emptyBuffer.editing.copy(
+      EditingStateFixtures(
         cursors = List(cursor),
         selection = selection.map(anchor => Selection(anchor, cursor)),
         preferredColumn = if selection.isDefined then None else preferredColumn,
@@ -38,26 +39,26 @@ class CursorListSpec extends AnyPropSpec with ScalaCheckPropertyChecks with Matc
     yield
       val states =
         if withVerticalState then cursors.map(c => VerticalCursorState(c, c.column, xPx)) else Nil
-      emptyBuffer.copy(editing = emptyBuffer.editing.copy(cursors = cursors, multiCursorVerticalStates = states))
+      emptyBuffer.copy(editing = EditingStateFixtures(cursors = cursors, multiCursorVerticalStates = states))
 
   private val genMultiSelectionBuffer: Gen[Buffer] =
     Gen.listOfN(3, Generators.genCursorPosition).map { cursors =>
       val selections = cursors.map(c => Selection(c, c))
-      emptyBuffer.copy(editing = emptyBuffer.editing.copy(cursors = cursors, selections = selections))
+      emptyBuffer.copy(editing = EditingStateFixtures(cursors = cursors, selections = selections))
     }
 
   private val genCanonicalBuffer: Gen[Buffer] =
     Gen.oneOf(genSingleCursorBuffer, genMultiCursorBuffer, genMultiSelectionBuffer)
 
-  property("withCursorList(cursorList(buffer)) reproduces the buffer's cursor-shaped fields") {
+  property("cursorList is exactly the buffer's own cursors") {
     forAll(genCanonicalBuffer) { buffer =>
-      val roundTripped = buffer.withCursorList(buffer.cursorList)
-      roundTripped.editing.cursors shouldBe buffer.editing.cursors
-      roundTripped.editing.selection shouldBe buffer.editing.selection
-      roundTripped.editing.selections shouldBe buffer.editing.selections
-      roundTripped.editing.preferredColumn shouldBe buffer.editing.preferredColumn
-      roundTripped.editing.preferredXPx shouldBe buffer.editing.preferredXPx
-      roundTripped.editing.multiCursorVerticalStates shouldBe buffer.editing.multiCursorVerticalStates
+      buffer.cursorList shouldBe buffer.editing.cursors
+    }
+  }
+
+  property("withCursorList(cursorList(buffer)) reproduces the buffer's cursors") {
+    forAll(genCanonicalBuffer) { buffer =>
+      buffer.withCursorList(buffer.cursorList).editing.cursors shouldBe buffer.editing.cursors
     }
   }
 

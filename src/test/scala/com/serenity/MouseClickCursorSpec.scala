@@ -63,8 +63,8 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(6, 4)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    buffer.editing.cursors.headOption.map(_.line) shouldBe Some(2)
-    buffer.editing.cursors.headOption.map(_.column) shouldBe Some(3)
+    buffer.editing.cursorPositions.headOption.map(_.line) shouldBe Some(2)
+    buffer.editing.cursorPositions.headOption.map(_.column) shouldBe Some(3)
   }
 
   it should "move cursor to the first row of the content area" in {
@@ -89,8 +89,8 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(3, 2)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    buffer.editing.cursors.headOption.map(_.line) shouldBe Some(0)
-    buffer.editing.cursors.headOption.map(_.column) shouldBe Some(0)
+    buffer.editing.cursorPositions.headOption.map(_.line) shouldBe Some(0)
+    buffer.editing.cursorPositions.headOption.map(_.column) shouldBe Some(0)
   }
 
   it should "not move the cursor for non-primary clicks" in {
@@ -106,7 +106,7 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
               .buffers(bufferId)
               .copy(
                 document = state.persisted.buffers(bufferId).document.copy(language = Some(LanguageId.Scala)),
-                editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 1)))
+                editing = EditingState(List(CursorPosition(0, 1)))
               )
           )
         )
@@ -143,8 +143,8 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(35, 2)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    buffer.editing.cursors.headOption.map(_.line) shouldBe Some(0)
-    buffer.editing.cursors.headOption.map(_.column) shouldBe Some(2)
+    buffer.editing.cursorPositions.headOption.map(_.line) shouldBe Some(0)
+    buffer.editing.cursorPositions.headOption.map(_.column) shouldBe Some(2)
   }
 
   it should "track the editor position under the pointer on mouse move" in {
@@ -191,12 +191,12 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    val initialCursor = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.headOption
+    val initialCursor = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.headOption
 
     // Click at row=0 (header row of pane at y=0) — should be ignored
     sm.applyEvent(MouseClick(20, 0)).unsafeRunSync()
 
-    val afterCursor = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.headOption
+    val afterCursor = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.headOption
     afterCursor shouldBe initialCursor
   }
 
@@ -211,12 +211,12 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    val initialCursor = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.headOption
+    val initialCursor = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.headOption
 
     // Click at col=5 (left spacer, pane starts at col=15) — should be ignored
     sm.applyEvent(MouseClick(5, 5)).unsafeRunSync()
 
-    val afterCursor = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.headOption
+    val afterCursor = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.headOption
     afterCursor shouldBe initialCursor
   }
 
@@ -226,11 +226,11 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     // No ResizeEvent applied — ViewportSize is None
 
-    val initialCursor = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.headOption
+    val initialCursor = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.headOption
 
     sm.applyEvent(MouseClick(20, 5)).unsafeRunSync()
 
-    val afterCursor = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors.headOption
+    val afterCursor = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions.headOption
     afterCursor shouldBe initialCursor
   }
 
@@ -281,7 +281,7 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     ).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    buffer.editing.cursors.headOption shouldBe Some(com.serenity.state.models.CursorPosition(0, 1))
+    buffer.editing.cursorPositions.headOption shouldBe Some(com.serenity.state.models.CursorPosition(0, 1))
   }
 
   it should "resolve a click below wrapped text to the last visual row of the wrap group, not the first" in {
@@ -330,7 +330,7 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(clickCol, clickRow)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    buffer.editing.cursors.headOption shouldBe Some(
+    buffer.editing.cursorPositions.headOption shouldBe Some(
       com.serenity.state.models.CursorPosition(0, lastRowStartColumn + xOffsetOnLastRow)
     )
   }

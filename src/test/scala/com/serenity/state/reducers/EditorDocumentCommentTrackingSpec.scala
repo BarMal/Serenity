@@ -1,5 +1,7 @@
 package com.serenity.state.reducers
 
+import com.serenity.testkit.EditingStateFixtures
+
 import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
@@ -30,7 +32,7 @@ class EditorDocumentCommentTrackingSpec extends AnyFlatSpec with Matchers:
             .copy(
               document =
                 AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope(text)),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(cursor)),
+              editing = EditingState(List(cursor)),
               annotations =
                 AppState.initial.persisted.buffers(bufferId).annotations.copy(documentComments = List(comment))
             )
@@ -69,7 +71,7 @@ class EditorDocumentCommentTrackingSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = NonCollectingRope(Rope("abc def"))),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
+              editing = EditingState(List(CursorPosition(0, 0))),
               annotations =
                 AppState.initial.persisted.buffers(bufferId).annotations.copy(documentComments = List(comment))
             )
@@ -129,7 +131,7 @@ class EditorDocumentCommentTrackingSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = NonCollectingRope(Rope("abc def"))),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(0, 0))),
+              editing = EditingState(List(CursorPosition(0, 0))),
               annotations =
                 AppState.initial.persisted.buffers(bufferId).annotations.copy(documentComments = List(comment))
             )
@@ -175,10 +177,7 @@ class EditorDocumentCommentTrackingSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("abc def ghi")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(
+              editing = EditingStateFixtures(
                   cursors = List(CursorPosition(0, 7)),
                   selection = Some(Selection(CursorPosition(0, 4), CursorPosition(0, 7)))
                 ),
@@ -211,10 +210,7 @@ class EditorDocumentCommentTrackingSpec extends AnyFlatSpec with Matchers:
             .copy(
               document =
                 AppState.initial.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("beta")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(
+              editing = EditingStateFixtures(
                   cursors = List(CursorPosition(0, 4)),
                   selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 4)))
                 ),

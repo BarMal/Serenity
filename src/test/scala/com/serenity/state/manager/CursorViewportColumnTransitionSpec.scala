@@ -47,14 +47,14 @@ class CursorViewportColumnTransitionSpec extends AnyFlatSpec with Matchers:
       .fromString(bufferId, content)
       .copy(
         viewport = Viewport(topLine = (cursorLine / 8) * 8, leftColumn = 0, visibleColumns = 40, visibleLines = 8),
-        editing = Buffer.fromString(bufferId, content).editing.copy(cursors = List(CursorPosition(cursorLine, 0)))
+        editing = EditingState(List(CursorPosition(cursorLine, 0)))
       )
 
   // Mirrors what a reducer actually does (`EditorNavigationEventReducer`'s doc comment on `pageNavigate`): it moves
   // the cursor and leaves `viewport` untouched, trusting `ensureVisibleCursors` to recompute it afterwards. So the
   // "after" buffer here starts from `before`'s own buffer -- same (stale) viewport -- with only the cursor moved.
   private def movedTo(buffer: Buffer, cursorLine: Int): Buffer =
-    buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(cursorLine, 0))))
+    buffer.copy(editing = EditingState(List(CursorPosition(cursorLine, 0))))
 
   "CursorViewport.ensureVisibleCursors" should
     "seed a column transition when the active column changes" in {

@@ -292,7 +292,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
             state.persisted.copy(buffers =
               state.persisted.buffers.updated(
                 bufferId,
-                buffer.copy(editing = buffer.editing.copy(cursors = List(CursorPosition(1, 0))))
+                buffer.copy(editing = EditingState(List(CursorPosition(1, 0))))
               )
             )
           )

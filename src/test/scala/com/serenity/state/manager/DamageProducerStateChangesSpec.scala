@@ -1,5 +1,7 @@
 package com.serenity.state.manager
 
+import com.serenity.testkit.EditingStateFixtures
+
 import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange}
@@ -24,7 +26,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
             .buffers(bufferId)
             .copy(
               document = AppState.initial.persisted.buffers(bufferId).document.copy(content = Rope(text)),
-              editing = AppState.initial.persisted.buffers(bufferId).editing.copy(cursors = cursors)
+              editing = EditingState(cursors)
             )
         )
       )
@@ -43,7 +45,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
           bufferId,
           before.persisted
             .buffers(bufferId)
-            .copy(editing = before.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 3))))
+            .copy(editing = EditingState(List(CursorPosition(2, 3))))
         )
       )
     )
@@ -66,10 +68,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
           before.persisted
             .buffers(bufferId)
             .copy(editing =
-              before.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(cursors = List(CursorPosition(1, 2), CursorPosition(2, 0)))
+              EditingState(List(CursorPosition(1, 2), CursorPosition(2, 0)))
             )
         )
       )
@@ -88,10 +87,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
           before.persisted
             .buffers(bufferId)
             .copy(editing =
-              before.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(selection = Some(Selection(CursorPosition(1, 0), CursorPosition(3, 2))))
+              EditingStateFixtures(selection = Some(Selection(CursorPosition(1, 0), CursorPosition(3, 2))))
             )
         )
       )
@@ -109,10 +105,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
           before.persisted
             .buffers(bufferId)
             .copy(editing =
-              before.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5))))
+              EditingStateFixtures(selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5))))
             )
         )
       )
@@ -124,10 +117,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
           withSelection.persisted
             .buffers(bufferId)
             .copy(editing =
-              withSelection.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(selection = Some(Selection(CursorPosition(2, 0), CursorPosition(2, 5))))
+              EditingStateFixtures(selection = Some(Selection(CursorPosition(2, 0), CursorPosition(2, 5))))
             )
         )
       )

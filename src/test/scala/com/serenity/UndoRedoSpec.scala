@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
@@ -247,7 +249,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     val beforeBuffer = initialBuffer
       .copy(
         document = initialBuffer.document.copy(isNewEmpty = true),
-        editing = initialBuffer.editing.copy(cursors = List(CursorPosition(2, 0)), preferredColumn = Some(0)),
+        editing = EditingStateFixtures(cursors = List(CursorPosition(2, 0)), preferredColumn = Some(0)),
         viewport = Viewport(topLine = 2, leftColumn = 1, visibleLines = 8, visibleColumns = 40),
         findState = Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
       )
@@ -369,7 +371,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
             state.persisted.copy(buffers =
               state.persisted.buffers.updated(
                 bufferId,
-                buffer.copy(editing = buffer.editing.copy(cursors = cursors, selection = None, selections = Nil))
+                buffer.copy(editing = EditingStateFixtures(cursors = cursors, selection = None, selections = Nil))
               )
             )
           )
@@ -385,7 +387,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
               state.persisted.buffers.updated(
                 bufferId,
                 buffer.copy(editing =
-                  buffer.editing.copy(
+                  EditingStateFixtures(
                     cursors = selections.map(_.focus),
                     selection = selections.headOption,
                     selections = selections

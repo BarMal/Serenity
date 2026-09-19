@@ -37,7 +37,7 @@ class TabInsertionSpec extends AnyFlatSpec with Matchers:
 
     val bufferId = BufferId(1)
     val cursor   = CursorPosition(0, 5)
-    val buffer   = Buffer.fromString(bufferId, "hello world").copy(editing = EditingState(cursors = List(cursor)))
+    val buffer   = Buffer.fromString(bufferId, "hello world").copy(editing = EditingState(List(cursor)))
     val paneId   = PaneId(1)
     val pane     = EditorPane(paneId, Some(bufferId), Viewport.default, List.empty, 0)
     val state = AppState.empty.copy(
@@ -59,7 +59,7 @@ class TabInsertionSpec extends AnyFlatSpec with Matchers:
         val updatedBuffer = newState.persisted.buffers(bufferId)
         updatedBuffer.document.content.collect() shouldBe "hello     world"
 
-        val newCursor = updatedBuffer.editing.cursors.head
+        val newCursor = updatedBuffer.editing.cursorPositions.head
         newCursor.column shouldBe 9
       case _ => fail("Expected ReducerUpdate result")
   }

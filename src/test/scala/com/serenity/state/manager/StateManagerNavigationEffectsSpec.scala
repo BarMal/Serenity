@@ -50,7 +50,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(BufferId(0), content)
       .copy(
-        editing = EditingState(cursors = List(cursor)),
+        editing = EditingState(List(cursor)),
         annotations = Annotations(bookmarks = bookmarks, documentComments = comments)
       )
     AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(BufferId(0) -> buffer)))

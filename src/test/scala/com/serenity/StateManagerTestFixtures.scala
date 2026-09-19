@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import cats.effect.IO
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.keystroke.events.Direction
@@ -107,7 +109,7 @@ private[serenity] object StateManagerTestFixtures:
             case Some(buffer) =>
               val newCursor = CursorPosition(line, column)
               val updatedBuffer = buffer.copy(
-                editing = buffer.editing.copy(
+                editing = EditingStateFixtures(
                   cursors = List(newCursor),
                   preferredColumn = Some(column),
                   preferredXPx = None,

@@ -1,5 +1,7 @@
 package com.serenity.state.reducers
 
+import com.serenity.testkit.EditingStateFixtures
+
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -30,10 +32,7 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("abc def ghi")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(
+              editing = EditingStateFixtures(
                   cursors = List(first.focus, second.focus),
                   selection = Some(first),
                   selections = List(first, second)
@@ -67,10 +66,7 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("alpha\nbeta\ngamma")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(
+              editing = EditingStateFixtures(
                   cursors = List(first.focus, second.focus),
                   selection = Some(first),
                   selections = List(first, second)
@@ -104,10 +100,7 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("abc def ghi")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(
+              editing = EditingStateFixtures(
                   cursors = List(first.focus, second.focus),
                   selection = Some(first),
                   selections = List(first, second)
@@ -144,10 +137,7 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("abc def ghi")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(
+              editing = EditingStateFixtures(
                   cursors = List(first.focus, second.focus),
                   selection = Some(first),
                   selections = List(first, second)
@@ -181,10 +171,7 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("    alpha\n  beta\n\tgamma")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(
+              editing = EditingStateFixtures(
                   cursors = List(first.focus, second.focus),
                   selection = Some(first),
                   selections = List(first, second)
@@ -218,10 +205,7 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("abc def ghi")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(
+              editing = EditingStateFixtures(
                   cursors = List(first.focus, second.focus),
                   selection = Some(first),
                   selections = List(first, second)
@@ -255,10 +239,7 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
                 .buffers(bufferId)
                 .document
                 .copy(content = com.serenity.rope.Rope("abc def ghi")),
-              editing = AppState.initial.persisted
-                .buffers(bufferId)
-                .editing
-                .copy(
+              editing = EditingStateFixtures(
                   cursors = List(first.focus, second.focus),
                   selection = Some(first),
                   selections = List(first, second)

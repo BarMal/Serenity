@@ -194,7 +194,7 @@ final class UiScenarioDriver private (
       case (bufferId, buffer) =>
         bufferId -> MarkdownBlockLens.activeBlockLineSet(
           buffer.document.content.toString.linesIterator.toVector,
-          buffer.editing.cursors.headOption.map(_.line)
+          buffer.editing.cursorPositions.headOption.map(_.line)
         )
     }
     val previewPlacements = contract.workspace.paneLayouts.toList.flatMap {
@@ -267,7 +267,7 @@ final class UiScenarioDriver private (
       if buffer.document.language.contains(com.serenity.lsp.config.LanguageId.Markdown)
     yield
       val lines       = buffer.document.content.linesFrom(0, buffer.document.content.lineCount)
-      val activeLine  = buffer.editing.cursors.headOption.map(_.line).filter(line => line >= 0 && line < lines.length)
+      val activeLine  = buffer.editing.cursorPositions.headOption.map(_.line).filter(line => line >= 0 && line < lines.length)
       val activeBlock = activeLine.map(line => MarkdownBlockLens.currentBlock(lines, line))
       val sourceLimit = math.max(32, buffer.viewport.visibleLines.max(1) * 4)
       val viewportTop = buffer.viewport.topLine.max(0).min(math.max(0, lines.length - 1))

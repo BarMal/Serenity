@@ -122,7 +122,7 @@ class TuiInputChannelsSpec extends TuiSpec:
         _ <- click(ContentColumn + 4, 1)
         _ <- verifyState("caret after the following click") { current =>
           focusedBuffer(current).flatMap(_.editing.selection) shouldBe empty
-          focusedBuffer(current).flatMap(_.editing.cursors.headOption).map(_.column) shouldBe Some(4)
+          focusedBuffer(current).flatMap(_.editing.cursorPositions.headOption).map(_.column) shouldBe Some(4)
         }
       yield ()
     }

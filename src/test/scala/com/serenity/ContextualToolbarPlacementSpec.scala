@@ -1,5 +1,7 @@
 package com.serenity
 
+import com.serenity.testkit.EditingStateFixtures
+
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.ToolbarDisplayMode
 import com.serenity.keystroke.events.*
@@ -131,7 +133,7 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
               .document
               .copy(content = com.serenity.rope.Rope(List.fill(12)("toolbar target").mkString("\n"))),
             editing =
-              state.persisted.buffers(bufferId).editing.copy(selection = None, cursors = List(CursorPosition(8, 4)))
+              EditingStateFixtures(selection = None, cursors = List(CursorPosition(8, 4)))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }
@@ -167,10 +169,7 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope(List.fill(20)("toolbar selection target").mkString("\n"))),
-            editing = state.persisted
-              .buffers(bufferId)
-              .editing
-              .copy(selection = Some(selection), cursors = List(selection.focus))
+            editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }
@@ -203,10 +202,7 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope(List.fill(20)("x" * 140).mkString("\n"))),
-            editing = state.persisted
-              .buffers(bufferId)
-              .editing
-              .copy(selection = Some(selection), cursors = List(selection.focus))
+            editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }
@@ -239,10 +235,7 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope(List.fill(12)("toolbar selection target").mkString("\n"))),
-            editing = state.persisted
-              .buffers(bufferId)
-              .editing
-              .copy(selection = Some(selection), cursors = List(selection.focus))
+            editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus))
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))
       }
@@ -274,7 +267,7 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
               .buffers(bufferId)
               .document
               .copy(content = com.serenity.rope.Rope(List.fill(40)("toolbar target").mkString("\n"))),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(30, 4))),
+            editing = EditingState(List(CursorPosition(30, 4))),
             viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 10, visibleColumns = 120)
           )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, buffer)))

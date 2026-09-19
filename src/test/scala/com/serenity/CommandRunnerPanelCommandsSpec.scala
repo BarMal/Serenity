@@ -201,7 +201,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
                 content = com.serenity.rope.Rope("# Chapter One\n\nBody\n\n## Scene Two"),
                 language = Some(LanguageId.Markdown)
               ),
-            editing = state.persisted.buffers(bufferId).editing.copy(cursors = List(CursorPosition(2, 4))),
+            editing = EditingState(List(CursorPosition(2, 4))),
             annotations = state.persisted
               .buffers(bufferId)
               .annotations
