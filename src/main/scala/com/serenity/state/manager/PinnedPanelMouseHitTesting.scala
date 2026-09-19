@@ -288,52 +288,51 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
           None
     yield locationHit
 
+  /** Resolves hover/click against the diagnostics panel's own `ResolvedSurfaceComposition` (issue #819, slice 4) -- the
+    * same composition `PinnedPanelViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than
+    * `pinnedPanelRowHitAt`'s generic row-index walk. `DiagnosticsSurfaceComposition` only emits a hit region for a row
+    * `PanelContentResolver.diagnosticsRowViews` marked addressable, so `Horizontal`/`Compact`'s summary rows and
+    * `Square`'s leading summary row are unreachable here exactly as they were pre-migration.
+    */
   private def pinnedDiagnosticsMouseHitAt(
     event: MouseInputEvent,
     state: AppState
   ): Option[(UiSurface, List[Diagnostic], Location)] =
-    for
-      hit <- pinnedPanelRowHitAt(event, state)
-      locationHit <- hit.surface.content match
-        case SurfaceContent.Diagnostics(issues, _) =>
-          hit.layoutKind match
-            case SurfaceLayoutKind.Vertical =>
-              issues.lift(hit.rowIndex).map(issue => (hit.surface, issues, issue.location))
-            case SurfaceLayoutKind.Square =>
-              Option
-                .when(hit.rowIndex > 0)(hit.rowIndex - 1)
-                .flatMap(issues.lift)
-                .map(issue => (hit.surface, issues, issue.location))
-            case SurfaceLayoutKind.Horizontal | SurfaceLayoutKind.Compact =>
-              None
-        case _ =>
-          None
-    yield locationHit
+    state.runtime.viewportSize.flatMap { viewportSize =>
+      val scene = AuthoritativeUiScene.forState(state, viewportSize)
+      scene.workspace.reverseIterator
+        .flatMap {
+          case SceneNode(SceneNodeId.Surface(surfaceId), _, frameRect, _, _, _) =>
+            for
+              surface <- state.surfaceById(surfaceId)
+              issues <- surface.content match
+                case SurfaceContent.Diagnostics(issues, _) => Some(issues)
+                case _                                     => None
+              activeLocation = surface.content match
+                case SurfaceContent.Diagnostics(_, activeLocation) => activeLocation
+                case _                                             => None
+              hitRegion <- DiagnosticsSurfaceComposition
+                .forDiagnostics(issues, activeLocation, frameRect)
+                .hitAt(event.col.toDouble, event.row.toDouble)
+              index <- hitRegion.focusId.value.stripPrefix("diagnostics-issue-").toIntOption
+              issue <- issues.lift(index)
+            yield (surface, issues, issue.location)
+          case _ => None
+        }
+        .collectFirst { case hit => hit }
+    }
 
-  /** Outline's location-click reuses `pinnedOutlineMouseHitAt`'s own composition-based hit test directly (issue #819,
-    * slice 4) rather than a second, parallel row lookup -- the two need the exact same symbol location. Diagnostics
-    * (not part of this slice) still resolves via `pinnedPanelRowHitAt`'s generic row-index walk.
+  /** Both outline's and diagnostics' location-click reuse their own composition-based hit test directly (issue #819,
+    * slice 4) rather than a second, parallel row lookup -- they need the exact same location their hover/click handlers
+    * resolve.
     */
   private def pinnedLocationMouseHitAt(
     event: MouseInputEvent,
     state: AppState
   ): Option[Location] =
-    pinnedOutlineMouseHitAt(event, state).map(_._3).orElse {
-      for
-        hit <- pinnedPanelRowHitAt(event, state)
-        location <- hit.surface.content match
-          case SurfaceContent.Diagnostics(issues, _) =>
-            hit.layoutKind match
-              case SurfaceLayoutKind.Vertical =>
-                issues.lift(hit.rowIndex).map(_.location)
-              case SurfaceLayoutKind.Square =>
-                Option.when(hit.rowIndex > 0)(hit.rowIndex - 1).flatMap(issues.lift).map(_.location)
-              case SurfaceLayoutKind.Horizontal | SurfaceLayoutKind.Compact =>
-                None
-          case _ =>
-            None
-      yield location
-    }
+    pinnedOutlineMouseHitAt(event, state)
+      .map(_._3)
+      .orElse(pinnedDiagnosticsMouseHitAt(event, state).map(_._3))
 
   private def navigateActiveEditorToLocation(state: AppState, location: Location): AppState =
     state.persisted.layout.activeEditorPaneId match

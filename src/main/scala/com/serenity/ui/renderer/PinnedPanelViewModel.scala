@@ -101,6 +101,8 @@ object PinnedPanelViewModel:
         Some(
           OutlineSurfaceComposition.forOutline(symbols, activeSymbolLocation(symbols, activeLocation, state), rect)
         )
+      case SurfaceContent.Diagnostics(issues, activeLocation) =>
+        Some(DiagnosticsSurfaceComposition.forDiagnostics(issues, activeLocation, rect))
       case _ => None
 
   private def toPanelRow(row: OverlayRow): TextPanelRow =

@@ -186,37 +186,62 @@ private[layout] object PanelContentResolver:
 
     ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "comments"), rows = shaped)
 
-  def resolveDiagnostics(
+  /** One rendered diagnostics row paired with the index into `issues` it represents, when the row is addressable at all
+    * -- `None` for `Horizontal`/`Compact`'s summary-only rows and `Square`'s leading count row, which have never been
+    * mouse-selectable (`PinnedPanelMouseHitTesting.pinnedDiagnosticsMouseHitAt` only ever resolves a hit for `Vertical`
+    * rows, or `Square` rows past the first). Shared by `resolveDiagnostics` (which only needs `row`) and
+    * `DiagnosticsSurfaceComposition` (issue #819, slice 4), which also needs `issueIndex` to build a row's hit region,
+    * so both build the exact same row text from one place.
+    */
+  final private[layout] case class DiagnosticsRowView(row: OverlayRow, issueIndex: Option[Int])
+
+  private[layout] def diagnosticsRowViews(
     rect: LayoutRect,
-    mode: SurfaceRenderMode,
     issues: List[com.serenity.ui.layout.Diagnostic],
     activeLocation: Option[Location]
-  ): ResolvedSurfaceContent =
+  ): List[DiagnosticsRowView] =
     val errorCount   = issues.count(_.severity == com.serenity.ui.layout.DiagnosticSeverity.Error)
     val warningCount = issues.count(_.severity == com.serenity.ui.layout.DiagnosticSeverity.Warning)
     val infoCount = issues.count(issue =>
       issue.severity == com.serenity.ui.layout.DiagnosticSeverity.Info ||
         issue.severity == com.serenity.ui.layout.DiagnosticSeverity.Hint
     )
-    val shaped = SurfaceLayoutKind.classify(rect) match
+    SurfaceLayoutKind.classify(rect) match
       case SurfaceLayoutKind.Horizontal =>
-        List(OverlayRow(s"$errorCount error | $warningCount warning | $infoCount info"))
+        List(DiagnosticsRowView(OverlayRow(s"$errorCount error | $warningCount warning | $infoCount info"), None))
       case SurfaceLayoutKind.Vertical =>
-        issues.take(math.max(1, rect.height - 2)).map { issue =>
-          OverlayRow(
-            s"${issue.severity}: ${issue.message}",
-            selected = activeLocation.contains(issue.location)
-          )
+        issues.take(math.max(1, rect.height - 2)).zipWithIndex.map {
+          case (issue, index) =>
+            DiagnosticsRowView(
+              OverlayRow(s"${issue.severity}: ${issue.message}", selected = activeLocation.contains(issue.location)),
+              Some(index)
+            )
         }
       case SurfaceLayoutKind.Square =>
-        OverlayRow(s"$errorCount error, $warningCount warning") ::
-          issues.take(math.max(0, rect.height - 3)).map { issue =>
-            OverlayRow(issue.message, selected = activeLocation.contains(issue.location))
+        DiagnosticsRowView(OverlayRow(s"$errorCount error, $warningCount warning"), None) ::
+          issues.take(math.max(0, rect.height - 3)).zipWithIndex.map {
+            case (issue, index) =>
+              DiagnosticsRowView(
+                OverlayRow(issue.message, selected = activeLocation.contains(issue.location)),
+                Some(index)
+              )
           }
       case SurfaceLayoutKind.Compact =>
-        List(OverlayRow(s"${issues.length} issues"), OverlayRow(s"$errorCount error"))
+        List(
+          DiagnosticsRowView(OverlayRow(s"${issues.length} issues"), None),
+          DiagnosticsRowView(OverlayRow(s"$errorCount error"), None)
+        )
 
-    ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "diagnostics"), rows = shaped)
+  def resolveDiagnostics(
+    rect: LayoutRect,
+    mode: SurfaceRenderMode,
+    issues: List[com.serenity.ui.layout.Diagnostic],
+    activeLocation: Option[Location]
+  ): ResolvedSurfaceContent =
+    ResolvedSurfaceContent(
+      SurfaceContentResolver.titleFor(mode, "diagnostics"),
+      rows = diagnosticsRowViews(rect, issues, activeLocation).map(_.row)
+    )
 
   /** The toggleable keyboard-shortcuts reference (issue #1247). Deliberately not layout-kind-branched like
     * `resolveOutline`/`resolveDiagnostics` above -- there is no "current" entry to highlight or compact down to a
