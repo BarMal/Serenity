@@ -14,8 +14,8 @@ import com.serenity.ui.layout.PixelPoint
   * `glide` (issue #1085 phase 2) is a GUI-canvas-only animation: it holds the caret's mid-flight pane-relative pixel
   * position whenever `CursorViewport` last moved this cursor with the `Cursor` motion family enabled, and is `None`
   * once the glide completes or motion is off -- both read by the renderer as "paint at the logical position, no
-  * offset." TUI/hardware-cursor mode never seeds one (a terminal cursor can't glide sub-cell), so it stays `None`
-  * there regardless of motion configuration.
+  * offset." TUI/hardware-cursor mode never seeds one (a terminal cursor can't glide sub-cell), so it stays `None` there
+  * regardless of motion configuration.
   */
 final case class Cursor(
     position: CursorPosition,

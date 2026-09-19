@@ -32,10 +32,9 @@ class StateManagerCursorGlideTickSpec extends AnyFlatSpec with Matchers:
     sm.updateState { state =>
       val glide  = Tween(start = PixelPoint(0, 0), end = PixelPoint(20, 0), curve = EasingCurve.Linear, steps = steps)
       val cursor = Cursor(CursorPosition(0, 0), glide = Some(glide))
-      val buffer = Buffer.fromString(bufferId, "hello world").copy(editing = EditingState.fromCursors(cursor :: cursors))
-      state.copy(persisted =
-        state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer))
-      )
+      val buffer =
+        Buffer.fromString(bufferId, "hello world").copy(editing = EditingState.fromCursors(cursor :: cursors))
+      state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
     }.unsafeRunSync()
 
   "advanceAnimationsOnTick" should "return true while a cursor glide is still in flight" in {

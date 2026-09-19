@@ -10,9 +10,9 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Caret-glide (issue #1085 phase 2): `CursorViewport.ensureVisibleCursors` seeds `Cursor.glide` whenever a cursor's
-  * own position changes -- any change (typing, navigation, mouse click, search jump), not narrowly arrow-key
-  * navigation -- gated by the `Cursor` motion family (including accessibility), GUI-canvas-only, and independently for
-  * every live cursor. Mirrors `CursorViewportColumnTransitionSpec`, the equivalent seeding spec for column transitions.
+  * own position changes -- any change (typing, navigation, mouse click, search jump), not narrowly arrow-key navigation
+  * -- gated by the `Cursor` motion family (including accessibility), GUI-canvas-only, and independently for every live
+  * cursor. Mirrors `CursorViewportColumnTransitionSpec`, the equivalent seeding spec for column transitions.
   */
 class CursorViewportGlideSpec extends AnyFlatSpec with Matchers:
 
@@ -58,7 +58,9 @@ class CursorViewportGlideSpec extends AnyFlatSpec with Matchers:
   "CursorViewport.ensureVisibleCursors" should "seed a glide when the cursor's position changes" in {
     val before = stateWith(bufferAt(CursorPosition(0, 0)))
     val after = before.copy(persisted =
-      before.persisted.copy(buffers = Map(bufferId -> movedTo(before.persisted.buffers(bufferId), CursorPosition(0, 5))))
+      before.persisted.copy(buffers =
+        Map(bufferId -> movedTo(before.persisted.buffers(bufferId), CursorPosition(0, 5)))
+      )
     )
 
     val result = CursorViewport.ensureVisibleCursors(before, after)
@@ -81,7 +83,9 @@ class CursorViewportGlideSpec extends AnyFlatSpec with Matchers:
   it should "not seed a glide when the Cursor motion family is disabled by accessibility" in {
     val before = stateWith(bufferAt(CursorPosition(0, 0)), config = _.withMotionAccessibility(MotionAccessibility.Off))
     val after = before.copy(persisted =
-      before.persisted.copy(buffers = Map(bufferId -> movedTo(before.persisted.buffers(bufferId), CursorPosition(0, 5))))
+      before.persisted.copy(buffers =
+        Map(bufferId -> movedTo(before.persisted.buffers(bufferId), CursorPosition(0, 5)))
+      )
     )
 
     val result = CursorViewport.ensureVisibleCursors(before, after)
@@ -92,7 +96,9 @@ class CursorViewportGlideSpec extends AnyFlatSpec with Matchers:
   it should "not seed a glide in TUI mode, where the caret snaps instantly" in {
     val before = stateWith(bufferAt(CursorPosition(0, 0)), isTuiMode = true)
     val after = before.copy(persisted =
-      before.persisted.copy(buffers = Map(bufferId -> movedTo(before.persisted.buffers(bufferId), CursorPosition(0, 5))))
+      before.persisted.copy(buffers =
+        Map(bufferId -> movedTo(before.persisted.buffers(bufferId), CursorPosition(0, 5)))
+      )
     )
 
     val result = CursorViewport.ensureVisibleCursors(before, after)
@@ -103,16 +109,21 @@ class CursorViewportGlideSpec extends AnyFlatSpec with Matchers:
   it should "retarget an in-flight glide rather than reseeding it at progress zero when the cursor moves again" in {
     val before = stateWith(bufferAt(CursorPosition(0, 0)))
     val afterFirstMove = before.copy(persisted =
-      before.persisted.copy(buffers = Map(bufferId -> movedTo(before.persisted.buffers(bufferId), CursorPosition(0, 5))))
+      before.persisted.copy(buffers =
+        Map(bufferId -> movedTo(before.persisted.buffers(bufferId), CursorPosition(0, 5)))
+      )
     )
     val firstResult = CursorViewport.ensureVisibleCursors(before, afterFirstMove)
-    val firstGlide  = firstResult.persisted.buffers(bufferId).editing.cursors.head.glide.getOrElse(fail("expected a glide"))
+    val firstGlide =
+      firstResult.persisted.buffers(bufferId).editing.cursors.head.glide.getOrElse(fail("expected a glide"))
 
     val midFlight = firstGlide.advance
     midFlight.isComplete shouldBe false
-    val midFlightBuffer = firstResult.persisted.buffers(bufferId).withCursorList(
-      firstResult.persisted.buffers(bufferId).editing.cursors.map(_.copy(glide = Some(midFlight)))
-    )
+    val midFlightBuffer = firstResult.persisted
+      .buffers(bufferId)
+      .withCursorList(
+        firstResult.persisted.buffers(bufferId).editing.cursors.map(_.copy(glide = Some(midFlight)))
+      )
     val midFlightState =
       firstResult.copy(persisted = firstResult.persisted.copy(buffers = Map(bufferId -> midFlightBuffer)))
 

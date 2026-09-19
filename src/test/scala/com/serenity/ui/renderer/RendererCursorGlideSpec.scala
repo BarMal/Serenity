@@ -25,7 +25,8 @@ class RendererCursorGlideSpec extends AnyFlatSpec with Matchers:
   private val font        = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
   private val cellMetrics = CellMetrics.fromFont(font)
 
-  private val inFlightGlide = Tween(start = PixelPoint(0, 0), end = PixelPoint(20, 0), curve = EasingCurve.Linear, steps = 4)
+  private val inFlightGlide =
+    Tween(start = PixelPoint(0, 0), end = PixelPoint(20, 0), curve = EasingCurve.Linear, steps = 4)
 
   "glidePixelPosition" should "return the tweened position for a GUI cursor with an in-flight glide" in {
     val cursor = Cursor(CursorPosition(0, 0), glide = Some(inFlightGlide))

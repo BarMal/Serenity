@@ -30,12 +30,12 @@ import com.serenity.ui.layout.{CellMetrics, PixelPoint, TextLayoutSnapshot}
 private[manager] object CursorGlideGeometry:
 
   def paneRelativePosition(buffer: Buffer, config: AppConfig, cursor: CursorPosition): PixelPoint =
-    val viewport            = buffer.viewport
-    val fontConfig          = config.editorConfig.fontConfig
-    val font                = FontLoader.previewFontForRole(fontConfig, buffer.typographyRole)
-    val wordWrapEnabled     = config.surfaceConfig.wordWrapEnabled
-    val wrapWidthPx         = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, fontConfig)
-    val lineHeightPx        = CellMetrics.fromFont(font).lineHeight
+    val viewport        = buffer.viewport
+    val fontConfig      = config.editorConfig.fontConfig
+    val font            = FontLoader.previewFontForRole(fontConfig, buffer.typographyRole)
+    val wordWrapEnabled = config.surfaceConfig.wordWrapEnabled
+    val wrapWidthPx     = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, fontConfig)
+    val lineHeightPx    = CellMetrics.fromFont(font).lineHeight
 
     def lineText(lineIndex: Int): String = buffer.document.content.getLine(lineIndex).getOrElse("")
 
@@ -58,7 +58,7 @@ private[manager] object CursorGlideGeometry:
     val rowsBetweenTopAndCursorLine =
       if cursor.line == viewport.topLine then 0
       else if cursor.line > viewport.topLine then (viewport.topLine until cursor.line).map(visualRowCountForLine).sum
-      else -((cursor.line until viewport.topLine).map(visualRowCountForLine).sum)
+      else -(cursor.line until viewport.topLine).map(visualRowCountForLine).sum
 
     val visualRowOffset =
       if !wordWrapEnabled then cursor.line - viewport.topLine
@@ -72,8 +72,7 @@ private[manager] object CursorGlideGeometry:
           .lift(cursorVisualLineWithinItsLine)
           .flatMap(_.xForColumn(cursor.column))
           .getOrElse(0.0f)
-      else
-        TextLayoutSnapshot.caretXsForText(lineText(cursor.line), font).lift(safeColumn).getOrElse(0.0f)
+      else TextLayoutSnapshot.caretXsForText(lineText(cursor.line), font).lift(safeColumn).getOrElse(0.0f)
     // Horizontal scroll (non-wrap mode only -- word wrap always keeps `leftColumn` at 0) shifts the line's rendered
     // start left of column 0, by `viewport.leftColumn` columns measured in the font's own average advance -- the same
     // unit `CursorViewport`'s own leftColumn clamp already treats a "column" as for this font.

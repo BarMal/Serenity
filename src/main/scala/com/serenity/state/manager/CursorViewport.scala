@@ -1,7 +1,7 @@
 package com.serenity.state.manager
 
 import com.serenity.animation.Interpolator.given
-import com.serenity.animation.{Tween, TransitionDirection}
+import com.serenity.animation.{TransitionDirection, Tween}
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
@@ -66,7 +66,8 @@ object CursorViewport:
                 case (cursor, index) =>
                   beforeCursors.lift(index) match
                     case Some(previous) if previous.position != cursor.position =>
-                      val newPixel = CursorGlideGeometry.paneRelativePosition(afterBuffer, state.persisted.config, cursor.position)
+                      val newPixel =
+                        CursorGlideGeometry.paneRelativePosition(afterBuffer, state.persisted.config, cursor.position)
                       // The reducer that moved this cursor typically rebuilds `EditingState` from bare `CursorPosition`s
                       // (`EditingState.apply`/`Cursor.apply(position)`), which wipes `cursor.glide` back to `None` before
                       // this ever runs -- so whether a glide was already in flight has to be read from `previous` (the
@@ -76,7 +77,11 @@ object CursorViewport:
                         case Some(existing) => existing.retarget(newPixel)
                         case None =>
                           val oldPixel =
-                            CursorGlideGeometry.paneRelativePosition(afterBuffer, state.persisted.config, previous.position)
+                            CursorGlideGeometry.paneRelativePosition(
+                              afterBuffer,
+                              state.persisted.config,
+                              previous.position
+                            )
                           Tween(start = oldPixel, end = newPixel, curve = animation.curve, steps = animation.steps)
                       cursor.copy(glide = Some(tween))
                     case _ => cursor

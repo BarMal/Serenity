@@ -18,7 +18,10 @@ class CursorGlideGeometrySpec extends AnyFlatSpec with Matchers:
 
   private val bufferId = BufferId(1)
 
-  private def bufferWith(content: String, viewport: Viewport = Viewport(visibleLines = 10, visibleColumns = 80)): Buffer =
+  private def bufferWith(
+    content: String,
+    viewport: Viewport = Viewport(visibleLines = 10, visibleColumns = 80)
+  ): Buffer =
     Buffer.fromString(bufferId, content).copy(viewport = viewport)
 
   "paneRelativePosition" should "place a cursor at the buffer's own top-left at pane-relative (0, 0)" in {
@@ -59,7 +62,7 @@ class CursorGlideGeometrySpec extends AnyFlatSpec with Matchers:
     )
 
     val atTopOfViewport = CursorGlideGeometry.paneRelativePosition(buffer, AppConfig.default, CursorPosition(2, 0))
-    val oneRowDown       = CursorGlideGeometry.paneRelativePosition(buffer, AppConfig.default, CursorPosition(3, 0))
+    val oneRowDown      = CursorGlideGeometry.paneRelativePosition(buffer, AppConfig.default, CursorPosition(3, 0))
 
     atTopOfViewport.yPx shouldBe 0
     oneRowDown.yPx should be > atTopOfViewport.yPx
@@ -73,7 +76,7 @@ class CursorGlideGeometrySpec extends AnyFlatSpec with Matchers:
     )
     val config = AppConfig.default
 
-    val atStart = CursorGlideGeometry.paneRelativePosition(buffer, config, CursorPosition(0, 0))
+    val atStart  = CursorGlideGeometry.paneRelativePosition(buffer, config, CursorPosition(0, 0))
     val farRight = CursorGlideGeometry.paneRelativePosition(buffer, config, CursorPosition(0, 250))
 
     // A column 250 columns into a wrapped line lands several wrapped rows down, not on the same row as column 0.
