@@ -469,7 +469,12 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     val stack    = overlays.belowCursorStack
 
     stack should have size 2
-    stack.head.rows.flatMap(_.segments).exists(_.text.contains("Bold")) shouldBe true
+    // Content is painted entirely from `ContextualToolbarSurfaceComposition` (issue #819, slice 3); row segments are
+    // read from its paint boxes, not the plain-rows `rows` field this content no longer populates.
+    stack.head.composition.toList
+      .flatMap(_.paintBoxes)
+      .flatMap(_.segments)
+      .exists(_.text.contains("Bold")) shouldBe true
     stack.head.itemGapRows shouldBe 0.25
     // `stack(1)` is the command palette, painted entirely from `CommandRunnerSurfaceComposition` (issue #819, slice
     // 2) -- its header text is read from the composition's paint boxes, not the plain-rows `header` field.

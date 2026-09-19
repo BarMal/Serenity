@@ -243,15 +243,15 @@ object OverlayViewModel:
       if collapsed then collapsedContentView(content)
       else
         content match
-          case SurfaceContent.ContextualToolbar(toolbarState) =>
-            SurfaceContentResolver.resolveContextualToolbar(toolbarState, state, rect, SurfaceRenderMode.Floating)
-          // Painted entirely via `ContextMenuSurfaceComposition`/`CommandRunnerSurfaceComposition` (issue #819,
-          // slice 2) -- `TextOverlayRenderer` ignores `rows` whenever `composition` is set below, which it always is
-          // for these two, so resolving real rows here would be dead computation on this specific call site. Scoped
-          // to just this call site, not `SurfaceContentResolver.resolve`'s own dispatch: `EditorLayoutContract`
-          // (`floatingGeometry`) calls that dispatcher independently and genuinely still needs the real, item-count
-          // accurate rows/header/footer it produces -- see its own doc comment.
-          case SurfaceContent.ContextMenu(_) | SurfaceContent.CommandPalette(_) =>
+          // Painted entirely via `ContextMenuSurfaceComposition`/`CommandRunnerSurfaceComposition`/
+          // `ContextualToolbarSurfaceComposition` (issue #819, slices 2-3) -- `TextOverlayRenderer` ignores `rows`
+          // whenever `composition` is set below, which it always is for these, so resolving real rows here would be
+          // dead computation on this specific call site. Scoped to just this call site, not
+          // `SurfaceContentResolver.resolve`'s own dispatch: `EditorLayoutContract` (`floatingGeometry`) calls that
+          // dispatcher independently and genuinely still needs the real, item-count accurate rows/header/footer it
+          // produces -- see its own doc comment.
+          case SurfaceContent.ContextMenu(_) | SurfaceContent.CommandPalette(_) |
+              SurfaceContent.ContextualToolbar(_) =>
             ResolvedSurfaceContent()
           case _ =>
             SurfaceContentResolver.resolve(
