@@ -1,6 +1,6 @@
 package com.serenity.animation
 
-import com.serenity.ui.layout.{LayoutRect, PixelRect}
+import com.serenity.ui.layout.{LayoutRect, PixelPoint, PixelRect}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -119,4 +119,25 @@ class TweenSpec extends AnyFlatSpec with Matchers:
     val end   = LayoutRect(20, 0, 10, 10)
     val tween = Tween(start = start, end = end, curve = EasingCurve.Linear, steps = 2, currentFrame = 1)
     tween.currentValue shouldBe LayoutRect(10, 0, 10, 10)
+  }
+
+  "Interpolator[PixelPoint]" should "lerp each field independently, rounding to the nearest pixel" in {
+    val start = PixelPoint(0, 0)
+    val end   = PixelPoint(100, 200)
+    val mid   = summon[Interpolator[PixelPoint]].lerp(start, end, 0.5)
+    mid shouldBe PixelPoint(50, 100)
+  }
+
+  it should "reach start and end exactly at t=0 and t=1" in {
+    val start = PixelPoint(3, 4)
+    val end   = PixelPoint(9, 6)
+    summon[Interpolator[PixelPoint]].lerp(start, end, 0.0) shouldBe start
+    summon[Interpolator[PixelPoint]].lerp(start, end, 1.0) shouldBe end
+  }
+
+  "a Tween[PixelPoint]" should "interpolate caret glide's on-screen position over its steps" in {
+    val start = PixelPoint(0, 0)
+    val end   = PixelPoint(20, 0)
+    val tween = Tween(start = start, end = end, curve = EasingCurve.Linear, steps = 2, currentFrame = 1)
+    tween.currentValue shouldBe PixelPoint(10, 0)
   }

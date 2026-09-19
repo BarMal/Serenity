@@ -1,6 +1,6 @@
 package com.serenity.animation
 
-import com.serenity.ui.layout.{LayoutRect, PixelRect}
+import com.serenity.ui.layout.{LayoutRect, PixelPoint, PixelRect}
 
 /** Typeclass for values a [[Tween]] can interpolate between. `t` is already curve-adjusted ("eased progress"), so an
   * instance only ever has to do the linear part -- `start + (end - start) * t` in whatever shape `A` needs.
@@ -48,6 +48,17 @@ object Interpolator:
         yPx = lerpInt(start.yPx, end.yPx, t),
         widthPx = lerpInt(start.widthPx, end.widthPx, t),
         heightPx = lerpInt(start.heightPx, end.heightPx, t)
+      )
+
+  /** `com.serenity.ui.layout.PixelPoint`: caret glide's (issue #1085 phase 2) tweened value -- a single pixel position
+    * rather than a rect, lerped and rounded the same way as `PixelRect`'s corner.
+    */
+  given Interpolator[PixelPoint] with
+
+    def lerp(start: PixelPoint, end: PixelPoint, t: Double): PixelPoint =
+      PixelPoint(
+        xPx = lerpInt(start.xPx, end.xPx, t),
+        yPx = lerpInt(start.yPx, end.yPx, t)
       )
 
 /** A generic, curve-aware, tick-driven tween (issue #1083) -- the same shape as `ScalarTimeline`/`ColorTimeline`
