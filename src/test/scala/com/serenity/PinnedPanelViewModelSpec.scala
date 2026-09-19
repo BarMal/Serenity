@@ -2,6 +2,7 @@ package com.serenity
 
 import java.nio.file.Paths
 
+import com.serenity.command.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{PinnedPanelViewModel, TextPanelRow, TextPanelView}
@@ -148,20 +149,33 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve resolved header and footer rows separately from item rows" in {
-    val modalPanel = UiSurface(
-      id = SurfaceId("find-panel"),
-      content = SurfaceContent.ModalWorkflow(
-        Modal.Find("needle", List(FindResult(2, 4)), 0)
+    // `ContextMenu` is used as the fixture here purely because it's a content kind whose resolver still produces a
+    // header, item rows, and a footer all at once (unlike `ModalWorkflow`, which paints entirely via
+    // `ModalSurfaceComposition` -- issue #819 -- and is never itself dockable, see `PanelStateReducer`).
+    val save = Command.typed("save", "Save file", CommandIntent.File(FileIntent.SaveCurrentFile), label = "Save")
+    val find = Command.typed("find", "Find text", CommandIntent.Edit(EditIntent.FindInCurrentFile), label = "Find")
+    val menuPanel = UiSurface(
+      id = SurfaceId("context-menu-panel"),
+      content = SurfaceContent.ContextMenu(
+        ContextMenu(
+          title = "editor",
+          targetFocus = Focus.EditorPane(PaneId(0)),
+          items = List(
+            ContextMenuItem(save.name, save.label, save),
+            ContextMenuItem(find.name, find.label, find)
+          ),
+          selectedIndex = 1
+        )
       ),
       presentation = SurfacePresentation.Docked
     )
 
-    val view = PinnedPanelViewModel.resolve(modalPanel, LayoutRect(0, 0, 40, 8))
+    val view = PinnedPanelViewModel.resolve(menuPanel, LayoutRect(0, 0, 40, 8))
 
-    view.title shouldBe "find"
-    view.header.map(_.plainText) shouldBe Some("find")
-    view.rows.map(_.plainText) shouldBe List("Find needle", "1. 3:5")
-    view.footer.map(_.plainText) shouldBe Some("1 match, 1/1 at 3:5")
+    view.title shouldBe "editor"
+    view.header.map(_.plainText) shouldBe Some("editor")
+    view.rows.map(_.plainText) shouldBe List("Save", "Find")
+    view.footer.map(_.plainText) shouldBe Some("2/2")
   }
 
   it should "capture the resolved content rectangle from the pinned surface content" in {
