@@ -16,7 +16,10 @@ final case class TextPanelView(
     rows: List[TextPanelRow],
     header: Option[TextPanelRow] = None,
     footer: Option[TextPanelRow] = None,
-    surfaceId: Option[SurfaceId] = None
+    surfaceId: Option[SurfaceId] = None,
+    // Painted in place of `rows`/`header`/`footer` whenever set (issue #819, slice 4) -- mirrors
+    // `TextOverlayView.composition`'s precedence in `TextOverlayRenderer`.
+    composition: Option[ResolvedSurfaceComposition] = None
 ):
   def lines: List[String] = (header.toList ++ rows ++ footer.toList).map(_.plainText)
 
