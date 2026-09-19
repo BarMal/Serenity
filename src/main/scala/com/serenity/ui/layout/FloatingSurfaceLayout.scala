@@ -245,13 +245,8 @@ object FloatingSurfaceLayout:
       case SurfaceContent.DirectoryListing(_, entries, _) => math.max(4, math.min(6, entries.take(4).size + 2))
       case SurfaceContent.DirectoryTree(tree, _) =>
         math.max(4, math.min(8, DirectoryTreeData.visibleRows(tree).size + 2))
-      case SurfaceContent.CommandPalette(runner) if runner.isSettingsSurface =>
-        math.min(commandMaxHeight, math.max(densityMetrics.commandSurfaceMinHeight, maxHeight - 1))
       case SurfaceContent.CommandPalette(_) =>
-        math.min(
-          commandMaxHeight,
-          math.max(densityMetrics.commandSurfaceMinHeight, maxHeight - 1)
-        )
+        CommandRunnerSurfaceComposition.frameHeight(state, maxHeight, roomOnPreferredSide)
       case SurfaceContent.CommandRunnerPeek(_) =>
         math.min(
           commandMaxHeight,
@@ -275,11 +270,8 @@ object FloatingSurfaceLayout:
           itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity)
         )
       case SurfaceContent.ContextMenu(menu) =>
-        SurfaceFrameLayout.frameHeightForItemRows(
-          itemRows = menu.items.length,
-          hasHeader = true,
-          hasFooter = menu.items.nonEmpty,
-          borderCells = SurfaceFrameLayout.borderCellsFor(content),
+        ContextMenuSurfaceComposition.frameHeight(
+          menu,
           itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
           itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity)
         )
