@@ -53,8 +53,6 @@ final case class Selection(anchor: CursorPosition, focus: CursorPosition) extend
 
 final case class DocumentComment(anchor: CursorPosition, focus: CursorPosition, text: String) extends DirectedRange
 
-final case class VerticalCursorState(cursor: CursorPosition, preferredColumn: Int, preferredXPx: Float)
-
 /** A buffer's on-disk identity and content -- what makes it "this file", independent of how it's being edited or
   * displayed. Split out by #1002 so `Buffer` itself no longer spans unrelated subdomains.
   */
@@ -66,17 +64,31 @@ final case class Document(
     isNewEmpty: Boolean = false
 )
 
-/** A buffer's cursor/selection state. `Buffer.cursorList`/`withCursorList` convert this to and from the uniform
-  * per-cursor [[Cursor]] shape the reducer operates over.
+/** A buffer's cursor/selection state: one entry per live cursor, each carrying its own position, in-flight selection
+  * anchor and preferred vertical-navigation column/pixel-x (`#1577`). Before `#1577` this was five separate parallel
+  * lists/options (`cursors`, `selection`, `selections`, `preferredColumn`, `preferredXPx`,
+  * `multiCursorVerticalStates`), which let a single cursor's own state drift across collections that had to be kept
+  * in sync by hand; `NonEmptyList[Cursor]` makes that drift impossible by construction.
   */
-final case class EditingState(
-    cursors: List[CursorPosition] = List(CursorPosition(0, 0)),
-    selection: Option[Selection] = None,
-    selections: List[Selection] = Nil,
-    preferredColumn: Option[Int] = None,
-    preferredXPx: Option[Float] = None,
-    multiCursorVerticalStates: List[VerticalCursorState] = Nil
-)
+final case class EditingState(cursors: NonEmptyList[Cursor] = NonEmptyList.one(Cursor(CursorPosition(0, 0)))):
+  def cursorPositions: List[CursorPosition] = cursors.toList.map(_.position)
+
+  /** Replaces the primary (first) cursor's full state while leaving every other live cursor untouched. */
+  def withPrimary(cursor: Cursor): EditingState = EditingState(NonEmptyList(cursor, cursors.tail))
+
+object EditingState:
+  /** Bare cursor positions, with no selection or preferred-column/x state -- the shape session restore and most
+    * post-edit cursor placement need.
+    */
+  def apply(positions: List[CursorPosition]): EditingState =
+    NonEmptyList.fromList(positions) match
+      case Some(nel) => EditingState(nel.map(Cursor(_)))
+      case None      => EditingState()
+
+  def fromCursors(cursors: List[Cursor]): EditingState =
+    NonEmptyList.fromList(cursors) match
+      case Some(nel) => EditingState(nel)
+      case None      => EditingState()
 
 /** User-authored markers anchored to buffer positions, independent of the document's own content. */
 final case class Annotations(
@@ -120,100 +132,32 @@ final case class Buffer(
     typographyRole.usesTextFont
 
   def allSelections: List[Selection] =
-    if editing.selections.nonEmpty then editing.selections else editing.selection.toList
+    editing.cursors.toList.flatMap(_.selection)
 
   def primarySelection: Option[Selection] =
-    allSelections.headOption
+    editing.cursors.head.selection
 
   def clearSelections: Buffer =
-    copy(editing = editing.copy(selection = None, selections = Nil))
+    copy(editing = EditingState(editing.cursors.map(_.copy(selectionAnchor = None))))
 
-  /** This buffer's cursors as one uniform list, converting `selections`/`selection`/`multiCursorVerticalStates` into
-    * each cursor's own optional selection anchor and preferred vertical-navigation state -- see [[Cursor]]. Order and
-    * membership exactly mirror `cursors`/`allSelections`; nothing is sorted or deduplicated here.
+  /** This buffer's cursors as one uniform list -- trivial now that `EditingState` itself stores cursors this way
+    * (`#1577`); kept as a named entry point since `EditorEventReducer`/`EditorNavigationEventReducer` document their
+    * whole dispatch in terms of it.
     */
-  def cursorList: NonEmptyList[Cursor] =
-    if allSelections.nonEmpty then NonEmptyList.fromListUnsafe(allSelections.map(Cursor(_)))
-    else if editing.cursors.sizeIs > 1 then
-      NonEmptyList.fromListUnsafe(editing.cursors.map { position =>
-        editing.multiCursorVerticalStates.find(_.cursor == position) match
-          case Some(state) => Cursor(position, None, Some(state.preferredColumn), Some(state.preferredXPx))
-          case None        => Cursor(position)
-      })
-    else
-      NonEmptyList.one(
-        Cursor(
-          editing.cursors.headOption.getOrElse(CursorPosition(0, 0)),
-          None,
-          editing.preferredColumn,
-          editing.preferredXPx
-        )
-      )
+  def cursorList: NonEmptyList[Cursor] = editing.cursors
 
-  /** The inverse of [[cursorList]]: repackages a cursor list back into this buffer's five cursor-shaped fields, leaving
-    * everything else untouched. Does not sort or deduplicate -- callers hand back the list in the order and membership
-    * they want stored, exactly as `cursorList` handed it to them.
-    */
+  /** The inverse of [[cursorList]]: stores a cursor list back as this buffer's editing state. */
   def withCursorList(updated: NonEmptyList[Cursor]): Buffer =
-    val list = updated.toList
-    (list.exists(_.selectionAnchor.isDefined), list) match
-      case (true, cursor :: Nil) =>
-        copy(editing =
-          EditingState(
-            cursors = List(cursor.position),
-            selection = cursor.selection,
-            selections = Nil,
-            preferredColumn = None,
-            preferredXPx = None,
-            multiCursorVerticalStates = Nil
-          )
-        )
-      case (true, many) =>
-        copy(editing =
-          EditingState(
-            cursors = many.map(_.position),
-            selection = None,
-            selections = many.map(cursor => cursor.selection.getOrElse(Selection(cursor.position, cursor.position))),
-            preferredColumn = None,
-            preferredXPx = None,
-            multiCursorVerticalStates = Nil
-          )
-        )
-      case (false, cursor :: Nil) =>
-        copy(editing =
-          EditingState(
-            cursors = List(cursor.position),
-            selection = None,
-            selections = Nil,
-            preferredColumn = cursor.preferredColumn,
-            preferredXPx = cursor.preferredXPx,
-            multiCursorVerticalStates = Nil
-          )
-        )
-      case (false, many) =>
-        copy(editing =
-          EditingState(
-            cursors = many.map(_.position),
-            selection = None,
-            selections = Nil,
-            preferredColumn = None,
-            preferredXPx = None,
-            multiCursorVerticalStates = many.flatMap { cursor =>
-              cursor.preferredColumn.map(column =>
-                VerticalCursorState(cursor.position, column, cursor.preferredXPx.getOrElse(0f))
-              )
-            }
-          )
-        )
+    copy(editing = EditingState(updated))
 
   /** True when closing this buffer may lose user-authored content. */
   def hasUnsavedChanges: Boolean =
     document.isDirty || (document.filePath.isEmpty && !document.isNewEmpty)
 
-  /** The buffer state after an edit lands: swaps in the new content, marks the document dirty, replaces the cursor list
-    * while clearing selection state, resets preferred-column/X tracking to the new primary cursor, and drops stale
-    * multi-cursor vertical state. `documentComments` and `richTextDocument` default to their current, unadjusted values
-    * -- pass the caller's remapped ones when the edit needs to carry them forward.
+  /** The buffer state after an edit lands: swaps in the new content, marks the document dirty, and replaces the
+    * cursor list with bare positions, clearing every cursor's selection and preferred-column/x state.
+    * `documentComments` and `richTextDocument` default to their current, unadjusted values -- pass the caller's
+    * remapped ones when the edit needs to carry them forward.
     *
     * Centralises the five near-identical post-edit `copy` blocks in `EditorEventReducer` (`#1072`), which had already
     * drifted: the merged-deletion path silently kept a stale `richTextDocument` (and stale `multiCursorVerticalStates`)
@@ -227,14 +171,7 @@ final case class Buffer(
   ): Buffer =
     copy(
       document = document.copy(content = content, isDirty = true, isNewEmpty = false),
-      editing = editing.copy(
-        cursors = cursors,
-        selection = None,
-        selections = Nil,
-        preferredColumn = Some(cursors.primaryCursor.column),
-        preferredXPx = None,
-        multiCursorVerticalStates = Nil
-      ),
+      editing = EditingState(cursors),
       annotations = annotations.copy(documentComments = documentComments),
       richText = richText.copy(richTextDocument = richTextDocument)
     )

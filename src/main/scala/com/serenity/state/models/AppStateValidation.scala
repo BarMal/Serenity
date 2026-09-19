@@ -90,7 +90,7 @@ object AppStateValidation:
       def outOfBounds(position: CursorPosition): Boolean =
         position.line < 0 || position.line >= buffer.document.content.lineCount || position.column < 0
 
-      val badCursors = buffer.editing.cursors.filter(outOfBounds)
+      val badCursors = buffer.editing.cursorPositions.filter(outOfBounds)
       if badCursors.nonEmpty then
         errors += s"Buffer ${bufferId.value} has out-of-bounds cursor(s): ${badCursors.mkString(", ")}"
       val badSelections = buffer.allSelections.flatMap(s => List(s.anchor, s.focus)).filter(outOfBounds)

@@ -63,7 +63,7 @@ object RendererMarkdownLens:
       baseRows,
       lines,
       activeRanges,
-      buffer.editing.cursors.map(_.line - previewWindow.window.firstSourceLine).toSet,
+      buffer.editing.cursorPositions.map(_.line - previewWindow.window.firstSourceLine).toSet,
       snapshot,
       previewWindow.window,
       previewWindow.window.firstSourceLine
@@ -120,7 +120,7 @@ object RendererMarkdownLens:
     val lineCount = buffer.document.content.lineCount
     if lineCount == 0 then MarkdownLensPreviewWindow(MarkdownDocumentPreview.PreviewWindow(0, 0, ""), 0)
     else
-      val activeLine = buffer.editing.cursors.headOption
+      val activeLine = buffer.editing.cursorPositions.headOption
         .map(_.line)
         .filter(line => line >= 0 && line < lineCount)
       val activeBlock     = activeLine.map(line => FocusedTextBody.markdownBlock(buffer, line))
@@ -175,7 +175,7 @@ object RendererMarkdownLens:
 
   private def activeMarkdownBlockRanges(buffer: Buffer): List[Range.Inclusive] =
     val lineCount = buffer.document.content.lineCount
-    val cursorRanges = buffer.editing.cursors
+    val cursorRanges = buffer.editing.cursorPositions
       .map(_.line)
       .filter(line => line >= 0 && line < lineCount)
       .map(line => FocusedTextBody.markdownBlock(buffer, line))
@@ -291,7 +291,7 @@ object RendererMarkdownLens:
           blockRange,
           markdownLensPlacement(blockRange, blockVisualLines, rect.height, lines, previewWindow)
         )
-        buffer.editing.cursors.zipWithIndex.foreach { (cursor, cursorIndex) =>
+        buffer.editing.cursorPositions.zipWithIndex.foreach { (cursor, cursorIndex) =>
           val isPrimaryCursor = cursorIndex == 0
           val shouldRenderCursor =
             context.cursorVisible || (buffer.editing.cursors.size > 1 && !isPrimaryCursor)

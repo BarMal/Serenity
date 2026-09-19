@@ -146,22 +146,9 @@ object EditorEventReducer:
   ): ReducerResult =
     import EditorCursorMovement.*
 
-    rawBuffer.editing.cursors.headOption match
-      case None =>
-        val currentState  = Focused.replaceBuffer(incomingState, rawBuffer)
-        val defaultCursor = CursorPosition(0, 0)
-        val updatedPane   = currentState.persisted.layout.editorPanes(paneId).copy(cursors = List(defaultCursor))
-        ReducerResult.noEffects(
-          currentState.copy(persisted =
-            currentState.persisted.copy(
-              layout = currentState.persisted.layout.copy(
-                editorPanes = currentState.persisted.layout.editorPanes + (paneId -> updatedPane)
-              )
-            )
-          )
-        )
+    val head = rawBuffer.editing.cursors.head.position
 
-      case Some(head) if isExtendSelectionEvent(event) =>
+    if isExtendSelectionEvent(event) then
         val buffer       = clearInFlightMultiCursorVerticalState(rawBuffer)
         val currentState = Focused.replaceBuffer(incomingState, buffer)
         event match
@@ -190,8 +177,7 @@ object EditorEventReducer:
               horizontalTarget(pageTarget(target, currentState, paneId, direction = 1)(from))
             )
           case _ => ReducerResult.noEffects(currentState)
-
-      case Some(head) =>
+    else
         val rawCursors   = rawBuffer.cursorList
         val hasSelection = rawCursors.head.selectionAnchor.isDefined
         val isMulti      = rawCursors.tail.nonEmpty

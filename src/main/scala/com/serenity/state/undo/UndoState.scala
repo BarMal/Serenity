@@ -6,11 +6,7 @@ import com.serenity.ui.layout.{Layout, WorkspaceNodeId, WorkspaceTree}
 
 final case class BufferSnapshot(
     content: Rope,
-    cursors: List[CursorPosition],
-    selection: Option[Selection],
-    selections: List[Selection],
-    preferredColumn: Option[Int],
-    preferredXPx: Option[Float],
+    editing: EditingState,
     viewport: Viewport,
     findState: Option[FindState],
     isNewEmpty: Boolean
@@ -23,14 +19,7 @@ final case class BufferSnapshot(
         isDirty = true,
         isNewEmpty = isNewEmpty
       ),
-      editing = buffer.editing.copy(
-        cursors = cursors,
-        selection = selection,
-        selections = selections,
-        preferredColumn = preferredColumn,
-        preferredXPx = preferredXPx,
-        multiCursorVerticalStates = Nil
-      ),
+      editing = editing,
       viewport = viewport,
       findState = findState
     )
@@ -40,11 +29,7 @@ object BufferSnapshot:
   def fromBuffer(buffer: Buffer): BufferSnapshot =
     BufferSnapshot(
       content = buffer.document.content,
-      cursors = buffer.editing.cursors,
-      selection = buffer.editing.selection,
-      selections = buffer.editing.selections,
-      preferredColumn = buffer.editing.preferredColumn,
-      preferredXPx = buffer.editing.preferredXPx,
+      editing = buffer.editing,
       viewport = buffer.viewport,
       findState = buffer.findState,
       isNewEmpty = buffer.document.isNewEmpty

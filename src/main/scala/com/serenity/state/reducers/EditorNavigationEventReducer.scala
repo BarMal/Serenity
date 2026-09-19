@@ -107,15 +107,7 @@ private[reducers] object EditorNavigationEventReducer:
       // No viewport here either, for the reasons `applyMultiCursorPageNavigation` documents: a top line of
       // `lastLine - visibleLines + 1` counts logical lines against a screen of visual rows, and the effect boundary
       // recomputes it correctly straight afterwards regardless.
-      applyBuffer(
-        _.copy(
-          editing = buffer.editing.copy(
-            cursors = List(newCursor),
-            preferredColumn = Some(newCursor.column),
-            preferredXPx = None
-          )
-        )
-      )
+      applyBuffer(_.copy(editing = EditingState(List(newCursor))))
     else navigate(_ => CursorPosition(lastLine, lastLineEnd))
 
   private def reduceSelectAll(ctx: CursorEventContext): ReducerResult =
@@ -126,13 +118,7 @@ private[reducers] object EditorNavigationEventReducer:
         val lastLine  = math.max(0, countLines(current.document.content) - 1)
         val endCursor = CursorPosition(lastLine, findLineEnd(current.document.content, lastLine))
         current.copy(
-          editing = current.editing.copy(
-            cursors = List(endCursor),
-            selection = Some(Selection(CursorPosition(0, 0), endCursor)),
-            selections = Nil,
-            preferredColumn = Some(endCursor.column),
-            preferredXPx = None
-          )
+          editing = EditingState.fromCursors(List(Cursor(endCursor, Some(CursorPosition(0, 0)))))
         )
       }
     )
@@ -140,22 +126,11 @@ private[reducers] object EditorNavigationEventReducer:
   private def applyMultiCursorNavigation(
     buffer: Buffer
   )(move: CursorPosition => CursorPosition): Buffer =
-    val finalCursors = buffer.editing.cursors
+    val finalCursors = buffer.editing.cursorPositions
       .map(move)
       .distinct
       .sortBy(cursor => (cursor.line, cursor.column))
-    val primaryCursor = finalCursors.primaryCursor
-    val baseBuffer = buffer.copy(
-      editing = buffer.editing.copy(
-        cursors = finalCursors,
-        selection = None,
-        selections = Nil,
-        preferredColumn = Some(primaryCursor.column),
-        preferredXPx = None,
-        multiCursorVerticalStates = Nil
-      )
-    )
-    baseBuffer
+    buffer.copy(editing = EditingState(finalCursors))
 
   private def applyMultiCursorPageNavigation(
     buffer: Buffer,
@@ -166,18 +141,8 @@ private[reducers] object EditorNavigationEventReducer:
   ): Buffer =
     val move = target(buffer, currentState, paneId, direction)
 
-    val finalCursors = buffer.editing.cursors
+    val finalCursors = buffer.editing.cursorPositions
       .map(move)
       .distinct
       .sortBy(cursor => (cursor.line, cursor.column))
-    val primaryCursor = finalCursors.primaryCursor
-    buffer.copy(
-      editing = buffer.editing.copy(
-        cursors = finalCursors,
-        selection = None,
-        selections = Nil,
-        preferredColumn = Some(primaryCursor.column),
-        preferredXPx = None,
-        multiCursorVerticalStates = Nil
-      )
-    )
+    buffer.copy(editing = EditingState(finalCursors))

@@ -9,19 +9,18 @@ import com.serenity.state.models.*
   */
 private[reducers] object EditorCursorMovement:
 
-  /** Replaces the primary (first) cursor while leaving every other live cursor untouched -- the shape every
-    * single-cursor edit needs, since `cursors` is a plain `List` rather than a type that proves non-emptiness.
-    * `cursors` is invariantly non-empty (every buffer keeps at least one cursor), so the `Nil` arm below never fires in
-    * practice; it exists only so this is total rather than partial on an empty list.
-    */
+  /** Replaces the primary (first) cursor while leaving every other live cursor untouched. */
   def replacePrimaryCursor(newPrimary: CursorPosition, cursors: List[CursorPosition]): List[CursorPosition] =
     cursors match
       case _ :: rest => newPrimary :: rest
       case Nil       => List(newPrimary)
 
-  def clearInFlightMultiCursorVerticalState(buffer: Buffer): Buffer =
-    if buffer.editing.multiCursorVerticalStates.isEmpty then buffer
-    else buffer.copy(editing = buffer.editing.copy(multiCursorVerticalStates = Nil))
+  /** Since `#1577`, each cursor carries its own preferred-column/x state directly, so there is nothing left to clear
+    * that a fresh primary-cursor write (`EditingState.withPrimary`) doesn't already replace on its own. Kept as a
+    * named no-op so call sites that clear stale multi-cursor vertical state ahead of an event that might turn
+    * genuinely multi-cursor again don't need to know that distinction disappeared.
+    */
+  def clearInFlightMultiCursorVerticalState(buffer: Buffer): Buffer = buffer
 
   /** Where a movement key lands, plus the column and measured x-offset a later vertical move should resume from.
     * Movement and shift-movement compute this identically and differ only in what they do with it.
@@ -70,12 +69,8 @@ private[reducers] object EditorCursorMovement:
       Focused.modifyBufferWithId(buffer.id) { current =>
         val landed = target(current, from)
         current.copy(
-          editing = current.editing.copy(
-            cursors = replacePrimaryCursor(landed.cursor, current.editing.cursors),
-            selection = None,
-            preferredColumn = Some(landed.preferredColumn),
-            preferredXPx = landed.preferredXPx
-          )
+          editing =
+            current.editing.withPrimary(Cursor(landed.cursor, None, Some(landed.preferredColumn), landed.preferredXPx))
         )
       }
     )
@@ -103,13 +98,7 @@ private[reducers] object EditorCursorMovement:
   ): Buffer =
     val selectionAnchor = buffer.primarySelection.map(_.anchor).getOrElse(anchor)
     buffer.copy(
-      editing = buffer.editing.copy(
-        cursors = replacePrimaryCursor(focus, buffer.editing.cursors),
-        selection = Some(Selection(selectionAnchor, focus)),
-        selections = Nil,
-        preferredColumn = preferredColumn,
-        preferredXPx = preferredXPx
-      )
+      editing = buffer.editing.withPrimary(Cursor(focus, Some(selectionAnchor), preferredColumn, preferredXPx))
     )
 
   def collapseSelectionsToFocus(buffer: Buffer): Buffer =
@@ -117,16 +106,7 @@ private[reducers] object EditorCursorMovement:
       .map(_.focus)
       .distinct
       .sortBy(cursor => (cursor.line, cursor.column))
-    val primaryCursor = cursors.primaryCursor
-    buffer.copy(
-      editing = buffer.editing.copy(
-        cursors = cursors,
-        selection = None,
-        selections = Nil,
-        preferredColumn = Some(primaryCursor.column),
-        preferredXPx = None
-      )
-    )
+    buffer.copy(editing = EditingState(cursors))
 
   /** A page is a screenful of what the reader can see. Under word wrap that is a screenful of *visual rows*, which is
     * far fewer logical lines than `visibleLines` -- counted in logical lines, one PageDown through wrapped prose jumps
@@ -209,7 +189,7 @@ private[reducers] object EditorCursorMovement:
     content.graphemeBoundaryAfterOrAt(content.lineColumnToOffset(selection.end.line, selection.end.column))
 
   def distinctCursorLines(buffer: Buffer): List[Int] =
-    buffer.editing.cursors.distinct
+    buffer.editing.cursorPositions.distinct
       .sortBy(cursor => (cursor.line, cursor.column))
       .map(_.line)
       .distinct
@@ -223,7 +203,7 @@ private[reducers] object EditorCursorMovement:
   final case class CursorEntry(cursor: CursorPosition, offset: Int)
 
   def multiCursorEntries(buffer: Buffer): List[CursorEntry] =
-    buffer.editing.cursors.distinct
+    buffer.editing.cursorPositions.distinct
       .map(cursor => CursorEntry(cursor, buffer.document.content.lineColumnToOffset(cursor.line, cursor.column)))
       .sortBy(_.offset)
 

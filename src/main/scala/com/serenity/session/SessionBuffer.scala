@@ -62,7 +62,7 @@ object SessionBuffer:
       isDirty = buffer.document.isDirty,
       language = buffer.document.language.map(_.id),
       isNewEmpty = buffer.document.isNewEmpty,
-      cursors = buffer.editing.cursors.map(SessionCursorPosition.fromCursorPosition),
+      cursors = buffer.editing.cursorPositions.map(SessionCursorPosition.fromCursorPosition),
       viewport = SessionViewport.fromViewport(buffer.viewport),
       // Clean, file-backed buffers rely on the on-disk file (see toBufferIO's disk-read fallback) --
       // only a buffer with actual unsaved content needs its text re-serialized into session JSON.
@@ -89,7 +89,7 @@ object SessionBuffer:
         language = sessionBuffer.language.flatMap(LanguageId.fromString),
         isNewEmpty = sessionBuffer.isNewEmpty
       ),
-      editing = EditingState(cursors = sessionBuffer.cursors.map(SessionCursorPosition.toCursorPosition)),
+      editing = EditingState(sessionBuffer.cursors.map(SessionCursorPosition.toCursorPosition)),
       viewport = SessionViewport.toViewport(sessionBuffer.viewport),
       findState = sessionBuffer.findState.map(SessionFindState.toFindState),
       annotations = Annotations(

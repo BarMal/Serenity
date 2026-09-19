@@ -140,7 +140,7 @@ final private[manager] class EditorMouseTargeting(port: EditorMouseTargetingPort
     )
 
   def rangeSelectionFromAnchor(buffer: Buffer, focus: CursorPosition): Option[Selection] =
-    val anchor = buffer.primarySelection.map(_.anchor).orElse(buffer.editing.cursors.headOption).getOrElse(focus)
+    val anchor = buffer.primarySelection.map(_.anchor).orElse(buffer.editing.cursorPositions.headOption).getOrElse(focus)
     Option.when(anchor != focus)(Selection(anchor, focus))
 
   private def offsetToCursorPosition(content: com.serenity.rope.Rope, offset: Int): CursorPosition =

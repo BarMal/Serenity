@@ -17,7 +17,7 @@ object StatusLineText:
   private def segment(state: AppState, buffer: Buffer, segment: StatusSegment): String =
     segment match
       case StatusSegment.Position =>
-        val cursor = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
+        val cursor = buffer.editing.cursorPositions.headOption.getOrElse(CursorPosition(0, 0))
         s"Line ${cursor.line + 1}, Col ${cursor.column + 1}"
       case StatusSegment.Title =>
         buffer.document.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Unsaved")

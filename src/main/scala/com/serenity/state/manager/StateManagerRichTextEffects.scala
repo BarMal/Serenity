@@ -148,7 +148,7 @@ final private[manager] class StateManagerRichTextEffects(stateRef: Ref[IO, AppSt
     val selections = buffer.allSelections.filter(selection => selection.start != selection.end).map(richTextRange)
     if selections.nonEmpty then selections
     else
-      buffer.editing.cursors.distinct.map { cursor =>
+      buffer.editing.cursorPositions.distinct.map { cursor =>
         RichTextRange(
           start = RichTextPosition(cursor.line, cursor.column),
           end = RichTextPosition(cursor.line, cursor.column)

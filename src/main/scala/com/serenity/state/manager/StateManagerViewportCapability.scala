@@ -32,7 +32,7 @@ final private[manager] class StateManagerViewportCapability(
     stateRef.update { state =>
       Focused.bufferOf(state, paneId) match
         case Some(buffer) =>
-          val cursor        = buffer.editing.cursors.primaryCursor
+          val cursor        = buffer.editing.cursors.head.position
           val updatedBuffer = buffer.copy(viewport = CursorViewport.adjustForCursor(buffer, state, cursor))
           state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> updatedBuffer)))
         case None => state
@@ -101,7 +101,7 @@ final private[manager] class StateManagerViewportCapability(
               val halfVisible = buffer.viewport.visibleLines / 2
               val newTopLine  = math.max(0, clampedLine - halfVisible)
               val updatedBuffer = buffer.copy(
-                editing = buffer.editing.copy(cursors = List(CursorPosition(clampedLine, 0))),
+                editing = EditingState(List(CursorPosition(clampedLine, 0))),
                 viewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0)
               )
               state.copy(persisted =

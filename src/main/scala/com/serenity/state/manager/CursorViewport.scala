@@ -19,10 +19,10 @@ object CursorViewport:
         val cursorMoved =
           before.persisted.buffers
             .get(bufferId)
-            .exists(_.editing.cursors.headOption != buffer.editing.cursors.headOption)
+            .exists(_.editing.cursorPositions.headOption != buffer.editing.cursorPositions.headOption)
         if !cursorMoved then state
         else
-          buffer.editing.cursors.headOption match
+          buffer.editing.cursorPositions.headOption match
             case Some(cursor) =>
               val surfaceConfig    = state.persisted.config.surfaceConfig
               val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled

@@ -305,7 +305,7 @@ object RendererFloatingPanels:
       val maxSourceLines = RendererMarkdownLens.markdownPreviewSourceLineLimit(visibleRows).max(1)
       val maxStart       = (lineCount - maxSourceLines).max(0)
       val fallbackStart  = buffer.viewport.topLine.max(0).min(maxStart)
-      val anchorLine = buffer.editing.cursors.headOption
+      val anchorLine = buffer.editing.cursorPositions.headOption
         .map(_.line)
         .filter(line => line >= 0 && line < lineCount)
         .getOrElse(buffer.viewport.topLine.max(0).min(lineCount - 1))

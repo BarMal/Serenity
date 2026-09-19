@@ -62,7 +62,7 @@ object EditorGeometryProducer:
     // `moveVertical` then found nothing and Up/Down/Home/End fell back to naive char-grid movement, which is the
     // "wrapped navigation moves by logical line" bug in a real prose document.
     val wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled
-    val cursor          = buffer.editing.cursors.headOption.getOrElse(CursorPosition(0, 0))
+    val cursor          = buffer.editing.cursorPositions.headOption.getOrElse(CursorPosition(0, 0))
     // Every logical line is at least one visual row, so walking back `rowsAbove` logical lines always reaches far
     // enough to offer `rowsAbove` rows of context; `windowTopVisualLine` below then trims the excess. The window's
     // budget has to hold that context as well as the rows below the cursor it already covered.

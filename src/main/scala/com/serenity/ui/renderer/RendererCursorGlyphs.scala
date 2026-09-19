@@ -26,7 +26,7 @@ object RendererCursorGlyphs:
     snapshot: TextLayoutSnapshot
   ): List[PixelRect] =
 
-    buffer.editing.cursors.zipWithIndex.flatMap { (cursor, cursorIndex) =>
+    buffer.editing.cursorPositions.zipWithIndex.flatMap { (cursor, cursorIndex) =>
       val isPrimaryCursor = cursorIndex == 0
       val shouldRenderCursor =
         context.cursorVisible || (buffer.editing.cursors.size > 1 && !isPrimaryCursor)

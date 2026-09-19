@@ -96,13 +96,7 @@ final private[manager] class StateManagerReplaceWorkflow(
         isDirty = true,
         isNewEmpty = false
       ),
-      editing = buffer.editing.copy(
-        cursors = List(newCursor),
-        selection = None,
-        selections = Nil,
-        preferredColumn = Some(newCursor.column),
-        preferredXPx = None
-      ),
+      editing = EditingState(List(newCursor)),
       findState = updatedFindState
     )
     recordWorkflowUndo(state, bufferId, buffer) >> stateRef.get.flatMap { current =>
@@ -196,12 +190,8 @@ final private[manager] class StateManagerReplaceWorkflow(
         isDirty = true,
         isNewEmpty = false
       ),
-      editing = buffer.editing.copy(
-        cursors = List(newCursor),
-        selection = replacementSelection,
-        selections = Nil,
-        preferredColumn = Some(newCursor.column),
-        preferredXPx = None
+      editing = EditingState.fromCursors(
+        List(replacementSelection.fold(Cursor(newCursor))(Cursor(_)))
       ),
       findState = updatedFindState
     )
@@ -218,7 +208,7 @@ final private[manager] class StateManagerReplaceWorkflow(
     )
 
   private def nextReplaceMatchOffset(buffer: Buffer, matches: List[Int]): Int =
-    val cursorOffset = buffer.editing.cursors.headOption
+    val cursorOffset = buffer.editing.cursorPositions.headOption
       .map(cursor => offsetForCursor(buffer.document.content, cursor))
       .getOrElse(0)
     // The only caller checks matches.isEmpty first, so matches is always non-empty here; 0 is an

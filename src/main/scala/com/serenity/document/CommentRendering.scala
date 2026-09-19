@@ -15,7 +15,7 @@ object CommentRendering:
 
   def atCursor(buffer: Buffer): Option[RenderedComment] =
     for
-      cursor  <- buffer.editing.cursors.headOption
+      cursor  <- buffer.editing.cursorPositions.headOption
       comment <- authoredCommentAt(buffer, cursor).orElse(commentAtLine(buffer, cursor.line))
     yield comment
 
@@ -84,7 +84,7 @@ object CommentRendering:
   private def documentCommentAtCursor(state: AppState, paneId: PaneId): Option[DocumentComment] =
     for
       buffer  <- paneBuffer(state, paneId)
-      cursor  <- buffer.editing.cursors.headOption
+      cursor  <- buffer.editing.cursorPositions.headOption
       comment <- buffer.annotations.documentComments.find(_.contains(cursor))
     yield comment
 
@@ -98,7 +98,7 @@ object CommentRendering:
       pane     <- state.persisted.layout.editorPanes.get(paneId)
       bufferId <- pane.bufferId
       buffer   <- state.persisted.buffers.get(bufferId)
-      cursor   <- buffer.editing.cursors.headOption
+      cursor   <- buffer.editing.cursorPositions.headOption
       comment  <- atCursor(buffer)
     yield
       val target = buffer.annotations.documentComments.find(_.contains(cursor))
