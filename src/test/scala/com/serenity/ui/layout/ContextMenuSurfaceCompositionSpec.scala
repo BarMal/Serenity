@@ -118,3 +118,46 @@ class ContextMenuSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     secondRowY - firstRowY shouldBe 3.0
     resolved.hitAt(itemBoxes.head.rect.x, firstRowY + 1) shouldBe None
   }
+
+  // `SurfaceFrameLayout.frameHeightForItemRows` is the exact call `FloatingSurfaceLayout`'s `ContextMenu` case makes
+  // today (`itemRows = menu.items.length`, `hasHeader = true`, `hasFooter = menu.items.nonEmpty`, default border
+  // cells) -- asserting against it directly, rather than hand-derived numbers, proves `frameHeight` behavior-preserving
+  // for every item count/gap/target-row combination that migration touches.
+  "frameHeight" should "match SurfaceFrameLayout.frameHeightForItemRows for a populated menu" in {
+    val populated = menu(List(save, cut, copyIt))
+    for
+      itemGapRows    <- List(0.0, 1.0, 2.0)
+      itemTargetRows <- List(1, 2, 3)
+    do
+      val expected = SurfaceFrameLayout.frameHeightForItemRows(
+        itemRows = populated.items.length,
+        hasHeader = true,
+        hasFooter = populated.items.nonEmpty,
+        borderCells = SurfaceFrameLayout.DefaultBorderCells,
+        itemGapRows = itemGapRows,
+        itemTargetRows = itemTargetRows
+      )
+
+      ContextMenuSurfaceComposition.frameHeight(populated, itemGapRows, itemTargetRows) shouldBe expected
+    end for
+  }
+
+  it should "omit the footer's row from the height of an empty menu, matching frameHeightForItemRows" in {
+    val empty = ContextMenu(title = "empty", targetFocus = Focus.EditorPane(PaneId(0)), items = Nil)
+
+    val expected = SurfaceFrameLayout.frameHeightForItemRows(
+      itemRows = 0,
+      hasHeader = true,
+      hasFooter = false,
+      borderCells = SurfaceFrameLayout.DefaultBorderCells
+    )
+
+    ContextMenuSurfaceComposition.frameHeight(empty) shouldBe expected
+  }
+
+  it should "default itemGapRows/itemTargetRows the same way forMenu does" in {
+    val populated = menu(List(save, cut, copyIt))
+
+    ContextMenuSurfaceComposition.frameHeight(populated) shouldBe
+      ContextMenuSurfaceComposition.frameHeight(populated, itemGapRows = 0.0, itemTargetRows = 1)
+  }
