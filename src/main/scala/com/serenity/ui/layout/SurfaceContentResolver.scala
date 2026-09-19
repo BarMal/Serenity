@@ -113,11 +113,20 @@ object SurfaceContentResolver:
         )
       case SurfaceContent.DirectoryTree(tree, selectedPath) =>
         PanelContentResolver.resolveDirectoryTree(rect, mode, tree, selectedPath)
-      case SurfaceContent.CommandPalette(_) =>
-        // Painted entirely via `CommandRunnerSurfaceComposition` (issue #819, slice 2), not this plain-rows path --
-        // mirrors `ModalWorkflow`/`TabBar`'s own empty fallback above. `CommandRunnerPeek` below still needs
-        // `CommandPaletteContentResolver.resolveCommandPalette`'s real rows -- it has no composition of its own.
-        ResolvedSurfaceContent()
+      case SurfaceContent.CommandPalette(runner) =>
+        // `OverlayViewModel.contentView` bypasses this call entirely for `CommandPalette` (issue #819, slice 2):
+        // painting is done via `CommandRunnerSurfaceComposition`, and `TextOverlayRenderer` ignores `rows` whenever
+        // `composition` is set, which it always is there. This dispatcher still resolves it for real, though --
+        // `EditorLayoutContract.floatingGeometry` calls `resolve` independently and genuinely needs these real,
+        // item-count-accurate rows/header/footer for its own (non-composition) row-slot/header-rect geometry.
+        CommandPaletteContentResolver.resolveCommandPalette(
+          runner,
+          rect,
+          mode,
+          itemGapRows,
+          itemTargetRows,
+          showKeyHints
+        )
       case SurfaceContent.CommandRunnerPeek(runner) =>
         // Cursor-peek prototype: same rendering as CommandPalette, reused as-is (see UiSurface.scala's doc comment
         // on why this is a distinct SurfaceContent case rather than the same one).
@@ -159,10 +168,10 @@ object SurfaceContentResolver:
         // Painted entirely via `TabBarSurfaceComposition` (issue #1075/#1076), not this plain-rows path -- mirrors
         // `ContextualToolbar`'s own empty fallback just above.
         ResolvedSurfaceContent()
-      case SurfaceContent.ContextMenu(_) =>
-        // Painted entirely via `ContextMenuSurfaceComposition` (issue #819, slice 2), not this plain-rows path --
-        // mirrors `ModalWorkflow`/`TabBar`'s own empty fallback above.
-        ResolvedSurfaceContent()
+      case SurfaceContent.ContextMenu(menu) =>
+        // `OverlayViewModel.contentView` bypasses this call entirely for `ContextMenu` too (issue #819, slice 2), for
+        // the same reason and with the same `EditorLayoutContract` caveat as `CommandPalette` just above.
+        PickerContentResolver.resolveContextMenu(menu, rect, mode, itemGapRows)
       case SurfaceContent.CommentLens(lens) =>
         ResolvedSurfaceContent(
           title = titleFor(mode, "comment"),

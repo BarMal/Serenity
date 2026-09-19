@@ -3,10 +3,9 @@ package com.serenity.ui.layout
 import com.serenity.state.models.*
 import com.serenity.ui.theme.Theme
 
-/** Resolves the windowed single-selection pickers -- the theme picker/creator and fuzzy file search -- into overlay
-  * rows. Split out of `SurfaceContentResolver` to keep that file's dispatcher readable -- see the doc comment there.
-  * The generic context menu's own resolver, `resolveContextMenu`, was retired here (issue #819, slice 2): it now paints
-  * entirely through `ContextMenuSurfaceComposition`.
+/** Resolves the windowed single-selection pickers -- the theme picker/creator, fuzzy file search, and the generic
+  * context menu -- into overlay rows. Split out of `SurfaceContentResolver` to keep that file's dispatcher readable --
+  * see the doc comment there.
   */
 private[layout] object PickerContentResolver:
 
@@ -100,4 +99,33 @@ private[layout] object PickerContentResolver:
       header = Some(headerRow),
       rows = resultRows,
       footer = Option.when(state.hasMoreResults)(OverlayRow(s"${state.results.length} loaded, more available"))
+    )
+
+  def resolveContextMenu(
+    menu: ContextMenu,
+    rect: LayoutRect,
+    mode: SurfaceRenderMode,
+    itemGapRows: Double
+  ): ResolvedSurfaceContent =
+    val itemWindow = SurfaceFrameLayout(rect).itemWindow(
+      itemCount = menu.items.size,
+      selectedIndex = menu.selectedIndex,
+      hasHeader = true,
+      hasFooter = menu.items.nonEmpty,
+      itemGapRows = itemGapRows
+    )
+    val visibleItems = itemWindow.slice(menu.items)
+    val rows = visibleItems.zipWithIndex.map {
+      case (item, index) =>
+        OverlayRow(
+          plainText = item.label,
+          selected = index + itemWindow.offset == menu.selectedIndex
+        )
+    }
+
+    ResolvedSurfaceContent(
+      title = SurfaceContentResolver.titleFor(mode, menu.title),
+      header = Some(OverlayRow(menu.title)),
+      rows = rows,
+      footer = Option.when(menu.items.nonEmpty)(OverlayRow(s"${menu.selectedIndex + 1}/${menu.items.length}"))
     )
