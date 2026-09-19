@@ -113,15 +113,11 @@ object SurfaceContentResolver:
         )
       case SurfaceContent.DirectoryTree(tree, selectedPath) =>
         PanelContentResolver.resolveDirectoryTree(rect, mode, tree, selectedPath)
-      case SurfaceContent.CommandPalette(runner) =>
-        CommandPaletteContentResolver.resolveCommandPalette(
-          runner,
-          rect,
-          mode,
-          itemGapRows,
-          itemTargetRows,
-          showKeyHints
-        )
+      case SurfaceContent.CommandPalette(_) =>
+        // Painted entirely via `CommandRunnerSurfaceComposition` (issue #819, slice 2), not this plain-rows path --
+        // mirrors `ModalWorkflow`/`TabBar`'s own empty fallback above. `CommandRunnerPeek` below still needs
+        // `CommandPaletteContentResolver.resolveCommandPalette`'s real rows -- it has no composition of its own.
+        ResolvedSurfaceContent()
       case SurfaceContent.CommandRunnerPeek(runner) =>
         // Cursor-peek prototype: same rendering as CommandPalette, reused as-is (see UiSurface.scala's doc comment
         // on why this is a distinct SurfaceContent case rather than the same one).
@@ -163,8 +159,10 @@ object SurfaceContentResolver:
         // Painted entirely via `TabBarSurfaceComposition` (issue #1075/#1076), not this plain-rows path -- mirrors
         // `ContextualToolbar`'s own empty fallback just above.
         ResolvedSurfaceContent()
-      case SurfaceContent.ContextMenu(menu) =>
-        PickerContentResolver.resolveContextMenu(menu, rect, mode, itemGapRows)
+      case SurfaceContent.ContextMenu(_) =>
+        // Painted entirely via `ContextMenuSurfaceComposition` (issue #819, slice 2), not this plain-rows path --
+        // mirrors `ModalWorkflow`/`TabBar`'s own empty fallback above.
+        ResolvedSurfaceContent()
       case SurfaceContent.CommentLens(lens) =>
         ResolvedSurfaceContent(
           title = titleFor(mode, "comment"),

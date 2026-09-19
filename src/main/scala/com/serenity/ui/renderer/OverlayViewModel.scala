@@ -268,6 +268,7 @@ object OverlayViewModel:
     content match
       case SurfaceContent.ModalWorkflow(_)     => true
       case SurfaceContent.ContextMenu(_)       => true
+      case SurfaceContent.CommandPalette(_)    => true
       case SurfaceContent.TabBar(_, _)         => true
       case SurfaceContent.ContextualToolbar(_) => true
       case _                                   => false

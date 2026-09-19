@@ -8,6 +8,14 @@ import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+/** Coverage for `CommandPaletteContentResolver.resolveCommandPalette`'s row-building logic -- search chrome, item
+  * rows, footer/key-hint text -- reached here through `SurfaceContent.CommandRunnerPeek`, not `CommandPalette`.
+  * `SurfaceContentResolver.resolve` bypasses `CommandPalette` entirely as of issue #819 slice 2 (painted solely via
+  * `CommandRunnerSurfaceComposition`, which calls the very same row-building helpers this suite exercises), but
+  * `CommandRunnerPeek` -- the cursor-peek prototype, which has no composition of its own -- still resolves through
+  * this exact function with identical behavior (both wrap the same `CommandRunner`), so this suite's coverage of that
+  * shared logic stays meaningful without duplicating it into `CommandRunnerSurfaceCompositionSpec`.
+  */
 class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers:
 
   "SurfaceContentResolver" should "resolve command palettes into search chrome, highlighted rows, and scroll metadata once typing begins" in {
@@ -23,7 +31,7 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
     val runner = CommandRunner.empty.activate(registry, AppConfig.default).updateSearchTerm("open file")(using registry)
 
     val floating = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 40, 10),
       SurfaceRenderMode.Floating
     )
@@ -46,7 +54,7 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
     val runner = CommandRunner.empty.activate(CommandRegistry.default, config)
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 80, 80),
       SurfaceRenderMode.Floating
     )
@@ -61,7 +69,7 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
 
   it should "return no floating rows for inactive command palettes" in {
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(CommandRunner.empty),
+      SurfaceContent.CommandRunnerPeek(CommandRunner.empty),
       LayoutRect(0, 0, 40, 10),
       SurfaceRenderMode.Floating
     )
@@ -80,7 +88,7 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
       .updateSearchTerm("zzzznotacommand")(using registry)
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 80, 10),
       SurfaceRenderMode.Floating
     )
@@ -95,7 +103,7 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
       .copy(statusMessage = Some("Invalid binding: ctrl"))
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 60, 10),
       SurfaceRenderMode.Floating
     )
@@ -108,7 +116,7 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
     val runner   = CommandRunner.empty.activate(registry, AppConfig.default)
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 60, 10),
       SurfaceRenderMode.Floating,
       showKeyHints = false
@@ -124,13 +132,13 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
     val statusRunner = plainRunner.copy(statusMessage = Some("Invalid binding: ctrl"))
 
     val plainResolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(plainRunner),
+      SurfaceContent.CommandRunnerPeek(plainRunner),
       LayoutRect(0, 0, 60, 10),
       SurfaceRenderMode.Floating,
       showKeyHints = true
     )
     val statusResolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(statusRunner),
+      SurfaceContent.CommandRunnerPeek(statusRunner),
       LayoutRect(0, 0, 60, 10),
       SurfaceRenderMode.Floating,
       showKeyHints = true
@@ -152,7 +160,7 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
       .withSelectedVisibleIndex(10)
 
     val floating = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 40, 8),
       SurfaceRenderMode.Floating
     )
@@ -193,7 +201,7 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
     )
 
     val floating = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       rect,
       SurfaceRenderMode.Floating
     )
@@ -212,7 +220,7 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
     val rect   = LayoutRect(0, 0, 80, 8)
 
     val floating = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       rect,
       SurfaceRenderMode.Floating,
       itemGapRows = 1
@@ -245,7 +253,7 @@ class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers
       .updateSearchTerm("java")
 
     val floating = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 40, 8),
       SurfaceRenderMode.Floating
     )

@@ -327,20 +327,15 @@ class EditorLayoutContractSurfacesSpec extends AnyFlatSpec with Matchers:
 
     contract.overlayRect(commandRunner.id) shouldBe Some(overlayRects(commandRunner.id))
     contract.overlayContentRect(commandRunner.id) shouldBe Some(overlaysById(commandRunner.id).resolvedContentRect)
-    contract.overlayHeaderRect(commandRunner.id) shouldBe Some(
-      LayoutRect(
-        overlaysById(commandRunner.id).resolvedContentRect.x,
-        overlaysById(commandRunner.id).resolvedContentRect.y,
-        overlaysById(commandRunner.id).resolvedContentRect.width,
-        1
-      )
-    )
-    contract.overlayRowSlots(commandRunner.id) shouldBe overlaysById(commandRunner.id).contentRowSlots
-    assertInside(
-      contract.overlayContentRect(commandRunner.id).getOrElse(fail("expected command runner content")),
-      contract.overlayHeaderRect(commandRunner.id).getOrElse(fail("expected command runner header")),
-      "command runner overlay header"
-    )
+    // The command runner is painted entirely through `CommandRunnerSurfaceComposition` (issue #819, slice 2):
+    // `SurfaceContentResolver.resolve` always returns an empty `ResolvedSurfaceContent` for it now, so this
+    // legacy-geometry header/row-slot tracking -- which reads only that resolved content, never the composition --
+    // can no longer report a header row or item rows for it. `contentRect` above stays meaningful (structural, not
+    // content-derived); its presence in `floatingOverlayContentRects` at all is what `isComposedContent` still
+    // guarantees. See `OverlayViewModelSpec`/`CommandRunnerSurfaceCompositionSpec` for the composition's own,
+    // accurate header/item geometry.
+    contract.overlayHeaderRect(commandRunner.id) shouldBe None
+    contract.overlayRowSlots(commandRunner.id) shouldBe Nil
 
     contract.overlayRect(SurfaceId("missing")) shouldBe None
     contract.overlayContentRect(SurfaceId("missing")) shouldBe None

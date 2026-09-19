@@ -492,7 +492,8 @@ object EditorLayoutContract:
               showKeyHintsFor(content, state)
             )
     Option.when(
-      resolved.header.nonEmpty || resolved.rows.nonEmpty || resolved.footer.nonEmpty || resolved.keyHintRow.nonEmpty
+      resolved.header.nonEmpty || resolved.rows.nonEmpty || resolved.footer.nonEmpty || resolved.keyHintRow.nonEmpty ||
+        isComposedContent(surface.content)
     )(
       surfaceGeometry(
         surface.content,
@@ -502,6 +503,17 @@ object EditorLayoutContract:
         itemTargetRowsFor(surface.content, state)
       )
     )
+
+  // Mirrors `OverlayViewModel.isComposedContent`: `ModalWorkflow`, `ContextMenu`, and `CommandPalette` paint entirely
+  // through their own composition objects (issue #819) and always return an empty `ResolvedSurfaceContent` from
+  // `SurfaceContentResolver.resolve` now, so this floating surface's geometry must not gate on that content being
+  // non-empty the way every other floating content kind still does.
+  private def isComposedContent(content: SurfaceContent): Boolean =
+    content match
+      case SurfaceContent.ModalWorkflow(_)  => true
+      case SurfaceContent.ContextMenu(_)    => true
+      case SurfaceContent.CommandPalette(_) => true
+      case _                                => false
 
   private def showKeyHintsFor(content: SurfaceContent, state: AppState): Boolean =
     content match
@@ -519,6 +531,10 @@ object EditorLayoutContract:
     SurfaceGeometry(
       titleRect = LayoutRect(contentRect.x, frameRect.y, contentRect.width, 1),
       contentRect = contentRect,
+      // `resolved.header`/`.rows`/`.footer` are empty for every composed content kind (`ModalWorkflow`, `ContextMenu`,
+      // `CommandPalette` -- issue #819), so `rowSlots`/`headerRect` cannot reflect their real, composition-painted
+      // header/item/footer layout here; only `contentRect` (structural, content-independent) stays meaningful for
+      // them. Nothing in production reads these two fields for a composed surface today.
       rowSlots = SurfaceFrameLayout.contentRowSlotsFor(
         contentRect,
         resolved.rows.length,

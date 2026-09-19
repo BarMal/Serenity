@@ -8,6 +8,11 @@ import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+/** Coverage for `CommandPaletteContentResolver.resolveSettingsSurface`'s row-building logic, reached here through
+  * `SurfaceContent.CommandRunnerPeek` -- see the doc comment on `SurfaceContentResolverCommandPaletteSpec` for why:
+  * `SurfaceContent.CommandPalette` no longer resolves through this path (issue #819 slice 2), but `CommandRunnerPeek`
+  * still does, with identical behavior, so this suite's coverage stays meaningful.
+  */
 class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matchers:
 
   "SurfaceContentResolver" should "render direct settings search result rows with effective values and source scopes" in {
@@ -18,7 +23,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       .updateSearchTerm("default document")
 
     val floating = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 90, 10),
       SurfaceRenderMode.Floating
     )
@@ -47,7 +52,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
 
     val row = SurfaceContentResolver
       .resolve(
-        SurfaceContent.CommandPalette(runner),
+        SurfaceContent.CommandRunnerPeek(runner),
         LayoutRect(0, 0, 80, 10),
         SurfaceRenderMode.Floating
       )
@@ -80,7 +85,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       )
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 80, 10),
       SurfaceRenderMode.Floating
     )
@@ -108,7 +113,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       .copy(surface = CommandRunnerSurface.Settings(root = CommandPaletteState(selectedIndex = 2), drilled = None))
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 80, 10),
       SurfaceRenderMode.Floating,
       itemGapRows = 0.0,
@@ -138,7 +143,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       )
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 80, 20),
       SurfaceRenderMode.Floating
     )
@@ -169,7 +174,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       )
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 80, 10),
       SurfaceRenderMode.Floating
     )
@@ -200,7 +205,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       )
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 80, 10),
       SurfaceRenderMode.Floating
     )
@@ -217,7 +222,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       )
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 90, 12),
       SurfaceRenderMode.Floating
     )
@@ -235,7 +240,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       .copy(surface = CommandRunnerSurface.Settings(drilled = None))
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 90, 12),
       SurfaceRenderMode.Floating,
       showKeyHints = true
@@ -259,7 +264,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       )
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 90, 12),
       SurfaceRenderMode.Floating,
       showKeyHints = true
@@ -287,7 +292,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       )
 
     val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 90, 12),
       SurfaceRenderMode.Floating,
       showKeyHints = true
@@ -327,7 +332,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
     )
 
     val floating = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       rect,
       SurfaceRenderMode.Floating
     )
@@ -347,7 +352,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       )
 
     val floating = SurfaceContentResolver.resolve(
-      SurfaceContent.CommandPalette(runner),
+      SurfaceContent.CommandRunnerPeek(runner),
       LayoutRect(0, 0, 60, 8),
       SurfaceRenderMode.Floating
     )
