@@ -276,7 +276,7 @@ object FloatingSurfaceLayout:
           itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity)
         )
       case SurfaceContent.CommentLens(lens) =>
-        math.max(4, math.min(8, lens.draft.split("\n", -1).length + 3))
+        CommentLensSurfaceComposition.frameHeight(lens)
       case SurfaceContent.ModalWorkflow(modal) =>
         ModalSurfaceComposition.frameHeight(
           modal,

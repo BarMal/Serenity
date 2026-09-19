@@ -244,14 +244,14 @@ object OverlayViewModel:
       else
         content match
           // Painted entirely via `ContextMenuSurfaceComposition`/`CommandRunnerSurfaceComposition`/
-          // `ContextualToolbarSurfaceComposition` (issue #819, slices 2-3) -- `TextOverlayRenderer` ignores `rows`
-          // whenever `composition` is set below, which it always is for these, so resolving real rows here would be
-          // dead computation on this specific call site. Scoped to just this call site, not
-          // `SurfaceContentResolver.resolve`'s own dispatch: `EditorLayoutContract` (`floatingGeometry`) calls that
-          // dispatcher independently and genuinely still needs the real, item-count accurate rows/header/footer it
-          // produces -- see its own doc comment.
+          // `ContextualToolbarSurfaceComposition`/`CommentLensSurfaceComposition` (issue #819, slices 2-3) --
+          // `TextOverlayRenderer` ignores `rows` whenever `composition` is set below, which it always is for these,
+          // so resolving real rows here would be dead computation on this specific call site. Scoped to just this
+          // call site, not `SurfaceContentResolver.resolve`'s own dispatch: `EditorLayoutContract`
+          // (`floatingGeometry`) calls that dispatcher independently and genuinely still needs the real, item-count
+          // accurate rows/header/footer it produces -- see its own doc comment.
           case SurfaceContent.ContextMenu(_) | SurfaceContent.CommandPalette(_) |
-              SurfaceContent.ContextualToolbar(_) =>
+              SurfaceContent.ContextualToolbar(_) | SurfaceContent.CommentLens(_) =>
             ResolvedSurfaceContent()
           case _ =>
             SurfaceContentResolver.resolve(
@@ -279,6 +279,7 @@ object OverlayViewModel:
       case SurfaceContent.CommandPalette(_)    => true
       case SurfaceContent.TabBar(_, _)         => true
       case SurfaceContent.ContextualToolbar(_) => true
+      case SurfaceContent.CommentLens(_)       => true
       case _                                   => false
 
   private def collapsedContentView(content: com.serenity.state.models.SurfaceContent): ResolvedSurfaceContent =
@@ -338,6 +339,8 @@ object OverlayViewModel:
         Some(TabBarSurfaceComposition.forTabBar(entries, activeBufferId, rect))
       case SurfaceContent.ContextualToolbar(toolbarState) =>
         Some(ContextualToolbarSurfaceComposition.forToolbar(toolbarState, state, rect))
+      case SurfaceContent.CommentLens(lens) =>
+        Some(CommentLensSurfaceComposition.forLens(lens, rect))
       case _ => None
 
   private def alphaMultiplierFor(surface: com.serenity.state.models.UiSurface, state: AppState): Float =

@@ -15,6 +15,12 @@ final private[manager] case class CommentLensMouseHitTestingPort(stateRef: Ref[I
   * (see `MouseHitTesting`'s editor-click fallback). A lens already in the editable state was fully interactive before
   * this feature and needs no new click handling here; it's left to the generic
   * `MouseHitTestGeometry.isInsideFloatingSurface` swallow later in the dispatch chain.
+  *
+  * Left as a single whole-body containment check rather than migrated onto `CommentLensSurfaceComposition`'s paint
+  * boxes (issue #819, slice 3): the lens is one contiguous draft text region, not a list of discrete rows a user picks
+  * between, and its UX contract (`CommentClickSpec`) is "click anywhere in the body to start editing", not "click a
+  * specific row" -- so there is no per-row target for a composition `hitAt` lookup to distinguish. Building one would
+  * be a hit-testing surface with nothing for it to resolve differently than this existing check already does.
   */
 final private[manager] class CommentLensMouseHitTesting(port: CommentLensMouseHitTestingPort):
   import port.*
