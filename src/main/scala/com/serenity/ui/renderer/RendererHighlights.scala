@@ -282,8 +282,12 @@ object RendererHighlights:
     */
   private[renderer] def selectionColumnsForVisualLine(cursor: Cursor, visualLine: TextVisualLine): Option[(Int, Int)] =
     cursor.selectionGeometry.flatMap(_.rectFor(visualLine.bufferLine, visualLine.startColumn)) match
-      case Some(animatedRect) => Option.when(animatedRect.width > 0)(animatedRect.x -> (animatedRect.x + animatedRect.width))
-      case None => cursor.selection.flatMap(selection => columnsForRange(selection.start, selection.end, visualLine, markPoint = false))
+      case Some(animatedRect) =>
+        Option.when(animatedRect.width > 0)(animatedRect.x -> (animatedRect.x + animatedRect.width))
+      case None =>
+        cursor.selection.flatMap(selection =>
+          columnsForRange(selection.start, selection.end, visualLine, markPoint = false)
+        )
 
   private def columnsForRange(
     start: CursorPosition,

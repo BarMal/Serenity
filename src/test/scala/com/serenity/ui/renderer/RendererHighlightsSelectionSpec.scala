@@ -7,10 +7,10 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Selection grow/settle (issue #1085 phase 3): [[RendererHighlights.selectionColumnsForVisualLine]] is the one
-  * integration point shared by both the GUI (measured) and TUI (cell) painting branches of
-  * `renderTextRangeBackground` -- both already take a generic `(rangeStart, rangeEnd)` column pair, so resolving that
-  * pair from an in-flight `Cursor.selectionGeometry` when one exists, or the live selection otherwise, is the entire
-  * renderer change either path needs; no TUI-specific animation code exists (or is needed) beyond this.
+  * integration point shared by both the GUI (measured) and TUI (cell) painting branches of `renderTextRangeBackground`
+  * -- both already take a generic `(rangeStart, rangeEnd)` column pair, so resolving that pair from an in-flight
+  * `Cursor.selectionGeometry` when one exists, or the live selection otherwise, is the entire renderer change either
+  * path needs; no TUI-specific animation code exists (or is needed) beyond this.
   */
 class RendererHighlightsSelectionSpec extends AnyFlatSpec with Matchers:
 
@@ -61,7 +61,8 @@ class RendererHighlightsSelectionSpec extends AnyFlatSpec with Matchers:
   it should "keep painting a removing line's shrinking extent even after the live selection no longer covers it" in {
     val tween    = Tween(start = rect(0, 4), end = rect(0, 0), curve = EasingCurve.Linear, steps = 4)
     val geometry = SelectionGeometryState(List(SelectionLineGeometry(SelectionLineKey(1, 0), tween, removing = true)))
-    val cursor   = Cursor(CursorPosition(0, 3), selectionAnchor = Some(CursorPosition(0, 0)), selectionGeometry = Some(geometry))
+    val cursor =
+      Cursor(CursorPosition(0, 3), selectionAnchor = Some(CursorPosition(0, 0)), selectionGeometry = Some(geometry))
 
     RendererHighlights.selectionColumnsForVisualLine(cursor, visualLine(1, 0, 10)) shouldBe Some(0 -> 4)
   }

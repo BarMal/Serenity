@@ -10,8 +10,8 @@ import org.scalatest.matchers.should.Matchers
 
 /** Selection grow/settle (issue #1085 phase 3): `CursorViewport.ensureVisibleCursors` seeds `Cursor.selectionGeometry`
   * whenever a cursor's own selection changes -- extend, shrink, create or clear -- gated by the `SelectionGeometry`
-  * motion family (including accessibility), independently for every live cursor, and *not* GUI-only the way caret
-  * glide is (`SelectionGeometryState`'s column-granular model serves TUI's cell painting too). Mirrors
+  * motion family (including accessibility), independently for every live cursor, and *not* GUI-only the way caret glide
+  * is (`SelectionGeometryState`'s column-granular model serves TUI's cell painting too). Mirrors
   * `CursorViewportGlideSpec`, the equivalent seeding spec for caret glide.
   */
 class CursorViewportSelectionGeometrySpec extends AnyFlatSpec with Matchers:
@@ -139,7 +139,13 @@ class CursorViewportSelectionGeometrySpec extends AnyFlatSpec with Matchers:
     )
     val firstResult = CursorViewport.ensureVisibleCursors(before, afterFirstExtend)
     val firstGeometry =
-      firstResult.persisted.buffers(bufferId).editing.cursors.head.selectionGeometry.getOrElse(fail("expected geometry"))
+      firstResult.persisted
+        .buffers(bufferId)
+        .editing
+        .cursors
+        .head
+        .selectionGeometry
+        .getOrElse(fail("expected geometry"))
     val midFlight = firstGeometry.advance
     midFlight.isComplete shouldBe false
     val midFlightRect = midFlight.rectFor(0, 0).getOrElse(fail("expected a rect"))
@@ -164,7 +170,12 @@ class CursorViewportSelectionGeometrySpec extends AnyFlatSpec with Matchers:
     )
     val secondResult = CursorViewport.ensureVisibleCursors(midFlightState, afterSecondExtend)
 
-    val retargeted = secondResult.persisted.buffers(bufferId).editing.cursors.head.selectionGeometry
+    val retargeted = secondResult.persisted
+      .buffers(bufferId)
+      .editing
+      .cursors
+      .head
+      .selectionGeometry
       .getOrElse(fail("expected a retargeted geometry"))
     val retargetedTween = retargeted.lines.find(_.key == SelectionLineKey(0, 0)).getOrElse(fail("expected a line"))
     retargetedTween.tween.start shouldBe midFlightRect

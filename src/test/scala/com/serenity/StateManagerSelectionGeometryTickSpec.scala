@@ -62,7 +62,7 @@ class StateManagerSelectionGeometryTickSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "advance each cursor's selection geometry independently in a multi-cursor buffer" in {
-    val sm = makeStateManager()
+    val sm             = makeStateManager()
     val secondTween    = Tween(rect(0), rect(4), EasingCurve.Linear, 1)
     val secondGeometry = SelectionGeometryState(List(SelectionLineGeometry(SelectionLineKey(1, 0), secondTween)))
     val secondCursor =

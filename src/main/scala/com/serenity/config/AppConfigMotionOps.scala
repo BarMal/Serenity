@@ -311,11 +311,11 @@ object AppConfigMotionOps:
       val motion = appConfig.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.Cursor)
       Option.when(motion.enabled)(AppConfig.scaledAnimation(motion.animation, motion.speedScale)).flatten
 
-    /** Selection grow/settle timing (issue #1085 phase 3) after applying the effective `SelectionGeometry` motion
-      * speed -- `None` when the family is disabled (including by accessibility, or under `MotionPreset.Reduced`),
-      * which `CursorViewport`/`SelectionGeometry` read as "paint the selection at its live extent instantly, no
-      * geometry to seed." Independent of [[scaledCursorGlideAnimation]] -- a user can turn off caret glide while
-      * keeping selection-highlight motion, or vice versa.
+    /** Selection grow/settle timing (issue #1085 phase 3) after applying the effective `SelectionGeometry` motion speed
+      * -- `None` when the family is disabled (including by accessibility, or under `MotionPreset.Reduced`), which
+      * `CursorViewport`/`SelectionGeometry` read as "paint the selection at its live extent instantly, no geometry to
+      * seed." Independent of [[scaledCursorGlideAnimation]] -- a user can turn off caret glide while keeping
+      * selection-highlight motion, or vice versa.
       */
     def scaledSelectionGeometryAnimation: Option[AnimationConfig] =
       val motion = appConfig.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.SelectionGeometry)

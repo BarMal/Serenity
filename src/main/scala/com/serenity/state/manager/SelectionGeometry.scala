@@ -5,8 +5,8 @@ import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{LayoutRect, TextLayoutSnapshot}
 
-/** Selection grow/settle (issue #1085 phase 3): `rectsForSelection` is the one place a [[Selection]] is turned into
-  * the per-visual-line column extents [[SelectionGeometryState.diff]] tweens between -- reusing the same word-wrap
+/** Selection grow/settle (issue #1085 phase 3): `rectsForSelection` is the one place a [[Selection]] is turned into the
+  * per-visual-line column extents [[SelectionGeometryState.diff]] tweens between -- reusing the same word-wrap
   * measurement `CursorGlideGeometry.paneRelativePosition`/`CursorViewport.adjustForCursor` already do, so this never
   * disagrees with them about where a wrapped line's rows fall.
   *

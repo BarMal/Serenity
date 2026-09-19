@@ -97,8 +97,8 @@ object CursorViewport:
   /** Selection grow/settle (issue #1085 phase 3): seeds/retargets `Cursor.selectionGeometry` for every cursor in
     * `bufferId` whose selection changed between `beforeBuffer` and the buffer now in `state` -- any change (extend,
     * shrink, create, clear), matched positionally the same way `seedCursorGlide` above does. Gated by the
-    * `SelectionGeometry` motion family (`AppConfig.scaledSelectionGeometryAnimation` already folds in accessibility
-    * and the `Reduced` preset). Unlike `seedCursorGlide`, this runs regardless of `state.runtime.isTuiMode` --
+    * `SelectionGeometry` motion family (`AppConfig.scaledSelectionGeometryAnimation` already folds in accessibility and
+    * the `Reduced` preset). Unlike `seedCursorGlide`, this runs regardless of `state.runtime.isTuiMode` --
     * `SelectionGeometryState`'s column-granular model serves both the GUI's measured painting and TUI's cell painting
     * (see its own doc comment), so there is nothing GUI-only about it here.
     *

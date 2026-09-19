@@ -61,9 +61,9 @@ class SelectionGeometrySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "split a word-wrapped line's selection across its own visual rows" in {
-    val longLine = "a" * 60
-    val buffer   = bufferWith(longLine, viewport = Viewport(visibleLines = 20, visibleColumns = 20))
-    val config   = AppConfig.default
+    val longLine  = "a" * 60
+    val buffer    = bufferWith(longLine, viewport = Viewport(visibleLines = 20, visibleColumns = 20))
+    val config    = AppConfig.default
     val selection = Selection(anchor = CursorPosition(0, 0), focus = CursorPosition(0, longLine.length))
 
     val rects = SelectionGeometry.rectsForSelection(buffer, config, selection)

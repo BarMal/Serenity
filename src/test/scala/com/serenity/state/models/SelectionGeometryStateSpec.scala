@@ -5,8 +5,8 @@ import com.serenity.ui.layout.LayoutRect
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Selection grow/settle (issue #1085 phase 3): [[SelectionGeometryState]] wraps one [[Tween]]`[LayoutRect]` per
-  * visual line a selection's highlight touches, keyed by [[SelectionLineKey]] (a visual line's own `bufferLine`/
+/** Selection grow/settle (issue #1085 phase 3): [[SelectionGeometryState]] wraps one [[Tween]]`[LayoutRect]` per visual
+  * line a selection's highlight touches, keyed by [[SelectionLineKey]] (a visual line's own `bufferLine`/
   * `startColumn`, the same identity `TextVisualLine` itself carries) rather than raw list position -- selection
   * anchor-stability (`Selection`'s `DirectedRange`) means a line's identity never needs to shift as neighbouring lines
   * are added or removed, so keying by identity is simpler than "index from the anchor" bookkeeping while producing the
@@ -26,7 +26,8 @@ class SelectionGeometryStateSpec extends AnyFlatSpec with Matchers:
 
   private def key(bufferLine: Int, startColumn: Int): SelectionLineKey = SelectionLineKey(bufferLine, startColumn)
 
-  private def rect(startColumn: Int, width: Int): LayoutRect = LayoutRect(x = startColumn, y = 0, width = width, height = 1)
+  private def rect(startColumn: Int, width: Int): LayoutRect =
+    LayoutRect(x = startColumn, y = 0, width = width, height = 1)
 
   "SelectionGeometryState.diff" should "tween only the line whose extent actually changed on a same-line-count resize" in {
     val before = Map(key(0, 0) -> rect(2, 3), key(1, 0) -> rect(0, 2))
@@ -104,9 +105,9 @@ class SelectionGeometryStateSpec extends AnyFlatSpec with Matchers:
 
   it should "retarget an in-flight tween rather than restarting it from the old rect" in {
     val inFlightTween = Tween(start = rect(0, 0), end = rect(0, 2), curve = curve, steps = 4, currentFrame = 2)
-    val existing       = SelectionGeometryState(List(SelectionLineGeometry(key(0, 0), inFlightTween)))
-    val before          = Map(key(0, 0) -> rect(0, 2))
-    val after           = Map(key(0, 0) -> rect(0, 6))
+    val existing      = SelectionGeometryState(List(SelectionLineGeometry(key(0, 0), inFlightTween)))
+    val before        = Map(key(0, 0) -> rect(0, 2))
+    val after         = Map(key(0, 0) -> rect(0, 6))
 
     val geometry = SelectionGeometryState.diff(Some(existing), before, after, curve, steps)
 
