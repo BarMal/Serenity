@@ -85,8 +85,15 @@ object PinnedPanelViewModel:
       rows = resolved.rows.map(toPanelRow),
       header = resolved.header.map(toPanelRow),
       footer = resolved.footer.map(toPanelRow),
-      surfaceId = Some(surface.id)
+      surfaceId = Some(surface.id),
+      composition = compositionFor(surface, rect)
     )
+
+  private def compositionFor(surface: UiSurface, rect: LayoutRect): Option[ResolvedSurfaceComposition] =
+    surface.content match
+      case SurfaceContent.DirectoryTree(tree, selectedPath) =>
+        Some(DirectoryTreeSurfaceComposition.forTree(tree, selectedPath, rect))
+      case _ => None
 
   private def toPanelRow(row: OverlayRow): TextPanelRow =
     TextPanelRow(

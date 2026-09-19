@@ -39,15 +39,20 @@ private[layout] object PanelContentResolver:
       rows = lines.map(OverlayRow(_))
     )
 
-  def resolveDirectoryTree(
+  /** One rendered directory-tree row paired with the filesystem path it represents -- shared by `resolveDirectoryTree`
+    * (which only needs `row`) and `DirectoryTreeSurfaceComposition` (issue #819, slice 4), which also needs `path` to
+    * build the row's hit region, so both build the exact same row text and clipping from one place.
+    */
+  final private[layout] case class DirectoryTreeRowView(row: OverlayRow, path: java.nio.file.Path)
+
+  private[layout] def directoryTreeRowViews(
     rect: LayoutRect,
-    mode: SurfaceRenderMode,
     tree: com.serenity.ui.layout.DirectoryTreeData,
     selectedPath: Option[java.nio.file.Path]
-  ): ResolvedSurfaceContent =
+  ): List[DirectoryTreeRowView] =
     val visibleRows = com.serenity.ui.layout.DirectoryTreeData.visibleRows(tree)
     val maxRows     = math.max(1, rect.height - 2)
-    val rows = visibleRows.take(maxRows).map { row =>
+    visibleRows.take(maxRows).map { row =>
       val marker =
         if row.isDirectory then
           if row.isExpanded then "▾ "
@@ -55,15 +60,24 @@ private[layout] object PanelContentResolver:
           else "▹ "
         else ""
       val indent = "  " * row.depth
-      OverlayRow(
-        plainText = s"$indent$marker${row.name}",
-        selected = selectedPath.contains(row.path)
+      DirectoryTreeRowView(
+        row = OverlayRow(
+          plainText = s"$indent$marker${row.name}",
+          selected = selectedPath.contains(row.path)
+        ),
+        path = row.path
       )
     }
 
+  def resolveDirectoryTree(
+    rect: LayoutRect,
+    mode: SurfaceRenderMode,
+    tree: com.serenity.ui.layout.DirectoryTreeData,
+    selectedPath: Option[java.nio.file.Path]
+  ): ResolvedSurfaceContent =
     ResolvedSurfaceContent(
       title = SurfaceContentResolver.titleFor(mode, tree.rootPath.getFileName.toString),
-      rows = rows
+      rows = directoryTreeRowViews(rect, tree, selectedPath).map(_.row)
     )
 
   def resolveTerminal(
