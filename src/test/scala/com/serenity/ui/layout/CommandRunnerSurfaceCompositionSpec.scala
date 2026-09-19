@@ -1,7 +1,8 @@
 package com.serenity.ui.layout
 
 import com.serenity.command.*
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, InterfaceConfig, InterfaceDensity}
+import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -178,4 +179,67 @@ class CommandRunnerSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       box.actionId shouldBe None
     }
     resolved.focusOrder.length shouldBe resolved.paintBoxes.count(_.focusId.isDefined)
+  }
+
+  private def stateForDensity(density: InterfaceDensity): AppState =
+    AppState(
+      persisted = Persisted(
+        layout = Layout.empty,
+        buffers = Map.empty,
+        focus = Focus.Modal,
+        config = AppConfig.default.copy(interfaceConfig = InterfaceConfig(density = density))
+      )
+    )
+
+  // `FloatingSurfaceLayout.calculateFloatingSurfaceHeight` is `private[layout]`, and this spec shares that package --
+  // it is called here directly as the pre-migration reference implementation, so `frameHeight` is proven
+  // behavior-preserving against the exact computation `FloatingSurfaceLayout` used to do inline, for every density and
+  // room combination, rather than against separately hand-derived numbers that could drift from it.
+  //
+  // `frameHeight` itself returns the *preferred* height only -- the same "before the shared floor/maxHeight clamp"
+  // value `ModalSurfaceComposition.frameHeight` returns for its own content -- because that final
+  // `math.max(3, math.min(maxHeight, preferredHeight))` clamp is common to every `SurfaceContent` case and stays in
+  // `FloatingSurfaceLayout` itself post-migration, not duplicated into each composition object. Reproducing that one
+  // shared clamp here is what makes this comparable to `calculateFloatingSurfaceHeight`'s fully-clamped result.
+  private def clamped(maxHeight: Int, preferredHeight: Int): Int =
+    math.max(3, math.min(maxHeight, preferredHeight))
+
+  "frameHeight" should "match FloatingSurfaceLayout's existing command-palette height for every density" in {
+    val runner = paletteRunner(commands(12))
+    for
+      density             <- List(InterfaceDensity.Compact, InterfaceDensity.Comfortable, InterfaceDensity.Spacious)
+      maxHeight           <- List(6, 12, 24)
+      roomOnPreferredSide <- List(4, 12, Int.MaxValue)
+    do
+      val state   = stateForDensity(density)
+      val content = SurfaceContent.CommandPalette(runner)
+      val expected =
+        FloatingSurfaceLayout.calculateFloatingSurfaceHeight(content, 60, maxHeight, state, roomOnPreferredSide)
+
+      clamped(
+        maxHeight,
+        CommandRunnerSurfaceComposition.frameHeight(state, maxHeight, roomOnPreferredSide)
+      ) shouldBe expected
+    end for
+  }
+
+  it should "match FloatingSurfaceLayout's existing height for a settings-surface (submenu) runner too" in {
+    val runner = settingsRootRunner
+    for
+      density   <- List(InterfaceDensity.Compact, InterfaceDensity.Comfortable, InterfaceDensity.Spacious)
+      maxHeight <- List(6, 12, 24)
+    do
+      val state   = stateForDensity(density)
+      val content = SurfaceContent.CommandPalette(runner)
+      val expected = FloatingSurfaceLayout.calculateFloatingSurfaceHeight(content, 60, maxHeight, state)
+
+      clamped(maxHeight, CommandRunnerSurfaceComposition.frameHeight(state, maxHeight)) shouldBe expected
+    end for
+  }
+
+  it should "default roomOnPreferredSide to unconstrained, matching FloatingSurfaceLayout's own default" in {
+    val state = stateForDensity(InterfaceDensity.Comfortable)
+
+    CommandRunnerSurfaceComposition.frameHeight(state, maxHeight = 20) shouldBe
+      CommandRunnerSurfaceComposition.frameHeight(state, maxHeight = 20, roomOnPreferredSide = Int.MaxValue)
   }
