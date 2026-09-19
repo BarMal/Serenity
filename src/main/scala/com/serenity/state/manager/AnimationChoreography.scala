@@ -154,7 +154,9 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
       val initialBg    = previousCell.flatMap(_.currentBackground).getOrElse(transparent(panelBg))
       val initialFg    = previousCell.flatMap(_.currentForeground).getOrElse(transparent(panelFg))
       val remainingSteps = previousCell
-        .map(cell => completedFadeSteps(rowOffset + steps, cell.backgroundAnimation.map(_.remainingFrames).getOrElse(0)))
+        .map(cell =>
+          completedFadeSteps(rowOffset + steps, cell.backgroundAnimation.map(_.remainingFrames).getOrElse(0))
+        )
         .getOrElse(steps)
       CharacterKey(0, rowOffset) -> AnimatedCell(
         content = None,

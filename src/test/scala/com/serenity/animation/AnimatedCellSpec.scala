@@ -25,10 +25,9 @@ class AnimatedCellSpec extends AnyFlatSpec with Matchers:
     cell.advance().currentForeground shouldEqual Some(white)
   }
 
-  it should "return None when there is no foreground animation" in {
+  it should "return None when there is no foreground animation" in
     AnimatedCell(None, backgroundAnimation = Some(Tween(red, blue, EasingCurve.Linear, steps = 1))).currentForeground
       .shouldEqual(None)
-  }
 
   "AnimatedCell.currentBackground" should "return the tween's current value" in {
     val cell = AnimatedCell(None, backgroundAnimation = Some(Tween(red, blue, EasingCurve.Linear, steps = 1)))
@@ -36,10 +35,9 @@ class AnimatedCellSpec extends AnyFlatSpec with Matchers:
     cell.advance().currentBackground shouldEqual Some(blue)
   }
 
-  it should "return None when there is no background animation" in {
+  it should "return None when there is no background animation" in
     AnimatedCell(None, foregroundAnimation = Some(Tween(black, white, EasingCurve.Linear, steps = 1))).currentBackground
       .shouldEqual(None)
-  }
 
   // ── isComplete / advance ─────────────────────────────────────────────────
 

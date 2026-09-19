@@ -4,10 +4,10 @@ import java.awt.Color
 
 /** A single buffer cell's colour animation. Both foreground and background are `Option[Tween[Color]]` (issue #1574) --
   * the same tweened-value primitive every other animated value in this codebase uses, generalised over `Color` via
-  * `Interpolator[Color]` -- rather than the `ColorTimeline`/step-list pair this type carried before: `ColorTimeline`
-  * is retired now that `Tween` covers everything it did (including its `delayFrames` stagger), and the step-list
-  * mechanism (`foregroundSteps`/`backgroundSteps`/`cycling`/`rotate`) had no caller left to serve once `Tween` took
-  * over every construction site that used it.
+  * `Interpolator[Color]` -- rather than the `ColorTimeline`/step-list pair this type carried before: `ColorTimeline` is
+  * retired now that `Tween` covers everything it did (including its `delayFrames` stagger), and the step-list mechanism
+  * (`foregroundSteps`/`backgroundSteps`/`cycling`/`rotate`) had no caller left to serve once `Tween` took over every
+  * construction site that used it.
   */
 final case class AnimatedCell(
     content: Option[Char],

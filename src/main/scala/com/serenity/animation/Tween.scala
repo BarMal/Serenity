@@ -64,8 +64,8 @@ object Interpolator:
       )
 
   /** `java.awt.Color` (issue #1574): each RGBA channel lerped independently via `Interpolator[Double]`, rounded and
-    * clamped to `[0, 255]` -- the same math `RgbInterpolator.interpolateComponent` used before colour joined this
-    * generic primitive, so retiring it changes no visible colour output.
+    * clamped to `[0, 255]` -- the same math `RgbInterpolator.interpolateComponent` used before that type was retired in
+    * favour of this generic primitive (issue #1574), so no visible colour output changed.
     */
   given Interpolator[Color] with
 
@@ -89,12 +89,12 @@ object Interpolator:
   * what a plain generic `ScalarTimeline[A]` would still be missing.
   */
 final case class Tween[A](
-  start: A,
-  end: A,
-  curve: EasingCurve,
-  steps: Int,
-  currentFrame: Int = 0,
-  delayFrames: Int = 0
+    start: A,
+    end: A,
+    curve: EasingCurve,
+    steps: Int,
+    currentFrame: Int = 0,
+    delayFrames: Int = 0
 ):
 
   /** Frames the tween sits at `start` before interpolation begins -- the per-row stagger `ColorTimeline` used to
@@ -117,9 +117,9 @@ final case class Tween[A](
   def isComplete: Boolean =
     steps <= 0 || currentFrame >= delay + steps
 
-  /** Frames still to run, delay included -- exactly the length of the step-list `ColorTimeline`/`RgbInterpolator`
-    * used to hand out before issue #1574, kept for callers (`AnimationChoreography`'s reverse-fade continuation)
-    * that need to know how far into an in-flight tween a cell has got.
+  /** Frames still to run, delay included -- exactly the length of the step-list the retired `ColorTimeline`/
+    * `RgbInterpolator` pair used to hand out before issue #1574, kept for callers (`AnimationChoreography`'s
+    * reverse-fade continuation) that need to know how far into an in-flight tween a cell has got.
     */
   def remainingFrames: Int =
     if steps <= 0 then 0 else math.max(0, delay + steps - currentFrame)

@@ -5,8 +5,8 @@ import java.awt.Color
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Exercises `AnimationState`'s advance/cleanup mechanics via `AnimatedCell.parametricForeground`-backed cells
-  * (issue #1574: the direct step-list construction this file originally tested was retired along with
+/** Exercises `AnimationState`'s advance/cleanup mechanics via `AnimatedCell.parametricForeground`-backed cells (issue
+  * #1574: the direct step-list construction this file originally tested was retired along with
   * `foregroundSteps`/`backgroundSteps`, since `AnimatedCell.advance()` covers the same ground through `Tween[Color]`
   * now -- see `AnimatedCellSpec`/`TweenSpec` for that primitive's own coverage).
   */

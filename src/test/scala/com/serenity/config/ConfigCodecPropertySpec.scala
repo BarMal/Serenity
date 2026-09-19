@@ -85,7 +85,7 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
     // (quick/smooth/subtle) or, under "custom", `steps`/`duration_ms` -- there is no `animation.curve` key in the
     // schema, because nothing in the settings surface can choose a curve yet (wiring a curve picker into settings is
     // separate follow-up work, not part of adding the primitive). `genAnimationConfig` correctly never varies it, so
-    // there is nothing to lose on a round trip either -- see `EasingSpec`/`TweenSpec`/`ColorTimelineSpec` for this
+    // there is nothing to lose on a round trip either -- see `EasingSpec`/`TweenSpec` for this
     // field's own coverage. Same reasoning for the other two places an `AnimationConfig` sits directly on the config
     // tree (rather than buried in the `motionConfiguration` families map, which is compared as a single opaque
     // value and so raises no leaf path of its own here).

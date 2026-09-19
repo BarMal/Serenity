@@ -206,14 +206,14 @@ class TweenSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "behave exactly like a delay-free tween once the delay has elapsed" in {
-    val tween = Tween(start = 0.0, end = 10.0, curve = EasingCurve.Linear, steps = 4, delayFrames = 2)
+    val tween          = Tween(start = 0.0, end = 10.0, curve = EasingCurve.Linear, steps = 4, delayFrames = 2)
     val atDelayElapsed = tween.advance.advance // currentFrame = 2, delay just elapsed
     atDelayElapsed.currentValue shouldBe 0.0
     atDelayElapsed.advance.currentValue shouldBe 2.5 // one step into a 4-step Linear tween
   }
 
   it should "become complete only after delayFrames + steps total advances" in {
-    val tween = Tween(start = 0.0, end = 10.0, curve = EasingCurve.Linear, steps = 2, delayFrames = 3)
+    val tween    = Tween(start = 0.0, end = 10.0, curve = EasingCurve.Linear, steps = 2, delayFrames = 3)
     val advanced = Iterator.iterate(tween)(_.advance).drop(4).next()
     advanced.isComplete shouldBe false
     advanced.advance.isComplete shouldBe true
