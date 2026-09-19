@@ -59,12 +59,14 @@ final private[manager] class StateManagerEditorCapability(
       hasColumnTransitions = state.runtime.columnTransitions.nonEmpty
       hasPanelGeometry     = state.runtime.panelGeometry.nonEmpty
       hasCursorGlide       = state.persisted.buffers.values.exists(hasInFlightGlide)
+      hasSelectionGeometry = state.persisted.buffers.values.exists(hasInFlightSelectionGeometry)
       hasTypingActivity    = state.runtime.typingActivity.isActive
       flairLevel           = state.persisted.config.visualFlairLevel
       hasCompanionSprite   = state.persisted.config.companionSpriteConfig.enabled && flairLevel != VisualFlairLevel.Off
       stillActive <-
         if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations && !hasColumnTransitions &&
-            !hasPanelGeometry && !hasCursorGlide && !hasCompanionSprite && !hasTypingActivity
+            !hasPanelGeometry && !hasCursorGlide && !hasSelectionGeometry && !hasCompanionSprite &&
+            !hasTypingActivity
         then IO.pure(false)
         else
           // `stateRef.modify`, not a `set` built from the `state` read above: this tick runs on the render loop's own
@@ -85,7 +87,9 @@ final private[manager] class StateManagerEditorCapability(
                 current.runtime.columnTransitions.view.mapValues(_.advance).toMap.filterNot(_._2.isComplete)
               val stateWithAdvancedBuffers = current.copy(
                 persisted = current.persisted.copy(
-                  buffers = current.persisted.buffers.view.mapValues(advanceCursorGlides).toMap
+                  buffers = current.persisted.buffers.view
+                    .mapValues(advanceCursorGlides andThen advanceSelectionGeometries)
+                    .toMap
                 ),
                 runtime = current.runtime.copy(
                   themeTransition = updatedTransition,
@@ -111,6 +115,7 @@ final private[manager] class StateManagerEditorCapability(
             newState.runtime.columnTransitions.nonEmpty ||
             newState.runtime.panelGeometry.nonEmpty ||
             newState.persisted.buffers.values.exists(hasInFlightGlide) ||
+            newState.persisted.buffers.values.exists(hasInFlightSelectionGeometry) ||
             newState.runtime.typingActivity.isActive ||
             hasCompanionSprite
     yield stillActive
@@ -120,6 +125,12 @@ final private[manager] class StateManagerEditorCapability(
     */
   private def hasInFlightGlide(buffer: Buffer): Boolean =
     buffer.editing.cursors.exists(_.glide.exists(!_.isComplete))
+
+  /** Selection grow/settle (issue #1085 phase 3): whether `buffer` has any cursor with a selection geometry still
+    * mid-flight -- the same early-out `hasInFlightGlide` gives caret glide.
+    */
+  private def hasInFlightSelectionGeometry(buffer: Buffer): Boolean =
+    buffer.editing.cursors.exists(_.selectionGeometry.exists(!_.isComplete))
 
   /** Advances every cursor's `glide` by one tick, dropping it once complete -- the per-cursor equivalent of
     * `Runtime.columnTransitions`'/`Runtime.panelGeometry`'s tick-driven advance, except this state lives on `Cursor`
@@ -132,6 +143,20 @@ final private[manager] class StateManagerEditorCapability(
         case Some(glide) =>
           val advanced = glide.advance
           if advanced.isComplete then cursor.copy(glide = None) else cursor.copy(glide = Some(advanced))
+        case None => cursor
+    }
+    if advancedCursors == buffer.editing.cursors then buffer else buffer.withCursorList(advancedCursors)
+
+  /** Selection grow/settle (issue #1085 phase 3): advances every cursor's `selectionGeometry` by one tick, dropping it
+    * once every line's tween completes -- the per-cursor equivalent of `advanceCursorGlides` just above.
+    */
+  private def advanceSelectionGeometries(buffer: Buffer): Buffer =
+    val advancedCursors = buffer.editing.cursors.map { cursor =>
+      cursor.selectionGeometry match
+        case Some(geometry) =>
+          val advanced = geometry.advance
+          if advanced.isComplete then cursor.copy(selectionGeometry = None)
+          else cursor.copy(selectionGeometry = Some(advanced))
         case None => cursor
     }
     if advancedCursors == buffer.editing.cursors then buffer else buffer.withCursorList(advancedCursors)

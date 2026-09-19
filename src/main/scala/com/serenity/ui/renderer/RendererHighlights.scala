@@ -24,8 +24,8 @@ object RendererHighlights:
     snapshot: TextLayoutSnapshot,
     styledSegments: Option[List[StyledText]] = None
   ): Unit =
-    buffer.allSelections.foreach { selection =>
-      columnsForRange(selection.start, selection.end, visualLine, markPoint = false).foreach {
+    buffer.editing.cursors.toList.foreach { cursor =>
+      selectionColumnsForVisualLine(cursor, visualLine).foreach {
         case (selectionStart, selectionEnd) =>
           renderTextRangeBackground(
             surface,
@@ -269,6 +269,25 @@ object RendererHighlights:
             CharacterRenderer.renderChar(surface, screenX, screenY, charToRender)
         }
       finally surface.disableStyle(extraStyle)
+
+  /** Selection grow/settle (issue #1085 phase 3): `cursor`'s highlight extent on `visualLine`, from its in-flight
+    * `Cursor.selectionGeometry` when one exists for this visual line (identified by its own `bufferLine`/
+    * `startColumn`, `SelectionGeometryState`'s own keying), or from the live selection directly otherwise.
+    *
+    * A geometry entry for this visual line always wins over the live selection, even for a line the live selection no
+    * longer covers at all -- that is exactly the "shrinking to nothing" and "removed line" cases, where the animated
+    * extent has to keep painting a line the live selection has already stopped touching until its own tween settles.
+    * `rect.width == 0` (a still-zero-width sliver, or a just-completed removal not yet dropped) paints nothing this
+    * frame, the same as no selection touching this line at all.
+    */
+  private[renderer] def selectionColumnsForVisualLine(cursor: Cursor, visualLine: TextVisualLine): Option[(Int, Int)] =
+    cursor.selectionGeometry.flatMap(_.rectFor(visualLine.bufferLine, visualLine.startColumn)) match
+      case Some(animatedRect) =>
+        Option.when(animatedRect.width > 0)(animatedRect.x -> (animatedRect.x + animatedRect.width))
+      case None =>
+        cursor.selection.flatMap(selection =>
+          columnsForRange(selection.start, selection.end, visualLine, markPoint = false)
+        )
 
   private def columnsForRange(
     start: CursorPosition,

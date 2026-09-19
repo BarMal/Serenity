@@ -16,13 +16,22 @@ import com.serenity.ui.layout.PixelPoint
   * once the glide completes or motion is off -- both read by the renderer as "paint at the logical position, no
   * offset." TUI/hardware-cursor mode never seeds one (a terminal cursor can't glide sub-cell), so it stays `None` there
   * regardless of motion configuration.
+  *
+  * `selectionGeometry` (issue #1085 phase 3) holds this cursor's selection highlight mid-flight, whenever
+  * `CursorViewport`'s seed hook last saw this cursor's selection change with the `SelectionGeometry` motion family
+  * enabled -- growing in when a selection is created, resizing as it extends/shrinks, and settling to nothing when
+  * cleared. Unlike `glide`, this is not GUI-only: both `RendererHighlights`' measured (GUI) and cell (TUI) painting
+  * read the same per-visual-line column extents (`SelectionGeometryState`'s model is column-granular, not pixel-
+  * granular), so it is seeded and advanced regardless of `Runtime.isTuiMode`. `None` once every line's tween completes
+  * or the family is off, read by the renderer as "paint the selection at its live extent directly."
   */
 final case class Cursor(
     position: CursorPosition,
     selectionAnchor: Option[CursorPosition] = None,
     preferredColumn: Option[Int] = None,
     preferredXPx: Option[Float] = None,
-    glide: Option[Tween[PixelPoint]] = None
+    glide: Option[Tween[PixelPoint]] = None,
+    selectionGeometry: Option[SelectionGeometryState] = None
 ):
   def selection: Option[Selection] = selectionAnchor.map(Selection(_, position))
 

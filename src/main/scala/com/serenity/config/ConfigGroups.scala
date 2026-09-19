@@ -78,6 +78,7 @@ object ConfigGroups:
         case MotionFamily.PinnedPanels      => family_.speedScale
         case MotionFamily.ColumnTransitions => family_.speedScale
         case MotionFamily.PanelGeometry     => family_.speedScale
+        case MotionFamily.SelectionGeometry => family_.speedScale
       val scopedTransitions =
         if family != MotionFamily.PinnedPanels then Nil
         else

@@ -20,7 +20,9 @@ final private[manager] class StateManagerMotionCancellation(
     clearBufferAnimations() >>
       stateRef.update(state =>
         state.copy(
-          persisted = state.persisted.copy(buffers = state.persisted.buffers.view.mapValues(clearCursorGlides).toMap),
+          persisted = state.persisted.copy(buffers =
+            state.persisted.buffers.view.mapValues(clearCursorGlides andThen clearSelectionGeometries).toMap
+          ),
           runtime = state.runtime.copy(
             themeTransition = None,
             uiSurfaces = state.runtime.uiSurfaces.filterNot(isGhostOverlay),
@@ -69,6 +71,15 @@ final private[manager] class StateManagerMotionCancellation(
             state.persisted.copy(buffers = state.persisted.buffers.view.mapValues(clearCursorGlides).toMap)
           )
         )
+      case com.serenity.config.MotionFamily.SelectionGeometry =>
+        // Selection grow/settle (issue #1085 phase 3): clears every buffer's in-flight `Cursor.selectionGeometry` --
+        // the one piece of `SelectionGeometry`-family state that is actually cancellable, the same way `Cursor`'s own
+        // case clears `Cursor.glide`.
+        stateRef.update(state =>
+          state.copy(persisted =
+            state.persisted.copy(buffers = state.persisted.buffers.view.mapValues(clearSelectionGeometries).toMap)
+          )
+        )
       case com.serenity.config.MotionFamily.ColumnTransitions =>
         stateRef.update(state => state.copy(runtime = state.runtime.copy(columnTransitions = Map.empty)))
       case com.serenity.config.MotionFamily.PanelGeometry =>
@@ -95,6 +106,14 @@ final private[manager] class StateManagerMotionCancellation(
   private def clearCursorGlides(buffer: Buffer): Buffer =
     if buffer.editing.cursors.exists(_.glide.isDefined) then
       buffer.withCursorList(buffer.editing.cursors.map(_.copy(glide = None)))
+    else buffer
+
+  /** Drops every cursor's in-flight selection geometry on `buffer` -- the `SelectionGeometry` family's cancellation
+    * (`cancelActiveMotion`/`cancelMotionFamily`'s `SelectionGeometry` case).
+    */
+  private def clearSelectionGeometries(buffer: Buffer): Buffer =
+    if buffer.editing.cursors.exists(_.selectionGeometry.isDefined) then
+      buffer.withCursorList(buffer.editing.cursors.map(_.copy(selectionGeometry = None)))
     else buffer
 
   private def clearBufferAnimations(): IO[Unit] =
