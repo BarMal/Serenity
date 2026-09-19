@@ -138,7 +138,7 @@ object DamageProducer:
     (startLine to endLine).toSet
 
   private def cursorDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
-    if before.editing.cursors == after.editing.cursors then Damage.Nothing
+    if before.editing.cursorPositions == after.editing.cursorPositions then Damage.Nothing
     else Damage.BufferRows(bufferId, (before.editing.cursorPositions ++ after.editing.cursorPositions).map(_.line).toSet)
 
   private def selectionDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =

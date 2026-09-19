@@ -4,7 +4,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.EditorGeometryProducer
 import com.serenity.state.models.*
-import com.serenity.testkit.{EditingStateFixtures, VerticalCursorState}
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -23,19 +23,11 @@ class EditorVerticalNavigationReducerSpec extends AnyFlatSpec with Matchers:
     text: String,
     cursors: List[CursorPosition],
     selection: Option[Selection] = None,
-    selections: List[Selection] = Nil,
-    multiCursorVerticalStates: List[VerticalCursorState] = Nil
+    selections: List[Selection] = Nil
   ): AppState =
     val buffer = Buffer
       .fromString(bufferId, text)
-      .copy(editing =
-        EditingStateFixtures(
-          cursors = cursors,
-          selection = selection,
-          selections = selections,
-          multiCursorVerticalStates = multiCursorVerticalStates
-        )
-      )
+      .copy(editing = EditingStateFixtures(cursors = cursors, selection = selection, selections = selections))
     val base = AppState.initial
     // Word wrap (and the visual-line cursor navigation it enables) defaults to on -- switch it off so MoveUp/MoveDown
     // take the plain logical-line path these tests exercise, rather than wrapping short lines against the real
@@ -88,21 +80,13 @@ class EditorVerticalNavigationReducerSpec extends AnyFlatSpec with Matchers:
     after.editing.cursorPositions shouldBe List(CursorPosition(1, 2))
   }
 
-  it should "replace stale in-flight vertical state (a sentinel preferred column/x) when extending" in {
-    val staleCursor = Cursor(CursorPosition(0, 2), None, Some(999), Some(999f))
-    val staleBuffer =
-      Buffer.fromString(bufferId, "alpha\nbeta").copy(editing = EditingState.fromCursors(List(staleCursor)))
-    val before = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> staleBuffer),
-        config = AppState.initial.persisted.config.withWordWrap(false)
-      )
-    )
-
-    val after = bufferAfter(ExtendSelectionDown, before)
-    after.editing.cursors.head.preferredColumn should not be Some(999)
-    after.editing.cursors.head.preferredXPx should not be Some(999f)
-  }
+  /** Before `#1577`, a genuinely multi-cursor buffer's per-cursor vertical state lived in a separate
+    * `multiCursorVerticalStates` collection that `ExtendSelectionDown` had to explicitly clear before falling back to
+    * its single-cursor path, or a later multi-cursor move could reuse state pinned to stale cursor positions. Now that
+    * a cursor's own preferred column/x travels with it directly, there is no second collection left to go stale or
+    * need clearing -- the single remaining cursor's own preferred state is simply whatever this move computes for it,
+    * as the previous test already pins.
+    */
 
   "MoveDown with multiple cursors" should "move every cursor down independently, deduplicating and sorting" in {
     val before = stateWith("alpha\nbeta\ngamma", List(CursorPosition(0, 0), CursorPosition(0, 3)))

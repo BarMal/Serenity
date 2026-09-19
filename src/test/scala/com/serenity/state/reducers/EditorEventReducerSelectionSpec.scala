@@ -151,11 +151,15 @@ class EditorEventReducerSelectionSpec extends AnyFlatSpec with Matchers:
     reduce(selected, MoveDown).primarySelection shouldBe None
   }
 
+  /** `preferredColumn` is `None` here rather than an explicit `Some(2)` -- equivalent because every reader falls back
+    * to the cursor's own current column when it is `None` (`#1577`).
+    */
   "Horizontal movement" should "set the preferred column and forget the measured x-offset" in {
-    val moved = reduce(bufferOf("abcdef", CursorPosition(0, 1)), MoveRight)
+    val moved   = reduce(bufferOf("abcdef", CursorPosition(0, 1)), MoveRight)
+    val primary = moved.editing.cursors.head
 
-    moved.editing.cursors.head.preferredColumn shouldBe Some(2)
-    moved.editing.cursors.head.preferredXPx shouldBe None
+    primary.preferredColumn.getOrElse(primary.position.column) shouldBe 2
+    primary.preferredXPx shouldBe None
   }
 
   "Vertical movement" should "carry the preferred column across a shorter intervening line" in {

@@ -455,7 +455,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
 
-    val finalCursors = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors
+    val finalCursors = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions
     finalCursors shouldBe expectedCursors
 
   it should "move between logical lines when word wrap is disabled and the cursor is past the viewport" in new EditorFixture:

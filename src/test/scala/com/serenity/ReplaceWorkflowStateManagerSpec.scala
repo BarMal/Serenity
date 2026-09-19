@@ -189,7 +189,9 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     undone.modalSurface shouldBe defined
     undone.persisted.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
     undone.persisted.buffers(bufferId).document.content.collect() shouldBe original
-    undone.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 0))
+    // The cursor's position is its own selection's focus (`#1577`), i.e. `CursorPosition(0, "needle".length)` --
+    // not the independent `CursorPosition(0, 0)` the pre-#1577 fixture's now-superseded `cursors` field named.
+    undone.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, "needle".length))
     undone.persisted.buffers(bufferId).primarySelection shouldBe Some(
       Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length))
     )
@@ -537,7 +539,9 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val undone = stateManager.getCurrentState.unsafeRunSync()
     undone.persisted.buffers(bufferId).document.content.collect() shouldBe original
-    undone.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 0))
+    // The cursor's position is its own selection's focus (`#1577`), not the independent `CursorPosition(0, 0)` the
+    // pre-#1577 fixture's now-superseded `cursors` field named.
+    undone.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, "needle".length))
     undone.persisted.buffers(bufferId).primarySelection shouldBe Some(
       Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length))
     )
