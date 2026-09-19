@@ -1,5 +1,6 @@
 package com.serenity.ui.renderer
 
+import com.serenity.animation.Interpolator.given
 import com.serenity.config.AppConfig
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -23,22 +24,30 @@ object RendererCursorGlyphs:
     theme: Theme,
     config: AppConfig,
     context: RenderContext,
-    snapshot: TextLayoutSnapshot
+    snapshot: TextLayoutSnapshot,
+    isTuiMode: Boolean
   ): List[PixelRect] =
 
-    buffer.editing.cursorPositions.zipWithIndex.flatMap { (cursor, cursorIndex) =>
+    buffer.editing.cursors.toList.zipWithIndex.flatMap { (cursor, cursorIndex) =>
       val isPrimaryCursor = cursorIndex == 0
       val shouldRenderCursor =
         context.cursorVisible || (buffer.editing.cursors.size > 1 && !isPrimaryCursor)
-      calculateCursorVisualPosition(cursor, snapshot) match
+      calculateCursorVisualPosition(cursor.position, snapshot) match
         case Some((visualLine, xPx)) if shouldRenderCursor =>
           if RendererPaneContent.visualLineVisible(rect, visualLine, context, snapshot)
           then
             val effectiveCursorColor = cursorColorFor(config, theme, context, isPrimaryCursor)
             val caretWidthPx         = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
-            val screenXPx            = context.cellMetrics.toPixelX(rect.x) + math.round(xPx)
             val rowMetrics           = RendererPaneContent.textRowMetrics(rect, context, snapshot)
-            val screenYPx            = rowMetrics.cursorTopPx(visualLine)
+            // Caret-glide (issue #1085 phase 2): while a glide is in flight, paint at its tweened pane-relative offset
+            // from this frame's own pane origin instead of the cursor's plain logical position -- see
+            // `CursorGlideGeometry`'s doc comment for why the offset is pane-relative rather than an absolute screen
+            // pixel captured once at seed time.
+            val (screenXPx, screenYPx) = glidePixelPosition(cursor, isTuiMode) match
+              case Some(offset) =>
+                (context.cellMetrics.toPixelX(rect.x) + offset.xPx, context.cellMetrics.toPixelY(rect.y) + offset.yPx)
+              case None =>
+                (context.cellMetrics.toPixelX(rect.x) + math.round(xPx), rowMetrics.cursorTopPx(visualLine))
             // Caret is as tall as the row it sits on, so on a heading line it grows with the heading (#1542 prose scale).
             val caretHeightPx = rowMetrics.rowHeightPx(visualLine)
             caretWithin(rect, context.cellMetrics, screenXPx, caretWidthPx) match
@@ -55,6 +64,15 @@ object RendererCursorGlyphs:
           else Nil
         case _ => Nil
     }
+
+  /** Caret-glide (issue #1085 phase 2): the pane-relative pixel offset to paint `cursor` at instead of its plain
+    * logical position, or `None` to paint at the logical position unmoved -- GUI-canvas-only (TUI's caret always snaps
+    * instantly, mirroring `RendererCursorOverlay.presentHardwareCursor`'s existing GUI/TUI split for hardware-cursor
+    * delegation), and `None` once the glide has completed (normally already cleared by
+    * `StateManagerEditorCapability.advanceCursorGlides`, checked again here defensively).
+    */
+  def glidePixelPosition(cursor: Cursor, isTuiMode: Boolean): Option[PixelPoint] =
+    if isTuiMode then None else cursor.glide.filterNot(_.isComplete).map(_.currentValue)
 
   /** The (visual-row index, caret x) the caret is drawn at. Row selection is delegated to
     * [[com.serenity.state.models.NavigationGeometry.visualRowIndexFor]] -- the same lookup vertical navigation uses --

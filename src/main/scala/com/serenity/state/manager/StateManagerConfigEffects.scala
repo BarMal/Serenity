@@ -64,7 +64,7 @@ final private[manager] class StateManagerConfigEffects(
 
   private def updateMotionConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     stateRef.get.flatMap { previousState =>
-      applyConfigUpdate(update).flatTap(cancelDisabledMotion(previousState.persisted.config, _))
+      applyConfigUpdate(update).flatTap(motionCancellation.cancelDisabledMotion(previousState.persisted.config, _))
     }
 
   private def updateMotionAccessibility(accessibility: com.serenity.config.MotionAccessibility): IO[AppConfig] =
@@ -115,123 +115,7 @@ final private[manager] class StateManagerConfigEffects(
       )
     else state
 
-  private def cancelActiveMotion(): IO[Unit] =
-    clearBufferAnimations() >>
-      stateRef.update(state =>
-        state.copy(runtime =
-          state.runtime.copy(
-            themeTransition = None,
-            uiSurfaces = state.runtime.uiSurfaces.filterNot(isGhostOverlay),
-            surfaceAnimations = Map.empty,
-            companionSprite = state.runtime.companionSprite.resetTyping,
-            columnTransitions = Map.empty,
-            panelGeometry = Map.empty
-          )
-        )
-      )
-
-  private def cancelDisabledMotion(previous: AppConfig, current: AppConfig): IO[Unit] =
-    val previousFamilies = previous.surfaceConfig.effectiveMotionConfiguration
-    val currentFamilies  = current.surfaceConfig.effectiveMotionConfiguration
-    if currentFamilies.families.values.forall(!_.enabled) && previousFamilies.families.values.exists(_.enabled) then
-      cancelActiveMotion()
-    else
-      com.serenity.config.MotionFamily.values.toList
-        .filter(family => previousFamilies.family(family).enabled && !currentFamilies.family(family).enabled)
-        .traverse_(cancelMotionFamily)
-
-  private def cancelMotionFamily(family: com.serenity.config.MotionFamily): IO[Unit] =
-    family match
-      case com.serenity.config.MotionFamily.EditorText =>
-        clearBufferAnimations(com.serenity.animation.AnimationOwner.EditorText)
-      case com.serenity.config.MotionFamily.CommandSurfaces =>
-        cancelSurfaceMotion(isCommandSurface)
-      case com.serenity.config.MotionFamily.PinnedPanels =>
-        cancelSurfaceMotion(isDockedSurface)
-      case com.serenity.config.MotionFamily.UiTransitions =>
-        clearBufferAnimations(com.serenity.animation.AnimationOwner.UiTransitions) >>
-          stateRef.update(state =>
-            state.copy(runtime =
-              state.runtime.copy(
-                themeTransition = None,
-                companionSprite = state.runtime.companionSprite.resetTyping
-              )
-            )
-          )
-      case com.serenity.config.MotionFamily.Cursor =>
-        IO.unit
-      case com.serenity.config.MotionFamily.ColumnTransitions =>
-        stateRef.update(state => state.copy(runtime = state.runtime.copy(columnTransitions = Map.empty)))
-      case com.serenity.config.MotionFamily.PanelGeometry =>
-        // Clears every in-flight scale-in/out, then drops any close ghost that existed only for this geometry (no
-        // `surfaceAnimations` entry of its own) -- otherwise, with its geometry gone and no colour fade left to
-        // eventually remove it (`AnimationChoreography.advancePanelGeometry`'s ordinary path), it would sit in
-        // `uiSurfaces` forever.
-        stateRef.update { state =>
-          val orphanedGhostIds = state.runtime.panelGeometry.keySet.filterNot(state.runtime.surfaceAnimations.contains)
-          val ghostIdsToDrop = state.runtime.uiSurfaces.collect {
-            case UiSurface(id, SurfaceContent.GhostOverlay(_, _), _, _) if orphanedGhostIds.contains(id) => id
-          }.toSet
-          state.copy(runtime =
-            state.runtime.copy(
-              panelGeometry = Map.empty,
-              uiSurfaces = state.runtime.uiSurfaces.filterNot(surface => ghostIdsToDrop.contains(surface.id))
-            )
-          )
-        }
-
-  private def clearBufferAnimations(): IO[Unit] =
-    bufferAnimationsRef.update(
-      _.view
-        .mapValues { animations =>
-          val cleared = animations.clearAll()
-          if cleared eq animations then animations else cleared
-        }
-        .toMap
-    )
-
-  private def clearBufferAnimations(owner: com.serenity.animation.AnimationOwner): IO[Unit] =
-    bufferAnimationsRef.update(
-      _.view
-        .mapValues { animations =>
-          val cleared = animations.clear(owner)
-          if cleared eq animations then animations else cleared
-        }
-        .toMap
-    )
-
-  private def cancelSurfaceMotion(matches: UiSurface => Boolean): IO[Unit] =
-    stateRef.update { state =>
-      val matchingIds = state.runtime.uiSurfaces.collect { case surface if matches(surface) => surface.id }.toSet
-      state.copy(runtime =
-        state.runtime.copy(
-          uiSurfaces = state.runtime.uiSurfaces.filterNot(surface => matches(surface) && isGhostOverlay(surface)),
-          surfaceAnimations =
-            state.runtime.surfaceAnimations.filterNot((surfaceId, _) => matchingIds.contains(surfaceId))
-        )
-      )
-    }
-
-  private def isCommandSurface(surface: UiSurface): Boolean =
-    surface.content match
-      case SurfaceContent.CommandPalette(_) => true
-      case SurfaceContent.GhostOverlay(content, _) =>
-        content match
-          case SurfaceContent.CommandPalette(_) => true
-          case _                                => false
-      case _ => false
-
-  /** A transient close-fade ghost, which is discarded rather than animated when motion is cancelled. */
-  private def isGhostOverlay(surface: UiSurface): Boolean =
-    surface.content match
-      case SurfaceContent.GhostOverlay(_, _) => true
-      case _                                 => false
-
-  /** A surface occupying a workspace dock, whether at its pinned size or expanded over the editor. */
-  private def isDockedSurface(surface: UiSurface): Boolean =
-    surface.presentation match
-      case SurfacePresentation.Docked => true
-      case _                          => false
+  private val motionCancellation = StateManagerMotionCancellation(stateRef, bufferAnimationsRef)
 
   private def updateCustomMotionConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     updateMotionConfig(config => update(config).withCustomMotionBaseline)

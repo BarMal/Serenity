@@ -301,6 +301,16 @@ object AppConfigMotionOps:
       val motion = appConfig.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.PanelGeometry)
       Option.when(motion.enabled)(AppConfig.scaledAnimation(motion.animation, motion.speedScale)).flatten
 
+    /** Caret-glide timing (issue #1085 phase 2) after applying the effective `Cursor` motion speed -- `None` when the
+      * family is disabled (including by accessibility, or under `MotionPreset.Reduced`), which `CursorViewport` reads
+      * as "snap the caret to its new position instantly, no glide to seed." Reuses the same `Cursor` family
+      * `AppRuntime.cursorIdleInterval` already gates the blink/breathe cadence with -- a single on/off switch and speed
+      * for every `Cursor`-family motion, not two independent ones.
+      */
+    def scaledCursorGlideAnimation: Option[AnimationConfig] =
+      val motion = appConfig.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.Cursor)
+      Option.when(motion.enabled)(AppConfig.scaledAnimation(motion.animation, motion.speedScale)).flatten
+
     def withEditorInsertionTransitionKind(kind: TransitionKind): AppConfig =
       appConfig.updateAuthoritativeMotion(_.copy(editorInsertionTransitionKind = kind)) { configuration =>
         updateMotionFamily(configuration, MotionFamily.EditorText)(_.copy(transitionKind = kind))
