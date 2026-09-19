@@ -74,10 +74,11 @@ class FlowAnimationBuilderSpec extends AnyFlatSpec with Matchers:
     delayed.advance().currentForeground shouldBe Some(black)
   }
 
-  it should "match post-padding color steps to RgbInterpolator output" in {
-    val steps    = 4
-    val result   = FlowAnimationBuilder.build(grid3x2(), FlowDirection.ByColumn, SweepDirection.Forward, steps)
-    val expected = RgbInterpolator.interpolateRgba(black, white, steps)
+  it should "match post-padding color steps to an un-delayed Tween's own interpolation" in {
+    val steps  = 4
+    val result = FlowAnimationBuilder.build(grid3x2(), FlowDirection.ByColumn, SweepDirection.Forward, steps)
+    val expected =
+      Iterator.iterate(Tween(black, white, EasingCurve.Linear, steps))(_.advance).take(steps).map(_.currentValue).toList
     val leading =
       Iterator.iterate(result(CharacterKey(0, 0)))(_.advance()).take(steps).flatMap(_.currentForeground).toList
     val delayed = Iterator
@@ -151,7 +152,8 @@ class FlowAnimationBuilderSpec extends AnyFlatSpec with Matchers:
       .iterate(result(CharacterKey(3, 7)))(_.advance())
       .take(steps)
       .flatMap(_.currentForeground)
-      .toList shouldEqual RgbInterpolator.interpolateRgba(black, white, steps)
+      .toList shouldEqual
+      Iterator.iterate(Tween(black, white, EasingCurve.Linear, steps))(_.advance).take(steps).map(_.currentValue).toList
   }
 
   it should "give all cells offset 0 when the element spans a single column with ByColumn direction" in {

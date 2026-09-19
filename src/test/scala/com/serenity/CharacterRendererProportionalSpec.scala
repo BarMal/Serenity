@@ -2,7 +2,7 @@ package com.serenity
 
 import java.awt.{Color, Font}
 
-import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
+import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey, EasingCurve, Tween}
 import com.serenity.state.models.{TextCaretStop, TextVisualLine}
 import com.serenity.ui.layout.TextLayoutSnapshot
 import com.serenity.ui.renderer.CharacterRenderer
@@ -32,8 +32,8 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
       Map(
         CharacterKey(1, 0) -> AnimatedCell(
           content = Some('b'),
-          foregroundSteps = List(fg),
-          backgroundSteps = List(bg)
+          foregroundAnimation = Some(Tween(fg, fg, EasingCurve.Linear, steps = 1)),
+          backgroundAnimation = Some(Tween(bg, bg, EasingCurve.Linear, steps = 1))
         )
       )
     )
@@ -43,8 +43,8 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
       Map(
         CharacterKey(column, 0) -> AnimatedCell(
           content = Some('?'),
-          foregroundSteps = List(fg),
-          backgroundSteps = List(bg)
+          foregroundAnimation = Some(Tween(fg, fg, EasingCurve.Linear, steps = 1)),
+          backgroundAnimation = Some(Tween(bg, bg, EasingCurve.Linear, steps = 1))
         )
       )
     )

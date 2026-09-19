@@ -29,8 +29,12 @@ class AnimationStateSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "clear only animations owned by the disabled motion family" in {
-    val editor = AnimatedCell(Some('e'), List(black, white), List.empty)
-    val ui     = AnimatedCell(Some('u'), List(black, white), List.empty, owner = AnimationOwner.UiTransitions)
+    val editor = AnimatedCell(Some('e'), foregroundAnimation = Some(Tween(black, white, EasingCurve.Linear, steps = 2)))
+    val ui = AnimatedCell(
+      Some('u'),
+      foregroundAnimation = Some(Tween(black, white, EasingCurve.Linear, steps = 2)),
+      owner = AnimationOwner.UiTransitions
+    )
     val state = AnimationState(
       Map(
         CharacterKey(0, 0) -> editor,
@@ -168,12 +172,19 @@ class AnimationStateSpec extends AnyFlatSpec with Matchers:
     state.getCharacterColor(6, 10) should be(empty)
   }
 
-  it should "return None from getCharacterColor once animation is complete" in {
+  // Note (issue #1574): under the old ColorTimeline/RgbInterpolator step model, a cell's exact completing tick
+  // returned None (the discrete sample index landed one past the last valid step) rather than the end colour.
+  // `Tween`'s continuous progress lands exactly on `end` at that same tick instead -- a real, intentional change
+  // in this narrow case, but one production code never observed: every real caller advances through
+  // `advanceAllAnimations`, which cleans up a completed cell in the same step it completes, so this state was
+  // only ever reachable via the raw `advanceAnimations()` this test calls directly.
+  it should "report the end colour from getCharacterColor on the tick the animation completes" in {
     val state = AnimationState.empty
       .addCharacterAnimation('a', 5, 10, black, white, 1)
       .advanceAnimations()
 
-    state.getCharacterColor(5, 10) should be(empty)
+    state.getCell(5, 10).get.isComplete shouldBe true
+    state.getCharacterColor(5, 10) shouldEqual Some(white)
   }
 
   it should "advance every cell when no relevance predicate is given, matching prior behavior" in {

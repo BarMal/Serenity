@@ -14,8 +14,7 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
   "Animation System Integration" should "apply background steps when cell has no foreground steps" in {
     val cell = AnimatedCell(
       content = Some('a'),
-      foregroundSteps = List.empty,
-      backgroundSteps = RgbInterpolator.interpolateRgba(black, white, 3)
+      backgroundAnimation = Some(Tween(black, white, EasingCurve.Linear, steps = 3))
     )
     val state = AnimationState.empty.mergeAnimations(Map(CharacterKey(0, 0) -> cell))
 
@@ -30,8 +29,7 @@ class AnimationIntegrationSpec extends AnyFlatSpec with Matchers:
   it should "track background-only cells via getLineAnimations and advance their background color" in {
     val bgCell = AnimatedCell(
       content = None,
-      foregroundSteps = List.empty,
-      backgroundSteps = RgbInterpolator.interpolateRgba(black, white, 3)
+      backgroundAnimation = Some(Tween(black, white, EasingCurve.Linear, steps = 3))
     )
     val state = AnimationState.empty
       .mergeAnimations(Map(CharacterKey(5, 2) -> bgCell))

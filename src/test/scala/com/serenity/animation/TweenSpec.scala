@@ -179,6 +179,22 @@ class TweenSpec extends AnyFlatSpec with Matchers:
     tween.currentValue shouldBe new Color(50, 50, 50)
   }
 
+  it should "apply its curve to the interpolated colour (issue #1574, folded in from ColorTimelineSpec)" in {
+    val start = new Color(0, 0, 0)
+    val end   = new Color(100, 100, 100)
+    val tween = Tween(start = start, end = end, curve = EasingCurve.EaseIn, steps = 2, currentFrame = 1)
+    // progress = 0.5, EaseIn(0.5) = 0.125
+    tween.currentValue shouldBe new Color(13, 13, 13)
+  }
+
+  it should "still land exactly on start and end regardless of curve" in {
+    val start = new Color(0, 0, 0)
+    val end   = new Color(100, 100, 100)
+    val tween = Tween(start = start, end = end, curve = EasingCurve.EaseInOut, steps = 2)
+    tween.currentValue shouldBe start
+    tween.advance.advance.currentValue shouldBe end
+  }
+
   // ── Tween delay (issue #1574: shared with ColorTimeline's retired `delayFrames`) ──────────────
 
   "a Tween with delayFrames" should "report the start value and make no progress while inside the delay window" in {
