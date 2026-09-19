@@ -8,13 +8,13 @@ import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Coverage for `CommandPaletteContentResolver.resolveCommandPalette`'s row-building logic -- search chrome, item
-  * rows, footer/key-hint text -- reached here through `SurfaceContent.CommandRunnerPeek`, not `CommandPalette`.
+/** Coverage for `CommandPaletteContentResolver.resolveCommandPalette`'s row-building logic -- search chrome, item rows,
+  * footer/key-hint text -- reached here through `SurfaceContent.CommandRunnerPeek`, not `CommandPalette`.
   * `SurfaceContentResolver.resolve` bypasses `CommandPalette` entirely as of issue #819 slice 2 (painted solely via
   * `CommandRunnerSurfaceComposition`, which calls the very same row-building helpers this suite exercises), but
-  * `CommandRunnerPeek` -- the cursor-peek prototype, which has no composition of its own -- still resolves through
-  * this exact function with identical behavior (both wrap the same `CommandRunner`), so this suite's coverage of that
-  * shared logic stays meaningful without duplicating it into `CommandRunnerSurfaceCompositionSpec`.
+  * `CommandRunnerPeek` -- the cursor-peek prototype, which has no composition of its own -- still resolves through this
+  * exact function with identical behavior (both wrap the same `CommandRunner`), so this suite's coverage of that shared
+  * logic stays meaningful without duplicating it into `CommandRunnerSurfaceCompositionSpec`.
   */
 class SurfaceContentResolverCommandPaletteSpec extends AnyFlatSpec with Matchers:
 

@@ -229,8 +229,8 @@ class CommandRunnerSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       density   <- List(InterfaceDensity.Compact, InterfaceDensity.Comfortable, InterfaceDensity.Spacious)
       maxHeight <- List(6, 12, 24)
     do
-      val state   = stateForDensity(density)
-      val content = SurfaceContent.CommandPalette(runner)
+      val state    = stateForDensity(density)
+      val content  = SurfaceContent.CommandPalette(runner)
       val expected = FloatingSurfaceLayout.calculateFloatingSurfaceHeight(content, 60, maxHeight, state)
 
       clamped(maxHeight, CommandRunnerSurfaceComposition.frameHeight(state, maxHeight)) shouldBe expected

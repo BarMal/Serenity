@@ -5,8 +5,8 @@ import com.serenity.ui.theme.Theme
 
 /** Resolves the windowed single-selection pickers -- the theme picker/creator and fuzzy file search -- into overlay
   * rows. Split out of `SurfaceContentResolver` to keep that file's dispatcher readable -- see the doc comment there.
-  * The generic context menu's own resolver, `resolveContextMenu`, was retired here (issue #819, slice 2): it now
-  * paints entirely through `ContextMenuSurfaceComposition`.
+  * The generic context menu's own resolver, `resolveContextMenu`, was retired here (issue #819, slice 2): it now paints
+  * entirely through `ContextMenuSurfaceComposition`.
   */
 private[layout] object PickerContentResolver:
 

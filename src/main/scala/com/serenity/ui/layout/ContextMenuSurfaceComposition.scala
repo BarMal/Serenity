@@ -10,8 +10,8 @@ import com.serenity.state.models.ContextMenu
   */
 object ContextMenuSurfaceComposition:
 
-  /** The context menu's frame height: header, one row per item at `itemTargetRows`/`itemGapRows`, and a
-    * selection-count footer whenever it has items -- the same `SurfaceFrameLayout.frameHeightForItemRows` call
+  /** The context menu's frame height: header, one row per item at `itemTargetRows`/`itemGapRows`, and a selection-count
+    * footer whenever it has items -- the same `SurfaceFrameLayout.frameHeightForItemRows` call
     * `FloatingSurfaceLayout`'s `ContextMenu` case used to make inline, mirroring `ModalSurfaceComposition.frameHeight`.
     */
   def frameHeight(menu: ContextMenu, itemGapRows: Double = 0.0, itemTargetRows: Int = 1): Int =

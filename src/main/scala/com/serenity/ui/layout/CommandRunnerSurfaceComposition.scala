@@ -30,10 +30,10 @@ object CommandRunnerSurfaceComposition:
   /** Recovers the absolute item index a `hitAt` hit's focus id addresses, the inverse of `focusId`. */
   def absoluteIndexOf(id: SurfaceFocusId): Option[Int] = id.value.stripPrefix(FocusIdPrefix).toIntOption
 
-  /** The command runner's frame height: the palette and the settings surface (submenu) it also hosts size
-    * identically today -- both cap at [[FloatingSurfaceLayout.commandSurfaceMaxHeight]] and floor at the density's
-    * own `commandSurfaceMinHeight` -- so this one method, not a `CommandRunnerSurface.Palette`/`.Settings` match,
-    * covers both, mirroring `ModalSurfaceComposition.frameHeight`'s role for blocking workflows.
+  /** The command runner's frame height: the palette and the settings surface (submenu) it also hosts size identically
+    * today -- both cap at [[FloatingSurfaceLayout.commandSurfaceMaxHeight]] and floor at the density's own
+    * `commandSurfaceMinHeight` -- so this one method, not a `CommandRunnerSurface.Palette`/`.Settings` match, covers
+    * both, mirroring `ModalSurfaceComposition.frameHeight`'s role for blocking workflows.
     */
   def frameHeight(state: AppState, maxHeight: Int, roomOnPreferredSide: Int = Int.MaxValue): Int =
     val densityMetrics   = InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity)
