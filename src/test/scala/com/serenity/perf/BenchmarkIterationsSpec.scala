@@ -9,7 +9,7 @@ import com.serenity.perf.BenchmarkFixtures.{
   largeRichTextDocument
 }
 import com.serenity.rope.Balance
-import com.serenity.state.models.CursorPosition
+import com.serenity.state.models.{CursorPosition, EditingState}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

@@ -273,8 +273,8 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
 
     val undone = getState.persisted.buffers(bufferId)
     undone.document.content.collect() shouldBe "alpha\nbeta\nalpha"
-    undone.editing.cursors shouldBe List(CursorPosition(2, 0))
-    undone.editing.preferredColumn shouldBe Some(0)
+    undone.editing.cursorPositions shouldBe List(CursorPosition(2, 0))
+    undone.editing.cursors.head.preferredColumn shouldBe Some(0)
     undone.viewport shouldBe beforeBuffer.viewport
     undone.findState shouldBe Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
     undone.document.isNewEmpty shouldBe true
@@ -361,7 +361,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
       getState.activeCursorPosition.getOrElse(CursorPosition(0, 0))
 
     def getCursors(bufferId: BufferId): List[CursorPosition] =
-      getState.persisted.buffers(bufferId).editing.cursors
+      getState.persisted.buffers(bufferId).editing.cursorPositions
 
     def setCursors(bufferId: BufferId, cursors: List[CursorPosition]): Unit =
       stateManager

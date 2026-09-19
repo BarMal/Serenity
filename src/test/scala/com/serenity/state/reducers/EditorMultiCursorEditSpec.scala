@@ -49,7 +49,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "aXbcXd"
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(0, 5))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 2), CursorPosition(0, 5))
   }
 
   it should "insert newlines at every cursor position when multiple cursors are active" in {
@@ -74,7 +74,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "a\nbc\nd"
-    buffer.editing.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(2, 0))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(1, 0), CursorPosition(2, 0))
   }
 
   it should "insert fixed spaces at every cursor position when tab is pressed with multiple cursors" in {
@@ -99,7 +99,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "a    bc    d"
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 5), CursorPosition(0, 11))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 5), CursorPosition(0, 11))
   }
 
   it should "remove one indentation level when reverse-tab is pressed with a single cursor" in {
@@ -124,7 +124,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "abc"
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 2))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 2))
   }
 
   it should "delete backward at every cursor position when multiple cursors are active" in {
@@ -149,7 +149,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "123"
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 2))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 1), CursorPosition(0, 2))
   }
 
   it should "delete forward at every cursor position when multiple cursors are active" in {
@@ -174,7 +174,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "123"
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 2))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 1), CursorPosition(0, 2))
   }
 
   it should "delete the previous word for a single cursor" in {
@@ -201,7 +201,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "alpha beta "
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 11))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 11))
   }
 
   it should "delete the next word for a single cursor" in {
@@ -228,7 +228,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "alpha gamma"
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 6))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 6))
   }
 
   it should "delete the previous word once when multiple cursors overlap the same word" in {
@@ -255,7 +255,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "alpha  gamma"
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 6))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 6))
   }
 
   it should "delete the next word once when multiple cursors overlap the same word" in {
@@ -282,7 +282,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "alpha gamma"
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 6))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 6))
   }
 
   it should "paste clipboard content at every cursor position when multiple cursors are active" in {
@@ -310,7 +310,7 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "ZabZ"
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 4))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 1), CursorPosition(0, 4))
   }
 
   it should "unindent every cursor line when reverse-tab is pressed with multiple cursors" in {
@@ -337,5 +337,5 @@ class EditorMultiCursorEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "one\ntwo\nthree"
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(1, 0), CursorPosition(2, 5))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 0), CursorPosition(1, 0), CursorPosition(2, 5))
   }

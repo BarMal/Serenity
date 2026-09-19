@@ -117,7 +117,7 @@ class TuiEditingSpec extends TuiSpec:
       _      <- selectAll
       after  <- screen
       _ <- verifyState("selection in state") { current =>
-        focusedBuffer(current).flatMap(_.editing.selection).map(_.end.column) shouldBe Some("selected text".length)
+        focusedBuffer(current).flatMap(_.primarySelection).map(_.end.column) shouldBe Some("selected text".length)
       }
     yield
       // The selected run must actually look different, not merely be recorded in state.

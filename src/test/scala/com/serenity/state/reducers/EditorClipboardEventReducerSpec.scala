@@ -50,7 +50,7 @@ class EditorClipboardEventReducerSpec extends AnyFlatSpec with Matchers:
 
     clipboardAfter(Copy, before) shouldBe Some("beta")
     bufferAfter(Copy, before).document.content.collect() shouldBe "alpha beta"
-    bufferAfter(Copy, before).editing.selection shouldBe Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
+    bufferAfter(Copy, before).primarySelection shouldBe Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
   }
 
   "Copy without a selection" should "put every cursor's whole line on the clipboard, one per line" in {
@@ -68,7 +68,7 @@ class EditorClipboardEventReducerSpec extends AnyFlatSpec with Matchers:
 
     clipboardAfter(Cut, before) shouldBe Some("beta")
     bufferAfter(Cut, before).document.content.collect() shouldBe "alpha "
-    bufferAfter(Cut, before).editing.selection shouldBe None
+    bufferAfter(Cut, before).primarySelection shouldBe None
   }
 
   "Cut without a selection" should "delete every cursor's whole line and put them on the clipboard" in {
@@ -95,7 +95,7 @@ class EditorClipboardEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val after = bufferAfter(Paste, before)
     after.document.content.collect() shouldBe "aXYb"
-    after.editing.cursors shouldBe List(CursorPosition(0, 3))
+    after.editing.cursorPositions shouldBe List(CursorPosition(0, 3))
   }
 
   "Paste with an active selection" should "replace the selection with the clipboard text" in {
@@ -108,7 +108,7 @@ class EditorClipboardEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val after = bufferAfter(Paste, before)
     after.document.content.collect() shouldBe "alpha XY"
-    after.editing.selection shouldBe None
+    after.primarySelection shouldBe None
   }
 
   "Paste with multiple cursors" should "insert the clipboard text at every cursor independently" in {

@@ -280,7 +280,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
-    updated.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(1, 2))
+    updated.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(1, 2))
   }
 
   it should "highlight an outline row on hover without stealing focus" in {
@@ -342,7 +342,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
-    updated.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(1, 0))
+    updated.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(1, 0))
 
     val lensSurface = updated.commentLensSurface.getOrElse(fail("Expected the comment lens to open"))
     val lensState = lensSurface.content match
@@ -407,7 +407,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
-    updated.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(2, 3))
+    updated.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(2, 3))
   }
 
   it should "highlight a diagnostics row on hover without stealing focus" in {
@@ -469,7 +469,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
-    updated.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 1))
+    updated.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 1))
   }
 
   it should "not navigate from blank rows in a horizontal bottom diagnostics panel" in {
@@ -493,7 +493,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
-    updated.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
+    updated.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 0))
   }
 
   it should "update a pinned panel size from mouse drag before release" in {

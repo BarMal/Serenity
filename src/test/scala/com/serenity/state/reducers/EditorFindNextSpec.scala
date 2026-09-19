@@ -132,7 +132,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(FindNext, paneId, initialState).state
     val buffer       = updatedState.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(2, 0))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(2, 0))
     buffer.findState shouldBe Some(FindState("match", List(FindResult(0, 0), FindResult(2, 0)), 1))
   }
 
@@ -160,7 +160,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(FindNext, paneId, initialState).state
     val buffer       = updatedState.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(0, "needle then ".length))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, "needle then ".length))
     buffer.findState shouldBe Some(
       FindState("needle", List(FindResult(0, 0), FindResult(0, "needle then ".length)), 1)
     )
@@ -191,7 +191,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.findState shouldBe None
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 0))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 0))
   }
 
   it should "drop find-next matches that split a regional-indicator flag pair" in {
@@ -221,7 +221,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.findState shouldBe None
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 0))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 0))
   }
 
   it should "scroll wrapped text to the selected find-next visual row" in {

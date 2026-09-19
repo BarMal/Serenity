@@ -312,7 +312,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
 
     val state  = sm.getCurrentState.unsafeRunSync()
     val buffer = state.persisted.buffers(bufferId)
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 1))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 1))
     val menu = state.contextMenuSurface
       .flatMap {
         _.content match

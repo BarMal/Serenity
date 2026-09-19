@@ -37,13 +37,13 @@ class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
   "MoveRight" should "move a single cursor one column right" in {
     val before = stateWith("hello", List(CursorPosition(0, 0)))
 
-    bufferAfter(MoveRight, before).editing.cursors shouldBe List(CursorPosition(0, 1))
+    bufferAfter(MoveRight, before).editing.cursorPositions shouldBe List(CursorPosition(0, 1))
   }
 
   it should "move every cursor independently when there are several" in {
     val before = stateWith("hello\nworld", List(CursorPosition(0, 0), CursorPosition(1, 0)))
 
-    bufferAfter(MoveRight, before).editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(1, 1))
+    bufferAfter(MoveRight, before).editing.cursorPositions shouldBe List(CursorPosition(0, 1), CursorPosition(1, 1))
   }
 
   it should "collapse an active selection to its focus first, rather than moving both ends" in {
@@ -55,8 +55,8 @@ class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
       )
 
     val after = bufferAfter(MoveRight, before)
-    after.editing.selection shouldBe None
-    after.editing.cursors shouldBe List(CursorPosition(0, 4))
+    after.primarySelection shouldBe None
+    after.editing.cursorPositions shouldBe List(CursorPosition(0, 4))
   }
 
   it should "deduplicate cursors that land on the same position and sort the result" in {
@@ -65,39 +65,39 @@ class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
     // "hello" has 5 characters: the cursor already at column 5 (the end) can't move further right and stays put,
     // while the cursor at column 4 advances onto that same position -- a genuine collision the reducer's
     // `.distinct` must collapse to one cursor rather than leaving a duplicate in the list.
-    bufferAfter(MoveRight, before).editing.cursors shouldBe List(CursorPosition(0, 5))
+    bufferAfter(MoveRight, before).editing.cursorPositions shouldBe List(CursorPosition(0, 5))
   }
 
   "MoveLeft at the start of the document" should "leave the cursor in place" in {
     val before = stateWith("hello", List(CursorPosition(0, 0)))
 
-    bufferAfter(MoveLeft, before).editing.cursors shouldBe List(CursorPosition(0, 0))
+    bufferAfter(MoveLeft, before).editing.cursorPositions shouldBe List(CursorPosition(0, 0))
   }
 
   "MoveWordRight" should "land on the next word boundary" in {
     val before = stateWith("alpha beta", List(CursorPosition(0, 0)))
 
-    bufferAfter(MoveWordRight, before).editing.cursors shouldBe List(CursorPosition(0, 6))
+    bufferAfter(MoveWordRight, before).editing.cursorPositions shouldBe List(CursorPosition(0, 6))
   }
 
   "MoveWordLeft" should "land on the previous word boundary" in {
     val before = stateWith("alpha beta", List(CursorPosition(0, 10)))
 
-    bufferAfter(MoveWordLeft, before).editing.cursors shouldBe List(CursorPosition(0, 6))
+    bufferAfter(MoveWordLeft, before).editing.cursorPositions shouldBe List(CursorPosition(0, 6))
   }
 
   "MoveToStartOfFile" should "move the cursor to line 0, column 0 regardless of starting position" in {
     val before = stateWith("alpha\nbeta\ngamma", List(CursorPosition(2, 3)))
 
-    bufferAfter(MoveToStartOfFile, before).editing.cursors shouldBe List(CursorPosition(0, 0))
+    bufferAfter(MoveToStartOfFile, before).editing.cursorPositions shouldBe List(CursorPosition(0, 0))
   }
 
   "SelectAll" should "select from the start of the document to the end of the last line" in {
     val before = stateWith("alpha\nbeta", List(CursorPosition(0, 0)))
 
     val after = bufferAfter(SelectAll, before)
-    after.editing.selection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
-    after.editing.cursors shouldBe List(CursorPosition(1, 4))
+    after.primarySelection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
+    after.editing.cursorPositions shouldBe List(CursorPosition(1, 4))
   }
 
   it should "collapse any existing multi-cursor/selection state before selecting the whole document" in {
@@ -108,14 +108,14 @@ class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val after = bufferAfter(SelectAll, before)
-    after.editing.selections shouldBe Nil
-    after.editing.cursors shouldBe List(CursorPosition(1, 4))
+    after.allSelections shouldBe after.primarySelection.toList
+    after.editing.cursorPositions shouldBe List(CursorPosition(1, 4))
   }
 
   "MoveToEndOfFile without a selection or extra cursors" should "move the cursor to the end of the last line" in {
     val before = stateWith("alpha\nbeta", List(CursorPosition(0, 0)))
 
-    bufferAfter(MoveToEndOfFile, before).editing.cursors shouldBe List(CursorPosition(1, 4))
+    bufferAfter(MoveToEndOfFile, before).editing.cursorPositions shouldBe List(CursorPosition(1, 4))
   }
 
   "MoveToEndOfFile with an active selection" should "collapse the selection and land at the end of the last line" in {
@@ -126,14 +126,14 @@ class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
     )
 
     val after = bufferAfter(MoveToEndOfFile, before)
-    after.editing.selection shouldBe None
-    after.editing.cursors shouldBe List(CursorPosition(1, 4))
+    after.primarySelection shouldBe None
+    after.editing.cursorPositions shouldBe List(CursorPosition(1, 4))
   }
 
   "MoveToEndOfFile with multiple cursors" should "collapse every cursor to the single end-of-file position" in {
     val before = stateWith("alpha\nbeta", List(CursorPosition(0, 1), CursorPosition(1, 2)))
 
-    bufferAfter(MoveToEndOfFile, before).editing.cursors shouldBe List(CursorPosition(1, 4))
+    bufferAfter(MoveToEndOfFile, before).editing.cursorPositions shouldBe List(CursorPosition(1, 4))
   }
 
   "PageDown" should "scroll the topLine forward and move the cursor down by a page" in {
@@ -148,7 +148,7 @@ class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
     val manyLines = (0 until 200).map(i => s"line$i").mkString("\n")
     val before    = stateWith(manyLines, List(CursorPosition(0, 0)))
 
-    bufferAfter(PageUp, before).editing.cursors shouldBe List(CursorPosition(0, 0))
+    bufferAfter(PageUp, before).editing.cursorPositions shouldBe List(CursorPosition(0, 0))
   }
 
   // Column-based document layout (issue #1338, Phase 1): ColumnRight/ColumnLeft jump exactly one column's worth of
@@ -165,7 +165,7 @@ class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
     val manyLines = (0 until 200).map(i => s"line$i").mkString("\n")
     val before    = stateWith(manyLines, List(CursorPosition(0, 0)))
 
-    bufferAfter(ColumnLeft, before).editing.cursors shouldBe List(CursorPosition(0, 0))
+    bufferAfter(ColumnLeft, before).editing.cursorPositions shouldBe List(CursorPosition(0, 0))
   }
 
   "ColumnRight and PageDown" should "move a cursor by exactly the same amount" in {

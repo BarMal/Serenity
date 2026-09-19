@@ -161,21 +161,21 @@ object PerformanceBenchmarks:
         "reducer.multi_cursor_insert",
         3,
         BenchmarkIterationCounts.Reducer,
-        () => assert(reducedBuffer(multiInsertResult).exists(_.editing.cursors.sizeIs == 50)),
+        () => assert(reducedBuffer(multiInsertResult).exists(_.editing.cursors.size == 50)),
         () => EditorEventReducer.reduce(InsertChar('x'), PaneId(0), multiCursorState)
       ),
       BenchmarkRunner.Benchmark(
         "reducer.multi_cursor_move",
         3,
         BenchmarkIterationCounts.Reducer,
-        () => assert(reducedBuffer(multiMoveResult).exists(_.editing.cursors.forall(_.column == 5))),
+        () => assert(reducedBuffer(multiMoveResult).exists(_.editing.cursorPositions.forall(_.column == 5))),
         () => EditorEventReducer.reduce(MoveRight, PaneId(0), multiCursorState)
       ),
       BenchmarkRunner.Benchmark(
         "reducer.multi_cursor_move_down",
         3,
         BenchmarkIterationCounts.Reducer,
-        () => assert(reducedBuffer(multiMoveDownResult).exists(_.editing.cursors.sizeIs == 50)),
+        () => assert(reducedBuffer(multiMoveDownResult).exists(_.editing.cursors.size == 50)),
         () => com.serenity.VerticalNavSupport.dispatch(MoveDown, PaneId(0), multiCursorWrapState)
       ),
       BenchmarkRunner.Benchmark(

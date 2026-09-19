@@ -73,7 +73,7 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
 
     final1.persisted.buffers(bufferId1).document.content.collect() shouldBe
       final2.persisted.buffers(bufferId2).document.content.collect()
-    final1.persisted.buffers(bufferId1).editing.cursors shouldBe
+    final1.persisted.buffers(bufferId1).editing.cursorPositions shouldBe
       final2.persisted.buffers(bufferId2).editing.cursors
 
   it should "handle state transitions through monadic composition" in new FunctionalFixture:

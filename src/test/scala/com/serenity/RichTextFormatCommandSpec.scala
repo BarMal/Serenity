@@ -7,7 +7,8 @@ import com.serenity.keystroke.events.InsertChar
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{BufferId, CursorPosition, Selection}
+import com.serenity.state.models.{BufferId, CursorPosition, EditingState, Selection}
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -41,7 +42,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
               bufferId,
               state.persisted
                 .buffers(bufferId)
-                .withEditing(_.copy(selection = Some(selection), cursors = List(selection.focus)))
+                .withEditing(_ => EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus)))
             )
           )
         )
@@ -118,7 +119,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
           state.persisted.copy(
             buffers = state.persisted.buffers.updated(
               bufferId,
-              state.persisted.buffers(bufferId).withEditing(_.copy(cursors = List(CursorPosition(0, 5))))
+              state.persisted.buffers(bufferId).withEditing(_ => EditingState(List(CursorPosition(0, 5))))
             )
           )
         )
@@ -167,7 +168,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
               bufferId,
               state.persisted
                 .buffers(bufferId)
-                .withEditing(_.copy(cursors = List(com.serenity.state.models.CursorPosition(0, 3))))
+                .withEditing(_ => EditingState(List(com.serenity.state.models.CursorPosition(0, 3))))
             )
           )
         )
@@ -268,7 +269,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
               bufferId,
               state.persisted
                 .buffers(bufferId)
-                .withEditing(_.copy(selection = None, cursors = List(CursorPosition(0, 8))))
+                .withEditing(_ => EditingState(List(CursorPosition(0, 8))))
             )
           )
         )
@@ -301,7 +302,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
               bufferId,
               state.persisted
                 .buffers(bufferId)
-                .withEditing(_.copy(cursors = List(com.serenity.state.models.CursorPosition(0, 0))))
+                .withEditing(_ => EditingState(List(com.serenity.state.models.CursorPosition(0, 0))))
             )
           )
         )

@@ -10,7 +10,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.KeyboardFidelityTier
-import com.serenity.state.models.{Buffer, BufferId, CursorPosition, Viewport}
+import com.serenity.state.models.{Buffer, BufferId, CursorPosition, EditingState, Viewport}
 import org.jline.terminal.Terminal
 import org.jline.terminal.impl.DumbTerminal
 import org.scalatest.concurrent.Eventually

@@ -107,7 +107,7 @@ class AppStateInvariantsSpec extends AnyFlatSpec with Matchers:
     val base = Buffer.fromString(BufferId(0), content)
     base.copy(
       editing = EditingStateFixtures(
-        cursors = if cursors.isEmpty then base.editing.cursors else cursors,
+        cursors = if cursors.isEmpty then base.editing.cursorPositions else cursors,
         selection = selection
       ),
       annotations = Annotations(bookmarks = bookmarks, documentComments = comments)

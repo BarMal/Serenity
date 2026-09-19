@@ -4,6 +4,7 @@ import com.serenity.config.*
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -53,7 +54,7 @@ class SurfaceContentResolverContextualToolbarSpec extends AnyFlatSpec with Match
           bufferId -> Buffer
             .fromString(bufferId, "alpha beta")
             .copy(
-              editing = EditingState(selection = Some(selection), cursors = List(selection.focus)),
+              editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus)),
               richText = RichTextState(richTextDocument = Some(richDocument))
             )
         ),
@@ -135,7 +136,7 @@ class SurfaceContentResolverContextualToolbarSpec extends AnyFlatSpec with Match
           bufferId -> Buffer
             .fromString(bufferId, "alpha beta")
             .copy(
-              editing = EditingState(selection = Some(selection), cursors = List(selection.focus)),
+              editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus)),
               richText = RichTextState(richTextDocument = Some(richDocument))
             )
         ),

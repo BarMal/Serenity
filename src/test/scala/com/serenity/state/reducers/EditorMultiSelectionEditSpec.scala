@@ -46,7 +46,7 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "X def X"
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 7))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 1), CursorPosition(0, 7))
     buffer.allSelections shouldBe Nil
   }
 
@@ -80,7 +80,7 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "    alpha\n    beta\n    gamma"
-    buffer.editing.cursors shouldBe List(CursorPosition(1, 6), CursorPosition(2, 9))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(1, 6), CursorPosition(2, 9))
     buffer.allSelections shouldBe Nil
   }
 
@@ -117,7 +117,7 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "ZZ def ZZ"
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 2), CursorPosition(0, 9))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 2), CursorPosition(0, 9))
     buffer.allSelections shouldBe Nil
   }
 
@@ -151,7 +151,7 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe " def "
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(0, 5))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 0), CursorPosition(0, 5))
     buffer.allSelections shouldBe Nil
   }
 
@@ -185,7 +185,7 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe "alpha\nbeta\ngamma"
-    buffer.editing.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(2, 5))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(1, 0), CursorPosition(2, 5))
     buffer.allSelections shouldBe Nil
   }
 
@@ -219,7 +219,7 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe " def "
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(0, 5))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 0), CursorPosition(0, 5))
     buffer.allSelections shouldBe Nil
   }
 
@@ -253,6 +253,6 @@ class EditorMultiSelectionEditSpec extends AnyFlatSpec with Matchers:
     val buffer       = updatedState.persisted.buffers(bufferId)
 
     buffer.document.content.collect() shouldBe " def "
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 0), CursorPosition(0, 5))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 0), CursorPosition(0, 5))
     buffer.allSelections shouldBe Nil
   }

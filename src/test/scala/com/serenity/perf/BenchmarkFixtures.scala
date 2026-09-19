@@ -5,7 +5,7 @@ import com.serenity.config.AppConfig
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{InlineMark, RichTextDocument, RichTextParagraph, RichTextRun, RichTextStyle}
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, Buffer, BufferId, CursorPosition, EditorPane, PaneId, Viewport}
+import com.serenity.state.models.{AppState, Buffer, BufferId, CursorPosition, EditingState, EditorPane, PaneId, Viewport}
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.theme.Theme
 

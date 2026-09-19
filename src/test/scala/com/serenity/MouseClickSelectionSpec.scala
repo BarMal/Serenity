@@ -105,8 +105,8 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     buffer.editing.cursorPositions.headOption shouldBe Some(CursorPosition(1, 3))
-    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
-    buffer.editing.selections shouldBe Nil
+    buffer.primarySelection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
+    buffer.allSelections shouldBe buffer.primarySelection.toList
   }
 
   it should "start a new drag selection from the latest press instead of reusing an old anchor" in {
@@ -138,8 +138,8 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     buffer.editing.cursorPositions.headOption shouldBe Some(CursorPosition(1, 5))
-    buffer.editing.selection shouldBe Some(Selection(CursorPosition(1, 2), CursorPosition(1, 5)))
-    buffer.editing.selections shouldBe Nil
+    buffer.primarySelection shouldBe Some(Selection(CursorPosition(1, 2), CursorPosition(1, 5)))
+    buffer.allSelections shouldBe buffer.primarySelection.toList
   }
 
   it should "select the clicked word on double click" in {
@@ -168,8 +168,8 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     buffer.editing.cursorPositions.headOption shouldBe Some(CursorPosition(0, 10))
-    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
-    buffer.editing.selections shouldBe Nil
+    buffer.primarySelection shouldBe Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
+    buffer.allSelections shouldBe buffer.primarySelection.toList
   }
 
   it should "select the clicked word on double click without materialising the whole buffer" in {
@@ -203,8 +203,8 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     buffer.editing.cursorPositions.headOption shouldBe Some(CursorPosition(0, 10))
-    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
-    buffer.editing.selections shouldBe Nil
+    buffer.primarySelection shouldBe Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
+    buffer.allSelections shouldBe buffer.primarySelection.toList
   }
 
   it should "select the clicked line on triple click" in {
@@ -233,8 +233,8 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     buffer.editing.cursorPositions.headOption shouldBe Some(CursorPosition(1, 10))
-    buffer.editing.selection shouldBe Some(Selection(CursorPosition(1, 0), CursorPosition(1, 10)))
-    buffer.editing.selections shouldBe Nil
+    buffer.primarySelection shouldBe Some(Selection(CursorPosition(1, 0), CursorPosition(1, 10)))
+    buffer.allSelections shouldBe buffer.primarySelection.toList
   }
 
   it should "extend the current selection from the existing anchor on shift-click" in {
@@ -266,8 +266,8 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     buffer.editing.cursorPositions.headOption shouldBe Some(CursorPosition(1, 4))
-    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(1, 4)))
-    buffer.editing.selections shouldBe Nil
+    buffer.primarySelection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(1, 4)))
+    buffer.allSelections shouldBe buffer.primarySelection.toList
   }
 
   it should "preserve the original anchor while extending with shift-drag" in {
@@ -300,8 +300,8 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     buffer.editing.cursorPositions.headOption shouldBe Some(CursorPosition(2, 5))
-    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(2, 5)))
-    buffer.editing.selections shouldBe Nil
+    buffer.primarySelection shouldBe Some(Selection(CursorPosition(0, 2), CursorPosition(2, 5)))
+    buffer.allSelections shouldBe buffer.primarySelection.toList
   }
 
   it should "collapse multi-cursor state to the clicked cursor" in {
@@ -338,10 +338,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(paneRect.x + 2, paneRect.y + 2)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    buffer.editing.cursors shouldBe List(CursorPosition(1, 2))
-    buffer.editing.selection shouldBe None
-    buffer.editing.selections shouldBe Nil
-    buffer.editing.multiCursorVerticalStates shouldBe Nil
+    buffer.editing.cursors.toList shouldBe List(Cursor(CursorPosition(1, 2)))
   }
 
   it should "collapse multi-selection state to a single drag selection" in {
@@ -379,7 +376,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseDrag(paneRect.x + 3, paneRect.y + 2)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    buffer.editing.cursors shouldBe List(CursorPosition(1, 3))
-    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
-    buffer.editing.selections shouldBe Nil
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(1, 3))
+    buffer.primarySelection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(1, 3)))
+    buffer.allSelections shouldBe buffer.primarySelection.toList
   }

@@ -48,7 +48,7 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(PageDown, paneId, initialState).state
     val buffer       = updatedState.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(3, 0), CursorPosition(5, 0))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(3, 0), CursorPosition(5, 0))
     buffer.allSelections shouldBe Nil
   }
 
@@ -81,7 +81,7 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(MoveToStartOfFile, paneId, initialState).state
     val buffer       = updatedState.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 0))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 0))
     buffer.allSelections shouldBe Nil
   }
 
@@ -114,7 +114,7 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(MoveToEndOfFile, paneId, initialState).state
     val buffer       = updatedState.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(4, 2))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(4, 2))
     buffer.allSelections shouldBe Nil
   }
 
@@ -137,7 +137,7 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     )
 
     val updatedState = EditorEventReducer.reduce(MoveLeft, paneId, initialState).state
-    updatedState.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
   }
 
   it should "move every cursor right when multiple cursors are active" in {
@@ -159,7 +159,7 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     )
 
     val updatedState = EditorEventReducer.reduce(MoveRight, paneId, initialState).state
-    updatedState.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
   }
 
   it should "move every cursor to line start when multiple cursors are active" in {
@@ -181,7 +181,7 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     )
 
     val updatedState = EditorEventReducer.reduce(MoveToStart, paneId, initialState).state
-    updatedState.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 0))
   }
 
   it should "move every cursor to line end when multiple cursors are active" in {
@@ -205,7 +205,7 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(MoveToEnd, paneId, initialState).state
     // End pins each cursor to the row it was pressed on (`RowAffinity.Upstream`), which on this unwrapped line is the
     // only row there is.
-    updatedState.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 4).upstream)
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 4).upstream)
   }
 
   it should "move every cursor down while preserving per-cursor columns when multiple cursors are active" in {
@@ -229,7 +229,7 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     )
 
     val updatedState = com.serenity.VerticalNavSupport.dispatch(MoveDown, paneId, initialState).state
-    updatedState.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(1, 1), CursorPosition(1, 3))
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(1, 1), CursorPosition(1, 3))
   }
 
   it should "move every cursor up while preserving per-cursor columns when multiple cursors are active" in {
@@ -253,7 +253,7 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     )
 
     val updatedState = com.serenity.VerticalNavSupport.dispatch(MoveUp, paneId, initialState).state
-    updatedState.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 1), CursorPosition(0, 3))
   }
 
   it should "move every cursor to the start of the file when multiple cursors are active" in {
@@ -277,7 +277,7 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     )
 
     val updatedState = EditorEventReducer.reduce(MoveToStartOfFile, paneId, initialState).state
-    updatedState.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 0))
   }
 
   it should "move every cursor to the end of the file when multiple cursors are active" in {
@@ -301,7 +301,7 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     )
 
     val updatedState = EditorEventReducer.reduce(MoveToEndOfFile, paneId, initialState).state
-    updatedState.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(2, 5))
+    updatedState.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(2, 5))
   }
 
   it should "move every cursor up by a visible page when multiple cursors are active" in {
@@ -336,7 +336,7 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     val updatedState = CursorViewport.ensureVisibleCursors(initialState, reducedState)
     val buffer       = updatedState.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(1, 0), CursorPosition(3, 0))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(1, 0), CursorPosition(3, 0))
     buffer.viewport.topLine shouldBe 0
   }
 
@@ -363,8 +363,8 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(SelectAll, paneId, initialState).state
     val buffer       = updatedState.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(1, 4))
-    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(1, 4))
+    buffer.primarySelection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
   }
 
   it should "select the whole buffer when select-all is pressed with multiple selections" in {
@@ -396,8 +396,8 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(SelectAll, paneId, initialState).state
     val buffer       = updatedState.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(1, 4))
-    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(1, 4))
+    buffer.primarySelection shouldBe Some(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
     buffer.allSelections shouldBe List(Selection(CursorPosition(0, 0), CursorPosition(1, 4)))
   }
 
@@ -423,8 +423,8 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     val secondState = EditorEventReducer.reduce(ExtendSelectionRight, paneId, firstState).state
     val buffer      = secondState.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 3))
-    buffer.editing.selection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(0, 3)))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 3))
+    buffer.primarySelection shouldBe Some(Selection(CursorPosition(0, 1), CursorPosition(0, 3)))
     buffer.allSelections shouldBe List(Selection(CursorPosition(0, 1), CursorPosition(0, 3)))
   }
 
@@ -451,8 +451,8 @@ class EditorMultiCursorNavigationSpec extends AnyFlatSpec with Matchers:
     val updatedState = com.serenity.VerticalNavSupport.dispatch(ExtendSelectionUp, paneId, initialState).state
     val buffer       = updatedState.persisted.buffers(bufferId)
 
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 1))
-    buffer.editing.selection shouldBe Some(Selection(CursorPosition(1, 1), CursorPosition(0, 1)))
-    buffer.editing.selection.map(_.start) shouldBe Some(CursorPosition(0, 1))
-    buffer.editing.selection.map(_.end) shouldBe Some(CursorPosition(1, 1))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 1))
+    buffer.primarySelection shouldBe Some(Selection(CursorPosition(1, 1), CursorPosition(0, 1)))
+    buffer.primarySelection.map(_.start) shouldBe Some(CursorPosition(0, 1))
+    buffer.primarySelection.map(_.end) shouldBe Some(CursorPosition(1, 1))
   }

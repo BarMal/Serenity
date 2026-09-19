@@ -318,7 +318,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val buffer     = finalState.persisted.buffers(bufferId)
     buffer.document.content.collect() shouldBe "Hello Universe Program"
-    buffer.editing.selection shouldBe None
+    buffer.primarySelection shouldBe None
     buffer.editing.cursorPositions.head shouldBe CursorPosition(0, 14)
 
   it should "preserve the preferred column when moving through shorter lines" in new EditorFixture:
@@ -507,7 +507,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(MoveDown).unsafeRunSync()
 
     val finalBuffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    finalBuffer.editing.cursors shouldBe List(CursorPosition(1, 0))
+    finalBuffer.editing.cursorPositions shouldBe List(CursorPosition(1, 0))
 
   it should "clear in-flight multi-cursor vertical state when a single-cursor edit takes over" in new EditorFixture:
     val bufferId = stateManager.bufferManager.createBuffer("abcdef\nxy\nabcdef", None).unsafeRunSync()
@@ -537,7 +537,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(MoveDown).unsafeRunSync()
 
     val finalBuffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    finalBuffer.editing.cursors shouldBe List(CursorPosition(2, 1))
+    finalBuffer.editing.cursorPositions shouldBe List(CursorPosition(2, 1))
 
   it should "handle opening an existing file" in new EditorFixture:
     // Given: A buffer loaded from disk and tagged with its source path

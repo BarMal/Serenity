@@ -10,6 +10,7 @@ import com.serenity.richtext.{
 }
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
@@ -47,7 +48,7 @@ class SelectionFontStyleConsistencySpec extends AnyFlatSpec with Matchers:
       .fromString(bufferId, proseText)
       .copy(
         richText = RichTextState(richTextDocument = Some(richDoc)),
-        editing = EditingState(
+        editing = EditingStateFixtures(
           cursors = List(CursorPosition(0, 6)),
           selection = Some(Selection(CursorPosition(0, 6), CursorPosition(0, 11)))
         )

@@ -83,7 +83,7 @@ class CommandRunnerEditCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "select-all", "select-all")
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.selection shouldBe Some(
+    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).primarySelection shouldBe Some(
       Selection(CursorPosition(0, 0), CursorPosition(0, "Hello World".length))
     )
 

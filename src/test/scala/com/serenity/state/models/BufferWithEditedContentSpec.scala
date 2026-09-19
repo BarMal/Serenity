@@ -2,6 +2,7 @@ package com.serenity.state.models
 
 import com.serenity.richtext.RichTextDocument
 import com.serenity.rope.{Balance, Rope}
+import com.serenity.testkit.{EditingStateFixtures, VerticalCursorState}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -19,7 +20,7 @@ class BufferWithEditedContentSpec extends AnyFlatSpec with Matchers:
   private val original = Buffer
     .fromString(BufferId(0), "alpha beta")
     .copy(
-      editing = EditingState(
+      editing = EditingStateFixtures(
         cursors = List(CursorPosition(0, 3)),
         selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5))),
         selections = List(Selection(CursorPosition(0, 0), CursorPosition(0, 5))),
@@ -45,25 +46,31 @@ class BufferWithEditedContentSpec extends AnyFlatSpec with Matchers:
 
   it should "replace the cursor list and clear selection state" in {
     val edited = original.withEditedContent(Rope("gamma delta"), List(CursorPosition(0, 1), CursorPosition(0, 7)))
-    edited.editing.cursors shouldBe List(CursorPosition(0, 1), CursorPosition(0, 7))
-    edited.editing.selection shouldBe None
-    edited.editing.selections shouldBe Nil
+    edited.editing.cursorPositions shouldBe List(CursorPosition(0, 1), CursorPosition(0, 7))
+    edited.primarySelection shouldBe None
+    edited.allSelections shouldBe edited.primarySelection.toList
   }
 
-  it should "set preferredColumn from the primary (first) cursor and reset preferredXPx" in {
-    val edited = original.withEditedContent(Rope("gamma delta"), List(CursorPosition(0, 7), CursorPosition(0, 1)))
-    edited.editing.preferredColumn shouldBe Some(7)
-    edited.editing.preferredXPx shouldBe None
+  /** `preferredColumn` is `None` on every fresh post-edit cursor rather than an explicit `Some` of its own column --
+    * equivalent because every reader falls back to the cursor's own current column when it is `None` (`#1577`).
+    */
+  it should "reset preferredColumn/preferredXPx so they fall back to the primary (first) cursor's own column" in {
+    val edited  = original.withEditedContent(Rope("gamma delta"), List(CursorPosition(0, 7), CursorPosition(0, 1)))
+    val primary = edited.editing.cursors.head
+    primary.preferredColumn shouldBe None
+    primary.preferredColumn.getOrElse(primary.position.column) shouldBe 7
+    primary.preferredXPx shouldBe None
   }
 
   it should "default preferredColumn to the document origin for an empty cursor list" in {
-    val edited = original.withEditedContent(Rope("gamma delta"), Nil)
-    edited.editing.preferredColumn shouldBe Some(0)
+    val edited  = original.withEditedContent(Rope("gamma delta"), Nil)
+    val primary = edited.editing.cursors.head
+    primary.preferredColumn.getOrElse(primary.position.column) shouldBe 0
   }
 
-  it should "always clear multiCursorVerticalStates, not just leave them at the caller's mercy" in {
+  it should "always clear every cursor's preferred vertical-navigation state, not just leave it at the caller's mercy" in {
     val edited = original.withEditedContent(Rope("gamma delta"), List(CursorPosition(0, 1)))
-    edited.editing.multiCursorVerticalStates shouldBe Nil
+    edited.editing.cursors.toList.forall(cursor => cursor.preferredColumn.isEmpty && cursor.preferredXPx.isEmpty) shouldBe true
   }
 
   it should "leave documentComments and richTextDocument unchanged when the caller doesn't supply them" in {

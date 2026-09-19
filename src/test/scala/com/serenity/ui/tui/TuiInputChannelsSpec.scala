@@ -87,7 +87,7 @@ class TuiInputChannelsSpec extends TuiSpec:
         _ <- press(TuiKeys.mousePress(ContentColumn, 1))
         _ <- dragMouse(ContentColumn + 10, 1)
         _ <- verifyState("selection while dragging") { current =>
-          val selection = focusedBuffer(current).flatMap(_.editing.selection)
+          val selection = focusedBuffer(current).flatMap(_.primarySelection)
           selection.map(_.start.column) shouldBe Some(0)
           selection.map(_.end.column) shouldBe Some(10)
         }
@@ -106,7 +106,7 @@ class TuiInputChannelsSpec extends TuiSpec:
         _ <- dragMouse(ContentColumn + 10, 1)
         _ <- press(TuiKeys.mouseRelease(ContentColumn + 10, 1))
         _ <- verifyState("selection after release") { current =>
-          val selection = focusedBuffer(current).flatMap(_.editing.selection)
+          val selection = focusedBuffer(current).flatMap(_.primarySelection)
           selection.map(_.start.column) shouldBe Some(0)
           selection.map(_.end.column) shouldBe Some(10)
         }
@@ -121,7 +121,7 @@ class TuiInputChannelsSpec extends TuiSpec:
         _ <- press(TuiKeys.mouseRelease(ContentColumn + 10, 1))
         _ <- click(ContentColumn + 4, 1)
         _ <- verifyState("caret after the following click") { current =>
-          focusedBuffer(current).flatMap(_.editing.selection) shouldBe empty
+          focusedBuffer(current).flatMap(_.primarySelection) shouldBe empty
           focusedBuffer(current).flatMap(_.editing.cursorPositions.headOption).map(_.column) shouldBe Some(4)
         }
       yield ()

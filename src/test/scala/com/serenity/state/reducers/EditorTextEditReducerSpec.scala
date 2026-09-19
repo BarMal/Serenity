@@ -45,7 +45,7 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
 
     val after = bufferAfter(ReverseTabKey, before)
     after.document.content.collect() shouldBe "abc"
-    after.editing.cursors shouldBe List(CursorPosition(0, 3))
+    after.editing.cursorPositions shouldBe List(CursorPosition(0, 3))
   }
 
   it should "remove at most one full indent level's worth of leading spaces, not every leading space" in {
@@ -53,7 +53,7 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
 
     val after = bufferAfter(ReverseTabKey, before)
     after.document.content.collect() shouldBe "    abc"
-    after.editing.cursors shouldBe List(CursorPosition(0, 7))
+    after.editing.cursorPositions shouldBe List(CursorPosition(0, 7))
   }
 
   it should "leave the line and the cursor untouched when it has no leading whitespace" in {
@@ -61,7 +61,7 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
 
     val after = bufferAfter(ReverseTabKey, before)
     after.document.content.collect() shouldBe "abc"
-    after.editing.cursors shouldBe List(CursorPosition(0, 2))
+    after.editing.cursorPositions shouldBe List(CursorPosition(0, 2))
   }
 
   it should "record no undo boundary when every targeted line has nothing to unindent" in {
@@ -101,7 +101,7 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
 
     val after = bufferAfter(InsertChar('e'), before)
     after.document.content.collect() shouldBe "hello"
-    after.editing.cursors shouldBe List(CursorPosition(0, 2))
+    after.editing.cursorPositions shouldBe List(CursorPosition(0, 2))
   }
 
   /** All four deletion events share one selection arm (`deleteSelectedRanges`) ahead of their own without-a-selection
@@ -116,7 +116,7 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
 
     val after = bufferAfter(DeleteWordBackward, before)
     after.document.content.collect() shouldBe "alpha be"
-    after.editing.selection shouldBe None
+    after.primarySelection shouldBe None
   }
 
   "DeleteWordForward with an active selection" should "delete the selection rather than a word after it" in {
@@ -128,7 +128,7 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
 
     val after = bufferAfter(DeleteWordForward, before)
     after.document.content.collect() shouldBe "pha beta"
-    after.editing.selection shouldBe None
+    after.primarySelection shouldBe None
   }
 
   "DeleteWordBackward without a selection" should "leave the buffer untouched at the start of the document" in {

@@ -177,7 +177,7 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "next-document-comment", "next-document-comment")
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursors shouldBe List(
+    stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).editing.cursorPositions shouldBe List(
       CursorPosition(0, 0)
     )
 
@@ -217,7 +217,7 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "previous-document-comment", "previous-document-comment")
 
     val afterPrevious = stateManager.getCurrentState.unsafeRunSync()
-    afterPrevious.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
+    afterPrevious.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 0))
     val previousLens = afterPrevious.commentLensSurface
       .collect { case UiSurface(_, SurfaceContent.CommentLens(lens), _, _) => lens }
       .getOrElse(fail("Expected the comment lens to open after previous-document-comment"))
@@ -227,7 +227,7 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "next-document-comment", "next-document-comment")
 
     val afterNext = stateManager.getCurrentState.unsafeRunSync()
-    afterNext.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(1, 0))
+    afterNext.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(1, 0))
     val nextLens = afterNext.commentLensSurface
       .collect { case UiSurface(_, SurfaceContent.CommentLens(lens), _, _) => lens }
       .getOrElse(fail("Expected the comment lens to open after next-document-comment"))

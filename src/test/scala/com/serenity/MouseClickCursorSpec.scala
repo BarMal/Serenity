@@ -117,7 +117,7 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(18, 2, button = MouseButton.Secondary)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    buffer.editing.cursors shouldBe List(CursorPosition(0, 1))
+    buffer.editing.cursorPositions shouldBe List(CursorPosition(0, 1))
   }
 
   it should "clamp column to line length when clicking past end of line" in {

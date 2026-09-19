@@ -179,8 +179,8 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     val replaced = stateManager.getCurrentState.unsafeRunSync()
     replaced.modalSurface shouldBe defined
     replaced.persisted.buffers(bufferId).document.content.collect() shouldBe "thread one\nneedle two\nkeep"
-    replaced.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, "thread".length))
-    replaced.persisted.buffers(bufferId).editing.selection shouldBe None
+    replaced.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, "thread".length))
+    replaced.persisted.buffers(bufferId).primarySelection shouldBe None
     replaced.persisted.buffers(bufferId).findState shouldBe Some(FindState("needle", List(FindResult(1, 0)), 0))
 
     stateManager.applyEvent(Undo).unsafeRunSync()
@@ -189,8 +189,8 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     undone.modalSurface shouldBe defined
     undone.persisted.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
     undone.persisted.buffers(bufferId).document.content.collect() shouldBe original
-    undone.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
-    undone.persisted.buffers(bufferId).editing.selection shouldBe Some(
+    undone.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 0))
+    undone.persisted.buffers(bufferId).primarySelection shouldBe Some(
       Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length))
     )
     undone.persisted.buffers(bufferId).findState shouldBe Some(
@@ -460,7 +460,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val afterFirst = stateManager.getCurrentState.unsafeRunSync()
     afterFirst.persisted.buffers(bufferId).document.content.collect() shouldBe "n one\nneedle two\noutside needle"
-    afterFirst.persisted.buffers(bufferId).editing.selection shouldBe Some(
+    afterFirst.persisted.buffers(bufferId).primarySelection shouldBe Some(
       Selection(CursorPosition(0, 0), CursorPosition(1, "needle two".length))
     )
 
@@ -468,7 +468,7 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val afterSecond = stateManager.getCurrentState.unsafeRunSync()
     afterSecond.persisted.buffers(bufferId).document.content.collect() shouldBe "n one\nn two\noutside needle"
-    afterSecond.persisted.buffers(bufferId).editing.selection shouldBe Some(
+    afterSecond.persisted.buffers(bufferId).primarySelection shouldBe Some(
       Selection(CursorPosition(0, 0), CursorPosition(1, "n two".length))
     )
 
@@ -528,17 +528,17 @@ class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     val replaced = stateManager.getCurrentState.unsafeRunSync()
     replaced.modalSurface shouldBe None
     replaced.persisted.buffers(bufferId).document.content.collect() shouldBe "thread one\nmiddle\nthread two"
-    replaced.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(2, "thread".length))
-    replaced.persisted.buffers(bufferId).editing.selection shouldBe None
-    replaced.persisted.buffers(bufferId).editing.selections shouldBe Nil
+    replaced.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(2, "thread".length))
+    replaced.persisted.buffers(bufferId).primarySelection shouldBe None
+    replaced.persisted.buffers(bufferId).allSelections shouldBe replaced.persisted.buffers(bufferId).primarySelection.toList
     replaced.persisted.buffers(bufferId).findState shouldBe None
 
     stateManager.applyEvent(Undo).unsafeRunSync()
 
     val undone = stateManager.getCurrentState.unsafeRunSync()
     undone.persisted.buffers(bufferId).document.content.collect() shouldBe original
-    undone.persisted.buffers(bufferId).editing.cursors shouldBe List(CursorPosition(0, 0))
-    undone.persisted.buffers(bufferId).editing.selection shouldBe Some(
+    undone.persisted.buffers(bufferId).editing.cursorPositions shouldBe List(CursorPosition(0, 0))
+    undone.persisted.buffers(bufferId).primarySelection shouldBe Some(
       Selection(CursorPosition(0, 0), CursorPosition(0, "needle".length))
     )
     undone.persisted.buffers(bufferId).findState shouldBe Some(
