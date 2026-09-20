@@ -104,3 +104,44 @@ class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     resolved.paintBoxes shouldBe Nil
     resolved.hitRegions shouldBe Nil
   }
+
+  "closeAffordances" should "produce no regions for an empty tab list" in {
+    TabBarSurfaceComposition.closeAffordances(Nil, LayoutRect(0, 0, 30, 1)) shouldBe Nil
+  }
+
+  it should
+    "produce one close hit region per wide-enough tab, addressed by closeFocusId, at the right edge of its own cell" in {
+      val entries = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
+      // Widths 6/6/5 (see the `allocate` spec above), starting at 0, 8, 16 (see `forTabBar`'s hit-region spec above).
+      val regions = TabBarSurfaceComposition.closeAffordances(entries, LayoutRect(0, 0, 21, 1))
+
+      regions.map(_.focusId) shouldBe entries.map(e => TabBarSurfaceComposition.closeFocusId(e.bufferId))
+      // Each region is the rightmost 2 columns of its tab's own cell: [4,6), [12,14), [19,21).
+      regions.map(_.rect.x) shouldBe List(4.0, 12.0, 19.0)
+      regions.foreach(_.rect.width shouldBe 2.0)
+    }
+
+  it should "resolve an absolute on-screen rect's offset into the close regions' x positions" in {
+    val entries = List(entry(0, "one"), entry(1, "two"))
+    val regions = TabBarSurfaceComposition.closeAffordances(entries, LayoutRect(5, 2, 20, 1))
+
+    // 18 content columns split 9/9 (see `forTabBar`'s own offset spec above); the strip starts at x=5, so the first
+    // tab's close region is [5+9-2,5+9)=[12,14) and the second's is [5+9+2+9-2,...)=[23,25).
+    regions.map(_.rect.x) shouldBe List(12.0, 23.0)
+    regions.foreach(_.rect.y shouldBe 2.0)
+  }
+
+  it should "produce no close region for a tab too narrow to leave room for one" in {
+    val entries = List.tabulate(5)(i => entry(i, s"tab-$i"))
+
+    val regions = TabBarSurfaceComposition.closeAffordances(entries, LayoutRect(0, 0, 3, 1))
+
+    regions shouldBe Nil
+  }
+
+  it should "not touch forTabBar's own hit regions -- switch (#1077) and close (#1078) resolve from disjoint sets" in {
+    val entries  = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
+    val resolved = TabBarSurfaceComposition.forTabBar(entries, None, LayoutRect(0, 0, 21, 1))
+
+    resolved.hitRegions.map(_.focusId) shouldBe entries.map(e => TabBarSurfaceComposition.focusId(e.bufferId))
+  }

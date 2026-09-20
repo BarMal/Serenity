@@ -26,6 +26,20 @@ object TabBarSurfaceComposition:
   def bufferIdOf(id: SurfaceFocusId): Option[BufferId] =
     id.value.stripPrefix(FocusIdPrefix).toIntOption.map(BufferId.apply)
 
+  private val CloseFocusIdPrefix = "tab-bar-close-"
+
+  /** Columns reserved at a tab's right edge for its close (x) affordance's click target (issue #1078) -- kept apart
+    * from `forTabBar`'s own per-tab hit region (used to switch, #1077) rather than folded into the same list, so a
+    * close click and a switch click always resolve from two disjoint region sets instead of one overloaded one.
+    */
+  private val CloseHitWidth = 2
+
+  def closeFocusId(bufferId: BufferId): SurfaceFocusId = SurfaceFocusId(s"$CloseFocusIdPrefix${bufferId.value}")
+
+  /** Recovers the `BufferId` a `closeAffordances` hit's focus id addresses, the inverse of `closeFocusId`. */
+  def closeBufferIdOf(id: SurfaceFocusId): Option[BufferId] =
+    id.value.stripPrefix(CloseFocusIdPrefix).toIntOption.map(BufferId.apply)
+
   /** One tab's resolved geometry: the width allocated to it and its (possibly truncated) display title. */
   final case class TabAllocation(entry: TabListEntry, allocatedWidth: Int, displayTitle: String)
 
@@ -137,3 +151,32 @@ object TabBarSurfaceComposition:
           (nextCursorX, acc :+ (cursorX, cellWidth))
       }
       ._2
+
+  /** Per-tab close (x) affordance hit regions (issue #1078), one per tab wide enough to leave room for one -- the
+    * rightmost [[CloseHitWidth]] columns of that tab's own cell, from the exact same `allocate`/`tabPositions` layout
+    * `forTabBar` uses for its own hit regions. Deliberately not part of `forTabBar`'s own `ResolvedSurfaceComposition`
+    * -- resolved as its own list so a close click (here) and a switch click (`forTabBar`'s existing hit regions, issue
+    * #1077) always come from two disjoint region sets rather than one overloaded one; painting the glyph itself into
+    * the shared `Distributed`-row renderer is not yet wired up (tracked on the issue, not a silent gap).
+    */
+  def closeAffordances(entries: List[TabListEntry], rect: LayoutRect): List[SurfaceHitRegion] =
+    if entries.isEmpty then Nil
+    else
+      val allocations = allocate(entries, rect.width)
+      val positions   = tabPositions(rect.x, allocations)
+      allocations.zip(positions).collect {
+        case (allocation, (startX, width)) if width > CloseHitWidth =>
+          val closeX = startX + width - CloseHitWidth
+          val id     = closeFocusId(allocation.entry.bufferId)
+          SurfaceHitRegion(
+            rect = LogicalPixelRect(
+              closeX.toDouble,
+              rect.y.toDouble,
+              CloseHitWidth.toDouble,
+              math.min(1.0, rect.height.toDouble)
+            ),
+            focusId = id,
+            actionId = Some(SurfaceActionId(id.value)),
+            semanticLabel = s"Close ${allocation.entry.title}"
+          )
+      }
