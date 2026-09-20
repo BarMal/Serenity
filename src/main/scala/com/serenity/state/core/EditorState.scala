@@ -69,29 +69,29 @@ object EditorState:
   def navigateToPreviousBuffer(state: AppState): AppState =
     navigateBuffer(state, _.previousBufferInOrder)
 
+  /** Closes the currently focused tab -- `Ctrl+W`'s keyboard path, which only ever knows the focused buffer.
+    * Generalised by [[closeBuffer]] (issue #1078), which a tab-bar mouse close click can also target by an arbitrary
+    * `BufferId`, whether or not it is focused.
+    */
   def closeFocusedTab(state: AppState): AppState =
-    state.persisted.focus match
-      case Focus.EditorPane(paneId) =>
-        state.persisted.layout.editorPanes.get(paneId) match
-          case Some(pane) =>
-            pane.bufferId match
-              case Some(bufferId) =>
-                val withoutBuffer  = removeBuffer(state, bufferId)
-                val fallbackBuffer = nextRemainingBuffer(state, bufferId)
-                val rebalancedState =
-                  fallbackBuffer match
-                    case Some(nextBufferId) =>
-                      focusBuffer(rebalancePanes(withoutBuffer, Some(nextBufferId)), nextBufferId)
-                    case None =>
-                      withoutBuffer
+    state.focusedBufferId match
+      case Some(bufferId) => closeBuffer(state, bufferId)
+      case None           => state
 
-                rebalancedState
-              case None =>
-                state
-          case None =>
-            state
-      case _ =>
-        state
+  /** Closes `bufferId` wherever it is -- the focused tab, or (issue #1078: a tab-bar close-affordance click) any other
+    * open tab -- the single close-by-id path both the keyboard's focused-only `CloseTab` and the mouse's per-tab close
+    * share. Closing the focused buffer reassigns focus/panes exactly as `closeFocusedTab` always did (falling back to
+    * the next remaining buffer, or leaving the pane empty once none remain); closing a buffer that is not focused only
+    * drops it from `bufferOrder`/`buffers` (and clears it from any pane showing it, via [[removeBuffer]]), leaving
+    * which buffer is focused untouched.
+    */
+  def closeBuffer(state: AppState, bufferId: BufferId): AppState =
+    val withoutBuffer = removeBuffer(state, bufferId)
+    if state.focusedBufferId.contains(bufferId) then
+      nextRemainingBuffer(state, bufferId) match
+        case Some(nextBufferId) => focusBuffer(rebalancePanes(withoutBuffer, Some(nextBufferId)), nextBufferId)
+        case None               => withoutBuffer
+    else withoutBuffer
 
   def removeBuffer(state: AppState, bufferId: BufferId): AppState =
     val updatedPanes = state.persisted.layout.editorPanes.view.mapValues { pane =>
