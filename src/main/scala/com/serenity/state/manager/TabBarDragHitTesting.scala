@@ -7,22 +7,22 @@ import com.serenity.state.models.{AppState, BufferId, SurfaceContent, TabDragSes
 import com.serenity.ui.layout.LayoutEngine
 
 /** State the event pipeline exposes for dragging a tab to reorder it, as a capability record rather than a trait --
-  * nothing here breaks a construction-order cycle (#1389), so mockability is the only reason this needs an interface
-  * at all, and a record fakes trivially without one (#1017).
+  * nothing here breaks a construction-order cycle (#1389), so mockability is the only reason this needs an interface at
+  * all, and a record fakes trivially without one (#1017).
   */
 final private[manager] case class TabBarDragHitTestingPort(
     stateRef: Ref[IO, AppState],
     validateAndUpdateState: (AppState, AppState) => IO[Unit]
 )
 
-/** Drag-to-reorder for the always-visible tab strip (issue #1079). A primary press on a tab starts a
-  * [[TabDragSession]] (`Runtime.tabDragSession`); each subsequent `MouseDrag` tick that lands on another tab reorders
-  * `bufferOrder` live via `EditorState.reorderBuffer`, the same live-apply-per-tick pattern
-  * `PinnedPanelMouseHitTesting.handlePinnedPanelResizeDrag`/`handleTextAreaResizeDrag` already use for resize, in
-  * place of a deferred "apply on release" this app's input model has no event for (`MouseEvent.scala` has no
-  * mouse-release event -- see [[TabDragSession]]'s own doc comment). A drag that never lands back on a different tab
-  * before the gesture ends therefore leaves `bufferOrder` exactly as the last successful tick left it, which is
-  * already unchanged if it never moved off its starting tab.
+/** Drag-to-reorder for the always-visible tab strip (issue #1079). A primary press on a tab starts a [[TabDragSession]]
+  * (`Runtime.tabDragSession`); each subsequent `MouseDrag` tick that lands on another tab reorders `bufferOrder` live
+  * via `EditorState.reorderBuffer`, the same live-apply-per-tick pattern
+  * `PinnedPanelMouseHitTesting.handlePinnedPanelResizeDrag`/`handleTextAreaResizeDrag` already use for resize, in place
+  * of a deferred "apply on release" this app's input model has no event for (`MouseEvent.scala` has no mouse-release
+  * event -- see [[TabDragSession]]'s own doc comment). A drag that never lands back on a different tab before the
+  * gesture ends therefore leaves `bufferOrder` exactly as the last successful tick left it, which is already unchanged
+  * if it never moved off its starting tab.
   */
 final private[manager] class TabBarDragHitTesting(port: TabBarDragHitTestingPort):
   import port.*
@@ -48,9 +48,11 @@ final private[manager] class TabBarDragHitTesting(port: TabBarDragHitTestingPort
         case Some(session) =>
           tabAt(state, drag.col.toDouble, drag.row.toDouble) match
             case Some(targetBufferId) if targetBufferId != session.bufferId =>
-              stateRef.get.flatMap { current =>
-                validateAndUpdateState(EditorState.reorderBuffer(current, session.bufferId, targetBufferId), current)
-              }.as(true)
+              stateRef.get
+                .flatMap { current =>
+                  validateAndUpdateState(EditorState.reorderBuffer(current, session.bufferId, targetBufferId), current)
+                }
+                .as(true)
             case _ =>
               // Off a tab, or back over the tab already being dragged -- the gesture continues, nothing to reorder
               // yet this tick.

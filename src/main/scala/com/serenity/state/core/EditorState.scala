@@ -119,7 +119,7 @@ object EditorState:
     val order = state.persisted.bufferOrder
     if from == to || !order.contains(from) || !order.contains(to) then state
     else
-      val without = order.filterNot(_ == from)
+      val without         = order.filterNot(_ == from)
       val (before, after) = without.splitAt(without.indexOf(to))
       state.copy(persisted = state.persisted.copy(bufferOrder = before ++ (from :: after)))
 
