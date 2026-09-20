@@ -72,6 +72,7 @@ private[manager] trait EffectModalWorkflowPort:
   def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit]
   def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
   def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
+  def openFileWorkflowAsProjectRootEffect(surfaceId: SurfaceId, openProjectRoot: Path => IO[Unit]): IO[Unit]
   def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
   def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
   def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit]

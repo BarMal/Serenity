@@ -357,6 +357,7 @@ object ModalSurfaceComposition:
   ): String =
     val showCreateDirectory =
       workflow.mode == FileWorkflowMode.SaveAs && workflow.missingPathSegments.nonEmpty
+    val showOpenAsProjectRoot = workflow.mode == FileWorkflowMode.Open
     val navigateLabel = workflow match
       case saveAsWorkflow: SaveAsFileWorkflowState if saveAsWorkflow.activeField == FileWorkflowField.Format =>
         "Cycle format"
@@ -367,7 +368,8 @@ object ModalSurfaceComposition:
       "Cancel"       -> ModalKeyAction.Dismiss,
       "Switch field" -> ModalKeyAction.NextField,
       navigateLabel  -> ModalKeyAction.NavigateDown
-    ) ++ Option.when(showCreateDirectory)("Create dir" -> ModalKeyAction.CreateDirectory)
+    ) ++ Option.when(showCreateDirectory)("Create dir" -> ModalKeyAction.CreateDirectory) ++
+      Option.when(showOpenAsProjectRoot)("Open as root" -> ModalKeyAction.OpenAsProjectRoot)
     actions
       .flatMap {
         case (label, action) =>

@@ -14,6 +14,7 @@ import com.serenity.rope.*
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
+import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.theme.config.ThemeConfigWriter
 
 /** Workflow operations selected by command effects. */
@@ -23,6 +24,7 @@ private[manager] trait WorkflowEffectPort:
   def refresh(surfaceId: SurfaceId): IO[Unit]
   def refreshFind(request: FindSearchRequest): IO[Unit]
   def submitFile(surfaceId: SurfaceId): IO[Unit]
+  def openAsProjectRoot(surfaceId: SurfaceId): IO[Unit]
   def submitReplace(surfaceId: SurfaceId): IO[Unit]
   def submitClose(surfaceId: SurfaceId): IO[Unit]
   def createDirectories(surfaceId: SurfaceId): IO[Unit]
@@ -37,6 +39,7 @@ final private[manager] class WorkflowEffectHandler(port: WorkflowEffectPort):
       case WorkflowEffect.RefreshFileWorkflow(id)           => port.refresh(id)
       case WorkflowEffect.RefreshFind(request)              => port.refreshFind(request)
       case WorkflowEffect.SubmitFileWorkflow(id)            => port.submitFile(id)
+      case WorkflowEffect.OpenFileWorkflowAsProjectRoot(id) => port.openAsProjectRoot(id)
       case WorkflowEffect.SubmitReplaceWorkflow(id)         => port.submitReplace(id)
       case WorkflowEffect.SubmitCloseWorkflow(id)           => port.submitClose(id)
       case WorkflowEffect.CreateFileWorkflowDirectories(id) => port.createDirectories(id)
@@ -74,6 +77,19 @@ final private[manager] class StateManagerEffectHandlers(
     def refresh(surfaceId: SurfaceId): IO[Unit]           = refreshFileWorkflowEffect(surfaceId)
     def refreshFind(request: FindSearchRequest): IO[Unit] = scheduleFindSearch(request)
     def submitFile(surfaceId: SurfaceId): IO[Unit]        = submitFileWorkflowEffect(surfaceId)
+    // `panelEffects` is declared further down this same class (below), not on `workflow` -- referencing it here is
+    // safe (no construction-time cycle: `panelEffects` doesn't depend on `workflowEffects`) because this method body
+    // only runs once the whole object is fully constructed, long after both `val`s are assigned.
+    def openAsProjectRoot(surfaceId: SurfaceId): IO[Unit] =
+      openFileWorkflowAsProjectRootEffect(
+        surfaceId,
+        path =>
+          panelEffects.pinExplorerPanelEffect(
+            PanelPosition.Left,
+            path,
+            panelEffects.defaultPanelSize(PanelKind.Explorer, PanelPosition.Left)
+          )
+      )
     def submitReplace(surfaceId: SurfaceId): IO[Unit]     = submitReplaceWorkflowEffect(surfaceId)
     def submitClose(surfaceId: SurfaceId): IO[Unit]       = submitCloseWorkflowEffect(surfaceId)
     def createDirectories(surfaceId: SurfaceId): IO[Unit] = createFileWorkflowDirectoriesEffect(surfaceId))

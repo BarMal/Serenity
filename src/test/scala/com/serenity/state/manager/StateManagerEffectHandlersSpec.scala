@@ -150,6 +150,8 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
         callsVar.update(_ :+ s"refreshFileWorkflowEffect:$surfaceId")
       def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
         callsVar.update(_ :+ s"submitFileWorkflowEffect:$surfaceId")
+      def openFileWorkflowAsProjectRootEffect(surfaceId: SurfaceId, openProjectRoot: Path => IO[Unit]): IO[Unit] =
+        callsVar.update(_ :+ s"openFileWorkflowAsProjectRootEffect:$surfaceId")
       def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
         callsVar.update(_ :+ s"submitReplaceWorkflowEffect:$surfaceId")
       def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =

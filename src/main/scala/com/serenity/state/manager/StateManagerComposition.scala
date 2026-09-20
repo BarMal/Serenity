@@ -194,6 +194,8 @@ private[manager] class StateManagerComposition(
       workflow.refreshFileWorkflowEffect(surfaceId)
     def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
       workflow.submitFileWorkflowEffect(surfaceId)
+    def openFileWorkflowAsProjectRootEffect(surfaceId: SurfaceId, openProjectRoot: Path => IO[Unit]): IO[Unit] =
+      workflow.openFileWorkflowAsProjectRootEffect(surfaceId, openProjectRoot)
     def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
       workflow.submitReplaceWorkflowEffect(surfaceId)
     def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
