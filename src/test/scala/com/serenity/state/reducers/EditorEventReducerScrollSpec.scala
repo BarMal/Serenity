@@ -9,10 +9,10 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Horizontal scroll-gesture support (issue #1568): `ScrollLeft`/`ScrollRight` pan `leftColumn` the same way
-  * `ScrollUp`/`ScrollDown` (covered end-to-end in `ScrollingNavigationSpec`) already pan `topLine`, or -- while
-  * column mode and word wrap are both on -- reduce exactly as `ColumnLeft`/`ColumnRight` already do, so a scroll
-  * gesture goes through the very same reduce path (and therefore the same `CursorViewport.seedColumnTransition`
-  * animated sweep at the effect boundary) as the keyboard equivalent, rather than a separate ad hoc path.
+  * `ScrollUp`/`ScrollDown` (covered end-to-end in `ScrollingNavigationSpec`) already pan `topLine`, or -- while column
+  * mode and word wrap are both on -- reduce exactly as `ColumnLeft`/`ColumnRight` already do, so a scroll gesture goes
+  * through the very same reduce path (and therefore the same `CursorViewport.seedColumnTransition` animated sweep at
+  * the effect boundary) as the keyboard equivalent, rather than a separate ad hoc path.
   */
 class EditorEventReducerScrollSpec extends AnyFlatSpec with Matchers:
 

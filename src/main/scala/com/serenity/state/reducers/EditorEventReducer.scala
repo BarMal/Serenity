@@ -94,9 +94,9 @@ object EditorEventReducer:
     * Under plain word wrap without column mode, `leftColumn` is always pinned to `0` (`CursorGlideGeometry`'s own
     * comment), so the gesture is a no-op there rather than moving a viewport field nothing ever reads.
     *
-    * The upper clamp is measured against the longest of the lines currently on screen -- not the whole document,
-    * which no reducer here scans, and not the cursor's own line, which `LayoutEngine.clampLeftColumnForBuffer`'s
-    * resize-time clamp uses but a scroll gesture has no cursor-based reason to prefer.
+    * The upper clamp is measured against the longest of the lines currently on screen -- not the whole document, which
+    * no reducer here scans, and not the cursor's own line, which `LayoutEngine.clampLeftColumnForBuffer`'s resize-time
+    * clamp uses but a scroll gesture has no cursor-based reason to prefer.
     */
   private def reduceHorizontalScroll(
     paneId: PaneId,
@@ -109,8 +109,7 @@ object EditorEventReducer:
     val surfaceConfig = currentState.persisted.config.surfaceConfig
     if surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled then
       reduceTextEvent(columnModeEvent, paneId, pane, currentState)
-    else if surfaceConfig.wordWrapEnabled then
-      ReducerResult.noEffects(currentState)
+    else if surfaceConfig.wordWrapEnabled then ReducerResult.noEffects(currentState)
     else
       pane.bufferId.flatMap(currentState.persisted.buffers.get) match
         case Some(buffer) =>
