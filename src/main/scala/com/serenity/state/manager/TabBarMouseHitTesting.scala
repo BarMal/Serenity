@@ -60,16 +60,19 @@ private[manager] object TabBarMouseHitTesting:
   /** Resolves a click's cell coordinate to the `BufferId` of the tab whose close (x) affordance it landed on (issue
     * #1078) -- the close-specific counterpart to `hitAt` above, resolved from
     * `TabBarSurfaceComposition.closeAffordances` rather than `forTabBar`'s own hit regions, so a close click and a
-    * switch click (#1077, via `hitAt`) never contend for the same region.
+    * switch click (#1077, via `hitAt`) never contend for the same region. `activeBufferId` must match the value
+    * `hitAt`/`forTabBar` were resolved with for this same click, so both agree on which tabs are visible under overflow
+    * (issue #1081).
     */
   def closeHitAt(
     entries: List[TabListEntry],
+    activeBufferId: Option[BufferId],
     rect: LayoutRect,
     col: Double,
     row: Double
   ): Option[BufferId] =
     TabBarSurfaceComposition
-      .closeAffordances(entries, rect)
+      .closeAffordances(entries, activeBufferId, rect)
       .reverse
       .find(_.rect.contains(col, row))
       .flatMap(hit => TabBarSurfaceComposition.closeBufferIdOf(hit.focusId))

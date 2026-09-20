@@ -106,14 +106,14 @@ class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   }
 
   "closeAffordances" should "produce no regions for an empty tab list" in {
-    TabBarSurfaceComposition.closeAffordances(Nil, LayoutRect(0, 0, 30, 1)) shouldBe Nil
+    TabBarSurfaceComposition.closeAffordances(Nil, None, LayoutRect(0, 0, 30, 1)) shouldBe Nil
   }
 
   it should
     "produce one close hit region per wide-enough tab, addressed by closeFocusId, at the right edge of its own cell" in {
       val entries = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
       // Widths 6/6/5 (see the `allocate` spec above), starting at 0, 8, 16 (see `forTabBar`'s hit-region spec above).
-      val regions = TabBarSurfaceComposition.closeAffordances(entries, LayoutRect(0, 0, 21, 1))
+      val regions = TabBarSurfaceComposition.closeAffordances(entries, None, LayoutRect(0, 0, 21, 1))
 
       regions.map(_.focusId) shouldBe entries.map(e => TabBarSurfaceComposition.closeFocusId(e.bufferId))
       // Each region is the rightmost 2 columns of its tab's own cell: [4,6), [12,14), [19,21).
@@ -123,7 +123,7 @@ class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
 
   it should "resolve an absolute on-screen rect's offset into the close regions' x positions" in {
     val entries = List(entry(0, "one"), entry(1, "two"))
-    val regions = TabBarSurfaceComposition.closeAffordances(entries, LayoutRect(5, 2, 20, 1))
+    val regions = TabBarSurfaceComposition.closeAffordances(entries, None, LayoutRect(5, 2, 20, 1))
 
     // 18 content columns split 9/9 (see `forTabBar`'s own offset spec above); the strip starts at x=5, so the first
     // tab's close region is [5+9-2,5+9)=[12,14) and the second's is [5+9+2+9-2,...)=[23,25).
@@ -134,7 +134,7 @@ class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   it should "produce no close region for a tab too narrow to leave room for one" in {
     val entries = List.tabulate(5)(i => entry(i, s"tab-$i"))
 
-    val regions = TabBarSurfaceComposition.closeAffordances(entries, LayoutRect(0, 0, 3, 1))
+    val regions = TabBarSurfaceComposition.closeAffordances(entries, None, LayoutRect(0, 0, 3, 1))
 
     regions shouldBe Nil
   }
