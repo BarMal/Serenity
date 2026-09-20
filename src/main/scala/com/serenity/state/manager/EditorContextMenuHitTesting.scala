@@ -61,7 +61,10 @@ final private[manager] class EditorContextMenuHitTesting(port: EditorContextMenu
       "next-document-symbol",
       "previous-document-symbol",
       "markdown-preview",
-      "pin-outline"
+      "pin-outline",
+      // #1531: a no-op when the cursor isn't on a flagged word, same as e.g. "delete-document-comment" above
+      // when there is no comment at the cursor.
+      "add-word-to-dictionary"
     )
 
   def openEditorContextMenu(click: MouseClick, state: AppState): IO[Unit] =

@@ -8,6 +8,7 @@ import com.serenity.command.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, LineNumberLayout, StatusLinePlacement, StatusSegment, VisualFlairLevel}
 import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
+import com.serenity.spellcheck.{DictionaryWord, SpellChecker}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CommandRunnerPanelSelections, CommandRunnerReducer}
 
@@ -185,7 +186,7 @@ final private[manager] class StateManagerConfigEffects(
       case SettingsIntent.InterfaceChrome(interfaceChromeIntent) =>
         interpretInterfaceChromeIntent(interfaceChromeIntent)
       case SettingsIntent.Decoration(decorationIntent) => interpretDecorationIntent(decorationIntent)
-      case SettingsIntent.SpellCheck(spellCheckIntent) => interpretSpellCheckIntent(spellCheckIntent)
+      case SettingsIntent.SpellCheck(spellCheckIntent) => interpretSpellCheckIntent(spellCheckIntent, state)
       case SettingsIntent.General(generalIntent)       => interpretGeneralSettingsIntent(generalIntent, state)
 
   private def interpretFontIntent(intent: FontIntent): IO[Unit] =
@@ -401,7 +402,7 @@ final private[manager] class StateManagerConfigEffects(
       case DecorationIntent.SetVisualFlairLevel(level) =>
         updateVisualFlairLevel(level)
 
-  private def interpretSpellCheckIntent(intent: SpellCheckIntent): IO[Unit] =
+  private def interpretSpellCheckIntent(intent: SpellCheckIntent, state: AppState): IO[Unit] =
     intent match
       case SpellCheckIntent.SetSpellCheckEnabled(enabled) =>
         updateSpellCheckConfig(_.copy(enabled = enabled))
@@ -411,6 +412,19 @@ final private[manager] class StateManagerConfigEffects(
         updateSpellCheckConfig(_.copy(dictionaryPaths = paths))
       case SpellCheckIntent.SetSpellCheckWords(words) =>
         updateSpellCheckConfig(_.copy(additionalWords = words))
+      case SpellCheckIntent.AddWordAtCursorToDictionary =>
+        addFlaggedWordAtCursorToDictionary(state)
+
+  // #1531: silently a no-op when the cursor is not on a flagged word -- mirrors how `delete-document-comment`
+  // is a no-op with no comment at the cursor, rather than surfacing an error for a command reachable from a
+  // static context-menu/command-palette entry that doesn't know in advance whether it applies.
+  private def addFlaggedWordAtCursorToDictionary(state: AppState): IO[Unit] =
+    SpellChecker.flaggedWordAtCursor(state) match
+      case Some(word) =>
+        val normalized = DictionaryWord.normalize(word)
+        updateSpellCheckConfig(config => config.copy(additionalWords = (config.additionalWords :+ normalized).distinct))
+      case None =>
+        IO.unit
 
   private def interpretGeneralSettingsIntent(intent: GeneralSettingsIntent, state: AppState): IO[Unit] =
     intent match

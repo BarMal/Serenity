@@ -272,6 +272,10 @@ enum SpellCheckIntent:
   case SetSpellCheckLanguages(languages: List[String])
   case SetSpellCheckDictionaryPaths(paths: List[String])
   case SetSpellCheckWords(words: List[String])
+  // #1531: no parameter -- like `LspIntent.RequestLspDefinition`, the word is resolved from the cursor position at
+  // interpret time (here, the word covered by the active spell-check diagnostic under the cursor) rather than
+  // threaded through the command.
+  case AddWordAtCursorToDictionary
 
 /** Settings with no more specific home: material/post-processing/shadows, render tuning, background, and the settings
   * surface's own open/save commands.

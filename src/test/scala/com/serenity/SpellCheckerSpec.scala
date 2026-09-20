@@ -564,6 +564,9 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     published shouldBe currentState
   }
 
+  // The #1531 "find the flagged word at the cursor" tests live in SpellCheckerFlaggedWordAtCursorSpec, split out to
+  // keep this file under the architecture ratchet's file-length target.
+
   "StateManager" should "refresh spell-check diagnostics after prose edits" in {
     val logger = LoggerFactory[IO].getLogger(using LoggerName("SpellCheckerSpec"))
     val stateManager = StateManager

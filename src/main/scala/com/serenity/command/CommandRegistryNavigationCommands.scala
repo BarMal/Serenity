@@ -120,5 +120,14 @@ private[command] object CommandRegistryNavigationCommands:
       CommandIntent.Lsp(LspIntent.RequestLspDefinition),
       CommandCategory.Edit,
       label = "LSP Definition"
+    ),
+    // #1531: adds the word flagged by the spell-check diagnostic at the cursor to the persisted custom-words
+    // dictionary, without requiring a trip through Settings to hand-edit the comma-separated list.
+    Command.typed(
+      "add-word-to-dictionary",
+      "Add the misspelled word at the cursor to the custom spell-check dictionary.",
+      CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.AddWordAtCursorToDictionary)),
+      CommandCategory.Edit,
+      label = "Add Word to Dictionary"
     )
   )
