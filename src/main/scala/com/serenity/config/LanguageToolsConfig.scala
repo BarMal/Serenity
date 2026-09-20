@@ -60,8 +60,8 @@ object SpellCheckConfig:
     * When `config.dictionaryPaths` is empty -- the zero-config case -- `osDictionaryDirectories` (standard
     * Hunspell/MySpell install locations, `defaultOsDictionaryDirectories()` by default) are searched for a
     * language-matching dictionary instead, so a system that already has e.g. `hunspell-en-gb` installed spell-checks
-    * without any configuration (#1175). A dictionary the user *did* configure is never second-guessed this way: as
-    * soon as `dictionaryPaths` is non-empty, `osDictionaryDirectories` is not consulted at all, so existing explicit
+    * without any configuration (#1175). A dictionary the user *did* configure is never second-guessed this way: as soon
+    * as `dictionaryPaths` is non-empty, `osDictionaryDirectories` is not consulted at all, so existing explicit
     * configuration resolves exactly as it always has. `osDictionaryDirectories` is a parameter (rather than always
     * reading `defaultOsDictionaryDirectories()` internally) so tests can point it at a directory they control instead
     * of depending on what is actually installed on the machine running the suite.
@@ -77,11 +77,11 @@ object SpellCheckConfig:
 
   /** Standard Hunspell/MySpell dictionary install directories for the running OS, most-specific first. Best-effort:
     * Linux distributions are consistent about `/usr/share/hunspell` and `/usr/share/myspell/dicts`, but there is no
-    * single standard location on macOS or Windows -- `/Library/Spelling` and a user's own `~/Library/Spelling` are
-    * what macOS's built-in spell-check panel itself uses, and `%PROGRAMDATA%\hunspell` mirrors where LibreOffice
-    * installs its bundled dictionaries on Windows. `osName`/`userHome`/`programData` default to reading the running
-    * JVM's own properties/environment, and are parameters only so callers (tests, primarily) can supply a specific
-    * platform without needing to run on it.
+    * single standard location on macOS or Windows -- `/Library/Spelling` and a user's own `~/Library/Spelling` are what
+    * macOS's built-in spell-check panel itself uses, and `%PROGRAMDATA%\hunspell` mirrors where LibreOffice installs
+    * its bundled dictionaries on Windows. `osName`/`userHome`/`programData` default to reading the running JVM's own
+    * properties/environment, and are parameters only so callers (tests, primarily) can supply a specific platform
+    * without needing to run on it.
     */
   def defaultOsDictionaryDirectories(
     osName: String = System.getProperty("os.name", ""),
@@ -89,8 +89,7 @@ object SpellCheckConfig:
     programData: Option[String] = Option(System.getenv("PROGRAMDATA"))
   ): List[String] =
     val normalizedOsName = osName.toLowerCase
-    if normalizedOsName.contains("win") then
-      programData.map(dir => s"$dir\\hunspell").toList
+    if normalizedOsName.contains("win") then programData.map(dir => s"$dir\\hunspell").toList
     else if normalizedOsName.contains("mac") then
       List("/Library/Spelling", s"$userHome/Library/Spelling", "/usr/share/hunspell", "/usr/local/share/hunspell")
     else
