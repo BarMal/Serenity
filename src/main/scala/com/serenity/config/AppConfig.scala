@@ -66,6 +66,22 @@ final case class AppConfig(
   def uiOutlineThicknessPx: Int =
     interfaceConfig.outlineThicknessPx
 
+  def uiChromeScale: Double =
+    editorConfig.fontConfig.uiChromeScale
+
+  /** [[uiCornerRadiusPx]] scaled by [[uiChromeScale]] -- what renderers should actually draw with, so a panel's
+    * corner radius stays proportionate to the panel as the UI font size changes (issue #1542) instead of always
+    * painting the configured pixel value regardless of font size.
+    */
+  def scaledUiCornerRadiusPx: Int =
+    math.round(uiCornerRadiusPx * uiChromeScale).toInt.max(0)
+
+  /** [[uiOutlineThicknessPx]] scaled the same way as [[scaledUiCornerRadiusPx]]; floored above zero since
+    * `BasicStroke` requires a positive width.
+    */
+  def scaledUiOutlineThicknessPx: Float =
+    (uiOutlineThicknessPx * uiChromeScale).toFloat.max(0.5f)
+
   /** Create a new config with syntax highlighting toggled */
   def withSyntaxHighlighting(enabled: Boolean): AppConfig =
     withLanguageToolsConfig(languageToolsConfig.copy(syntaxHighlightingEnabled = enabled))

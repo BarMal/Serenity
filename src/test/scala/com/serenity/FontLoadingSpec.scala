@@ -154,3 +154,27 @@ class FontLoadingSpec extends AnyFlatSpec with Matchers:
         metrics.isValid shouldBe true
       }
     }
+
+  // issue #1542: UI chrome (panel corner radius, border thickness) is drawn at a scale derived from the UI font
+  // size rather than always at its configured pixel value, so it stays proportionate as the font grows.
+  it should "keep uiChromeScale neutral at the baseline UI font size" in {
+    FontConfig(uiFontSize = FontConfig.BaselineUiFontSizePx).uiChromeScale shouldBe 1.0
+  }
+
+  it should "scale uiChromeScale up with a larger UI font size" in {
+    FontConfig(uiFontSize = FontConfig.BaselineUiFontSizePx * 2).uiChromeScale shouldBe 2.0
+  }
+
+  it should "scale uiChromeScale down with a smaller UI font size" in {
+    FontConfig(uiFontSize = FontConfig.BaselineUiFontSizePx / 2).uiChromeScale shouldBe 0.5
+  }
+
+  it should "fold the device text-scale multiplier into uiChromeScale, same as scaledUiFontSize" in {
+    val config = FontConfig(
+      uiFontSize = FontConfig.BaselineUiFontSizePx,
+      textScaleMode = FontLoader.TextScaleMode.Manual,
+      textScaleMultiplier = 1.5
+    )
+
+    config.uiChromeScale shouldBe 1.5
+  }

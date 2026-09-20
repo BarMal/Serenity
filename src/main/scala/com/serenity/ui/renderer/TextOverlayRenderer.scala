@@ -42,7 +42,14 @@ object TextOverlayRenderer:
     // SurfaceFrameLayout) no border.
     if config.surfaceConfig.uiShadowsEnabled && !isStatusLine && !isTabBar then
       surface.roundedRects.foreach(
-        _.drawRoundRectShadow(rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx, new Color(0, 0, 0))
+        _.drawRoundRectShadow(
+          rect.x,
+          rect.y,
+          rect.width,
+          rect.height,
+          config.scaledUiCornerRadiusPx,
+          new Color(0, 0, 0)
+        )
       )
 
     // Scoped to the one surface the status line's colour overrides name -- every other floating panel keeps painting
@@ -72,7 +79,7 @@ object TextOverlayRenderer:
 
     surface.effects.foreach(_.setAlpha(SurfaceMaterials.panelAlpha(config, theme) * overlay.alphaMultiplier))
 
-    withOptionalRoundRectClip(surface, rect.x, rect.y, rect.width, rect.height, config.uiCornerRadiusPx) {
+    withOptionalRoundRectClip(surface, rect.x, rect.y, rect.width, rect.height, config.scaledUiCornerRadiusPx) {
       for (y, rowOffset) <- (rect.y until rect.bottom).zipWithIndex do
         val (fg, bg) = rowColors(rowOffset)
         surface.setForegroundColor(fg)
@@ -106,9 +113,9 @@ object TextOverlayRenderer:
           rect.y,
           rect.width,
           rect.height,
-          config.uiCornerRadiusPx,
+          config.scaledUiCornerRadiusPx,
           theme.border,
-          config.uiOutlineThicknessPx.toFloat
+          config.scaledUiOutlineThicknessPx
         )
       )
 

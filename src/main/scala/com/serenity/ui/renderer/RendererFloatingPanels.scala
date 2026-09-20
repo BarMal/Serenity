@@ -86,7 +86,7 @@ object RendererFloatingPanels:
         overlay.rect.y,
         overlay.rect.width,
         overlay.rect.height,
-        config.uiCornerRadiusPx
+        config.scaledUiCornerRadiusPx
       ) {
         context.surface.effects.foreach(
           _.blurRegion(
@@ -130,7 +130,7 @@ object RendererFloatingPanels:
       case None => render
       case Some(geometry) =>
         val rect  = geometry.currentRect
-        val arcPx = state.persisted.config.uiCornerRadiusPx
+        val arcPx = state.persisted.config.scaledUiCornerRadiusPx
         withOptionalRoundRectClip(context.surface, rect.x, rect.y, rect.width, rect.height, arcPx)(render)
 
   private val ModalBackdropEffect = LayerEffect(0.4f)

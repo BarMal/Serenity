@@ -46,6 +46,13 @@ object FontLoader:
     def scaledUiFontSize: Float =
       scaledPointSize(uiFontSize)
 
+    /** The factor UI chrome (panel corner radius, border thickness -- see `AppConfig.scaledUiCornerRadiusPx`) is drawn
+      * at, so it grows and shrinks with the same UI font size (and device scale) `scaledUiFontSize` does, rather than
+      * always painting at its configured pixel value regardless of font size (issue #1542).
+      */
+    def uiChromeScale: Double =
+      if uiFontSize > 0.0f then scaledUiFontSize.toDouble / FontConfig.BaselineUiFontSizePx else 1.0
+
     def resolveAutoTextScale(detectedDeviceScale: Double): FontConfig =
       textScaleMode match
         case TextScaleMode.Auto =>
@@ -61,6 +68,9 @@ object FontLoader:
   object FontConfig:
     val MinTextScale: Double = 0.5
     val MaxTextScale: Double = 4.0
+
+    /** The UI font size `uiChromeScale` treats as 1x -- the default `uiFontSize`. */
+    val BaselineUiFontSizePx: Float = 12.0f
 
     def clampTextScale(scale: Double): Double =
       scale.max(MinTextScale).min(MaxTextScale)
