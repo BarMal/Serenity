@@ -31,12 +31,17 @@ final case class SceneHitRegion(kind: SceneHitKind, rect: LayoutRect)
   * rect (`contentRect.x + xOffsetCells`), and its own width in cells (so the renderer can clip the column to its own
   * band and never paint into its neighbour). The renderer composes the page by painting each column's snapshot at its
   * own x-origin; a single-column pane is just `columnIndex = 0`, `xOffsetCells = 0`.
+  *
+  * `gutterWidthCells` (slice 2) is the width of this column's own line-number rail on its left edge, zero when line
+  * numbers are off. The rail occupies the leftmost `gutterWidthCells` of the column band; the snapshot's text is
+  * already wrapped in the remaining `columnWidthCells - gutterWidthCells` and is painted shifted right by that width.
   */
 final case class ColumnSnapshotPlacement(
     columnIndex: Int,
     xOffsetCells: Int,
     columnWidthCells: Int,
-    snapshot: TextLayoutSnapshot
+    snapshot: TextLayoutSnapshot,
+    gutterWidthCells: Int = 0
 )
 
 /** Geometry for one visible pane or surface in a rendered UI frame. */
