@@ -1,10 +1,11 @@
 package com.serenity.state.manager
 
+import com.serenity.config.AppConfig
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.ui.layout.{LayoutEngine, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -240,4 +241,105 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
     val forPane  = EditorGeometryProducer.forPane(tuiState, paneId, rowsAbove = 7).getOrElse(fail("expected geometry"))
 
     forEvent shouldBe forPane
+  }
+
+  // Multi-column e-reader layout (issue #1338, Phase 2 / slice 3): vertical navigation reads the visual-line geometry
+  // this producer builds, so in column mode that geometry must wrap at the NARROW column width the columns are actually
+  // rendered at -- not the full pane width. When it wrapped at the full width, a line that folds across two rows inside
+  // a column stayed one row in the navigation geometry, so Up/Down landed on rows that no column ever painted and the
+  // cursor jumped to the wrong buffer line. See CursorViewport.adjustForCursorColumnMode / RendererPaneSetup, both of
+  // which already wrap at the column width.
+  private val columnConfig: AppConfig =
+    AppConfig.default.withWordWrap(true).withColumnMode(true).withColumnTargetWidth(20).withColumnGap(2)
+
+  private def columnStateWith(buffer: Buffer, config: AppConfig, viewportSize: ViewportSize): AppState =
+    // `stateWith(isTuiMode = true)` already sets `capabilities = FrontendCapabilities.tui()`; only the viewport size
+    // is overridden here for the multi-column layout under test.
+    val base = stateWith(buffer, isTuiMode = true)
+    base
+      .copy(persisted = base.persisted.copy(config = config))
+      .copy(runtime = base.runtime.copy(viewportSize = Some(viewportSize)))
+
+  // The single column's TEXT width in cells for `buffer`'s pane, derived the same way the layout does, so the test
+  // never hard-codes a width the layout owns: the column band minus its per-column line-number rail (issue #1338
+  // slice 2) -- exactly the width the column's text is rendered and wrapped at, and so what nav must fold lines at.
+  private def columnWidthColumnsFor(state: AppState, viewportSize: ViewportSize): Int =
+    val calculated  = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+    val paneLayouts = LayoutEngine.calculateEditorPaneLayouts(state, calculated)
+    val contentWidth = paneLayouts.headOption
+      .map(_._2.contentRect.width)
+      .getOrElse(fail("expected a pane for the buffer"))
+    val surfaceConfig = state.persisted.config.surfaceConfig
+    val bandWidth =
+      LayoutEngine.columnWidthCells(contentWidth, surfaceConfig.columnTargetWidthCells, surfaceConfig.columnGap)
+    (bandWidth - LayoutEngine.perColumnGutterWidth(state)).max(1)
+
+  private def columnCountFor(state: AppState, viewportSize: ViewportSize): Int =
+    val calculated  = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+    val paneLayouts = LayoutEngine.calculateEditorPaneLayouts(state, calculated)
+    val contentWidth = paneLayouts.headOption
+      .map(_._2.contentRect.width)
+      .getOrElse(fail("expected a pane for the buffer"))
+    val surfaceConfig = state.persisted.config.surfaceConfig
+    LayoutEngine.columnCount(contentWidth, surfaceConfig.columnTargetWidthCells, surfaceConfig.columnGap)
+
+  "EditorGeometryProducer.forPane, in column mode" should
+    "wrap the navigation geometry at the narrow column width, not the full pane width" in {
+      val viewportSize = ViewportSize(200, 40)
+      // A probe with the same layout so the narrow column width can be measured before the real content exists.
+      val probe       = columnStateWith(Buffer.fromString(bufferId, "probe"), columnConfig, viewportSize)
+      val columnWidth = columnWidthColumnsFor(probe, viewportSize)
+      assert(columnCountFor(probe, viewportSize) > 1, "test setup expected a multi-column page")
+
+      // Every line is wider than one column but far narrower than the whole pane, so the wrap width chosen is
+      // observable: at the column width each folds into more than one visual row; at the pane width each stays a
+      // single row.
+      val lineWidth = columnWidth * 2
+      val content   = (0 until 40).map(_ => "w" * lineWidth).mkString("\n")
+      val buffer = Buffer
+        .fromString(bufferId, content)
+        .copy(
+          viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = columnWidth, visibleLines = 8),
+          editing = EditingState(List(CursorPosition(0, 0)))
+        )
+      val state = columnStateWith(buffer, columnConfig, viewportSize)
+
+      val geometry = EditorGeometryProducer.forPane(state, paneId).getOrElse(fail("expected geometry for pane"))
+      val firstRow = geometry.navigation.visualLines.headOption.getOrElse(fail("expected at least one visual line"))
+
+      (firstRow.endColumn - firstRow.startColumn) shouldBe columnWidth
+    }
+
+  it should "step Down onto the next visual row a column actually renders, not skip the wrapped remainder of the line" in {
+    val viewportSize = ViewportSize(200, 40)
+    val probe        = columnStateWith(Buffer.fromString(bufferId, "probe"), columnConfig, viewportSize)
+    val columnWidth  = columnWidthColumnsFor(probe, viewportSize)
+    assert(columnCountFor(probe, viewportSize) > 1, "test setup expected a multi-column page")
+
+    // Each line folds into exactly two visual rows at the column width the columns render at. A cursor on the FIRST
+    // row of such a line, pressing Down, must land on that same logical line's SECOND row -- the row the column paints
+    // directly beneath it. Wrapping the navigation geometry at the full pane width instead leaves the line a single
+    // row, so Down skips the wrapped remainder entirely and jumps to the next logical line (a different buffer line
+    // than the one shown below the cursor): exactly the "cursor jumps to the wrong line" the report describes.
+    val lineWidth      = columnWidth * 2
+    val firstRowCursor = CursorPosition(0, 0)
+
+    val content = (0 until 40).map(_ => "w" * lineWidth).mkString("\n")
+    val buffer = Buffer
+      .fromString(bufferId, content)
+      .copy(
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = columnWidth, visibleLines = 8),
+        editing = EditingState(List(firstRowCursor))
+      )
+    val state = columnStateWith(buffer, columnConfig, viewportSize)
+
+    val geometry = EditorGeometryProducer.forPane(state, paneId).getOrElse(fail("expected geometry for pane"))
+
+    val landed = geometry.navigation
+      .moveVertical(firstRowCursor, direction = 1, preferredXPx = 0.0f)
+      .getOrElse(fail("expected a visual row below the cursor"))
+
+    // The wrapped remainder of line 0, not the top of line 1.
+    landed.line shouldBe 0
+    landed.column shouldBe columnWidth
   }

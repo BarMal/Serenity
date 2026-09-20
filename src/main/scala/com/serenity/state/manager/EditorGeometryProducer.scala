@@ -64,7 +64,7 @@ object EditorGeometryProducer:
     val font    = FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, buffer.typographyRole)
     val isTui   = state.runtime.capabilities.isCellGrid
     val metrics = if isTui then CellMetrics.cellUnit else CellMetrics.fromFont(font)
-    val panelWidthColumns = effectivePanelWidth(state)
+    val panelWidthColumns = effectivePanelWidth(state, buffer)
     // TUI mode's terminal cell is 1px wide by definition, not `font`'s measured pixel width -- `font` is never
     // actually rendered with in TUI mode (`TuiRuntime.CellFont`'s doc comment), so wrapping geometry for it here must
     // agree with `TerminalAnsiDiff`'s cell grid, not a pixel measurement of an inert AWT font.
@@ -139,6 +139,46 @@ object EditorGeometryProducer:
       )
     EditorGeometry(snapshot.navigationGeometry, metrics.charWidth, panelWidthColumns)
 
-  private def effectivePanelWidth(state: AppState): Int =
+  /** The width in cells the wrapped navigation geometry is built at. Multi-column e-reader layout (issue #1338, Phase 2
+    * / slice 3): vertical navigation steps through the visual-line stream this geometry exposes, so in column mode it
+    * must fold lines at the SAME narrow column width the columns are actually rendered at
+    * (`RendererPaneSetup.snapshotForBuffer`) and the viewport anchored to (`CursorViewport.adjustForCursorColumnMode`)
+    * -- otherwise a line that wraps inside a column stays one row here and Down skips its wrapped remainder onto the
+    * wrong buffer line. Off the column path (or when the pane's full width is unknown, e.g. a reducer test with no
+    * laid-out window), this is exactly the full editor-panel width used before.
+    */
+  private def effectivePanelWidth(state: AppState, buffer: Buffer): Int =
+    val surfaceConfig    = state.persisted.config.surfaceConfig
+    val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
+    columnWidthForBuffer(state, buffer).filter(_ => columnModeActive).getOrElse(fullPanelWidth(state))
+
+  private def fullPanelWidth(state: AppState): Int =
     val viewportSize = state.runtime.viewportSize.getOrElse(ViewportSize(80, 24))
     LayoutEngine.calculateLayout(state, viewportSize).editorPanelRect.width
+
+  /** One column's TEXT width in cells for `buffer`'s own pane, derived the same way
+    * `CursorViewport.adjustForCursorColumnMode` (via `columnCountForBuffer`) and `RendererPaneSetup` do --
+    * `LayoutEngine.columnWidthCells` of the pane's full content width, MINUS the per-column line-number rail
+    * (`LayoutEngine.perColumnGutterWidth`, issue #1338 slice 2), so nav folds lines at exactly the width the column's
+    * text is rendered and wrapped at. The rail is 0 cells when line numbers are off, leaving the full column width.
+    * `None` when there is no laid-out window (`runtime.viewportSize` unset) or the buffer's pane cannot be found, so
+    * the caller falls back to the full panel width.
+    */
+  private def columnWidthForBuffer(state: AppState, buffer: Buffer): Option[Int] =
+    val surfaceConfig = state.persisted.config.surfaceConfig
+    state.runtime.viewportSize.flatMap { viewportSize =>
+      val calculated  = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+      val paneLayouts = LayoutEngine.calculateEditorPaneLayouts(state, calculated)
+      state.persisted.layout.editorPanes
+        .collectFirst {
+          case (paneId, pane) if pane.bufferId.contains(buffer.id) =>
+            paneLayouts.get(paneId).map(_.contentRect.width)
+        }
+        .flatten
+        .filter(_ > 0)
+        .map { contentWidth =>
+          val bandWidth =
+            LayoutEngine.columnWidthCells(contentWidth, surfaceConfig.columnTargetWidthCells, surfaceConfig.columnGap)
+          (bandWidth - LayoutEngine.perColumnGutterWidth(state)).max(1)
+        }
+    }
