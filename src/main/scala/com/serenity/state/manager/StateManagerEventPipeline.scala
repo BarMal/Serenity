@@ -58,7 +58,10 @@ final private[manager] class StateManagerEventPipeline(
       case Nil => cats.effect.IO.unit
       case pendingOperations =>
         pendingOperations.traverse_ {
-          case StateManagerOperation.Event(event)                       => applyEvent(event)
+          // Already running inside `applyEvent`'s locked dispatch (drained from an effect interpreted during that
+          // same call, on the same fiber) -- replays via `applyEventLocked` directly, never the public `applyEvent`,
+          // which would try to re-acquire the non-reentrant dispatch lock this call already holds and self-deadlock.
+          case StateManagerOperation.Event(event)                       => applyEventLocked(event)
           case StateManagerOperation.ApplyAnimationHooks(previousState) => applyAnimationHooks(previousState)
         } >> drainPendingOperations
     }
@@ -148,7 +151,14 @@ final private[manager] class StateManagerEventPipeline(
     commentLensMouseHitTesting
   )
 
+  /** Serialized against every other top-level call into the pipeline (#1570) -- see
+    * `StateManagerOperationBoundary.serializeDispatch`. A call already inside a dispatch must use
+    * `applyEventLocked` directly instead of recursing back through here.
+    */
   def applyEvent(event: Event): cats.effect.IO[Unit] =
+    operations.serializeDispatch(applyEventLocked(event))
+
+  private def applyEventLocked(event: Event): cats.effect.IO[Unit] =
     given org.typelevel.log4cats.Logger[cats.effect.IO] = logger
     def eventLabel                                      = s"event.${event.getClass.getSimpleName}"
     Trace.timed(eventLabel) {
