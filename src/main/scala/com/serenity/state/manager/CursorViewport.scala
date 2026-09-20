@@ -5,7 +5,7 @@ import com.serenity.animation.{TransitionDirection, Tween}
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
+import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot}
 
 /** Java2D/font measurement for cursor-visibility scrolling belongs at the effect boundary, not in a reducer -- a
   * reducer runs mid-edit against content the effect boundary has not seen yet. `adjustForCursor` is the shared
@@ -382,6 +382,13 @@ object CursorViewport:
       if fromLine >= toLineExclusive then acc
       else rowsForward(fromLine + 1, toLineExclusive, acc + visualRowCountForLine(fromLine))
 
+    // Multi-column page anchoring (issue #1338, Phase 2 / slice 1): a "page" shows `columnCount` columns side by side,
+    // so the viewport anchors to a whole-page boundary (`pageRows` rows) rather than a single column (`visibleLines`
+    // rows). With one column -- the fallback whenever the pane's full width is unknown -- `pageRows == visibleLines`,
+    // so this reduces exactly to the single-column anchoring from before multi-column pages existed.
+    val columnCount = columnCountForBuffer(buffer, currentState)
+    val pageRows    = columnCount * visibleLines
+
     @annotation.tailrec
     def findTopForward(line: Int, consumedRows: Int, targetRow: Int): (Int, Int) =
       if line >= lineCount then (math.max(0, lineCount - 1), 0)
@@ -398,7 +405,7 @@ object CursorViewport:
         if previousLineRows >= remainingDeficit then (line - 1, previousLineRows - remainingDeficit)
         else findTopBackward(line - 1, remainingDeficit - previousLineRows)
 
-    val previousTopValid = viewport.topVisualLine % visibleLines == 0
+    val previousTopValid = viewport.topVisualLine % pageRows == 0
 
     val (topLine, topVisualLine) =
       if lineCount <= 0 then (0, 0)
@@ -408,17 +415,44 @@ object CursorViewport:
           if cursor.line >= previousTopLine then
             rowsForward(previousTopLine, cursor.line, 0) + cursorVisualRowInLine - viewport.topVisualLine
           else -rowsForward(cursor.line, previousTopLine, 0) + cursorVisualRowInLine - viewport.topVisualLine
-        val targetOffsetFromPreviousTop      = Math.floorDiv(relativeCursorRow, visibleLines) * visibleLines
+        val targetOffsetFromPreviousTop      = Math.floorDiv(relativeCursorRow, pageRows) * pageRows
         val targetRowFromPreviousTopLineHead = viewport.topVisualLine + targetOffsetFromPreviousTop
         if targetRowFromPreviousTopLineHead >= 0 then
           findTopForward(previousTopLine, 0, targetRowFromPreviousTopLineHead)
         else findTopBackward(previousTopLine, -targetRowFromPreviousTopLineHead)
       else
         val absoluteCursorRow = rowsForward(0, cursor.line, 0) + cursorVisualRowInLine
-        val targetVisualRow   = (absoluteCursorRow / visibleLines) * visibleLines
+        val targetVisualRow   = (absoluteCursorRow / pageRows) * pageRows
         findTopForward(0, 0, targetVisualRow)
 
     viewport.copy(topLine = topLine, leftColumn = 0, topVisualLine = topVisualLine)
+
+  /** How many e-reader columns a page shows for `buffer`'s pane -- `LayoutEngine.columnCount` of the pane's own full
+    * content width (in cells) at the configured target width/gap. The buffer's own `viewport.visibleColumns` here is
+    * already the NARROWED single-column width, so the full pane width has to be recovered from the pane layout. When
+    * `runtime.viewportSize` is unset (no laid-out window yet -- e.g. a reducer test) the full width is unknown, so this
+    * falls back to a single column, which makes [[adjustForCursorColumnMode]]'s page anchoring exactly the
+    * active-column anchoring it did before multi-column pages existed.
+    */
+  private def columnCountForBuffer(buffer: Buffer, state: AppState): Int =
+    val surfaceConfig = state.persisted.config.surfaceConfig
+    state.runtime.viewportSize match
+      case None => 1
+      case Some(viewportSize) =>
+        val calculated  = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+        val paneLayouts = LayoutEngine.calculateEditorPaneLayouts(state, calculated)
+        val paneContentWidth = state.persisted.layout.editorPanes.collectFirst {
+          case (paneId, pane) if pane.bufferId.contains(buffer.id) =>
+            paneLayouts.get(paneId).map(_.contentRect.width)
+        }.flatten
+        paneContentWidth match
+          case None => 1
+          case Some(contentWidth) =>
+            LayoutEngine.columnCount(
+              contentWidth,
+              surfaceConfig.columnTargetWidthCells,
+              surfaceConfig.columnGap
+            )
 
   private def previewFontForBuffer(
     buffer: Buffer,

@@ -12,9 +12,16 @@ final case class EditorPaneRenderPlan(
     workspaceLayout: EditorWorkspaceLayout,
     layoutContract: EditorLayoutContract,
     snapshots: Map[PaneId, TextLayoutSnapshot],
+    // Multi-column e-reader layout (issue #1338, Phase 2 / slice 1): the ordered per-column placements a column-mode
+    // pane paints side by side. Empty for a pane not in column mode, where `snapshots` alone drives painting exactly as
+    // before.
+    columnSnapshots: Map[PaneId, Vector[ColumnSnapshotPlacement]],
     annotations: Map[BufferId, BufferRenderAnnotations]
 ):
   def paneLayouts: Map[PaneId, EditorPaneLayout] = workspaceLayout.paneLayouts
+
+  def columnSnapshotsFor(paneId: PaneId): Vector[ColumnSnapshotPlacement] =
+    columnSnapshots.getOrElse(paneId, Vector.empty)
 
 /** Per-pane geometry for this frame: which buffer line each visual row shows, to translate `Damage`'s buffer-line facts
   * into row indices, and the pixel band each row owns, to know what a preserved row's pixels actually cover.
@@ -71,6 +78,12 @@ object RendererPaneSetup:
             )
       }
 
+    val columnSnapshots =
+      state.persisted.layout.editorPanes.keys.iterator
+        .map(paneId => paneId -> scene.columnSnapshotsFor(paneId))
+        .filter(_._2.nonEmpty)
+        .toMap
+
     val visibleLinesByBuffer = state.persisted.layout.editorPanes.toList
       .flatMap {
         case (paneId, pane) =>
@@ -101,7 +114,7 @@ object RendererPaneSetup:
       }
       .toMap
 
-    EditorPaneRenderPlan(workspaceLayout, layoutContract, snapshots, annotations)
+    EditorPaneRenderPlan(workspaceLayout, layoutContract, snapshots, columnSnapshots, annotations)
 
   def visibleAnnotationLines[A](
     visibleLines: Set[Int],

@@ -297,7 +297,7 @@ private[serenity] object AuthoritativeUiScene:
       // and wraps at it whenever column mode and word wrap are both on. Without this the scene stayed full-width and a
       // column-mode toggle had no visible render effect (Phase 1 regression).
       val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
-      val snapshots = base.paneLayouts.flatMap {
+      val perPane = base.paneLayouts.flatMap {
         case (paneId, paneLayout) =>
           for
             pane     <- state.persisted.layout.editorPanes.get(paneId)
@@ -347,33 +347,75 @@ private[serenity] object AuthoritativeUiScene:
               visibleLines = math.max(1, heightPx / math.max(1, fontMetrics.lineHeight))
             )
             val proseScale = com.serenity.ui.theme.RichTextStyling.proseZoom(font.getSize2D)
-            paneId ->
-              (if columnModeActive then
-                 // `viewport.visibleColumns` is already the column's own width in cells (from the column-aware
-                 // `baseViewport` above), so its pixel width is exactly what `fromBufferColumn` should wrap at --
-                 // matching `RendererPaneSetup.snapshotForBuffer`'s column branch.
-                 val columnWidthPx = math.max(1, viewport.visibleColumns * gridMetrics.charWidth)
-                 TextLayoutSnapshot.fromBufferColumn(
-                   buffer.copy(viewport = viewport),
-                   columnWidthPx,
-                   font,
-                   cellMetricsOverride = Some(fontMetrics),
-                   forceCellLayout = cellMetrics.isDefined,
-                   proseScale = proseScale
-                 )
-               else
-                 TextLayoutSnapshot.fromBuffer(
-                   buffer.copy(viewport = viewport),
-                   width,
-                   font,
-                   wordWrapEnabled = surfaceConfig.wordWrapEnabled,
-                   cellMetricsOverride = Some(fontMetrics),
-                   forceCellLayout = cellMetrics.isDefined,
-                   // Match the render path's prose zoom so hit-testing rows/advances line up with what was drawn.
-                   proseScale = proseScale
-                 ))
+            if columnModeActive then
+              // `viewport.visibleColumns` is already the column's own width in cells (from the column-aware
+              // `baseViewport` above), so its pixel width is exactly what the per-column snapshots should wrap at --
+              // matching `RendererPaneSetup.snapshotForBuffer`'s column branch. `columnCount` fits "as many columns as
+              // fit" the pane's full content width; each column is placed at `columnIndex * (columnWidth + gap)` cells.
+              val columnWidthCells = math.max(1, viewport.visibleColumns)
+              val columnWidthPx    = math.max(1, columnWidthCells * gridMetrics.charWidth)
+              val columnCount =
+                LayoutEngine.columnCount(
+                  paneLayout.contentRect.width,
+                  surfaceConfig.columnTargetWidthCells,
+                  surfaceConfig.columnGap
+                )
+              val columnSnapshotList = TextLayoutSnapshot.fromBufferColumns(
+                buffer.copy(viewport = viewport),
+                columnWidthPx,
+                font,
+                cellMetricsOverride = Some(fontMetrics),
+                forceCellLayout = cellMetrics.isDefined,
+                proseScale = proseScale,
+                columnCount = columnCount
+              )
+              // Only a genuinely multi-column page carries per-column placements. A single fitted column is fully
+              // served by `textSnapshots` alone (identical to the pre-multi-column render path, including its
+              // column-transition animation overlay), so emitting a lone placement would only make the renderer take
+              // its multi-column branch for a page that has nothing to lay out side by side.
+              val placements =
+                if columnCount <= 1 then Vector.empty[ColumnSnapshotPlacement]
+                else
+                  columnSnapshotList.zipWithIndex.map {
+                    case (snapshot, columnIndex) =>
+                      ColumnSnapshotPlacement(
+                        columnIndex = columnIndex,
+                        xOffsetCells = columnIndex * (columnWidthCells + math.max(0, surfaceConfig.columnGap)),
+                        columnWidthCells = columnWidthCells,
+                        snapshot = snapshot
+                      )
+                  }
+              // The single active-column snapshot every non-column consumer still reads is the page's first column
+              // (index 0) -- the cursor's own column, since the viewport was snapped to the page holding it.
+              val activeSnapshot = placements.headOption
+                .map(_.snapshot)
+                .getOrElse(
+                  TextLayoutSnapshot.fromBufferColumn(
+                    buffer.copy(viewport = viewport),
+                    columnWidthPx,
+                    font,
+                    cellMetricsOverride = Some(fontMetrics),
+                    forceCellLayout = cellMetrics.isDefined,
+                    proseScale = proseScale
+                  )
+                )
+              paneId -> (activeSnapshot, placements)
+            else
+              val single = TextLayoutSnapshot.fromBuffer(
+                buffer.copy(viewport = viewport),
+                width,
+                font,
+                wordWrapEnabled = surfaceConfig.wordWrapEnabled,
+                cellMetricsOverride = Some(fontMetrics),
+                forceCellLayout = cellMetrics.isDefined,
+                // Match the render path's prose zoom so hit-testing rows/advances line up with what was drawn.
+                proseScale = proseScale
+              )
+              paneId -> (single, Vector.empty[ColumnSnapshotPlacement])
       }
-      val scene = base.withTextSnapshots(snapshots)
+      val textSnapshots   = perPane.view.mapValues(_._1).toMap
+      val columnSnapshots = perPane.view.mapValues(_._2).filter(_._2.nonEmpty).toMap
+      val scene           = base.withTextSnapshots(textSnapshots).withColumnSnapshots(columnSnapshots)
       prepared.put(key, scene)
       scene
     }
