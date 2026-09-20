@@ -126,7 +126,14 @@ object LayoutEngine:
     val textAreaInsets =
       if spacerPercentage == DefaultSpacerPercentage then state.persisted.config.surfaceConfig.textAreaInsets.normalized
       else TextAreaInsets(spacerPercentage, spacerPercentage).normalized
-    val lineNumbersOn    = state.persisted.config.surfaceConfig.showLineNumbers
+    // Multi-column e-reader layout (issue #1338, Phase 2 / slice 2): a column-mode page carries its line numbers as a
+    // per-column rail on each column's own left edge (`RendererGutter`/`perColumnGutterWidth`), so the single
+    // pane-level rail slice 1 still reserved here is dropped -- reserving it as well would take the gutter's width out
+    // of the page twice. The editor panel therefore tiles at full width; each column subtracts the rail from its own
+    // text width instead.
+    val columnModeActive =
+      state.persisted.config.surfaceConfig.columnModeEnabled && state.persisted.config.surfaceConfig.wordWrapEnabled
+    val lineNumbersOn    = state.persisted.config.surfaceConfig.showLineNumbers && !columnModeActive
     val lineNumberLayout = state.persisted.config.surfaceConfig.lineNumberLayout.normalized
     val counterWidth     = if lineNumbersOn then calculateLineNumberWidth(state) else 0
     val hasLeftCounter   = lineNumbersOn && lineNumberLayout.side.showsLeft
@@ -348,12 +355,28 @@ object LayoutEngine:
     if state.persisted.config.surfaceConfig.showPaneHeaders then EditorPaneHeaderHeight else 0
 
   private def calculateLineNumberWidth(state: AppState): Int =
-    // Find the maximum line count across all buffers to determine width needed
+    lineNumberCounterWidth(state)
+
+  /** The gutter counter's width in cells: digits for the largest line number across all buffers, plus one spacer cell,
+    * minimum three. Shared by the single-column rail's own reservation and the per-column e-reader rail
+    * ([[perColumnGutterWidth]]), so both rails size identically.
+    */
+  def lineNumberCounterWidth(state: AppState): Int =
     val maxLines =
       if state.persisted.buffers.isEmpty then 10
       else state.persisted.buffers.values.map(_.document.content.lineCount).foldLeft(Int.MinValue)(_ max _)
 
     math.max(3, maxLines.toString.length + 1) // +1 for spacing, minimum 3 chars
+
+  /** Multi-column e-reader layout (issue #1338, Phase 2 / slice 2): the width in cells each column reserves on its own
+    * left edge for its line-number rail -- the shared counter width while line numbers and column mode are both on,
+    * zero otherwise. The single pane-level rail's reservation is dropped in this case (see `calculateLayoutWithUI`), so
+    * a column's text wraps in `columnWidthCells - perColumnGutterWidth`.
+    */
+  def perColumnGutterWidth(state: AppState): Int =
+    val surfaceConfig    = state.persisted.config.surfaceConfig
+    val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
+    if surfaceConfig.showLineNumbers && columnModeActive then lineNumberCounterWidth(state) else 0
 
   def calculateViewportForCursor(
     cursor: CursorPosition,

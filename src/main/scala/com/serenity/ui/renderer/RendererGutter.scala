@@ -9,21 +9,78 @@ import com.serenity.ui.layout.*
 object RendererGutter:
 
   def renderLineNumbers(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
-    // Multi-column e-reader layout (issue #1338, Phase 2 / slice 1): the gutter is driven by the active pane's SINGLE
-    // (column-0) snapshot and has no notion of which column a row sits in, so a per-column line-number rail is real new
-    // work deferred to a later slice. For now line numbers are suppressed while column mode is active rather than
-    // painted against the wrong rows. The layout still reserves the gutter's width, so an enabled-but-suppressed gutter
-    // shows as blank margin -- see the report's slice-2 note.
-    val columnModeActive =
-      state.persisted.config.surfaceConfig.columnModeEnabled && state.persisted.config.surfaceConfig.wordWrapEnabled
-    if state.persisted.config.surfaceConfig.showLineNumbers && !columnModeActive then
-      context.surface.text.setFont(context.uiFont)
-      renderPlan.layoutContract.lineNumberRect.foreach(rect =>
-        renderCounterColumn(state, context, renderPlan, rect, dividerOnLeft = false)
-      )
-      renderPlan.layoutContract.rightLineNumberRect.foreach(rect =>
-        renderCounterColumn(state, context, renderPlan, rect, dividerOnLeft = true)
-      )
+    if state.persisted.config.surfaceConfig.showLineNumbers then
+      // Multi-column e-reader layout (issue #1338, Phase 2 / slice 2): a column-mode page has no single shared
+      // pane-level rail (`LayoutEngine` reserves none in that case); each column carries its own rail on its left edge,
+      // painted inline against that column's own chunk of rows.
+      val columnModeActive =
+        state.persisted.config.surfaceConfig.columnModeEnabled && state.persisted.config.surfaceConfig.wordWrapEnabled
+      if columnModeActive then renderPerColumnRails(state, context, renderPlan)
+      else
+        context.surface.text.setFont(context.uiFont)
+        renderPlan.layoutContract.lineNumberRect.foreach(rect =>
+          renderCounterColumn(state, context, renderPlan, rect, dividerOnLeft = false)
+        )
+        renderPlan.layoutContract.rightLineNumberRect.foreach(rect =>
+          renderCounterColumn(state, context, renderPlan, rect, dividerOnLeft = true)
+        )
+
+  /** Paint each e-reader column's own line-number rail (slice 2). Every pane carrying column placements draws a rail on
+    * the leftmost `gutterWidthCells` of each column's band, aligned row-for-row against that column's own snapshot -- a
+    * buffer line number on the row a buffer line starts, a continuation indicator on a wrapped row -- so the rails read
+    * exactly like the single-column gutter, one per column.
+    */
+  private def renderPerColumnRails(
+    state: AppState,
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan
+  ): Unit =
+    context.surface.text.setFont(context.uiFont)
+    state.persisted.layout.editorPanes.foreach {
+      case (paneId, _) =>
+        renderPlan.paneLayouts.get(paneId).foreach { paneLayout =>
+          renderPlan
+            .columnSnapshotsFor(paneId)
+            .filter(_.gutterWidthCells > 0)
+            .foreach(placement => renderColumnRail(state, context, paneLayout.contentRect, placement))
+        }
+    }
+
+  private def renderColumnRail(
+    state: AppState,
+    context: RenderContext,
+    contentRect: LayoutRect,
+    placement: ColumnSnapshotPlacement
+  ): Unit =
+    val surface  = context.surface
+    val railX    = contentRect.x + placement.xOffsetCells
+    val railRect = LayoutRect(railX, contentRect.y, placement.gutterWidthCells, contentRect.height)
+    val snapshot = placement.snapshot
+
+    surface.setBackgroundColor(state.persisted.theme.panel.background)
+    surface.setForegroundColor(state.persisted.theme.muted)
+    surface.fillRect(railRect.x, railRect.y, railRect.width, railRect.height, ' ')
+
+    val wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled
+    snapshot.visualLines.zipWithIndex.foreach {
+      case (visualLine, rowIndex) if RendererPaneContent.visualLineFits(railRect, rowIndex, context, snapshot) =>
+        val text =
+          if shouldRenderLineNumberForVisualLine(visualLine, wordWrapEnabled) then
+            val numberWidth = math.max(1, railRect.width - 1)
+            (visualLine.bufferLine + 1).toString.reverse.padTo(numberWidth, ' ').reverse + " "
+          else continuationIndicatorText(railRect.width)
+        if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
+          surface.text.drawRunPx(
+            context.cellMetrics.toPixelX(railRect.x).toFloat,
+            RendererPaneContent.visualLineTopPx(railRect, rowIndex, context, snapshot),
+            railRect.width * context.cellMetrics.charWidth.toFloat,
+            snapshot.lineHeightPx,
+            snapshot.ascentPx,
+            text
+          )
+        else surface.putString(railRect.x, railRect.y + rowIndex, text)
+      case _ => ()
+    }
 
   /** Paint one line-number counter. The gutter/body divider sits on the counter's content-facing edge: the last column
     * for a left-placed counter, the first column for a right-placed one (`dividerOnLeft`).

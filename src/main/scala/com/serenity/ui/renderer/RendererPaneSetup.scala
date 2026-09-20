@@ -204,12 +204,15 @@ object RendererPaneSetup:
       if columnModeActive then
         // Column-based document layout (issue #1338, Phase 1 rendering): wraps at the (narrower) column's own width
         // and paints only the active column's chunk of visual lines -- `renderedViewport.visibleColumns` is already
-        // that column's width in cells (from the column-aware `baseViewport` above), so its pixel width is exactly
-        // what `fromBufferColumn` should wrap at.
-        val columnWidthPx = math.max(1, renderedViewport.visibleColumns * context.cellMetrics.charWidth)
+        // that column's full band in cells (from the column-aware `baseViewport` above). Slice 2: subtract the
+        // per-column line-number rail from the wrap width so this single active-column snapshot matches the per-column
+        // placements the scene builds (`AuthoritativeUiScene.forState`); zero when line numbers are off.
+        val gutterWidthCells = LayoutEngine.perColumnGutterWidth(state)
+        val columnTextWidthPx =
+          math.max(1, (renderedViewport.visibleColumns - gutterWidthCells).max(1) * context.cellMetrics.charWidth)
         TextLayoutSnapshot.fromBufferColumn(
           renderBuffer,
-          columnWidthPx,
+          columnTextWidthPx,
           bufferFont,
           fontRenderContext,
           cellMetricsOverride = cellMetricsForSnapshot,

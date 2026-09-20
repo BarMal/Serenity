@@ -348,12 +348,16 @@ private[serenity] object AuthoritativeUiScene:
             )
             val proseScale = com.serenity.ui.theme.RichTextStyling.proseZoom(font.getSize2D)
             if columnModeActive then
-              // `viewport.visibleColumns` is already the column's own width in cells (from the column-aware
-              // `baseViewport` above), so its pixel width is exactly what the per-column snapshots should wrap at --
-              // matching `RendererPaneSetup.snapshotForBuffer`'s column branch. `columnCount` fits "as many columns as
-              // fit" the pane's full content width; each column is placed at `columnIndex * (columnWidth + gap)` cells.
-              val columnWidthCells = math.max(1, viewport.visibleColumns)
-              val columnWidthPx    = math.max(1, columnWidthCells * gridMetrics.charWidth)
+              // `viewport.visibleColumns` is the column's own full band in cells (from the column-aware `baseViewport`
+              // above). Slice 2: each column carries its own line-number rail on its left edge, so its TEXT wraps in the
+              // band minus that rail (`columnTextWidthCells`) while the band itself (placement `columnWidthCells`) and
+              // the inter-column offset stay full-width -- matching `RendererPaneSetup.snapshotForBuffer`'s column
+              // branch. `columnCount` fits "as many columns as fit" the pane's full content width; each column is
+              // placed at `columnIndex * (columnWidth + gap)` cells.
+              val columnWidthCells     = math.max(1, viewport.visibleColumns)
+              val gutterWidthCells     = LayoutEngine.perColumnGutterWidth(state)
+              val columnTextWidthCells = math.max(1, columnWidthCells - gutterWidthCells)
+              val columnTextWidthPx    = math.max(1, columnTextWidthCells * gridMetrics.charWidth)
               val columnCount =
                 LayoutEngine.columnCount(
                   paneLayout.contentRect.width,
@@ -362,7 +366,7 @@ private[serenity] object AuthoritativeUiScene:
                 )
               val columnSnapshotList = TextLayoutSnapshot.fromBufferColumns(
                 buffer.copy(viewport = viewport),
-                columnWidthPx,
+                columnTextWidthPx,
                 font,
                 cellMetricsOverride = Some(fontMetrics),
                 forceCellLayout = cellMetrics.isDefined,
@@ -382,7 +386,8 @@ private[serenity] object AuthoritativeUiScene:
                         columnIndex = columnIndex,
                         xOffsetCells = columnIndex * (columnWidthCells + math.max(0, surfaceConfig.columnGap)),
                         columnWidthCells = columnWidthCells,
-                        snapshot = snapshot
+                        snapshot = snapshot,
+                        gutterWidthCells = gutterWidthCells
                       )
                   }
               // The single active-column snapshot every non-column consumer still reads is the page's first column
@@ -392,7 +397,7 @@ private[serenity] object AuthoritativeUiScene:
                 .getOrElse(
                   TextLayoutSnapshot.fromBufferColumn(
                     buffer.copy(viewport = viewport),
-                    columnWidthPx,
+                    columnTextWidthPx,
                     font,
                     cellMetricsOverride = Some(fontMetrics),
                     forceCellLayout = cellMetrics.isDefined,

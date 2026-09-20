@@ -1,5 +1,6 @@
 package com.serenity
 
+import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -99,4 +100,64 @@ class LayoutEngineColumnModeSpec extends AnyFlatSpec with Matchers:
     val viewport = LayoutEngine.updateBufferViewportDimensions(bufferWithViewport, panelRect, wordWrapEnabled = true)
 
     viewport.visibleColumns shouldBe 200
+  }
+
+  behavior of "LayoutEngine per-column gutter reservation (issue #1338, Phase 2 / slice 2)"
+
+  private val viewportSize = ViewportSize(160, 40)
+
+  private def columnModeState(lineNumbers: Boolean): AppState =
+    val buffer = Buffer.fromString(bufferId, (0 until 200).map(i => s"line-$i").mkString("\n"))
+    val base   = AppState.initial
+    base.copy(persisted =
+      base.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = base.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
+        ),
+        focus = Focus.EditorPane(PaneId(0)),
+        config = AppConfig.default.withoutStatusLine
+          .withLineNumbers(lineNumbers)
+          .withWordWrap(true)
+          .withColumnMode(true)
+          .withColumnTargetWidth(40)
+          .withColumnGap(2)
+      )
+    )
+
+  it should "reserve no single pane-level line-number rail in column mode -- the per-column rails replace it" in {
+    val layout = LayoutEngine.calculateLayoutWithUI(columnModeState(lineNumbers = true), viewportSize)
+
+    layout.lineNumberRect shouldBe None
+    layout.rightLineNumberRect shouldBe None
+  }
+
+  it should "give the editor panel the full workspace width in column mode with line numbers on (no pane-level gutter shift)" in {
+    val withNumbers    = LayoutEngine.calculateLayoutWithUI(columnModeState(lineNumbers = true), viewportSize)
+    val withoutNumbers = LayoutEngine.calculateLayoutWithUI(columnModeState(lineNumbers = false), viewportSize)
+
+    withNumbers.editorPanelRect shouldBe withoutNumbers.editorPanelRect
+  }
+
+  behavior of "LayoutEngine.perColumnGutterWidth"
+
+  it should "match the single-column counter width when line numbers and column mode are both on" in {
+    val state = columnModeState(lineNumbers = true)
+
+    LayoutEngine.perColumnGutterWidth(state) shouldBe LayoutEngine.lineNumberCounterWidth(state)
+    LayoutEngine.perColumnGutterWidth(state) should be > 0
+  }
+
+  it should "be zero when line numbers are off, even in column mode" in {
+    LayoutEngine.perColumnGutterWidth(columnModeState(lineNumbers = false)) shouldBe 0
+  }
+
+  it should "be zero when column mode is off, even with line numbers on" in {
+    val state     = columnModeState(lineNumbers = true)
+    val columnOff = state.copy(persisted = state.persisted.copy(config = state.persisted.config.withColumnMode(false)))
+
+    LayoutEngine.perColumnGutterWidth(columnOff) shouldBe 0
   }

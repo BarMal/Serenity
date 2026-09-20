@@ -220,12 +220,14 @@ object RendererPaneContent:
           )
       case _ => ()
 
-  /** The x-shifted content rect a single page column paints into: the pane's content rect moved right by the column's
-    * own cell offset and narrowed to the column's own width, so a column never paints past its neighbour.
+  /** The x-shifted content rect a single page column's TEXT paints into: the pane's content rect moved right by the
+    * column's own cell offset, past its line-number rail (`gutterWidthCells`, slice 2), and narrowed to the remaining
+    * band -- so a column's text never paints over its own rail or past its neighbour.
     */
   private def columnRect(contentRect: LayoutRect, placement: ColumnSnapshotPlacement): LayoutRect =
-    val leftX = contentRect.x + placement.xOffsetCells
-    val width = math.min(placement.columnWidthCells, math.max(0, contentRect.right - leftX))
+    val leftX     = contentRect.x + placement.xOffsetCells + placement.gutterWidthCells
+    val bandWidth = math.max(0, placement.columnWidthCells - placement.gutterWidthCells)
+    val width     = math.min(bandWidth, math.max(0, contentRect.right - leftX))
     contentRect.copy(x = leftX, width = math.max(0, width))
 
   private def renderBufferHeader(
