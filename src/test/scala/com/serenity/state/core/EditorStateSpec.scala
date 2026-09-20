@@ -357,6 +357,86 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
     EditorState.closeBuffer(state, BufferId(99)) shouldBe state
   }
 
+  "EditorState.reorderBuffer" should
+    "move the dragged buffer to sit immediately before the drop target (issue #1079)" in {
+      val withThreeBuffers = EditorState.openNewTab(
+        EditorState.openNewTab(
+          AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(200, 24))))
+        )
+      )
+      withThreeBuffers.persisted.bufferOrder shouldBe List(BufferId(0), BufferId(1), BufferId(2))
+
+      val updatedState = EditorState.reorderBuffer(withThreeBuffers, from = BufferId(0), to = BufferId(2))
+
+      updatedState.persisted.bufferOrder shouldBe List(BufferId(1), BufferId(0), BufferId(2))
+    }
+
+  it should "move a buffer earlier in the order the same way, inserting it before the drop target" in {
+    val withThreeBuffers = EditorState.openNewTab(
+      EditorState.openNewTab(
+        AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(200, 24))))
+      )
+    )
+
+    val updatedState = EditorState.reorderBuffer(withThreeBuffers, from = BufferId(2), to = BufferId(0))
+
+    updatedState.persisted.bufferOrder shouldBe List(BufferId(2), BufferId(0), BufferId(1))
+  }
+
+  it should "leave the order unchanged when a drag ends where it began (issue #1079's own acceptance case)" in {
+    val withThreeBuffers = EditorState.openNewTab(
+      EditorState.openNewTab(
+        AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(200, 24))))
+      )
+    )
+
+    val movedAway = EditorState.reorderBuffer(withThreeBuffers, from = BufferId(0), to = BufferId(2))
+    val movedBack = EditorState.reorderBuffer(movedAway, from = BufferId(0), to = BufferId(1))
+
+    movedBack.persisted.bufferOrder shouldBe withThreeBuffers.persisted.bufferOrder
+  }
+
+  it should "leave the order unchanged when dropped onto itself" in {
+    val withThreeBuffers = EditorState.openNewTab(
+      EditorState.openNewTab(
+        AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(200, 24))))
+      )
+    )
+
+    EditorState.reorderBuffer(withThreeBuffers, from = BufferId(1), to = BufferId(1)) shouldBe withThreeBuffers
+  }
+
+  it should "leave the order unchanged when the dragged buffer is no longer open" in {
+    val state = AppState.initial
+
+    EditorState.reorderBuffer(state, from = BufferId(99), to = BufferId(0)) shouldBe state
+  }
+
+  it should "leave the order unchanged when the drop target is no longer open" in {
+    val withThreeBuffers = EditorState.openNewTab(
+      EditorState.openNewTab(
+        AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(200, 24))))
+      )
+    )
+
+    EditorState.reorderBuffer(withThreeBuffers, from = BufferId(0), to = BufferId(99)) shouldBe withThreeBuffers
+  }
+
+  it should "not change which buffer each pane shows or which buffer is focused" in {
+    val withThreeBuffers = EditorState.openNewTab(
+      EditorState.openNewTab(
+        AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(200, 24))))
+      )
+    )
+    val focused = withThreeBuffers.focusedBufferId
+    val panes   = withThreeBuffers.persisted.layout.editorPanes
+
+    val updatedState = EditorState.reorderBuffer(withThreeBuffers, from = BufferId(0), to = BufferId(2))
+
+    updatedState.focusedBufferId shouldBe focused
+    updatedState.persisted.layout.editorPanes shouldBe panes
+  }
+
   private def addPane(state: AppState, after: PaneId, paneId: PaneId, bufferId: BufferId): AppState =
     val tree = state.persisted.layout.workspaceTree
       .flatMap(
