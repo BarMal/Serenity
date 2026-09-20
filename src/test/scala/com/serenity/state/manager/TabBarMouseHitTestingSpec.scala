@@ -1,14 +1,16 @@
 package com.serenity.state.manager
 
 import com.serenity.rope.Balance
+import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutRect, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Coverage for `TabBarMouseHitTesting` -- resolving a click's cell coordinate to the `BufferId` of the tab it landed
-  * on (issue #1075: Foundation), and resolving a click against live `AppState` into a buffer switch (issue #1077:
-  * "Click a tab to switch buffer").
+  * on (issue #1075: Foundation), resolving a click against live `AppState` into a buffer switch (issue #1077:
+  * "Click a tab to switch buffer"), and resolving a click against the trailing new-tab (+) affordance into opening a
+  * new tab (issue #1080: "New-tab affordance").
   */
 class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
 
@@ -17,8 +19,9 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
   private def entry(id: Int, title: String): TabListEntry = TabListEntry(BufferId(id), title, isDirty = false)
 
   private val entries = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
-  // Widths 6/6/5 (see TabBarSurfaceCompositionSpec): tab 0 at [0,6), gap [6,8), tab 1 at [8,14), gap [14,16),
-  // tab 2 at [16,21).
+  // Widths 5/5/5 (see TabBarSurfaceCompositionSpec -- 21 columns available, minus 2 reserved for the trailing
+  // new-tab affordance, issue #1080): tab 0 at [0,5), gap [5,7), tab 1 at [7,12), gap [12,14), tab 2 at [14,19),
+  // then the new-tab affordance at [19,21).
   private val rect = LayoutRect(0, 0, 21, 1)
 
   "hitAt" should "resolve a click inside the first tab to its BufferId" in {
@@ -30,11 +33,11 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "resolve a click inside the third tab to its BufferId" in {
-    TabBarMouseHitTesting.hitAt(entries, None, rect, col = 20, row = 0) shouldBe Some(BufferId(2))
+    TabBarMouseHitTesting.hitAt(entries, None, rect, col = 18, row = 0) shouldBe Some(BufferId(2))
   }
 
   it should "resolve no tab for a click on the separator glyph between tabs" in {
-    TabBarMouseHitTesting.hitAt(entries, None, rect, col = 7, row = 0) shouldBe None
+    TabBarMouseHitTesting.hitAt(entries, None, rect, col = 6, row = 0) shouldBe None
   }
 
   it should "resolve no tab for a click outside the strip's row" in {
@@ -45,8 +48,10 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
     TabBarMouseHitTesting.hitAt(Nil, None, rect, col = 3, row = 0) shouldBe None
   }
 
-  // Widths 10/9 (19 content columns over 2 tabs, GapColumns=2 reserved for the one gap): tab 0 (BufferId(0), the
-  // pane's already-active buffer) at [0,10), gap [10,12), tab 1 (BufferId(1)) at [12,21).
+  // Widths 9/8 (21 columns available, minus 2 reserved for the trailing new-tab affordance -> 19 columns for tabs,
+  // minus 1 gap reserving 2 columns -> 17 content columns, issue #1080): tab 0 (BufferId(0), the pane's
+  // already-active buffer) at [0,9), gap [9,11), tab 1 (BufferId(1)) at [11,19), then the new-tab affordance at
+  // [19,21).
   private val twoTabViewport = ViewportSize(21, 5)
 
   private def twoBufferState: AppState =
@@ -69,7 +74,7 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "swallow a click on the gap between tabs" in {
-    TabBarMouseHitTesting.clickTarget(twoBufferState, col = 11, row = 0) shouldBe Some(None)
+    TabBarMouseHitTesting.clickTarget(twoBufferState, col = 10, row = 0) shouldBe Some(None)
   }
 
   it should "miss for a click outside the strip's row, leaving it for another mouse target" in {
@@ -108,15 +113,15 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
   }
 
   "closeHitAt" should "resolve a click on a tab's close affordance to its BufferId (issue #1078)" in {
-    // Close regions sit at the rightmost 2 columns of each tab's own cell: [4,6), [12,14), [19,21) (see
+    // Close regions sit at the rightmost 2 columns of each tab's own cell: [3,5), [10,12), [17,19) (see
     // TabBarSurfaceCompositionSpec's `closeAffordances` coverage).
-    TabBarMouseHitTesting.closeHitAt(entries, rect, col = 5, row = 0) shouldBe Some(BufferId(0))
-    TabBarMouseHitTesting.closeHitAt(entries, rect, col = 13, row = 0) shouldBe Some(BufferId(1))
-    TabBarMouseHitTesting.closeHitAt(entries, rect, col = 20, row = 0) shouldBe Some(BufferId(2))
+    TabBarMouseHitTesting.closeHitAt(entries, rect, col = 4, row = 0) shouldBe Some(BufferId(0))
+    TabBarMouseHitTesting.closeHitAt(entries, rect, col = 11, row = 0) shouldBe Some(BufferId(1))
+    TabBarMouseHitTesting.closeHitAt(entries, rect, col = 18, row = 0) shouldBe Some(BufferId(2))
   }
 
   it should "resolve no close hit for a click inside a tab but outside its close affordance" in {
-    TabBarMouseHitTesting.closeHitAt(entries, rect, col = 3, row = 0) shouldBe None
+    TabBarMouseHitTesting.closeHitAt(entries, rect, col = 1, row = 0) shouldBe None
   }
 
   it should "resolve no close hit for a click outside the strip's row" in {
@@ -125,4 +130,45 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
 
   it should "resolve no close hit when there are no open buffers" in {
     TabBarMouseHitTesting.closeHitAt(Nil, rect, col = 5, row = 0) shouldBe None
+  }
+
+  // Same state as `twoBufferState`, but with `nextBufferId` corrected to `BufferId(2)` -- `twoBufferState` adds its
+  // second buffer directly at `BufferId(1)` without advancing `nextBufferId` past it (fine for the switch/close
+  // coverage above, which never allocates a new buffer id), but `EditorState.openNewTab` needs a fixture where the
+  // next id it hands out doesn't collide with an already-open buffer.
+  private def twoBufferStateForNewTab: AppState =
+    twoBufferState.copy(runtime = twoBufferState.runtime.copy(nextBufferId = BufferId(2)))
+
+  "newTabClickTarget" should "resolve true for a click on the trailing new-tab (+) affordance (issue #1080)" in {
+    TabBarMouseHitTesting.newTabClickTarget(twoBufferStateForNewTab, col = 20, row = 0) shouldBe true
+  }
+
+  it should "resolve false for a click on a tab" in {
+    TabBarMouseHitTesting.newTabClickTarget(twoBufferStateForNewTab, col = 3, row = 0) shouldBe false
+  }
+
+  it should "resolve false for a click outside the strip's row" in {
+    TabBarMouseHitTesting.newTabClickTarget(twoBufferStateForNewTab, col = 20, row = 1) shouldBe false
+  }
+
+  it should "resolve false when there is no tab bar this frame (a single open buffer)" in {
+    TabBarMouseHitTesting.newTabClickTarget(AppState.initial, col = 20, row = 0) shouldBe false
+  }
+
+  "handleNewTabClick" should
+    "open a new tab identically to Ctrl+T and focus it when the affordance is clicked (issue #1080)" in {
+      val state = twoBufferStateForNewTab
+
+      val updated =
+        TabBarMouseHitTesting.handleNewTabClick(state, col = 20, row = 0).getOrElse(fail("expected a click hit"))
+
+      updated.persisted.buffers should have size 3
+      updated.persisted.bufferOrder should contain(BufferId(2))
+      updated.focusedBufferId shouldBe Some(BufferId(2))
+      // Mouse and keyboard (Ctrl+T) share EditorState.openNewTab, so the two produce identical resulting state.
+      updated shouldBe EditorState.openNewTab(state)
+    }
+
+  it should "return None for a click that misses the affordance" in {
+    TabBarMouseHitTesting.handleNewTabClick(twoBufferStateForNewTab, col = 3, row = 0) shouldBe None
   }

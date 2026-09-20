@@ -40,6 +40,50 @@ object TabBarSurfaceComposition:
   def closeBufferIdOf(id: SurfaceFocusId): Option[BufferId] =
     id.value.stripPrefix(CloseFocusIdPrefix).toIntOption.map(BufferId.apply)
 
+  /** Stable focus id for the trailing new-tab (+) affordance (issue #1080) -- not keyed to a `BufferId` like
+    * `focusId`/`closeFocusId` since it addresses no existing tab.
+    */
+  val NewTabFocusId: SurfaceFocusId = SurfaceFocusId("tab-bar-new-tab")
+
+  /** Columns reserved at the strip's trailing edge for the new-tab (+) affordance (issue #1080) -- carved out of the
+    * row's total width before `allocate` splits the rest across tabs, the same way [[CloseHitWidth]] is carved out of
+    * a tab's own cell, so tabs never paint underneath it. Painted as `" +"` so the glyph itself lands flush against
+    * the strip's right edge, one blank column short of the last tab's cell -- the same visual gap `GapColumns`
+    * reserves between two tabs, without a second, separate reservation.
+    */
+  private val NewTabAffordanceWidth = 2
+
+  private val NewTabGlyph = " +"
+
+  /** The width `allocate` should split across `entries`, with [[NewTabAffordanceWidth]] already carved off the
+    * strip's trailing edge for the new-tab affordance -- shared by `forTabBar` and `closeAffordances` so both keep
+    * deriving tab cells from the exact same reduced width.
+    */
+  private def tabsAvailableWidth(rect: LayoutRect): Int = math.max(0, rect.width - NewTabAffordanceWidth)
+
+  /** The trailing new-tab (+) affordance's hit region (issue #1080): a single, buffer-independent target at the
+    * strip's right edge, kept apart from `forTabBar`'s per-tab hit regions and `closeAffordances`' per-tab close
+    * regions -- a switch click, a close click, and a new-tab click always resolve from three disjoint region sets.
+    * `None` when there is no tab strip to append it to (an empty tab list, mirroring `closeAffordances`).
+    */
+  def newTabAffordance(entries: List[TabListEntry], rect: LayoutRect): Option[SurfaceHitRegion] =
+    if entries.isEmpty then None
+    else
+      val x = rect.x + rect.width - NewTabAffordanceWidth
+      Some(
+        SurfaceHitRegion(
+          rect = LogicalPixelRect(
+            x.toDouble,
+            rect.y.toDouble,
+            NewTabAffordanceWidth.toDouble,
+            math.min(1.0, rect.height.toDouble)
+          ),
+          focusId = NewTabFocusId,
+          actionId = Some(SurfaceActionId(NewTabFocusId.value)),
+          semanticLabel = "New tab"
+        )
+      )
+
   /** One tab's resolved geometry: the width allocated to it and its (possibly truncated) display title. */
   final case class TabAllocation(entry: TabListEntry, allocatedWidth: Int, displayTitle: String)
 
@@ -96,7 +140,7 @@ object TabBarSurfaceComposition:
         focusOrder = Nil
       )
     else
-      val allocations = allocate(entries, rect.width)
+      val allocations = allocate(entries, tabsAvailableWidth(rect))
       val positions   = tabPositions(rect.x, allocations)
 
       val segments = allocations.zipWithIndex.map {
@@ -117,6 +161,20 @@ object TabBarSurfaceComposition:
         layout = SurfacePaintLayout.Distributed
       )
 
+      // The new-tab (+) affordance paints as its own plain-text box at its own reserved rect (issue #1080), rather
+      // than as another `Distributed` segment of `rowBox` -- it addresses no `BufferId`, so it has no place in a row
+      // whose segments are otherwise one-to-one with `entries`.
+      val newTabBox = newTabAffordance(entries, rect).map { region =>
+        SurfacePaintBox(
+          kind = SurfacePaintKind.Text,
+          rect = region.rect,
+          text = Some(NewTabGlyph),
+          focusId = Some(region.focusId),
+          actionId = region.actionId,
+          semanticLabel = Some(region.semanticLabel)
+        )
+      }
+
       val hitRegions = allocations.zip(positions).map {
         case (allocation, (startX, width)) =>
           val id = focusId(allocation.entry.bufferId)
@@ -131,7 +189,7 @@ object TabBarSurfaceComposition:
       ResolvedSurfaceComposition(
         bounds = bounds,
         intrinsicSize = SurfaceIntrinsicSize(bounds.width, bounds.height),
-        paintBoxes = List(rowBox),
+        paintBoxes = List(rowBox) ++ newTabBox,
         hitRegions = hitRegions,
         focusOrder = hitRegions.map(_.focusId)
       )
@@ -162,7 +220,7 @@ object TabBarSurfaceComposition:
   def closeAffordances(entries: List[TabListEntry], rect: LayoutRect): List[SurfaceHitRegion] =
     if entries.isEmpty then Nil
     else
-      val allocations = allocate(entries, rect.width)
+      val allocations = allocate(entries, tabsAvailableWidth(rect))
       val positions   = tabPositions(rect.x, allocations)
       allocations.zip(positions).collect {
         case (allocation, (startX, width)) if width > CloseHitWidth =>

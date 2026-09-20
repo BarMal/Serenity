@@ -496,7 +496,8 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       com.serenity.state.models.TabListEntry(com.serenity.state.models.BufferId(0), "one", isDirty = false),
       com.serenity.state.models.TabListEntry(com.serenity.state.models.BufferId(1), "two", isDirty = true)
     )
-    // 20 columns, 1 separator reserved -> 19 content columns split 10/9.
+    // 20 columns available, minus 2 reserved for the trailing new-tab affordance (issue #1080) -> 18 columns for
+    // tabs, minus 1 gap reserving 2 columns -> 16 content columns split 8/8.
     val composition = com.serenity.ui.layout.TabBarSurfaceComposition.forTabBar(
       entries,
       activeBufferId = Some(com.serenity.state.models.BufferId(1)),
@@ -506,15 +507,15 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
 
     TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
 
-    // Tab 0 ("one") is centered in its 9-column cell at [0,9): (9-3)/2 = 3 columns of left padding, so "one" lands
-    // at [3,6). The separator glyph sits at column 9 (the end of that cell), then tab 1's cell starts at column 11
-    // (one column for the glyph, one blank column after it) and is itself centered: (9-5)/2 = 2 columns of left
-    // padding for "two ●", landing at [13,18).
+    // Tab 0 ("one") is centered in its 8-column cell at [0,8): (8-3)/2 = 2 columns of left padding, so "one" lands
+    // at [2,5). The separator glyph sits at column 8 (the end of that cell), then tab 1's cell starts at column 10
+    // (one column for the glyph, one blank column after it) and is itself centered: (8-5)/2 = 1 column of left
+    // padding for "two ●", landing at [11,16).
     val row = surface.getRow(0)
-    row.slice(3, 6) shouldBe "one"
-    row.charAt(9) shouldBe '│'
-    row.slice(13, 16) shouldBe "two"
-    row.charAt(17) shouldBe '●'
-    surface.getBg(3, 0) shouldBe Theme.light.panel.background
-    surface.getBg(13, 0) shouldBe Theme.light.highlighted.background
+    row.slice(2, 5) shouldBe "one"
+    row.charAt(8) shouldBe '│'
+    row.slice(11, 14) shouldBe "two"
+    row.charAt(15) shouldBe '●'
+    surface.getBg(2, 0) shouldBe Theme.light.panel.background
+    surface.getBg(11, 0) shouldBe Theme.light.highlighted.background
   }
