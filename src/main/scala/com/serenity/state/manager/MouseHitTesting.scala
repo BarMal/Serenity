@@ -96,10 +96,12 @@ final private[manager] class MouseHitTesting(
   private def handleTabBarClick(click: MouseClick, state: AppState): IO[Boolean] =
     TabBarMouseHitTesting.clickTarget(state, click.col, click.row) match
       case Some(switchTo) =>
-        stateRef.get.flatMap { current =>
-          val next = switchTo.fold(current)(EditorState.switchToBuffer(current, _))
-          validateAndUpdateState(next, current)
-        }.as(true)
+        stateRef.get
+          .flatMap { current =>
+            val next = switchTo.fold(current)(EditorState.switchToBuffer(current, _))
+            validateAndUpdateState(next, current)
+          }
+          .as(true)
       case None =>
         IO.pure(false)
 

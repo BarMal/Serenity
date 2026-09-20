@@ -50,8 +50,8 @@ private[manager] object TabBarMouseHitTesting:
   /** Applies [[clickTarget]]'s resolution to `state`, switching the active pane to the clicked buffer via
     * `EditorState.switchToBuffer` -- the same helper keyboard `NextTab`/`PreviousTab` navigation uses -- when a
     * different tab was clicked, or leaving `state` untouched for a swallowed click that hit no tab (a gap) or the
-    * already-active one. `None` (click missed the strip) is left to the caller, which should keep resolving other
-    * mouse targets rather than treating the click as handled.
+    * already-active one. `None` (click missed the strip) is left to the caller, which should keep resolving other mouse
+    * targets rather than treating the click as handled.
     */
   def handleClick(state: AppState, col: Int, row: Int): Option[AppState] =
     clickTarget(state, col, row).map(_.fold(state)(EditorState.switchToBuffer(state, _)))

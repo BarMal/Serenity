@@ -72,8 +72,8 @@ object EditorState:
   /** Assigns `bufferId` to the active pane and focuses it -- the one path keyboard `NextTab`/`PreviousTab`
     * (`navigateBuffer` below) and mouse tab-bar clicks (`TabBarMouseHitTesting`, issue #1077) both switch buffers
     * through, so the two never drift. Unlike plain `focusBuffer` (which only focuses a pane already showing
-    * `bufferId`), this first rebalances panes so the active pane picks the buffer up if no pane shows it yet --
-    * needed for a tab-bar click, where the clicked buffer need not already be the active pane's buffer.
+    * `bufferId`), this first rebalances panes so the active pane picks the buffer up if no pane shows it yet -- needed
+    * for a tab-bar click, where the clicked buffer need not already be the active pane's buffer.
     */
   def switchToBuffer(state: AppState, bufferId: BufferId): AppState =
     focusBuffer(rebalancePanes(state, Some(bufferId)), bufferId)
