@@ -82,7 +82,8 @@ job already has from checkout, dependency resolution, and Xvfb setup on shared r
 Issue #1586 reports the same spurious-regression pattern #1576 fixed for `reducer.*`/`damage.*`/`lsp.framer.large_batch`/
 `render.markdown.inline_lens`, now on `layout.large_multiline.visible_viewport`, which flagged a false "regression"
 on two unrelated PRs in one session (PR #1583: 2.19ms -> 4.41ms, 2.01x; PR #1585: 2.19ms -> 4.47ms, 2.04x; both
-re-ran clean, and a third instance was seen on PR #1580). Applying #1576's own methodology to this benchmark:
+re-ran clean, a third instance was seen on PR #1580, and a fourth (2.19ms -> 4.64ms, 2.12x) on PR #1601 while this
+investigation was in progress). Applying #1576's own methodology to this benchmark:
 
 **The absolute-delta floor from #1576 does not cover this benchmark, and cannot be tuned to cover it without
 weakening the gate elsewhere.** `check_perf_regression.py --min-regression-delta-ms` is a single global floor
@@ -99,32 +100,39 @@ regression on any of them. That is not a fix; it is trading one false-positive s
 risk gate-wide. The floor guard is therefore not the applicable tool here -- unlike the #1576 families, this one
 needs the other half of that methodology: a higher iteration count for this specific scenario.
 
-**An iteration-count bump is the applicable fix, but this pass could not derive one.** The scenario currently runs
-with `warmups = 3, iterations = 20` (`src/test/scala/com/serenity/perf/PerformanceBenchmarks.scala`, the
-`layout.large_multiline.visible_viewport` `BenchmarkRunner.Benchmark` entry) -- the same shape of under-provisioned
-count the #1576 families had before their bump. Sizing a replacement count correctly requires the exact process
-`BenchmarkIterationCounts.scala` documents: twelve local `PerformanceBenchmarks` runs under `xvfb-run` on
-CI-equivalent shared hardware (six at 20 iterations, six at a candidate higher count), comparing this scenario's own
-run-to-run p50 CV and max/min spread before and after, the same way `reducer.*`'s and `damage.*`'s counts were
-derived rather than guessed.
+**Iteration-count derivation -- 2026-09-20, 2nd pass.** A prior pass of this investigation could not run the twelve-run
+`sbt`/`xvfb-run` comparison because that sandbox had no `sbt` binary and no network path to install one. This pass's
+sandbox had both, so the same process `BenchmarkIterationCounts.scala` documents for the four #1576 families was run
+here: local `PerformanceBenchmarks` runs under `xvfb-run`, comparing this scenario's own run-to-run p50 CV and
+max/min spread at the current count (20) against a candidate (60, matching the `reducer.*`/`damage.*` multiplier).
+The sample size is four runs per side, not six -- smaller than #1576's, for time budget reasons -- so treat the
+numbers below as directionally consistent with, rather than as precise as, that derivation.
 
-This sandbox has no `sbt` binary and no network path to install one, so that local harness cannot be run here, and
-no CI historical CSV archive exists to substitute for it (per the `BenchmarkIterationCounts.scala` note that CI's own
-artifact retention is the only historical p50 data this project keeps, and it does not extend far enough back to
-cover this either). Producing a candidate iteration count without that measurement would mean guessing a number and
-presenting it as empirically derived, which is exactly what the #1576 methodology this issue asks to be repeated
-explicitly rejects ("a guessed number", above). No change to `BenchmarkIterationCounts.scala`,
-`BenchmarkIterationsSpec.scala`, or the benchmark's `iterations` field is included in this pass for that reason.
+| Config | p50 samples (ms) | mean p50 | CV | max/min spread |
+| --- | --- | ---: | ---: | ---: |
+| `iterations = 20` (previous) | 1.909, 2.186, 1.978, 1.890 | 1.991 | 5.91% | 1.157x |
+| `iterations = 60` (adopted) | 1.882, 1.895, 2.050, 1.898 | 1.931 | 3.58% | 1.090x |
 
-**What is needed to close this out:** a maintainer (or a future session) with local `sbt`/`xvfb-run` access should
-run the twelve-run comparison described above for `layout.large_multiline.visible_viewport` at 20 iterations vs. a
-candidate count (60, matching the `reducer.*`/`damage.*` multiplier, is a reasonable starting candidate to test, not
-a conclusion), record the before/after CV and spread in this section following the table format above, and land the
-resulting count in `BenchmarkIterationCounts.scala` with a `BenchmarkIterationsSpec.scala` lock-in test, exactly as
-the four #1576 families were. If that run shows iteration count alone does not stabilize it (as happened with
-`reducer.normal_editing`), the next thing to check is whether allocation pressure from `TextLayoutSnapshot.fromBuffer`
-makes this scenario more GC-sensitive than the others, which the harness's existing allocation-sampling pass
-(see `BenchmarkRunner.AllocationTracked`) could help confirm.
+A real but partial improvement, the same shape #1576 found for `lsp.framer.large_batch` (6.43% CV / 1.22x spread ->
+5.25% CV / 1.16x spread). As with the four-family derivation, neither side of this four-run comparison reproduced a
+2x-plus run-to-run spread locally, despite CI itself observing exactly that on four separate PRs -- this is not proof
+the bump eliminates the flag outright, only that it makes the scenario's own noise markedly less volatile, consistent
+with #1576's finding that local runs under-represent a shared CI runner's noise.
+
+Several runs at both counts showed `p95`/`max` spike sharply out of proportion to `p50` -- one 60-iteration run hit an
+11.66ms max against a ~2ms p50 -- which is consistent with GC-pause sensitivity: `TextLayoutSnapshot.fromBuffer`'s
+allocation for a 15,000-line deep-scrolled buffer is large enough that a GC cycle landing mid-sample can corrupt
+whichever rank it hits. More iterations move the odds of a pause landing on the *median* rank down (30-31st of 60
+vs. 10-11th of 20), which is the most likely mechanism behind the CV/spread improvement above, and is also why the
+tail (`p95`/`max`) stayed noisy while `p50` tightened.
+
+**Change landed:** `layout.large_multiline.visible_viewport` now runs at `BenchmarkIterationCounts.LayoutVisibleViewport`
+(60), with a `BenchmarkIterationsSpec.scala` bound test alongside the other four families' lock-ins.
+
+**If CI still flags this benchmark after the bump:** per the mechanism above, the next thing to check is allocation
+pressure from `TextLayoutSnapshot.fromBuffer` specifically -- the harness's existing allocation-sampling pass (see
+`BenchmarkRunner.AllocationTracked`) could confirm whether this scenario is more GC-sensitive than the others, which
+would point toward reducing its allocation rather than further raising the iteration count.
 
 ## Repeatable before/after workflow
 

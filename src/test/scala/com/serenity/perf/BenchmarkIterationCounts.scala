@@ -33,16 +33,24 @@ package com.serenity.perf
   * got markedly less volatile. Full before/after per-scenario figures are in docs/performance-benchmarks.md's
   * "Iteration-count derivation" section, including the measured CI job runtime impact of the combined bump.
   *
-  * `layout.large_multiline.visible_viewport` (issue #1586) is deliberately absent from this object: it also produces
-  * spurious 2x-ratio flags (see docs/performance-benchmarks.md's "#1586 investigation" section), but for a different
-  * reason than the four families above and one this file's existing derivations cannot be extended to cover by
-  * inspection alone -- its baseline sits at multi-millisecond scale, where `check_perf_regression.py`'s absolute delta
-  * floor (tuned for the sub-millisecond families above) does not help, and fixing it needs the same twelve-run
-  * empirical comparison this file's other entries were sized from. That measurement is not in this change; see the doc
-  * section for why.
+  * `layout.large_multiline.visible_viewport` (issue #1586) needed the same treatment but couldn't get it in the
+  * original #1576 pass -- its baseline sits at multi-millisecond scale, where `check_perf_regression.py`'s absolute
+  * delta floor (tuned for the sub-millisecond families above) does not help, so an iteration-count bump is the only
+  * applicable lever, and deriving one needed the same empirical comparison this file's other entries were sized from.
+  * That measurement is in `docs/performance-benchmarks.md`'s "#1586 investigation" section:
+  *
+  *   - `layout.large_multiline.visible_viewport` (20 -> 60, 3x): 5.91% CV / 1.157x spread fell to 3.58% CV / 1.090x
+  *     spread -- a real but partial improvement, the same shape as `lsp.framer.large_batch` above. The sample here is
+  *     four runs per side, not six, and neither side ever reproduced the 2x-plus ratio CI itself observed on this
+  *     benchmark (PRs #1580/#1583/#1585/#1601) -- consistent with the four-family finding above that local runs
+  *     under-represent CI's noisier shared runner, so this is not proof the bump eliminates the flag outright. Several
+  *     runs at both counts showed `p95`/`max` spike sharply (once to 11.66ms against a ~2ms p50), which points at
+  *     GC-pause sensitivity as the next thing to check if CI keeps flagging this after the bump -- see
+  *     `BenchmarkRunner.AllocationTracked`.
   */
 private[perf] object BenchmarkIterationCounts:
-  val Damage         = 60
-  val Reducer        = 60
-  val LspFramer      = 48
-  val RenderMarkdown = 24
+  val Damage                = 60
+  val Reducer               = 60
+  val LspFramer             = 48
+  val RenderMarkdown        = 24
+  val LayoutVisibleViewport = 60

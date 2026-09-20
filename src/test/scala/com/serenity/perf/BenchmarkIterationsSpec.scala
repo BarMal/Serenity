@@ -45,6 +45,7 @@ class BenchmarkIterationsSpec extends AnyFlatSpec with Matchers:
     BenchmarkIterationCounts.Reducer should be > 20
     BenchmarkIterationCounts.LspFramer should be > 12
     BenchmarkIterationCounts.RenderMarkdown should be > 8
+    BenchmarkIterationCounts.LayoutVisibleViewport should be > 20
   }
 
   /** Rebuilds the same shapes of state `PerformanceBenchmarks.benchmarks()` passes to `reducerBenchmarks` -- a
