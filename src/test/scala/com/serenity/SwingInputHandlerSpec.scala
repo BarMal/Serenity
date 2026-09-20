@@ -20,7 +20,11 @@ import com.serenity.keystroke.events.{
   MouseDrag,
   MouseMove,
   MousePress,
-  MouseRenderMetrics
+  MouseRenderMetrics,
+  ScrollDown,
+  ScrollLeft,
+  ScrollRight,
+  ScrollUp
 }
 import com.serenity.keystroke.translators.{TextEntryTranslator, Translator}
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
@@ -373,4 +377,120 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
 
     handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
       Some(KeyStrokeInfo(InputKey.Character, Some('z'), Set.empty))
+  }
+
+  // Horizontal scroll-gesture support (issue #1568): a plain wheel notch still scrolls vertically; shift-held is the
+  // documented convention (also used by e.g. VS Code and other editors, given AWT's `MouseWheelEvent` exposes no
+  // separate horizontal-delta channel of its own) this handler now uses to tell a horizontal gesture apart from a
+  // vertical one.
+  it should "convert a plain mouse wheel notch into vertical scroll events" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val wheel     = component.getMouseWheelListeners.head
+
+    wheel.mouseWheelMoved(
+      new java.awt.event.MouseWheelEvent(
+        component,
+        java.awt.event.MouseEvent.MOUSE_WHEEL,
+        1L,
+        0,
+        0,
+        0,
+        0,
+        false,
+        java.awt.event.MouseWheelEvent.WHEEL_UNIT_SCROLL,
+        1,
+        1
+      )
+    )
+    wheel.mouseWheelMoved(
+      new java.awt.event.MouseWheelEvent(
+        component,
+        java.awt.event.MouseEvent.MOUSE_WHEEL,
+        2L,
+        0,
+        0,
+        0,
+        0,
+        false,
+        java.awt.event.MouseWheelEvent.WHEEL_UNIT_SCROLL,
+        1,
+        -1
+      )
+    )
+
+    handler.eventStream.take(2).compile.toList.unsafeRunTimed(StreamObservationTimeout) shouldBe Some(
+      List(ScrollDown(3), ScrollUp(3))
+    )
+  }
+
+  it should "convert a shift-held mouse wheel notch into horizontal scroll events instead of vertical ones" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val wheel     = component.getMouseWheelListeners.head
+
+    wheel.mouseWheelMoved(
+      new java.awt.event.MouseWheelEvent(
+        component,
+        java.awt.event.MouseEvent.MOUSE_WHEEL,
+        1L,
+        InputEvent.SHIFT_DOWN_MASK,
+        0,
+        0,
+        0,
+        false,
+        java.awt.event.MouseWheelEvent.WHEEL_UNIT_SCROLL,
+        1,
+        1
+      )
+    )
+    wheel.mouseWheelMoved(
+      new java.awt.event.MouseWheelEvent(
+        component,
+        java.awt.event.MouseEvent.MOUSE_WHEEL,
+        2L,
+        InputEvent.SHIFT_DOWN_MASK,
+        0,
+        0,
+        0,
+        false,
+        java.awt.event.MouseWheelEvent.WHEEL_UNIT_SCROLL,
+        1,
+        -1
+      )
+    )
+
+    handler.eventStream.take(2).compile.toList.unsafeRunTimed(StreamObservationTimeout) shouldBe Some(
+      List(ScrollRight(3), ScrollLeft(3))
+    )
+  }
+
+  it should "ignore a wheel event with no rotation" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val wheel     = component.getMouseWheelListeners.head
+
+    wheel.mouseWheelMoved(
+      new java.awt.event.MouseWheelEvent(
+        component,
+        java.awt.event.MouseEvent.MOUSE_WHEEL,
+        1L,
+        0,
+        0,
+        0,
+        0,
+        false,
+        java.awt.event.MouseWheelEvent.WHEEL_UNIT_SCROLL,
+        1,
+        0
+      )
+    )
+    val key = component.getKeyListeners.head
+    key.keyTyped(KeyEvent(component, KeyEvent.KEY_TYPED, 2L, 0, KeyEvent.VK_UNDEFINED, 'a'))
+
+    handler.eventStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
+      Some(InsertChar('a'))
   }

@@ -140,11 +140,20 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   // AWT reports a wheel notch as one "unit scroll" of `getScrollAmount` units; the platform's own amount is a system
   // preference this setting stands in for, so a notch is `wheelScrollLines` lines whatever the OS says. Block scrolls
   // (a page notch, some trackpads) report their own count and are honoured as multiples of it.
+  //
+  // Horizontal scroll gestures (issue #1568): AWT's `MouseWheelEvent` has no separate horizontal-delta channel of its
+  // own, so shift-held is the convention this handler uses to tell a horizontal gesture (shift+wheel, or however a
+  // given trackpad driver surfaces two-finger horizontal scrolling through the same event) apart from an ordinary
+  // vertical one -- the same convention most editors already use for a plain scroll wheel.
   component.addMouseWheelListener((e: java.awt.event.MouseWheelEvent) =>
     val notches = if e.getWheelRotation != 0 then e.getWheelRotation else 0
     if notches != 0 then
-      val lines = math.abs(notches) * wheelScrollLines
-      enqueueRaw(if notches > 0 then ScrollDown(lines) else ScrollUp(lines))
+      val amount = math.abs(notches) * wheelScrollLines
+      val event =
+        if e.isShiftDown then if notches > 0 then ScrollRight(amount) else ScrollLeft(amount)
+        else if notches > 0 then ScrollDown(amount)
+        else ScrollUp(amount)
+      enqueueRaw(event)
   )
 
   component.addMouseListener(

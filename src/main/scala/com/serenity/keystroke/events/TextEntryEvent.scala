@@ -44,17 +44,22 @@ case object ColumnLeft                  extends NavigationEvent
 case object ColumnRight                 extends NavigationEvent
 final case class ScrollDown(lines: Int) extends ScrollEvent
 final case class ScrollUp(lines: Int)   extends ScrollEvent
-case object OpenGotoLine                extends ModalRequestEvent
-case object OpenReplace                 extends ModalRequestEvent
-case object FindNext                    extends TextEntryEvent
-case object Enter                       extends TextEntryEvent
-case object OpenFind                    extends ModalRequestEvent
-case object Escape                      extends TextEntryEvent
-case object TabKey                      extends TextEntryEvent
-case object ReverseTabKey               extends TextEntryEvent
-case object Copy                        extends TextEntryEvent
-case object Paste                       extends TextEntryEvent
-case object Cut                         extends TextEntryEvent
-case object Undo                        extends TextEntryEvent
-case object Redo                        extends TextEntryEvent
-case object ToggleSyntaxHighlighting    extends TextEntryEvent
+// Horizontal scroll gestures (issue #1568): shift+wheel or a trackpad's own horizontal notches, the same input-layer
+// counterpart to ScrollDown/ScrollUp above. `EditorEventReducer` pans `leftColumn` with these while word wrap is off,
+// or -- while column mode and word wrap are both on -- reduces them exactly as `ColumnLeft`/`ColumnRight` already are.
+final case class ScrollLeft(columns: Int)  extends ScrollEvent
+final case class ScrollRight(columns: Int) extends ScrollEvent
+case object OpenGotoLine                   extends ModalRequestEvent
+case object OpenReplace                    extends ModalRequestEvent
+case object FindNext                       extends TextEntryEvent
+case object Enter                          extends TextEntryEvent
+case object OpenFind                       extends ModalRequestEvent
+case object Escape                         extends TextEntryEvent
+case object TabKey                         extends TextEntryEvent
+case object ReverseTabKey                  extends TextEntryEvent
+case object Copy                           extends TextEntryEvent
+case object Paste                          extends TextEntryEvent
+case object Cut                            extends TextEntryEvent
+case object Undo                           extends TextEntryEvent
+case object Redo                           extends TextEntryEvent
+case object ToggleSyntaxHighlighting       extends TextEntryEvent
