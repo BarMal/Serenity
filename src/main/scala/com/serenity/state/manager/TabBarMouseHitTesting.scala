@@ -4,10 +4,11 @@ import com.serenity.state.core.EditorState
 import com.serenity.state.models.{AppState, BufferId, SurfaceContent, TabListEntry}
 import com.serenity.ui.layout.{LayoutEngine, LayoutRect, TabBarSurfaceComposition}
 
-/** Per-tab hit regions for the always-visible tab strip (issue #1075: Foundation), and resolving a primary click
-  * against them into a buffer switch (issue #1077). Resolves a click's cell coordinate to the `BufferId` of the tab it
-  * landed on, using the exact same `ResolvedSurfaceComposition` `TextOverlayRenderer` paints from -- the same "painted
-  * and hit-tested from one plan" guarantee `ModalMouseHitTesting`/`CommandRunnerMouseHitTesting` already give their own
+/** Per-tab hit regions for the always-visible tab strip (issue #1075: Foundation; close affordance, #1078), and
+  * resolving a primary click against them into a buffer switch (issue #1077). Resolves a click's cell coordinate to
+  * the `BufferId` of the tab (`hitAt`) or its close affordance (`closeHitAt`) it landed on, using the exact same
+  * `ResolvedSurfaceComposition`/`closeAffordances` geometry `TextOverlayRenderer` paints from -- the same "painted and
+  * hit-tested from one plan" guarantee `ModalMouseHitTesting`/`CommandRunnerMouseHitTesting` already give their own
   * surfaces.
   */
 private[manager] object TabBarMouseHitTesting:
@@ -55,3 +56,20 @@ private[manager] object TabBarMouseHitTesting:
     */
   def handleClick(state: AppState, col: Int, row: Int): Option[AppState] =
     clickTarget(state, col, row).map(_.fold(state)(EditorState.switchToBuffer(state, _)))
+
+  /** Resolves a click's cell coordinate to the `BufferId` of the tab whose close (x) affordance it landed on (issue
+    * #1078) -- the close-specific counterpart to `hitAt` above, resolved from
+    * `TabBarSurfaceComposition.closeAffordances` rather than `forTabBar`'s own hit regions, so a close click and a
+    * switch click (#1077, via `hitAt`) never contend for the same region.
+    */
+  def closeHitAt(
+    entries: List[TabListEntry],
+    rect: LayoutRect,
+    col: Double,
+    row: Double
+  ): Option[BufferId] =
+    TabBarSurfaceComposition
+      .closeAffordances(entries, rect)
+      .reverse
+      .find(_.rect.contains(col, row))
+      .flatMap(hit => TabBarSurfaceComposition.closeBufferIdOf(hit.focusId))

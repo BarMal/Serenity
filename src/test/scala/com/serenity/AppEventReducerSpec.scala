@@ -154,6 +154,42 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     result.effects shouldBe Nil
   }
 
+  it should "close a specific tab by id on CloseTabById without changing which buffer is focused (issue #1078)" in {
+    val twoBufferState = AppEventReducer.reduce(NewTab, AppState.initial, registry).state
+    twoBufferState.focusedBufferId shouldBe Some(BufferId(1))
+
+    val result = AppEventReducer.reduce(CloseTabById(BufferId(0)), twoBufferState, registry)
+    val state  = result.state
+
+    state.persisted.buffers should not contain key(BufferId(0))
+    state.persisted.bufferOrder shouldBe List(BufferId(1))
+    state.focusedBufferId shouldBe Some(BufferId(1))
+    result.effects shouldBe Nil
+  }
+
+  it should "close the focused tab by id on CloseTabById, falling back to the next remaining buffer" in {
+    val twoBufferState = AppEventReducer.reduce(NewTab, AppState.initial, registry).state
+    twoBufferState.focusedBufferId shouldBe Some(BufferId(1))
+
+    val result = AppEventReducer.reduce(CloseTabById(BufferId(1)), twoBufferState, registry)
+    val state  = result.state
+
+    state.persisted.buffers should not contain key(BufferId(1))
+    state.persisted.bufferOrder shouldBe List(BufferId(0))
+    state.focusedBufferId shouldBe Some(BufferId(0))
+    result.effects shouldBe Nil
+  }
+
+  it should "close the last tab via CloseTabById the same way keyboard CloseTab does, leaving the pane empty" in {
+    val result = AppEventReducer.reduce(CloseTabById(BufferId(0)), AppState.initial, registry)
+    val state  = result.state
+
+    state.persisted.buffers shouldBe empty
+    state.persisted.bufferOrder shouldBe empty
+    state.persisted.layout.editorPanes(PaneId(0)).bufferId shouldBe None
+    result.effects shouldBe Nil
+  }
+
   it should "split the focused pane horizontally, carrying its buffer, on SplitPaneHorizontal" in {
     val result = AppEventReducer.reduce(SplitPaneHorizontal, AppState.initial, registry)
     val state  = result.state

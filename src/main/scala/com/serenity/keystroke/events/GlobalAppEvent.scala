@@ -1,7 +1,7 @@
 package com.serenity.keystroke.events
 
 import com.serenity.keystroke.Modifier
-import com.serenity.state.models.PanelId
+import com.serenity.state.models.{BufferId, PanelId}
 
 /** Handled by `AppEventReducer`. Deliberately not editor events: routing is decided by this parent, never by case order
   * in a match.
@@ -28,6 +28,12 @@ case object ClosePane                     extends GlobalAppEvent // Ctrl+Shift+W
 case object NextTab                       extends GlobalAppEvent // Ctrl+Tab
 case object PreviousTab                   extends GlobalAppEvent // Ctrl+Shift+Tab
 case object FileSearch                    extends GlobalAppEvent // Ctrl+Shift+F
+
+/** Close-by-id (issue #1078): a tab-bar close-affordance click closing a specific tab, whether or not it is focused --
+  * `CloseTab`'s mouse counterpart, sharing `EditorState.closeBuffer` with it rather than requiring a focus switch
+  * first.
+  */
+final case class CloseTabById(bufferId: BufferId) extends GlobalAppEvent
 
 /** Raw bare-modifier press/release, always emitted by `SwingInputHandler` for every modifier key regardless of the
   * cursor-peek prototype's `commandRunnerCursorPeekEnabled` flag -- like mouse-move events, the translator emits

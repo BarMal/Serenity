@@ -106,3 +106,23 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
   it should "return None for a click outside the strip" in {
     TabBarMouseHitTesting.handleClick(twoBufferState, col = 3, row = 1) shouldBe None
   }
+
+  "closeHitAt" should "resolve a click on a tab's close affordance to its BufferId (issue #1078)" in {
+    // Close regions sit at the rightmost 2 columns of each tab's own cell: [4,6), [12,14), [19,21) (see
+    // TabBarSurfaceCompositionSpec's `closeAffordances` coverage).
+    TabBarMouseHitTesting.closeHitAt(entries, rect, col = 5, row = 0) shouldBe Some(BufferId(0))
+    TabBarMouseHitTesting.closeHitAt(entries, rect, col = 13, row = 0) shouldBe Some(BufferId(1))
+    TabBarMouseHitTesting.closeHitAt(entries, rect, col = 20, row = 0) shouldBe Some(BufferId(2))
+  }
+
+  it should "resolve no close hit for a click inside a tab but outside its close affordance" in {
+    TabBarMouseHitTesting.closeHitAt(entries, rect, col = 3, row = 0) shouldBe None
+  }
+
+  it should "resolve no close hit for a click outside the strip's row" in {
+    TabBarMouseHitTesting.closeHitAt(entries, rect, col = 5, row = 1) shouldBe None
+  }
+
+  it should "resolve no close hit when there are no open buffers" in {
+    TabBarMouseHitTesting.closeHitAt(Nil, rect, col = 5, row = 0) shouldBe None
+  }

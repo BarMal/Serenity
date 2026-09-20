@@ -305,6 +305,58 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
     updatedState.persisted.focus shouldBe Focus.EditorPane(PaneId(2))
   }
 
+  "EditorState.closeBuffer" should
+    "close the focused tab and focus the remaining buffer, the same as closeFocusedTab (issue #1078)" in {
+      val constrainedViewport = ViewportSize(80, 24)
+      val withThreeBuffers = EditorState.openNewTab(
+        EditorState.openNewTab(
+          AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(constrainedViewport)))
+        )
+      )
+      withThreeBuffers.focusedBufferId shouldBe Some(BufferId(2))
+
+      val updatedState = EditorState.closeBuffer(withThreeBuffers, BufferId(2))
+
+      updatedState.persisted.buffers should not contain key(BufferId(2))
+      updatedState.persisted.bufferOrder shouldBe List(BufferId(0), BufferId(1))
+      updatedState.focusedBufferId shouldBe Some(BufferId(1))
+    }
+
+  it should "close a non-active tab (e.g. a tab-bar close click) without changing which buffer is focused" in {
+    val constrainedViewport = ViewportSize(80, 24)
+    val withThreeBuffers = EditorState.openNewTab(
+      EditorState.openNewTab(
+        AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(constrainedViewport)))
+      )
+    )
+    withThreeBuffers.focusedBufferId shouldBe Some(BufferId(2))
+    val activePaneId = withThreeBuffers.persisted.layout.activeEditorPaneId.get
+
+    val updatedState = EditorState.closeBuffer(withThreeBuffers, BufferId(0))
+
+    updatedState.persisted.buffers should not contain key(BufferId(0))
+    updatedState.persisted.bufferOrder shouldBe List(BufferId(1), BufferId(2))
+    updatedState.focusedBufferId shouldBe Some(BufferId(2))
+    updatedState.persisted.focus shouldBe withThreeBuffers.persisted.focus
+    updatedState.persisted.layout.editorPanes(activePaneId).bufferId shouldBe Some(BufferId(2))
+  }
+
+  it should "close the last remaining tab, leaving no buffers open and the pane empty (matches CloseTab's fallback)" in {
+    val singleBufferState = AppState.initial
+
+    val updatedState = EditorState.closeBuffer(singleBufferState, BufferId(0))
+
+    updatedState.persisted.buffers shouldBe empty
+    updatedState.persisted.bufferOrder shouldBe empty
+    updatedState.persisted.layout.editorPanes(PaneId(0)).bufferId shouldBe None
+  }
+
+  it should "leave state unchanged when asked to close a buffer id that is not open" in {
+    val state = AppState.initial
+
+    EditorState.closeBuffer(state, BufferId(99)) shouldBe state
+  }
+
   private def addPane(state: AppState, after: PaneId, paneId: PaneId, bufferId: BufferId): AppState =
     val tree = state.persisted.layout.workspaceTree
       .flatMap(
