@@ -13,7 +13,7 @@ import com.serenity.state.models.SurfaceContent
   * per-symbol rows) -- the `Horizontal`/`Compact` summary rows stay non-interactive, matching
   * `PinnedPanelMouseHitTesting.pinnedCommentsMouseHitAt`'s pre-migration behaviour.
   */
-object CommentsSurfaceComposition:
+object CommentsSurfaceComposition extends RowCompositionSupport:
 
   def forComments(
     symbols: List[Symbol],
@@ -37,7 +37,7 @@ object CommentsSurfaceComposition:
         toRowBox(rowViews(index), rowRect(bounds, y - contentRect.y))
     }
 
-    plan(bounds, boxes)
+    planWithRowHits(bounds, boxes)
 
   private def toRowBox(
     view: PanelContentResolver.CommentsRowView,
@@ -61,30 +61,3 @@ object CommentsSurfaceComposition:
           text = Some(view.row.plainText),
           selected = view.row.selected
         )
-
-  private def plan(bounds: LogicalPixelRect, boxes: List[SurfacePaintBox]): ResolvedSurfaceComposition =
-    val clipped = boxes.flatMap(box => box.rect.intersection(bounds).map(rect => box.copy(rect = rect)))
-    val hits = clipped.flatMap { box =>
-      for
-        focusId <- box.focusId
-        label   <- box.semanticLabel
-      yield SurfaceHitRegion(box.rect, focusId, box.actionId, label)
-    }
-    ResolvedSurfaceComposition(
-      bounds = bounds,
-      intrinsicSize = SurfaceIntrinsicSize(bounds.width, bounds.height),
-      paintBoxes = clipped,
-      hitRegions = hits,
-      focusOrder = hits.map(_.focusId)
-    )
-
-  private def rowRect(bounds: LogicalPixelRect, row: Int): LogicalPixelRect =
-    LogicalPixelRect(
-      bounds.x,
-      bounds.y + row,
-      bounds.width,
-      math.min(1.0, math.max(0.0, bounds.bottom - bounds.y - row))
-    )
-
-  private def logicalRect(x: Int, y: Int, width: Int, height: Int): LogicalPixelRect =
-    LogicalPixelRect(x.toDouble, y.toDouble, width.toDouble, height.toDouble)

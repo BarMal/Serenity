@@ -226,6 +226,58 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
     adjusted.topVisualLine shouldBe 0
   }
 
+  /** Regression cover for the O(n^2) fix: `adjustForCursorColumnMode` used to re-measure every line from the document
+    * start on every call, so repeatedly moving the cursor through a large document cost O(n) per move. The fix walks
+    * from the previous placement instead; this pins that the result is unchanged by asserting an incremental placement
+    * (starting from an already-valid column-mode viewport near the document start) agrees with a cold, from-scratch
+    * placement for the same target cursor far into the document.
+    */
+  it should "agree with a cold from-scratch placement when reached incrementally from an earlier valid placement" in {
+    val lineCount = 3000
+    val content   = (0 until lineCount).map(i => s"line $i").mkString("\n")
+    val buffer = Buffer
+      .fromString(bufferId, content)
+      .copy(
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 8),
+        editing = EditingState(List(CursorPosition(0, 0)))
+      )
+    val state        = tuiStateWith(buffer)
+    val targetCursor = CursorPosition(2500, 0)
+
+    val direct = CursorViewport.adjustForCursorColumnMode(buffer, state, targetCursor)
+
+    // Line 20 sits in the third column (rows 16-23), so this establishes a non-zero previous top -- the case that
+    // actually exercises the incremental walk rather than trivially matching the cold path's own line-0 starting point.
+    val nearCursor              = CursorPosition(20, 0)
+    val intermediateViewport    = CursorViewport.adjustForCursorColumnMode(buffer, state, nearCursor)
+    val bufferAfterIntermediate = buffer.copy(viewport = intermediateViewport)
+    val incremental             = CursorViewport.adjustForCursorColumnMode(bufferAfterIntermediate, state, targetCursor)
+
+    incremental shouldBe direct
+  }
+
+  it should "agree with a cold from-scratch placement when the cursor moves backward from a later valid placement" in {
+    val lineCount = 3000
+    val content   = (0 until lineCount).map(i => s"line $i").mkString("\n")
+    val buffer = Buffer
+      .fromString(bufferId, content)
+      .copy(
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 8),
+        editing = EditingState(List(CursorPosition(0, 0)))
+      )
+    val state        = tuiStateWith(buffer)
+    val targetCursor = CursorPosition(12, 0)
+
+    val direct = CursorViewport.adjustForCursorColumnMode(buffer, state, targetCursor)
+
+    val farCursor               = CursorPosition(2900, 0)
+    val intermediateViewport    = CursorViewport.adjustForCursorColumnMode(buffer, state, farCursor)
+    val bufferAfterIntermediate = buffer.copy(viewport = intermediateViewport)
+    val incremental             = CursorViewport.adjustForCursorColumnMode(bufferAfterIntermediate, state, targetCursor)
+
+    incremental shouldBe direct
+  }
+
   "CursorViewport.ensureVisibleCursors" should
     "dispatch to the column-mode placement when column mode and word wrap are both on" in {
       val content = (0 until 30).map(i => s"line $i").mkString("\n")

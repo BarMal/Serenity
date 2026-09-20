@@ -320,6 +320,17 @@ object CursorViewport:
     * from its own top row. A sibling to [[adjustForCursor]] rather than a branch inside it -- that function's centring/
     * typewriter/bottom-clamp logic does not apply here at all, so branching it in would only add complexity to both
     * paths for no shared benefit.
+    *
+    * Walks from the *previous* placement (`buffer.viewport`) rather than re-measuring every line from the document
+    * start on every call. `buffer.viewport.topVisualLine` is always an exact multiple of the `visibleLines` it was
+    * placed with (the invariant above), so the new target column boundary can be found by measuring only the lines
+    * between the previous top and the cursor, and then walking that same distance from the previous top -- cost
+    * proportional to how far the cursor moved since the last placement, not to its absolute position in the document.
+    * Re-scanning from line 0 made moving the cursor progressively through a large wrapped document O(n) per move
+    * (O(n^2) overall). The one case that invalidates the shortcut -- column mode just switched on (the inherited
+    * viewport came from `adjustForCursor`'s centring, whose `topVisualLine` has no reason to be a multiple of
+    * `visibleLines`) or a resize changed `visibleLines` since the last placement -- is detected by the same modulus
+    * check and falls back to the original from-scratch scan.
     */
   def adjustForCursorColumnMode(
     buffer: Buffer,
@@ -334,6 +345,8 @@ object CursorViewport:
     val cellMetricsOverride = if isTui then Some(CellMetrics.cellUnit) else None
     val forceCellLayout     = isTui
     val wrapWidthPx         = if isTui then viewport.visibleColumns * CellMetrics.cellUnit.charWidth else gridWidthPx
+    val lineCount           = buffer.document.content.lineCount
+    val visibleLines        = math.max(1, viewport.visibleLines)
 
     def visualRowCountForLine(lineIndex: Int): Int =
       val text = buffer.document.content.getLine(lineIndex).getOrElse("")
@@ -361,22 +374,49 @@ object CursorViewport:
         forceCellLayout = forceCellLayout,
         rowAffinity = cursor.rowAffinity
       )
-    val cumulativeRowsBeforeCursorLine = (0 until cursor.line).map(visualRowCountForLine).sum
-    val absoluteCursorRow              = cumulativeRowsBeforeCursorLine + cursorVisualRowInLine
 
-    val visibleLines      = math.max(1, viewport.visibleLines)
-    val activeColumnIndex = absoluteCursorRow / visibleLines
-    val targetVisualRow   = activeColumnIndex * visibleLines
-    val lineCount         = buffer.document.content.lineCount
+    // Rows spanned by the lines [fromLine, toLineExclusive), walking forward -- bounded by the distance between the
+    // two lines, used both to place the cursor relative to the previous top and to walk that same distance again.
+    @annotation.tailrec
+    def rowsForward(fromLine: Int, toLineExclusive: Int, acc: Int): Int =
+      if fromLine >= toLineExclusive then acc
+      else rowsForward(fromLine + 1, toLineExclusive, acc + visualRowCountForLine(fromLine))
 
     @annotation.tailrec
-    def findTop(line: Int, consumedRows: Int): (Int, Int) =
+    def findTopForward(line: Int, consumedRows: Int, targetRow: Int): (Int, Int) =
       if line >= lineCount then (math.max(0, lineCount - 1), 0)
       else
         val rows = visualRowCountForLine(line)
-        if consumedRows + rows > targetVisualRow then (line, targetVisualRow - consumedRows)
-        else findTop(line + 1, consumedRows + rows)
-    val (topLine, topVisualLine) = if lineCount <= 0 then (0, 0) else findTop(0, 0)
+        if consumedRows + rows > targetRow then (line, targetRow - consumedRows)
+        else findTopForward(line + 1, consumedRows + rows, targetRow)
+
+    @annotation.tailrec
+    def findTopBackward(line: Int, remainingDeficit: Int): (Int, Int) =
+      if line <= 0 then (0, 0)
+      else
+        val previousLineRows = visualRowCountForLine(line - 1)
+        if previousLineRows >= remainingDeficit then (line - 1, previousLineRows - remainingDeficit)
+        else findTopBackward(line - 1, remainingDeficit - previousLineRows)
+
+    val previousTopValid = viewport.topVisualLine % visibleLines == 0
+
+    val (topLine, topVisualLine) =
+      if lineCount <= 0 then (0, 0)
+      else if previousTopValid then
+        val previousTopLine = math.max(0, math.min(viewport.topLine, lineCount - 1))
+        val relativeCursorRow =
+          if cursor.line >= previousTopLine then
+            rowsForward(previousTopLine, cursor.line, 0) + cursorVisualRowInLine - viewport.topVisualLine
+          else -rowsForward(cursor.line, previousTopLine, 0) + cursorVisualRowInLine - viewport.topVisualLine
+        val targetOffsetFromPreviousTop      = Math.floorDiv(relativeCursorRow, visibleLines) * visibleLines
+        val targetRowFromPreviousTopLineHead = viewport.topVisualLine + targetOffsetFromPreviousTop
+        if targetRowFromPreviousTopLineHead >= 0 then
+          findTopForward(previousTopLine, 0, targetRowFromPreviousTopLineHead)
+        else findTopBackward(previousTopLine, -targetRowFromPreviousTopLineHead)
+      else
+        val absoluteCursorRow = rowsForward(0, cursor.line, 0) + cursorVisualRowInLine
+        val targetVisualRow   = (absoluteCursorRow / visibleLines) * visibleLines
+        findTopForward(0, 0, targetVisualRow)
 
     viewport.copy(topLine = topLine, leftColumn = 0, topVisualLine = topVisualLine)
 
