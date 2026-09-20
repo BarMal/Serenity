@@ -380,7 +380,7 @@ object PerformanceBenchmarks:
       BenchmarkRunner.Benchmark(
         "layout.large_multiline.visible_viewport",
         3,
-        20,
+        BenchmarkIterationCounts.LayoutVisibleViewport,
         () => assert(layoutSnapshot.exists(_.visualLines.size == viewportSize.height)),
         () =>
           plainScrollState.persisted.buffers.get(BufferId(1)).foreach { buffer =>
