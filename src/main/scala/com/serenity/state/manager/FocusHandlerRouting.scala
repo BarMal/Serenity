@@ -105,6 +105,8 @@ private[manager] object FocusHandlerRouting:
       // toggle-only pattern as ShortcutsHelp above.
       case SurfaceContent.TabList(_, _)           => peekOverlay
       case SurfaceContent.RecentFilesInMode(_, _) => peekOverlay
-      // Tab strip (issue #1075/#1076): click behaviour (switch/close/reorder) is #1077-1081, out of this slice's
-      // scope -- routed here only so this table stays exhaustive, same "look but don't touch" pattern as TabList.
+      // Tab strip (issue #1075/#1076): the strip itself is never pushed onto the focus stack -- a click switches the
+      // active pane's buffer via `MouseHitTesting`/`TabBarMouseHitTesting` (issue #1077) without ever routing through
+      // this table's focused-handler dispatch. Close/reorder (#1078-1081) remain out of scope. Routed here only so
+      // this table stays exhaustive, same "look but don't touch" pattern as TabList.
       case SurfaceContent.TabBar(_, _) => peekOverlay
