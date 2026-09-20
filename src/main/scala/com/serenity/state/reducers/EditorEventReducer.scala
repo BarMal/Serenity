@@ -75,8 +75,62 @@ object EditorEventReducer:
             )
           case None => ReducerResult.noEffects(currentState)
 
+      case ScrollRight(columns) =>
+        reduceHorizontalScroll(paneId, pane, currentState, columns, direction = 1, ColumnRight)
+
+      case ScrollLeft(columns) =>
+        reduceHorizontalScroll(paneId, pane, currentState, columns, direction = -1, ColumnLeft)
+
       case textEvent: TextEntryEvent =>
         reduceTextEvent(textEvent, paneId, pane, currentState)
+
+  /** Horizontal scroll gestures (issue #1568): shift+wheel/trackpad delta pans `leftColumn` the same way the vertical
+    * wheel above already pans `topLine`, or -- while column mode and word wrap are both on -- reduces exactly as
+    * `ColumnLeft`/`ColumnRight` already do, through the very same `reduceTextEvent` path a keyboard `PageUp`/`PageDown`
+    * remapped to a column move takes. That reuse is what lets a scroll gesture pick up `CursorViewport`'s existing
+    * animated column-sweep transition for free, rather than a separate ad hoc path -- a single discrete column step per
+    * gesture, the same as one `PageUp`/`PageDown`, regardless of how many lines a fast flick reports.
+    *
+    * Under plain word wrap without column mode, `leftColumn` is always pinned to `0` (`CursorGlideGeometry`'s own
+    * comment), so the gesture is a no-op there rather than moving a viewport field nothing ever reads.
+    *
+    * The upper clamp is measured against the longest of the lines currently on screen -- not the whole document,
+    * which no reducer here scans, and not the cursor's own line, which `LayoutEngine.clampLeftColumnForBuffer`'s
+    * resize-time clamp uses but a scroll gesture has no cursor-based reason to prefer.
+    */
+  private def reduceHorizontalScroll(
+    paneId: PaneId,
+    pane: EditorPane,
+    currentState: AppState,
+    columns: Int,
+    direction: Int,
+    columnModeEvent: NavigationEvent
+  )(using balance: com.serenity.rope.Balance): ReducerResult =
+    val surfaceConfig = currentState.persisted.config.surfaceConfig
+    if surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled then
+      reduceTextEvent(columnModeEvent, paneId, pane, currentState)
+    else if surfaceConfig.wordWrapEnabled then
+      ReducerResult.noEffects(currentState)
+    else
+      pane.bufferId.flatMap(currentState.persisted.buffers.get) match
+        case Some(buffer) =>
+          val viewport          = buffer.viewport
+          val visibleLines      = math.max(1, viewport.visibleLines)
+          val lastLine          = math.max(0, countLines(buffer.document.content) - 1)
+          val topLine           = math.min(math.max(0, viewport.topLine), lastLine)
+          val bottomVisibleLine = math.min(lastLine, topLine + visibleLines - 1)
+          val maxLineLength = (topLine to bottomVisibleLine).foldLeft(0) { (longest, line) =>
+            math.max(longest, buffer.document.content.getLine(line).map(_.length).getOrElse(0))
+          }
+          val maxLeftColumn = math.max(0, maxLineLength - viewport.visibleColumns + 1)
+          val newLeftColumn = math.max(0, math.min(viewport.leftColumn + columns * direction, maxLeftColumn))
+          val updatedBuffer = buffer.copy(viewport = viewport.copy(leftColumn = newLeftColumn))
+          ReducerResult.noEffects(
+            currentState.copy(persisted =
+              currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
+            )
+          )
+        case None => ReducerResult.noEffects(currentState)
 
   private def reduceTextEvent(
     event: TextEntryEvent,

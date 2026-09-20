@@ -44,6 +44,11 @@ case object ColumnLeft                  extends NavigationEvent
 case object ColumnRight                 extends NavigationEvent
 final case class ScrollDown(lines: Int) extends ScrollEvent
 final case class ScrollUp(lines: Int)   extends ScrollEvent
+// Horizontal scroll gestures (issue #1568): shift+wheel or a trackpad's own horizontal notches, the same input-layer
+// counterpart to ScrollDown/ScrollUp above. `EditorEventReducer` pans `leftColumn` with these while word wrap is off,
+// or -- while column mode and word wrap are both on -- reduces them exactly as `ColumnLeft`/`ColumnRight` already are.
+final case class ScrollLeft(columns: Int)  extends ScrollEvent
+final case class ScrollRight(columns: Int) extends ScrollEvent
 case object OpenGotoLine                extends ModalRequestEvent
 case object OpenReplace                 extends ModalRequestEvent
 case object FindNext                    extends TextEntryEvent
