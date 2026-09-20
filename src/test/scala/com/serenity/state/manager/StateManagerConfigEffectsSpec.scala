@@ -189,9 +189,9 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
     val text = "hello wurld today"
     val staleDiagnostic =
       com.serenity.spellcheck.SpellChecker.check(text, com.serenity.config.SpellCheckConfig(enabled = true))
-    val config = com.serenity.config.SpellCheckConfig(enabled = true, additionalWords = List("wurld"))
-    val bufferId        = BufferId(0)
-    val baseBuffer      = AppState.initial.persisted.buffers(bufferId)
+    val config     = com.serenity.config.SpellCheckConfig(enabled = true, additionalWords = List("wurld"))
+    val bufferId   = BufferId(0)
+    val baseBuffer = AppState.initial.persisted.buffers(bufferId)
     val buffer = baseBuffer.copy(
       document = baseBuffer.document.copy(content = com.serenity.rope.Rope(text)),
       editing = EditingState(List(CursorPosition(0, 8)))
@@ -203,8 +203,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
         buffers = Map(bufferId -> buffer)
       ),
       runtime = AppState.initial.runtime.copy(
-        diagnosticsState =
-          AppState.initial.runtime.diagnosticsState.copy(diagnostics = Map(uri -> staleDiagnostic))
+        diagnosticsState = AppState.initial.runtime.diagnosticsState.copy(diagnostics = Map(uri -> staleDiagnostic))
       )
     )
     val fixture = harness(state)

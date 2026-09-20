@@ -7,8 +7,8 @@ import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Regression cover for #1531: the "add word to dictionary" action resolves the flagged word directly from the
-  * buffer's current content at the diagnostic's range, rather than reparsing the diagnostic message. Split out of
+/** Regression cover for #1531: the "add word to dictionary" action resolves the flagged word directly from the buffer's
+  * current content at the diagnostic's range, rather than reparsing the diagnostic message. Split out of
   * `SpellCheckerSpec` to keep that file under the architecture ratchet's file-length target.
   */
 class SpellCheckerFlaggedWordAtCursorSpec extends AnyFlatSpec with Matchers:

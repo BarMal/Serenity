@@ -422,9 +422,7 @@ final private[manager] class StateManagerConfigEffects(
     SpellChecker.flaggedWordAtCursor(state) match
       case Some(word) =>
         val normalized = DictionaryWord.normalize(word)
-        updateSpellCheckConfig(config =>
-          config.copy(additionalWords = (config.additionalWords :+ normalized).distinct)
-        )
+        updateSpellCheckConfig(config => config.copy(additionalWords = (config.additionalWords :+ normalized).distinct))
       case None =>
         IO.unit
 
