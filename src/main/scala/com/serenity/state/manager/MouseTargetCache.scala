@@ -64,6 +64,12 @@ final private[manager] case class MouseTargetLayoutKey(
     fontConfig: FontConfig,
     showLineNumbers: Boolean,
     wordWrapEnabled: Boolean,
+    // Column-based document layout (issue #1338): these feed `AuthoritativeUiScene.forState`'s column-aware viewport
+    // narrowing and `fromBufferColumn` snapshot, so a live column-mode toggle (or a target-width/gap change) must
+    // invalidate the cached scene -- without them a toggle re-uses the full-width scene and has no visible effect.
+    columnModeEnabled: Boolean,
+    columnTargetWidthCells: Int,
+    columnGap: Int,
     minimumPaneWidth: Int,
     textAreaInsets: TextAreaInsets,
     interfaceDensity: InterfaceDensity,
@@ -158,6 +164,9 @@ private[manager] object MouseTargetLayoutKey:
       fontConfig = state.persisted.config.editorConfig.fontConfig,
       showLineNumbers = state.persisted.config.surfaceConfig.showLineNumbers,
       wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled,
+      columnModeEnabled = state.persisted.config.surfaceConfig.columnModeEnabled,
+      columnTargetWidthCells = state.persisted.config.surfaceConfig.columnTargetWidthCells,
+      columnGap = state.persisted.config.surfaceConfig.columnGap,
       minimumPaneWidth = state.persisted.config.editorConfig.minimumPaneWidth,
       textAreaInsets = state.persisted.config.surfaceConfig.textAreaInsets,
       interfaceDensity = state.persisted.config.interfaceDensity,
@@ -281,7 +290,13 @@ private[serenity] object AuthoritativeUiScene:
       // Pane rects are measured in the screen grid's cells, and that grid is the code font's, whatever font a
       // buffer draws with. Sizing a document-font pane from its own cells makes the snapshot wrap at a width the
       // pane does not have, so its rows run off the right edge instead of wrapping.
-      val gridMetrics = cellMetrics.getOrElse(CellMetrics.fromFont(codeFont))
+      val gridMetrics   = cellMetrics.getOrElse(CellMetrics.fromFont(codeFont))
+      val surfaceConfig = state.persisted.config.surfaceConfig
+      // Column-based document layout (issue #1338): mirrors `RendererPaneSetup.snapshotForBuffer`'s column branch so
+      // this shared scene -- used by both painting and mouse hit-testing -- narrows the viewport to one column's width
+      // and wraps at it whenever column mode and word wrap are both on. Without this the scene stayed full-width and a
+      // column-mode toggle had no visible render effect (Phase 1 regression).
+      val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
       val snapshots = base.paneLayouts.flatMap {
         case (paneId, paneLayout) =>
           for
@@ -297,10 +312,13 @@ private[serenity] object AuthoritativeUiScene:
               .updateBufferViewportDimensions(
                 buffer,
                 paneLayout.contentRect,
-                state.persisted.config.surfaceConfig.wordWrapEnabled
+                surfaceConfig.wordWrapEnabled,
+                columnModeEnabled = surfaceConfig.columnModeEnabled,
+                columnTargetWidthCells = surfaceConfig.columnTargetWidthCells,
+                columnGap = surfaceConfig.columnGap
               )
             val visibleColumns =
-              if state.persisted.config.surfaceConfig.wordWrapEnabled then baseViewport.visibleColumns
+              if surfaceConfig.wordWrapEnabled then baseViewport.visibleColumns
               else
                 val averageAdvance = math.max(
                   1.0f,
@@ -321,23 +339,39 @@ private[serenity] object AuthoritativeUiScene:
             val cursorColumn =
               buffer.editing.cursorPositions.headOption.map(_.column).getOrElse(baseViewport.leftColumn)
             val leftColumn =
-              if state.persisted.config.surfaceConfig.wordWrapEnabled then 0
+              if surfaceConfig.wordWrapEnabled then 0
               else baseViewport.leftColumn.max(0).max(cursorColumn - visibleColumns + 1)
             val viewport = baseViewport.copy(
               leftColumn = leftColumn,
               visibleColumns = visibleColumns,
               visibleLines = math.max(1, heightPx / math.max(1, fontMetrics.lineHeight))
             )
-            paneId -> TextLayoutSnapshot.fromBuffer(
-              buffer.copy(viewport = viewport),
-              width,
-              font,
-              wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled,
-              cellMetricsOverride = Some(fontMetrics),
-              forceCellLayout = cellMetrics.isDefined,
-              // Match the render path's prose zoom so hit-testing rows/advances line up with what was drawn.
-              proseScale = com.serenity.ui.theme.RichTextStyling.proseZoom(font.getSize2D)
-            )
+            val proseScale = com.serenity.ui.theme.RichTextStyling.proseZoom(font.getSize2D)
+            paneId ->
+              (if columnModeActive then
+                 // `viewport.visibleColumns` is already the column's own width in cells (from the column-aware
+                 // `baseViewport` above), so its pixel width is exactly what `fromBufferColumn` should wrap at --
+                 // matching `RendererPaneSetup.snapshotForBuffer`'s column branch.
+                 val columnWidthPx = math.max(1, viewport.visibleColumns * gridMetrics.charWidth)
+                 TextLayoutSnapshot.fromBufferColumn(
+                   buffer.copy(viewport = viewport),
+                   columnWidthPx,
+                   font,
+                   cellMetricsOverride = Some(fontMetrics),
+                   forceCellLayout = cellMetrics.isDefined,
+                   proseScale = proseScale
+                 )
+               else
+                 TextLayoutSnapshot.fromBuffer(
+                   buffer.copy(viewport = viewport),
+                   width,
+                   font,
+                   wordWrapEnabled = surfaceConfig.wordWrapEnabled,
+                   cellMetricsOverride = Some(fontMetrics),
+                   forceCellLayout = cellMetrics.isDefined,
+                   // Match the render path's prose zoom so hit-testing rows/advances line up with what was drawn.
+                   proseScale = proseScale
+                 ))
       }
       val scene = base.withTextSnapshots(snapshots)
       prepared.put(key, scene)

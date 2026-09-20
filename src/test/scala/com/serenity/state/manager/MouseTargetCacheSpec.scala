@@ -294,6 +294,46 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  // Column-based document layout (issue #1338, Phase 1 regression): the authoritative scene shared by rendering and
+  // mouse targeting was column-mode-blind -- it always laid the pane snapshot out at the pane's full width, so turning
+  // on column mode had zero visible render effect. It must mirror `RendererPaneSetup.snapshotForBuffer`'s column branch
+  // and wrap at the (narrower) column width whenever `columnModeEnabled && wordWrapEnabled`.
+  it should "lay out the pane snapshot at the narrowed column width when column mode is active" in {
+    // A wide pane with a small column target so the fitted column is genuinely narrower than the full pane -- a
+    // paragraph long enough to wrap within a 20-cell column but not within the full pane.
+    val columnConfig =
+      AppConfig.default.withWordWrap(true).withColumnMode(true).withColumnTargetWidth(20)
+    val buffer = Buffer.fromString(bufferId, (1 to 40).map(_ => "word").mkString(" "))
+    val state  = stateWith(buffer, columnConfig)
+    val size   = ViewportSize(200, 24)
+    val cache  = MouseTargetCache.fromState(state, size)
+    val codeFont =
+      com.serenity.ui.fonts.FontLoader
+        .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code)
+    val snapshot    = cache.scene.textSnapshot(paneId).getOrElse(fail("expected prepared text snapshot"))
+    val contentRect = cache.scene.paneLayouts(paneId).contentRect
+
+    snapshot.panelWidthPx should be < (contentRect.width * CellMetrics.fromFont(codeFont).charWidth)
+    all(snapshot.visualLines.map(_.widthPx)) should be <= snapshot.panelWidthPx.toFloat
+    snapshot.visualLines.size should be > 1
+  }
+
+  it should "invalidate the scene key when column mode is toggled live" in {
+    // The same buffer instance in both states, so the only thing that differs between them is `columnModeEnabled` --
+    // `RopeIdentity`'s identity equality would otherwise make two separately-constructed "alpha beta" buffers differ
+    // for an unrelated reason, masking whether the key actually tracks the column-mode toggle.
+    val base      = AppConfig.default.withWordWrap(true).withColumnTargetWidth(20)
+    val buffer    = Buffer.fromString(bufferId, "alpha beta")
+    val columnOff = stateWith(buffer, base.withColumnMode(false))
+    val columnOn  = stateWith(buffer, base.withColumnMode(true))
+    val size      = ViewportSize(200, 24)
+
+    MouseTargetLayoutKey.from(columnOff, size) should not be MouseTargetLayoutKey.from(columnOn, size)
+    MouseTargetCache.fromState(columnOn, size).scene should not be theSameInstanceAs(
+      MouseTargetCache.fromState(columnOff, size).scene
+    )
+  }
+
   private def stateWithStartPage(selectedIndex: Int): AppState =
     val newSessionCommand = Command.typed(
       "startup.new-session",
