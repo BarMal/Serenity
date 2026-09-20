@@ -5,8 +5,8 @@ import com.serenity.state.models.{AppState, BufferId, SurfaceContent, TabListEnt
 import com.serenity.ui.layout.{LayoutEngine, LayoutRect, TabBarSurfaceComposition}
 
 /** Per-tab hit regions for the always-visible tab strip (issue #1075: Foundation; close affordance, #1078), and
-  * resolving a primary click against them into a buffer switch (issue #1077). Resolves a click's cell coordinate to
-  * the `BufferId` of the tab (`hitAt`) or its close affordance (`closeHitAt`) it landed on, using the exact same
+  * resolving a primary click against them into a buffer switch (issue #1077). Resolves a click's cell coordinate to the
+  * `BufferId` of the tab (`hitAt`) or its close affordance (`closeHitAt`) it landed on, using the exact same
   * `ResolvedSurfaceComposition`/`closeAffordances` geometry `TextOverlayRenderer` paints from -- the same "painted and
   * hit-tested from one plan" guarantee `ModalMouseHitTesting`/`CommandRunnerMouseHitTesting` already give their own
   * surfaces.
