@@ -77,6 +77,55 @@ step's own wall-clock time, six runs each side, JIT/sbt already warm): before av
 ~39s/run, so call it a ~8s increase to that one CI step, comfortably inside the run-to-run noise the ~4-minute perf
 job already has from checkout, dependency resolution, and Xvfb setup on shared runners.
 
+## `layout.large_multiline.visible_viewport`: issue #1586 investigation -- 2026-09-20
+
+Issue #1586 reports the same spurious-regression pattern #1576 fixed for `reducer.*`/`damage.*`/`lsp.framer.large_batch`/
+`render.markdown.inline_lens`, now on `layout.large_multiline.visible_viewport`, which flagged a false "regression"
+on two unrelated PRs in one session (PR #1583: 2.19ms -> 4.41ms, 2.01x; PR #1585: 2.19ms -> 4.47ms, 2.04x; both
+re-ran clean, and a third instance was seen on PR #1580). Applying #1576's own methodology to this benchmark:
+
+**The absolute-delta floor from #1576 does not cover this benchmark, and cannot be tuned to cover it without
+weakening the gate elsewhere.** `check_perf_regression.py --min-regression-delta-ms` is a single global floor
+(default 0.05ms) applied to every benchmark's ratio-flagged delta identically -- there is no per-benchmark or
+per-family override in that script. It was sized against the four families audited in #1576, whose baselines sit at
+low-single-digit milliseconds or below and whose run-to-run jitter is on the order of tens to a couple hundred
+microseconds, so 50us sits comfortably above their noise band while still catching a real regression. But
+`layout.large_multiline.visible_viewport`'s own baseline (2.19ms -- see `PerformanceBenchmarks.scala`'s
+`layout.large_multiline.visible_viewport` scenario) is on the same order of magnitude as the #1576 families'
+baselines, and its *observed jitter* in issue #1586 was 2.22ms and 2.28ms -- more than 40x the 0.05ms floor. Raising
+the floor high enough to absorb that would raise it for every other benchmark sharing the same global argument, most
+of which have no evidence of needing it, and would blunt the gate's ability to catch a real multi-millisecond
+regression on any of them. That is not a fix; it is trading one false-positive source for a worse false-negative
+risk gate-wide. The floor guard is therefore not the applicable tool here -- unlike the #1576 families, this one
+needs the other half of that methodology: a higher iteration count for this specific scenario.
+
+**An iteration-count bump is the applicable fix, but this pass could not derive one.** The scenario currently runs
+with `warmups = 3, iterations = 20` (`src/test/scala/com/serenity/perf/PerformanceBenchmarks.scala`, the
+`layout.large_multiline.visible_viewport` `BenchmarkRunner.Benchmark` entry) -- the same shape of under-provisioned
+count the #1576 families had before their bump. Sizing a replacement count correctly requires the exact process
+`BenchmarkIterationCounts.scala` documents: twelve local `PerformanceBenchmarks` runs under `xvfb-run` on
+CI-equivalent shared hardware (six at 20 iterations, six at a candidate higher count), comparing this scenario's own
+run-to-run p50 CV and max/min spread before and after, the same way `reducer.*`'s and `damage.*`'s counts were
+derived rather than guessed.
+
+This sandbox has no `sbt` binary and no network path to install one, so that local harness cannot be run here, and
+no CI historical CSV archive exists to substitute for it (per the `BenchmarkIterationCounts.scala` note that CI's own
+artifact retention is the only historical p50 data this project keeps, and it does not extend far enough back to
+cover this either). Producing a candidate iteration count without that measurement would mean guessing a number and
+presenting it as empirically derived, which is exactly what the #1576 methodology this issue asks to be repeated
+explicitly rejects ("a guessed number", above). No change to `BenchmarkIterationCounts.scala`,
+`BenchmarkIterationsSpec.scala`, or the benchmark's `iterations` field is included in this pass for that reason.
+
+**What is needed to close this out:** a maintainer (or a future session) with local `sbt`/`xvfb-run` access should
+run the twelve-run comparison described above for `layout.large_multiline.visible_viewport` at 20 iterations vs. a
+candidate count (60, matching the `reducer.*`/`damage.*` multiplier, is a reasonable starting candidate to test, not
+a conclusion), record the before/after CV and spread in this section following the table format above, and land the
+resulting count in `BenchmarkIterationCounts.scala` with a `BenchmarkIterationsSpec.scala` lock-in test, exactly as
+the four #1576 families were. If that run shows iteration count alone does not stabilize it (as happened with
+`reducer.normal_editing`), the next thing to check is whether allocation pressure from `TextLayoutSnapshot.fromBuffer`
+makes this scenario more GC-sensitive than the others, which the harness's existing allocation-sampling pass
+(see `BenchmarkRunner.AllocationTracked`) could help confirm.
+
 ## Repeatable before/after workflow
 
 1. Close CPU-intensive applications and use the same power and display-scale settings for both captures.
