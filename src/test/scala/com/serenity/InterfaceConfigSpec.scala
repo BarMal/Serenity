@@ -113,3 +113,34 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
       InterfaceDensityMetrics.forDensity(InterfaceDensity.Spacious).commandSurfaceMaxHeight
     )
   }
+
+  // issue #1542: corner radius and outline thickness are configured in pixels, but the pixels a panel actually
+  // occupies grow with the UI font size -- so the drawn chrome must scale by the same factor, rather than staying
+  // fixed while everything around it grows (which is what made larger fonts look "proportionally tight").
+  it should "draw UI corner radius/outline at their configured pixel values at the baseline font size" in {
+    val config = AppConfig.default.withInterfaceConfig(
+      InterfaceConfig(cornerRadiusPx = 8, outlineThicknessPx = 2)
+    )
+
+    config.scaledUiCornerRadiusPx shouldBe 8
+    config.scaledUiOutlineThicknessPx shouldBe 2.0f
+  }
+
+  it should "scale UI corner radius and outline thickness up as the UI font size grows" in {
+    val config = AppConfig.default
+      .withInterfaceConfig(InterfaceConfig(cornerRadiusPx = 8, outlineThicknessPx = 2))
+      .withFontConfig(AppConfig.default.editorConfig.fontConfig.copy(uiFontSize = 24.0f))
+
+    config.uiChromeScale shouldBe 2.0
+    config.scaledUiCornerRadiusPx shouldBe 16
+    config.scaledUiOutlineThicknessPx shouldBe 4.0f
+  }
+
+  it should "scale UI corner radius/outline down as UI font size shrinks, never to zero thickness" in {
+    val config = AppConfig.default
+      .withInterfaceConfig(InterfaceConfig(cornerRadiusPx = 0, outlineThicknessPx = 1))
+      .withFontConfig(AppConfig.default.editorConfig.fontConfig.copy(uiFontSize = 6.0f))
+
+    config.scaledUiCornerRadiusPx shouldBe 0
+    config.scaledUiOutlineThicknessPx should be > 0.0f
+  }

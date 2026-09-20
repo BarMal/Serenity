@@ -26,7 +26,7 @@ object PinnedPanelRenderer:
           rect.y,
           rect.width,
           rect.height,
-          config.uiCornerRadiusPx,
+          config.scaledUiCornerRadiusPx,
           new java.awt.Color(0, 0, 0)
         )
       )
@@ -64,9 +64,9 @@ object PinnedPanelRenderer:
           rect.y,
           rect.width,
           rect.height,
-          config.uiCornerRadiusPx,
+          config.scaledUiCornerRadiusPx,
           borderColor,
-          config.uiOutlineThicknessPx.toFloat
+          config.scaledUiOutlineThicknessPx
         )
       )
 
