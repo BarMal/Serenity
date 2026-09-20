@@ -140,6 +140,10 @@ final private[manager] class StateManagerEventPipeline(
     CommentLensMouseHitTestingPort(stateRef = state.stateRef)
   )
 
+  private val tabBarDragHitTesting = new TabBarDragHitTesting(
+    TabBarDragHitTestingPort(stateRef = state.stateRef, validateAndUpdateState = validateAndUpdateState)
+  )
+
   private val mouseHitTesting = new MouseHitTesting(
     MouseHitTestingPort(stateRef = state.stateRef, validateAndUpdateState = validateAndUpdateState),
     editorMouseTargeting,
@@ -148,7 +152,8 @@ final private[manager] class StateManagerEventPipeline(
     commandRunnerMouseHitTesting,
     pinnedPanelMouseHitTesting,
     startupPageMouseHitTesting,
-    commentLensMouseHitTesting
+    commentLensMouseHitTesting,
+    tabBarDragHitTesting
   )
 
   /** Serialized against every other top-level call into the pipeline (#1570) -- see

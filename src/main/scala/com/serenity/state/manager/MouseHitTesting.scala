@@ -29,7 +29,8 @@ final private[manager] class MouseHitTesting(
     commandRunner: CommandRunnerMouseHitTesting,
     pinnedPanel: PinnedPanelMouseHitTesting,
     startupPage: StartupPageMouseHitTesting,
-    commentLens: CommentLensMouseHitTesting
+    commentLens: CommentLensMouseHitTesting,
+    tabBarDrag: TabBarDragHitTesting
 )(using balance: com.serenity.rope.Balance):
   import port.*
 
@@ -174,37 +175,41 @@ final private[manager] class MouseHitTesting(
             case false =>
               if MouseHitTestGeometry.isInsideFloatingSurface(press, state) then IO.unit
               else
-                pinnedPanel.handlePinnedPanelMouseSelect(press, state, focusPanel = true).flatMap {
+                tabBarDrag.handleTabBarPress(press, state).flatMap {
                   case true => IO.unit
                   case false =>
-                    editorTargeting.resolveMouseTarget(press, state).flatMap {
-                      _.fold(IO.unit) { (paneId, buffer, pressedCursor) =>
-                        stateRef.get.flatMap { s =>
-                          val nextState = s.persisted.buffers.get(buffer.id) match
-                            case Some(current) =>
-                              val selection =
-                                Option
-                                  .when(press.shiftDown)(
-                                    editorTargeting.rangeSelectionFromAnchor(current, pressedCursor)
-                                  )
-                                  .flatten
-                              val focusCursor = selection.map(_.focus).getOrElse(pressedCursor)
-                              s.copy(persisted =
-                                s.persisted.copy(
-                                  buffers = s.persisted.buffers.updated(
-                                    buffer.id,
-                                    current.copy(editing =
-                                      EditingState.fromCursors(List(Cursor(focusCursor, selection.map(_.anchor))))
+                    pinnedPanel.handlePinnedPanelMouseSelect(press, state, focusPanel = true).flatMap {
+                      case true => IO.unit
+                      case false =>
+                        editorTargeting.resolveMouseTarget(press, state).flatMap {
+                          _.fold(IO.unit) { (paneId, buffer, pressedCursor) =>
+                            stateRef.get.flatMap { s =>
+                              val nextState = s.persisted.buffers.get(buffer.id) match
+                                case Some(current) =>
+                                  val selection =
+                                    Option
+                                      .when(press.shiftDown)(
+                                        editorTargeting.rangeSelectionFromAnchor(current, pressedCursor)
+                                      )
+                                      .flatten
+                                  val focusCursor = selection.map(_.focus).getOrElse(pressedCursor)
+                                  s.copy(persisted =
+                                    s.persisted.copy(
+                                      buffers = s.persisted.buffers.updated(
+                                        buffer.id,
+                                        current.copy(editing =
+                                          EditingState.fromCursors(List(Cursor(focusCursor, selection.map(_.anchor))))
+                                        )
+                                      ),
+                                      focus = Focus.EditorPane(paneId),
+                                      layout = s.persisted.layout.copy(activeEditorPaneId = Some(paneId))
                                     )
-                                  ),
-                                  focus = Focus.EditorPane(paneId),
-                                  layout = s.persisted.layout.copy(activeEditorPaneId = Some(paneId))
-                                )
-                              )
-                            case None => s
-                          validateAndUpdateState(nextState, s)
+                                  )
+                                case None => s
+                              validateAndUpdateState(nextState, s)
+                            }
+                          }
                         }
-                      }
                     }
                 }
           }
@@ -219,37 +224,41 @@ final private[manager] class MouseHitTesting(
           pinnedPanel.handlePinnedPanelResizeDrag(drag, state).flatMap {
             case true => IO.unit
             case false =>
-              if MouseHitTestGeometry.isInsideFloatingSurface(drag, state) then IO.unit
-              else
-                editorTargeting.resolveMouseTarget(drag, state).flatMap {
-                  _.fold(IO.unit) { (paneId, buffer, draggedCursor) =>
-                    stateRef.get.flatMap { s =>
-                      val nextState = s.persisted.buffers.get(buffer.id) match
-                        case Some(current) =>
-                          val anchor =
-                            current.primarySelection
-                              .map(_.anchor)
-                              .orElse(Some(current.editing.cursors.head.position))
-                              .getOrElse(draggedCursor)
-                          val selection =
-                            Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
-                          s.copy(persisted =
-                            s.persisted.copy(
-                              buffers = s.persisted.buffers.updated(
-                                buffer.id,
-                                current.copy(editing =
-                                  EditingState.fromCursors(List(Cursor(draggedCursor, selection.map(_.anchor))))
+              tabBarDrag.handleTabBarDrag(drag, state).flatMap {
+                case true => IO.unit
+                case false =>
+                  if MouseHitTestGeometry.isInsideFloatingSurface(drag, state) then IO.unit
+                  else
+                    editorTargeting.resolveMouseTarget(drag, state).flatMap {
+                      _.fold(IO.unit) { (paneId, buffer, draggedCursor) =>
+                        stateRef.get.flatMap { s =>
+                          val nextState = s.persisted.buffers.get(buffer.id) match
+                            case Some(current) =>
+                              val anchor =
+                                current.primarySelection
+                                  .map(_.anchor)
+                                  .orElse(Some(current.editing.cursors.head.position))
+                                  .getOrElse(draggedCursor)
+                              val selection =
+                                Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
+                              s.copy(persisted =
+                                s.persisted.copy(
+                                  buffers = s.persisted.buffers.updated(
+                                    buffer.id,
+                                    current.copy(editing =
+                                      EditingState.fromCursors(List(Cursor(draggedCursor, selection.map(_.anchor))))
+                                    )
+                                  ),
+                                  focus = Focus.EditorPane(paneId),
+                                  layout = s.persisted.layout.copy(activeEditorPaneId = Some(paneId))
                                 )
-                              ),
-                              focus = Focus.EditorPane(paneId),
-                              layout = s.persisted.layout.copy(activeEditorPaneId = Some(paneId))
-                            )
-                          )
-                        case None => s
-                      validateAndUpdateState(nextState, s)
+                              )
+                            case None => s
+                          validateAndUpdateState(nextState, s)
+                        }
+                      }
                     }
-                  }
-                }
+              }
           }
       }
 

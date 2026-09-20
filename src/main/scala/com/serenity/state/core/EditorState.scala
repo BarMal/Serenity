@@ -115,6 +115,23 @@ object EditorState:
       )
     )
 
+  /** Moves `from` to sit immediately before `to` within `bufferOrder` -- issue #1079's drag-to-reorder. Reordering the
+    * tab strip is exactly reordering `bufferOrder`: `TabListContent.build` derives the tab list from it one-to-one, so
+    * there is no separate "tab order" to update, and which buffer each pane shows (and which is focused) is untouched.
+    * "Insert before the drop target" is the only convention this can express without a finer, sub-tab-cell drop
+    * position (deferred per the issue's own scope note) -- dropping `from` on the tab immediately after its current
+    * position, or on itself, is therefore already a no-op, satisfying "a drag that ends where it began leaves order
+    * unchanged". `from`/`to` no longer being open tabs is a no-op too, guarding a drag tick against a tab that closed
+    * mid-gesture.
+    */
+  def reorderBuffer(state: AppState, from: BufferId, to: BufferId): AppState =
+    val order = state.persisted.bufferOrder
+    if from == to || !order.contains(from) || !order.contains(to) then state
+    else
+      val without         = order.filterNot(_ == from)
+      val (before, after) = without.splitAt(without.indexOf(to))
+      state.copy(persisted = state.persisted.copy(bufferOrder = before ++ (from :: after)))
+
   def removePane(state: AppState, paneId: PaneId): AppState =
     state.persisted.layout.editorPanes.get(paneId) match
       case None =>
