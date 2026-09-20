@@ -1,5 +1,8 @@
 package com.serenity
 
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+
 import com.serenity.config.*
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -95,4 +98,78 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
     ConfigRegistry.rejects("spellcheck.languages", "en,fr").shouldBe(false)
     ConfigRegistry.rejects("spellcheck.dictionary_paths", "").shouldBe(false)
     ConfigRegistry.rejects("spellcheck.words", "Serenity,IO").shouldBe(false)
+  }
+
+  // #1175: a system with an already-installed Hunspell/MySpell dictionary (e.g. `hunspell-en-gb` on Linux) should
+  // spell-check with zero config -- `discoverDictionarySourcePaths` takes the OS directory list as a parameter
+  // (defaulting to `SpellCheckConfig.defaultOsDictionaryDirectories()`) precisely so these specs can point it at a
+  // temp directory instead of depending on what is actually installed on the machine running the suite.
+  "SpellCheckConfig.discoverDictionarySourcePaths" should
+    "fall back to a language-matching dictionary in an OS-standard directory when dictionaryPaths is unconfigured" in {
+      val osDirectory = Files.createTempDirectory("serenity-os-hunspell")
+      val enDic       = osDirectory.resolve("en.dic")
+      Files.writeString(enDic, "1\nhello", StandardCharsets.UTF_8)
+
+      val config = SpellCheckConfig(languages = List("en"))
+      val paths =
+        SpellCheckConfig.discoverDictionarySourcePaths(config, osDictionaryDirectories = List(osDirectory.toString))
+
+      paths.shouldBe(List(enDic))
+    }
+
+  it should
+    "resolve no candidates when neither dictionaryPaths nor any OS-standard directory has a matching dictionary" in {
+      val emptyOsDirectory = Files.createTempDirectory("serenity-os-hunspell-empty")
+
+      val paths = SpellCheckConfig.discoverDictionarySourcePaths(
+        SpellCheckConfig(),
+        osDictionaryDirectories = List(emptyOsDirectory.toString, "/definitely/does/not/exist")
+      )
+
+      paths.shouldBe(Nil)
+    }
+
+  it should
+    "leave an already-configured dictionaryPaths resolution unchanged, never consulting OS-standard directories" in {
+      val osDirectory       = Files.createTempDirectory("serenity-os-hunspell-ignored")
+      val osDic             = osDirectory.resolve("en.dic")
+      val explicitDirectory = Files.createTempDirectory("serenity-explicit")
+      val explicitDic       = explicitDirectory.resolve("en.dic")
+      Files.writeString(osDic, "1\nhello", StandardCharsets.UTF_8)
+      Files.writeString(explicitDic, "1\nworld", StandardCharsets.UTF_8)
+
+      val config = SpellCheckConfig(languages = List("en"), dictionaryPaths = List(explicitDirectory.toString))
+      val paths =
+        SpellCheckConfig.discoverDictionarySourcePaths(config, osDictionaryDirectories = List(osDirectory.toString))
+
+      paths.shouldBe(List(explicitDic))
+    }
+
+  "SpellCheckConfig.defaultOsDictionaryDirectories" should "list standard Linux Hunspell/MySpell locations" in {
+    val directories = SpellCheckConfig.defaultOsDictionaryDirectories(osName = "Linux")
+
+    directories.should(contain("/usr/share/hunspell"))
+    directories.should(contain("/usr/share/myspell/dicts"))
+  }
+
+  it should "list standard macOS Hunspell/Spelling locations, including the user's own Library" in {
+    val directories =
+      SpellCheckConfig.defaultOsDictionaryDirectories(osName = "Mac OS X", userHome = "/Users/serenity")
+
+    directories.should(contain("/Library/Spelling"))
+    directories.should(contain("/Users/serenity/Library/Spelling"))
+  }
+
+  it should "list standard Windows dictionary locations under ProgramData, when set" in {
+    val directories = SpellCheckConfig
+      .defaultOsDictionaryDirectories(osName = "Windows 11", programData = Some("C:\\ProgramData"))
+
+    directories.should(contain("C:\\ProgramData\\hunspell"))
+  }
+
+  it should "omit the ProgramData-derived Windows location when the environment variable is unset" in {
+    val directories =
+      SpellCheckConfig.defaultOsDictionaryDirectories(osName = "Windows 11", programData = None)
+
+    directories.shouldBe(Nil)
   }
