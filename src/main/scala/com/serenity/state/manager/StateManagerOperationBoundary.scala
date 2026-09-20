@@ -51,9 +51,10 @@ final private[manager] class StateManagerOperationBoundary private (
     * concurrently with, and silently discard, another top-level call's commit (#1570; the same non-atomic
     * get/compute/set shape as the animation ticker race fixed in #1564/#1571, but here between e.g. the input loop's
     * and the LSP loop's own direct `applyEvent` calls rather than within a single method). Callers already inside a
-    * dispatch that recurses back into the pipeline on the same fiber -- `StateManagerEventPipeline.drainPendingOperations`
-    * replaying an event enqueued while interpreting an effect -- must use the already-locked entry point instead of
-    * this one: re-acquiring a non-reentrant `Semaphore` here would self-deadlock.
+    * dispatch that recurses back into the pipeline on the same fiber --
+    * `StateManagerEventPipeline.drainPendingOperations` replaying an event enqueued while interpreting an effect --
+    * must use the already-locked entry point instead of this one: re-acquiring a non-reentrant `Semaphore` here would
+    * self-deadlock.
     */
   def serializeDispatch[A](dispatch: IO[A]): IO[A] = dispatchLock.permit.use(_ => dispatch)
 

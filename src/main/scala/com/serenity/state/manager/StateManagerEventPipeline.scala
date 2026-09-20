@@ -152,8 +152,8 @@ final private[manager] class StateManagerEventPipeline(
   )
 
   /** Serialized against every other top-level call into the pipeline (#1570) -- see
-    * `StateManagerOperationBoundary.serializeDispatch`. A call already inside a dispatch must use
-    * `applyEventLocked` directly instead of recursing back through here.
+    * `StateManagerOperationBoundary.serializeDispatch`. A call already inside a dispatch must use `applyEventLocked`
+    * directly instead of recursing back through here.
     */
   def applyEvent(event: Event): cats.effect.IO[Unit] =
     operations.serializeDispatch(applyEventLocked(event))

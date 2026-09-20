@@ -20,11 +20,11 @@ import org.scalatest.matchers.should.Matchers
   *
   * `NewTab` is a convenient probe because each dispatch derives its new buffer's id from `state.runtime.nextBufferId`
   * -- a counter carried on the very snapshot `applyEvent` reads at the top of the call and commits back at the end.
-  * Before the fix, every concurrent `applyEvent` call raced the same read-compute-`stateRef.set` shape as the
-  * animation ticker fixed in #1564/#1571: whichever call's blind `stateRef.set` landed last discarded every other
-  * concurrent call's fully-computed (and individually valid) new buffer, so firing N of them concurrently yielded far
-  * fewer than N new buffers. Serializing the whole dispatch (this fix) makes every call observe the other calls'
-  * commits, so N concurrent `NewTab` events always yield exactly N new buffers.
+  * Before the fix, every concurrent `applyEvent` call raced the same read-compute-`stateRef.set` shape as the animation
+  * ticker fixed in #1564/#1571: whichever call's blind `stateRef.set` landed last discarded every other concurrent
+  * call's fully-computed (and individually valid) new buffer, so firing N of them concurrently yielded far fewer than N
+  * new buffers. Serializing the whole dispatch (this fix) makes every call observe the other calls' commits, so N
+  * concurrent `NewTab` events always yield exactly N new buffers.
   */
 class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers:
 
@@ -35,12 +35,12 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
     onEffect: (StateManagerOperationBoundary, AppEffect) => IO[Unit] = (_, _) => IO.unit
   ): IO[StateManagerEventPipeline] =
     for
-      fiberRef              <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
-      cacheRef              <- Ref.of[IO, Option[MouseTargetCache]](None)
+      fiberRef               <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
+      cacheRef               <- Ref.of[IO, Option[MouseTargetCache]](None)
       sharedBufferAnimations <- Ref.of[IO, Map[BufferId, com.serenity.animation.AnimationState]](Map.empty)
-      sharedUndoRef         <- Ref.of[IO, UndoState](UndoState())
-      pipelineLogger         = org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
-      operations            <- StateManagerOperationBoundary.create(sharedStateRef, fiberRef, pipelineLogger)
+      sharedUndoRef          <- Ref.of[IO, UndoState](UndoState())
+      pipelineLogger = org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
+      operations <- StateManagerOperationBoundary.create(sharedStateRef, fiberRef, pipelineLogger)
       statePort = new EventStatePort:
         val stateRef                 = sharedStateRef
         val logger                   = pipelineLogger
