@@ -13,7 +13,7 @@ import com.serenity.state.models.{CommentLensState, SurfaceContent}
   * target (`CommentLensMouseHitTesting.handleCommentLensMouseClick` flips a read-only lens to editable on any click
   * inside its bounds), not a set of per-row targets, so there is nothing for `hitAt` to distinguish between rows for.
   */
-object CommentLensSurfaceComposition:
+object CommentLensSurfaceComposition extends RowCompositionSupport:
 
   private val Title = "comment"
 
@@ -87,14 +87,3 @@ object CommentLensSurfaceComposition:
         case OverlayRowLayout.Columns         => SurfacePaintLayout.Columns
         case OverlayRowLayout.PriorityColumns => SurfacePaintLayout.Plain
     )
-
-  private def rowRect(bounds: LogicalPixelRect, row: Int): LogicalPixelRect =
-    LogicalPixelRect(
-      bounds.x,
-      bounds.y + row,
-      bounds.width,
-      math.min(1.0, math.max(0.0, bounds.bottom - bounds.y - row))
-    )
-
-  private def logicalRect(x: Int, y: Int, width: Int, height: Int): LogicalPixelRect =
-    LogicalPixelRect(x.toDouble, y.toDouble, width.toDouble, height.toDouble)
