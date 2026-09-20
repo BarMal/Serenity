@@ -369,9 +369,9 @@ object AppEventReducer:
     if closedState.persisted.layout.activeEditorPaneId.isDefined then closedState
     else toggleCommandRunner(closedState, registry)
 
-  /** Mouse close-by-id (issue #1078): identical to `closeTabState`'s wrap around `closeFocusedTab` -- same
-    * empty-editor fallback -- but around `EditorState.closeBuffer` with a `bufferId` the tab-bar resolved directly,
-    * rather than only the currently focused one.
+  /** Mouse close-by-id (issue #1078): identical to `closeTabState`'s wrap around `closeFocusedTab` -- same empty-editor
+    * fallback -- but around `EditorState.closeBuffer` with a `bufferId` the tab-bar resolved directly, rather than only
+    * the currently focused one.
     */
   private def closeTabByIdState(state: AppState, registry: CommandRegistry, bufferId: BufferId): AppState =
     val closedState = EditorState.closeBuffer(state, bufferId)
