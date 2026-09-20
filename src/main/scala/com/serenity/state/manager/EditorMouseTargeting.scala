@@ -42,7 +42,29 @@ final private[manager] class EditorMouseTargeting(port: EditorMouseTargetingPort
                 case Some(buffer) =>
                   val contentRect = paneLayout.contentRect
                   val vp          = buffer.viewport
-                  mouseTargetSnapshot(cache, paneId).map { snapshot =>
+                  mouseTargetSnapshot(cache, paneId).map { activeSnapshot =>
+                    // Multi-column e-reader layout (issue #1338, Phase 2 / slice 5): a column-mode page carries one
+                    // `ColumnSnapshotPlacement` per painted column. The click's cell column selects which one it lands in
+                    // (its `xOffsetCells`/`columnWidthCells` band, inter-column gaps resolving to the nearer column), and
+                    // from there the click resolves against *that* column's snapshot and x-origin -- not the shared
+                    // (column-0) active snapshot every non-column consumer still reads. A non-column pane has no
+                    // placements, so `snapshot`/`columnXOriginCells`/`columnWidthCells` stay the pane's own, leaving the
+                    // single-column path below unchanged.
+                    val placements         = cache.scene.columnSnapshotsFor(paneId)
+                    val columnXCells       = (click.col - contentRect.x).max(0)
+                    val placement          = MouseHitTestGeometry.columnPlacementForX(placements, columnXCells)
+                    val snapshot           = placement.map(_.snapshot).getOrElse(activeSnapshot)
+                    val columnXOriginCells = placement.map(_.xOffsetCells).getOrElse(0)
+                    // Slice 2 reserves a line-number rail on each column's left, so the text starts `gutterWidthCells`
+                    // past the band's left edge and wraps in the remaining width. A click therefore resolves against the
+                    // text region, not the whole band. A non-column pane has no rail (`0`), leaving the single-column
+                    // path below unchanged.
+                    val columnGutterCells = placement.map(_.gutterWidthCells).getOrElse(0)
+                    val columnTextWidthCells =
+                      placement.map(p => (p.columnWidthCells - p.gutterWidthCells).max(1)).getOrElse(contentRect.width)
+                    // A column's own snapshot is expressed in its own TEXT width (band minus rail), so its cell size is
+                    // that text width per its own cell count; a non-column pane keeps the pane-width divisor it used.
+                    val cellWidthDivisor = columnTextWidthCells
                     // With variable per-line heights a cell row no longer maps to a visual line, so reverse the click's
                     // pixel Y through the same cumulative row geometry the renderer used. Falls back to the cell row when
                     // there's no pixel Y (TUI) or the layout is uniform (cell mode).
@@ -59,10 +81,15 @@ final private[manager] class EditorMouseTargeting(port: EditorMouseTargetingPort
                       case Some(pixelY) if snapshot.usesMeasuredLayout => rowMetrics.visualRowAt(pixelY)
                       case _                                           => (click.row - contentRect.y).max(0)
                     val cellWidthPx =
-                      if contentRect.width > 0 then snapshot.panelWidthPx.toFloat / contentRect.width.toFloat else 1.0f
-                    val xPx = click.pixelX match
-                      case Some(pixelX) => pixelX.toFloat - (contentRect.x * cellWidthPx)
-                      case None         => (click.col - contentRect.x).max(0) * cellWidthPx
+                      if cellWidthDivisor > 0 then snapshot.panelWidthPx.toFloat / cellWidthDivisor.toFloat else 1.0f
+                    val columnOriginPx = (contentRect.x + columnXOriginCells + columnGutterCells) * cellWidthPx
+                    val rawXPx = click.pixelX match
+                      case Some(pixelX) => pixelX.toFloat - columnOriginPx
+                      case None         => (columnXCells - columnXOriginCells - columnGutterCells) * cellWidthPx
+                    // Clamp into the selected column's own text region: a click on its rail, in a gap, or off-page
+                    // resolves to that column's near text edge rather than reaching into (or past) it.
+                    val columnWidthPx = placement.map(_ => columnTextWidthCells * cellWidthPx).getOrElse(Float.MaxValue)
+                    val xPx           = rawXPx.max(0.0f).min(columnWidthPx)
                     val clickedCursor = snapshot
                       .cursorForVisualRowAndXPx(visualRow, xPx.max(0.0f))
                       .orElse {

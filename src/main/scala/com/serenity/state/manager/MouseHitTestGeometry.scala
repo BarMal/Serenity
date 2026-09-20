@@ -14,6 +14,28 @@ private[manager] object MouseHitTestGeometry:
   def floatingCellMetrics(state: AppState): CellMetrics =
     CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.editorConfig.fontConfig))
 
+  /** Multi-column e-reader layout (issue #1338, Phase 2 / slice 5): which page column a click at `xCellsFromContent`
+    * (cells right of the pane's content-rect left edge) lands in, given the same [[ColumnSnapshotPlacement]]s slice 1
+    * computed for painting -- so hit-testing and paint agree on where each column's band is. Each placement owns the
+    * half-open band `[xOffsetCells, xOffsetCells + columnWidthCells)`; a click inside a band picks that column. The
+    * `columnGap` cells between two columns are a dead-zone that belongs to neither band, so a click there (or off
+    * either end of the page) resolves to the *nearest* band by distance to its interval -- clamping to the nearer
+    * column's own edge rather than falling through to column 0. Ties (a click exactly midway in a gap) resolve to the
+    * left column, matching left-to-right reading order. `None` only when there are no placements at all (a non-column
+    * pane), where the caller keeps its single-snapshot path.
+    */
+  def columnPlacementForX(
+    placements: Vector[ColumnSnapshotPlacement],
+    xCellsFromContent: Int
+  ): Option[ColumnSnapshotPlacement] =
+    def distanceToBand(placement: ColumnSnapshotPlacement): Int =
+      val left  = placement.xOffsetCells
+      val right = placement.xOffsetCells + math.max(0, placement.columnWidthCells)
+      if xCellsFromContent < left then left - xCellsFromContent
+      else if xCellsFromContent >= right then xCellsFromContent - right + 1
+      else 0
+    placements.minByOption(distanceToBand)
+
   /** `visibleFloatingSurfaces`, not `floatingSurfaces`: the cursor info bar is derived per frame rather than stored,
     * and it floats over the document right where the caret is -- so reading the stored list alone let every click on
     * the bar fall through to the hidden text it was covering (#1292).
