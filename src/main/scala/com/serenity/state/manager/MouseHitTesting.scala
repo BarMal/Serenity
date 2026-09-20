@@ -4,6 +4,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.config.CommentDisplayMode
 import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
+import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 
 /** State the event pipeline exposes for applying a resolved editor click/press/drag target to buffer selection, as a
@@ -53,27 +54,31 @@ final private[manager] class MouseHitTesting(
                         commentLens.handleCommentLensMouseClick(click, state).flatMap {
                           case true => IO.unit
                           case false =>
-                            if MouseHitTestGeometry.isInsideFloatingSurface(click, state) then IO.unit
-                            else
-                              pinnedPanel.handlePinnedPanelMouseClick(click, state).flatMap {
-                                case true => IO.unit
-                                case false =>
-                                  pinnedPanel.handlePinnedPanelLocationClick(click, state).flatMap {
+                            handleTabBarClick(click, state).flatMap {
+                              case true => IO.unit
+                              case false =>
+                                if MouseHitTestGeometry.isInsideFloatingSurface(click, state) then IO.unit
+                                else
+                                  pinnedPanel.handlePinnedPanelMouseClick(click, state).flatMap {
                                     case true => IO.unit
                                     case false =>
-                                      editorTargeting.resolveMouseTarget(click, state).flatMap {
-                                        _.fold(contextMenu.dismissContextMenuIfOpen(state)) {
-                                          (paneId, buffer, clickedCursor) =>
-                                            stateRef.get.flatMap { current =>
-                                              validateAndUpdateState(
-                                                applyEditorClick(current, click, paneId, buffer, clickedCursor),
-                                                current
-                                              )
+                                      pinnedPanel.handlePinnedPanelLocationClick(click, state).flatMap {
+                                        case true => IO.unit
+                                        case false =>
+                                          editorTargeting.resolveMouseTarget(click, state).flatMap {
+                                            _.fold(contextMenu.dismissContextMenuIfOpen(state)) {
+                                              (paneId, buffer, clickedCursor) =>
+                                                stateRef.get.flatMap { current =>
+                                                  validateAndUpdateState(
+                                                    applyEditorClick(current, click, paneId, buffer, clickedCursor),
+                                                    current
+                                                  )
+                                                }
                                             }
-                                        }
+                                          }
                                       }
                                   }
-                              }
+                            }
                         }
                     }
                 }
@@ -81,6 +86,22 @@ final private[manager] class MouseHitTesting(
         }
       case _ =>
         IO.unit
+
+  /** Resolves a primary click against the always-visible tab strip (issue #1077) via `TabBarMouseHitTesting`: *which*
+    * buffer (if any) to switch to is resolved from `state`, this dispatch's already-current snapshot, but the switch
+    * itself is applied to the freshest state at write time -- mirroring `applyEditorClick`'s `current`-not-`state`
+    * write below, so a concurrent update elsewhere (e.g. a background LSP diagnostics pass) is never clobbered by a
+    * stale click target.
+    */
+  private def handleTabBarClick(click: MouseClick, state: AppState): IO[Boolean] =
+    TabBarMouseHitTesting.clickTarget(state, click.col, click.row) match
+      case Some(switchTo) =>
+        stateRef.get.flatMap { current =>
+          val next = switchTo.fold(current)(EditorState.switchToBuffer(current, _))
+          validateAndUpdateState(next, current)
+        }.as(true)
+      case None =>
+        IO.pure(false)
 
   /** Applies a resolved editor click's cursor/selection to its buffer, dismisses any open context menu, and -- in
     * floating display mode, for a plain click inside a highlighted comment range -- layers the read-only floating lens

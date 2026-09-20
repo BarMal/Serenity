@@ -1,15 +1,18 @@
 package com.serenity.state.manager
 
-import com.serenity.state.models.{BufferId, TabListEntry}
-import com.serenity.ui.layout.LayoutRect
+import com.serenity.rope.Balance
+import com.serenity.state.models.*
+import com.serenity.ui.layout.{LayoutRect, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Coverage for `TabBarMouseHitTesting` (issue #1075: Foundation) -- resolving a click's cell coordinate to the
-  * `BufferId` of the tab it landed on. Wiring an actual click into switch/close/reorder behaviour is #1077 onward, out
-  * of scope here (see the object's own doc comment).
+/** Coverage for `TabBarMouseHitTesting` -- resolving a click's cell coordinate to the `BufferId` of the tab it landed
+  * on (issue #1075: Foundation), and resolving a click against live `AppState` into a buffer switch (issue #1077:
+  * "Click a tab to switch buffer").
   */
 class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
+
+  given Balance = Balance.default
 
   private def entry(id: Int, title: String): TabListEntry = TabListEntry(BufferId(id), title, isDirty = false)
 
@@ -40,4 +43,66 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
 
   it should "resolve no tab when there are no open buffers" in {
     TabBarMouseHitTesting.hitAt(Nil, None, rect, col = 3, row = 0) shouldBe None
+  }
+
+  // Widths 10/9 (19 content columns over 2 tabs, GapColumns=2 reserved for the one gap): tab 0 (BufferId(0), the
+  // pane's already-active buffer) at [0,10), gap [10,12), tab 1 (BufferId(1)) at [12,21).
+  private val twoTabViewport = ViewportSize(21, 5)
+
+  private def twoBufferState: AppState =
+    val second = Buffer.fromString(BufferId(1), "second")
+    val base   = AppState.initial
+    base.copy(
+      runtime = base.runtime.copy(viewportSize = Some(twoTabViewport)),
+      persisted = base.persisted.copy(
+        buffers = base.persisted.buffers + (second.id -> second),
+        bufferOrder = base.persisted.bufferOrder :+ second.id
+      )
+    )
+
+  "clickTarget" should "resolve a click on a tab other than the active one to Some(Some(bufferId))" in {
+    TabBarMouseHitTesting.clickTarget(twoBufferState, col = 15, row = 0) shouldBe Some(Some(BufferId(1)))
+  }
+
+  it should "swallow a click on the already-active tab as a no-op" in {
+    TabBarMouseHitTesting.clickTarget(twoBufferState, col = 3, row = 0) shouldBe Some(None)
+  }
+
+  it should "swallow a click on the gap between tabs" in {
+    TabBarMouseHitTesting.clickTarget(twoBufferState, col = 11, row = 0) shouldBe Some(None)
+  }
+
+  it should "miss for a click outside the strip's row, leaving it for another mouse target" in {
+    TabBarMouseHitTesting.clickTarget(twoBufferState, col = 3, row = 1) shouldBe None
+  }
+
+  it should "miss when there is no tab bar this frame (a single open buffer)" in {
+    TabBarMouseHitTesting.clickTarget(AppState.initial, col = 3, row = 0) shouldBe None
+  }
+
+  it should "miss when the viewport size is not yet known" in {
+    val noViewport = twoBufferState.copy(runtime = twoBufferState.runtime.copy(viewportSize = None))
+
+    TabBarMouseHitTesting.clickTarget(noViewport, col = 3, row = 0) shouldBe None
+  }
+
+  "handleClick" should "switch the active pane to the clicked tab's buffer and keep it focused" in {
+    val state = twoBufferState
+
+    val updated = TabBarMouseHitTesting.handleClick(state, col = 15, row = 0).getOrElse(fail("expected a click hit"))
+
+    updated.persisted.layout.editorPanes(PaneId(0)).bufferId shouldBe Some(BufferId(1))
+    updated.focusedBufferId shouldBe Some(BufferId(1))
+    updated.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+    updated.persisted.bufferOrder shouldBe state.persisted.bufferOrder
+  }
+
+  it should "leave state completely unchanged when clicking the already-active tab" in {
+    val state = twoBufferState
+
+    TabBarMouseHitTesting.handleClick(state, col = 3, row = 0) shouldBe Some(state)
+  }
+
+  it should "return None for a click outside the strip" in {
+    TabBarMouseHitTesting.handleClick(twoBufferState, col = 3, row = 1) shouldBe None
   }

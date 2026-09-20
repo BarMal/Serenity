@@ -91,6 +91,35 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
     updatedState.focusedBufferId shouldBe Some(BufferId(1))
   }
 
+  "EditorState.switchToBuffer" should "assign the active pane's bufferId to the target buffer and focus it" in {
+    val withSecondBuffer = EditorState
+      .openNewTab(
+        AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(200, 24))))
+      )
+    val focusedFirst =
+      EditorState.focusBuffer(EditorState.rebalancePanes(withSecondBuffer, Some(BufferId(0))), BufferId(0))
+    focusedFirst.persisted.layout.editorPanes(PaneId(0)).bufferId shouldBe Some(BufferId(0))
+
+    val updatedState = EditorState.switchToBuffer(focusedFirst, BufferId(1))
+
+    updatedState.persisted.layout.editorPanes(PaneId(0)).bufferId shouldBe Some(BufferId(1))
+    updatedState.focusedBufferId shouldBe Some(BufferId(1))
+    updatedState.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+    updatedState.persisted.bufferOrder shouldBe focusedFirst.persisted.bufferOrder
+  }
+
+  it should "be the same helper navigateToNextBuffer/navigateToPreviousBuffer converge on" in {
+    val withThreeBuffers = EditorState.openNewTab(
+      EditorState.openNewTab(
+        AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(200, 24))))
+      )
+    )
+    val focusedFirst =
+      EditorState.focusBuffer(EditorState.rebalancePanes(withThreeBuffers, Some(BufferId(0))), BufferId(0))
+
+    EditorState.navigateToNextBuffer(focusedFirst) shouldBe EditorState.switchToBuffer(focusedFirst, BufferId(1))
+  }
+
   "EditorState.removeBuffer" should "remove the buffer from state, order, and pane assignments" in {
     val initialState =
       EditorState
