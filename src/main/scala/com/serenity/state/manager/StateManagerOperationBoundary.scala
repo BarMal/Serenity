@@ -31,7 +31,8 @@ final private[manager] class StateManagerOperationBoundary private (
     analysisLifecycleLock: Semaphore[IO],
     documentAnalysisShutdownRef: Ref[IO, Boolean],
     beforeDocumentAnalysisStart: IO[Unit],
-    beforeDocumentAnalysisShutdown: IO[Unit]
+    beforeDocumentAnalysisShutdown: IO[Unit],
+    dispatchLock: Semaphore[IO]
 ):
   private val DocumentAnalysisDebounce      = 150.millis
   private val FindSearchDebounce            = 50.millis
@@ -44,6 +45,18 @@ final private[manager] class StateManagerOperationBoundary private (
     pendingOperations.update(_ :+ StateManagerOperation.ApplyAnimationHooks(previousState))
 
   def takeOperations: IO[List[StateManagerOperation]] = pendingOperations.getAndSet(Nil)
+
+  /** Serializes top-level calls into the event-dispatch pipeline against each other, so a call's eventual
+    * `stateRef.set` (built from a snapshot read at its own start -- see `validateAndUpdateState`) can never land
+    * concurrently with, and silently discard, another top-level call's commit (#1570; the same non-atomic
+    * get/compute/set shape as the animation ticker race fixed in #1564/#1571, but here between e.g. the input loop's
+    * and the LSP loop's own direct `applyEvent` calls rather than within a single method). Callers already inside a
+    * dispatch that recurses back into the pipeline on the same fiber --
+    * `StateManagerEventPipeline.drainPendingOperations` replaying an event enqueued while interpreting an effect --
+    * must use the already-locked entry point instead of this one: re-acquiring a non-reentrant `Semaphore` here would
+    * self-deadlock.
+    */
+  def serializeDispatch[A](dispatch: IO[A]): IO[A] = dispatchLock.permit.use(_ => dispatch)
 
   def ensureCommandRunnerSurface(state: AppState): AppState =
     val registry = CommandRegistry.default
@@ -201,6 +214,7 @@ private[manager] object StateManagerOperationBoundary:
       documentAnalysisInputsRef      <- Ref.of[IO, Option[Map[String, SpellCheckFingerprint]]](None)
       findSearchFiberRef             <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
       markdownPreviewCommitFibersRef <- Ref.of[IO, Map[BufferId, Fiber[IO, Throwable, Unit]]](Map.empty)
+      dispatchLock                   <- Semaphore[IO](1)
     yield new StateManagerOperationBoundary(
       pendingOperations,
       stateRef,
@@ -212,5 +226,6 @@ private[manager] object StateManagerOperationBoundary:
       analysisLifecycleLock,
       documentAnalysisShutdownRef,
       beforeDocumentAnalysisStart,
-      beforeDocumentAnalysisShutdown
+      beforeDocumentAnalysisShutdown,
+      dispatchLock
     )
