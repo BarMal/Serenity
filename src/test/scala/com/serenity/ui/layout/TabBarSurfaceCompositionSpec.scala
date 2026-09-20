@@ -192,7 +192,7 @@ class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     val entries  = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
     val rect     = LayoutRect(0, 0, 21, 1)
     val resolved = TabBarSurfaceComposition.forTabBar(entries, None, rect)
-    val closes   = TabBarSurfaceComposition.closeAffordances(entries, rect)
+    val closes   = TabBarSurfaceComposition.closeAffordances(entries, None, rect)
 
     val newTabFocusId = TabBarSurfaceComposition.NewTabFocusId
     resolved.hitRegions.map(_.focusId) should not contain newTabFocusId
