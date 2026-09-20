@@ -251,7 +251,7 @@ libraryDependencies ++= Seq(
   "org.commonmark"   % "commonmark"                   % commonMarkVersion,
   "org.commonmark"   % "commonmark-ext-gfm-tables"    % commonMarkVersion,
   "org.commonmark"   % "commonmark-ext-task-list-items" % commonMarkVersion,
-  "org.xhtmlrenderer" % "flying-saucer-core"          % "10.2.2"
+  "org.xhtmlrenderer" % "flying-saucer-core"          % "10.5.0"
 )
 
 val jlineVersion = "3.30.16"
