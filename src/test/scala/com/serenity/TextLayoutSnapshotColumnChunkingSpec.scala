@@ -145,3 +145,82 @@ class TextLayoutSnapshotColumnChunkingSpec extends AnyFlatSpec with Matchers:
 
     snapshot.visualLines.map(_.bufferLine) shouldBe (16 until 20).toList
   }
+
+  behavior of "TextLayoutSnapshot.fromBufferColumns"
+
+  it should "produce one snapshot per column, each holding its own chunk of visual lines" in {
+    val buffer = bufferOfLines(count = 30, visibleLines = 8)
+
+    val snapshots = TextLayoutSnapshot.fromBufferColumns(
+      buffer,
+      columnWidthPx = 2000,
+      font = font,
+      cellMetricsOverride = Some(CellMetrics.cellUnit),
+      forceCellLayout = true,
+      columnCount = 3
+    )
+
+    snapshots.length shouldBe 3
+    snapshots.map(_.visualLines.map(_.bufferLine).toList) shouldBe List(
+      (0 until 8).toList,
+      (8 until 16).toList,
+      (16 until 24).toList
+    )
+  }
+
+  it should "give every column the same panel width" in {
+    val buffer = bufferOfLines(count = 30, visibleLines = 8)
+
+    val snapshots = TextLayoutSnapshot.fromBufferColumns(
+      buffer,
+      columnWidthPx = 2000,
+      font = font,
+      cellMetricsOverride = Some(CellMetrics.cellUnit),
+      forceCellLayout = true,
+      columnCount = 3
+    )
+
+    val widths = snapshots.map(_.panelWidthPx)
+    widths shouldBe List.fill(3)(2000)
+  }
+
+  it should "produce a shorter final column when the document runs out of lines" in {
+    val buffer = bufferOfLines(count = 20, visibleLines = 8)
+
+    val snapshots = TextLayoutSnapshot.fromBufferColumns(
+      buffer,
+      columnWidthPx = 2000,
+      font = font,
+      cellMetricsOverride = Some(CellMetrics.cellUnit),
+      forceCellLayout = true,
+      columnCount = 3
+    )
+
+    val lengths = snapshots.map(_.visualLines.length)
+    lengths shouldBe List(8, 8, 4)
+  }
+
+  it should "match fromBufferColumn's single snapshot in its first column" in {
+    val buffer = bufferOfLines(count = 30, visibleLines = 8, topLine = 16, topVisualLine = 0)
+
+    val single = TextLayoutSnapshot.fromBufferColumn(
+      buffer,
+      columnWidthPx = 2000,
+      font = font,
+      cellMetricsOverride = Some(CellMetrics.cellUnit),
+      forceCellLayout = true
+    )
+    val plural = TextLayoutSnapshot.fromBufferColumns(
+      buffer,
+      columnWidthPx = 2000,
+      font = font,
+      cellMetricsOverride = Some(CellMetrics.cellUnit),
+      forceCellLayout = true,
+      columnCount = 2
+    )
+
+    val firstColumnLines = plural.headOption.map(_.visualLines.map(_.bufferLine))
+    firstColumnLines shouldBe Some(single.visualLines.map(_.bufferLine))
+    val firstColumnWidth = plural.headOption.map(_.panelWidthPx)
+    firstColumnWidth shouldBe Some(single.panelWidthPx)
+  }

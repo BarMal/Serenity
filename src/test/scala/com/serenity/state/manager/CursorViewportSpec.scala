@@ -1,9 +1,18 @@
 package com.serenity.state.manager
 
+import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.ui.layout.{
+  CellMetrics,
+  LayoutEngine,
+  TextLayoutSnapshot,
+  ViewportSize,
+  WorkspaceNode,
+  WorkspaceNodeId,
+  WorkspaceTree
+}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -276,6 +285,69 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
     val incremental             = CursorViewport.adjustForCursorColumnMode(bufferAfterIntermediate, state, targetCursor)
 
     incremental shouldBe direct
+  }
+
+  // Multi-column page anchoring (issue #1338, Phase 2 / slice 1): the viewport must show the whole PAGE that contains
+  // the cursor's column, not just that column as column 0. With N columns per page the top snaps to the page's first
+  // column boundary `(activeColumnIndex / N) * N * visibleLines`, so a cursor in an odd column index still shows the
+  // even column that opens its page.
+  it should "anchor topVisualLine to the page's first column, not the active column, when multiple columns fit" in {
+    // 40 single-row lines, 8 rows per column -> column indices are [0,8)=0 [8,16)=1 [16,24)=2 [24,32)=3 [32,40)=4.
+    val content = (0 until 40).map(i => s"line $i").mkString("\n")
+    // A wide window with a small target column width fits several columns per page.
+    val viewportSize = ViewportSize(400, 40)
+    val config       = AppConfig.default.withColumnMode(true).withColumnTargetWidth(20).withColumnGap(2)
+    val buffer = Buffer
+      .fromString(bufferId, content)
+      .copy(
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 8),
+        editing = EditingState(List(CursorPosition(25, 0)))
+      )
+    val base = tuiStateWith(buffer)
+    val state = base
+      .copy(persisted = base.persisted.copy(config = config))
+      .copy(runtime = base.runtime.copy(isTuiMode = false, viewportSize = Some(viewportSize)))
+
+    // The expected page-first-column boundary, computed the same way the implementation derives N from the pane's
+    // content width, so the test stays honest about "which page" without hard-coding a column count the layout owns.
+    val calculated  = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+    val paneLayouts = LayoutEngine.calculateEditorPaneLayouts(state, calculated)
+    val contentWidth = paneLayouts
+      .collectFirst {
+        case (id, layout) if state.persisted.layout.editorPanes.get(id).flatMap(_.bufferId).contains(bufferId) =>
+          layout.contentRect.width
+      }
+      .getOrElse(fail("expected a pane for the buffer"))
+    val expectedColumns = LayoutEngine.columnCount(contentWidth, 20, 2)
+    val activeColumnIdx = 25 / 8
+    val pageFirstColumn = (activeColumnIdx / expectedColumns) * expectedColumns
+    val expectedTopLine = pageFirstColumn * 8
+
+    assert(expectedColumns > 1, s"test setup expected a multi-column page, got $expectedColumns columns")
+
+    val adjusted = CursorViewport.adjustForCursorColumnMode(buffer, state, CursorPosition(25, 0))
+
+    adjusted.topLine shouldBe expectedTopLine
+    adjusted.topVisualLine shouldBe 0
+  }
+
+  it should "fall back to single-column anchoring when the viewport size is unknown" in {
+    // No runtime.viewportSize -> the pane's full content width is unknown, so N falls back to 1 and the anchor is the
+    // active column itself (the pre-multi-column behaviour, unchanged).
+    val content = (0 until 40).map(i => s"line $i").mkString("\n")
+    val buffer = Buffer
+      .fromString(bufferId, content)
+      .copy(
+        viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 8),
+        editing = EditingState(List(CursorPosition(25, 0)))
+      )
+    val state = tuiStateWith(buffer)
+
+    val adjusted = CursorViewport.adjustForCursorColumnMode(buffer, state, CursorPosition(25, 0))
+
+    // Cursor at row 25 -> active column index 3 -> single-column anchor is that column's own top row (24).
+    adjusted.topLine shouldBe 24
+    adjusted.topVisualLine shouldBe 0
   }
 
   "CursorViewport.ensureVisibleCursors" should

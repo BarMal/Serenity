@@ -247,7 +247,7 @@ object TextLayoutSnapshot:
   // Column-based document layout (issue #1338, Phase 1): `columnChunksForBuffer`/`fromBufferColumn` live in
   // `TextLayoutSnapshotColumnMode` (600-line architecture ratchet split) and are exported here so existing
   // `TextLayoutSnapshot.foo` call sites keep working unchanged.
-  export TextLayoutSnapshotColumnMode.{columnChunksForBuffer, fromBufferColumn}
+  export TextLayoutSnapshotColumnMode.{columnChunksForBuffer, fromBufferColumn, fromBufferColumns}
 
   private[layout] def collectVisualLines(
     buffer: Buffer,

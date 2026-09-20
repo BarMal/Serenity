@@ -38,6 +38,7 @@ object RendererPaneContent:
             state,
             context,
             renderPlan.snapshots.get(paneId),
+            renderPlan.columnSnapshotsFor(paneId),
             renderPlan.layoutContract,
             pane.bufferId.flatMap(renderPlan.annotations.get),
             dirtyRowsByPane.get(paneId)
@@ -58,21 +59,43 @@ object RendererPaneContent:
 
     orderedPanes.flatMap {
       case (paneId, pane) =>
+        val columnPlacements = renderPlan.columnSnapshotsFor(paneId)
         (for
           paneLayout <- renderPlan.paneLayouts.get(paneId)
           bufferId   <- pane.bufferId
           buffer     <- state.persisted.buffers.get(bufferId)
-          snapshot   <- renderPlan.snapshots.get(paneId)
-        yield RendererCursorGlyphs.renderCursors(
-          buffer,
-          paneLayout.contentRect,
-          state.persisted.theme,
-          state.persisted.config,
-          context,
-          snapshot,
-          state.runtime.isTuiMode
-        ))
-          .getOrElse(Nil)
+        yield
+          if columnPlacements.nonEmpty then
+            // Multi-column e-reader layout (issue #1338, Phase 2 / slice 1): the caret paints against whichever page
+            // column actually holds it -- every other column's snapshot resolves it to no visual row and paints
+            // nothing -- at that column's own x-shifted rect.
+            columnPlacements.flatMap { placement =>
+              RendererCursorGlyphs.renderCursors(
+                buffer,
+                columnRect(paneLayout.contentRect, placement),
+                state.persisted.theme,
+                state.persisted.config,
+                context,
+                placement.snapshot,
+                state.runtime.isTuiMode
+              )
+            }.toList
+          else
+            renderPlan.snapshots
+              .get(paneId)
+              .map(snapshot =>
+                RendererCursorGlyphs.renderCursors(
+                  buffer,
+                  paneLayout.contentRect,
+                  state.persisted.theme,
+                  state.persisted.config,
+                  context,
+                  snapshot,
+                  state.runtime.isTuiMode
+                )
+              )
+              .getOrElse(Nil)
+        ).getOrElse(Nil)
     }
 
   private def renderEditorPane(
@@ -81,6 +104,7 @@ object RendererPaneContent:
     state: AppState,
     context: RenderContext,
     preparedSnapshot: Option[TextLayoutSnapshot],
+    columnPlacements: Vector[ColumnSnapshotPlacement],
     contract: EditorLayoutContract,
     annotations: Option[BufferRenderAnnotations],
     dirtyRows: Option[Set[Int]]
@@ -101,11 +125,35 @@ object RendererPaneContent:
         if RendererMarkdownLens.isInlineMarkdownLens(buf, state)
       yield RendererMarkdownLens.markdownLensFrameFor(buf, snap)
 
+    // Multi-column e-reader layout (issue #1338, Phase 2 / slice 1): a column-mode pane paints each column's own
+    // snapshot at its own x-origin (`contentRect.x + placement.xOffsetCells`), so the page reads as columns side by
+    // side. The markdown lens keeps its single full-width path -- its content is not the plain wrapped text these
+    // placements chunk. `dirtyRows` (the row-reuse contract) is a per-column-snapshot row index, which the multi-column
+    // path does not track yet, so a column-mode pane always redraws in full (see report's slice-2 note).
+    val paintsColumns =
+      columnPlacements.nonEmpty &&
+        buffer.exists(buf => buf.document.content.weight > 0 && !RendererMarkdownLens.isInlineMarkdownLens(buf, state))
+
     buffer match
       case Some(buf) if buf.document.content.weight == 0 && buf.document.isNewEmpty =>
         RendererStartPage.renderWelcomeText(contentRect, state.persisted.theme, context)
       case Some(buf) if buf.document.content.weight == 0 =>
         RendererStartPage.renderEmptyPane(contentRect, state.persisted.theme, context)
+      case Some(buf) if paintsColumns =>
+        val bufferAnnotations =
+          annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty, SemanticTokensAvailability.Pending))
+        columnPlacements.foreach { placement =>
+          renderBufferContent(
+            buf,
+            columnRect(contentRect, placement),
+            state,
+            context,
+            placement.snapshot,
+            markdownLensFrame = None,
+            bufferAnnotations,
+            dirtyRows = None
+          )
+        }
       case Some(buf) =>
         bufferSnapshot.fold(RendererStartPage.renderEmptyPane(contentRect, state.persisted.theme, context)) { snap =>
           renderBufferContent(
@@ -134,6 +182,21 @@ object RendererPaneContent:
       if state.hasCommandRunnerDomain then context.copy(cursorVisible = true)
       else context
     (buffer, bufferSnapshot) match
+      case (Some(buf), _) if paintsColumns =>
+        // Each column paints only the cursors whose buffer position falls on one of its own visual rows; the others
+        // resolve to no visual row in that column's snapshot and paint nothing. So the caret lands in whichever page
+        // column actually holds it.
+        columnPlacements.foreach { placement =>
+          val _ = RendererCursorGlyphs.renderCursors(
+            buf,
+            columnRect(contentRect, placement),
+            state.persisted.theme,
+            state.persisted.config,
+            cursorContext,
+            placement.snapshot,
+            state.runtime.isTuiMode
+          )
+        }
       case (Some(buf), Some(snap)) =>
         if RendererMarkdownLens.isInlineMarkdownLens(buf, state) then
           RendererMarkdownLens.renderMarkdownLensCursors(
@@ -156,6 +219,14 @@ object RendererPaneContent:
             state.runtime.isTuiMode
           )
       case _ => ()
+
+  /** The x-shifted content rect a single page column paints into: the pane's content rect moved right by the column's
+    * own cell offset and narrowed to the column's own width, so a column never paints past its neighbour.
+    */
+  private def columnRect(contentRect: LayoutRect, placement: ColumnSnapshotPlacement): LayoutRect =
+    val leftX = contentRect.x + placement.xOffsetCells
+    val width = math.min(placement.columnWidthCells, math.max(0, contentRect.right - leftX))
+    contentRect.copy(x = leftX, width = math.max(0, width))
 
   private def renderBufferHeader(
     pane: EditorPane,

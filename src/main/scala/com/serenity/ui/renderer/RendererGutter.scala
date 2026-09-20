@@ -9,7 +9,14 @@ import com.serenity.ui.layout.*
 object RendererGutter:
 
   def renderLineNumbers(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan): Unit =
-    if state.persisted.config.surfaceConfig.showLineNumbers then
+    // Multi-column e-reader layout (issue #1338, Phase 2 / slice 1): the gutter is driven by the active pane's SINGLE
+    // (column-0) snapshot and has no notion of which column a row sits in, so a per-column line-number rail is real new
+    // work deferred to a later slice. For now line numbers are suppressed while column mode is active rather than
+    // painted against the wrong rows. The layout still reserves the gutter's width, so an enabled-but-suppressed gutter
+    // shows as blank margin -- see the report's slice-2 note.
+    val columnModeActive =
+      state.persisted.config.surfaceConfig.columnModeEnabled && state.persisted.config.surfaceConfig.wordWrapEnabled
+    if state.persisted.config.surfaceConfig.showLineNumbers && !columnModeActive then
       context.surface.text.setFont(context.uiFont)
       renderPlan.layoutContract.lineNumberRect.foreach(rect =>
         renderCounterColumn(state, context, renderPlan, rect, dividerOnLeft = false)

@@ -25,6 +25,20 @@ enum SceneHitKind:
 /** A named interactive rectangle whose owner is the enclosing [[SceneNode]]. */
 final case class SceneHitRegion(kind: SceneHitKind, rect: LayoutRect)
 
+/** One e-reader column of a pane's page (issue #1338, Phase 2 / slice 1): its own [[TextLayoutSnapshot]] (a
+  * `visibleLines`-row chunk of the buffer, wrapped at the column's own narrower width) plus where to paint it -- its
+  * `columnIndex` on the page (column 0 is the page's leftmost), its x-origin in cells relative to the pane's content
+  * rect (`contentRect.x + xOffsetCells`), and its own width in cells (so the renderer can clip the column to its own
+  * band and never paint into its neighbour). The renderer composes the page by painting each column's snapshot at its
+  * own x-origin; a single-column pane is just `columnIndex = 0`, `xOffsetCells = 0`.
+  */
+final case class ColumnSnapshotPlacement(
+    columnIndex: Int,
+    xOffsetCells: Int,
+    columnWidthCells: Int,
+    snapshot: TextLayoutSnapshot
+)
+
 /** Geometry for one visible pane or surface in a rendered UI frame. */
 final case class SceneNode(
     id: SceneNodeId,
@@ -45,6 +59,11 @@ final case class UiSceneSnapshot(
     paneLayouts: Map[PaneId, EditorPaneLayout],
     editorContract: EditorLayoutContract,
     textSnapshots: Map[PaneId, TextLayoutSnapshot],
+    // Multi-column e-reader layout (issue #1338, Phase 2 / slice 1): the full ordered list of per-column snapshots the
+    // renderer paints side by side. Empty for a pane not in column mode; for a column-mode pane `textSnapshots` still
+    // carries the single (active-column) snapshot so every non-column consumer -- gutter, mouse targeting, damage
+    // planning -- keeps working unchanged in slice 1.
+    columnSnapshots: Map[PaneId, Vector[ColumnSnapshotPlacement]],
     workspace: List[SceneNode],
     floating: List[SceneNode],
     modalBackdrop: Option[SceneNode],
@@ -61,8 +80,17 @@ final case class UiSceneSnapshot(
   def textSnapshot(paneId: PaneId): Option[TextLayoutSnapshot] =
     textSnapshots.get(paneId)
 
+  /** The pane's ordered per-column snapshots, or empty when the pane is not painting in multi-column mode -- the
+    * renderer's entry point for painting an e-reader page.
+    */
+  def columnSnapshotsFor(paneId: PaneId): Vector[ColumnSnapshotPlacement] =
+    columnSnapshots.getOrElse(paneId, Vector.empty)
+
   def withTextSnapshots(snapshots: Map[PaneId, TextLayoutSnapshot]): UiSceneSnapshot =
     copy(textSnapshots = snapshots)
+
+  def withColumnSnapshots(snapshots: Map[PaneId, Vector[ColumnSnapshotPlacement]]): UiSceneSnapshot =
+    copy(columnSnapshots = snapshots)
 
 object UiSceneSnapshot:
 
@@ -138,6 +166,7 @@ object UiSceneSnapshot:
       paneLayouts = paneLayouts,
       editorContract = editorContract,
       textSnapshots = Map.empty,
+      columnSnapshots = Map.empty,
       workspace = workspacePanes ++ workspaceSurfaces,
       floating = floating,
       modalBackdrop = modalBackdrop,

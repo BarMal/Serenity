@@ -58,13 +58,12 @@ object TextLayoutSnapshotColumnMode:
     allVisualLines.grouped(visibleLines).toVector
 
   /** The snapshot for the ONE column currently showing -- `columnChunksForBuffer`'s first chunk (the viewport's own
-    * `topLine`/`topVisualLine` is always already snapped to a column boundary by
-    * `CursorViewport.adjustForCursorColumnMode`, so that first chunk is always the active column), wrapped as an
+    * `topLine`/`topVisualLine` is always already snapped to a page boundary by
+    * `CursorViewport.adjustForCursorColumnMode`, so that first chunk is always the page's first column), wrapped as an
     * ordinary [[TextLayoutSnapshot]] so every downstream consumer (painting, cursor placement) needs no column-mode
-    * branch of its own. `panelWidthPx` is the column's own (narrower) width, not the pane's full width -- the renderer
-    * paints this one column's content starting at the pane's left edge, occupying only as much of the pane horizontally
-    * as the column itself is wide (see `RendererPaneSetup.snapshotForBuffer`'s doc comment for why
-    * centring/multi-column-at-once is out of scope for this phase).
+    * branch of its own. `panelWidthPx` is the column's own (narrower) width, not the pane's full width. Delegates to
+    * [[fromBufferColumns]] and takes the first column; kept as a named entry point for the single-column consumers
+    * (`RendererColumnTransition`'s outgoing sliver, the animation path) that only ever want one column.
     */
   def fromBufferColumn(
     buffer: Buffer,
@@ -75,6 +74,37 @@ object TextLayoutSnapshotColumnMode:
     forceCellLayout: Boolean = false,
     proseScale: Float = 1.0f
   ): TextLayoutSnapshot =
+    fromBufferColumns(
+      buffer,
+      columnWidthPx,
+      font,
+      fontRenderContext,
+      cellMetricsOverride,
+      forceCellLayout,
+      proseScale,
+      columnCount = 1
+    ).headOption.getOrElse(
+      emptyColumnSnapshot(columnWidthPx, font, fontRenderContext, cellMetricsOverride, forceCellLayout, proseScale)
+    )
+
+  /** All `columnCount` per-column snapshots for the page anchored at the viewport's own `topLine`/`topVisualLine` (the
+    * page-first-column boundary set by `CursorViewport.adjustForCursorColumnMode`): text fills column 1 top-to-bottom
+    * (`visibleLines` rows) then flows into column 2, etc. Each chunk from [[columnChunksForBuffer]] is wrapped into its
+    * own ordinary [[TextLayoutSnapshot]] at the shared (narrower) `columnWidthPx`, so the renderer composes the page by
+    * painting each at its own x-origin (`contentRect.x + columnIndex * (columnWidthCells + columnGap)`) -- generalizing
+    * the single-column machinery rather than introducing a new data model. A document that runs out of lines before
+    * filling every column simply yields a shorter final snapshot (and no snapshots past it).
+    */
+  def fromBufferColumns(
+    buffer: Buffer,
+    columnWidthPx: Int,
+    font: Font,
+    fontRenderContext: FontRenderContext = defaultFontRenderContext(),
+    cellMetricsOverride: Option[CellMetrics] = None,
+    forceCellLayout: Boolean = false,
+    proseScale: Float = 1.0f,
+    columnCount: Int = 1
+  ): Vector[TextLayoutSnapshot] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
     val lineHeightPx =
@@ -88,7 +118,8 @@ object TextLayoutSnapshotColumnMode:
     val totalLines = buffer.document.content.lineCount
     val richDocument =
       buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(totalLines, buffer.document.content.weight))
-    val visualLines = columnChunksForBuffer(
+
+    columnChunksForBuffer(
       buffer,
       columnWidthPx,
       font,
@@ -96,16 +127,48 @@ object TextLayoutSnapshotColumnMode:
       cellMetricsOverride,
       forceCellLayout,
       proseScale,
-      columnCount = 1
-    ).headOption.getOrElse(Vector.empty)
+      columnCount
+    ).map { chunk =>
+      TextLayoutSnapshot(
+        visualLines = chunk,
+        panelWidthPx = math.max(1, columnWidthPx),
+        lineHeightPx = lineHeightPx,
+        ascentPx = ascentPx,
+        isProportional = !FontLoader.isMonospacedFont(font),
+        usesMeasuredLayout = measuredLayout,
+        richTextDocument = richDocument,
+        proseScale = proseScale
+      )
+    }
 
+  /** The empty-content fallback `fromBufferColumn` returns when the page has no rows at all (`columnChunksForBuffer`
+    * yields nothing) -- an empty single-column snapshot with the same per-column width and metrics the real path would
+    * have produced, so callers never see a width of zero.
+    */
+  private def emptyColumnSnapshot(
+    columnWidthPx: Int,
+    font: Font,
+    fontRenderContext: FontRenderContext,
+    cellMetricsOverride: Option[CellMetrics],
+    forceCellLayout: Boolean,
+    proseScale: Float
+  ): TextLayoutSnapshot =
+    val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
+    val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
+    val lineHeightPx =
+      if measuredLayout then
+        math.max(1, math.ceil(font.getLineMetrics("Mg", fontRenderContext).getHeight.toDouble).toInt)
+      else math.max(1, cellMetrics.lineHeight)
+    val ascentPx =
+      if measuredLayout then
+        math.max(1, math.ceil(font.getLineMetrics("Mg", fontRenderContext).getAscent.toDouble).toInt)
+      else math.max(0, cellMetrics.ascent)
     TextLayoutSnapshot(
-      visualLines = visualLines,
+      visualLines = Vector.empty,
       panelWidthPx = math.max(1, columnWidthPx),
       lineHeightPx = lineHeightPx,
       ascentPx = ascentPx,
       isProportional = !FontLoader.isMonospacedFont(font),
       usesMeasuredLayout = measuredLayout,
-      richTextDocument = richDocument,
       proseScale = proseScale
     )
