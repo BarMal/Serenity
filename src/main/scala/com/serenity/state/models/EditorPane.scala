@@ -12,18 +12,12 @@ object PaneId:
 
   given Order[PaneId] = Order.by(identity)
 
-final case class SmoothScrollState(
-    targetTopLine: Int,
-    progress: Double
-)
-
 final case class EditorPane(
     id: PaneId,
     bufferId: Option[BufferId],
     viewport: Viewport,
     cursors: List[CursorPosition],
     centerLine: Int,
-    smoothScrolling: Option[SmoothScrollState] = None,
     syncedScrolling: Boolean = false,
     minimapVisible: Boolean = false
 )

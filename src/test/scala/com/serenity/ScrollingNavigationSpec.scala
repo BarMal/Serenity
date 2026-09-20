@@ -232,47 +232,6 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     val buffer2            = pane2.bufferId.flatMap(afterScrollUpState.persisted.buffers.get).get
     buffer2.viewport.topLine shouldBe 1
 
-  it should "handle smooth scrolling animations" in new ScrollFixture:
-    // Given: File with content
-    val content  = (1 to 50).map(i => s"Line $i").mkString("\n")
-    val bufferId = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
-
-    val state  = stateManager.getCurrentState.unsafeRunSync()
-    val paneId = state.persisted.layout.editorPanes.keys.head
-    stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    stateManager.setCursorPosition(paneId, 0, 0).unsafeRunSync()
-    stateManager
-      .setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
-      .unsafeRunSync()
-
-    // When: Initiate smooth scroll to line 30
-    stateManager.scrollManager.smoothScrollTo(paneId, 30).unsafeRunSync()
-
-    // Then: Should start smooth scrolling animation
-    val duringScrollState = stateManager.getCurrentState.unsafeRunSync()
-    val pane              = duringScrollState.persisted.layout.editorPanes(paneId)
-    pane.smoothScrolling shouldBe Some(SmoothScrollState(targetTopLine = 30, progress = 0.0))
-
-    // When: Progress smooth scroll animation
-    stateManager.scrollManager.progressSmoothScroll(paneId, 0.5).unsafeRunSync()
-
-    // Then: Should be partially scrolled
-    val halfwayState = stateManager.getCurrentState.unsafeRunSync()
-    val pane2        = halfwayState.persisted.layout.editorPanes(paneId)
-    val buffer2      = pane2.bufferId.flatMap(halfwayState.persisted.buffers.get).get
-    buffer2.viewport.topLine should be > 0
-    buffer2.viewport.topLine should be < 30
-
-    // When: Complete smooth scroll
-    stateManager.scrollManager.progressSmoothScroll(paneId, 1.0).unsafeRunSync()
-
-    // Then: Should reach target
-    val finalState = stateManager.getCurrentState.unsafeRunSync()
-    val pane3      = finalState.persisted.layout.editorPanes(paneId)
-    val buffer3    = pane3.bufferId.flatMap(finalState.persisted.buffers.get).get
-    buffer3.viewport.topLine shouldBe 30
-    pane3.smoothScrolling shouldBe None
-
   it should "handle goto line functionality" in new ScrollFixture:
     // Given: Large file
     val content  = (1 to 500).map(i => s"Line $i content").mkString("\n")
