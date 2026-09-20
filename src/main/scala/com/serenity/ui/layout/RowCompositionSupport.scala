@@ -3,8 +3,8 @@ package com.serenity.ui.layout
 /** Shared row-geometry and hit-region-plan helpers for the flat, per-row pinned/floating surface compositions (issue
   * #819 slices 4-5: `OutlineSurfaceComposition`, `DiagnosticsSurfaceComposition`, `DirectoryTreeSurfaceComposition`,
   * `CommentsSurfaceComposition`, `CommentLensSurfaceComposition`) -- each resolves one row list into paint boxes at
-  * row-height slots inside `bounds`, then clips them to it. Pulled out once this trio was duplicated identically
-  * across all five objects, so a future fix to row/clip geometry is made in one place instead of five.
+  * row-height slots inside `bounds`, then clips them to it. Pulled out once this trio was duplicated identically across
+  * all five objects, so a future fix to row/clip geometry is made in one place instead of five.
   *
   * `CommentLensSurfaceComposition` uses `rowRect`/`logicalRect` but not `planWithRowHits`: its lens body is one
   * click-anywhere target rather than per-row hit targets, so it keeps its own no-hits `plan`.

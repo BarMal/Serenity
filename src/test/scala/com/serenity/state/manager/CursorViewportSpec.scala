@@ -241,17 +241,17 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 8),
         editing = EditingState(List(CursorPosition(0, 0)))
       )
-    val state         = tuiStateWith(buffer)
-    val targetCursor  = CursorPosition(2500, 0)
+    val state        = tuiStateWith(buffer)
+    val targetCursor = CursorPosition(2500, 0)
 
     val direct = CursorViewport.adjustForCursorColumnMode(buffer, state, targetCursor)
 
     // Line 20 sits in the third column (rows 16-23), so this establishes a non-zero previous top -- the case that
     // actually exercises the incremental walk rather than trivially matching the cold path's own line-0 starting point.
-    val nearCursor           = CursorPosition(20, 0)
-    val intermediateViewport = CursorViewport.adjustForCursorColumnMode(buffer, state, nearCursor)
+    val nearCursor              = CursorPosition(20, 0)
+    val intermediateViewport    = CursorViewport.adjustForCursorColumnMode(buffer, state, nearCursor)
     val bufferAfterIntermediate = buffer.copy(viewport = intermediateViewport)
-    val incremental              = CursorViewport.adjustForCursorColumnMode(bufferAfterIntermediate, state, targetCursor)
+    val incremental             = CursorViewport.adjustForCursorColumnMode(bufferAfterIntermediate, state, targetCursor)
 
     incremental shouldBe direct
   }
@@ -270,10 +270,10 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
 
     val direct = CursorViewport.adjustForCursorColumnMode(buffer, state, targetCursor)
 
-    val farCursor            = CursorPosition(2900, 0)
-    val intermediateViewport = CursorViewport.adjustForCursorColumnMode(buffer, state, farCursor)
+    val farCursor               = CursorPosition(2900, 0)
+    val intermediateViewport    = CursorViewport.adjustForCursorColumnMode(buffer, state, farCursor)
     val bufferAfterIntermediate = buffer.copy(viewport = intermediateViewport)
-    val incremental              = CursorViewport.adjustForCursorColumnMode(bufferAfterIntermediate, state, targetCursor)
+    val incremental             = CursorViewport.adjustForCursorColumnMode(bufferAfterIntermediate, state, targetCursor)
 
     incremental shouldBe direct
   }

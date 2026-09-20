@@ -325,12 +325,12 @@ object CursorViewport:
     * start on every call. `buffer.viewport.topVisualLine` is always an exact multiple of the `visibleLines` it was
     * placed with (the invariant above), so the new target column boundary can be found by measuring only the lines
     * between the previous top and the cursor, and then walking that same distance from the previous top -- cost
-    * proportional to how far the cursor moved since the last placement, not to its absolute position in the
-    * document. Re-scanning from line 0 made moving the cursor progressively through a large wrapped document O(n)
-    * per move (O(n^2) overall). The one case that invalidates the shortcut -- column mode just switched on (the
-    * inherited viewport came from `adjustForCursor`'s centring, whose `topVisualLine` has no reason to be a multiple
-    * of `visibleLines`) or a resize changed `visibleLines` since the last placement -- is detected by the same
-    * modulus check and falls back to the original from-scratch scan.
+    * proportional to how far the cursor moved since the last placement, not to its absolute position in the document.
+    * Re-scanning from line 0 made moving the cursor progressively through a large wrapped document O(n) per move
+    * (O(n^2) overall). The one case that invalidates the shortcut -- column mode just switched on (the inherited
+    * viewport came from `adjustForCursor`'s centring, whose `topVisualLine` has no reason to be a multiple of
+    * `visibleLines`) or a resize changed `visibleLines` since the last placement -- is detected by the same modulus
+    * check and falls back to the original from-scratch scan.
     */
   def adjustForCursorColumnMode(
     buffer: Buffer,
@@ -407,8 +407,7 @@ object CursorViewport:
         val relativeCursorRow =
           if cursor.line >= previousTopLine then
             rowsForward(previousTopLine, cursor.line, 0) + cursorVisualRowInLine - viewport.topVisualLine
-          else
-            -rowsForward(cursor.line, previousTopLine, 0) + cursorVisualRowInLine - viewport.topVisualLine
+          else -rowsForward(cursor.line, previousTopLine, 0) + cursorVisualRowInLine - viewport.topVisualLine
         val targetOffsetFromPreviousTop      = Math.floorDiv(relativeCursorRow, visibleLines) * visibleLines
         val targetRowFromPreviousTopLineHead = viewport.topVisualLine + targetOffsetFromPreviousTop
         if targetRowFromPreviousTopLineHead >= 0 then
