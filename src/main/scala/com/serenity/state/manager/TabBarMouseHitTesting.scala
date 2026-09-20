@@ -8,9 +8,9 @@ import com.serenity.ui.layout.{LayoutEngine, LayoutRect, TabBarSurfaceCompositio
   * resolving a primary click against them into a buffer switch (issue #1077) or, via the trailing new-tab (+)
   * affordance, a new tab (issue #1080). Resolves a click's cell coordinate to the `BufferId` of the tab (`hitAt`) or
   * its close affordance (`closeHitAt`) it landed on, using the exact same
-  * `ResolvedSurfaceComposition`/`closeAffordances`/`newTabAffordance` geometry `TextOverlayRenderer` paints from --
-  * the same "painted and hit-tested from one plan" guarantee `ModalMouseHitTesting`/`CommandRunnerMouseHitTesting`
-  * already give their own surfaces.
+  * `ResolvedSurfaceComposition`/`closeAffordances`/`newTabAffordance` geometry `TextOverlayRenderer` paints from -- the
+  * same "painted and hit-tested from one plan" guarantee `ModalMouseHitTesting`/`CommandRunnerMouseHitTesting` already
+  * give their own surfaces.
   */
 private[manager] object TabBarMouseHitTesting:
 
@@ -77,8 +77,8 @@ private[manager] object TabBarMouseHitTesting:
 
   /** Resolves a primary click's cell coordinate against `state`'s own tab strip's trailing new-tab (+) affordance
     * (issue #1080) -- the same `AppState.tabBarSurface`/`LayoutEngine.calculateLayoutWithUI` resolution `clickTarget`
-    * uses, but checked against `TabBarSurfaceComposition.newTabAffordance` instead of `hitAt`, so a new-tab click and
-    * a switch click (`clickTarget`, #1077) always resolve from disjoint region sets. `false` covers both "the click
+    * uses, but checked against `TabBarSurfaceComposition.newTabAffordance` instead of `hitAt`, so a new-tab click and a
+    * switch click (`clickTarget`, #1077) always resolve from disjoint region sets. `false` covers both "the click
     * missed the strip" and "the click landed in the strip but not on the affordance" -- either way the caller should
     * keep resolving other mouse targets/tab-strip outcomes.
     */

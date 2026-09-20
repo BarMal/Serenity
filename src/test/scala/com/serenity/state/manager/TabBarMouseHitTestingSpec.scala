@@ -8,9 +8,9 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Coverage for `TabBarMouseHitTesting` -- resolving a click's cell coordinate to the `BufferId` of the tab it landed
-  * on (issue #1075: Foundation), resolving a click against live `AppState` into a buffer switch (issue #1077:
-  * "Click a tab to switch buffer"), and resolving a click against the trailing new-tab (+) affordance into opening a
-  * new tab (issue #1080: "New-tab affordance").
+  * on (issue #1075: Foundation), resolving a click against live `AppState` into a buffer switch (issue #1077: "Click a
+  * tab to switch buffer"), and resolving a click against the trailing new-tab (+) affordance into opening a new tab
+  * (issue #1080: "New-tab affordance").
   */
 class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
 

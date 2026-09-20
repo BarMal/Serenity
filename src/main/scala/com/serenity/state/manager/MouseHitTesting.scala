@@ -87,11 +87,11 @@ final private[manager] class MouseHitTesting(
       case _ =>
         IO.unit
 
-  /** Resolves a primary click against the always-visible tab strip (issue #1077: switch by clicking a tab; issue
-    * #1080: open a new tab from the trailing `+` affordance) via `TabBarMouseHitTesting`. The new-tab affordance is
-    * checked first since it sits in the same reserved trailing region a plain `clickTarget` would otherwise resolve
-    * as a swallowed no-op (a click inside the strip but on no tab). Either way, *what* to do is resolved from `state`,
-    * this dispatch's already-current snapshot, but the change itself is applied to the freshest state at write time --
+  /** Resolves a primary click against the always-visible tab strip (issue #1077: switch by clicking a tab; issue #1080:
+    * open a new tab from the trailing `+` affordance) via `TabBarMouseHitTesting`. The new-tab affordance is checked
+    * first since it sits in the same reserved trailing region a plain `clickTarget` would otherwise resolve as a
+    * swallowed no-op (a click inside the strip but on no tab). Either way, *what* to do is resolved from `state`, this
+    * dispatch's already-current snapshot, but the change itself is applied to the freshest state at write time --
     * mirroring `applyEditorClick`'s `current`-not-`state` write below, so a concurrent update elsewhere (e.g. a
     * background LSP diagnostics pass) is never clobbered by a stale click target.
     */

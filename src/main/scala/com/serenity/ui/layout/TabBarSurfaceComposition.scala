@@ -46,25 +46,25 @@ object TabBarSurfaceComposition:
   val NewTabFocusId: SurfaceFocusId = SurfaceFocusId("tab-bar-new-tab")
 
   /** Columns reserved at the strip's trailing edge for the new-tab (+) affordance (issue #1080) -- carved out of the
-    * row's total width before `allocate` splits the rest across tabs, the same way [[CloseHitWidth]] is carved out of
-    * a tab's own cell, so tabs never paint underneath it. Painted as `" +"` so the glyph itself lands flush against
-    * the strip's right edge, one blank column short of the last tab's cell -- the same visual gap `GapColumns`
-    * reserves between two tabs, without a second, separate reservation.
+    * row's total width before `allocate` splits the rest across tabs, the same way [[CloseHitWidth]] is carved out of a
+    * tab's own cell, so tabs never paint underneath it. Painted as `" +"` so the glyph itself lands flush against the
+    * strip's right edge, one blank column short of the last tab's cell -- the same visual gap `GapColumns` reserves
+    * between two tabs, without a second, separate reservation.
     */
   private val NewTabAffordanceWidth = 2
 
   private val NewTabGlyph = " +"
 
-  /** The width `allocate` should split across `entries`, with [[NewTabAffordanceWidth]] already carved off the
-    * strip's trailing edge for the new-tab affordance -- shared by `forTabBar` and `closeAffordances` so both keep
-    * deriving tab cells from the exact same reduced width.
+  /** The width `allocate` should split across `entries`, with [[NewTabAffordanceWidth]] already carved off the strip's
+    * trailing edge for the new-tab affordance -- shared by `forTabBar` and `closeAffordances` so both keep deriving tab
+    * cells from the exact same reduced width.
     */
   private def tabsAvailableWidth(rect: LayoutRect): Int = math.max(0, rect.width - NewTabAffordanceWidth)
 
-  /** The trailing new-tab (+) affordance's hit region (issue #1080): a single, buffer-independent target at the
-    * strip's right edge, kept apart from `forTabBar`'s per-tab hit regions and `closeAffordances`' per-tab close
-    * regions -- a switch click, a close click, and a new-tab click always resolve from three disjoint region sets.
-    * `None` when there is no tab strip to append it to (an empty tab list, mirroring `closeAffordances`).
+  /** The trailing new-tab (+) affordance's hit region (issue #1080): a single, buffer-independent target at the strip's
+    * right edge, kept apart from `forTabBar`'s per-tab hit regions and `closeAffordances`' per-tab close regions -- a
+    * switch click, a close click, and a new-tab click always resolve from three disjoint region sets. `None` when there
+    * is no tab strip to append it to (an empty tab list, mirroring `closeAffordances`).
     */
   def newTabAffordance(entries: List[TabListEntry], rect: LayoutRect): Option[SurfaceHitRegion] =
     if entries.isEmpty then None
