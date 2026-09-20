@@ -31,7 +31,7 @@ final private[manager] class MouseHitTesting(
     startupPage: StartupPageMouseHitTesting,
     commentLens: CommentLensMouseHitTesting,
     tabBarDrag: TabBarDragHitTesting
-):
+)(using balance: com.serenity.rope.Balance):
   import port.*
 
   def handleMouseClick(click: MouseClick, state: AppState): IO[Unit] =
@@ -88,23 +88,30 @@ final private[manager] class MouseHitTesting(
       case _ =>
         IO.unit
 
-  /** Resolves a primary click against the always-visible tab strip (issue #1077) via `TabBarMouseHitTesting`: *which*
-    * buffer (if any) to switch to is resolved from `state`, this dispatch's already-current snapshot, but the switch
-    * itself is applied to the freshest state at write time -- mirroring `applyEditorClick`'s `current`-not-`state`
-    * write below, so a concurrent update elsewhere (e.g. a background LSP diagnostics pass) is never clobbered by a
-    * stale click target.
+  /** Resolves a primary click against the always-visible tab strip (issue #1077: switch by clicking a tab; issue #1080:
+    * open a new tab from the trailing `+` affordance) via `TabBarMouseHitTesting`. The new-tab affordance is checked
+    * first since it sits in the same reserved trailing region a plain `clickTarget` would otherwise resolve as a
+    * swallowed no-op (a click inside the strip but on no tab). Either way, *what* to do is resolved from `state`, this
+    * dispatch's already-current snapshot, but the change itself is applied to the freshest state at write time --
+    * mirroring `applyEditorClick`'s `current`-not-`state` write below, so a concurrent update elsewhere (e.g. a
+    * background LSP diagnostics pass) is never clobbered by a stale click target.
     */
   private def handleTabBarClick(click: MouseClick, state: AppState): IO[Boolean] =
-    TabBarMouseHitTesting.clickTarget(state, click.col, click.row) match
-      case Some(switchTo) =>
-        stateRef.get
-          .flatMap { current =>
-            val next = switchTo.fold(current)(EditorState.switchToBuffer(current, _))
-            validateAndUpdateState(next, current)
-          }
-          .as(true)
-      case None =>
-        IO.pure(false)
+    if TabBarMouseHitTesting.newTabClickTarget(state, click.col, click.row) then
+      stateRef.get
+        .flatMap(current => validateAndUpdateState(EditorState.openNewTab(current), current))
+        .as(true)
+    else
+      TabBarMouseHitTesting.clickTarget(state, click.col, click.row) match
+        case Some(switchTo) =>
+          stateRef.get
+            .flatMap { current =>
+              val next = switchTo.fold(current)(EditorState.switchToBuffer(current, _))
+              validateAndUpdateState(next, current)
+            }
+            .as(true)
+        case None =>
+          IO.pure(false)
 
   /** Applies a resolved editor click's cursor/selection to its buffer, dismisses any open context menu, and -- in
     * floating display mode, for a plain click inside a highlighted comment range -- layers the read-only floating lens

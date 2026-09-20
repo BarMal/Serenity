@@ -63,12 +63,22 @@ class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     val entries  = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
     val resolved = TabBarSurfaceComposition.forTabBar(entries, Some(BufferId(1)), LayoutRect(0, 0, 30, 1))
 
-    resolved.paintBoxes should have size 1
+    // Second paint box is the trailing new-tab (+) affordance (issue #1080) -- see its own coverage below.
+    resolved.paintBoxes should have size 2
     val box = resolved.paintBoxes.head
     box.layout shouldBe SurfacePaintLayout.Distributed
     box.segments should have size 3
     box.segments.map(_.allocatedWidth.isDefined) shouldBe List(true, true, true)
     box.segments.map(_.trailingSeparator) shouldBe List(true, true, false)
+  }
+
+  it should "paint the trailing new-tab (+) affordance as its own plain-text box, addressed by NewTabFocusId" in {
+    val entries  = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
+    val resolved = TabBarSurfaceComposition.forTabBar(entries, Some(BufferId(1)), LayoutRect(0, 0, 30, 1))
+
+    val newTabBox = resolved.paintBoxes(1)
+    newTabBox.text shouldBe Some(" +")
+    newTabBox.focusId shouldBe Some(TabBarSurfaceComposition.NewTabFocusId)
   }
 
   it should "mark exactly the active buffer's segment as selected" in {
@@ -82,19 +92,23 @@ class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     val entries  = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
     val resolved = TabBarSurfaceComposition.forTabBar(entries, None, LayoutRect(0, 0, 21, 1))
 
-    // Widths 6/6/5 (see the `allocate` spec above); each tab starts two columns past the previous tab's cell (one
-    // for its separator glyph, one for the blank column after it): 0, then 0+6+2=8, then 8+6+2=16.
+    // 21 columns available, minus 2 reserved for the trailing new-tab affordance (issue #1080) -> 19 columns for
+    // tabs, minus 2 gaps reserving 2 columns each -> 15 columns of content, 5/5/5. Each tab starts two columns past
+    // the previous tab's cell (one for its separator glyph, one for the blank column after it): 0, then 0+5+2=7,
+    // then 7+5+2=14.
     resolved.hitRegions.map(_.focusId) shouldBe entries.map(e => TabBarSurfaceComposition.focusId(e.bufferId))
-    resolved.hitRegions.map(_.rect.width) shouldBe List(6.0, 6.0, 5.0)
-    resolved.hitRegions.map(_.rect.x) shouldBe List(0.0, 8.0, 16.0)
+    resolved.hitRegions.map(_.rect.width) shouldBe List(5.0, 5.0, 5.0)
+    resolved.hitRegions.map(_.rect.x) shouldBe List(0.0, 7.0, 14.0)
   }
 
   it should "resolve an absolute on-screen rect's offset into the hit regions' x positions" in {
     val entries  = List(entry(0, "one"), entry(1, "two"))
     val resolved = TabBarSurfaceComposition.forTabBar(entries, None, LayoutRect(5, 2, 20, 1))
 
-    // 18 content columns split 9/9; the strip itself starts at x=5, so the second tab starts at 5+9+2=16.
-    resolved.hitRegions.map(_.rect.x) shouldBe List(5.0, 16.0)
+    // 20 columns available, minus 2 reserved for the new-tab affordance -> 18 columns for tabs, minus 1 gap
+    // reserving 2 columns -> 16 content columns split 8/8; the strip itself starts at x=5, so the second tab starts
+    // at 5+8+2=15.
+    resolved.hitRegions.map(_.rect.x) shouldBe List(5.0, 15.0)
     resolved.hitRegions.foreach(_.rect.y shouldBe 2.0)
   }
 
@@ -112,12 +126,13 @@ class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   it should
     "produce one close hit region per wide-enough tab, addressed by closeFocusId, at the right edge of its own cell" in {
       val entries = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
-      // Widths 6/6/5 (see the `allocate` spec above), starting at 0, 8, 16 (see `forTabBar`'s hit-region spec above).
+      // Widths 5/5/5, starting at 0, 7, 14 (see `forTabBar`'s hit-region spec above -- both derive tab cells from the
+      // same width, reduced by the trailing new-tab affordance, issue #1080).
       val regions = TabBarSurfaceComposition.closeAffordances(entries, None, LayoutRect(0, 0, 21, 1))
 
       regions.map(_.focusId) shouldBe entries.map(e => TabBarSurfaceComposition.closeFocusId(e.bufferId))
-      // Each region is the rightmost 2 columns of its tab's own cell: [4,6), [12,14), [19,21).
-      regions.map(_.rect.x) shouldBe List(4.0, 12.0, 19.0)
+      // Each region is the rightmost 2 columns of its tab's own cell: [3,5), [10,12), [17,19).
+      regions.map(_.rect.x) shouldBe List(3.0, 10.0, 17.0)
       regions.foreach(_.rect.width shouldBe 2.0)
     }
 
@@ -125,9 +140,9 @@ class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     val entries = List(entry(0, "one"), entry(1, "two"))
     val regions = TabBarSurfaceComposition.closeAffordances(entries, None, LayoutRect(5, 2, 20, 1))
 
-    // 18 content columns split 9/9 (see `forTabBar`'s own offset spec above); the strip starts at x=5, so the first
-    // tab's close region is [5+9-2,5+9)=[12,14) and the second's is [5+9+2+9-2,...)=[23,25).
-    regions.map(_.rect.x) shouldBe List(12.0, 23.0)
+    // 16 content columns split 8/8 (see `forTabBar`'s own offset spec above); the strip starts at x=5, so the first
+    // tab's close region is [5+8-2,5+8)=[11,13) and the second's is [5+8+2+8-2,...)=[21,23).
+    regions.map(_.rect.x) shouldBe List(11.0, 21.0)
     regions.foreach(_.rect.y shouldBe 2.0)
   }
 
@@ -144,4 +159,42 @@ class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     val resolved = TabBarSurfaceComposition.forTabBar(entries, None, LayoutRect(0, 0, 21, 1))
 
     resolved.hitRegions.map(_.focusId) shouldBe entries.map(e => TabBarSurfaceComposition.focusId(e.bufferId))
+  }
+
+  "newTabAffordance" should "produce no region for an empty tab list" in {
+    TabBarSurfaceComposition.newTabAffordance(Nil, LayoutRect(0, 0, 30, 1)) shouldBe None
+  }
+
+  it should "produce a 2-column hit region flush against the strip's right edge, addressed by NewTabFocusId" in {
+    val entries = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
+
+    val region = TabBarSurfaceComposition
+      .newTabAffordance(entries, LayoutRect(0, 0, 21, 1))
+      .getOrElse(fail("expected a new-tab affordance region"))
+
+    region.focusId shouldBe TabBarSurfaceComposition.NewTabFocusId
+    region.rect.x shouldBe 19.0
+    region.rect.width shouldBe 2.0
+  }
+
+  it should "resolve an absolute on-screen rect's offset into its own x position" in {
+    val entries = List(entry(0, "one"), entry(1, "two"))
+
+    val region = TabBarSurfaceComposition
+      .newTabAffordance(entries, LayoutRect(5, 2, 20, 1))
+      .getOrElse(fail("expected a new-tab affordance region"))
+
+    region.rect.x shouldBe 23.0
+    region.rect.y shouldBe 2.0
+  }
+
+  it should "not touch forTabBar's own hit regions or closeAffordances -- three disjoint region sets (issue #1080)" in {
+    val entries  = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
+    val rect     = LayoutRect(0, 0, 21, 1)
+    val resolved = TabBarSurfaceComposition.forTabBar(entries, None, rect)
+    val closes   = TabBarSurfaceComposition.closeAffordances(entries, None, rect)
+
+    val newTabFocusId = TabBarSurfaceComposition.NewTabFocusId
+    resolved.hitRegions.map(_.focusId) should not contain newTabFocusId
+    closes.map(_.focusId) should not contain newTabFocusId
   }

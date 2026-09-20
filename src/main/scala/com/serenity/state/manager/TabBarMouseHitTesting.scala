@@ -5,11 +5,12 @@ import com.serenity.state.models.{AppState, BufferId, SurfaceContent, TabListEnt
 import com.serenity.ui.layout.{LayoutEngine, LayoutRect, TabBarSurfaceComposition}
 
 /** Per-tab hit regions for the always-visible tab strip (issue #1075: Foundation; close affordance, #1078), and
-  * resolving a primary click against them into a buffer switch (issue #1077). Resolves a click's cell coordinate to the
-  * `BufferId` of the tab (`hitAt`) or its close affordance (`closeHitAt`) it landed on, using the exact same
-  * `ResolvedSurfaceComposition`/`closeAffordances` geometry `TextOverlayRenderer` paints from -- the same "painted and
-  * hit-tested from one plan" guarantee `ModalMouseHitTesting`/`CommandRunnerMouseHitTesting` already give their own
-  * surfaces.
+  * resolving a primary click against them into a buffer switch (issue #1077) or, via the trailing new-tab (+)
+  * affordance, a new tab (issue #1080). Resolves a click's cell coordinate to the `BufferId` of the tab (`hitAt`) or
+  * its close affordance (`closeHitAt`) it landed on, using the exact same
+  * `ResolvedSurfaceComposition`/`closeAffordances`/`newTabAffordance` geometry `TextOverlayRenderer` paints from -- the
+  * same "painted and hit-tested from one plan" guarantee `ModalMouseHitTesting`/`CommandRunnerMouseHitTesting` already
+  * give their own surfaces.
   */
 private[manager] object TabBarMouseHitTesting:
 
@@ -76,3 +77,31 @@ private[manager] object TabBarMouseHitTesting:
       .reverse
       .find(_.rect.contains(col, row))
       .flatMap(hit => TabBarSurfaceComposition.closeBufferIdOf(hit.focusId))
+
+  /** Resolves a primary click's cell coordinate against `state`'s own tab strip's trailing new-tab (+) affordance
+    * (issue #1080) -- the same `AppState.tabBarSurface`/`LayoutEngine.calculateLayoutWithUI` resolution `clickTarget`
+    * uses, but checked against `TabBarSurfaceComposition.newTabAffordance` instead of `hitAt`, so a new-tab click and a
+    * switch click (`clickTarget`, #1077) always resolve from disjoint region sets. `false` covers both "the click
+    * missed the strip" and "the click landed in the strip but not on the affordance" -- either way the caller should
+    * keep resolving other mouse targets/tab-strip outcomes.
+    */
+  def newTabClickTarget(state: AppState, col: Int, row: Int): Boolean =
+    (for
+      surface      <- state.tabBarSurface
+      viewportSize <- state.runtime.viewportSize
+      rect         <- LayoutEngine.calculateLayoutWithUI(state, viewportSize).tabBarRect
+      _            <- Option.when(rect.contains(col, row))(())
+    yield
+      val entries = surface.content match
+        case SurfaceContent.TabBar(entries, _) => entries
+        // Unreachable: AppState.tabBarSurface only ever builds SurfaceContent.TabBar.
+        case _ => Nil
+      TabBarSurfaceComposition.newTabAffordance(entries, rect).exists(_.rect.contains(col.toDouble, row.toDouble))
+    ).getOrElse(false)
+
+  /** Applies [[newTabClickTarget]]'s resolution to `state`, opening a new tab via `EditorState.openNewTab` -- the same
+    * helper keyboard `NewTab` (Ctrl+T) uses -- when the click landed on the affordance, or `None` otherwise so the
+    * caller keeps resolving other mouse targets.
+    */
+  def handleNewTabClick(state: AppState, col: Int, row: Int)(using com.serenity.rope.Balance): Option[AppState] =
+    Option.when(newTabClickTarget(state, col, row))(EditorState.openNewTab(state))
