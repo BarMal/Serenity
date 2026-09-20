@@ -32,8 +32,8 @@ private[manager] object TabBarMouseHitTesting:
     * #1078) -- the close-specific counterpart to `hitAt` above, resolved from
     * `TabBarSurfaceComposition.closeAffordances` rather than `forTabBar`'s own hit regions, so a close click and a
     * switch click (#1077, via `hitAt`) never contend for the same region. `activeBufferId` must match the value
-    * `hitAt`/`forTabBar` were resolved with for this same click, so both agree on which tabs are visible under
-    * overflow (issue #1081).
+    * `hitAt`/`forTabBar` were resolved with for this same click, so both agree on which tabs are visible under overflow
+    * (issue #1081).
     */
   def closeHitAt(
     entries: List[TabListEntry],

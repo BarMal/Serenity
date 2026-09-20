@@ -86,9 +86,9 @@ object TabBarSurfaceComposition:
     */
   private val OverflowIndicatorWidth = 4
 
-  /** The visible subset of `entries` and how many are hidden (issue #1081). A contiguous, order-preserving window
-    * sized to what fits at [[MinTabWidth]], centred on the active tab so it is never scrolled out of view. Reachable
-    * hidden tabs are not this composition's concern: the existing keyboard-toggled `SurfaceContent.TabList` overlay
+  /** The visible subset of `entries` and how many are hidden (issue #1081). A contiguous, order-preserving window sized
+    * to what fits at [[MinTabWidth]], centred on the active tab so it is never scrolled out of view. Reachable hidden
+    * tabs are not this composition's concern: the existing keyboard-toggled `SurfaceContent.TabList` overlay
     * (`TabListContent.build`, `AppEventReducer.toggleTabList`) already lists every open buffer regardless of strip
     * width, so overflow here does not need its own dropdown/menu affordance to keep hidden tabs reachable.
     */
@@ -126,7 +126,7 @@ object TabBarSurfaceComposition:
     * [[GapColumns]] from `rect.width` before allocating the visible tabs whenever any are hidden, so the "+N" marker
     * `forTabBar` paints always has room within `rect` alongside them.
     */
-  private final case class TabBarLayout(
+  final private case class TabBarLayout(
       allocations: List[TabAllocation],
       positions: List[(Int, Int)],
       hiddenCount: Int
@@ -145,10 +145,10 @@ object TabBarSurfaceComposition:
     * uses to place segments, so a click resolves to the tab it visually lands on.
     *
     * Once more tabs are open than fit at `MinTabWidth` (issue #1081), only a contiguous, active-tab-centred window of
-    * them is allocated at all -- the rest get neither a paint segment nor a hit region, so a scrolled-out tab is
-    * never clickable. A trailing, non-interactive "+N" segment is appended to the paint box (but not to
-    * `hitRegions`) so the row still reflects how many tabs are hidden; those tabs stay reachable through the
-    * existing `SurfaceContent.TabList` overlay rather than through any new affordance here.
+    * them is allocated at all -- the rest get neither a paint segment nor a hit region, so a scrolled-out tab is never
+    * clickable. A trailing, non-interactive "+N" segment is appended to the paint box (but not to `hitRegions`) so the
+    * row still reflects how many tabs are hidden; those tabs stay reachable through the existing
+    * `SurfaceContent.TabList` overlay rather than through any new affordance here.
     */
   def forTabBar(
     entries: List[TabListEntry],
@@ -236,13 +236,13 @@ object TabBarSurfaceComposition:
     * rightmost [[CloseHitWidth]] columns of that tab's own cell, from the exact same `layOut` (`allocate` +
     * `tabPositions`) `forTabBar` uses for its own hit regions -- including its overflow window (issue #1081), so a
     * scrolled-out tab has no close region either. Deliberately not part of `forTabBar`'s own
-    * `ResolvedSurfaceComposition` -- resolved as its own list so a close click (here) and a switch click
-    * (`forTabBar`'s existing hit regions, issue #1077) always come from two disjoint region sets rather than one
-    * overloaded one; painting the glyph itself into the shared `Distributed`-row renderer is not yet wired up
-    * (tracked on the issue, not a silent gap).
+    * `ResolvedSurfaceComposition` -- resolved as its own list so a close click (here) and a switch click (`forTabBar`'s
+    * existing hit regions, issue #1077) always come from two disjoint region sets rather than one overloaded one;
+    * painting the glyph itself into the shared `Distributed`-row renderer is not yet wired up (tracked on the issue,
+    * not a silent gap).
     *
-    * `activeBufferId` must be the same value passed to `forTabBar` for this same `rect`/`entries`, so both resolve
-    * the same visible window under overflow.
+    * `activeBufferId` must be the same value passed to `forTabBar` for this same `rect`/`entries`, so both resolve the
+    * same visible window under overflow.
     */
   def closeAffordances(
     entries: List[TabListEntry],
