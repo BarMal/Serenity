@@ -36,10 +36,10 @@ package com.serenity.perf
   * `layout.large_multiline.visible_viewport` (issue #1586) is deliberately absent from this object: it also produces
   * spurious 2x-ratio flags (see docs/performance-benchmarks.md's "#1586 investigation" section), but for a different
   * reason than the four families above and one this file's existing derivations cannot be extended to cover by
-  * inspection alone -- its baseline sits at multi-millisecond scale, where `check_perf_regression.py`'s absolute
-  * delta floor (tuned for the sub-millisecond families above) does not help, and fixing it needs the same twelve-run
-  * empirical comparison this file's other entries were sized from. That measurement is not in this change; see the
-  * doc section for why.
+  * inspection alone -- its baseline sits at multi-millisecond scale, where `check_perf_regression.py`'s absolute delta
+  * floor (tuned for the sub-millisecond families above) does not help, and fixing it needs the same twelve-run
+  * empirical comparison this file's other entries were sized from. That measurement is not in this change; see the doc
+  * section for why.
   */
 private[perf] object BenchmarkIterationCounts:
   val Damage         = 60
