@@ -26,14 +26,19 @@ object LspManager:
 
   final private case class RequestKey(uri: DocumentUri, kind: RequestKind)
 
-  /** `anchor` is meaningful only for the cursor-anchored request kinds handled today (Hover, Completion, Definition).
-    * #1507: a whole-document request kind (e.g. semantic tokens, tracked in the still-unmerged #1506) has no cursor
-    * position to give here, so `startRequest`'s shared parameter shape will need reworking -- into an ADT
-    * distinguishing cursor-anchored from whole-document requests, or a separate dispatch path for whole-document ones
-    * -- once that request kind actually exists in this file. Not done speculatively here: there is nothing today to
-    * construct or test a whole-document case against.
+  /** Distinguishes the cursor-anchored request kinds (Hover, Completion, Definition) from the whole-document ones
+    * (SemanticTokens), so `startRequest`'s shared parameter shape doesn't force a placeholder cursor position onto a
+    * request that has no cursor to anchor to (#1507).
     */
-  final private case class RequestContext(version: Int, anchor: CursorPosition)
+  private enum RequestAnchor:
+    case CursorAnchored(position: CursorPosition)
+    case WholeDocument
+
+    def cursorPosition: Option[CursorPosition] = this match
+      case CursorAnchored(position) => Some(position)
+      case WholeDocument            => None
+
+  final private case class RequestContext(version: Int, anchor: RequestAnchor)
 
   private[lsp] trait ConnectionProvider:
 
@@ -203,7 +208,7 @@ object LspManager:
           RequestKind.Hover,
           uri,
           languageId,
-          anchor,
+          RequestAnchor.CursorAnchored(anchor),
           connectionsRef,
           documentVersions,
           requestContexts,
@@ -232,7 +237,7 @@ object LspManager:
           RequestKind.Completion,
           uri,
           languageId,
-          anchor,
+          RequestAnchor.CursorAnchored(anchor),
           connectionsRef,
           documentVersions,
           requestContexts,
@@ -260,7 +265,7 @@ object LspManager:
           RequestKind.Definition,
           uri,
           languageId,
-          anchor,
+          RequestAnchor.CursorAnchored(anchor),
           connectionsRef,
           documentVersions,
           requestContexts,
@@ -329,9 +334,7 @@ object LspManager:
       RequestKind.SemanticTokens,
       uri,
       languageId,
-      // Semantic tokens apply to the whole document, not a cursor position -- `anchor` here is never read back
-      // out of `context` by the request lambda below, unlike hover/definition.
-      anchor = CursorPosition(0, 0),
+      anchor = RequestAnchor.WholeDocument,
       connectionsRef,
       documentVersions,
       requestContexts,
@@ -368,7 +371,7 @@ object LspManager:
     kind: RequestKind,
     uri: DocumentUri,
     languageId: LanguageId,
-    anchor: CursorPosition,
+    anchor: RequestAnchor,
     connectionsRef: Ref[IO, Map[ConnectionIdentity, ManagedConnection]],
     documentVersions: Ref[IO, Map[DocumentUri, Int]],
     requestContexts: Ref[IO, Map[RequestKey, RequestContext]],
@@ -425,13 +428,15 @@ object LspManager:
     kind: RequestKind,
     uri: DocumentUri,
     languageId: LanguageId,
-    anchor: CursorPosition
+    anchor: RequestAnchor
   ): Option[LspEvent] =
     kind match
       case RequestKind.Hover =>
-        Some(LspEvent.LspHoverReceived(s"No LSP server available for ${languageId.displayName}", anchor))
+        anchor.cursorPosition.map(position =>
+          LspEvent.LspHoverReceived(s"No LSP server available for ${languageId.displayName}", position)
+        )
       case RequestKind.Completion =>
-        Some(LspEvent.LspCompletionReceived(Nil, anchor))
+        anchor.cursorPosition.map(position => LspEvent.LspCompletionReceived(Nil, position))
       case RequestKind.Definition =>
         None
       case RequestKind.SemanticTokens =>

@@ -281,9 +281,9 @@ class LspManagerSpec extends AnyFlatSpec with Matchers:
     )
 
   // #1508: the "no server available" fallback in `startRequest` used to hardcode `LspHoverReceived` regardless of
-  // which request kind was actually being made. These three cover the fallback's kind-appropriate event for each of
-  // the request kinds that exist today (Hover, Completion, Definition); a semantic-tokens case will need the same
-  // treatment once #1506 (currently unmerged) introduces that request kind.
+  // which request kind was actually being made. These three cover the fallback's kind-appropriate event for the
+  // cursor-anchored request kinds (Hover, Completion, Definition); the semantic-tokens case is covered by
+  // `LspManagerSemanticTokensRenderingSpec`, since it needs a whole-document (not cursor-anchored) request.
   it should "emit an explanatory hover message when no LSP server is available" in {
     val anchor = CursorPosition(0, 1)
     runVirtual(
