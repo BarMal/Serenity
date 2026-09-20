@@ -113,8 +113,8 @@ private[reducers] object ModalFileWorkflowReducer:
         ReducerResult.noEffects(currentState)
 
   /** Fires unconditionally for an Open workflow, exactly like `handleSubmit` -- the reducer can't tell from
-    * `FileWorkflowState` alone whether `path` is really a directory, so that check (and the resulting status message
-    * or dismiss-and-pin) happens in IO (issue #1525). A no-op for Save As, which has no project-root concept.
+    * `FileWorkflowState` alone whether `path` is really a directory, so that check (and the resulting status message or
+    * dismiss-and-pin) happens in IO (issue #1525). A no-op for Save As, which has no project-root concept.
     */
   private def handleOpenAsProjectRoot(currentState: AppState): ReducerResult =
     currentModal(currentState) match
