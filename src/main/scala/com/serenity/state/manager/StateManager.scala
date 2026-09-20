@@ -208,8 +208,6 @@ final case class FileService(
   */
 final case class ScrollManager(
     ensureCursorVisible: PaneId => IO[Unit],
-    smoothScrollTo: (PaneId, Int) => IO[Unit],
-    progressSmoothScroll: (PaneId, Double) => IO[Unit],
     clickMinimap: (PaneId, Int) => IO[Unit]
 )
 

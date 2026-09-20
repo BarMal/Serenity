@@ -23,8 +23,6 @@ final private[manager] class StateManagerViewportCapability(
 
   val scrollManager: ScrollManager = ScrollManager(
     ensureCursorVisible = ensureCursorVisible,
-    smoothScrollTo = smoothScrollTo,
-    progressSmoothScroll = progressSmoothScroll,
     clickMinimap = clickMinimap
   )
 
@@ -35,56 +33,6 @@ final private[manager] class StateManagerViewportCapability(
           val cursor        = buffer.editing.cursors.head.position
           val updatedBuffer = buffer.copy(viewport = CursorViewport.adjustForCursor(buffer, state, cursor))
           state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> updatedBuffer)))
-        case None => state
-    }
-
-  private def smoothScrollTo(paneId: PaneId, targetLine: Int): IO[Unit] =
-    stateRef.update { state =>
-      state.persisted.layout.editorPanes.get(paneId) match
-        case Some(pane) =>
-          val updatedPane = pane.copy(
-            smoothScrolling = Some(SmoothScrollState(targetTopLine = targetLine, progress = 0.0))
-          )
-          state.copy(persisted =
-            state.persisted.copy(layout =
-              state.persisted.layout.copy(
-                editorPanes = state.persisted.layout.editorPanes + (paneId -> updatedPane)
-              )
-            )
-          )
-        case None => state
-    }
-
-  private def progressSmoothScroll(paneId: PaneId, progress: Double): IO[Unit] =
-    stateRef.update { state =>
-      state.persisted.layout.editorPanes.get(paneId) match
-        case Some(pane) =>
-          pane.bufferId.flatMap(state.persisted.buffers.get) match
-            case Some(buffer) =>
-              pane.smoothScrolling match
-                case Some(SmoothScrollState(targetTopLine, _)) =>
-                  val currentTopLine = buffer.viewport.topLine
-                  val (newTopLine, newSmoothing) =
-                    if progress >= 1.0 then (targetTopLine, None)
-                    else
-                      val interpolated =
-                        math.round(currentTopLine + progress * (targetTopLine - currentTopLine)).toInt
-                      (interpolated, Some(SmoothScrollState(targetTopLine, progress)))
-
-                  val updatedBuffer =
-                    buffer.copy(viewport = buffer.viewport.copy(topLine = newTopLine, topVisualLine = 0))
-                  val updatedPane = pane.copy(smoothScrolling = newSmoothing)
-
-                  state.copy(
-                    persisted = state.persisted.copy(
-                      buffers = state.persisted.buffers + (buffer.id -> updatedBuffer),
-                      layout = state.persisted.layout.copy(
-                        editorPanes = state.persisted.layout.editorPanes + (paneId -> updatedPane)
-                      )
-                    )
-                  )
-                case None => state
-            case None => state
         case None => state
     }
 
