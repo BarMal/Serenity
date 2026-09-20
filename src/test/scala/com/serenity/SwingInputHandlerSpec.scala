@@ -392,7 +392,7 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     wheel.mouseWheelMoved(
       new java.awt.event.MouseWheelEvent(
         component,
-        java.awt.event.MouseWheelEvent.MOUSE_WHEEL,
+        java.awt.event.MouseEvent.MOUSE_WHEEL,
         1L,
         0,
         0,
@@ -407,7 +407,7 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     wheel.mouseWheelMoved(
       new java.awt.event.MouseWheelEvent(
         component,
-        java.awt.event.MouseWheelEvent.MOUSE_WHEEL,
+        java.awt.event.MouseEvent.MOUSE_WHEEL,
         2L,
         0,
         0,
@@ -434,7 +434,7 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     wheel.mouseWheelMoved(
       new java.awt.event.MouseWheelEvent(
         component,
-        java.awt.event.MouseWheelEvent.MOUSE_WHEEL,
+        java.awt.event.MouseEvent.MOUSE_WHEEL,
         1L,
         InputEvent.SHIFT_DOWN_MASK,
         0,
@@ -449,7 +449,7 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     wheel.mouseWheelMoved(
       new java.awt.event.MouseWheelEvent(
         component,
-        java.awt.event.MouseWheelEvent.MOUSE_WHEEL,
+        java.awt.event.MouseEvent.MOUSE_WHEEL,
         2L,
         InputEvent.SHIFT_DOWN_MASK,
         0,
@@ -476,7 +476,7 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     wheel.mouseWheelMoved(
       new java.awt.event.MouseWheelEvent(
         component,
-        java.awt.event.MouseWheelEvent.MOUSE_WHEEL,
+        java.awt.event.MouseEvent.MOUSE_WHEEL,
         1L,
         0,
         0,
