@@ -148,6 +148,30 @@ object SpellChecker:
       )
     else current
 
+  /** The word covered by an active spell-check diagnostic at the cursor (#1531), read back from the buffer's current
+    * content at the diagnostic's own range rather than reparsed from the diagnostic message. `None` when there is no
+    * active buffer/cursor, or the cursor sits outside every spell-check diagnostic's range for that buffer.
+    */
+  def flaggedWordAtCursor(state: AppState): Option[String] =
+    for
+      buffer <- state.activeBuffer
+      cursor <- state.activeCursorPosition
+      diagnostic <- state.runtime.diagnosticsState.diagnostics
+        .getOrElse(diagnosticsUri(buffer), Nil)
+        .find(diagnostic => diagnostic.source.contains(Source) && containsCursor(diagnostic.range, cursor))
+      line <- buffer.document.content.getLine(diagnostic.range.start.line)
+      word <- wordInRange(line, diagnostic.range)
+    yield word
+
+  private def containsCursor(range: LspRange, cursor: CursorPosition): Boolean =
+    cursor.line == range.start.line && cursor.column >= range.start.character &&
+      cursor.column <= range.end.character
+
+  private def wordInRange(line: String, range: LspRange): Option[String] =
+    val start = range.start.character.max(0).min(line.length)
+    val end   = range.end.character.max(start).min(line.length)
+    Option.when(end > start)(line.substring(start, end))
+
   def diagnosticsUri(buffer: Buffer): String =
     buffer.document.filePath.map(_.toUri.toString).getOrElse(bufferDiagnosticsUri(buffer.id))
 

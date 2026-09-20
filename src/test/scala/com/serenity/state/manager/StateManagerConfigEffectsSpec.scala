@@ -143,6 +143,79 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.analysisRuns.get.unsafeRunSync() shouldBe 1
   }
 
+  it should "add the flagged word at the cursor to the custom spell-check dictionary" in {
+    val text       = "hello wurld today"
+    val config     = com.serenity.config.SpellCheckConfig(enabled = true)
+    val bufferId   = BufferId(0)
+    val baseBuffer = AppState.initial.persisted.buffers(bufferId)
+    val buffer = baseBuffer.copy(
+      document = baseBuffer.document.copy(content = com.serenity.rope.Rope(text)),
+      editing = EditingState(List(CursorPosition(0, 8)))
+    )
+    val uri         = com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer)
+    val diagnostics = com.serenity.spellcheck.SpellChecker.check(text, config)
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.withSpellCheck(config),
+        buffers = Map(bufferId -> buffer)
+      ),
+      runtime = AppState.initial.runtime.copy(
+        diagnosticsState = AppState.initial.runtime.diagnosticsState.copy(diagnostics = Map(uri -> diagnostics))
+      )
+    )
+    val fixture = harness(state)
+
+    fixture.config
+      .interpret(SettingsIntent.SpellCheck(SpellCheckIntent.AddWordAtCursorToDictionary), state)
+      .unsafeRunSync()
+
+    fixture.currentConfig.languageToolsConfig.spellCheck.additionalWords shouldBe List("wurld")
+  }
+
+  it should "not add a word to the dictionary when the cursor is not on a flagged word" in {
+    val fixture = harness()
+
+    fixture.config
+      .interpret(SettingsIntent.SpellCheck(SpellCheckIntent.AddWordAtCursorToDictionary), AppState.initial)
+      .unsafeRunSync()
+
+    fixture.currentConfig.languageToolsConfig.spellCheck.additionalWords shouldBe Nil
+  }
+
+  // A diagnostic computed before "wurld" was added to the dictionary, still cached against a buffer whose config
+  // now already accepts the word (e.g. re-analysis hasn't caught up yet) -- appending must still dedupe rather
+  // than double the entry.
+  it should "not duplicate a word already in the custom spell-check dictionary" in {
+    val text = "hello wurld today"
+    val staleDiagnostic =
+      com.serenity.spellcheck.SpellChecker.check(text, com.serenity.config.SpellCheckConfig(enabled = true))
+    val config = com.serenity.config.SpellCheckConfig(enabled = true, additionalWords = List("wurld"))
+    val bufferId        = BufferId(0)
+    val baseBuffer      = AppState.initial.persisted.buffers(bufferId)
+    val buffer = baseBuffer.copy(
+      document = baseBuffer.document.copy(content = com.serenity.rope.Rope(text)),
+      editing = EditingState(List(CursorPosition(0, 8)))
+    )
+    val uri = com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer)
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
+        config = AppConfig.default.withSpellCheck(config),
+        buffers = Map(bufferId -> buffer)
+      ),
+      runtime = AppState.initial.runtime.copy(
+        diagnosticsState =
+          AppState.initial.runtime.diagnosticsState.copy(diagnostics = Map(uri -> staleDiagnostic))
+      )
+    )
+    val fixture = harness(state)
+
+    fixture.config
+      .interpret(SettingsIntent.SpellCheck(SpellCheckIntent.AddWordAtCursorToDictionary), state)
+      .unsafeRunSync()
+
+    fixture.currentConfig.languageToolsConfig.spellCheck.additionalWords shouldBe List("wurld")
+  }
+
   it should "route the contextual toolbar toggle through the editor event queue rather than the config" in {
     val fixture = harness()
 

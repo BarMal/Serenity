@@ -140,3 +140,12 @@ class CommandRegistrySpec extends AnyFlatSpec with Matchers:
     )
     registry.findCommand("clear-session").map(_.intent) shouldBe Some(CommandIntent.Session(SessionIntent.ClearSession))
   }
+
+  // #1531: the command-palette/context-menu-reachable path onto `SpellCheckConfig.additionalWords`.
+  it should "register a command that adds the flagged word at the cursor to the spell-check dictionary" in {
+    val registry = CommandRegistry.default
+
+    registry.findCommand("add-word-to-dictionary").map(_.intent) shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.AddWordAtCursorToDictionary))
+    )
+  }
