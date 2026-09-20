@@ -228,9 +228,9 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
 
   /** Regression cover for the O(n^2) fix: `adjustForCursorColumnMode` used to re-measure every line from the document
     * start on every call, so repeatedly moving the cursor through a large document cost O(n) per move. The fix walks
-    * from the previous placement instead; this pins that the result is unchanged by asserting an incremental
-    * placement (starting from an already-valid column-mode viewport near the document start) agrees with a cold,
-    * from-scratch placement for the same target cursor far into the document.
+    * from the previous placement instead; this pins that the result is unchanged by asserting an incremental placement
+    * (starting from an already-valid column-mode viewport near the document start) agrees with a cold, from-scratch
+    * placement for the same target cursor far into the document.
     */
   it should "agree with a cold from-scratch placement when reached incrementally from an earlier valid placement" in {
     val lineCount = 3000
