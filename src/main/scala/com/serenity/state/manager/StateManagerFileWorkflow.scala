@@ -264,6 +264,38 @@ final private[manager] class StateManagerFileWorkflow(
           }
         }
 
+  /** Resolves the directory an Open dialog is targeting for use as a project root (issue #1525), reporting back into
+    * the still-open dialog -- exactly like `completeOpenWorkflow` -- when the target is remote storage or isn't
+    * actually a directory. Returns `None` in both of those cases and for anything that isn't an in-flight Open
+    * workflow; the caller (which owns the panel-pinning and dismissal this class has no access to) only proceeds on
+    * `Some`.
+    */
+  private[manager] def resolveOpenAsProjectRoot(surfaceId: SurfaceId): IO[Option[Path]] =
+    stateRef.get.flatMap { state =>
+      fileWorkflowSurface(state, surfaceId) match
+        case Some(openWorkflow: OpenFileWorkflowState) =>
+          remoteWorkflowTarget(openWorkflow) match
+            case Some(remoteTarget) =>
+              updateFileWorkflowSurface(
+                surfaceId,
+                openWorkflow.updated(statusMessage = Some(remoteStorageMessage(remoteTarget)))
+              ).map(_ => None)
+            case None =>
+              workflowTargetPath(openWorkflow).flatMap { targetPath =>
+                IO.blocking(Files.isDirectory(targetPath)).flatMap {
+                  case true =>
+                    IO.pure(Some(targetPath))
+                  case false =>
+                    updateFileWorkflowSurface(
+                      surfaceId,
+                      openWorkflow.updated(statusMessage = Some(s"Not a directory: $targetPath"))
+                    ).map(_ => None)
+                }
+              }
+        case _ =>
+          IO.pure(None)
+    }
+
   /** The explicit, single-step counterpart to submitting twice (Enter to flag `missingPathSegments`, Enter again to
     * confirm): creates the missing directories -- as a side effect of performing the save itself, exactly like the
     * confirmed double-submit path -- immediately, without a second submit (issue #1253).

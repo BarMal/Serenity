@@ -284,6 +284,22 @@ final private[manager] class StateManagerWorkflowCapability(
   private[manager] def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     fileWorkflow.submitFileWorkflowEffect(surfaceId)
 
+  /** Opens the directory an Open dialog is targeting as a project root (issue #1525): resolves and validates the target
+    * through `fileWorkflow` (reporting back into the dialog on failure, exactly like a regular Open submit), then -- on
+    * a confirmed directory -- dismisses the dialog and hands the path to `openProjectRoot`, which the caller supplies
+    * so this capability doesn't need its own route to the panel-pinning machinery (`StateManagerPanelEffects`, owned by
+    * `StateManagerEffectHandlers`, isn't available to this capability -- issue #1525 reuses it rather than duplicating
+    * it).
+    */
+  private[manager] def openFileWorkflowAsProjectRootEffect(
+    surfaceId: SurfaceId,
+    openProjectRoot: Path => IO[Unit]
+  ): IO[Unit] =
+    fileWorkflow.resolveOpenAsProjectRoot(surfaceId).flatMap {
+      case Some(path) => dismissSurfaceAndFocusEditor(surfaceId) >> openProjectRoot(path)
+      case None       => IO.unit
+    }
+
   private[manager] def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     replaceWorkflow.submitReplaceWorkflowEffect(surfaceId)
 

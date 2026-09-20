@@ -25,6 +25,7 @@ private[reducers] object ModalFileWorkflowReducer:
       case ModalNavigate(Direction.Down) => handleNavigateDown(currentState)
       case ModalSubmit                   => handleSubmit(currentState)
       case ModalCreateDirectory          => handleCreateDirectory(currentState)
+      case ModalOpenAsProjectRoot        => handleOpenAsProjectRoot(currentState)
       case ModalClick(focusId, actionId) => handleClick(currentState, focusId, actionId)
       case _                             => ReducerResult.noEffects(currentState)
 
@@ -108,6 +109,17 @@ private[reducers] object ModalFileWorkflowReducer:
           currentState,
           AppEffect.Workflow(WorkflowEffect.CreateFileWorkflowDirectories(id))
         )
+      case _ =>
+        ReducerResult.noEffects(currentState)
+
+  /** Fires unconditionally for an Open workflow, exactly like `handleSubmit` -- the reducer can't tell from
+    * `FileWorkflowState` alone whether `path` is really a directory, so that check (and the resulting status message or
+    * dismiss-and-pin) happens in IO (issue #1525). A no-op for Save As, which has no project-root concept.
+    */
+  private def handleOpenAsProjectRoot(currentState: AppState): ReducerResult =
+    currentModal(currentState) match
+      case Some((id, Modal.FileWorkflow(workflow))) if workflow.mode == FileWorkflowMode.Open =>
+        ReducerResult.withEffect(currentState, AppEffect.Workflow(WorkflowEffect.OpenFileWorkflowAsProjectRoot(id)))
       case _ =>
         ReducerResult.noEffects(currentState)
 

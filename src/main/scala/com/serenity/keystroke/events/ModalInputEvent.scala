@@ -19,7 +19,13 @@ case object ModalDismiss                             extends ModalInputEvent
   * reached solely via `ModalKeyAction.CreateDirectory`'s binding, never through the shared `FocusIntent` vocabulary
   * other surfaces translate through.
   */
-case object ModalCreateDirectory                                       extends ModalInputEvent
+case object ModalCreateDirectory extends ModalInputEvent
+
+/** Opens the directory currently browsed in an Open dialog as a project root (issue #1525), reusing the same
+  * `ExplorerEffect.OpenRoot` pin-panel machinery a UI preset's docked directory tree already uses. Modal-only, like
+  * `ModalCreateDirectory`: reached solely via `ModalKeyAction.OpenAsProjectRoot`'s binding.
+  */
+case object ModalOpenAsProjectRoot                                     extends ModalInputEvent
 final case class ModalClick(focusId: String, actionId: Option[String]) extends ModalInputEvent
 
 object ModalInputEvent:

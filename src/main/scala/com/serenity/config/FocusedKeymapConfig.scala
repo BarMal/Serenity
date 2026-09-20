@@ -297,6 +297,7 @@ enum ModalKeyAction extends KeymapEventAction[ModalInputEvent]:
   case Submit
   case Dismiss
   case CreateDirectory
+  case OpenAsProjectRoot
 
   def event: ModalInputEvent =
     this match
@@ -313,6 +314,7 @@ enum ModalKeyAction extends KeymapEventAction[ModalInputEvent]:
       case Submit             => ModalSubmit
       case Dismiss            => ModalDismiss
       case CreateDirectory    => ModalCreateDirectory
+      case OpenAsProjectRoot  => ModalOpenAsProjectRoot
 
 object ModalKeyAction:
 
@@ -336,6 +338,9 @@ object ModalKeyAction:
     ModalKeyAction.Dismiss       -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Escape, None, Set.empty)),
     ModalKeyAction.CreateDirectory -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.Character, Some('n'), Set(com.serenity.keystroke.Modifier.Ctrl))
+    ),
+    ModalKeyAction.OpenAsProjectRoot -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Character, Some('r'), Set(com.serenity.keystroke.Modifier.Ctrl))
     )
   )
 

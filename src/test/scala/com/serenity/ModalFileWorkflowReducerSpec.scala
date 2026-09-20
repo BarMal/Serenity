@@ -362,6 +362,36 @@ class ModalFileWorkflowReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "queue OpenFileWorkflowAsProjectRoot only for an open workflow, never a save-as one" in {
+    val openWorkflow = ModalDialog(
+      SurfaceId("open"),
+      Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.Open, path = "/tmp/project")),
+      ModalPlacement.Centered
+    )
+    val openState = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(focus = Focus.Modal),
+      runtime = AppState.initial.runtime.copy(modalStack = List(openWorkflow))
+    )
+    val openResult = ModalEventReducer.reduce(ModalType.FileWorkflow, ModalOpenAsProjectRoot, openState)
+    openResult.state shouldBe openState
+    openResult.effects shouldBe List(
+      AppEffect.Workflow(WorkflowEffect.OpenFileWorkflowAsProjectRoot(SurfaceId("open")))
+    )
+
+    val saveAsWorkflow = ModalDialog(
+      SurfaceId("save-as"),
+      Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.SaveAs, filename = "notes.scala", path = "/tmp")),
+      ModalPlacement.Centered
+    )
+    val saveAsState = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(focus = Focus.Modal),
+      runtime = AppState.initial.runtime.copy(modalStack = List(saveAsWorkflow))
+    )
+    val saveAsResult = ModalEventReducer.reduce(ModalType.FileWorkflow, ModalOpenAsProjectRoot, saveAsState)
+    saveAsResult.state shouldBe saveAsState
+    saveAsResult.effects shouldBe Nil
+  }
+
   it should "queue file workflow submission when enter is pressed without suggestions" in {
     val initialWorkflow = SaveAsFileWorkflowState(
       filename = "notes.scala",

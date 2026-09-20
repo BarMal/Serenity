@@ -415,7 +415,7 @@ final private[manager] class StateManagerPanelEffects(
       case SurfaceContent.MarkdownPreview(_, _) => Some(PanelKind.MarkdownPreview)
       case _                                    => None
 
-  private def defaultPanelSize(kind: PanelKind, position: PanelPosition): Int =
+  private[manager] def defaultPanelSize(kind: PanelKind, position: PanelPosition): Int =
     kind match
       case PanelKind.MarkdownPreview => 40
       case PanelKind.Diagnostics =>

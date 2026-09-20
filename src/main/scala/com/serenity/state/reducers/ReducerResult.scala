@@ -41,6 +41,10 @@ enum WorkflowEffect:
   case SubmitReplaceWorkflow(surfaceId: SurfaceId)
   case SubmitCloseWorkflow(surfaceId: SurfaceId)
   case CreateFileWorkflowDirectories(surfaceId: SurfaceId)
+  // Opens the directory currently browsed in an Open dialog as a project root (issue #1525): validated in IO exactly
+  // like `SubmitFileWorkflow` (the reducer can't know whether `path` is really a directory), then handed off to the
+  // same `ExplorerEffect.OpenRoot` pin-panel machinery a UI preset's docked directory tree already uses.
+  case OpenFileWorkflowAsProjectRoot(surfaceId: SurfaceId)
 
 enum LspQueueEffect:
   case Enqueue(effect: LspEffect)
