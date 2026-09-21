@@ -80,6 +80,13 @@ private[manager] trait EffectModalWorkflowPort:
   def createStartupSession(): IO[Unit]
   def restoreStartupSession(): IO[Unit]
   def activeEditorBufferId(state: AppState): Option[BufferId]
+  // Named sessions (issue #1390): `openSaveSessionAsPrompt`/`openSessionPicker` show the modal, called directly from
+  // command interpretation; the `submit*` pair complete it once the modal's Enter routes back through
+  // `WorkflowEffect`, exactly like `submitFileWorkflowEffect` does for `FileWorkflow`.
+  def openSaveSessionAsPrompt(state: AppState): IO[Unit]
+  def openSessionPicker(state: AppState, purpose: SessionListPurpose): IO[Unit]
+  def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit]
+  def submitSessionListEffect(surfaceId: SurfaceId): IO[Unit]
 
 /** State and analysis ownership required while routing editor events. */
 private[manager] trait EventStatePort:

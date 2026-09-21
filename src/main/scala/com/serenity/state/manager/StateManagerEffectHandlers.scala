@@ -28,6 +28,8 @@ private[manager] trait WorkflowEffectPort:
   def submitReplace(surfaceId: SurfaceId): IO[Unit]
   def submitClose(surfaceId: SurfaceId): IO[Unit]
   def createDirectories(surfaceId: SurfaceId): IO[Unit]
+  def submitSessionNamePrompt(surfaceId: SurfaceId): IO[Unit]
+  def submitSessionList(surfaceId: SurfaceId): IO[Unit]
 
 /** Interprets workflow effects without editor, theme, file, or runtime dependencies. */
 final private[manager] class WorkflowEffectHandler(port: WorkflowEffectPort):
@@ -43,6 +45,8 @@ final private[manager] class WorkflowEffectHandler(port: WorkflowEffectPort):
       case WorkflowEffect.SubmitReplaceWorkflow(id)         => port.submitReplace(id)
       case WorkflowEffect.SubmitCloseWorkflow(id)           => port.submitClose(id)
       case WorkflowEffect.CreateFileWorkflowDirectories(id) => port.createDirectories(id)
+      case WorkflowEffect.SubmitSessionNamePrompt(id)       => port.submitSessionNamePrompt(id)
+      case WorkflowEffect.SubmitSessionList(id)             => port.submitSessionList(id)
 
 /** Lifecycle operation required by lifecycle effects. */
 private[manager] trait LifecycleEffectPort:
@@ -90,9 +94,11 @@ final private[manager] class StateManagerEffectHandlers(
             panelEffects.defaultPanelSize(PanelKind.Explorer, PanelPosition.Left)
           )
       )
-    def submitReplace(surfaceId: SurfaceId): IO[Unit]     = submitReplaceWorkflowEffect(surfaceId)
-    def submitClose(surfaceId: SurfaceId): IO[Unit]       = submitCloseWorkflowEffect(surfaceId)
-    def createDirectories(surfaceId: SurfaceId): IO[Unit] = createFileWorkflowDirectoriesEffect(surfaceId))
+    def submitReplace(surfaceId: SurfaceId): IO[Unit]           = submitReplaceWorkflowEffect(surfaceId)
+    def submitClose(surfaceId: SurfaceId): IO[Unit]             = submitCloseWorkflowEffect(surfaceId)
+    def createDirectories(surfaceId: SurfaceId): IO[Unit]       = createFileWorkflowDirectoriesEffect(surfaceId)
+    def submitSessionNamePrompt(surfaceId: SurfaceId): IO[Unit] = submitSessionNamePromptEffect(surfaceId)
+    def submitSessionList(surfaceId: SurfaceId): IO[Unit]       = submitSessionListEffect(surfaceId))
 
   private val lifecycleEffects = new LifecycleEffectHandler(
     new LifecycleEffectPort:
@@ -409,6 +415,12 @@ final private[manager] class StateManagerEffectHandlers(
         requestOpenFileDialog
       case SessionIntent.ReturnToStartPage =>
         beginCloseAction(CloseScope.ReturnToStartPage, state)
+      case SessionIntent.OpenSaveSessionAsPrompt =>
+        openSaveSessionAsPrompt(state)
+      case SessionIntent.OpenSessionPicker =>
+        openSessionPicker(state, SessionListPurpose.Open)
+      case SessionIntent.OpenRenameSessionPicker =>
+        openSessionPicker(state, SessionListPurpose.Rename)
 
   private def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)

@@ -163,6 +163,13 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
       def createStartupSession(): IO[Unit]                        = callsVar.update(_ :+ "createStartupSession")
       def restoreStartupSession(): IO[Unit]                       = callsVar.update(_ :+ "restoreStartupSession")
       def activeEditorBufferId(state: AppState): Option[BufferId] = state.focusedBufferId
+      def openSaveSessionAsPrompt(state: AppState): IO[Unit]      = callsVar.update(_ :+ "openSaveSessionAsPrompt")
+      def openSessionPicker(state: AppState, purpose: SessionListPurpose): IO[Unit] =
+        callsVar.update(_ :+ s"openSessionPicker:$purpose")
+      def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit] =
+        callsVar.update(_ :+ s"submitSessionNamePromptEffect:$surfaceId")
+      def submitSessionListEffect(surfaceId: SurfaceId): IO[Unit] =
+        callsVar.update(_ :+ s"submitSessionListEffect:$surfaceId")
 
     new Harness(
       stateRefVar,

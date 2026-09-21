@@ -137,6 +137,13 @@ enum SessionIntent:
   case StartupRestoreSession
   case StartupOpenFile
   case ReturnToStartPage
+  // Named sessions (issue #1390): `SaveSession`/`RestoreSession`/`ClearSession` above all operate implicitly on the
+  // "current" session (`SessionManager`'s own notion of the one on `SessionIndex.currentSessionId`) -- these three
+  // instead reach the named-session methods (`saveSessionAs`/`listSessions`/`renameSession`) that had no command
+  // surface at all before this: opening the save-as/open/rename modals, which the modal's own Enter then completes.
+  case OpenSaveSessionAsPrompt
+  case OpenSessionPicker
+  case OpenRenameSessionPicker
 
 enum KeybindingsIntent:
   case SetGlobalHotkey(action: HotkeyAction, binding: String)

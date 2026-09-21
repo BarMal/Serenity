@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
 import com.serenity.config.{HotkeyTrigger, ModalKeyAction}
+import com.serenity.session.SessionMetadata
 import com.serenity.state.models.*
 
 /** Declarative composition plans for blocking workflow surfaces. */
@@ -25,15 +26,22 @@ object ModalSurfaceComposition:
       case Modal.Custom(name, input)       => Some(inputPlan(name, input, "custom-input", frameRect))
       case Modal.FileWorkflow(workflow)    => Some(filePlan(workflow, frameRect, modalBindings))
       case Modal.ReplaceWorkflow(workflow) => Some(replacePlan(workflow, frameRect, targetRows))
+      case Modal.SessionNamePrompt(mode, input) =>
+        Some(inputPlan(sessionNamePromptLabel(mode), input, "session-name", frameRect))
+      case Modal.SessionList(sessions, selectedIndex, purpose) =>
+        Some(sessionListPlan(sessions, selectedIndex, purpose, frameRect))
 
   /** Return the minimum frame height needed to show a modal workflow at the requested density. */
   def frameHeight(modal: Modal, targetRows: Int): Int =
     val actionRows = math.max(1, targetRows)
     modal match
-      case Modal.GotoLine(_)     => 3
-      case Modal.Find(_, Nil, _) => 5
-      case Modal.Custom(_, _)    => 4
-      case Modal.Find(_, _, _)   => 6
+      case Modal.GotoLine(_)             => 3
+      case Modal.Find(_, Nil, _)         => 5
+      case Modal.Custom(_, _)            => 4
+      case Modal.Find(_, _, _)           => 6
+      case Modal.SessionNamePrompt(_, _) => 3
+      case Modal.SessionList(Nil, _, _)  => 3
+      case Modal.SessionList(_, _, _)    => 6
       case Modal.ReplaceWorkflow(workflow) =>
         val contentRows = 3 + actionRows * 2 + workflow.statusMessage.fold(0)(_ => 1)
         SurfaceFrameLayout.DefaultBorderCells * 2 + contentRows
@@ -169,6 +177,43 @@ object ModalSurfaceComposition:
       )
     }
     plan(bounds, headerBox :: queryBox :: resultBoxes ++ footer.toList)
+
+  private def sessionNamePromptLabel(mode: SessionNamePromptMode): String =
+    mode match
+      case SessionNamePromptMode.SaveAs    => "Save session as"
+      case SessionNamePromptMode.Rename(_) => "Rename session"
+
+  /** Renders `SessionManager.listSessions()` the same shape as `findPlan`'s results (a header, then one row per entry,
+    * the selected one highlighted) -- there is no query field here, since this list is never filtered.
+    */
+  private def sessionListPlan(
+    sessions: List[SessionMetadata],
+    selectedIndex: Int,
+    purpose: SessionListPurpose,
+    frameRect: LayoutRect
+  ): ResolvedSurfaceComposition =
+    val content = SurfaceFrameLayout(frameRect).contentRect
+    val bounds  = logicalRect(content.x, content.y, content.width, content.height)
+    val header  = textBox(sessionListHeader(purpose), rowRect(bounds, 0))
+    val rows =
+      if sessions.isEmpty then List(textBox("No saved sessions", rowRect(bounds, 1)))
+      else
+        sessions.zipWithIndex.map {
+          case (session, index) =>
+            textBox(
+              session.displayName,
+              rowRect(bounds, index + 1),
+              selected = index == selectedIndex,
+              focusId = Some(SurfaceFocusId(s"session-list-$index")),
+              actionId = Some(SurfaceActionId(s"session-list-$index"))
+            )
+        }
+    plan(bounds, header :: rows)
+
+  private def sessionListHeader(purpose: SessionListPurpose): String =
+    purpose match
+      case SessionListPurpose.Open   => "Open session"
+      case SessionListPurpose.Rename => "Rename session"
 
   private def replacePlan(
     workflow: ReplaceWorkflowState,
