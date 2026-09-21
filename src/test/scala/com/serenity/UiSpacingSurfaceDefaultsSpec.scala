@@ -75,21 +75,20 @@ class UiSpacingSurfaceDefaultsSpec extends AnyFlatSpec with Matchers:
     tui.copy(persisted = tui.persisted.copy(config = zeroed)).effectiveUiElementGap shouldBe 0.0
   }
 
-  // `AppState.effectiveCommandRunnerCursorGapRows` mirrors `FloatingSurfaceLayout.floatingStackGapRows`'s fallback
-  // chain -- the command palette's cursor gap should track the surface-aware UI element gap the same way every other
-  // floating surface's stack gap already does, rather than the AppConfig-only accessor's surface-blind read of the
-  // raw `uiElementGap` field (issue #1621 carve-out).
-  "an unset command-runner cursor gap" should "fall back to the surface-aware UI element gap when it is positive" in {
+  // `AppState.effectiveCommandRunnerCursorGapRows` (issue #1621 carve-out): the command palette keeps its own
+  // per-density gap on the GUI (pinned by `CursorOverlayLayoutSpec`, e.g. zero at `Compact` density) rather than
+  // `effectiveUiElementGap`'s flat one-cell default -- only the TUI's unset behaviour changes, from always
+  // inheriting that GUI-oriented density gap to the same flush-by-default zero every other TUI spacing default uses.
+  "an unset command-runner cursor gap" should "fall back to interface density's overlay gap on the GUI" in {
     gui.persisted.config.surfaceConfig.commandRunnerCursorGapRows shouldBe None
-    gui.effectiveCommandRunnerCursorGapRows shouldBe gui.effectiveUiElementGap
-    gui.effectiveCommandRunnerCursorGapRows shouldBe 1.0
+    gui.effectiveCommandRunnerCursorGapRows shouldBe
+      InterfaceDensityMetrics.forDensity(gui.persisted.config.interfaceDensity).overlayGapRows.toDouble
   }
 
-  it should "fall back to interface density's overlay gap on the TUI, where the UI element gap defaults to zero" in {
+  it should "default to zero on the TUI, matching every other unset TUI spacing default" in {
     tui.persisted.config.surfaceConfig.commandRunnerCursorGapRows shouldBe None
     tui.effectiveUiElementGap shouldBe 0.0
-    tui.effectiveCommandRunnerCursorGapRows shouldBe
-      InterfaceDensityMetrics.forDensity(tui.persisted.config.interfaceDensity).overlayGapRows.toDouble
+    tui.effectiveCommandRunnerCursorGapRows shouldBe 0.0
   }
 
   it should "prefer an explicit UI element gap over interface density's overlay gap, on either surface" in {
