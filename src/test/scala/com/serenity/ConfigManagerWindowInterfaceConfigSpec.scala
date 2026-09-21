@@ -99,7 +99,7 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
-    config.uiElementGap shouldBe 3
+    config.uiElementGap shouldBe Some(3)
     ConfigManager.configToString(config) should include("ui.element_gap = 3")
   }
 
@@ -134,13 +134,13 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
   it should "store interface density and chrome metrics inside the interface sub-config" in {
     val config = AppConfig.default
       .withInterfaceDensity(InterfaceDensity.Spacious)
-      .withUiElementGap(3)
+      .withUiElementGap(Some(3))
       .withUiCornerRadiusPx(14)
       .withUiOutlineThicknessPx(4)
 
     config.interfaceConfig shouldBe InterfaceConfig(
       density = InterfaceDensity.Spacious,
-      elementGap = 3,
+      elementGap = Some(3),
       cornerRadiusPx = 14,
       outlineThicknessPx = 4
     )

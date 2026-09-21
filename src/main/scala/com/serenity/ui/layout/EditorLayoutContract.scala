@@ -346,7 +346,7 @@ object EditorLayoutContract:
     val workspace = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
     val minimumFloatingOverlayGapRows = math.max(
       InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity).overlayGapRows,
-      math.ceil(math.max(0.0, state.persisted.config.uiElementGap)).toInt
+      math.ceil(math.max(0.0, state.effectiveUiElementGap)).toInt
     )
     val panelGeometryById = state.pinnedSurfaces.flatMap { surface =>
       panelRectFor(surface, state, calculatedLayout).map(rect => surface.id -> pinnedGeometry(surface, rect, state))
@@ -549,7 +549,7 @@ object EditorLayoutContract:
       case SurfaceContent.CommandPalette(_) | SurfaceContent.ContextMenu(_) =>
         state.persisted.config.effectiveCommandRunnerItemGapRows
       case SurfaceContent.ContextualToolbar(_) =>
-        state.persisted.config.uiElementGap
+        state.effectiveUiElementGap
       case SurfaceContent.GhostOverlay(originalContent, _) =>
         itemGapRowsFor(originalContent, state)
       case _ => 0.0

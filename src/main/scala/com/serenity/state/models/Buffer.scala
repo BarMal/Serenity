@@ -7,6 +7,7 @@ import cats.data.NonEmptyList
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{RichTextDocument, RichTextFidelity, RichTextStyle}
 import com.serenity.rope.Rope
+import com.serenity.text.LineEnding
 
 opaque type BufferId = Int
 
@@ -61,7 +62,10 @@ final case class Document(
     filePath: Option[Path] = None,
     isDirty: Boolean = false,
     language: Option[LanguageId] = None,
-    isNewEmpty: Boolean = false
+    isNewEmpty: Boolean = false,
+    // Recorded on load so saving can reproduce the file it came from; `Rope` has already normalised the content
+    // itself to LF by the time it reaches here.
+    lineEnding: LineEnding = LineEnding.default
 )
 
 /** A buffer's cursor/selection state: one entry per live cursor, each carrying its own position, in-flight selection

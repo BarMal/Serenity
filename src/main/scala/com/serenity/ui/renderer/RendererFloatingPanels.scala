@@ -195,6 +195,7 @@ object RendererFloatingPanels:
                 PinnedPanelViewModel.resolve(surface, rect, state).copy(contentRect = Some(node.contentRect)),
                 state.persisted.theme,
                 state.persisted.config,
+                layerContext.cellMetrics,
                 animationState
               )
 
@@ -224,7 +225,14 @@ object RendererFloatingPanels:
     animationState: com.serenity.animation.AnimationState
   ): Unit =
     val shell = TextPanelView(rect = rect, contentRect = Some(contentRect), title = s"Preview: $title", rows = Nil)
-    PinnedPanelRenderer.render(context.surface, shell, state.persisted.theme, state.persisted.config, animationState)
+    PinnedPanelRenderer.render(
+      context.surface,
+      shell,
+      state.persisted.theme,
+      state.persisted.config,
+      context.cellMetrics,
+      animationState
+    )
 
     val imageRect          = markdownPreviewImageRect(rect, contentRect, context)
     val contentWidthCells  = math.max(1, imageRect.width)
@@ -271,7 +279,14 @@ object RendererFloatingPanels:
     animationState: com.serenity.animation.AnimationState
   ): Unit =
     val shell = TextPanelView(rect = rect, contentRect = Some(contentRect), title = "Companion", rows = Nil)
-    PinnedPanelRenderer.render(context.surface, shell, state.persisted.theme, state.persisted.config, animationState)
+    PinnedPanelRenderer.render(
+      context.surface,
+      shell,
+      state.persisted.theme,
+      state.persisted.config,
+      context.cellMetrics,
+      animationState
+    )
 
     if state.persisted.config.visualFlairLevel != VisualFlairLevel.Off then
       val frames = CompanionSpriteAssets.loadFrames(state.persisted.config.companionSpriteConfig.character)

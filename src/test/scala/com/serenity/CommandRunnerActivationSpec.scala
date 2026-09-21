@@ -100,7 +100,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default
       .withInterfaceDensity(InterfaceDensity.Compact)
       .withWindowChromeMode(WindowChromeMode.NativeThemed)
-      .withUiElementGap(2)
+      .withUiElementGap(Some(2))
       .withUiCornerRadiusPx(6)
       .withUiOutlineThicknessPx(3)
     val runner = CommandRunner.empty.activate(registry, config)

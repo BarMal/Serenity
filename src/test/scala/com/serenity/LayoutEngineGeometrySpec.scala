@@ -47,7 +47,7 @@ class LayoutEngineGeometrySpec extends AnyFlatSpec with Matchers:
             .withLineNumbers(true)
             .withStatusLinePlacement(StatusLinePlacement.Pinned)
             .withTextAreaInsets(TextAreaInsets(left = 0.05, right = 0.10))
-            .withUiElementGap(2)
+            .withUiElementGap(Some(2))
         )
       )
       val state = DockedPanelFixtures.dockAllContent(
@@ -218,7 +218,7 @@ class LayoutEngineGeometrySpec extends AnyFlatSpec with Matchers:
           .withLineNumbers(false)
           .withoutStatusLine
           .withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0))
-          .withUiElementGap(gap)
+          .withUiElementGap(Some(gap.toDouble))
       )
     )
     val state = DockedPanelFixtures.dockAllContent(
@@ -250,7 +250,7 @@ class LayoutEngineGeometrySpec extends AnyFlatSpec with Matchers:
           .withLineNumbers(false)
           .withoutStatusLine
           .withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0, top = 0.0, bottom = 0.0))
-          .withUiElementGap(gap)
+          .withUiElementGap(Some(gap.toDouble))
       )
     )
     val state = DockedPanelFixtures.dockAllContent(

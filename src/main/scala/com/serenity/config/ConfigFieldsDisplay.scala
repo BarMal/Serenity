@@ -122,7 +122,7 @@ private[config] object ConfigFieldsDisplay:
       "display.line_number_margin_left",
       "display.line.number.margin.left"
     )(
-      int.filtered(cells => cells >= 0 && cells <= LineNumberLayout.MaxCells)
+      int.filtered(cells => cells >= 0 && cells <= LineNumberLayout.MaxCells).orAuto
     )(
       _.surfaceConfig.lineNumberLayout.marginLeft,
       (config, value) => config.withLineNumberLayout(config.lineNumberLayout.copy(marginLeft = value))
@@ -144,7 +144,7 @@ private[config] object ConfigFieldsDisplay:
       "display.line_number_padding",
       "display.line.number.padding"
     )(
-      int.filtered(cells => cells >= 0 && cells <= LineNumberLayout.MaxCells)
+      int.filtered(cells => cells >= 0 && cells <= LineNumberLayout.MaxCells).orAuto
     )(
       _.surfaceConfig.lineNumberLayout.padding,
       (config, value) => config.withLineNumberLayout(config.lineNumberLayout.copy(padding = value))

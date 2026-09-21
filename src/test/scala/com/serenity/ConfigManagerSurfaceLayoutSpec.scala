@@ -58,7 +58,7 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
 
     config.surfaceConfig.commandRunnerItemGapRows shouldBe Some(0.25)
     config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(0.5)
-    config.uiElementGap shouldBe 0.75
+    config.uiElementGap shouldBe Some(0.75)
     ConfigManager.configToString(config) should include("command_runner.item_gap_rows = 0.25")
     ConfigManager.configToString(config) should include("command_runner.cursor_gap_rows = 0.5")
     ConfigManager.configToString(config) should include("ui.element_gap = 0.75")

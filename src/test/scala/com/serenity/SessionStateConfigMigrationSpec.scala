@@ -266,7 +266,10 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.get.config.interfaceDensity shouldBe InterfaceDensity.Comfortable
   }
 
-  it should "default UI element gap to zero when loading older JSON without the field" in {
+  // issue tracked by the elementGap Option conversion: unset now means "surface-resolved default", not a baked-in
+  // zero, so an older session file that never wrote this key must decode to `None` -- not to either surface's
+  // number -- exactly as if the field had never existed on that file's `AppConfig` at all.
+  it should "leave UI element gap unset when loading older JSON without the field" in {
     val originalJson = SessionState
       .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
       .asJson
@@ -280,7 +283,7 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
     val decoded = jsonWithoutUiElementGap.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.uiElementGap shouldBe 0
+    decoded.toOption.get.config.uiElementGap shouldBe None
   }
 
   it should "default UI corner radius to the existing panel radius when loading older JSON without the field" in {

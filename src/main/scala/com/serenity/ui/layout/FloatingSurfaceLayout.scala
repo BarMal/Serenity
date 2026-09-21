@@ -221,7 +221,7 @@ object FloatingSurfaceLayout:
 
   private[layout] def floatingStackGapRows(state: AppState): Double =
     Option
-      .when(state.persisted.config.uiElementGap > 0.0)(state.persisted.config.uiElementGap)
+      .when(state.effectiveUiElementGap > 0.0)(state.effectiveUiElementGap)
       .getOrElse(InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity).overlayGapRows.toDouble)
 
   private[layout] def wholeRowOrigin(rows: Double): Int =
@@ -266,7 +266,7 @@ object FloatingSurfaceLayout:
           hasHeader = false,
           hasFooter = false,
           borderCells = borderCells,
-          itemGapRows = state.persisted.config.uiElementGap,
+          itemGapRows = state.effectiveUiElementGap,
           itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity)
         )
       case SurfaceContent.ContextMenu(menu) =>

@@ -30,7 +30,7 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default.withInterfaceConfig(
       InterfaceConfig(
         density = InterfaceDensity.Spacious,
-        elementGap = 3,
+        elementGap = Some(3),
         cornerRadiusPx = 12,
         outlineThicknessPx = 4
       )
@@ -38,7 +38,7 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
 
     config.interfaceConfig shouldBe InterfaceConfig(
       density = InterfaceDensity.Spacious,
-      elementGap = 3,
+      elementGap = Some(3),
       cornerRadiusPx = 12,
       outlineThicknessPx = 4
     )
@@ -65,7 +65,7 @@ class InterfaceConfigSpec extends AnyFlatSpec with Matchers:
         .getOrElse(fail("outline parse"))
 
     densityConfig.interfaceConfig.density.shouldBe(InterfaceDensity.Spacious)
-    gapConfig.interfaceConfig.elementGap.shouldBe(4)
+    gapConfig.interfaceConfig.elementGap.shouldBe(Some(4))
     radiusConfig.interfaceConfig.cornerRadiusPx.shouldBe(14)
     outlineConfig.interfaceConfig.outlineThicknessPx.shouldBe(5)
     ConfigRegistry.read(AppConfig.default, "ui.density", "unknown").shouldBe(None)

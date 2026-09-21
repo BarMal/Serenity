@@ -4,6 +4,7 @@ import cats.effect.IO
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
 import com.serenity.state.models.*
+import com.serenity.text.LineEnding
 
 final case class SessionBuffer(
     id: Int,
@@ -19,7 +20,8 @@ final case class SessionBuffer(
     richTextFidelity: Option[RichTextFidelity] = None,
     findState: Option[SessionFindState] = None,
     bookmarks: List[SessionCursorPosition] = Nil,
-    documentComments: List[SessionDocumentComment] = Nil
+    documentComments: List[SessionDocumentComment] = Nil,
+    lineEnding: Option[String] = None
 )
 
 final case class SessionCursorPosition(
@@ -62,6 +64,7 @@ object SessionBuffer:
       isDirty = buffer.document.isDirty,
       language = buffer.document.language.map(_.id),
       isNewEmpty = buffer.document.isNewEmpty,
+      lineEnding = Some(buffer.document.lineEnding.configKey),
       cursors = buffer.editing.cursorPositions.map(SessionCursorPosition.fromCursorPosition),
       viewport = SessionViewport.fromViewport(buffer.viewport),
       // Clean, file-backed buffers rely on the on-disk file (see toBufferIO's disk-read fallback) --
@@ -87,7 +90,10 @@ object SessionBuffer:
         filePath = sessionBuffer.filePath.map(path => Paths.get(path)),
         isDirty = sessionBuffer.isDirty,
         language = sessionBuffer.language.flatMap(LanguageId.fromString),
-        isNewEmpty = sessionBuffer.isNewEmpty
+        isNewEmpty = sessionBuffer.isNewEmpty,
+        // A session written before line endings were recorded has no key to restore; LineEnding.default matches
+        // what that session's buffers would have been saved with anyway.
+        lineEnding = sessionBuffer.lineEnding.flatMap(LineEnding.fromConfigKey).getOrElse(LineEnding.default)
       ),
       editing = EditingState(sessionBuffer.cursors.map(SessionCursorPosition.toCursorPosition)),
       viewport = SessionViewport.toViewport(sessionBuffer.viewport),

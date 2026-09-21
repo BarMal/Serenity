@@ -95,6 +95,23 @@ final case class AppState(
   def syntaxHighlightingEnabled: Boolean = persisted.config.languageToolsConfig.syntaxHighlightingEnabled
   def isValid: Boolean                   = AppStateValidation.validationErrors(this).isEmpty
 
+  /** `InterfaceConfig.elementGap`, resolved for this state's surface. `AppConfig` alone can't make this call --
+    * `runtime.isTuiMode` lives only here -- and it must not: the config is shared and persisted across both surfaces,
+    * so baking either one's default into it would be wrong. Unset (`None`) defaults to a GUI cell of breathing room
+    * (flush-to-edge content there reads as unfinished) but leaves the TUI's existing density alone (a cell there is a
+    * whole column out of a typical 80). An explicit value is honoured on both surfaces.
+    */
+  def effectiveUiElementGap: Double =
+    persisted.config.uiElementGap.getOrElse(if runtime.isTuiMode then 0.0 else 1.0)
+
+  /** [[LineNumberLayout.marginLeft]], resolved the same way as [[effectiveUiElementGap]]. */
+  def effectiveLineNumberMarginLeft: Int =
+    persisted.config.surfaceConfig.lineNumberLayout.marginLeft.getOrElse(if runtime.isTuiMode then 0 else 1)
+
+  /** [[LineNumberLayout.padding]], resolved the same way as [[effectiveUiElementGap]]. */
+  def effectiveLineNumberPadding: Int =
+    persisted.config.surfaceConfig.lineNumberLayout.padding.getOrElse(if runtime.isTuiMode then 0 else 1)
+
   /** Cursor position for the currently active editor pane, if any. */
   def activeCursorPosition: Option[CursorPosition] =
     persisted.layout.activeEditorPaneId

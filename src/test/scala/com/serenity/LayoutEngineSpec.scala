@@ -50,7 +50,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     calculatedLayout.leftSpacerRect.width shouldBe 0
     calculatedLayout.rightSpacerRect.width shouldBe 0
     calculatedLayout.lineNumberRect.map(_.width) shouldBe Some(3)
-    calculatedLayout.editorPanelRect shouldBe LayoutRect(3, 0, 97, 29)
+    // x/width shift by 2: unset line-number margin/padding now default to a GUI cell each, not zero.
+    calculatedLayout.editorPanelRect shouldBe LayoutRect(5, 0, 95, 29)
   }
 
   it should "remove single-pane chrome when the selected configuration disables pane headers" in {
@@ -75,7 +76,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     paneLayout.paneRect shouldBe calculatedLayout.editorPanelRect
     paneLayout.headerRect shouldBe LayoutRect(0, 0, 100, 1)
     paneLayout.titleRect shouldBe paneLayout.headerRect
-    paneLayout.contentRect shouldBe LayoutRect(3, 1, 97, 28)
+    paneLayout.contentRect shouldBe LayoutRect(5, 1, 95, 28)
   }
 
   it should "expose a single editor workspace contract for panes, line numbers, and gutter" in {
@@ -190,24 +191,21 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val calculatedLayout = LayoutEngine.calculateLayout(state, renderViewport)
     val paneLayouts      = LayoutEngine.calculatePaneLayouts(state, calculatedLayout)
 
-    // The aggressive text area insets here (left 10%, right 20%) push `minimumEditorWorkspaceWidth` (issue #817's
-    // `calculateWorkspaceNodeRects` minimum-width protection) up to 76 cells against this 100-cell viewport, so the
-    // Left panel's requested width of 10 is clamped down to make room for the editor's minimum -- not a result of
-    // its dock order or nesting. Right, needing no such headroom, keeps its exact requested width.
-    calculatedLayout.pinnedPanelRects(PanelPosition.Left).width shouldBe 4
-    calculatedLayout.pinnedPanelRects(PanelPosition.Right).width shouldBe 20
-    calculatedLayout.leftSpacerRect shouldBe LayoutRect(4, 0, 7, 29)
-    calculatedLayout.rightSpacerRect shouldBe LayoutRect(65, 0, 15, 29)
-    calculatedLayout.topSpacerRect shouldBe LayoutRect(11, 1, 54, 2)
-    calculatedLayout.bottomSpacerRect shouldBe LayoutRect(11, 25, 54, 4)
-    calculatedLayout.lineNumberRect shouldBe Some(LayoutRect(11, 3, 3, 22))
-    calculatedLayout.editorPanelRect shouldBe LayoutRect(14, 0, 51, 29)
-    LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)(PaneId(0)).headerRect shouldBe
-      LayoutRect(4, 0, 76, 1)
-    LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)(PaneId(0)).topSpacerRect shouldBe
-      LayoutRect(14, 1, 51, 2)
-    LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)(PaneId(0)).contentRect shouldBe
-      LayoutRect(14, 3, 51, 22)
+    // The insets raise `minimumEditorWorkspaceWidth` (#817), and the left dock is squeezed to its own one-cell
+    // minimum: the editor's minimum outranks a dock's requested size, so the last contested cell goes to the editor.
+    val insetPaneLayout = LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)(PaneId(0))
+    calculatedLayout.pinnedPanelRects(PanelPosition.Left).width shouldBe 1
+    calculatedLayout.pinnedPanelRects(PanelPosition.Right).width shouldBe 18
+    calculatedLayout.leftSpacerRect shouldBe LayoutRect(2, 0, 7, 29)
+    calculatedLayout.rightSpacerRect shouldBe LayoutRect(66, 0, 15, 29)
+    calculatedLayout.topSpacerRect shouldBe LayoutRect(9, 1, 57, 2)
+    calculatedLayout.bottomSpacerRect shouldBe LayoutRect(9, 25, 57, 4)
+    calculatedLayout.lineNumberRect shouldBe Some(LayoutRect(10, 3, 3, 22))
+    calculatedLayout.editorPanelRect shouldBe LayoutRect(14, 0, 52, 29)
+    calculatedLayout.editorPanelRect.width should be >= state.persisted.config.editorConfig.minimumPaneWidth
+    insetPaneLayout.headerRect shouldBe LayoutRect(2, 0, 79, 1)
+    insetPaneLayout.topSpacerRect shouldBe LayoutRect(14, 1, 52, 2)
+    insetPaneLayout.contentRect shouldBe LayoutRect(14, 3, 52, 22)
     paneLayouts(PaneId(0)) shouldBe calculatedLayout.editorPanelRect
   }
 
@@ -218,7 +216,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
         config = AppConfig.default
           .withLineNumbers(false)
           .withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0))
-          .withUiElementGap(2)
+          .withUiElementGap(Some(2))
       ),
       runtime = AppState.initial.runtime.copy(viewportSize = Some(renderViewport))
     )
@@ -374,8 +372,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val panes  = LayoutEngine.calculatePaneLayouts(state, layout)
 
     panes(first) shouldBe LayoutRect(layout.editorPanelRect.x, layout.editorPanelRect.y, 38, 29)
-    panes(second) shouldBe LayoutRect(layout.editorPanelRect.x + 38, layout.editorPanelRect.y, 59, 14)
-    panes(third) shouldBe LayoutRect(layout.editorPanelRect.x + 38, layout.editorPanelRect.y + 14, 59, 15)
+    panes(second) shouldBe LayoutRect(layout.editorPanelRect.x + 38, layout.editorPanelRect.y, 57, 14)
+    panes(third) shouldBe LayoutRect(layout.editorPanelRect.x + 38, layout.editorPanelRect.y + 14, 57, 15)
     panes.values.foreach(layout.editorPanelRect.containsRect(_) shouldBe true)
     panes(first).right shouldBe panes(second).x
     panes(second).bottom shouldBe panes(third).y
@@ -418,9 +416,9 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val panes  = LayoutEngine.calculatePaneLayouts(state, layout)
 
-    panes(first) shouldBe LayoutRect(layout.editorPanelRect.x, layout.editorPanelRect.y, 97, 11)
-    panes(second) shouldBe LayoutRect(layout.editorPanelRect.x, layout.editorPanelRect.y + 11, 48, 18)
-    panes(third) shouldBe LayoutRect(layout.editorPanelRect.x + 48, layout.editorPanelRect.y + 11, 49, 18)
+    panes(first) shouldBe LayoutRect(layout.editorPanelRect.x, layout.editorPanelRect.y, 95, 11)
+    panes(second) shouldBe LayoutRect(layout.editorPanelRect.x, layout.editorPanelRect.y + 11, 47, 18)
+    panes(third) shouldBe LayoutRect(layout.editorPanelRect.x + 47, layout.editorPanelRect.y + 11, 48, 18)
     panes.values.foreach(layout.editorPanelRect.containsRect(_) shouldBe true)
     panes(first).bottom shouldBe panes(second).y
     panes(second).right shouldBe panes(third).x
@@ -544,7 +542,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     )
 
     LayoutEngine.calculateLayout(state, ViewportSize(100, 30)).belowCursorOverlayRect.map(_.width) shouldBe Some(72)
-    LayoutEngine.calculateLayout(state, ViewportSize(40, 30)).belowCursorOverlayRect.map(_.width) shouldBe Some(37)
+    LayoutEngine.calculateLayout(state, ViewportSize(40, 30)).belowCursorOverlayRect.map(_.width) shouldBe Some(35)
   }
 
   /** Bug: the command palette's horizontal position was cursor-anchored (`horizontalAnchorX` = the cursor's screen
@@ -642,7 +640,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       runtime = AppState.initial.runtime.copy(uiSurfaces = List(surface))
     )
 
-    LayoutEngine.calculateLayout(state, ViewportSize(100, 30)).belowCursorOverlayRect.map(_.width) shouldBe Some(97)
+    LayoutEngine.calculateLayout(state, ViewportSize(100, 30)).belowCursorOverlayRect.map(_.width) shouldBe Some(95)
   }
 
   it should "keep an end-of-line cursor visible when scrolling horizontally with word wrap off" in {

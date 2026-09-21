@@ -127,7 +127,7 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   it should "prefer an explicit UI element gap over interface density's overlay gap for the command palette's cursor gap" in {
     val config = AppConfig.default
       .withInterfaceDensity(InterfaceDensity.Compact)
-      .withUiElementGap(3.5)
+      .withUiElementGap(Some(3.5))
 
     config.surfaceConfig.commandRunnerCursorGapRows shouldBe None
     config.effectiveCommandRunnerCursorGapRows shouldBe 3.5
@@ -313,14 +313,14 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   it should "leave interface settings owned by InterfaceConfig" in {
     val config = AppConfig.default
       .withInterfaceDensity(InterfaceDensity.Spacious)
-      .withUiElementGap(3)
+      .withUiElementGap(Some(3))
       .withUiCornerRadiusPx(12)
       .withUiOutlineThicknessPx(4)
 
     config.interfaceConfig.shouldBe(
       InterfaceConfig(
         density = InterfaceDensity.Spacious,
-        elementGap = 3,
+        elementGap = Some(3),
         cornerRadiusPx = 12,
         outlineThicknessPx = 4
       )

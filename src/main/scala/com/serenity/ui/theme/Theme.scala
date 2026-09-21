@@ -18,7 +18,13 @@ final case class Theme(
     muted: Color,
     placeholder: Color,
     textStyle: TextStyle,
-    syntaxColors: Map[SyntaxElement, ThemeColor]
+    syntaxColors: Map[SyntaxElement, ThemeColor],
+    // Unconditionally present, like every other field above -- a theme file that doesn't declare either gets a value
+    // derived from colors the theme already has (`InteractionStates.derive`/`ElevationLevels.derive`, applied by
+    // `ConfigurableThemeManager.configToTheme`); the optionality lives only in `ThemeConfig`, the same split
+    // `warning` already uses.
+    interactionStates: InteractionStates,
+    elevation: ElevationLevels
 ):
   /** Accent used for interactive affordances such as the caret and primary controls. */
   def accent: Color = cursor
@@ -106,6 +112,22 @@ object Theme:
     * luminance. Solves `(L + 0.05) / 0.05 == 1.05 / (L + 0.05)` for `L`.
     */
   val EqualContrastLuminanceThreshold: Double = math.sqrt(1.05 * 0.05) - 0.05
+
+  /** Component-wise linear blend from `from` toward `to`, clamped to `[0, 1]`; keeps `from`'s alpha. The one shared
+    * copy of the technique `InteractionStates.derive` and `ElevationLevels.derive` use for hover/pressed/disabled and
+    * elevation tints -- see `SurfaceMaterials.blend` in the renderer package for the same idiom applied to painting.
+    */
+  private[theme] def blend(from: Color, to: Color, factor: Double): Color =
+    val t = factor.max(0.0).min(1.0)
+    def component(start: Int, end: Int): Int =
+      math.round(start + (end - start) * t).toInt.max(0).min(255)
+
+    new Color(
+      component(from.getRed, to.getRed),
+      component(from.getGreen, to.getGreen),
+      component(from.getBlue, to.getBlue),
+      from.getAlpha
+    )
 
   def dark: Theme = DefaultThemes.defaultDark.copy(name = "dark")
 

@@ -167,7 +167,7 @@ object ConfigGenerators:
   val genInterfaceConfig: Gen[InterfaceConfig] =
     for
       density   <- oneOfEnum(InterfaceDensity.values)
-      gap       <- double(AppConfig.MinUiElementGap, AppConfig.MaxUiElementGap)
+      gap       <- Gen.option(double(AppConfig.MinUiElementGap, AppConfig.MaxUiElementGap))
       radius    <- Gen.choose(AppConfig.MinUiCornerRadiusPx, AppConfig.MaxUiCornerRadiusPx)
       thickness <- Gen.choose(AppConfig.MinUiOutlineThicknessPx, AppConfig.MaxUiOutlineThicknessPx)
     yield InterfaceConfig(density, gap, radius, thickness)
@@ -186,9 +186,9 @@ object ConfigGenerators:
   val genLineNumberLayout: Gen[LineNumberLayout] =
     for
       side        <- oneOfEnum(LineNumberSide.values)
-      marginLeft  <- Gen.choose(0, LineNumberLayout.MaxCells)
+      marginLeft  <- Gen.option(Gen.choose(0, LineNumberLayout.MaxCells))
       marginRight <- Gen.choose(0, LineNumberLayout.MaxCells)
-      padding     <- Gen.choose(0, LineNumberLayout.MaxCells)
+      padding     <- Gen.option(Gen.choose(0, LineNumberLayout.MaxCells))
     yield LineNumberLayout(side, marginLeft, marginRight, padding)
 
   val genViewportAxisSizing: Gen[ViewportAxisSizing] =

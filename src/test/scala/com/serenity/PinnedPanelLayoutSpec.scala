@@ -71,7 +71,8 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
 
     layout.editorPanelRect.x should be > noPanels.editorPanelRect.x
     layout.editorPanelRect.width should be < noPanels.editorPanelRect.width
-    layout.editorPanelRect.bottom shouldBe 33
+    // 39 (content height) - 6 (bottom panel) - 1 (bottom gap, the GUI's unset-`ui.element_gap` default) = 32.
+    layout.editorPanelRect.bottom shouldBe 32
   }
 
   it should "place an expanded panel in the central editor workspace and keep side panels out of the layout" in {
@@ -102,7 +103,9 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     layout.pinnedPanelRects(PanelPosition.Left) shouldBe LayoutRect(0, 0, 24, 30)
     layout.pinnedSurfaceRects(SurfaceId("left-one")) shouldBe LayoutRect(0, 0, 24, 15)
     layout.pinnedSurfaceRects(SurfaceId("left-two")) shouldBe LayoutRect(0, 15, 24, 15)
-    layout.editorPanelRect.x shouldBe 27
+    // 24 (panel) + 1 (left gap, unset `ui.element_gap`'s GUI default) + 1 (unset left margin's GUI default) +
+    // 3 (counter) + 1 (unset padding's GUI default) = 30.
+    layout.editorPanelRect.x shouldBe 30
   }
 
   it should "split same-side top and bottom panels into per-surface rects" in {
@@ -120,7 +123,8 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     layout.pinnedPanelRects(PanelPosition.Bottom) shouldBe LayoutRect(0, 16, 80, 8)
     layout.pinnedSurfaceRects(SurfaceId("bottom-one")) shouldBe LayoutRect(0, 16, 40, 8)
     layout.pinnedSurfaceRects(SurfaceId("bottom-two")) shouldBe LayoutRect(40, 16, 40, 8)
-    layout.editorPanelRect.bottom shouldBe 16
+    // 24 (content height) - 8 (bottom panel) - 1 (bottom gap, unset `ui.element_gap`'s GUI default) = 15.
+    layout.editorPanelRect.bottom shouldBe 15
   }
 
   it should "derive ordered same-edge panel rectangles from docked workspace leaves" in {
@@ -140,7 +144,8 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     layout.pinnedSurfaceRects(firstId) shouldBe LayoutRect(75, 0, 25, 15)
     layout.pinnedSurfaceRects(secondId) shouldBe LayoutRect(75, 15, 25, 15)
     layout.pinnedPanelRects(PanelPosition.Right) shouldBe LayoutRect(75, 0, 25, 30)
-    layout.editorPanelRect.right shouldBe 75
+    // 100 (viewport) - 25 (panel) - 1 (right gap, unset `ui.element_gap`'s GUI default) = 74.
+    layout.editorPanelRect.right shouldBe 74
   }
 
   it should "retain the configured editor minimum beside oversized panels on every edge" in {
@@ -182,5 +187,33 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
 
     layout.editorPanelRect.width should be >= baseState.persisted.config.editorConfig.minimumPaneWidth
     layout.editorPanelRect.height should be >= 5
+  }
+
+  /** Each dock-vs-editor boundary costs a gap, and `LayoutEngine` charges every one of them to the editor workspace.
+    * Reserving a gap in a subtree's total alone leaves that cell unclaimed inside the subtree, so a dock asking for a
+    * large ratio takes it and the editor finishes short by one cell per ancestor boundary -- invisible at a gap of 1,
+    * which is why this drives the gap up until a one-cell error could not hide.
+    */
+  it should "retain the editor minimum against opposite-edge panels whatever the gap costs" in {
+    val viewport = ViewportSize(120, 45)
+    List(1.0, 2.0, 4.0).foreach { gap =>
+      val state = dockedState(
+        List(
+          (SurfaceId("oversized-left"), PanelContent.Outline(Nil), PanelPosition.Left, 1000),
+          (SurfaceId("oversized-right"), PanelContent.Diagnostics(Nil), PanelPosition.Right, 1000),
+          (SurfaceId("oversized-top"), PanelContent.Terminal("", 0), PanelPosition.Top, 1000),
+          (SurfaceId("oversized-bottom"), PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 1000)
+        ),
+        viewport
+      )
+      val withGap =
+        state.copy(persisted = state.persisted.copy(config = state.persisted.config.withUiElementGap(Some(gap))))
+      val layout = LayoutEngine.calculateLayout(withGap, viewport)
+
+      withClue(s"gap $gap: ") {
+        layout.editorPanelRect.width should be >= withGap.persisted.config.editorConfig.minimumPaneWidth
+        layout.editorPanelRect.height should be >= 5
+      }
+    }
   }
 end PinnedPanelLayoutSpec

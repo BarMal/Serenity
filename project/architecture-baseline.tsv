@@ -16,7 +16,7 @@ main/scala/com/serenity/ui/renderer/Java2DPostProcessingEffects.scala	method app
 test/scala/com/serenity/FileHandlingSpec.scala	file length	634
 test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	639
 test/scala/com/serenity/GutterAndLineNumbersSpec.scala	file length	636
-test/scala/com/serenity/LayoutEngineSpec.scala	file length	671
+test/scala/com/serenity/LayoutEngineSpec.scala	file length	669
 test/scala/com/serenity/LineWrappingSpec.scala	file length	750
 test/scala/com/serenity/MarkdownDocumentPreviewSpec.scala	file length	745
 test/scala/com/serenity/RendererSnapshotReuseSpec.scala	file length	618
