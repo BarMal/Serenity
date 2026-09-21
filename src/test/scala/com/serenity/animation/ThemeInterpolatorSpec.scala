@@ -30,7 +30,9 @@ class ThemeInterpolatorSpec extends AnyFlatSpec with Matchers:
       muted = bg,
       placeholder = bg,
       textStyle = TextStyle.normal,
-      syntaxColors = Map(SyntaxElement.Keyword -> ThemeColor(fg, bg))
+      syntaxColors = Map(SyntaxElement.Keyword -> ThemeColor(fg, bg)),
+      interactionStates = InteractionStates.derive(ThemeColor(fg, bg)),
+      elevation = ElevationLevels.derive(fg, bg)
     )
 
   private val fromTheme = makeTheme(black, white)
