@@ -126,10 +126,10 @@ private[layout] object CommandPaletteContentResolver:
         )
 
   /** Renders `CommandRunnerSurface.PresetDiffReview`: a flat list, so this mirrors the `Palette`-active branch above
-    * minus everything specific to searching/category prefixes/group breadcrumbs that a fixed, non-searchable list
-    * never needs. Every row is a `ToggleItem` (one per pending change) or the trailing "Apply Selected Changes"
-    * `CommandItem` -- `CommandRunner.presetDiffReviewItems` guarantees no other `CommandSurfaceItem` case ever
-    * reaches this surface, but the match stays exhaustive rather than assuming that from outside this file.
+    * minus everything specific to searching/category prefixes/group breadcrumbs that a fixed, non-searchable list never
+    * needs. Every row is a `ToggleItem` (one per pending change) or the trailing "Apply Selected Changes" `CommandItem`
+    * -- `CommandRunner.presetDiffReviewItems` guarantees no other `CommandSurfaceItem` case ever reaches this surface,
+    * but the match stays exhaustive rather than assuming that from outside this file.
     */
   private def resolvePresetDiffReview(
     runner: com.serenity.command.CommandRunner,
@@ -162,11 +162,11 @@ private[layout] object CommandPaletteContentResolver:
         val selected = index == adjustedSelectedIndex
         item match
           case CommandSurfaceItem.CommandItem(command) => commandRow(command, selected, binding = None)
-          case toggle: CommandSurfaceItem.ToggleItem    => toggleRow(toggle, runner.effectiveChecked(toggle), selected)
-          case option: CommandSurfaceItem.OptionItem    => optionRow(option, selected)
-          case item: CommandSurfaceItem.InputItem       => inputRow(item, selected, None)
+          case toggle: CommandSurfaceItem.ToggleItem   => toggleRow(toggle, runner.effectiveChecked(toggle), selected)
+          case option: CommandSurfaceItem.OptionItem   => optionRow(option, selected)
+          case item: CommandSurfaceItem.InputItem      => inputRow(item, selected, None)
           case item: CommandSurfaceItem.SettingSearchItem => settingSearchRow(item, selected)
-          case group: CommandSurfaceItem.GroupItem      => groupRow(group.label, group.hint, selected)
+          case group: CommandSurfaceItem.GroupItem        => groupRow(group.label, group.hint, selected)
     }
     val footer = runner.statusMessage
       .map(OverlayRow(_))

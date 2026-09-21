@@ -8,10 +8,10 @@ import org.scalatest.matchers.should.Matchers
 
 /** `CommandRunnerReducer.submitToggle` -- the "flip a `ToggleItem` in place" reducer behavior a `ToggleItem` row
   * dispatches to on `RunnerSubmit` (mirroring `submitSubmenuOption`'s dispatch shape for `OptionItem`; see the
-  * `reduceActive`/`submitRootSelection`/`submitSubmenu` wiring in `CommandRunnerReducer`). Tested directly against
-  * this `private[reducers]` function -- like `invalidInputMessage` below it -- since (unlike `OptionItem`, which is
-  * always backed by a real config-driven settings row) no settings group yet builds a `ToggleItem`: it is a generic
-  * primitive with no current production call site.
+  * `reduceActive`/`submitRootSelection`/`submitSubmenu` wiring in `CommandRunnerReducer`). Tested directly against this
+  * `private[reducers]` function -- like `invalidInputMessage` below it -- since (unlike `OptionItem`, which is always
+  * backed by a real config-driven settings row) no settings group yet builds a `ToggleItem`: it is a generic primitive
+  * with no current production call site.
   */
 class CommandRunnerReducerToggleSpec extends AnyFlatSpec with Matchers:
 

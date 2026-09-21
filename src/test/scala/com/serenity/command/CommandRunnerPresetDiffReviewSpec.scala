@@ -4,9 +4,9 @@ import com.serenity.ui.presets.PresetChange
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** `CommandRunner.openPresetDiffReview` and the `CommandRunnerSurface.PresetDiffReview` surface it opens: the
-  * preset diff-toggle UI's own state, distinct from the generic `ToggleItem` primitive (`CommandRunnerReducerToggleSpec`)
-  * and the diff computation itself (`UiPresetDiffSpec`).
+/** `CommandRunner.openPresetDiffReview` and the `CommandRunnerSurface.PresetDiffReview` surface it opens: the preset
+  * diff-toggle UI's own state, distinct from the generic `ToggleItem` primitive (`CommandRunnerReducerToggleSpec`) and
+  * the diff computation itself (`UiPresetDiffSpec`).
   */
 class CommandRunnerPresetDiffReviewSpec extends AnyFlatSpec with Matchers:
 
@@ -71,7 +71,7 @@ class CommandRunnerPresetDiffReviewSpec extends AnyFlatSpec with Matchers:
 
   it should "ignore typed search text rather than filtering or crashing" in {
     given CommandRegistry = CommandRegistry.default
-    val runner = CommandRunner.empty.openPresetDiffReview("Code", changes)
+    val runner            = CommandRunner.empty.openPresetDiffReview("Code", changes)
 
     val afterTyping = runner.updateSearchTerm("anything")
 

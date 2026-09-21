@@ -82,6 +82,7 @@ object CommandPaletteState:
 enum CommandRunnerSurface:
   case Palette(state: CommandPaletteState = CommandPaletteState())
   case Settings(root: CommandPaletteState = CommandPaletteState(), drilled: Option[SettingsSurfaceState] = None)
+
   // A flat, non-drillable, non-searchable list of toggleable changes a UI preset would make (issue: preset
   // diff-toggle UI). `state` carries only `selectedIndex` -- reused rather than a bespoke shape purely so the
   // generic `rootState`/`withRootSelectedIndex`/`moveSelection` navigation `Palette` already uses works unchanged;

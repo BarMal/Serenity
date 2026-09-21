@@ -99,7 +99,7 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
 
   it should "report docked-panel and workspace-tree presence changes" in {
     val current = AppConfig.default
-    val preset = UiPreset.builtIn("Code").getOrElse(fail("missing Code preset"))
+    val preset  = UiPreset.builtIn("Code").getOrElse(fail("missing Code preset"))
 
     val changes = UiPresetDiff.changes(
       currentConfig = current,
@@ -169,7 +169,7 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
   it should "leave the theme untouched when \"theme\" is not selected, and apply it when it is" in {
     val current = AppConfig.default
     val preset  = UiPreset(name = "Custom", config = current, themeName = Theme.light.name)
-    val state   = AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = current, theme = Theme.dark))
+    val state = AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = current, theme = Theme.dark))
 
     UiPresetDiff.applySelected(state, Theme.light, preset, Set.empty).persisted.theme.name shouldBe Theme.dark.name
     UiPresetDiff.applySelected(state, Theme.light, preset, Set("theme")).persisted.theme.name shouldBe Theme.light.name
@@ -211,11 +211,12 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
 
   it should "apply a composite group wholesale when selected, and leave it untouched when not" in {
     val current = AppConfig.default
-    val preset  = UiPreset(name = "Custom", config = current.withMotionPreset(MotionPreset.Expressive), themeName = Theme.dark.name)
-    val state   = AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = current, theme = Theme.dark))
+    val preset =
+      UiPreset(name = "Custom", config = current.withMotionPreset(MotionPreset.Expressive), themeName = Theme.dark.name)
+    val state = AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = current, theme = Theme.dark))
 
     val untouched = UiPresetDiff.applySelected(state, Theme.dark, preset, Set.empty)
-    val applied    = UiPresetDiff.applySelected(state, Theme.dark, preset, Set("motion"))
+    val applied   = UiPresetDiff.applySelected(state, Theme.dark, preset, Set("motion"))
 
     untouched.persisted.config.surfaceConfig.motionPreset shouldBe current.surfaceConfig.motionPreset
     applied.persisted.config.surfaceConfig.motionPreset shouldBe MotionPreset.Expressive

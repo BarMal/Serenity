@@ -57,9 +57,9 @@ object UiPresetDiff:
     )
 
   /** The composite settings [[ConfigRegistry]] leaves out because they are not one key to one value (see
-    * `ConfigRegistry.scala`'s comment on why). Each is reported as a single coarse entry rather than one per
-    * underlying key -- a preset that changes a motion family's speed scale does not need forty toggles, one that says
-    * "motion" changes does.
+    * `ConfigRegistry.scala`'s comment on why). Each is reported as a single coarse entry rather than one per underlying
+    * key -- a preset that changes a motion family's speed scale does not need forty toggles, one that says "motion"
+    * changes does.
     */
   private def groupChanges(current: AppConfig, resolved: AppConfig): List[PresetChange] =
     List(
@@ -134,10 +134,10 @@ object UiPresetDiff:
     *
     * Docked panels and workspace layout (`"dockedPanels"`/`"workspaceTree"`) are the one pair applied together,
     * all-or-nothing: `UiPreset.applyToState`'s panel/tree restore (pruning, redocking, the editor-pane target) is one
-    * intricate, mutually-dependent operation with no smaller unit to select within it, so the existing full apply
-    * runs when either is selected and is skipped entirely -- leaving the current layout untouched -- when neither is.
-    * Every other selected key is layered on top of that result's config afterward, so a layout-only selection still
-    * gets exactly the config values it asked for, not the preset's full resolved config.
+    * intricate, mutually-dependent operation with no smaller unit to select within it, so the existing full apply runs
+    * when either is selected and is skipped entirely -- leaving the current layout untouched -- when neither is. Every
+    * other selected key is layered on top of that result's config afterward, so a layout-only selection still gets
+    * exactly the config values it asked for, not the preset's full resolved config.
     */
   def applySelected(state: AppState, theme: Theme, preset: UiPreset, selectedKeys: Set[String]): AppState =
     val current  = state.persisted.config

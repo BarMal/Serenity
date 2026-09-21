@@ -213,9 +213,9 @@ private[command] trait CommandRunnerSubmenuEditing:
       case _ =>
         this
 
-  /** Effective checked state for a `ToggleItem`, following the same override-map convention `optionSelections`
-    * uses for `OptionItem.selectedIndex` -- `toggleSelections` records a flip in place, independent of whatever
-    * `checked` the item itself was constructed with.
+  /** Effective checked state for a `ToggleItem`, following the same override-map convention `optionSelections` uses for
+    * `OptionItem.selectedIndex` -- `toggleSelections` records a flip in place, independent of whatever `checked` the
+    * item itself was constructed with.
     */
   def effectiveChecked(item: CommandSurfaceItem.ToggleItem): Boolean =
     toggleSelections.getOrElse(item.id, item.checked)

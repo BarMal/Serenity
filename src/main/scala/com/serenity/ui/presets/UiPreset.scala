@@ -151,8 +151,8 @@ object UiPreset:
         )
       )
 
-  /** Exposed at `presets` visibility so [[UiPresetDiff]] can reuse this exact resolution rather than reimplementing
-    * it -- the "would apply" side of a built-in workflow's diff has to be the same merge `applyBuiltInWorkflowToState`
+  /** Exposed at `presets` visibility so [[UiPresetDiff]] can reuse this exact resolution rather than reimplementing it
+    * -- the "would apply" side of a built-in workflow's diff has to be the same merge `applyBuiltInWorkflowToState`
     * actually performs.
     */
   private[presets] def mergeBuiltInWorkflowConfig(base: AppConfig, preset: UiPreset): AppConfig =

@@ -118,14 +118,14 @@ final private[manager] class StateManagerUiPresetEffects(
       )
 
   /** Resolves `presetName` to a preset the same way [[applyUiPresetEffect]]/[[confirmUiPresetDiffApplyEffect]] both
-    * need to: a custom preset shadows a built-in of the same name, so this is not simply "check custom, then
-    * built-in" done twice with different results.
+    * need to: a custom preset shadows a built-in of the same name, so this is not simply "check custom, then built-in"
+    * done twice with different results.
     */
   private def resolveUiPreset(presetName: String): IO[Option[UiPreset]] =
     uiPresetStore.find(presetName).map(_.orElse(UiPreset.builtIn(presetName)))
 
-  /** The one-shot "just apply it" path -- the splash's workflow shortcuts and the top-level searchable "Apply
-    * <Name> Preset" commands both use this, applying every setting immediately via the real, unconditional
+  /** The one-shot "just apply it" path -- the splash's workflow shortcuts and the top-level searchable "Apply <Name>
+    * Preset" commands both use this, applying every setting immediately via the real, unconditional
     * `UiPreset.applyBuiltInWorkflowToState`/`applyToState` rather than `UiPresetDiff.applySelected` with every known
     * key selected: `UiPresetDiff`'s selective merge only knows the fields it explicitly enumerates
     * (`ConfigRegistry.fields` plus its five composite groups), so "select everything it knows about" is not actually
@@ -133,8 +133,8 @@ final private[manager] class StateManagerUiPresetEffects(
     * exposed this. [[reviewUiPresetEffect]]/[[confirmUiPresetDiffApplyEffect]] are the deliberate, genuinely-partial
     * alternative, where that limitation is inherent to "apply only some of the changes" anyway.
     *
-    * Resolution here (not [[resolveUiPreset]]) mirrors the pre-existing behavior this restores: a custom preset
-    * shadows a built-in of the same name, and *which* source it came from decides `applyBuiltInWorkflowToState` vs.
+    * Resolution here (not [[resolveUiPreset]]) mirrors the pre-existing behavior this restores: a custom preset shadows
+    * a built-in of the same name, and *which* source it came from decides `applyBuiltInWorkflowToState` vs.
     * `applyToState` -- not `UiPresetDiff`'s own name-only check, which does not have "was this shadowed" to go on.
     */
   private def applyUiPresetEffect(name: String): IO[Unit] =
@@ -213,8 +213,8 @@ final private[manager] class StateManagerUiPresetEffects(
           .copy(runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ surface))
           .pushFocus(Focus.Surface(surfaceId))
 
-  /** Re-resolves and re-validates the preset rather than trusting what the review opened with -- the store or the
-    * theme could plausibly have changed in the time the review sat open.
+  /** Re-resolves and re-validates the preset rather than trusting what the review opened with -- the store or the theme
+    * could plausibly have changed in the time the review sat open.
     */
   private def confirmUiPresetDiffApplyEffect(name: String, selectedKeys: Set[String]): IO[Unit] =
     normalizedPresetName(name) match
@@ -250,8 +250,8 @@ final private[manager] class StateManagerUiPresetEffects(
         state
 
   /** Shared tail for both `applyUiPresetEffect`'s full apply and `confirmUiPresetDiffApplyEffect`'s selective one --
-    * `restore` is the one step that differs between them; committing the result (validation, config persistence,
-    * font reload, pinned directories, markdown preview, session auto-save) is identical either way.
+    * `restore` is the one step that differs between them; committing the result (validation, config persistence, font
+    * reload, pinned directories, markdown preview, session auto-save) is identical either way.
     */
   private def applyLoadedUiPresetWith(preset: UiPreset, restore: AppState => AppState): IO[Unit] =
     for
@@ -260,7 +260,7 @@ final private[manager] class StateManagerUiPresetEffects(
       // first (dropping the splash) and apply the preset on top -- the same valid base a runtime preset-apply sees.
       // The preset then docks its panels into a real tree, its document mode lands on a real empty buffer, and there
       // is a focused buffer to type into (#1524 and its buffer-less-pane fallout).
-      base = seedEditorFromSplash(current)
+      base                = seedEditorFromSplash(current)
       restoredPresetState = restore(base)
       restoredDocumentState =
         applyPresetDocumentModeToActiveEmptyBuffer(restoredPresetState, preset.config.defaultDocumentMode)
