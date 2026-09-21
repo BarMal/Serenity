@@ -1,8 +1,7 @@
 package com.serenity.state.manager
 
-import cats.effect.IO
-import cats.effect.Ref
 import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Ref}
 import com.serenity.keystroke.events.{MouseDrag, MousePress}
 import com.serenity.rope.Balance
 import com.serenity.state.core.EditorState

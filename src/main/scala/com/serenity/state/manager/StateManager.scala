@@ -33,9 +33,10 @@ trait StateReader:
 
 trait StateUpdater:
   def updateState(update: AppState => AppState): IO[Unit]
-  /** Same as `updateState`, but the result is checked by `AppStateValidation` before it commits -- an update that
-    * would leave the state invalid is rejected and the state before the call is kept instead (#1183). External
-    * callers (outside `state.manager`) should prefer this over `updateState`, which stays unchecked.
+
+  /** Same as `updateState`, but the result is checked by `AppStateValidation` before it commits -- an update that would
+    * leave the state invalid is rejected and the state before the call is kept instead (#1183). External callers
+    * (outside `state.manager`) should prefer this over `updateState`, which stays unchecked.
     */
   def updateStateValidated(update: AppState => AppState): IO[Unit]
   def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit]

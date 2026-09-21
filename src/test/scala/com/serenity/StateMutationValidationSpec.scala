@@ -424,8 +424,8 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
 
   it should "move focus onto a pane that does exist" in {
     val stateManager = createStateManager()
-    val secondBuffer  = stateManager.bufferManager.createBuffer("second", None).unsafeRunSync()
-    val secondPane    = stateManager.paneManager.createPane(Some(secondBuffer)).unsafeRunSync()
+    val secondBuffer = stateManager.bufferManager.createBuffer("second", None).unsafeRunSync()
+    val secondPane   = stateManager.paneManager.createPane(Some(secondBuffer)).unsafeRunSync()
 
     stateManager.focusManager.switchFocus(Focus.EditorPane(secondPane)).unsafeRunSync()
 

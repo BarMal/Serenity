@@ -318,8 +318,8 @@ object TabBarSurfaceComposition:
     * scrolled-out tab has no close region either. Deliberately not part of `forTabBar`'s own
     * `ResolvedSurfaceComposition` -- resolved as its own list so a close click (here) and a switch click (`forTabBar`'s
     * existing hit regions, issue #1077) always come from two disjoint region sets rather than one overloaded one.
-    * `forTabBar` paints each of these regions' glyph by calling this same method rather than folding it into the
-    * shared `Distributed`-row renderer, so the painted glyph and its click target can never drift apart.
+    * `forTabBar` paints each of these regions' glyph by calling this same method rather than folding it into the shared
+    * `Distributed`-row renderer, so the painted glyph and its click target can never drift apart.
     *
     * `activeBufferId` must be the same value passed to `forTabBar` for this same `rect`/`entries`, so both resolve the
     * same visible window under overflow.

@@ -68,6 +68,6 @@ final private[manager] class TabBarDragHitTesting(port: TabBarDragHitTestingPort
       surface      <- state.tabBarSurface
       (entries, activeBufferId) <- surface.content match
         case SurfaceContent.TabBar(entries, activeBufferId) => Some((entries, activeBufferId))
-        case _                                               => None
-      hit                       <- TabBarMouseHitTesting.hitAt(entries, activeBufferId, rect, col, row)
+        case _                                              => None
+      hit <- TabBarMouseHitTesting.hitAt(entries, activeBufferId, rect, col, row)
     yield hit
