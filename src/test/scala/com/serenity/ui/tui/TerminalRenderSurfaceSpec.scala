@@ -584,5 +584,10 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.EditorPane(paneId),
         theme = Theme.light
-      )
+      ),
+      // This exercises `TerminalRenderSurface`'s own ANSI output directly, so it is a TUI render whatever surface
+      // `AppState.initial` itself defaults to -- flagging it as one keeps the line-number gutter at the terminal's
+      // flush density (`AppState.effectiveLineNumberMarginLeft`/`effectiveLineNumberPadding`), matching what this
+      // spec's hardcoded cursor-position escapes assume.
+      runtime = AppState.initial.runtime.copy(isTuiMode = true)
     )

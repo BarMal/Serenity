@@ -470,6 +470,78 @@ final private[manager] class StateManagerWorkflowCapability(
       validateAndUpdateState(opened.copy(runtime = opened.runtime.copy(uiSurfaces = List.empty)), before)
     }
 
+  /** Opens the "Save Session As..." name prompt (issue #1390), pre-filled empty -- `ModalSessionReducer` routes its
+    * Enter into `submitSessionNamePromptEffect` below.
+    */
+  private[manager] def openSaveSessionAsPrompt(state: AppState): IO[Unit] =
+    val shown = ModalStateReducer.show(Modal.SessionNamePrompt(SessionNamePromptMode.SaveAs, ""), state).state
+    validateAndUpdateState(shown, state)
+
+  /** Opens the `SessionManager.listSessions()` picker (issue #1390) for either purpose: `Open` loads the selected
+    * session directly on Enter, `Rename` hands it off to `openSaveSessionAsPrompt`'s sibling name prompt.
+    */
+  private[manager] def openSessionPicker(state: AppState, purpose: SessionListPurpose): IO[Unit] =
+    sessionManager.listSessions().flatMap { sessions =>
+      val shown = ModalStateReducer.show(Modal.SessionList(sessions, 0, purpose), state).state
+      validateAndUpdateState(shown, state)
+    }
+
+  /** Completes the name prompt: `saveSessionAs` for a brand-new named session, `renameSession` for one already picked
+    * from the list. A blank (post-trim) name is treated as a cancel, matching `ModalSessionReducer`'s own guard on
+    * `ModalSubmit`.
+    */
+  private[manager] def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      sessionNamePromptSurface(state, surfaceId) match
+        case Some((SessionNamePromptMode.SaveAs, input)) if input.trim.nonEmpty =>
+          sessionManager.saveSessionAs(input.trim, state).void >> dismissSurfaceAndFocusEditor(surfaceId)
+        case Some((SessionNamePromptMode.Rename(sessionId), input)) if input.trim.nonEmpty =>
+          sessionManager.renameSession(sessionId, input.trim) >> dismissSurfaceAndFocusEditor(surfaceId)
+        case _ =>
+          dismissSurfaceAndFocusEditor(surfaceId)
+    }
+
+  /** Completes an `Open`-purpose `SessionList` selection: loads the picked session and restores it into the current
+    * viewport, exactly like `SessionIntent.RestoreSession` does for the implicit "current" session.
+    */
+  private[manager] def submitSessionListEffect(surfaceId: SurfaceId): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      sessionListSurface(state, surfaceId) match
+        case Some((sessions, selectedIndex, SessionListPurpose.Open)) =>
+          sessions.lift(selectedIndex) match
+            case Some(session) =>
+              // `restoreSessionIntoCurrentViewport` replaces `runtime.uiSurfaces` wholesale (see its own doc), which
+              // already clears this picker along with everything else -- no separate dismiss needed, exactly like
+              // `SessionIntent.RestoreSession`'s equivalent call.
+              sessionManager.loadSession(session.id).flatMap {
+                case Some(restored) =>
+                  validateAndUpdateState(restoreSessionIntoCurrentViewport(restored, state), state)
+                case None =>
+                  dismissSurfaceAndFocusEditor(surfaceId)
+              }
+            case None =>
+              dismissSurfaceAndFocusEditor(surfaceId)
+        case _ =>
+          dismissSurfaceAndFocusEditor(surfaceId)
+    }
+
+  private def sessionNamePromptSurface(
+    state: AppState,
+    surfaceId: SurfaceId
+  ): Option[(SessionNamePromptMode, String)] =
+    state.runtime.uiSurfaces.find(_.id == surfaceId).collect {
+      case UiSurface(_, SurfaceContent.ModalWorkflow(Modal.SessionNamePrompt(mode, input)), _, _) => (mode, input)
+    }
+
+  private def sessionListSurface(
+    state: AppState,
+    surfaceId: SurfaceId
+  ): Option[(List[com.serenity.session.SessionMetadata], Int, SessionListPurpose)] =
+    state.runtime.uiSurfaces.find(_.id == surfaceId).collect {
+      case UiSurface(_, SurfaceContent.ModalWorkflow(Modal.SessionList(sessions, index, purpose)), _, _) =>
+        (sessions, index, purpose)
+    }
+
   private[manager] def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
     val restored = restoredState.copy(
       runtime = restoredState.runtime.copy(

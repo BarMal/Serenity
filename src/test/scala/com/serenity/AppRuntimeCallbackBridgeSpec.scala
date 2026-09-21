@@ -178,6 +178,8 @@ class AppRuntimeCallbackBridgeSpec extends AnyFlatSpec with Matchers:
         failingStateManager = new StateUpdater:
           def updateState(update: AppState => AppState): IO[Unit] =
             IO.raiseError(new RuntimeException("markdown preview close signal failed"))
+          def updateStateValidated(update: AppState => AppState): IO[Unit] =
+            IO.raiseError(new RuntimeException("markdown preview close signal failed"))
           def updateBufferAnimations(
             update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
               BufferId,

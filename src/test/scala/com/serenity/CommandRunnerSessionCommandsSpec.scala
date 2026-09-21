@@ -1,5 +1,6 @@
 package com.serenity
 
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 
 import cats.effect.IO
@@ -61,6 +62,18 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(Enter).unsafeRunSync()
 
+  private def typeText(stateManager: StateManager, text: String): Unit =
+    text.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+
+  private def readSessionIndex(sessionRoot: Path): String =
+    new String(Files.readAllBytes(sessionRoot.resolve("session-index.json")), StandardCharsets.UTF_8)
+
+  private def hasOpenModalWorkflow(state: AppState): Boolean =
+    state.runtime.uiSurfaces.exists {
+      case UiSurface(_, SurfaceContent.ModalWorkflow(_), _, _) => true
+      case _                                                   => false
+    }
+
   private def assertActiveBufferFitsViewport(state: AppState, viewportSize: ViewportSize): Unit =
     state.runtime.viewportSize shouldBe Some(viewportSize)
     val paneId = state.persisted.layout.activeEditorPaneId.getOrElse(fail("Expected active pane"))
@@ -96,6 +109,72 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "clear-session", "clear-session")
     stateManager.sessionStartupInfo.sessionExists.unsafeRunSync() shouldBe false
+  }
+
+  it should "save the current session under a new name via Save Session As, without touching the current session" in {
+    val sessionRoot  = Files.createTempDirectory("serenity-save-session-as")
+    val stateManager = createStateManager(Some(sessionRoot))
+    val bufferId     = BufferId(0)
+
+    stateManager.bufferManager.updateBuffer(bufferId, "feature work").unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "save-session-as", "save-session-as")
+    typeText(stateManager, "Feature Branch")
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    readSessionIndex(sessionRoot) should include("Feature Branch")
+    hasOpenModalWorkflow(stateManager.getCurrentState.unsafeRunSync()) shouldBe false
+  }
+
+  it should "list saved sessions and open the selected one via Open Session" in {
+    val sessionRoot  = Files.createTempDirectory("serenity-open-session")
+    val stateManager = createStateManager(Some(sessionRoot))
+    val bufferId     = BufferId(0)
+
+    stateManager.bufferManager.updateBuffer(bufferId, "first content").unsafeRunSync()
+    executeCommandThroughRunner(stateManager, "save-session-as", "save-session-as")
+    typeText(stateManager, "First")
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    stateManager.bufferManager.updateBuffer(bufferId, "second content").unsafeRunSync()
+    executeCommandThroughRunner(stateManager, "save-session-as", "save-session-as")
+    typeText(stateManager, "Second")
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    stateManager.bufferManager.updateBuffer(bufferId, "unsaved current content").unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "open-session", "open-session")
+    // "First" was saved (and so listed) before "Second"; move the selection down once to reach it.
+    stateManager.applyEvent(MoveDown).unsafeRunSync()
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val restoredState = stateManager.getCurrentState.unsafeRunSync()
+    restoredState.persisted.buffers(bufferId).document.content.collect() shouldBe "second content"
+    hasOpenModalWorkflow(restoredState) shouldBe false
+  }
+
+  it should "rename a saved session via Rename Session" in {
+    val sessionRoot  = Files.createTempDirectory("serenity-rename-session")
+    val stateManager = createStateManager(Some(sessionRoot))
+    val bufferId     = BufferId(0)
+    val originalName = "Old"
+
+    stateManager.bufferManager.updateBuffer(bufferId, "rename target content").unsafeRunSync()
+    executeCommandThroughRunner(stateManager, "save-session-as", "save-session-as")
+    typeText(stateManager, originalName)
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    executeCommandThroughRunner(stateManager, "rename-session", "rename-session")
+    // Selects the (only) listed session, handing off to the name prompt pre-filled with its current name.
+    stateManager.applyEvent(Enter).unsafeRunSync()
+    originalName.indices.foreach(_ => stateManager.applyEvent(DeleteBackward).unsafeRunSync())
+    typeText(stateManager, "New Name")
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val indexContent = readSessionIndex(sessionRoot)
+    indexContent should include("New Name")
+    indexContent should not include "\"Old\""
+    hasOpenModalWorkflow(stateManager.getCurrentState.unsafeRunSync()) shouldBe false
   }
 
   it should "restore a startup session into the current startup viewport" in {

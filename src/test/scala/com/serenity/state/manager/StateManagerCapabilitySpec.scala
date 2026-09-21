@@ -6,6 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.animation.AnimationState
 import com.serenity.app.AppRuntime
 import com.serenity.config.AppConfig
 import com.serenity.config.AppConfigMotionOps.*
@@ -16,6 +17,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.renderer.RenderController
@@ -37,7 +39,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val currentFiberRef = Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None).unsafeRunSync()
     val currentCacheRef = Ref.of[IO, Option[MouseTargetCache]](None).unsafeRunSync()
     val currentBufferAnimationsRef =
-      Ref.of[IO, Map[BufferId, com.serenity.animation.AnimationState]](Map.empty).unsafeRunSync()
+      Ref.of[IO, Map[BufferId, AnimationState]](Map.empty).unsafeRunSync()
     val statePort = new EventStatePort:
       val stateRef = currentStateRef; val logger = currentLogger; val documentAnalysisFiberRef = currentFiberRef
       val mouseTargetCacheRef = currentCacheRef; val bufferAnimationsRef = currentBufferAnimationsRef
@@ -452,17 +454,14 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val stateRef = Ref.of[IO, AppState](AppState.initial).unsafeRunSync()
     val applied  = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
     val bufferAnimationsRef =
-      Ref.of[IO, Map[BufferId, com.serenity.animation.AnimationState]](Map.empty).unsafeRunSync()
+      Ref.of[IO, Map[BufferId, AnimationState]](Map.empty).unsafeRunSync()
     val capabilities = new StateEngine:
-      def getCurrentState: IO[AppState]                                                 = stateRef.get
-      def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = bufferAnimationsRef.get
-      def updateState(update: AppState => AppState): IO[Unit]                           = stateRef.update(update)
-      def updateBufferAnimations(
-        update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
-          BufferId,
-          com.serenity.animation.AnimationState
-        ]
-      ): IO[Unit] = bufferAnimationsRef.update(update)
+      def getCurrentState: IO[AppState]                                = stateRef.get
+      def getBufferAnimations: IO[Map[BufferId, AnimationState]]       = bufferAnimationsRef.get
+      def updateState(update: AppState => AppState): IO[Unit]          = stateRef.update(update)
+      def updateStateValidated(update: AppState => AppState): IO[Unit] = stateRef.update(update)
+      def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit] =
+        bufferAnimationsRef.update(update)
       def applyEvent(event: Event): IO[Unit] = applied.update(_ :+ event)
     val router        = InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default)).unsafeRunSync()
     val clipboard     = SystemClipboard[IO](readText = IO.pure(Some("pasted")), writeText = _ => IO.unit)
@@ -499,7 +498,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       afterState <- stateRef.get
     yield afterState.persisted.buffers(bufferId).markdownPreviewCommittedGeneration
 
-    program.unsafeRunSync() shouldBe 1L
+    runVirtual(program) shouldBe 1L
   }
 
   it should "cancel a pending markdown preview commit when superseded by a newer edit" in {
@@ -521,7 +520,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       afterState <- stateRef.get
     yield afterState.persisted.buffers(bufferId).markdownPreviewCommittedGeneration
 
-    program.unsafeRunSync() shouldBe 2L
+    runVirtual(program) shouldBe 2L
   }
 
   "StateManagerEventPipeline" should "recognize a live markdown preview via a pinned panel surface" in {

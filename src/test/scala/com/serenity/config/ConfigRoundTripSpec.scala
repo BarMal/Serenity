@@ -67,7 +67,9 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
   private val mutated: AppConfig = AppConfig.default
     .withSyntaxHighlighting(true)
     .withLineNumbers(false)
-    .withLineNumberLayout(LineNumberLayout(side = LineNumberSide.Both, marginLeft = 2, marginRight = 3, padding = 1))
+    .withLineNumberLayout(
+      LineNumberLayout(side = LineNumberSide.Both, marginLeft = Some(2), marginRight = 3, padding = Some(1))
+    )
     .withoutStatusLine
     .withPaneHeaders(false)
     .withCommentDisplayMode(CommentDisplayMode.Margin)
@@ -104,7 +106,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withAppMode(AppMode.Prose)
     .withShowAllSettingsRegardlessOfMode(true)
     .withInterfaceDensity(InterfaceDensity.Compact)
-    .withUiElementGap(2.0)
+    .withUiElementGap(Some(2.0))
     .withUiCornerRadiusPx(6)
     .withUiOutlineThicknessPx(3)
     .withTextAreaLeftInset(12.0)

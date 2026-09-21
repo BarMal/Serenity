@@ -132,6 +132,35 @@ object EditorState:
       val (before, after) = without.splitAt(without.indexOf(to))
       state.copy(persisted = state.persisted.copy(bufferOrder = before ++ (from :: after)))
 
+  /** Moves the focused tab one position left in `bufferOrder` -- issue #1610's keyboard equivalent of drag-to-reorder.
+    * Implemented as `reorderBuffer(focused, leftNeighbour)`, moving the focused buffer to sit immediately before its
+    * left neighbour, i.e. swapping the two -- the same helper the mouse drag path (`TabBarDragHitTesting`) already
+    * calls, so keyboard and mouse converge on one implementation. A no-op when no buffer is focused or the focused tab
+    * is already first, since there is then no left neighbour to swap with.
+    */
+  def moveFocusedTabLeft(state: AppState): AppState =
+    moveFocusedTab(state, offset = -1)
+
+  /** Moves the focused tab one position right in `bufferOrder`, the mirror of [[moveFocusedTabLeft]]. Implemented as
+    * `reorderBuffer(rightNeighbour, focused)`, moving the right neighbour to sit immediately before the focused buffer
+    * -- swapping the two without needing `reorderBuffer` to express "move to the very end", which its
+    * insert-before-target contract cannot do directly. A no-op when no buffer is focused or the focused tab is already
+    * last.
+    */
+  def moveFocusedTabRight(state: AppState): AppState =
+    moveFocusedTab(state, offset = 1)
+
+  private def moveFocusedTab(state: AppState, offset: -1 | 1): AppState =
+    val order = state.persisted.bufferOrder
+    (state.focusedBufferId, state.focusedBufferId.map(order.indexOf)) match
+      case (Some(focusedId), Some(index)) if index >= 0 =>
+        order.lift(index + offset) match
+          case Some(neighbourId) =>
+            if offset < 0 then reorderBuffer(state, focusedId, neighbourId)
+            else reorderBuffer(state, neighbourId, focusedId)
+          case None => state
+      case _ => state
+
   def removePane(state: AppState, paneId: PaneId): AppState =
     state.persisted.layout.editorPanes.get(paneId) match
       case None =>

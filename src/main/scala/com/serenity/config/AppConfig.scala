@@ -57,7 +57,7 @@ final case class AppConfig(
   def interfaceDensity: InterfaceDensity =
     interfaceConfig.density
 
-  def uiElementGap: Double =
+  def uiElementGap: Option[Double] =
     interfaceConfig.elementGap
 
   def uiCornerRadiusPx: Int =
@@ -300,7 +300,7 @@ final case class AppConfig(
   def withInterfaceDensity(density: InterfaceDensity): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(density = density))
 
-  def withUiElementGap(gap: Double): AppConfig =
+  def withUiElementGap(gap: Option[Double]): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(elementGap = gap))
 
   def withUiCornerRadiusPx(radius: Int): AppConfig =

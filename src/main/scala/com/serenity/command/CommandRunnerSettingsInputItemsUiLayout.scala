@@ -26,7 +26,10 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
               .Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiElementGap(commandIntentArg)))
           ),
       category = CommandCategory.Settings,
-      defaultValue = Some(CommandRunnerSettingsInputItems.formatDecimal(AppConfig.default.interfaceConfig.elementGap))
+      // `auto` rather than a surface-specific number: this builder has no `state.runtime.isTuiMode` to resolve
+      // against (see the matching note on `derivedValues.elementGapValue`).
+      defaultValue =
+        Some(AppConfig.default.interfaceConfig.elementGap.fold("auto")(CommandRunnerSettingsInputItems.formatDecimal))
     ),
     CommandSurfaceItem.InputItem(
       id = "ui-corner-radius",
@@ -72,7 +75,10 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
       label: String,
       hint: String,
       currentValue: String,
-      default: Int,
+      // A string, not an `Int`: `marginLeft`/`padding`'s default is now `auto` (unset, surface-resolved), which
+      // this builder cannot spell as a number without `state.runtime.isTuiMode` -- see the matching note on
+      // `derivedValues.elementGapValue`. `marginRight` (still a plain `Int`) is just `.toString`-ed by the caller.
+      default: String,
       intent: Int => TextDisplayIntent
     ): CommandSurfaceItem.InputItem =
       CommandSurfaceItem.InputItem(
@@ -86,7 +92,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
             .filter(value => value >= 0 && value <= LineNumberLayout.MaxCells)
             .map(cells => CommandIntent.Settings(SettingsIntent.TextDisplay(intent(cells)))),
         category = CommandCategory.Settings,
-        defaultValue = Some(default.toString)
+        defaultValue = Some(default)
       )
 
     val defaults = LineNumberLayout()
@@ -96,7 +102,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
         "Line Number Margin (Left)",
         s"Cells from the left edge to the counter (0-${LineNumberLayout.MaxCells})",
         marginLeftValue,
-        defaults.marginLeft,
+        defaults.marginLeft.fold("auto")(_.toString),
         TextDisplayIntent.SetLineNumberMarginLeft(_)
       ),
       cellsItem(
@@ -104,7 +110,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
         "Line Number Margin (Right)",
         s"Cells from the right edge to the counter (0-${LineNumberLayout.MaxCells})",
         marginRightValue,
-        defaults.marginRight,
+        defaults.marginRight.toString,
         TextDisplayIntent.SetLineNumberMarginRight(_)
       ),
       cellsItem(
@@ -112,7 +118,7 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
         "Line Number Padding",
         s"Cells between the counter and the content (0-${LineNumberLayout.MaxCells})",
         paddingValue,
-        defaults.padding,
+        defaults.padding.fold("auto")(_.toString),
         TextDisplayIntent.SetLineNumberPadding(_)
       )
     )

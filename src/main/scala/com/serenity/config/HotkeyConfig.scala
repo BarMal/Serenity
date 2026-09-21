@@ -26,6 +26,8 @@ enum HotkeyAction:
   case FileSearch
   case NextTab
   case PreviousTab
+  case MoveTabLeft
+  case MoveTabRight
   case Find
   case Replace
   case GoToLine
@@ -54,6 +56,8 @@ enum HotkeyAction:
       case FileSearch               => "file_search"
       case NextTab                  => "next_tab"
       case PreviousTab              => "previous_tab"
+      case MoveTabLeft              => "move_tab_left"
+      case MoveTabRight             => "move_tab_right"
       case Find                     => "find"
       case Replace                  => "replace"
       case GoToLine                 => "go_to_line"
@@ -348,10 +352,17 @@ object HotkeyConfig:
         primaryKey(InputKey.Tab, shift = true),
         primaryKey(InputKey.ReverseTab)
       ),
-      HotkeyAction.Find     -> List(primary('f')),
-      HotkeyAction.Replace  -> List(if isMac then primary('f', alt = true) else primary('h')),
-      HotkeyAction.GoToLine -> List(primary('g')),
-      HotkeyAction.SaveAs   -> List(primary('s', shift = true)),
+      // Mirrors the browser convention for moving a tab (Firefox's Ctrl+Shift+PageUp/PageDown) rather than reusing
+      // NextTab/PreviousTab's Tab-key bindings, since Shift+Tab already means PreviousTab -- there is no unshifted
+      // "switch tab" action on Page keys to shift-broaden the way ClosePane/SplitPaneVertical/FileSearch do over their
+      // plain counterparts. Also avoids colliding with the editor's own Ctrl+Shift+Left/Right
+      // (`ExtendSelectionWordLeft/Right` in `FocusedKeymapConfig`), which arrow-key "move tab" bindings would hit.
+      HotkeyAction.MoveTabLeft  -> List(primaryKey(InputKey.PageUp, shift = true)),
+      HotkeyAction.MoveTabRight -> List(primaryKey(InputKey.PageDown, shift = true)),
+      HotkeyAction.Find         -> List(primary('f')),
+      HotkeyAction.Replace      -> List(if isMac then primary('f', alt = true) else primary('h')),
+      HotkeyAction.GoToLine     -> List(primary('g')),
+      HotkeyAction.SaveAs       -> List(primary('s', shift = true)),
       // Plain F1, not primary-modifier-gated: unlike the Cmd/Ctrl bindings above, F1 is delivered identically by
       // every terminal and by AWT regardless of platform, so it needs none of `forTerminalUse`'s Mac-Cmd rewriting
       // (issue #1213) and no per-OS branching here.

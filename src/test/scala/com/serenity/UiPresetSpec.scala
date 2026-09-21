@@ -284,14 +284,14 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val sourceConfig = AppConfig.default
       .withBackgroundStyle(BackgroundStyle.GlassLike)
       .withInterfaceDensity(InterfaceDensity.Spacious)
-      .withUiElementGap(4)
+      .withUiElementGap(Some(4))
       .withUiOutlineThicknessPx(5)
 
     val patched = UiPreset.Patch.Appearance(sourceConfig, themeName = Some(Theme.light.name)).applyTo(preset)
 
     patched.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
     patched.config.interfaceDensity shouldBe InterfaceDensity.Spacious
-    patched.config.uiElementGap shouldBe 4
+    patched.config.uiElementGap shouldBe Some(4)
     patched.config.uiOutlineThicknessPx shouldBe 5
     patched.themeName shouldBe Theme.light.name
     patched.pinnedPanels shouldBe List(panel)

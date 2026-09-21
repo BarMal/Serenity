@@ -29,6 +29,8 @@ private[manager] object ModalMouseHitTesting:
       case Modal.FileWorkflow(_)                => ModalType.FileWorkflow
       case Modal.ReplaceWorkflow(_)             => ModalType.ReplaceWorkflow
       case Modal.CloseWorkflow(_)               => ModalType.CloseWorkflow
+      case Modal.SessionNamePrompt(_, _)        => ModalType.SessionNamePrompt
+      case Modal.SessionList(_, _, _)           => ModalType.SessionList
       case Modal.Custom(name, _)                => ModalType.Custom(name)
 
 final private[manager] class ModalMouseHitTesting(port: ModalMouseHitTestingPort):

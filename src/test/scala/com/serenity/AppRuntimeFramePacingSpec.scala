@@ -91,6 +91,7 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
         def getCurrentState: IO[AppState]                                                 = IO.pure(state)
         def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
         def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
+        def updateStateValidated(update: AppState => AppState): IO[Unit]                  = IO.unit
         def updateBufferAnimations(
           update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
             BufferId,

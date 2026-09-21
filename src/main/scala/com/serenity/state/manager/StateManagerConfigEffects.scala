@@ -333,11 +333,11 @@ final private[manager] class StateManagerConfigEffects(
       case TextDisplayIntent.SetLineNumberSide(side) =>
         updateLineNumberLayout(_.copy(side = side))
       case TextDisplayIntent.SetLineNumberMarginLeft(cells) =>
-        updateLineNumberLayout(_.copy(marginLeft = cells))
+        updateLineNumberLayout(_.copy(marginLeft = Some(cells)))
       case TextDisplayIntent.SetLineNumberMarginRight(cells) =>
         updateLineNumberLayout(_.copy(marginRight = cells))
       case TextDisplayIntent.SetLineNumberPadding(cells) =>
-        updateLineNumberLayout(_.copy(padding = cells))
+        updateLineNumberLayout(_.copy(padding = Some(cells)))
       case TextDisplayIntent.SetWordWrap(enabled) =>
         updateTextDisplayConfig(config => config.withWordWrap(enabled)).void
       case TextDisplayIntent.SetVisualLineCursorNavigation(enabled) =>
@@ -375,7 +375,7 @@ final private[manager] class StateManagerConfigEffects(
       case InterfaceChromeIntent.SetCommandRunnerShowKeyHints(enabled) =>
         updateAppearanceConfig(_.withCommandRunnerShowKeyHints(enabled)).void
       case InterfaceChromeIntent.SetUiElementGap(gap) =>
-        updateAppearanceConfig(_.withUiElementGap(gap)).void
+        updateAppearanceConfig(_.withUiElementGap(Some(gap))).void
       case InterfaceChromeIntent.SetUiCornerRadiusPx(radius) =>
         updateAppearanceConfig(_.withUiCornerRadiusPx(radius)).void
       case InterfaceChromeIntent.SetUiOutlineThicknessPx(thickness) =>
@@ -429,9 +429,10 @@ final private[manager] class StateManagerConfigEffects(
   private def interpretGeneralSettingsIntent(intent: GeneralSettingsIntent, state: AppState): IO[Unit] =
     intent match
       case GeneralSettingsIntent.OpenSettings =>
-        editor.updateState(current =>
-          CommandRunnerReducer.openSettings(current, CommandRegistry.withToggleUI)(using balance)
-        )
+        stateRef.get.flatMap { current =>
+          val newState = CommandRunnerReducer.openSettings(current, CommandRegistry.withToggleUI)(using balance)
+          editor.validateAndUpdateState(newState, current)
+        }
       case GeneralSettingsIntent.SaveConfig =>
         persistConfigFile(state.persisted.config)
       case GeneralSettingsIntent.SetMaterialPreset(preset) =>

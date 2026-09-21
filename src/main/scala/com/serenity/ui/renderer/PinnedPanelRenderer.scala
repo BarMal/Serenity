@@ -1,8 +1,10 @@
 package com.serenity.ui.renderer
 
+import java.awt.Color
+
 import com.serenity.animation.AnimationState
 import com.serenity.config.AppConfig
-import com.serenity.ui.layout.{ResolvedSurfaceComposition, SurfaceContentRowKind}
+import com.serenity.ui.layout.{CellMetrics, ResolvedSurfaceComposition, SurfaceContentRowKind}
 import com.serenity.ui.theme.Theme
 
 object PinnedPanelRenderer:
@@ -15,6 +17,7 @@ object PinnedPanelRenderer:
     panel: TextPanelView,
     theme: Theme,
     config: AppConfig,
+    cellMetrics: CellMetrics,
     animationState: AnimationState = AnimationState.empty
   ): Unit =
     val rect = panel.rect
@@ -36,12 +39,15 @@ object PinnedPanelRenderer:
 
     for y <- rect.y until rect.bottom do surface.putString(rect.x, y, " " * rect.width)
 
+    val textInsetPx = SurfaceTextInset.px(config)
     applyGlassSheen(surface, panel, theme, config)
     drawBorder(surface, panel, theme, config, animationState)
-    drawTitle(surface, panel, theme, animationState)
+    drawTitle(surface, panel, theme, animationState, textInsetPx)
     panel.composition match
-      case Some(composition) => drawComposition(surface, panel, composition, theme, animationState)
-      case None              => drawLines(surface, panel, theme, animationState)
+      case Some(composition) =>
+        drawComposition(surface, panel, composition, theme, animationState, cellMetrics, textInsetPx)
+      case None =>
+        drawLines(surface, panel, theme, animationState, cellMetrics, textInsetPx)
 
     surface.effects.foreach(_.setAlpha(1.0f))
     surface.setForegroundColor(theme.foreground)
@@ -74,18 +80,23 @@ object PinnedPanelRenderer:
     surface: RenderSurface,
     panel: TextPanelView,
     theme: Theme,
-    animationState: AnimationState
+    animationState: AnimationState,
+    textInsetPx: Double
   ): Unit =
     val titleRect = panel.titleRect
     val title     = panel.title.take(titleRect.width).padTo(titleRect.width, ' ')
     if titleRect.width > 0 then
-      renderAnimatedText(surface, titleRect.x, titleRect.y, title, 0, theme.panel.foreground, animationState)
+      surface.pixels.withPixelTranslation(textInsetPx, 0.0) {
+        renderAnimatedText(surface, titleRect.x, titleRect.y, title, 0, theme.panel.foreground, animationState)
+      }
 
   private def drawLines(
     surface: RenderSurface,
     panel: TextPanelView,
     theme: Theme,
-    animationState: AnimationState
+    animationState: AnimationState,
+    cellMetrics: CellMetrics,
+    textInsetPx: Double
   ): Unit =
     val contentRect = panel.resolvedContentRect
     val maxLineSize = contentRect.width
@@ -102,24 +113,25 @@ object PinnedPanelRenderer:
 
         maybeRow.foreach { row =>
           val padded = row.plainText.take(maxLineSize).padTo(maxLineSize, ' ')
+          val (foreground, background) =
+            if row.selected then (theme.highlighted.foreground, theme.highlighted.background)
+            else (theme.panel.foreground, theme.panel.background)
+          surface.setForegroundColor(foreground)
+          surface.setBackgroundColor(background)
           if row.selected then
-            surface.setForegroundColor(theme.highlighted.foreground)
-            surface.setBackgroundColor(theme.highlighted.background)
             surface.enableStyle(theme.focusStyle)
-          else
-            surface.setForegroundColor(theme.panel.foreground)
-            surface.setBackgroundColor(theme.panel.background)
-          val baseForeground =
-            if row.selected then theme.highlighted.foreground else theme.panel.foreground
-          renderAnimatedText(
-            surface,
-            contentRect.x,
-            slot.y,
-            padded,
-            slot.y - panel.rect.y,
-            baseForeground,
-            animationState
-          )
+            fillRowBackground(surface, cellMetrics, contentRect.x, slot.y, maxLineSize, background)
+          surface.pixels.withPixelTranslation(textInsetPx, 0.0) {
+            renderAnimatedText(
+              surface,
+              contentRect.x,
+              slot.y,
+              padded,
+              slot.y - panel.rect.y,
+              foreground,
+              animationState
+            )
+          }
           if row.selected then surface.disableStyle(theme.focusStyle)
         }
       }
@@ -133,7 +145,9 @@ object PinnedPanelRenderer:
     panel: TextPanelView,
     composition: ResolvedSurfaceComposition,
     theme: Theme,
-    animationState: AnimationState
+    animationState: AnimationState,
+    cellMetrics: CellMetrics,
+    textInsetPx: Double
   ): Unit =
     composition.paintBoxes.foreach { box =>
       box.text.foreach { text =>
@@ -141,19 +155,37 @@ object PinnedPanelRenderer:
         val y      = math.round(box.rect.y).toInt
         val width  = math.round(box.rect.width).toInt
         val padded = text.take(width).padTo(width, ' ')
+        val (foreground, background) =
+          if box.selected then (theme.highlighted.foreground, theme.highlighted.background)
+          else (theme.panel.foreground, theme.panel.background)
+        surface.setForegroundColor(foreground)
+        surface.setBackgroundColor(background)
         if box.selected then
-          surface.setForegroundColor(theme.highlighted.foreground)
-          surface.setBackgroundColor(theme.highlighted.background)
           surface.enableStyle(theme.focusStyle)
-        else
-          surface.setForegroundColor(theme.panel.foreground)
-          surface.setBackgroundColor(theme.panel.background)
-        val baseForeground =
-          if box.selected then theme.highlighted.foreground else theme.panel.foreground
-        renderAnimatedText(surface, x, y, padded, y - panel.rect.y, baseForeground, animationState)
+          fillRowBackground(surface, cellMetrics, x, y, width, background)
+        surface.pixels.withPixelTranslation(textInsetPx, 0.0) {
+          renderAnimatedText(surface, x, y, padded, y - panel.rect.y, foreground, animationState)
+        }
         if box.selected then surface.disableStyle(theme.focusStyle)
       }
     }
+
+  /** Fills one row's full content width with `color`, at its true (un-inset) position -- called only for a selected
+    * row/box, ahead of its glyphs drawing shifted by `textInsetPx`. Every other row already gets this from `render`'s
+    * own full-panel blank, which already paints the unselected panel background; a selected row needs its own fill
+    * because that blank predates knowing which row is selected.
+    */
+  private def fillRowBackground(
+    surface: RenderSurface,
+    cellMetrics: CellMetrics,
+    x: Int,
+    y: Int,
+    width: Int,
+    color: Color
+  ): Unit =
+    val leftPx  = cellMetrics.toPixelX(x)
+    val rightPx = cellMetrics.toPixelX(x + width)
+    surface.pixels.fillPixelRect(leftPx, cellMetrics.toPixelY(y), rightPx - leftPx, cellMetrics.lineHeight, color)
 
   private def renderAnimatedText(
     surface: RenderSurface,

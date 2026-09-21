@@ -40,7 +40,7 @@ class EditorLayoutContractViolationsSpec extends AnyFlatSpec with Matchers:
     )
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
-        config = AppConfig.default.withUiElementGap(2),
+        config = AppConfig.default.withUiElementGap(Some(2)),
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(
@@ -136,7 +136,7 @@ class EditorLayoutContractViolationsSpec extends AnyFlatSpec with Matchers:
     )
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
-        config = AppConfig.default.withUiElementGap(2),
+        config = AppConfig.default.withUiElementGap(Some(2)),
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(

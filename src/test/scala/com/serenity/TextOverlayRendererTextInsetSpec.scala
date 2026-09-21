@@ -3,7 +3,7 @@ package com.serenity
 import java.awt.Font
 
 import com.serenity.config.{AppConfig, InterfaceDensity}
-import com.serenity.ui.layout.{CellMetrics, LayoutRect, OverlayRow, SpacingScale, SpacingStep}
+import com.serenity.ui.layout.{CellMetrics, LayoutRect, OverlayRow}
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -19,9 +19,7 @@ class TextOverlayRendererTextInsetSpec extends AnyFlatSpec with Matchers:
   private val metrics = CellMetrics(charWidth = 8, lineHeight = 20, ascent = 15)
 
   private def expectedInsetPx(config: AppConfig): Int =
-    SpacingScale
-      .forUi(config.editorConfig.fontConfig.scaledUiFontSize.toDouble, config.interfaceDensity)
-      .px(SpacingStep.Sm)
+    SurfaceTextInset.px(config).toInt
 
   private def renderRowOverlay(config: AppConfig, surface: MockRenderSurface): Unit =
     val overlay = TextOverlayView(rect = LayoutRect(0, 0, 12, 3), rows = List(OverlayRow("row")))

@@ -59,12 +59,14 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
     // Click at row 4: content now starts at row 2 (tab bar at row 0, pane header at row 1), so bufferLine =
-    // topLine(0) + (4-2) = 2, bufferCol = leftCol(0) + 3 = 3.
+    // topLine(0) + (4-2) = 2. bufferCol = leftCol(0) + (click col 6 - editorPanelRect.x); the gutter is 2 cells
+    // wider than before the line-number margin/padding Option conversion (a GUI cell of breathing room each side
+    // of the counter, where both used to be zero), so bufferCol = 6 - 5 = 1.
     sm.applyEvent(MouseClick(6, 4)).unsafeRunSync()
 
     val buffer = sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     buffer.editing.cursorPositions.headOption.map(_.line) shouldBe Some(2)
-    buffer.editing.cursorPositions.headOption.map(_.column) shouldBe Some(3)
+    buffer.editing.cursorPositions.headOption.map(_.column) shouldBe Some(1)
   }
 
   it should "move cursor to the first row of the content area" in {
@@ -165,11 +167,12 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     }.unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
-    // Row 3 is content row 1 now that content starts at row 2 (tab bar at row 0, pane header at row 1).
+    // Row 3 is content row 1 now that content starts at row 2 (tab bar at row 0, pane header at row 1). Column 1,
+    // not 3: same 2-cell-wider gutter as the click test above (unset line-number margin/padding's GUI default).
     sm.applyEvent(MouseMove(6, 3)).unsafeRunSync()
 
     sm.getCurrentState.unsafeRunSync().runtime.hoveredEditorTarget shouldBe Some(
-      HoveredEditorTarget(PaneId(0), bufferId, CursorPosition(1, 3))
+      HoveredEditorTarget(PaneId(0), bufferId, CursorPosition(1, 1))
     )
   }
 

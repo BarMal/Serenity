@@ -91,7 +91,7 @@ object AppStartup:
     openPath match
       case Some(path) =>
         for
-          _ <- stateManager.updateState { _ =>
+          _ <- stateManager.updateStateValidated { _ =>
             val base = AppState.empty(appConfig)
             base.copy(
               persisted = base.persisted.copy(theme = theme),
@@ -112,7 +112,7 @@ object AppStartup:
           // companion sprite surface (if enabled) and dock it in the same update, so uiSurfaces and the tree change
           // together instead of passing through an inconsistent intermediate state (issue #817: idempotent/no-op if
           // it's already present, already docked, or the sprite is disabled).
-          _ <- stateManager.updateState { state =>
+          _ <- stateManager.updateStateValidated { state =>
             state.copy(
               persisted = state.persisted
                 .copy(layout = AppState.dockCompanionSprite(state.persisted.layout, state.persisted.config)),
@@ -137,6 +137,6 @@ object AppStartup:
             keyboardFidelityTier,
             configNotice
           )
-          _     <- stateManager.updateState(_ => startState)
+          _     <- stateManager.updateStateValidated(_ => startState)
           state <- stateManager.getCurrentState
         yield state

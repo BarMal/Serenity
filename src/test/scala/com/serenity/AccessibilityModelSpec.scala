@@ -3,6 +3,7 @@ package com.serenity
 import com.serenity.command.{CommandRunner, FileIntent}
 import com.serenity.config.{AppConfig, InterfaceDensity}
 import com.serenity.rope.Balance
+import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.ui.accessibility.{AccessibilityRole, AccessibilitySnapshot}
 import com.serenity.ui.layout.*
@@ -352,7 +353,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val initialState = AppState.initial
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
-        config = AppConfig.default.withUiElementGap(1),
+        config = AppConfig.default.withUiElementGap(Some(1)),
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -440,4 +441,70 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     )
     repeated.announcements shouldBe Nil
     changed.announcements.map(_.message) shouldBe List("Unknown command")
+  }
+
+  /** Coverage for issue #1611: the always-visible tab strip (`AppState.tabBarSurface`) was exposed as no accessibility
+    * node at all -- the strip is painted entirely outside the `UiSceneSnapshot`/`SceneNode` pipeline `nodeFor` and
+    * `surfaceControls` otherwise walk (`OverlayViewModel.fromState`'s `tabBar` is built straight from
+    * `state.tabBarSurface`, never added to any of `workspace`/`floating`/`modal`), so a screen reader had no way to
+    * discover the open tabs, which one was active, or how many there were.
+    */
+  private def bufferState(bufferIds: List[Int]): AppState =
+    val initialState = AppState.initial
+    val buffers      = bufferIds.map(id => BufferId(id) -> Buffer.fromString(BufferId(id), s"content-$id")).toMap
+    initialState.copy(
+      persisted = initialState.persisted.copy(
+        buffers = buffers,
+        bufferOrder = bufferIds.map(BufferId.apply),
+        layout = initialState.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), BufferId(bufferIds.head)))
+        )
+      ),
+      runtime = initialState.runtime.copy(viewportSize = Some(ViewportSize(60, 20)))
+    )
+
+  "AccessibilitySnapshot" should "expose no tab-bar nodes when at most one buffer is open" in {
+    AccessibilitySnapshot.from(AppState.initial, viewport).nodes.map(_.id) should not contain "surface:tab-bar"
+  }
+
+  it should "expose one Button-role node per open tab, with only the active tab selected" in {
+    val state    = bufferState(List(0, 1, 2))
+    val snapshot = AccessibilitySnapshot.from(state, viewport)
+    val tabs     = snapshot.nodes.filter(_.id.startsWith("surface:tab-bar/tab:"))
+
+    tabs.map(_.id) shouldBe List("surface:tab-bar/tab:0", "surface:tab-bar/tab:1", "surface:tab-bar/tab:2")
+    tabs.map(_.role) shouldBe List.fill(3)(AccessibilityRole.Button)
+    tabs.map(_.name) shouldBe List("Buffer 0", "Buffer 1", "Buffer 2")
+    tabs.map(_.selected) shouldBe List(true, false, false)
+  }
+
+  it should "move the selected tab node when the active tab changes" in {
+    val state    = EditorState.switchToBuffer(bufferState(List(0, 1, 2)), BufferId(1))
+    val snapshot = AccessibilitySnapshot.from(state, viewport)
+    val tabs     = snapshot.nodes.filter(_.id.startsWith("surface:tab-bar/tab:"))
+
+    tabs.map(_.selected) shouldBe List(false, true, false)
+  }
+
+  it should "expose the tab bar's close and new-tab affordances as their own actionable nodes" in {
+    val state    = bufferState(List(0, 1, 2))
+    val snapshot = AccessibilitySnapshot.from(state, viewport)
+    val closes   = snapshot.nodes.filter(_.id.startsWith("surface:tab-bar/close:"))
+    val newTab   = snapshot.nodes.find(_.id == "surface:tab-bar/new-tab")
+
+    closes.map(_.id) shouldBe List("surface:tab-bar/close:0", "surface:tab-bar/close:1", "surface:tab-bar/close:2")
+    closes.map(_.role) shouldBe List.fill(3)(AccessibilityRole.Button)
+    closes.map(_.name) shouldBe List("Close Buffer 0", "Close Buffer 1", "Close Buffer 2")
+    newTab.map(_.role) shouldBe Some(AccessibilityRole.Button)
+    newTab.map(_.name) shouldBe Some("New tab")
+  }
+
+  it should "expose the tab bar's own node with a count and the active tab's title as its value" in {
+    val state    = bufferState(List(0, 1, 2))
+    val snapshot = AccessibilitySnapshot.from(state, viewport)
+    val tabBar   = snapshot.nodes.find(_.id == "surface:tab-bar")
+
+    tabBar.map(_.role) shouldBe Some(AccessibilityRole.Panel)
+    tabBar.map(_.name) shouldBe Some("Tab bar")
+    tabBar.flatMap(_.value) shouldBe Some("Buffer 0 (1 of 3)")
   }

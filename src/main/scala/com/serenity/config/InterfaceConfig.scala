@@ -77,14 +77,17 @@ object InterfaceDensityMetrics:
 
 final case class InterfaceConfig(
     density: InterfaceDensity = InterfaceDensity.Comfortable,
-    elementGap: Double = 0.0,
+    // `None` means the user never set this: resolved by a surface-aware default (GUI a cell of breathing room, TUI
+    // the flush-to-edge density it always had), rather than baking either surface's default in here -- see
+    // `AppState.effectiveUiElementGap`. `Some` is honoured on both surfaces unchanged.
+    elementGap: Option[Double] = None,
     cornerRadiusPx: Int = 8,
     outlineThicknessPx: Int = 2
 ):
 
   def normalized: InterfaceConfig =
     copy(
-      elementGap = AppConfig.clampUiElementGap(elementGap),
+      elementGap = elementGap.map(AppConfig.clampUiElementGap),
       cornerRadiusPx = AppConfig.clampUiCornerRadiusPx(cornerRadiusPx),
       outlineThicknessPx = AppConfig.clampUiOutlineThicknessPx(outlineThicknessPx)
     )

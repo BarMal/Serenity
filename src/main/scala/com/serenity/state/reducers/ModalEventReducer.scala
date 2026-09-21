@@ -24,13 +24,15 @@ object ModalEventReducer:
 
   def reduce(modalType: ModalType, event: ModalInputEvent, currentState: AppState): ReducerResult =
     modalType match
-      case ModalType.GotoLine        => ModalGotoLineReducer.reduce(event, currentState)
-      case ModalType.RenameSymbol    => ModalRenameSymbolReducer.reduce(event, currentState)
-      case ModalType.Find            => ModalFindReducer.reduce(event, currentState)
-      case ModalType.FileWorkflow    => ModalFileWorkflowReducer.reduce(event, currentState)
-      case ModalType.ReplaceWorkflow => ModalReplaceWorkflowReducer.reduce(event, currentState)
-      case ModalType.CloseWorkflow   => ModalCloseWorkflowReducer.reduce(event, currentState)
-      case ModalType.Custom(_)       => ReducerResult.noEffects(currentState)
+      case ModalType.GotoLine          => ModalGotoLineReducer.reduce(event, currentState)
+      case ModalType.RenameSymbol      => ModalRenameSymbolReducer.reduce(event, currentState)
+      case ModalType.Find              => ModalFindReducer.reduce(event, currentState)
+      case ModalType.FileWorkflow      => ModalFileWorkflowReducer.reduce(event, currentState)
+      case ModalType.ReplaceWorkflow   => ModalReplaceWorkflowReducer.reduce(event, currentState)
+      case ModalType.CloseWorkflow     => ModalCloseWorkflowReducer.reduce(event, currentState)
+      case ModalType.SessionNamePrompt => ModalSessionReducer.reduceNamePrompt(event, currentState)
+      case ModalType.SessionList       => ModalSessionReducer.reduceList(event, currentState)
+      case ModalType.Custom(_)         => ReducerResult.noEffects(currentState)
 
   def applyFindSearchResults(
     state: AppState,

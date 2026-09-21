@@ -24,7 +24,9 @@ class LayoutEngineTabBarSpec extends AnyFlatSpec with Matchers:
     // regardless of the tab bar, and line numbers are on by default -- neither of which this test is about, so the
     // reservation under test is "no *additional* row for the tab bar", not "no chrome at all".
     calculatedLayout.tabBarRect shouldBe None
-    calculatedLayout.editorPanelRect shouldBe LayoutRect(3, 0, 97, 29)
+    // x/width shift by 2 cells from the unset line-number margin/padding's GUI default (one cell each side of the
+    // counter, where both used to be zero) -- see the matching update in LayoutEngineSpec.
+    calculatedLayout.editorPanelRect shouldBe LayoutRect(5, 0, 95, 29)
   }
 
   it should "reserve a one-row strip at the top of the frame once 2+ buffers are open, shrinking the workspace beneath it by exactly that row" in {
