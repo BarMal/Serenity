@@ -356,14 +356,13 @@ object HotkeyConfig:
       // NextTab/PreviousTab's Tab-key bindings, since Shift+Tab already means PreviousTab -- there is no unshifted
       // "switch tab" action on Page keys to shift-broaden the way ClosePane/SplitPaneVertical/FileSearch do over their
       // plain counterparts. Also avoids colliding with the editor's own Ctrl+Shift+Left/Right
-      // (`EditorKeyAction.ExtendSelectionWordLeft/Right` in `FocusedKeymapConfig`), which arrow-key bindings for
-      // "move tab" would step on.
+      // (`ExtendSelectionWordLeft/Right` in `FocusedKeymapConfig`), which arrow-key "move tab" bindings would hit.
       HotkeyAction.MoveTabLeft  -> List(primaryKey(InputKey.PageUp, shift = true)),
       HotkeyAction.MoveTabRight -> List(primaryKey(InputKey.PageDown, shift = true)),
-      HotkeyAction.Find     -> List(primary('f')),
-      HotkeyAction.Replace  -> List(if isMac then primary('f', alt = true) else primary('h')),
-      HotkeyAction.GoToLine -> List(primary('g')),
-      HotkeyAction.SaveAs   -> List(primary('s', shift = true)),
+      HotkeyAction.Find         -> List(primary('f')),
+      HotkeyAction.Replace      -> List(if isMac then primary('f', alt = true) else primary('h')),
+      HotkeyAction.GoToLine     -> List(primary('g')),
+      HotkeyAction.SaveAs       -> List(primary('s', shift = true)),
       // Plain F1, not primary-modifier-gated: unlike the Cmd/Ctrl bindings above, F1 is delivered identically by
       // every terminal and by AWT regardless of platform, so it needs none of `forTerminalUse`'s Mac-Cmd rewriting
       // (issue #1213) and no per-OS branching here.

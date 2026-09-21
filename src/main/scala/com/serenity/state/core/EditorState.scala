@@ -142,10 +142,10 @@ object EditorState:
     moveFocusedTab(state, offset = -1)
 
   /** Moves the focused tab one position right in `bufferOrder`, the mirror of [[moveFocusedTabLeft]]. Implemented as
-    * `reorderBuffer(rightNeighbour, focused)`, moving the right neighbour to sit immediately before the focused
-    * buffer -- swapping the two without needing `reorderBuffer` to express "move to the very end", which its
-    * insert-before-target contract cannot do directly. A no-op when no buffer is focused or the focused tab is
-    * already last.
+    * `reorderBuffer(rightNeighbour, focused)`, moving the right neighbour to sit immediately before the focused buffer
+    * -- swapping the two without needing `reorderBuffer` to express "move to the very end", which its
+    * insert-before-target contract cannot do directly. A no-op when no buffer is focused or the focused tab is already
+    * last.
     */
   def moveFocusedTabRight(state: AppState): AppState =
     moveFocusedTab(state, offset = 1)

@@ -204,7 +204,7 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
     val bindings = HotkeyConfig.defaultBindingsFor("Linux")
 
     HotkeyConfig.validate(bindings) shouldBe Right(())
-    val allTriggers = bindings.valuesIterator.flatten.toList
+    val allTriggers  = bindings.valuesIterator.flatten.toList
     val moveTriggers = bindings(HotkeyAction.MoveTabLeft) ++ bindings(HotkeyAction.MoveTabRight)
     moveTriggers.foreach(trigger => allTriggers.count(_ == trigger) shouldBe 1)
   }
