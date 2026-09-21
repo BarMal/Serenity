@@ -49,7 +49,12 @@ object AccessibilitySnapshot:
     val visibleNodes = state.topModal match
       case Some(dialog) => scene.modal.filter(_.id == SceneNodeId.Surface(dialog.id))
       case None         => scene.nodesInPaintOrder
-    val nodes = visibleNodes.flatMap(nodeFor(state, _)) ++ surfaceControls(state, visibleNodes)
+    // The always-visible tab strip (`AppState.tabBarSurface`) is painted entirely outside the `SceneNode` pipeline
+    // `visibleNodes` walks -- `OverlayViewModel.fromState` builds its view straight from `state.tabBarSurface`, never
+    // adding it to `workspace`/`floating`/`modal` -- so it is projected here on its own, gated the same way a blocking
+    // modal already gates everything else (issue #1611).
+    val tabBar = if state.topModal.isEmpty then tabBarNodes(state, scene.calculatedLayout) else Nil
+    val nodes  = visibleNodes.flatMap(nodeFor(state, _)) ++ surfaceControls(state, visibleNodes) ++ tabBar
     AccessibilitySnapshot(nodes, announcements(previous, nodes))
 
   /** Comfortable and spacious surfaces reserve two text rows for pointer targets; compact remains keyboard complete. */
@@ -107,6 +112,88 @@ object AccessibilitySnapshot:
                 node.frameRect
               )
             }
+
+  /** Per-tab, close-affordance and new-tab-affordance nodes for the always-visible tab strip (issue #1611), plus its
+    * own container node -- built straight from `AppState.tabBarSurface`/`CalculatedLayout.tabBarRect` rather than from
+    * a `SceneNode`, since the strip never becomes one (see `from`'s own comment). `None` (one or no open buffers, or no
+    * `tabBarRect` reserved this frame) yields no nodes at all, matching the strip itself not being painted.
+    */
+  private def tabBarNodes(state: AppState, calculatedLayout: CalculatedLayout): List[AccessibleNode] =
+    (for
+      surface <- state.tabBarSurface
+      rect    <- calculatedLayout.tabBarRect
+    yield surface.content match
+      case content @ SurfaceContent.TabBar(entries, activeBufferId) =>
+        val containerNode = AccessibleNode(
+          s"surface:${surface.id.value}",
+          surfaceRole(content),
+          surfaceName(content),
+          surfaceValue(content),
+          selected = false,
+          focused = state.persisted.focus == Focus.Surface(surface.id),
+          rect
+        )
+        containerNode :: tabBarControls(surface.id, entries, activeBufferId, rect, state)
+      // Unreachable: AppState.tabBarSurface only ever builds SurfaceContent.TabBar.
+      case _ => Nil
+    ).getOrElse(Nil)
+
+  private def tabBarControls(
+    surfaceId: SurfaceId,
+    entries: List[TabListEntry],
+    activeBufferId: Option[BufferId],
+    rect: LayoutRect,
+    state: AppState
+  ): List[AccessibleNode] =
+    val composition = TabBarSurfaceComposition.forTabBar(entries, activeBufferId, rect)
+    val tabNodes = composition.hitRegions.flatMap { hit =>
+      TabBarSurfaceComposition.bufferIdOf(hit.focusId).map { bufferId =>
+        val selected = activeBufferId.contains(bufferId)
+        AccessibleNode(
+          s"surface:${surfaceId.value}/tab:${bufferId.value}",
+          AccessibilityRole.Button,
+          hit.semanticLabel,
+          None,
+          selected,
+          state.persisted.focus == Focus.Surface(surfaceId) && selected,
+          LayoutRect(hit.rect.x.toInt, hit.rect.y.toInt, hit.rect.width.toInt, hit.rect.height.toInt)
+        )
+      }
+    }
+    val closeNodes = TabBarSurfaceComposition.closeAffordances(entries, activeBufferId, rect).flatMap { hit =>
+      TabBarSurfaceComposition.closeBufferIdOf(hit.focusId).map { bufferId =>
+        AccessibleNode(
+          s"surface:${surfaceId.value}/close:${bufferId.value}",
+          AccessibilityRole.Button,
+          hit.semanticLabel,
+          None,
+          selected = false,
+          focused = false,
+          LayoutRect(hit.rect.x.toInt, hit.rect.y.toInt, hit.rect.width.toInt, hit.rect.height.toInt)
+        )
+      }
+    }
+    val newTabNode = TabBarSurfaceComposition.newTabAffordance(entries, rect).toList.map { hit =>
+      AccessibleNode(
+        s"surface:${surfaceId.value}/new-tab",
+        AccessibilityRole.Button,
+        hit.semanticLabel,
+        None,
+        selected = false,
+        focused = false,
+        LayoutRect(hit.rect.x.toInt, hit.rect.y.toInt, hit.rect.width.toInt, hit.rect.height.toInt)
+      )
+    }
+    tabNodes ++ closeNodes ++ newTabNode
+
+  /** The tab strip's own accessible value: the active tab's title plus its position among the open tabs, e.g.
+    * `"main.scala (2 of 4)"` -- there is otherwise no way for assistive tech to learn which tab is active or how many
+    * are open without visiting every per-tab child node (issue #1611).
+    */
+  private def tabBarValue(entries: List[TabListEntry], activeBufferId: Option[BufferId]): Option[String] =
+    activeBufferId
+      .flatMap(id => entries.zipWithIndex.find { case (entry, _) => entry.bufferId == id })
+      .map { case (entry, index) => s"${entry.title} (${index + 1} of ${entries.size})" }
 
   private def surfaceControls(state: AppState, nodes: List[SceneNode]): List[AccessibleNode] =
     nodes.flatMap {
@@ -472,9 +559,10 @@ object AccessibilitySnapshot:
 
   private def surfaceValue(content: SurfaceContent): Option[String] =
     content match
-      case SurfaceContent.StartPage(page)  => page.statusMessage
-      case SurfaceContent.StatusLine(text) => Some(text)
-      case _                               => None
+      case SurfaceContent.StartPage(page)                 => page.statusMessage
+      case SurfaceContent.StatusLine(text)                => Some(text)
+      case SurfaceContent.TabBar(entries, activeBufferId) => tabBarValue(entries, activeBufferId)
+      case _                                              => None
 
   private def statusMessage(content: SurfaceContent): Option[String] =
     content match
