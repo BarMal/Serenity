@@ -22,7 +22,7 @@ object LspManager:
   final private case class ManagedConnection(connection: LspConnection, release: IO[Unit])
 
   private enum RequestKind:
-    case Hover, Definition, Completion, SemanticTokens
+    case Hover, Definition, References, Rename, Completion, SemanticTokens
 
   final private case class RequestKey(uri: DocumentUri, kind: RequestKind)
 
@@ -293,6 +293,72 @@ object LspManager:
             .handleErrorWith(ex => logger.error(ex)(s"[LSP] definition failed: $rawUri"))
         }
 
+      case LspEffect.ReferencesRequested(rawUri, languageId, line, character, anchor, symbol) =>
+        val uri = DocumentUri(rawUri)
+        startRequest(
+          RequestKind.References,
+          uri,
+          languageId,
+          RequestAnchor.CursorAnchored(anchor),
+          connectionsRef,
+          documentVersions,
+          requestContexts,
+          requestFibers,
+          supervisor,
+          applyEvent,
+          logger,
+          connectionProvider
+        ) { (conn, context) =>
+          Trace
+            .timed(s"lsp.references.$rawUri")(
+              conn.sendRequest(LspMethod("textDocument/references"), LspProtocol.referencesParams(uri, line, character))
+            )
+            .flatMap(response =>
+              LspProtocol.parseReferencesLocations(response).fold(IO.unit) { locations =>
+                isCurrent(RequestKey(uri, RequestKind.References), context, documentVersions, requestContexts)
+                  .ifM(
+                    applyEvent(
+                      LspEvent.LspReferencesReceived(
+                        symbol,
+                        locations.map(location => location.uri.value -> location.range.start),
+                        anchor
+                      )
+                    ),
+                    IO.unit
+                  )
+              }
+            )
+            .handleErrorWith(ex => logger.error(ex)(s"[LSP] references failed: $rawUri"))
+        }
+
+      case LspEffect.RenameRequested(rawUri, languageId, line, character, anchor, newName) =>
+        val uri = DocumentUri(rawUri)
+        startRequest(
+          RequestKind.Rename,
+          uri,
+          languageId,
+          RequestAnchor.CursorAnchored(anchor),
+          connectionsRef,
+          documentVersions,
+          requestContexts,
+          requestFibers,
+          supervisor,
+          applyEvent,
+          logger,
+          connectionProvider
+        ) { (conn, context) =>
+          Trace
+            .timed(s"lsp.rename.$rawUri")(
+              conn.sendRequest(LspMethod("textDocument/rename"), LspProtocol.renameParams(uri, line, character, newName))
+            )
+            .flatMap { response =>
+              val edits = LspProtocol.parseWorkspaceEdit(response).map { case (docUri, e) => docUri.value -> e }
+              isCurrent(RequestKey(uri, RequestKind.Rename), context, documentVersions, requestContexts)
+                .ifM(applyEvent(LspEvent.LspRenameReceived(edits, anchor)), IO.unit)
+            }
+            .handleErrorWith(ex => logger.error(ex)(s"[LSP] rename failed: $rawUri"))
+        }
+
       case LspEffect.SemanticTokensRequested(rawUri, languageId) =>
         requestSemanticTokens(
           rawUri,
@@ -418,7 +484,8 @@ object LspManager:
     * a real, connected server's empty/absent result: Completion already emits `LspCompletionReceived(Nil, _)` for an
     * empty item list (rendered as "No completions available." by `SystemEventReducer`), and Definition's "not found"
     * case is already silently absorbed (no event) above in its own response handling -- there is no `LspEvent` shape
-    * for "no definition found". Hover is the one kind whose result is free-form text, so it alone gets an explanatory
+    * for "no definition found". References and Rename follow the same "no event" policy as Definition, for the same
+    * reason. Hover is the one kind whose result is free-form text, so it alone gets an explanatory
     * message here rather than staying silent. SemanticTokens gets [[LspEvent.LspSemanticTokensUnavailable]] -- `None`
     * here would leave `AppState.semanticTokensAvailability` stuck at `Pending` forever for a document whose language
     * has no server at all, never reaching the confirmed `Unavailable` state (issue #859/#1177 rendering-slice review
@@ -438,6 +505,10 @@ object LspManager:
       case RequestKind.Completion =>
         anchor.cursorPosition.map(position => LspEvent.LspCompletionReceived(Nil, position))
       case RequestKind.Definition =>
+        None
+      case RequestKind.References =>
+        None
+      case RequestKind.Rename =>
         None
       case RequestKind.SemanticTokens =>
         Some(LspEvent.LspSemanticTokensUnavailable(uri.value))

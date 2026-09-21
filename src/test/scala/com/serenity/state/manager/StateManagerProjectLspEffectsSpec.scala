@@ -31,6 +31,7 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
       val stateRef: Ref[IO, AppState],
       val pinCalls: Ref[IO, List[(String, PanelPosition, Int)]],
       val peeks: Ref[IO, List[(PeekContent, CursorPosition)]],
+      val modals: Ref[IO, List[Modal]],
       val projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]],
       val lspQueue: LspEffectQueue,
       val effects: StateManagerProjectLspEffects
@@ -40,6 +41,7 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
     val stateRef             = Ref.of[IO, AppState](AppState.initial).unsafeRunSync()
     val pinCalls             = Ref.of[IO, List[(String, PanelPosition, Int)]](Nil).unsafeRunSync()
     val peeks                = Ref.of[IO, List[(PeekContent, CursorPosition)]](Nil).unsafeRunSync()
+    val modals                = Ref.of[IO, List[Modal]](Nil).unsafeRunSync()
     val projectTaskFiberRef  = Ref.of[IO, Option[ManagedProjectTask]](None).unsafeRunSync()
     val projectTaskSemaphore = Semaphore[IO](1).unsafeRunSync()
     val lspQueue             = LspEffectQueue.create.unsafeRunSync()
@@ -48,6 +50,7 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
       stateRef,
       pinCalls,
       peeks,
+      modals,
       projectTaskFiberRef,
       lspQueue,
       new StateManagerProjectLspEffects(
@@ -55,7 +58,8 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
         projectTaskFiberRef,
         projectTaskSemaphore,
         (text, position, size) => pinCalls.update(_ :+ (text, position, size)),
-        (content, cursor) => peeks.update(_ :+ (content, cursor))
+        (content, cursor) => peeks.update(_ :+ (content, cursor)),
+        modal => modals.update(_ :+ modal)
       )
     )
 
@@ -238,6 +242,63 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
     enqueued shouldBe List(
       LspEffect.DefinitionRequested(path.toUri.toString, LanguageId.Scala, 0, 8, cursor, "someValue")
     )
+  }
+
+  it should "enqueue an LSP references request carrying the identifier under the cursor" in {
+    val fixture = harness()
+    val path    = Path.of("/tmp/serenity-lsp-spec/example.scala")
+    val content = "val someValue = 42"
+    val cursor  = CursorPosition(0, 8)
+    val state   = stateWithBuffer(bufferWithLanguage(Some(path), Some(LanguageId.Scala), content, cursor))
+
+    fixture.effects.interpretLsp(LspIntent.RequestLspReferences, state).unsafeRunSync()
+
+    val enqueued = fixture.lspQueue.stream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync()
+    enqueued shouldBe List(
+      LspEffect.ReferencesRequested(path.toUri.toString, LanguageId.Scala, 0, 8, cursor, "someValue")
+    )
+  }
+
+  it should "show an unavailable peek instead of enqueueing an LSP references request when the buffer has no language mode" in {
+    val fixture = harness()
+    val path    = Path.of("/tmp/serenity-lsp-spec/plain.txt")
+    val cursor  = CursorPosition(0, 0)
+    val state   = stateWithBuffer(bufferWithLanguage(Some(path), None, "plain text", cursor))
+
+    fixture.effects.interpretLsp(LspIntent.RequestLspReferences, state).unsafeRunSync()
+
+    fixture.peeks.get.unsafeRunSync() shouldBe List(
+      (PeekContent.QuickInfo("LSP requests need a saved buffer with a language mode."), cursor)
+    )
+  }
+
+  it should "open the rename-symbol prompt carrying the identifier under the cursor" in {
+    val fixture = harness()
+    val path    = Path.of("/tmp/serenity-lsp-spec/example.scala")
+    val content = "val someValue = 42"
+    val cursor  = CursorPosition(0, 8)
+    val state   = stateWithBuffer(bufferWithLanguage(Some(path), Some(LanguageId.Scala), content, cursor))
+
+    fixture.effects.interpretLsp(LspIntent.OpenRenameSymbolPrompt, state).unsafeRunSync()
+
+    fixture.modals.get.unsafeRunSync() shouldBe List(
+      Modal.RenameSymbol(path.toUri.toString, LanguageId.Scala, 0, 8, cursor, "someValue")
+    )
+    fixture.peeks.get.unsafeRunSync() shouldBe Nil
+  }
+
+  it should "show an unavailable peek instead of opening the rename prompt when the buffer has no language mode" in {
+    val fixture = harness()
+    val path    = Path.of("/tmp/serenity-lsp-spec/plain.txt")
+    val cursor  = CursorPosition(0, 0)
+    val state   = stateWithBuffer(bufferWithLanguage(Some(path), None, "plain text", cursor))
+
+    fixture.effects.interpretLsp(LspIntent.OpenRenameSymbolPrompt, state).unsafeRunSync()
+
+    fixture.peeks.get.unsafeRunSync() shouldBe List(
+      (PeekContent.QuickInfo("LSP requests need a saved buffer with a language mode."), cursor)
+    )
+    fixture.modals.get.unsafeRunSync() shouldBe Nil
   }
 
   it should "show an unavailable peek instead of enqueueing an LSP request when the buffer has no language mode" in {

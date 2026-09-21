@@ -20,6 +20,8 @@ object ModalSurfaceComposition:
     modal match
       case Modal.CloseWorkflow(workflow) => Some(close(workflow, frameRect, targetRows))
       case Modal.GotoLine(input)         => Some(inputPlan("Go to line", input, "goto-line", frameRect))
+      case Modal.RenameSymbol(_, _, _, _, _, input) =>
+        Some(inputPlan("Rename symbol", input, "rename-symbol", frameRect))
       case Modal.Find(query, results, currentIndex) =>
         Some(findPlan(query, results, currentIndex, frameRect))
       case Modal.Custom(name, input)       => Some(inputPlan(name, input, "custom-input", frameRect))
@@ -30,7 +32,8 @@ object ModalSurfaceComposition:
   def frameHeight(modal: Modal, targetRows: Int): Int =
     val actionRows = math.max(1, targetRows)
     modal match
-      case Modal.GotoLine(_)     => 3
+      case Modal.GotoLine(_)               => 3
+      case Modal.RenameSymbol(_, _, _, _, _, _) => 3
       case Modal.Find(_, Nil, _) => 5
       case Modal.Custom(_, _)    => 4
       case Modal.Find(_, _, _)   => 6

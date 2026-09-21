@@ -3,10 +3,10 @@ package com.serenity.state.reducers
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 
-/** Thin dispatcher over the per-modal-type reducers -- [[ModalGotoLineReducer]], [[ModalFindReducer]],
-  * [[ModalFileWorkflowReducer]], [[ModalCloseWorkflowReducer]], [[ModalReplaceWorkflowReducer]] -- plus the helpers
-  * they all share for locating and updating the currently active modal. Each modal type used to have its reducer
-  * inlined here; they were split into their own files when this file grew past its 600-line target.
+/** Thin dispatcher over the per-modal-type reducers -- [[ModalGotoLineReducer]], [[ModalRenameSymbolReducer]],
+  * [[ModalFindReducer]], [[ModalFileWorkflowReducer]], [[ModalCloseWorkflowReducer]], [[ModalReplaceWorkflowReducer]]
+  * -- plus the helpers they all share for locating and updating the currently active modal. Each modal type used to
+  * have its reducer inlined here; they were split into their own files when this file grew past its 600-line target.
   */
 object ModalEventReducer:
 
@@ -25,6 +25,7 @@ object ModalEventReducer:
   def reduce(modalType: ModalType, event: ModalInputEvent, currentState: AppState): ReducerResult =
     modalType match
       case ModalType.GotoLine        => ModalGotoLineReducer.reduce(event, currentState)
+      case ModalType.RenameSymbol    => ModalRenameSymbolReducer.reduce(event, currentState)
       case ModalType.Find            => ModalFindReducer.reduce(event, currentState)
       case ModalType.FileWorkflow    => ModalFileWorkflowReducer.reduce(event, currentState)
       case ModalType.ReplaceWorkflow => ModalReplaceWorkflowReducer.reduce(event, currentState)

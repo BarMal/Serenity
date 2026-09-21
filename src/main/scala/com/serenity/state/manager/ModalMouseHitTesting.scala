@@ -23,12 +23,13 @@ private[manager] object ModalMouseHitTesting:
 
   def modalType(modal: Modal): ModalType =
     modal match
-      case Modal.GotoLine(_)        => ModalType.GotoLine
-      case Modal.Find(_, _, _)      => ModalType.Find
-      case Modal.FileWorkflow(_)    => ModalType.FileWorkflow
-      case Modal.ReplaceWorkflow(_) => ModalType.ReplaceWorkflow
-      case Modal.CloseWorkflow(_)   => ModalType.CloseWorkflow
-      case Modal.Custom(name, _)    => ModalType.Custom(name)
+      case Modal.GotoLine(_)                    => ModalType.GotoLine
+      case Modal.RenameSymbol(_, _, _, _, _, _) => ModalType.RenameSymbol
+      case Modal.Find(_, _, _)                  => ModalType.Find
+      case Modal.FileWorkflow(_)                => ModalType.FileWorkflow
+      case Modal.ReplaceWorkflow(_)              => ModalType.ReplaceWorkflow
+      case Modal.CloseWorkflow(_)                => ModalType.CloseWorkflow
+      case Modal.Custom(name, _)                 => ModalType.Custom(name)
 
 final private[manager] class ModalMouseHitTesting(port: ModalMouseHitTestingPort):
   import port.*

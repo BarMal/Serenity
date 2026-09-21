@@ -22,7 +22,8 @@ final private[manager] class StateManagerProjectLspEffects(
     projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]],
     projectTaskSemaphore: Semaphore[IO],
     pinOrUpdateTerminalPanel: (String, com.serenity.ui.layout.PanelPosition, Int) => IO[Unit],
-    showPeek: (com.serenity.ui.layout.PeekContent, CursorPosition) => IO[Unit]
+    showPeek: (com.serenity.ui.layout.PeekContent, CursorPosition) => IO[Unit],
+    showModal: Modal => IO[Unit]
 ):
 
   private[manager] def interpretProject(intent: ProjectIntent, state: AppState): IO[Unit] =
@@ -40,6 +41,10 @@ final private[manager] class StateManagerProjectLspEffects(
         requestLspCompletion(state)
       case LspIntent.RequestLspDefinition =>
         requestLspDefinition(state)
+      case LspIntent.RequestLspReferences =>
+        requestLspReferences(state)
+      case LspIntent.OpenRenameSymbolPrompt =>
+        openRenameSymbolPrompt(state)
 
   private def runProjectTask(state: AppState, kind: ProjectTaskKind): IO[Unit] =
     if !state.editingContext.hasCodeTooling then pinProjectTerminal(ProjectTaskTerminal.notAvailableInProseMode(kind))
@@ -140,6 +145,31 @@ final private[manager] class StateManagerProjectLspEffects(
             cursor,
             wordAtCursor(buffer, cursor)
           )
+        )
+      case None =>
+        showLspUnavailablePeek(state)
+
+  private def requestLspReferences(state: AppState): IO[Unit] =
+    activeLspRequestTarget(state) match
+      case Some((uri, languageId, cursor, buffer)) =>
+        lspQueue.enqueue(
+          LspEffect.ReferencesRequested(
+            uri,
+            languageId,
+            cursor.line,
+            cursor.column,
+            cursor,
+            wordAtCursor(buffer, cursor)
+          )
+        )
+      case None =>
+        showLspUnavailablePeek(state)
+
+  private def openRenameSymbolPrompt(state: AppState): IO[Unit] =
+    activeLspRequestTarget(state) match
+      case Some((uri, languageId, cursor, buffer)) =>
+        showModal(
+          Modal.RenameSymbol(uri, languageId, cursor.line, cursor.column, cursor, wordAtCursor(buffer, cursor))
         )
       case None =>
         showLspUnavailablePeek(state)

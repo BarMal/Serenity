@@ -39,6 +39,7 @@ private[manager] object FocusHandlerRouting:
   private val peekOverlay: LocalEventHandler = new PeekOverlayComponent()
 
   private val modalGotoLine: LocalEventHandler        = new ModalComponent(ModalType.GotoLine)
+  private val modalRenameSymbol: LocalEventHandler    = new ModalComponent(ModalType.RenameSymbol)
   private val modalFind: LocalEventHandler            = new ModalComponent(ModalType.Find)
   private val modalFileWorkflow: LocalEventHandler    = new ModalComponent(ModalType.FileWorkflow)
   private val modalReplaceWorkflow: LocalEventHandler = new ModalComponent(ModalType.ReplaceWorkflow)
@@ -59,6 +60,7 @@ private[manager] object FocusHandlerRouting:
   private[manager] def forModalType(modalType: ModalType): LocalEventHandler =
     modalType match
       case ModalType.GotoLine        => modalGotoLine
+      case ModalType.RenameSymbol    => modalRenameSymbol
       case ModalType.Find            => modalFind
       case ModalType.FileWorkflow    => modalFileWorkflow
       case ModalType.ReplaceWorkflow => modalReplaceWorkflow

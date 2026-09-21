@@ -40,6 +40,16 @@ object SystemEventReducer:
           state
         )
 
+      case LspEvent.LspReferencesReceived(symbol, locations, anchor) =>
+        val text =
+          if locations.isEmpty then s"No references found for $symbol."
+          else locations.map { case (uri, position) => s"$uri:${position.line + 1}:${position.character + 1}" }
+            .mkString("\n")
+        PeekStateReducer.show(PeekContent.QuickInfo(text), anchor, state)
+
+      case LspEvent.LspRenameReceived(edits, anchor) =>
+        RenameEditReducer.apply(edits, anchor, state)
+
       case LspEvent.LspSemanticTokensReceived(uri, tokens) =>
         ReducerResult.noEffects(
           state.copy(runtime =

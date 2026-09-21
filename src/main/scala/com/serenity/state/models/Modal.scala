@@ -1,6 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.io.{DocumentFormat, FileType, SaveFormat}
+import com.serenity.lsp.config.LanguageId
 import com.serenity.text.TextEditing
 
 final case class FileWorkflowSuggestion(
@@ -429,6 +430,19 @@ object FileWorkflowState:
 enum Modal:
 
   case GotoLine(
+      input: String
+  )
+
+  /** The "new name" prompt for `textDocument/rename` (#1467): `uri`/`languageId`/`line`/`character`/`anchor` are the
+    * invocation site, captured when the prompt opens rather than re-read from the cursor on submit, so a rename still
+    * targets the symbol it was opened for even if focus or the cursor moves while the modal is up.
+    */
+  case RenameSymbol(
+      uri: String,
+      languageId: LanguageId,
+      line: Int,
+      character: Int,
+      anchor: CursorPosition,
       input: String
   )
 

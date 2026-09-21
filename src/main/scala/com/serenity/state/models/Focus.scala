@@ -7,6 +7,7 @@ enum Focus:
 
 enum ModalType:
   case GotoLine
+  case RenameSymbol
   case Find
   case FileWorkflow
   case ReplaceWorkflow

@@ -19,6 +19,24 @@ enum LspEffect:
       symbol: String
   )
 
+  case ReferencesRequested(
+      uri: String,
+      languageId: LanguageId,
+      line: Int,
+      character: Int,
+      anchor: CursorPosition,
+      symbol: String
+  )
+
+  case RenameRequested(
+      uri: String,
+      languageId: LanguageId,
+      line: Int,
+      character: Int,
+      anchor: CursorPosition,
+      newName: String
+  )
+
   /** Requests semantic tokens for the whole document, not a cursor position -- there is no line/character to give,
     * unlike [[HoverRequested]]/[[CompletionRequested]]/[[DefinitionRequested]].
     */
