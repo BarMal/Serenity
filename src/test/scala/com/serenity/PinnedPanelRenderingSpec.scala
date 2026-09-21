@@ -1,6 +1,6 @@
 package com.serenity
 
-import java.awt.Color
+import java.awt.{Color, Font}
 
 import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey, EasingCurve, Tween}
 import com.serenity.config.{AppConfig, BackgroundStyle}
@@ -16,6 +16,8 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
+  private val cellMetrics = CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12))
+
   "PinnedPanelRenderer" should "use semantic panel colors rather than hard-coded ANSI backgrounds" in {
     val surface = new MockRenderSurface(40, 12)
     val panel = TextPanelView(
@@ -24,7 +26,7 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
       rows = List(TextPanelRow("Item 1"), TextPanelRow("Item 2"))
     )
 
-    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default)
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default, cellMetrics)
 
     surface.getBg(panel.rect.x + 1, panel.rect.y + 1) shouldBe Theme.light.panel.background
     surface.strokeRoundRectCalls.map(_.color) should contain(Theme.light.border)
@@ -38,7 +40,7 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
       rows = List(TextPanelRow("Item 1"))
     )
 
-    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default.withUiCornerRadiusPx(14))
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default.withUiCornerRadiusPx(14), cellMetrics)
 
     surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(14)
   }
@@ -51,7 +53,7 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
       rows = List(TextPanelRow("Item 1"))
     )
 
-    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default.withUiOutlineThicknessPx(4))
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default.withUiOutlineThicknessPx(4), cellMetrics)
 
     surface.strokeRoundRectCalls.headOption.map(_.strokeWidth) shouldBe Some(4.0f)
   }
@@ -65,8 +67,14 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     val enabledSurface  = new MockRenderSurface(40, 12)
     val disabledSurface = new MockRenderSurface(40, 12)
 
-    PinnedPanelRenderer.render(enabledSurface, panel, Theme.light, AppConfig.default)
-    PinnedPanelRenderer.render(disabledSurface, panel, Theme.light, AppConfig.default.withUiShadowsEnabled(false))
+    PinnedPanelRenderer.render(enabledSurface, panel, Theme.light, AppConfig.default, cellMetrics)
+    PinnedPanelRenderer.render(
+      disabledSurface,
+      panel,
+      Theme.light,
+      AppConfig.default.withUiShadowsEnabled(false),
+      cellMetrics
+    )
 
     enabledSurface.roundRectShadowCalls.map(_.rect) should contain(panel.rect)
     disabledSurface.roundRectShadowCalls shouldBe empty
@@ -83,7 +91,7 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default)
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default, cellMetrics)
 
     surface.getBg(panel.rect.x + 1, panel.rect.y + 2) shouldBe Theme.light.highlighted.background
     surface.getFg(panel.rect.x + 1, panel.rect.y + 2) shouldBe Theme.light.highlighted.foreground
@@ -99,7 +107,7 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     )
     val contentRect = SurfaceFrameLayout(panel.rect).contentRect
 
-    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default)
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default, cellMetrics)
 
     surface.getRow(contentRect.y).slice(contentRect.x, contentRect.right) shouldBe "abcdef"
     surface.getRow(contentRect.y)(panel.rect.x) should not be 'a'
@@ -118,7 +126,7 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     val frameLayout = SurfaceFrameLayout(panel.rect)
     val contentRect = frameLayout.contentRect
 
-    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default)
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default, cellMetrics)
 
     surface.getRow(contentRect.y).slice(contentRect.x, contentRect.x + 4) shouldBe "head"
     surface.getRow(contentRect.y + 1).slice(contentRect.x, contentRect.x + 4) shouldBe "body"
@@ -135,7 +143,7 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
       rows = List(TextPanelRow("abcdef"))
     )
 
-    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default)
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default, cellMetrics)
 
     surface.getRow(panel.titleRect.y).slice(panel.titleRect.x, panel.titleRect.right) shouldBe "tit"
     surface.getRow(3).slice(4, 7) shouldBe "abc"
@@ -163,7 +171,7 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default, animationState)
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default, cellMetrics, animationState)
 
     surface.strokeRoundRectCalls.map(_.color) should contain(animatedForeground)
     surface.getFg(panel.rect.x + 1, panel.rect.y + 1) shouldBe animatedForeground
@@ -192,7 +200,7 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
       composition = Some(composition)
     )
 
-    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default)
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default, cellMetrics)
 
     surface.getRow(contentRect.y).slice(contentRect.x, contentRect.x + "from composition".length) shouldBe
       "from composition"
@@ -228,7 +236,7 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
       composition = Some(composition)
     )
 
-    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default)
+    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default, cellMetrics)
 
     surface.getBg(contentRect.x + 1, contentRect.y + 1) shouldBe Theme.light.highlighted.background
     surface.getFg(contentRect.x + 1, contentRect.y + 1) shouldBe Theme.light.highlighted.foreground
