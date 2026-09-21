@@ -16,6 +16,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.renderer.RenderController
@@ -499,7 +500,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       afterState <- stateRef.get
     yield afterState.persisted.buffers(bufferId).markdownPreviewCommittedGeneration
 
-    program.unsafeRunSync() shouldBe 1L
+    runVirtual(program) shouldBe 1L
   }
 
   it should "cancel a pending markdown preview commit when superseded by a newer edit" in {
@@ -521,7 +522,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       afterState <- stateRef.get
     yield afterState.persisted.buffers(bufferId).markdownPreviewCommittedGeneration
 
-    program.unsafeRunSync() shouldBe 2L
+    runVirtual(program) shouldBe 2L
   }
 
   "StateManagerEventPipeline" should "recognize a live markdown preview via a pinned panel surface" in {
