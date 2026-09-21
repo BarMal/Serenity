@@ -13,6 +13,7 @@ import com.serenity.richtext.{
 }
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
+import com.serenity.text.LineEnding
 
 /** Failures `FileManager` raises for its own file-open/save workflow, distinct from [[LossyRichTextOverwriteException]]
   * (a richtext-package concern about a specific re-import losing content, not about format support in general).
@@ -54,7 +55,7 @@ class FileManager(using balance: Balance):
       case FileType.Markdown =>
         for
           _ <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
-          _ <- FileUtils.writeFileContent(path, markdownContentForSave(buffer))
+          _ <- FileUtils.writeFileContent(path, contentForSave(buffer, markdownContentForSave(buffer)))
         yield savedBuffer(buffer, path, None)
       case FileType.RichText =>
         val document = richTextDocumentForSave(buffer)
@@ -68,7 +69,7 @@ class FileManager(using balance: Balance):
       case _ =>
         for
           _ <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
-          _ <- FileUtils.writeFileContent(path, buffer.document.content.collect())
+          _ <- FileUtils.writeFileContent(path, contentForSave(buffer, buffer.document.content.collect()))
         yield savedBuffer(buffer, path, None))
 
   /** Save buffer to its existing file path */
@@ -79,13 +80,20 @@ class FileManager(using balance: Balance):
 
   def listDirectory(directory: Path): IO[List[FileEntry]] = FileBrowser.listDirectory(directory)
 
+  /** Editor content is LF-only, because `Rope` normalised it on the way in. A file that arrived with CRLF is written
+    * back with CRLF, so an ordinary save does not rewrite every line of it.
+    */
+  private def contentForSave(buffer: Buffer, normalizedContent: String): String =
+    buffer.document.lineEnding.applyTo(normalizedContent)
+
   private def bufferFromContent(bufferId: BufferId, path: Path, content: String): Buffer =
     Buffer(
       id = bufferId,
       document = com.serenity.state.models.Document(
         content = com.serenity.rope.Rope(content),
         filePath = Some(path),
-        language = languageFromPath(path)
+        language = languageFromPath(path),
+        lineEnding = LineEnding.detect(content)
       )
     )
 
