@@ -87,7 +87,7 @@ object TextOverlayRenderer:
         surface.putString(rect.x, y, " " * rect.width)
 
       applyGlassSheen(surface, overlay, theme, config)
-      val textInsetPx = overlayTextInsetPx(config)
+      val textInsetPx = SurfaceTextInset.px(config)
       overlay.composition match
         case Some(composition) =>
           drawComposition(
@@ -144,20 +144,6 @@ object TextOverlayRenderer:
     surface.roundedRects match
       case Some(rounded) => rounded.withRoundRectClip(x, y, width, height, arcPx)(render)
       case None          => render
-
-  /** How far a surface's text sits inside the content rect the frame laid out for it, beyond the whole cell
-    * [[SurfaceFrameLayout]] already reserves for the border. A cell is the smallest inset a frame can express and it is
-    * narrower than it is tall, so one cell alone leaves glyphs closer to the border horizontally than vertically, and
-    * closest of all to the rounded corner the border is drawn with.
-    *
-    * Deliberately smaller than a cell: the row's text was measured and truncated against the full content width, so an
-    * inset at or beyond a cell would push a full-width row's last glyph past the margin the border sits in.
-    */
-  private def overlayTextInsetPx(config: AppConfig): Double =
-    SpacingScale
-      .forUi(config.editorConfig.fontConfig.scaledUiFontSize.toDouble, config.interfaceDensity)
-      .px(SpacingStep.Sm)
-      .toDouble
 
   private def drawContent(
     surface: RenderSurface,
