@@ -363,3 +363,72 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
       after.persisted.layout.activeEditorPaneId shouldBe before.persisted.layout.activeEditorPaneId
       AppStateValidation.validationErrors(after) shouldBe AppStateValidation.validationErrors(before)
     }
+
+  /** #1183 item 1: `StateUpdater.updateState` is reachable from outside `state.manager` (`AppStartup`, `AppRuntime`,
+    * `ClipboardEventSync`) with no call into `validateAndUpdateState` at all, so an external caller can commit a
+    * structurally invalid `AppState` outright. `updateStateValidated` is the checked sibling those call sites now use
+    * -- mirroring `EffectEditorPort`'s existing `updateState`/`validateAndUpdateState` pair inside `state.manager` --
+    * and this pins down that it rejects an update that would leave the committed state invalid, falling back to the
+    * state before the call instead of committing the corruption.
+    */
+  "StateManager.updateStateValidated" should "reject an update that collides nextBufferId with a live buffer" in {
+    val stateManager = createStateManager()
+    val before       = stateManager.getCurrentState.unsafeRunSync()
+
+    stateManager
+      .updateStateValidated(state => state.copy(runtime = state.runtime.copy(nextBufferId = BufferId(0))))
+      .unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    after shouldBe before
+    AppStateValidation.validationErrors(after) shouldBe empty
+  }
+
+  it should "commit an update that leaves the state valid" in {
+    val stateManager = createStateManager()
+
+    stateManager
+      .updateStateValidated(state => state.copy(runtime = state.runtime.copy(clipboard = Some("copied text"))))
+      .unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    after.runtime.clipboard shouldBe Some("copied text")
+    AppStateValidation.validationErrors(after) shouldBe empty
+  }
+
+  /** #1183 item 2: `switchFocus` (`StateManagerEditorCapability.scala`) committed the new focus via a bare
+    * `stateRef.update`, bypassing the focus-target-exists check `AppStateValidation` otherwise enforces for every other
+    * commit path -- so a focus switch onto a pane or surface that doesn't exist was silently applied.
+    */
+  "StateManager.focusManager.switchFocus" should "not move focus onto a pane that does not exist" in {
+    val stateManager = createStateManager()
+    val before       = stateManager.getCurrentState.unsafeRunSync()
+
+    stateManager.focusManager.switchFocus(Focus.EditorPane(PaneId(9999))).unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    after.persisted.focus shouldBe before.persisted.focus
+    AppStateValidation.validationErrors(after) shouldBe empty
+  }
+
+  it should "not move focus onto a surface that does not exist" in {
+    val stateManager = createStateManager()
+    val before       = stateManager.getCurrentState.unsafeRunSync()
+
+    stateManager.focusManager.switchFocus(Focus.Surface(SurfaceId("nonexistent-surface"))).unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    after.persisted.focus shouldBe before.persisted.focus
+    AppStateValidation.validationErrors(after) shouldBe empty
+  }
+
+  it should "move focus onto a pane that does exist" in {
+    val stateManager = createStateManager()
+    val secondBuffer  = stateManager.bufferManager.createBuffer("second", None).unsafeRunSync()
+    val secondPane    = stateManager.paneManager.createPane(Some(secondBuffer)).unsafeRunSync()
+
+    stateManager.focusManager.switchFocus(Focus.EditorPane(secondPane)).unsafeRunSync()
+
+    val after = stateManager.getCurrentState.unsafeRunSync()
+    after.persisted.focus shouldBe Focus.EditorPane(secondPane)
+  }

@@ -458,6 +458,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       def getCurrentState: IO[AppState]                                                 = stateRef.get
       def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = bufferAnimationsRef.get
       def updateState(update: AppState => AppState): IO[Unit]                           = stateRef.update(update)
+      def updateStateValidated(update: AppState => AppState): IO[Unit]                  = stateRef.update(update)
       def updateBufferAnimations(
         update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
           BufferId,

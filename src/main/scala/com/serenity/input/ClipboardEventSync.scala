@@ -15,7 +15,7 @@ object ClipboardEventSync:
       case Paste =>
         systemClipboard.readText.flatMap {
           case Some(text) =>
-            stateManager.updateState(state => state.copy(runtime = state.runtime.copy(clipboard = Some(text))))
+            stateManager.updateStateValidated(state => state.copy(runtime = state.runtime.copy(clipboard = Some(text))))
           case None => IO.unit
         }
       case _ =>
