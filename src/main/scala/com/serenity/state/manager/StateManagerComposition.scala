@@ -207,6 +207,13 @@ private[manager] class StateManagerComposition(
     def createStartupSession(): IO[Unit]                        = workflow.createStartupSession()
     def restoreStartupSession(): IO[Unit]                       = workflow.restoreStartupSession()
     def activeEditorBufferId(state: AppState): Option[BufferId] = workflow.activeEditorBufferId(state)
+    def openSaveSessionAsPrompt(state: AppState): IO[Unit]      = workflow.openSaveSessionAsPrompt(state)
+    def openSessionPicker(state: AppState, purpose: SessionListPurpose): IO[Unit] =
+      workflow.openSessionPicker(state, purpose)
+    def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit] =
+      workflow.submitSessionNamePromptEffect(surfaceId)
+    def submitSessionListEffect(surfaceId: SurfaceId): IO[Unit] =
+      workflow.submitSessionListEffect(surfaceId)
 
   private val effects = new StateManagerEffectHandlers(
     effectRuntimePort,

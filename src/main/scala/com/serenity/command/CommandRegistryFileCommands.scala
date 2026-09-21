@@ -63,6 +63,27 @@ private[command] object CommandRegistryFileCommands:
       label = "Return to Start Page"
     ),
     Command.typed(
+      "save-session-as",
+      "Save the current editor session under a new name, keeping it alongside your other named sessions.",
+      CommandIntent.Session(SessionIntent.OpenSaveSessionAsPrompt),
+      CommandCategory.File,
+      label = "Save Session As..."
+    ),
+    Command.typed(
+      "open-session",
+      "Open one of your saved named sessions.",
+      CommandIntent.Session(SessionIntent.OpenSessionPicker),
+      CommandCategory.File,
+      label = "Open Session..."
+    ),
+    Command.typed(
+      "rename-session",
+      "Rename one of your saved named sessions.",
+      CommandIntent.Session(SessionIntent.OpenRenameSessionPicker),
+      CommandCategory.File,
+      label = "Rename Session..."
+    ),
+    Command.typed(
       "open",
       "Open a file.",
       CommandIntent.File(FileIntent.OpenFile),

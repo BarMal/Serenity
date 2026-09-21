@@ -1,6 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.io.{DocumentFormat, FileType, SaveFormat}
+import com.serenity.session.{SessionId, SessionMetadata}
 import com.serenity.text.TextEditing
 
 final case class FileWorkflowSuggestion(
@@ -426,10 +427,42 @@ object FileWorkflowState:
           bufferHasRichFormatting = bufferHasRichFormatting
         )
 
+/** What a [[Modal.SessionNamePrompt]] is collecting a name for -- naming a brand-new session (issue #1390's
+  * `saveSessionAs`) or renaming an existing one (`renameSession`, which needs to know which session).
+  */
+enum SessionNamePromptMode:
+  case SaveAs
+  case Rename(sessionId: SessionId)
+
+/** What selecting an entry in a [[Modal.SessionList]] does -- load it (`SessionManager.loadSession`) or hand it off to
+  * a [[Modal.SessionNamePrompt]] to collect its new name (`SessionManager.renameSession` needs both the id and the new
+  * name, so renaming a listed session is a two-step pick-then-name flow).
+  */
+enum SessionListPurpose:
+  case Open
+  case Rename
+
 enum Modal:
 
   case GotoLine(
       input: String
+  )
+
+  /** Named-session prompt (issue #1390): a single free-text field, styled and driven exactly like [[GotoLine]] --
+    * `mode` decides whether submitting calls `saveSessionAs` or `renameSession`.
+    */
+  case SessionNamePrompt(
+      mode: SessionNamePromptMode,
+      input: String
+  )
+
+  /** The `SessionManager.listSessions()` picker (issue #1390) -- structurally the same query-less list-with-selection
+    * shape as [[Find]]'s results, minus the query field this list is never filtered by.
+    */
+  case SessionList(
+      sessions: List[SessionMetadata],
+      selectedIndex: Int,
+      purpose: SessionListPurpose
   )
 
   case Find(
