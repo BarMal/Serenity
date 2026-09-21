@@ -456,10 +456,10 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val bufferAnimationsRef =
       Ref.of[IO, Map[BufferId, AnimationState]](Map.empty).unsafeRunSync()
     val capabilities = new StateEngine:
-      def getCurrentState: IO[AppState]                                                 = stateRef.get
-      def getBufferAnimations: IO[Map[BufferId, AnimationState]] = bufferAnimationsRef.get
-      def updateState(update: AppState => AppState): IO[Unit]                           = stateRef.update(update)
-      def updateStateValidated(update: AppState => AppState): IO[Unit]                  = stateRef.update(update)
+      def getCurrentState: IO[AppState]                                = stateRef.get
+      def getBufferAnimations: IO[Map[BufferId, AnimationState]]       = bufferAnimationsRef.get
+      def updateState(update: AppState => AppState): IO[Unit]          = stateRef.update(update)
+      def updateStateValidated(update: AppState => AppState): IO[Unit] = stateRef.update(update)
       def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit] =
         bufferAnimationsRef.update(update)
       def applyEvent(event: Event): IO[Unit] = applied.update(_ :+ event)
