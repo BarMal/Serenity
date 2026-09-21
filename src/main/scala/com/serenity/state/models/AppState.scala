@@ -112,6 +112,20 @@ final case class AppState(
   def effectiveLineNumberPadding: Int =
     persisted.config.surfaceConfig.lineNumberLayout.padding.getOrElse(if runtime.isTuiMode then 0 else 1)
 
+  /** The command palette's cursor gap, resolved for this state's surface. Mirrors
+    * `FloatingSurfaceLayout.floatingStackGapRows`'s fallback chain -- an explicit override wins, otherwise the
+    * surface-aware [[effectiveUiElementGap]] applies when positive, otherwise the density-derived
+    * `InterfaceDensityMetrics.overlayGapRows` -- rather than `AppConfig.effectiveCommandRunnerCursorGapRows`
+    * (`AppConfigMotionOps`), which reads the raw `uiElementGap` field and so can't tell a GUI's default cell of
+    * breathing room from a TUI's deliberate zero.
+    */
+  def effectiveCommandRunnerCursorGapRows: Double =
+    persisted.config.surfaceConfig.commandRunnerCursorGapRows.getOrElse(
+      Option
+        .when(effectiveUiElementGap > 0.0)(effectiveUiElementGap)
+        .getOrElse(InterfaceDensityMetrics.forDensity(persisted.config.interfaceDensity).overlayGapRows.toDouble)
+    )
+
   /** Cursor position for the currently active editor pane, if any. */
   def activeCursorPosition: Option[CursorPosition] =
     persisted.layout.activeEditorPaneId

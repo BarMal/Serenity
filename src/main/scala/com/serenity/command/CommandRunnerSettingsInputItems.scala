@@ -53,7 +53,7 @@ object CommandRunnerSettingsInputItems:
       companionSpriteConfig: CompanionSpriteConfig
   )
 
-  private def derivedValues(config: AppConfig): DerivedValues =
+  private def derivedValues(config: AppConfig, isTuiMode: Boolean): DerivedValues =
     val editorConfig        = config.editorConfig
     val surfaceConfig       = config.surfaceConfig
     val interfaceConfig     = config.interfaceConfig
@@ -76,21 +76,23 @@ object CommandRunnerSettingsInputItems:
       uiSpeedScaleValue = f"${config.effectiveUiTransitionSpeedScale}%.2f",
       cursorSpeedScaleValue = f"${config.effectiveCursorTransitionSpeedScale}%.2f",
       speedScaleValue = f"${surfaceConfig.elementTransitionSpeedScale}%.2f",
-      // `auto` (this format's own spelling for "unset", `FieldCodec.orAuto`) rather than the numeric surface
-      // default: this builder only has `config`, not `state.runtime.isTuiMode`, so it cannot say which surface's
-      // default would apply (issue tracked in the elementGap/margin/padding Option conversion's own follow-up).
-      elementGapValue = interfaceConfig.elementGap.fold("auto")(formatDecimal),
+      // Unset resolves to the same surface-specific number `AppState.effectiveUiElementGap` and its
+      // `effectiveLineNumberMarginLeft`/`effectiveLineNumberPadding` siblings would show -- a GUI cell of breathing
+      // room, or the TUI's existing zero -- rather than the literal string "auto" (issue #1621 carve-out).
+      elementGapValue = interfaceConfig.elementGap.fold(formatDecimal(if isTuiMode then 0.0 else 1.0))(formatDecimal),
       cornerRadiusValue = interfaceConfig.cornerRadiusPx.toString,
       outlineThicknessValue = interfaceConfig.outlineThicknessPx.toString,
-      lineNumberMarginLeftValue = surfaceConfig.lineNumberLayout.marginLeft.fold("auto")(_.toString),
+      lineNumberMarginLeftValue =
+        surfaceConfig.lineNumberLayout.marginLeft.fold(if isTuiMode then "0" else "1")(_.toString),
       lineNumberMarginRightValue = surfaceConfig.lineNumberLayout.marginRight.toString,
-      lineNumberPaddingValue = surfaceConfig.lineNumberLayout.padding.fold("auto")(_.toString),
+      lineNumberPaddingValue =
+        surfaceConfig.lineNumberLayout.padding.fold(if isTuiMode then "0" else "1")(_.toString),
       spellCheck = languageToolsConfig.spellCheck.normalized,
       companionSpriteConfig = config.companionSpriteConfig
     )
 
-  def build(config: AppConfig): List[CommandSurfaceItem.InputItem] =
-    val v = derivedValues(config)
+  def build(config: AppConfig, isTuiMode: Boolean = false): List[CommandSurfaceItem.InputItem] =
+    val v = derivedValues(config, isTuiMode)
 
     val commentItems = List(
       CommandSurfaceItem.InputItem(

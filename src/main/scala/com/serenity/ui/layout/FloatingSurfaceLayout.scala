@@ -216,7 +216,7 @@ object FloatingSurfaceLayout:
   private[layout] def floatingCursorGapRows(state: AppState, content: SurfaceContent): Double =
     content match
       case SurfaceContent.CommandPalette(_) =>
-        math.max(0.0, state.persisted.config.effectiveCommandRunnerCursorGapRows)
+        math.max(0.0, state.effectiveCommandRunnerCursorGapRows)
       case _ => floatingStackGapRows(state)
 
   private[layout] def floatingStackGapRows(state: AppState): Double =

@@ -73,3 +73,38 @@ class UiSpacingSurfaceDefaultsSpec extends AnyFlatSpec with Matchers:
     gui.copy(persisted = gui.persisted.copy(config = zeroed)).effectiveUiElementGap shouldBe 0.0
     tui.copy(persisted = tui.persisted.copy(config = zeroed)).effectiveUiElementGap shouldBe 0.0
   }
+
+  // `AppState.effectiveCommandRunnerCursorGapRows` mirrors `FloatingSurfaceLayout.floatingStackGapRows`'s fallback
+  // chain -- the command palette's cursor gap should track the surface-aware UI element gap the same way every other
+  // floating surface's stack gap already does, rather than the AppConfig-only accessor's surface-blind read of the
+  // raw `uiElementGap` field (issue #1621 carve-out).
+  "an unset command-runner cursor gap" should "fall back to the surface-aware UI element gap when it is positive" in {
+    gui.persisted.config.surfaceConfig.commandRunnerCursorGapRows shouldBe None
+    gui.effectiveCommandRunnerCursorGapRows shouldBe gui.effectiveUiElementGap
+    gui.effectiveCommandRunnerCursorGapRows shouldBe 1.0
+  }
+
+  it should "fall back to interface density's overlay gap on the TUI, where the UI element gap defaults to zero" in {
+    tui.persisted.config.surfaceConfig.commandRunnerCursorGapRows shouldBe None
+    tui.effectiveUiElementGap shouldBe 0.0
+    tui.effectiveCommandRunnerCursorGapRows shouldBe
+      InterfaceDensityMetrics.forDensity(tui.persisted.config.interfaceDensity).overlayGapRows.toDouble
+  }
+
+  it should "prefer an explicit UI element gap over interface density's overlay gap, on either surface" in {
+    val guiExplicit =
+      gui.copy(persisted = gui.persisted.copy(config = gui.persisted.config.withUiElementGap(Some(3.5))))
+    val tuiExplicit =
+      tui.copy(persisted = tui.persisted.copy(config = tui.persisted.config.withUiElementGap(Some(3.5))))
+    guiExplicit.effectiveCommandRunnerCursorGapRows shouldBe 3.5
+    tuiExplicit.effectiveCommandRunnerCursorGapRows shouldBe 3.5
+  }
+
+  "an explicit command-runner cursor gap override" should "win regardless of surface or UI element gap" in {
+    def withOverride(state: AppState): AppState =
+      state.copy(persisted =
+        state.persisted.copy(config = state.persisted.config.withCommandRunnerCursorGapRows(Some(4.0)))
+      )
+    withOverride(gui).effectiveCommandRunnerCursorGapRows shouldBe 4.0
+    withOverride(tui).effectiveCommandRunnerCursorGapRows shouldBe 4.0
+  }
