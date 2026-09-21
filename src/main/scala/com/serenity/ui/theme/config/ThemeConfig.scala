@@ -6,7 +6,9 @@ import pureconfig.*
 final case class ThemeConfig(
     name: String,
     ui: UiColors,
-    syntax: SyntaxColors
+    syntax: SyntaxColors,
+    interactionStates: Option[InteractionStatesConfig] = None,
+    elevation: Option[ElevationConfig] = None
 ) derives ConfigReader
 
 /** Semantic UI colors for the theme */
@@ -60,6 +62,31 @@ final case class StyleConfig(
     bold: Boolean = false,
     italic: Boolean = false,
     underline: Boolean = false
+) derives ConfigReader
+
+/** Optional overrides for a theme's derived hover/pressed/disabled row treatments (issues #1093, #1612). Each state is
+  * independently optional, falling back to `InteractionStates.derive` field-by-field when absent.
+  */
+final case class InteractionStatesConfig(
+    hover: Option[UiTokenConfig] = None,
+    pressed: Option[UiTokenConfig] = None,
+    disabled: Option[UiTokenConfig] = None
+) derives ConfigReader
+
+/** Optional override for one `ElevationLevel`'s shadow/tint. Both fields are independently optional, falling back to
+  * `ElevationLevels.derive` field-by-field when absent.
+  */
+final case class ElevationTreatmentConfig(
+    shadowOpacity: Option[Double] = None,
+    surfaceTint: Option[String] = None
+) derives ConfigReader
+
+/** Optional overrides for the four `ElevationLevel` tiers (issue #1090). */
+final case class ElevationConfig(
+    base: Option[ElevationTreatmentConfig] = None,
+    raised: Option[ElevationTreatmentConfig] = None,
+    floating: Option[ElevationTreatmentConfig] = None,
+    modal: Option[ElevationTreatmentConfig] = None
 ) derives ConfigReader
 
 object ThemeConfig:

@@ -10,20 +10,22 @@ object ConfigurableThemeManager:
 
   def configToTheme(config: ThemeConfig): Either[String, Theme] =
     for
-      foreground   <- ColorParser.parseColor(ThemeFieldSchema.uiForegroundField.select(config.ui))
-      background   <- ColorParser.parseColor(ThemeFieldSchema.uiBackgroundField.select(config.ui))
-      cursor       <- ColorParser.parseColor(ThemeFieldSchema.uiCursorField.select(config.ui))
-      highlighted  <- convertUiToken(ThemeFieldSchema.uiHighlightedField.select(config.ui))
-      menuItem     <- convertUiToken(ThemeFieldSchema.uiMenuItemField.select(config.ui))
-      panel        <- convertUiToken(ThemeFieldSchema.uiPanelField.select(config.ui))
-      error        <- convertUiToken(ThemeFieldSchema.uiErrorField.select(config.ui))
-      warning      <- convertUiToken(config.ui.warning.getOrElse(ThemeFieldSchema.warningDefault))
-      border       <- ColorParser.parseColor(ThemeFieldSchema.uiBorderField.select(config.ui))
-      panelBorder  <- parseOptionalColor(config.ui.panelBorder, border)
-      margin       <- parseOptionalColor(config.ui.margin, background)
-      muted        <- ColorParser.parseColor(ThemeFieldSchema.uiMutedField.select(config.ui))
-      placeholder  <- ColorParser.parseColor(ThemeFieldSchema.uiPlaceholderField.select(config.ui))
-      syntaxColors <- convertSyntaxColors(config.syntax, background)
+      foreground        <- ColorParser.parseColor(ThemeFieldSchema.uiForegroundField.select(config.ui))
+      background        <- ColorParser.parseColor(ThemeFieldSchema.uiBackgroundField.select(config.ui))
+      cursor            <- ColorParser.parseColor(ThemeFieldSchema.uiCursorField.select(config.ui))
+      highlighted       <- convertUiToken(ThemeFieldSchema.uiHighlightedField.select(config.ui))
+      menuItem          <- convertUiToken(ThemeFieldSchema.uiMenuItemField.select(config.ui))
+      panel             <- convertUiToken(ThemeFieldSchema.uiPanelField.select(config.ui))
+      error             <- convertUiToken(ThemeFieldSchema.uiErrorField.select(config.ui))
+      warning           <- convertUiToken(config.ui.warning.getOrElse(ThemeFieldSchema.warningDefault))
+      border            <- ColorParser.parseColor(ThemeFieldSchema.uiBorderField.select(config.ui))
+      panelBorder       <- parseOptionalColor(config.ui.panelBorder, border)
+      margin            <- parseOptionalColor(config.ui.margin, background)
+      muted             <- ColorParser.parseColor(ThemeFieldSchema.uiMutedField.select(config.ui))
+      placeholder       <- ColorParser.parseColor(ThemeFieldSchema.uiPlaceholderField.select(config.ui))
+      syntaxColors      <- convertSyntaxColors(config.syntax, background)
+      interactionStates <- convertInteractionStates(config.interactionStates, InteractionStates.derive(menuItem))
+      elevation         <- convertElevation(config.elevation, ElevationLevels.derive(foreground, background))
     yield Theme(
       name = config.name,
       foreground = foreground,
@@ -40,7 +42,9 @@ object ConfigurableThemeManager:
       muted = muted,
       placeholder = placeholder,
       textStyle = TextStyle.normal,
-      syntaxColors = syntaxColors
+      syntaxColors = syntaxColors,
+      interactionStates = interactionStates,
+      elevation = elevation
     )
 
   private def parseOptionalColor(value: Option[String], default: Color): Either[String, Color] =
@@ -82,6 +86,48 @@ object ConfigurableThemeManager:
       case (Left(error), _)                      => Left(error)
       case (_, Left(error))                      => Left(error)
     }
+
+  private def convertInteractionStates(
+    configOpt: Option[InteractionStatesConfig],
+    default: InteractionStates
+  ): Either[String, InteractionStates] =
+    val fields = configOpt.getOrElse(InteractionStatesConfig())
+
+    def resolve(overrideConfig: Option[UiTokenConfig], fallback: ThemeColor): Either[String, ThemeColor] =
+      overrideConfig match
+        case Some(tokenConfig) => convertUiToken(tokenConfig)
+        case None              => Right(fallback)
+
+    for
+      hover    <- resolve(fields.hover, default.hover)
+      pressed  <- resolve(fields.pressed, default.pressed)
+      disabled <- resolve(fields.disabled, default.disabled)
+    yield InteractionStates(hover, pressed, disabled)
+
+  private def convertElevation(
+    configOpt: Option[ElevationConfig],
+    default: ElevationLevels
+  ): Either[String, ElevationLevels] =
+    val fields = configOpt.getOrElse(ElevationConfig())
+    for
+      base     <- convertElevationTreatment(fields.base, default.base)
+      raised   <- convertElevationTreatment(fields.raised, default.raised)
+      floating <- convertElevationTreatment(fields.floating, default.floating)
+      modal    <- convertElevationTreatment(fields.modal, default.modal)
+    yield ElevationLevels(base, raised, floating, modal)
+
+  private def convertElevationTreatment(
+    configOpt: Option[ElevationTreatmentConfig],
+    default: ElevationTreatment
+  ): Either[String, ElevationTreatment] =
+    configOpt match
+      case None => Right(default)
+      case Some(fields) =>
+        val shadowOpacity = fields.shadowOpacity.map(NormalizedAlpha(_)).getOrElse(default.shadowOpacity)
+        fields.surfaceTint match
+          case None => Right(ElevationTreatment(shadowOpacity, default.surfaceTint))
+          case Some(colorStr) =>
+            ColorParser.parseColor(colorStr).map(color => ElevationTreatment(shadowOpacity, Some(color)))
 
   private def convertSyntaxElementConfig(
     config: SyntaxElementConfig,
