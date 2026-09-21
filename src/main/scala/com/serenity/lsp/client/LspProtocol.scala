@@ -207,6 +207,17 @@ object LspProtocol:
   def definitionParams(uri: DocumentUri, line: Int, character: Int): Json =
     textDocumentPositionParams(uri, line, character)
 
+  /** `includeDeclaration` is always `true`: this client has no UI distinction for "references excluding the declaration
+    * itself" today, and including it matches what most editors show by default.
+    */
+  def referencesParams(uri: DocumentUri, line: Int, character: Int): Json =
+    textDocumentPositionParams(uri, line, character).deepMerge(
+      Json.obj("context" -> Json.obj("includeDeclaration" -> true.asJson))
+    )
+
+  def renameParams(uri: DocumentUri, line: Int, character: Int, newName: String): Json =
+    textDocumentPositionParams(uri, line, character).deepMerge(Json.obj("newName" -> newName.asJson))
+
   def completionParams(uri: DocumentUri, line: Int, character: Int): Json =
     textDocumentPositionParams(uri, line, character)
 
@@ -283,6 +294,45 @@ object LspProtocol:
       uri   <- c.downField("uri").as[String].toOption
       range <- parseRange(c)
     yield LspLocation(DocumentUri(uri), range)
+
+  /** `None` only when `result` isn't an array at all (e.g. `null` for "no references") -- an empty array is a real,
+    * confirmed "found zero references" answer and parses to `Some(Nil)`, the same distinction [[parseCompletionItems]]
+    * already draws between "no result" and "result is an empty list".
+    */
+  def parseReferencesLocations(result: Json): Option[List[LspLocation]] =
+    result.asArray.map(_.toList.flatMap(parseLocation))
+
+  /** Parses a `textDocument/rename` response's `WorkspaceEdit` (LSP 3.17 §3.17.9) into edits keyed by the document uri
+    * they apply to. A server may use either the `changes` form (a plain uri -> `TextEdit[]` map) or the richer
+    * `documentChanges` form (an array of `TextDocumentEdit`, needed when an edit also creates/renames/deletes a file --
+    * this client has no use for that extra information, only the edits themselves); `changes` is preferred when both
+    * are present, per the spec. Neither field present (or a `null` result) parses to an empty map, not `None` -- unlike
+    * [[parseReferencesLocations]], a rename that touches nothing is not distinguishable from, nor treated differently
+    * than, one whose result shape this client doesn't recognise.
+    */
+  def parseWorkspaceEdit(result: Json): Map[DocumentUri, List[LspTextEdit]] =
+    val c = result.hcursor
+    c.downField("changes").as[Map[String, List[Json]]].toOption match
+      case Some(changes) =>
+        changes.map { case (uri, edits) => DocumentUri(uri) -> edits.flatMap(parseTextEdit) }
+      case None =>
+        c.downField("documentChanges")
+          .as[List[Json]]
+          .getOrElse(Nil)
+          .flatMap { documentChange =>
+            val dc = documentChange.hcursor
+            for
+              uri   <- dc.downField("textDocument").downField("uri").as[String].toOption
+              edits <- dc.downField("edits").as[List[Json]].toOption
+            yield DocumentUri(uri) -> edits.flatMap(parseTextEdit)
+          }
+          .toMap
+
+  private def parseTextEdit(json: Json): Option[LspTextEdit] =
+    for
+      range   <- parseRange(json.hcursor)
+      newText <- json.hcursor.downField("newText").as[String].toOption
+    yield LspTextEdit(range, newText)
 
   // ── PublishDiagnostics ──────────────────────────────────────────────────────
 

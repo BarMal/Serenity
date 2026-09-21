@@ -3,10 +3,10 @@ package com.serenity.lsp
 import scala.concurrent.duration.*
 
 import cats.effect.std.Queue
-import cats.effect.{Deferred, Fiber, IO, Ref, Resource}
-import com.serenity.keystroke.events.{Event, LspEvent}
+import cats.effect.{Deferred, IO, Ref, Resource}
+import com.serenity.keystroke.events.LspEvent
 import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
-import com.serenity.lsp.config.{LanguageId, LspServerBinary, LspServerConfig}
+import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.CursorPosition
 import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.Stream
@@ -14,101 +14,8 @@ import io.circe.Json
 import io.circe.syntax.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class LspManagerSpec extends AnyFlatSpec with Matchers:
-
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
-
-  private val logger      = LoggerFactory[IO].getLogger(using LoggerName("LspManagerSpec"))
-  private val uri         = "file:///workspace/Foo.scala"
-  private val scalaServer = LspServerConfig(LanguageId.Scala, LspServerBinary.Metals)
-
-  private def resolvedConnection(
-    rootUri: WorkspaceRootUri,
-    connection: LspConnection,
-    release: IO[Unit] = IO.unit
-  ): LspManager.ResolvedConnection =
-    LspManager.ResolvedConnection(
-      LspManager.ConnectionIdentity(rootUri, scalaServer),
-      Resource.make(IO.pure(connection))(_ => release)
-    )
-
-  final private case class Harness(
-      effects: Queue[IO, Option[LspEffect]],
-      events: Ref[IO, List[Event]],
-      eventApplied: Deferred[IO, Unit],
-      connection: LspConnection,
-      released: Deferred[IO, Unit],
-      managerFiber: Fiber[IO, Throwable, Unit]
-  ):
-    def stop: IO[Unit] =
-      effects.offer(None) >> managerFiber.joinWithNever
-
-  /** #1357: a bare `.start` here left `managerFiber` (and any LSP request it was supervising, including its own
-    * internal 10s `sendRequest` timeout) running on the shared global runtime whenever a test's own IO chain exited
-    * before reaching `manager.stop` -- for instance a test body erroring out early under CI scheduling pressure. The
-    * leaked fiber would then surface an unrelated `LspRequestTimeout` failure up to 10 seconds later, attributed to
-    * whatever was running at that point. `Resource.make` guarantees `managerFiber.cancel` on every exit path (normal,
-    * error, or cancellation) rather than only the happy path `manager.stop` covered; cancelling a fiber that already
-    * finished via `manager.stop` is a no-op, so this changes nothing on that path.
-    */
-  private def harness(serverAvailable: Boolean = true): Resource[IO, Harness] =
-    for
-      effects      <- Resource.eval(Queue.unbounded[IO, Option[LspEffect]])
-      events       <- Resource.eval(Ref.of[IO, List[Event]](Nil))
-      eventApplied <- Resource.eval(Deferred[IO, Unit])
-      connection   <- Resource.eval(LspConnection.create(LanguageId.Scala, logger))
-      released     <- Resource.eval(Deferred[IO, Unit])
-      provider = new LspManager.ConnectionProvider:
-        def resolve(
-          languageId: LanguageId,
-          fileUri: DocumentUri,
-          onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
-        ): IO[Option[LspManager.ResolvedConnection]] =
-          if serverAvailable then
-            IO.pure(
-              Some(resolvedConnection(WorkspaceRootUri("file:///workspace"), connection, released.complete(()).void))
-            )
-          else IO.pure(None)
-      managerFiber <- Resource.make(
-        LspManager
-          .runWithProvider(
-            Stream.fromQueueNoneTerminated(effects),
-            event => events.update(_ :+ event) >> eventApplied.complete(()).void,
-            logger,
-            provider
-          )
-          .start
-      )(_.cancel)
-    yield Harness(effects, events, eventApplied, connection, released, managerFiber)
-
-  private def takeMessage(connection: LspConnection): IO[Json] =
-    connection.takeOutgoing.flatMap(IO.fromOption(_)(new RuntimeException("Missing LSP message")))
-
-  private def expectNotification(connection: LspConnection, method: String, uri: String): IO[Unit] =
-    takeMessage(connection).map { message =>
-      message.hcursor.downField("method").as[String].toOption shouldBe Some(method)
-      message.hcursor.downField("params").downField("textDocument").downField("uri").as[String].toOption shouldBe Some(
-        uri
-      )
-    }
-
-  private def noMessage(connection: LspConnection): IO[Unit] =
-    connection.tryTakeOutgoing.map(_ shouldBe None)
-
-  private def requestId(message: Json): Long =
-    message.hcursor.downField("id").as[Long].toOption.getOrElse(fail("Request was missing an id"))
-
-  private def response(id: Long, result: Json): Json =
-    Json.obj("jsonrpc" -> "2.0".asJson, "id" -> id.asJson, "result" -> result)
-
-  private def open(manager: Harness): IO[Unit] =
-    manager.effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo"))) >>
-      takeMessage(manager.connection).flatMap { message =>
-        IO(message.hcursor.downField("method").as[String].toOption shouldBe Some("textDocument/didOpen"))
-      }
+class LspManagerSpec extends AnyFlatSpec with Matchers with LspManagerSpecFixture:
 
   "LspManager" should "send document changes while a hover response is pending" in
     runVirtual(

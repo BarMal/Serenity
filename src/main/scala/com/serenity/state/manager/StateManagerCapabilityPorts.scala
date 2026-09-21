@@ -43,6 +43,7 @@ private[manager] trait EffectEditorPort:
 
 private[manager] trait EffectSurfacePort:
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit]
+  def showModal(modal: Modal): IO[Unit]
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit]
   def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit]
   def unpinPanel(target: PanelTarget): IO[Unit]

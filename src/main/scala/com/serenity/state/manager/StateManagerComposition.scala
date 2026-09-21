@@ -151,6 +151,7 @@ private[manager] class StateManagerComposition(
 
   private val effectSurfacePort: EffectSurfacePort = new EffectSurfacePort:
     def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] = surfaces.showPeek(content, at)
+    def showModal(modal: Modal): IO[Unit]                            = surfaces.showModal(modal)
     def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
       surfaces.pinPanel(content, position, size)
     def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit] =

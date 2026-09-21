@@ -121,6 +121,20 @@ private[command] object CommandRegistryNavigationCommands:
       CommandCategory.Edit,
       label = "LSP Definition"
     ),
+    Command.typed(
+      "lsp-references",
+      "Find all references to the symbol from the language server.",
+      CommandIntent.Lsp(LspIntent.RequestLspReferences),
+      CommandCategory.Edit,
+      label = "Find References"
+    ),
+    Command.typed(
+      "lsp-rename",
+      "Rename the symbol at the cursor via the language server.",
+      CommandIntent.Lsp(LspIntent.OpenRenameSymbolPrompt),
+      CommandCategory.Edit,
+      label = "Rename Symbol"
+    ),
     // #1531: adds the word flagged by the spell-check diagnostic at the cursor to the persisted custom-words
     // dictionary, without requiring a trip through Settings to hand-edit the comma-separated list.
     Command.typed(

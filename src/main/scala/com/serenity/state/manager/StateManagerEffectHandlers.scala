@@ -127,7 +127,8 @@ final private[manager] class StateManagerEffectHandlers(
     projectTaskFiberRef,
     projectTaskSemaphore,
     pinOrUpdateTerminalPanel,
-    showPeek
+    showPeek,
+    showModal
   )
 
   private val navigationEffects =

@@ -109,6 +109,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
 
     val surfaces = new EffectSurfacePort:
       def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] = callsVar.update(_ :+ s"showPeek:$content")
+      def showModal(modal: Modal): IO[Unit]                            = callsVar.update(_ :+ s"showModal:$modal")
       def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
         callsVar.update(_ :+ s"pinPanel:$content:$position:$size")
       def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit] =
