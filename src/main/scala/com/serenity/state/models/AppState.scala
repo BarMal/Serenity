@@ -119,8 +119,8 @@ final case class AppState(
     * per-density gap, e.g. zero at `Compact`, so flattening it to one cell regardless of density would be a real
     * behavior change, not just a surface fix), while the TUI now gets the same flush-by-default treatment as every
     * other TUI spacing default rather than always inheriting the GUI-oriented density gap. Replaces
-    * `AppConfig.effectiveCommandRunnerCursorGapRows` (`AppConfigMotionOps`), which read the raw `uiElementGap`
-    * field and so had no way to tell a TUI session from a GUI one at all.
+    * `AppConfig.effectiveCommandRunnerCursorGapRows` (`AppConfigMotionOps`), which read the raw `uiElementGap` field
+    * and so had no way to tell a TUI session from a GUI one at all.
     */
   def effectiveCommandRunnerCursorGapRows: Double =
     persisted.config.surfaceConfig.commandRunnerCursorGapRows.getOrElse(

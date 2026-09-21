@@ -85,8 +85,7 @@ object CommandRunnerSettingsInputItems:
       lineNumberMarginLeftValue =
         surfaceConfig.lineNumberLayout.marginLeft.fold(if isTuiMode then "0" else "1")(_.toString),
       lineNumberMarginRightValue = surfaceConfig.lineNumberLayout.marginRight.toString,
-      lineNumberPaddingValue =
-        surfaceConfig.lineNumberLayout.padding.fold(if isTuiMode then "0" else "1")(_.toString),
+      lineNumberPaddingValue = surfaceConfig.lineNumberLayout.padding.fold(if isTuiMode then "0" else "1")(_.toString),
       spellCheck = languageToolsConfig.spellCheck.normalized,
       companionSpriteConfig = config.companionSpriteConfig
     )
