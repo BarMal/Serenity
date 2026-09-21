@@ -437,6 +437,71 @@ class EditorStateSpec extends AnyFlatSpec with Matchers:
     updatedState.persisted.layout.editorPanes shouldBe panes
   }
 
+  "EditorState.moveFocusedTabLeft" should
+    "swap the focused tab with its left neighbour in bufferOrder (issue #1610)" in {
+      val withThreeBuffers = EditorState.openNewTab(
+        EditorState.openNewTab(
+          AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(200, 24))))
+        )
+      )
+      val focusedMiddle =
+        EditorState.focusBuffer(EditorState.rebalancePanes(withThreeBuffers, Some(BufferId(1))), BufferId(1))
+      focusedMiddle.persisted.bufferOrder shouldBe List(BufferId(0), BufferId(1), BufferId(2))
+
+      val updatedState = EditorState.moveFocusedTabLeft(focusedMiddle)
+
+      updatedState.persisted.bufferOrder shouldBe List(BufferId(1), BufferId(0), BufferId(2))
+      updatedState.focusedBufferId shouldBe Some(BufferId(1))
+    }
+
+  it should "be a no-op when the focused tab is already first" in {
+    val withThreeBuffers = EditorState.openNewTab(
+      EditorState.openNewTab(
+        AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(200, 24))))
+      )
+    )
+    val focusedFirst =
+      EditorState.focusBuffer(EditorState.rebalancePanes(withThreeBuffers, Some(BufferId(0))), BufferId(0))
+
+    EditorState.moveFocusedTabLeft(focusedFirst) shouldBe focusedFirst
+  }
+
+  it should "be a no-op when no buffer is focused" in {
+    EditorState.moveFocusedTabLeft(AppState.empty) shouldBe AppState.empty
+  }
+
+  "EditorState.moveFocusedTabRight" should
+    "swap the focused tab with its right neighbour in bufferOrder (issue #1610)" in {
+      val withThreeBuffers = EditorState.openNewTab(
+        EditorState.openNewTab(
+          AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(200, 24))))
+        )
+      )
+      val focusedMiddle =
+        EditorState.focusBuffer(EditorState.rebalancePanes(withThreeBuffers, Some(BufferId(1))), BufferId(1))
+      focusedMiddle.persisted.bufferOrder shouldBe List(BufferId(0), BufferId(1), BufferId(2))
+
+      val updatedState = EditorState.moveFocusedTabRight(focusedMiddle)
+
+      updatedState.persisted.bufferOrder shouldBe List(BufferId(0), BufferId(2), BufferId(1))
+      updatedState.focusedBufferId shouldBe Some(BufferId(1))
+    }
+
+  it should "be a no-op when the focused tab is already last" in {
+    val withThreeBuffers = EditorState.openNewTab(
+      EditorState.openNewTab(
+        AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(200, 24))))
+      )
+    )
+    withThreeBuffers.focusedBufferId shouldBe Some(BufferId(2))
+
+    EditorState.moveFocusedTabRight(withThreeBuffers) shouldBe withThreeBuffers
+  }
+
+  it should "be a no-op when no buffer is focused" in {
+    EditorState.moveFocusedTabRight(AppState.empty) shouldBe AppState.empty
+  }
+
   private def addPane(state: AppState, after: PaneId, paneId: PaneId, bufferId: BufferId): AppState =
     val tree = state.persisted.layout.workspaceTree
       .flatMap(

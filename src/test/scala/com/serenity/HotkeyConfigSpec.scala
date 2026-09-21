@@ -190,6 +190,25 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
       bindings(HotkeyAction.ToggleShortcutsHelp).map(_.render) shouldBe List("f1")
     }
 
+  it should
+    "bind tab reordering to Ctrl+Shift+PageUp/PageDown (Cmd+Shift on macOS), issue #1610's keyboard equivalent of drag-to-reorder" in
+    List("Linux", "Windows", "Mac OS X").foreach { osName =>
+      val bindings = HotkeyConfig.defaultBindingsFor(osName)
+      val modifier = if osName == "Mac OS X" then "meta" else "ctrl"
+
+      bindings(HotkeyAction.MoveTabLeft).map(_.render) shouldBe List(s"$modifier+shift+pageup")
+      bindings(HotkeyAction.MoveTabRight).map(_.render) shouldBe List(s"$modifier+shift+pagedown")
+    }
+
+  it should "not collide MoveTabLeft/MoveTabRight with any other default binding" in {
+    val bindings = HotkeyConfig.defaultBindingsFor("Linux")
+
+    HotkeyConfig.validate(bindings) shouldBe Right(())
+    val allTriggers = bindings.valuesIterator.flatten.toList
+    val moveTriggers = bindings(HotkeyAction.MoveTabLeft) ++ bindings(HotkeyAction.MoveTabRight)
+    moveTriggers.foreach(trigger => allTriggers.count(_ == trigger) shouldBe 1)
+  }
+
   it should "keep every default binding, including Toggle Shortcuts Help, conflict-free" in {
     HotkeyConfig.validate(HotkeyConfig.defaultBindingsFor("Linux")) shouldBe Right(())
     HotkeyConfig.defaultBindingsFor("Linux") should contain key HotkeyAction.ToggleShortcutsHelp

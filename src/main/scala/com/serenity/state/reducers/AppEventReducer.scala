@@ -65,6 +65,12 @@ object AppEventReducer:
       case PreviousTab =>
         ReducerResult.noEffects(EditorState.navigateToPreviousBuffer(state))
 
+      case MoveTabLeft =>
+        ReducerResult.noEffects(EditorState.moveFocusedTabLeft(state))
+
+      case MoveTabRight =>
+        ReducerResult.noEffects(EditorState.moveFocusedTabRight(state))
+
       case FileSearch =>
         ReducerResult.withEffect(state, AppEffect.Surface(SurfaceEffect.OpenFileSearch))
 

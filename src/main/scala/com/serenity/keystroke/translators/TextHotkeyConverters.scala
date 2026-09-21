@@ -27,6 +27,8 @@ object TextHotkeyConverters:
     HotkeyAction.FileSearch               -> FileSearch,
     HotkeyAction.PreviousTab              -> PreviousTab,
     HotkeyAction.NextTab                  -> NextTab,
+    HotkeyAction.MoveTabLeft              -> MoveTabLeft,
+    HotkeyAction.MoveTabRight             -> MoveTabRight,
     HotkeyAction.Find                     -> OpenFind,
     HotkeyAction.Replace                  -> OpenReplace,
     HotkeyAction.GoToLine                 -> OpenGotoLine,

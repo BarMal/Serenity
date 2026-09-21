@@ -26,6 +26,8 @@ enum HotkeyAction:
   case FileSearch
   case NextTab
   case PreviousTab
+  case MoveTabLeft
+  case MoveTabRight
   case Find
   case Replace
   case GoToLine
@@ -54,6 +56,8 @@ enum HotkeyAction:
       case FileSearch               => "file_search"
       case NextTab                  => "next_tab"
       case PreviousTab              => "previous_tab"
+      case MoveTabLeft              => "move_tab_left"
+      case MoveTabRight             => "move_tab_right"
       case Find                     => "find"
       case Replace                  => "replace"
       case GoToLine                 => "go_to_line"
@@ -348,6 +352,14 @@ object HotkeyConfig:
         primaryKey(InputKey.Tab, shift = true),
         primaryKey(InputKey.ReverseTab)
       ),
+      // Mirrors the browser convention for moving a tab (Firefox's Ctrl+Shift+PageUp/PageDown) rather than reusing
+      // NextTab/PreviousTab's Tab-key bindings, since Shift+Tab already means PreviousTab -- there is no unshifted
+      // "switch tab" action on Page keys to shift-broaden the way ClosePane/SplitPaneVertical/FileSearch do over their
+      // plain counterparts. Also avoids colliding with the editor's own Ctrl+Shift+Left/Right
+      // (`EditorKeyAction.ExtendSelectionWordLeft/Right` in `FocusedKeymapConfig`), which arrow-key bindings for
+      // "move tab" would step on.
+      HotkeyAction.MoveTabLeft  -> List(primaryKey(InputKey.PageUp, shift = true)),
+      HotkeyAction.MoveTabRight -> List(primaryKey(InputKey.PageDown, shift = true)),
       HotkeyAction.Find     -> List(primary('f')),
       HotkeyAction.Replace  -> List(if isMac then primary('f', alt = true) else primary('h')),
       HotkeyAction.GoToLine -> List(primary('g')),
