@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
