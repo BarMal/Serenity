@@ -214,6 +214,60 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.pinnedDirectoryLoads.get.unsafeRunSync() shouldBe List(PanelPosition.Left -> Path.of("."))
   }
 
+  /** All of `changes`' keys, `fixture.currentRunner`'s trailing "Apply Selected Changes" default selection --
+    * confirming with this set is "apply everything", the review's own default before anything is toggled off.
+    */
+  private def reviewChangeKeys(fixture: Harness): List[String] =
+    fixture.currentRunner.surface match
+      case review: com.serenity.command.CommandRunnerSurface.PresetDiffReview => review.changes.map(_.key)
+      case other => fail(s"Expected a PresetDiffReview surface, got $other")
+
+  it should "open the preset diff review rather than applying immediately, on ReviewUiPreset" in {
+    val fixture = harness(commandPaletteState())
+    val preset  = UiPreset(name = "Custom", config = AppConfig.default, themeName = Theme.light.name)
+    fixture.store.create(preset).unsafeRunSync()
+
+    fixture.presets.interpret(UiPresetsIntent.ReviewUiPreset("Custom")).unsafeRunSync()
+
+    fixture.currentRunner.surface shouldBe a[com.serenity.command.CommandRunnerSurface.PresetDiffReview]
+    fixture.currentState.persisted.theme.name should not be "light"
+    fixture.persistedConfigs.get.unsafeRunSync() shouldBe Nil
+  }
+
+  it should "apply a custom preset's theme, config, and font, and auto-save the session, on confirm" in {
+    val fixture = harness(commandPaletteState())
+    val preset  = UiPreset(name = "Custom", config = AppConfig.default, themeName = Theme.light.name)
+    fixture.store.create(preset).unsafeRunSync()
+    fixture.presets.interpret(UiPresetsIntent.ReviewUiPreset("Custom")).unsafeRunSync()
+
+    fixture.presets
+      .interpret(UiPresetsIntent.ConfirmUiPresetDiffApply("Custom", reviewChangeKeys(fixture)))
+      .unsafeRunSync()
+
+    val after = fixture.currentState
+    after.persisted.theme.name shouldBe "light"
+    fixture.persistedConfigs.get.unsafeRunSync().size shouldBe 1
+    fixture.fontConfigs.get.unsafeRunSync() shouldBe List(after.persisted.config.editorConfig.fontConfig)
+    fixture.sessionTriggers.get.unsafeRunSync() shouldBe List(SessionSaveTrigger.Manual)
+    fixture.markdownPreviewOpens.get.unsafeRunSync() shouldBe 0
+  }
+
+  it should "apply a built-in workflow preset and reload its pinned directory panels, on confirm" in {
+    val fixture = harness(commandPaletteState())
+    fixture.presets.interpret(UiPresetsIntent.ReviewUiPreset("Code")).unsafeRunSync()
+
+    fixture.presets
+      .interpret(UiPresetsIntent.ConfirmUiPresetDiffApply("Code", reviewChangeKeys(fixture)))
+      .unsafeRunSync()
+
+    val after = fixture.currentState
+    after.persisted.theme.name shouldBe "dark"
+    after.pinnedSurfaces.exists(surface =>
+      after.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(PanelPosition.Left)
+    ) shouldBe true
+    fixture.pinnedDirectoryLoads.get.unsafeRunSync() shouldBe List(PanelPosition.Left -> Path.of("."))
+  }
+
   it should "reject applying a preset that requires an unavailable font" in {
     val fixture    = harness(commandPaletteState())
     val fontConfig = FontLoader.FontConfig().copy(textFontFamily = "Definitely-Not-An-Installed-Font-XYZ")

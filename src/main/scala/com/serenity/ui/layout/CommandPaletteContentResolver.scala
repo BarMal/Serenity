@@ -32,6 +32,8 @@ private[layout] object CommandPaletteContentResolver:
     runner.surface match
       case _: com.serenity.command.CommandRunnerSurface.Settings =>
         resolveSettingsSurface(runner, rect, itemGapRows, itemTargetRows, showKeyHints)
+      case review: com.serenity.command.CommandRunnerSurface.PresetDiffReview =>
+        resolvePresetDiffReview(runner, review, rect, mode, itemGapRows, itemTargetRows, showKeyHints)
       case com.serenity.command.CommandRunnerSurface.Palette(_) if !runner.isActive =>
         ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "commands"))
       case com.serenity.command.CommandRunnerSurface.Palette(paletteState) =>
@@ -81,6 +83,8 @@ private[layout] object CommandPaletteContentResolver:
                 commandRow(command, selected, prefix, runner.bindingFor(command))
               case option: CommandSurfaceItem.OptionItem =>
                 optionRow(option, selected)
+              case toggle: CommandSurfaceItem.ToggleItem =>
+                toggleRow(toggle, runner.effectiveChecked(toggle), selected)
               case item: CommandSurfaceItem.InputItem =>
                 val editingText = if runner.editingItemId.contains(item.id) then Some(runner.editingText) else None
                 inputRow(item, selected, editingText)
@@ -121,6 +125,60 @@ private[layout] object CommandPaletteContentResolver:
           keyHintRow = Option.when(hasKeyHint)(OverlayRow(paletteKeyHintText))
         )
 
+  /** Renders `CommandRunnerSurface.PresetDiffReview`: a flat list, so this mirrors the `Palette`-active branch above
+    * minus everything specific to searching/category prefixes/group breadcrumbs that a fixed, non-searchable list never
+    * needs. Every row is a `ToggleItem` (one per pending change) or the trailing "Apply Selected Changes" `CommandItem`
+    * -- `CommandRunner.presetDiffReviewItems` guarantees no other `CommandSurfaceItem` case ever reaches this surface,
+    * but the match stays exhaustive rather than assuming that from outside this file.
+    */
+  private def resolvePresetDiffReview(
+    runner: com.serenity.command.CommandRunner,
+    review: com.serenity.command.CommandRunnerSurface.PresetDiffReview,
+    rect: LayoutRect,
+    mode: SurfaceRenderMode,
+    itemGapRows: Double,
+    itemTargetRows: Int,
+    showKeyHints: Boolean
+  ): ResolvedSurfaceContent =
+    val allItems    = runner.visibleItems
+    val header      = Some(OverlayRow(plainText = s"Apply preset: ${review.presetName}"))
+    val hasKeyHint  = showKeyHints && allItems.nonEmpty
+    val hasFooter   = allItems.nonEmpty || runner.statusMessage.nonEmpty
+    val frameLayout = SurfaceFrameLayout.forContent(rect, SurfaceContent.CommandPalette(runner))
+    val itemWindow = frameLayout.itemWindow(
+      itemCount = allItems.size,
+      selectedIndex = runner.selectedIndex,
+      hasHeader = true,
+      hasFooter = hasFooter,
+      reservedContentRows = 0,
+      itemGapRows = itemGapRows,
+      itemTargetRows = itemTargetRows,
+      hasKeyHint = hasKeyHint
+    )
+    val windowItems           = itemWindow.slice(allItems)
+    val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(runner.selectedIndex)
+    val rows = windowItems.zipWithIndex.map {
+      case (item, index) =>
+        val selected = index == adjustedSelectedIndex
+        item match
+          case CommandSurfaceItem.CommandItem(command) => commandRow(command, selected, binding = None)
+          case toggle: CommandSurfaceItem.ToggleItem   => toggleRow(toggle, runner.effectiveChecked(toggle), selected)
+          case option: CommandSurfaceItem.OptionItem   => optionRow(option, selected)
+          case item: CommandSurfaceItem.InputItem      => inputRow(item, selected, None)
+          case item: CommandSurfaceItem.SettingSearchItem => settingSearchRow(item, selected)
+          case group: CommandSurfaceItem.GroupItem        => groupRow(group.label, group.hint, selected)
+    }
+    val footer = runner.statusMessage
+      .map(OverlayRow(_))
+      .orElse(Option.when(review.changes.nonEmpty)(OverlayRow(s"${review.changes.size} change(s) pending")))
+    ResolvedSurfaceContent(
+      title = SurfaceContentResolver.titleFor(mode, "commands"),
+      header = header,
+      rows = rows,
+      footer = footer,
+      keyHintRow = Option.when(hasKeyHint)(OverlayRow(paletteKeyHintText))
+    )
+
   def resolveSettingsSurface(
     runner: com.serenity.command.CommandRunner,
     rect: LayoutRect,
@@ -158,6 +216,8 @@ private[layout] object CommandPaletteContentResolver:
             commandRow(command, selected, binding = runner.bindingFor(command))
           case option: CommandSurfaceItem.OptionItem =>
             optionRow(option, selected)
+          case toggle: CommandSurfaceItem.ToggleItem =>
+            toggleRow(toggle, runner.effectiveChecked(toggle), selected)
           case item: CommandSurfaceItem.InputItem =>
             val editingText =
               runner.activeSettingsSurface
@@ -249,6 +309,7 @@ private[layout] object CommandPaletteContentResolver:
     selectedItem match
       case Some(_: CommandSurfaceItem.GroupItem) | Some(_: CommandSurfaceItem.SettingSearchItem) => "Open"
       case Some(_: CommandSurfaceItem.OptionItem)                                                => "Apply"
+      case Some(_: CommandSurfaceItem.ToggleItem)                                                => "Toggle"
       case Some(item: CommandSurfaceItem.InputItem) =>
         if runner.activeSettingsSurface.exists(_.current.editingItemId.contains(item.id)) then "Save" else "Edit"
       case Some(_: CommandSurfaceItem.CommandItem) => "Run"
@@ -354,6 +415,20 @@ private[layout] object CommandPaletteContentResolver:
         OverlaySegment(selectedHint, tone = OverlayTone.Normal),
         OverlaySegment(option.selectedOption, selected = true)
       ),
+      layout = OverlayRowLayout.Columns
+    )
+
+  /** Renders a `ToggleItem` (independent checkbox row) -- `checked` is passed in rather than read off `item.checked`
+    * directly, mirroring how `inputRow` takes `editingText` separately from the item: the effective, possibly
+    * in-place-flipped state (`CommandRunner.effectiveChecked`) lives on the runner, not baked into the item.
+    */
+  private[layout] def toggleRow(item: CommandSurfaceItem.ToggleItem, checked: Boolean, selected: Boolean): OverlayRow =
+    val glyph = if checked then "[x]" else "[ ]"
+    OverlayRow(
+      plainText = s"$glyph ${item.label}".trim,
+      selected = selected,
+      segments = List(OverlaySegment(glyph), OverlaySegment(item.label)) ++
+        item.hint.toList.map(hint => OverlaySegment(hint, tone = OverlayTone.Muted)),
       layout = OverlayRowLayout.Columns
     )
 

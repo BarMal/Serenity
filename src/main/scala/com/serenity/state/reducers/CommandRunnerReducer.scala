@@ -131,6 +131,8 @@ object CommandRunnerReducer:
             )
           case None =>
             ReducerResult.noEffects(state)
+      case Some(toggle: CommandSurfaceItem.ToggleItem) =>
+        submitToggle(state, toggle)
       case _ =>
         ReducerResult.noEffects(deactivate(state))
 
@@ -403,7 +405,8 @@ object CommandRunnerReducer:
   private[reducers] def activeSubmenu(state: AppState): Option[SettingsSurfaceState] =
     currentRunner(state).flatMap(_.surface match
       case CommandRunnerSurface.Settings(_, drilled) => drilled
-      case CommandRunnerSurface.Palette(_)           => None)
+      case CommandRunnerSurface.Palette(_)           => None
+      case _: CommandRunnerSurface.PresetDiffReview  => None)
 
   /** Items that open a nested surface on submit rather than executing an action. */
   private def entersGroupOnSubmit(item: CommandSurfaceItem): Boolean =
@@ -466,6 +469,8 @@ object CommandRunnerReducer:
                 submitSubmenuInputValue(state, item, page)
               case Some(option: CommandSurfaceItem.OptionItem) =>
                 submitSubmenuOption(state, option)
+              case Some(toggle: CommandSurfaceItem.ToggleItem) =>
+                submitToggle(state, toggle)
               case Some(CommandSurfaceItem.CommandItem(command)) =>
                 submitSubmenuCommand(state, command)
               case Some(_: CommandSurfaceItem.GroupItem) =>
@@ -489,6 +494,13 @@ object CommandRunnerReducer:
         ReducerResult.noEffects(
           replaceRunner(state, _.copy(statusMessage = Some(invalidInputMessage(item, page.draftText))))
         )
+
+  /** Flips a `ToggleItem` in place -- a pure state transition (`CommandRunner.toggling`), no `AppEffect` -- mirroring
+    * `submitSubmenuOption`'s dispatch shape but with no config-backed intent to execute, since this is a generic,
+    * reusable checkbox row rather than a specific setting.
+    */
+  private[reducers] def submitToggle(state: AppState, toggle: CommandSurfaceItem.ToggleItem): ReducerResult =
+    ReducerResult.noEffects(replaceRunner(state, _.toggling(toggle)))
 
   private def submitSubmenuOption(state: AppState, option: CommandSurfaceItem.OptionItem): ReducerResult =
     option.selectedIntent match

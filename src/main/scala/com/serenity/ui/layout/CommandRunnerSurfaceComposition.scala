@@ -50,7 +50,10 @@ object CommandRunnerSurfaceComposition:
     runner.surface match
       case _: CommandRunnerSurface.Settings =>
         forSettingsSurface(runner, frameRect, itemGapRows, itemTargetRows, showKeyHints)
-      case CommandRunnerSurface.Palette(_) =>
+      // `forPalette` is already generic over `runner.visibleItems`/`selectedIndex`/`statusMessage` -- position and
+      // hit-testing don't care that a preset-diff review's header/footer text differs from the palette's, only
+      // `CommandPaletteContentResolver` (the paint layer) needs its own case for that.
+      case CommandRunnerSurface.Palette(_) | (_: CommandRunnerSurface.PresetDiffReview) =>
         forPalette(runner, frameRect, itemGapRows, itemTargetRows, showKeyHints)
 
   private def forPalette(
@@ -189,6 +192,8 @@ object CommandRunnerSurfaceComposition:
         CommandPaletteContentResolver.commandRow(command, selected, prefix, runner.bindingFor(command))
       case option: CommandSurfaceItem.OptionItem =>
         CommandPaletteContentResolver.optionRow(option, selected)
+      case toggle: CommandSurfaceItem.ToggleItem =>
+        CommandPaletteContentResolver.toggleRow(toggle, runner.effectiveChecked(toggle), selected)
       case item: CommandSurfaceItem.InputItem =>
         val editingText = if runner.editingItemId.contains(item.id) then Some(runner.editingText) else None
         CommandPaletteContentResolver.inputRow(item, selected, editingText)
@@ -206,6 +211,8 @@ object CommandRunnerSurfaceComposition:
         CommandPaletteContentResolver.commandRow(command, selected, binding = runner.bindingFor(command))
       case option: CommandSurfaceItem.OptionItem =>
         CommandPaletteContentResolver.optionRow(option, selected)
+      case toggle: CommandSurfaceItem.ToggleItem =>
+        CommandPaletteContentResolver.toggleRow(toggle, runner.effectiveChecked(toggle), selected)
       case item: CommandSurfaceItem.InputItem =>
         val editingText =
           runner.activeSettingsSurface.filter(_.current.editingItemId.contains(item.id)).map(_.current.draftText)

@@ -174,6 +174,13 @@ enum UiPresetsIntent:
   case RenameUiPreset(sourceName: String, targetName: String)
   case DeleteUiPreset(name: String)
   case ResetUiPreset(name: String)
+  // `ApplyUiPreset` (the splash's workflow shortcuts, the top-level searchable "Apply <Name> Preset" commands) stays
+  // a one-shot, apply-everything action -- ReviewUiPreset is the deliberate alternative reached from a preset's own
+  // settings group ("Apply Preset" there), which opens the diff-toggle review instead of applying immediately.
+  case ReviewUiPreset(name: String)
+  // `selectedKeys` are `PresetChange.key`s (see `UiPresetDiff`) still checked when the review was submitted --
+  // baked in at that point rather than re-read from runner state afterward.
+  case ConfirmUiPresetDiffApply(name: String, selectedKeys: List[String])
 
 /** Font family/size and ligature settings. Mirrors the `AppConfig`/`FontLoader.FontConfig` domain split. */
 enum FontIntent:
@@ -422,6 +429,22 @@ object CommandSurfaceItem:
         val rawIndex     = (selectedIndex + delta) % options.length
         val wrappedIndex = if rawIndex < 0 then options.length + rawIndex else rawIndex
         copy(selectedIndex = wrappedIndex)
+
+  /** A single independent boolean row -- e.g. a checkbox in a list of toggleable changes -- distinct from
+    * [[OptionItem]]'s single choice among N options. `checked` is the item's own baseline value; a runner tracks any
+    * in-place flip separately (`CommandRunner.toggleSelections`), the same override-map convention `optionSelections`
+    * already uses for `OptionItem.selectedIndex`.
+    */
+  final case class ToggleItem(
+      id: String,
+      label: String,
+      checked: Boolean,
+      category: CommandCategory,
+      hint: Option[String] = None
+  ) extends CommandSurfaceItem:
+    override lazy val searchText: String = s"$label ${hint.getOrElse("")}".trim
+
+    def toggled: ToggleItem = copy(checked = !checked)
 
   /** What kind of text an [[InputItem]] accepts -- previously encoded as three independent booleans
     * (`isDecimal`/`acceptsBindingText`/`acceptsFreeText`) that were really a single priority-ordered choice, since no

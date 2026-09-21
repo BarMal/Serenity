@@ -151,7 +151,11 @@ object UiPreset:
         )
       )
 
-  private def mergeBuiltInWorkflowConfig(base: AppConfig, preset: UiPreset): AppConfig =
+  /** Exposed at `presets` visibility so [[UiPresetDiff]] can reuse this exact resolution rather than reimplementing it
+    * -- the "would apply" side of a built-in workflow's diff has to be the same merge `applyBuiltInWorkflowToState`
+    * actually performs.
+    */
+  private[presets] def mergeBuiltInWorkflowConfig(base: AppConfig, preset: UiPreset): AppConfig =
     val source = preset.config
     // The workflow's app mode travels with it: a prose workflow on a code workspace would otherwise leave the
     // settings tree filtering out exactly the prose groups the workflow just made relevant.

@@ -224,7 +224,7 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
 
     // Each defaults to the preset currently being edited ("Writing").
     List(applyOption, overwriteOption, deleteOption, resetOption).foreach(_.selectedOption shouldBe "Writing")
-    applyOption.selectedIntent shouldBe Some(CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Writing")))
+    applyOption.selectedIntent shouldBe Some(CommandIntent.UiPresets(UiPresetsIntent.ReviewUiPreset("Writing")))
     overwriteOption.selectedIntent shouldBe Some(CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset("Writing")))
     deleteOption.selectedIntent shouldBe Some(CommandIntent.UiPresets(UiPresetsIntent.DeleteUiPreset("Writing")))
     resetOption.selectedIntent shouldBe Some(CommandIntent.UiPresets(UiPresetsIntent.ResetUiPreset("Writing")))

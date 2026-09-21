@@ -148,6 +148,7 @@ object SettingsSurfaceState:
     item match
       case CommandSurfaceItem.CommandItem(command)    => command.label
       case item: CommandSurfaceItem.OptionItem        => item.label
+      case item: CommandSurfaceItem.ToggleItem        => item.label
       case item: CommandSurfaceItem.InputItem         => item.label
       case item: CommandSurfaceItem.SettingSearchItem => item.label
       case item: CommandSurfaceItem.GroupItem         => item.label

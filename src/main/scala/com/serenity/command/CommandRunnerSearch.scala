@@ -63,6 +63,7 @@ private[command] object CommandRunnerSearch:
     item match
       case CommandSurfaceItem.CommandItem(command)    => command.label
       case item: CommandSurfaceItem.OptionItem        => item.label
+      case item: CommandSurfaceItem.ToggleItem        => item.label
       case item: CommandSurfaceItem.InputItem         => item.label
       case item: CommandSurfaceItem.SettingSearchItem => item.label
       case item: CommandSurfaceItem.GroupItem         => item.label
@@ -70,6 +71,7 @@ private[command] object CommandRunnerSearch:
   private[command] def itemHint(item: CommandSurfaceItem): Option[String] =
     item match
       case item: CommandSurfaceItem.OptionItem        => item.hint
+      case item: CommandSurfaceItem.ToggleItem        => item.hint
       case item: CommandSurfaceItem.InputItem         => Some(item.hint)
       case item: CommandSurfaceItem.SettingSearchItem => item.hint
       case item: CommandSurfaceItem.GroupItem         => item.hint

@@ -139,6 +139,77 @@ class CommandPaletteContentResolverSpec extends AnyFlatSpec with Matchers:
     withoutHints.footer shouldBe defined
   }
 
+  "toggleRow" should "render a checked glyph and the label when checked" in {
+    val item = CommandSurfaceItem.ToggleItem(
+      id = "test-toggle",
+      label = "Enable widget",
+      checked = false,
+      category = CommandCategory.Settings
+    )
+
+    val row = CommandPaletteContentResolver.toggleRow(item, checked = true, selected = false)
+
+    row.plainText shouldBe "[x] Enable widget"
+    row.segments.map(_.text) shouldBe List("[x]", "Enable widget")
+  }
+
+  it should "render an unchecked glyph when unchecked" in {
+    val item = CommandSurfaceItem.ToggleItem(
+      id = "test-toggle",
+      label = "Enable widget",
+      checked = true,
+      category = CommandCategory.Settings
+    )
+
+    val row = CommandPaletteContentResolver.toggleRow(item, checked = false, selected = false)
+
+    row.plainText shouldBe "[ ] Enable widget"
+    row.segments.map(_.text) shouldBe List("[ ]", "Enable widget")
+  }
+
+  it should "read the checked state passed in, not the item's own baked-in checked field" in {
+    val item = CommandSurfaceItem.ToggleItem(
+      id = "test-toggle",
+      label = "Enable widget",
+      checked = true,
+      category = CommandCategory.Settings
+    )
+
+    // `checked` is supplied by the caller (the runner's `effectiveChecked`, after any in-place flip) rather than
+    // read off `item.checked` directly -- the same relationship `inputRow` has with its `editingText` parameter.
+    val row = CommandPaletteContentResolver.toggleRow(item, checked = false, selected = false)
+
+    row.plainText shouldBe "[ ] Enable widget"
+  }
+
+  it should "append a muted hint segment when the item has one" in {
+    val item = CommandSurfaceItem.ToggleItem(
+      id = "test-toggle",
+      label = "Enable widget",
+      checked = false,
+      category = CommandCategory.Settings,
+      hint = Some("Restart required")
+    )
+
+    val row = CommandPaletteContentResolver.toggleRow(item, checked = false, selected = false)
+
+    row.segments.last.text shouldBe "Restart required"
+    row.segments.last.tone shouldBe OverlayTone.Muted
+  }
+
+  it should "mark the row selected when selected is true" in {
+    val item = CommandSurfaceItem.ToggleItem(
+      id = "test-toggle",
+      label = "Enable widget",
+      checked = false,
+      category = CommandCategory.Settings
+    )
+
+    val row = CommandPaletteContentResolver.toggleRow(item, checked = false, selected = true)
+
+    row.selected shouldBe true
+  }
+
   "inputRow" should "render the raw item value when not being edited" in {
     val item = CommandSurfaceItem.InputItem(
       id = "font-size",
