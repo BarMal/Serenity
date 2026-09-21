@@ -32,6 +32,8 @@ private[layout] object CommandPaletteContentResolver:
     runner.surface match
       case _: com.serenity.command.CommandRunnerSurface.Settings =>
         resolveSettingsSurface(runner, rect, itemGapRows, itemTargetRows, showKeyHints)
+      case review: com.serenity.command.CommandRunnerSurface.PresetDiffReview =>
+        resolvePresetDiffReview(runner, review, rect, mode, itemGapRows, itemTargetRows, showKeyHints)
       case com.serenity.command.CommandRunnerSurface.Palette(_) if !runner.isActive =>
         ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "commands"))
       case com.serenity.command.CommandRunnerSurface.Palette(paletteState) =>
@@ -122,6 +124,60 @@ private[layout] object CommandPaletteContentResolver:
           footer = footer,
           keyHintRow = Option.when(hasKeyHint)(OverlayRow(paletteKeyHintText))
         )
+
+  /** Renders `CommandRunnerSurface.PresetDiffReview`: a flat list, so this mirrors the `Palette`-active branch above
+    * minus everything specific to searching/category prefixes/group breadcrumbs that a fixed, non-searchable list
+    * never needs. Every row is a `ToggleItem` (one per pending change) or the trailing "Apply Selected Changes"
+    * `CommandItem` -- `CommandRunner.presetDiffReviewItems` guarantees no other `CommandSurfaceItem` case ever
+    * reaches this surface, but the match stays exhaustive rather than assuming that from outside this file.
+    */
+  private def resolvePresetDiffReview(
+    runner: com.serenity.command.CommandRunner,
+    review: com.serenity.command.CommandRunnerSurface.PresetDiffReview,
+    rect: LayoutRect,
+    mode: SurfaceRenderMode,
+    itemGapRows: Double,
+    itemTargetRows: Int,
+    showKeyHints: Boolean
+  ): ResolvedSurfaceContent =
+    val allItems    = runner.visibleItems
+    val header      = Some(OverlayRow(plainText = s"Apply preset: ${review.presetName}"))
+    val hasKeyHint  = showKeyHints && allItems.nonEmpty
+    val hasFooter   = allItems.nonEmpty || runner.statusMessage.nonEmpty
+    val frameLayout = SurfaceFrameLayout.forContent(rect, SurfaceContent.CommandPalette(runner))
+    val itemWindow = frameLayout.itemWindow(
+      itemCount = allItems.size,
+      selectedIndex = runner.selectedIndex,
+      hasHeader = true,
+      hasFooter = hasFooter,
+      reservedContentRows = 0,
+      itemGapRows = itemGapRows,
+      itemTargetRows = itemTargetRows,
+      hasKeyHint = hasKeyHint
+    )
+    val windowItems           = itemWindow.slice(allItems)
+    val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(runner.selectedIndex)
+    val rows = windowItems.zipWithIndex.map {
+      case (item, index) =>
+        val selected = index == adjustedSelectedIndex
+        item match
+          case CommandSurfaceItem.CommandItem(command) => commandRow(command, selected, binding = None)
+          case toggle: CommandSurfaceItem.ToggleItem    => toggleRow(toggle, runner.effectiveChecked(toggle), selected)
+          case option: CommandSurfaceItem.OptionItem    => optionRow(option, selected)
+          case item: CommandSurfaceItem.InputItem       => inputRow(item, selected, None)
+          case item: CommandSurfaceItem.SettingSearchItem => settingSearchRow(item, selected)
+          case group: CommandSurfaceItem.GroupItem      => groupRow(group.label, group.hint, selected)
+    }
+    val footer = runner.statusMessage
+      .map(OverlayRow(_))
+      .orElse(Option.when(review.changes.nonEmpty)(OverlayRow(s"${review.changes.size} change(s) pending")))
+    ResolvedSurfaceContent(
+      title = SurfaceContentResolver.titleFor(mode, "commands"),
+      header = header,
+      rows = rows,
+      footer = footer,
+      keyHintRow = Option.when(hasKeyHint)(OverlayRow(paletteKeyHintText))
+    )
 
   def resolveSettingsSurface(
     runner: com.serenity.command.CommandRunner,

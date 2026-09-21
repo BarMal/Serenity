@@ -24,7 +24,7 @@ private[command] object CommandRunnerSettingsPresetGroups:
     def action(id: String, label: String, hint: String, intent: String => UiPresetsIntent) =
       CommandRunnerSettingsItems.presetActionOptionItem(id, label, hint, uiPresetPreviews, editingPreset, intent)
     val presetActionItems = List(
-      action("ui-preset-apply", "Apply Preset", "Reapply this preset's settings", UiPresetsIntent.ApplyUiPreset(_)),
+      action("ui-preset-apply", "Apply Preset", "Reapply this preset's settings", UiPresetsIntent.ReviewUiPreset(_)),
       action(
         "ui-preset-overwrite",
         "Overwrite Preset",

@@ -174,6 +174,13 @@ enum UiPresetsIntent:
   case RenameUiPreset(sourceName: String, targetName: String)
   case DeleteUiPreset(name: String)
   case ResetUiPreset(name: String)
+  // `ApplyUiPreset` (the splash's workflow shortcuts, the top-level searchable "Apply <Name> Preset" commands) stays
+  // a one-shot, apply-everything action -- ReviewUiPreset is the deliberate alternative reached from a preset's own
+  // settings group ("Apply Preset" there), which opens the diff-toggle review instead of applying immediately.
+  case ReviewUiPreset(name: String)
+  // `selectedKeys` are `PresetChange.key`s (see `UiPresetDiff`) still checked when the review was submitted --
+  // baked in at that point rather than re-read from runner state afterward.
+  case ConfirmUiPresetDiffApply(name: String, selectedKeys: List[String])
 
 /** Font family/size and ligature settings. Mirrors the `AppConfig`/`FontLoader.FontConfig` domain split. */
 enum FontIntent:

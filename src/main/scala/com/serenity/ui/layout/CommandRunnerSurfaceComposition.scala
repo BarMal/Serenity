@@ -50,7 +50,10 @@ object CommandRunnerSurfaceComposition:
     runner.surface match
       case _: CommandRunnerSurface.Settings =>
         forSettingsSurface(runner, frameRect, itemGapRows, itemTargetRows, showKeyHints)
-      case CommandRunnerSurface.Palette(_) =>
+      // `forPalette` is already generic over `runner.visibleItems`/`selectedIndex`/`statusMessage` -- position and
+      // hit-testing don't care that a preset-diff review's header/footer text differs from the palette's, only
+      // `CommandPaletteContentResolver` (the paint layer) needs its own case for that.
+      case CommandRunnerSurface.Palette(_) | (_: CommandRunnerSurface.PresetDiffReview) =>
         forPalette(runner, frameRect, itemGapRows, itemTargetRows, showKeyHints)
 
   private def forPalette(

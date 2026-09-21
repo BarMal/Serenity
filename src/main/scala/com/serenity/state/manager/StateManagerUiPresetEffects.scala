@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
-import com.serenity.command.{SettingsPage, SettingsSurfaceState, UiPresetsIntent}
+import com.serenity.command.{CommandRunner, SettingsPage, SettingsSurfaceState, UiPresetsIntent}
 import com.serenity.config.{AppConfig, DefaultDocumentMode, MarkdownViewMode}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.RichTextDocument
@@ -10,7 +10,7 @@ import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.presets.UiPreset
+import com.serenity.ui.presets.{UiPreset, UiPresetDiff}
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.AppThemeManager
 
@@ -38,6 +38,10 @@ final private[manager] class StateManagerUiPresetEffects(
         overwriteUiPresetEffect(name)
       case UiPresetsIntent.ApplyUiPreset(name) =>
         applyUiPresetEffect(name)
+      case UiPresetsIntent.ReviewUiPreset(name) =>
+        reviewUiPresetEffect(name)
+      case UiPresetsIntent.ConfirmUiPresetDiffApply(name, selectedKeys) =>
+        confirmUiPresetDiffApplyEffect(name, selectedKeys.toSet)
       case UiPresetsIntent.DuplicateUiPreset(sourceName, targetName) =>
         duplicateUiPresetEffect(sourceName, targetName)
       case UiPresetsIntent.RenameUiPreset(sourceName, targetName) =>
@@ -113,6 +117,26 @@ final private[manager] class StateManagerUiPresetEffects(
         s"$summary: ${Option(error.getMessage).getOrElse(error.getClass.getSimpleName)}"
       )
 
+  /** Resolves `presetName` to a preset the same way [[applyUiPresetEffect]]/[[confirmUiPresetDiffApplyEffect]] both
+    * need to: a custom preset shadows a built-in of the same name, so this is not simply "check custom, then
+    * built-in" done twice with different results.
+    */
+  private def resolveUiPreset(presetName: String): IO[Option[UiPreset]] =
+    uiPresetStore.find(presetName).map(_.orElse(UiPreset.builtIn(presetName)))
+
+  /** The one-shot "just apply it" path -- the splash's workflow shortcuts and the top-level searchable "Apply
+    * <Name> Preset" commands both use this, applying every setting immediately via the real, unconditional
+    * `UiPreset.applyBuiltInWorkflowToState`/`applyToState` rather than `UiPresetDiff.applySelected` with every known
+    * key selected: `UiPresetDiff`'s selective merge only knows the fields it explicitly enumerates
+    * (`ConfigRegistry.fields` plus its five composite groups), so "select everything it knows about" is not actually
+    * equivalent to a true full replace -- `preferredWindowSize`, uncovered by either, is the concrete field that
+    * exposed this. [[reviewUiPresetEffect]]/[[confirmUiPresetDiffApplyEffect]] are the deliberate, genuinely-partial
+    * alternative, where that limitation is inherent to "apply only some of the changes" anyway.
+    *
+    * Resolution here (not [[resolveUiPreset]]) mirrors the pre-existing behavior this restores: a custom preset
+    * shadows a built-in of the same name, and *which* source it came from decides `applyBuiltInWorkflowToState` vs.
+    * `applyToState` -- not `UiPresetDiff`'s own name-only check, which does not have "was this shadowed" to go on.
+    */
   private def applyUiPresetEffect(name: String): IO[Unit] =
     normalizedPresetName(name) match
       case None =>
@@ -120,11 +144,7 @@ final private[manager] class StateManagerUiPresetEffects(
       case Some(presetName) =>
         uiPresetStore
           .find(presetName)
-          .map { customPreset =>
-            customPreset
-              .map(_ -> false)
-              .orElse(UiPreset.builtIn(presetName).map(_ -> true))
-          }
+          .map(_.map(_ -> false).orElse(UiPreset.builtIn(presetName).map(_ -> true)))
           .flatMap {
             case None =>
               logger.warn(s"[PRESET] UI preset not found: $presetName")
@@ -133,12 +153,107 @@ final private[manager] class StateManagerUiPresetEffects(
                 case Left(reason) =>
                   rejectUiPresetPreview(presetName, reason)
                 case Right(theme) =>
-                  applyLoadedUiPreset(preset, isBuiltInWorkflow, theme)
+                  applyLoadedUiPresetWith(
+                    preset,
+                    base =>
+                      if isBuiltInWorkflow then UiPreset.applyBuiltInWorkflowToState(preset, base, theme)
+                      else UiPreset.applyToState(preset, base, theme)
+                  )
               }
           }
           .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to apply UI preset $presetName"))
 
-  private def applyLoadedUiPreset(preset: UiPreset, isBuiltInWorkflow: Boolean, theme: Theme): IO[Unit] =
+  /** Opens the preset diff-toggle review rather than applying immediately -- [[confirmUiPresetDiffApplyEffect]] does
+    * the actual apply once the user confirms (default: every change selected). Reached from a preset's own settings
+    * group ("Apply Preset" there), always from within an already-open command runner in practice, but
+    * `ensureCommandRunnerSurfaceForReview` covers the case where one is not (e.g. dispatched directly, as tests do).
+    */
+  private def reviewUiPresetEffect(name: String): IO[Unit] =
+    normalizedPresetName(name) match
+      case None =>
+        logger.warn("[PRESET] Ignoring empty UI preset name")
+      case Some(presetName) =>
+        resolveUiPreset(presetName)
+          .flatMap {
+            case None =>
+              logger.warn(s"[PRESET] UI preset not found: $presetName")
+            case Some(preset) =>
+              openUiPresetDiffReview(preset)
+          }
+          .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to review UI preset $presetName"))
+
+  private def openUiPresetDiffReview(preset: UiPreset): IO[Unit] =
+    stateRef.update { state =>
+      val changes = UiPresetDiff.changes(
+        currentConfig = state.persisted.config,
+        currentThemeName = state.persisted.theme.name,
+        currentHasDockedPanels = state.pinnedSurfaces.nonEmpty,
+        currentHasWorkspaceTree = state.persisted.layout.workspaceTree.isDefined,
+        preset = preset
+      )
+      updateCommandRunner(ensureCommandRunnerSurfaceForReview(state))(_.openPresetDiffReview(preset.name, changes))
+    }
+
+  /** A bare, minimally-activated command-runner surface to host the review when none is already open -- unlike
+    * `StateManagerOperationBoundary.ensureCommandRunnerSurface`, this needs no `CommandRegistry` (the review's own
+    * items come entirely from `CommandRunner.openPresetDiffReview`, not the palette's command list), so it is its own
+    * small, self-contained version rather than threading that collaborator through this class for one call site.
+    */
+  private def ensureCommandRunnerSurfaceForReview(state: AppState): AppState =
+    state.commandRunnerSurface match
+      case Some(_) => state
+      case None =>
+        val (stateWithId, surfaceId) = state.allocateSurfaceId
+        val surface = UiSurface(
+          id = surfaceId,
+          content = SurfaceContent.CommandPalette(CommandRunner.empty.copy(isActive = true)),
+          presentation = SurfacePresentation.Floating(stateWithId.activeCursorPosition, SurfacePlacement.BelowCursor)
+        )
+        stateWithId
+          .copy(runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ surface))
+          .pushFocus(Focus.Surface(surfaceId))
+
+  /** Re-resolves and re-validates the preset rather than trusting what the review opened with -- the store or the
+    * theme could plausibly have changed in the time the review sat open.
+    */
+  private def confirmUiPresetDiffApplyEffect(name: String, selectedKeys: Set[String]): IO[Unit] =
+    normalizedPresetName(name) match
+      case None =>
+        logger.warn("[PRESET] Ignoring empty UI preset name")
+      case Some(presetName) =>
+        resolveUiPreset(presetName)
+          .flatMap {
+            case None =>
+              logger.warn(s"[PRESET] UI preset not found: $presetName")
+            case Some(preset) =>
+              loadUiPresetResources(preset).flatMap {
+                case Left(reason) =>
+                  rejectUiPresetPreview(presetName, reason)
+                case Right(theme) =>
+                  applyLoadedUiPresetWith(preset, base => UiPresetDiff.applySelected(base, theme, preset, selectedKeys))
+              }
+          }
+          .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to apply UI preset $presetName"))
+
+  private def updateCommandRunner(state: AppState)(f: CommandRunner => CommandRunner): AppState =
+    state.commandRunnerSurface match
+      case Some(surface) =>
+        surface.content match
+          case SurfaceContent.CommandPalette(runner) =>
+            val updatedSurfaces = state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
+              _.copy(content = SurfaceContent.CommandPalette(f(runner)))
+            )
+            state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
+          case _ =>
+            state
+      case None =>
+        state
+
+  /** Shared tail for both `applyUiPresetEffect`'s full apply and `confirmUiPresetDiffApplyEffect`'s selective one --
+    * `restore` is the one step that differs between them; committing the result (validation, config persistence,
+    * font reload, pinned directories, markdown preview, session auto-save) is identical either way.
+    */
+  private def applyLoadedUiPresetWith(preset: UiPreset, restore: AppState => AppState): IO[Unit] =
     for
       current <- stateRef.get
       // From the splash there is no editor pane/buffer/tree to apply onto, so seed a fresh "New document" workspace
@@ -146,9 +261,7 @@ final private[manager] class StateManagerUiPresetEffects(
       // The preset then docks its panels into a real tree, its document mode lands on a real empty buffer, and there
       // is a focused buffer to type into (#1524 and its buffer-less-pane fallout).
       base = seedEditorFromSplash(current)
-      restoredPresetState =
-        if isBuiltInWorkflow then UiPreset.applyBuiltInWorkflowToState(preset, base, theme)
-        else UiPreset.applyToState(preset, base, theme)
+      restoredPresetState = restore(base)
       restoredDocumentState =
         applyPresetDocumentModeToActiveEmptyBuffer(restoredPresetState, preset.config.defaultDocumentMode)
       restoredOutlineState = hydratePresetSymbolPanels(restoredDocumentState)

@@ -125,7 +125,7 @@ final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMou
               if drilled.nonEmpty then RunnerSelectSubmenuItem(index)
               else RunnerSelectVisibleItem(index)
             }
-        case CommandRunnerSurface.Palette(_) =>
+        case CommandRunnerSurface.Palette(_) | (_: CommandRunnerSurface.PresetDiffReview) =>
           val items = runner.visibleItems
           MouseHitTestGeometry
             .overlayItemIndex(

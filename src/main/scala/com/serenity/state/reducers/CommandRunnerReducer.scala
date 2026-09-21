@@ -405,7 +405,8 @@ object CommandRunnerReducer:
   private[reducers] def activeSubmenu(state: AppState): Option[SettingsSurfaceState] =
     currentRunner(state).flatMap(_.surface match
       case CommandRunnerSurface.Settings(_, drilled) => drilled
-      case CommandRunnerSurface.Palette(_)           => None)
+      case CommandRunnerSurface.Palette(_)           => None
+      case _: CommandRunnerSurface.PresetDiffReview  => None)
 
   /** Items that open a nested surface on submit rather than executing an action. */
   private def entersGroupOnSubmit(item: CommandSurfaceItem): Boolean =
