@@ -122,7 +122,7 @@ object LayoutEngine:
     val gutterHeight   = if usesBottomGutter(state) then densityMetrics.gutterHeight else 0
     val tabBarHeight   = if showsTabBar(state) then TabBarHeight else 0
     val contentHeight  = math.max(1, viewportSize.height - gutterHeight - tabBarHeight)
-    val uiElementGap   = math.ceil(math.max(0.0, state.persisted.config.uiElementGap)).toInt
+    val uiElementGap   = math.ceil(math.max(0.0, state.effectiveUiElementGap)).toInt
     val textAreaInsets =
       if spacerPercentage == DefaultSpacerPercentage then state.persisted.config.surfaceConfig.textAreaInsets.normalized
       else TextAreaInsets(spacerPercentage, spacerPercentage).normalized
@@ -133,20 +133,21 @@ object LayoutEngine:
     // text width instead.
     val columnModeActive =
       state.persisted.config.surfaceConfig.columnModeEnabled && state.persisted.config.surfaceConfig.wordWrapEnabled
-    val lineNumbersOn    = state.persisted.config.surfaceConfig.showLineNumbers && !columnModeActive
-    val lineNumberLayout = state.persisted.config.surfaceConfig.lineNumberLayout.normalized
-    val counterWidth     = if lineNumbersOn then calculateLineNumberWidth(state) else 0
-    val hasLeftCounter   = lineNumbersOn && lineNumberLayout.side.showsLeft
-    val hasRightCounter  = lineNumbersOn && lineNumberLayout.side.showsRight
+    val lineNumbersOn        = state.persisted.config.surfaceConfig.showLineNumbers && !columnModeActive
+    val lineNumberLayout     = state.persisted.config.surfaceConfig.lineNumberLayout.normalized
+    val lineNumberMarginLeft = state.effectiveLineNumberMarginLeft
+    val lineNumberPadding    = state.effectiveLineNumberPadding
+    val counterWidth         = if lineNumbersOn then calculateLineNumberWidth(state) else 0
+    val hasLeftCounter       = lineNumbersOn && lineNumberLayout.side.showsLeft
+    val hasRightCounter      = lineNumbersOn && lineNumberLayout.side.showsRight
     // Margins apply to their side while line numbers are enabled -- even a side with no counter -- so toggling a
     // side's counter does not shift content. Padding sits between a counter and the content, so only on counter sides.
     val leftBlock =
-      if lineNumbersOn then
-        lineNumberLayout.marginLeft + (if hasLeftCounter then counterWidth + lineNumberLayout.padding else 0)
+      if lineNumbersOn then lineNumberMarginLeft + (if hasLeftCounter then counterWidth + lineNumberPadding else 0)
       else 0
     val rightBlock =
       if lineNumbersOn then
-        lineNumberLayout.marginRight + (if hasRightCounter then counterWidth + lineNumberLayout.padding else 0)
+        lineNumberLayout.marginRight + (if hasRightCounter then counterWidth + lineNumberPadding else 0)
       else 0
     val horizontalTextFraction = (1.0 - textAreaInsets.left - textAreaInsets.right).max(0.01)
     val minimumEditorWorkspaceWidth =
@@ -222,7 +223,7 @@ object LayoutEngine:
       if hasLeftCounter then
         Some(
           LayoutRect(
-            workspaceX + leftSpacerWidth + lineNumberLayout.marginLeft,
+            workspaceX + leftSpacerWidth + lineNumberMarginLeft,
             lineNumberY,
             counterWidth,
             lineNumberHeight
@@ -233,7 +234,7 @@ object LayoutEngine:
       if hasRightCounter then
         Some(
           LayoutRect(
-            editorPanelX + availableWidth + lineNumberLayout.padding,
+            editorPanelX + availableWidth + lineNumberPadding,
             lineNumberY,
             counterWidth,
             lineNumberHeight

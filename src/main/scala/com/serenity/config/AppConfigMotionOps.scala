@@ -237,8 +237,8 @@ object AppConfigMotionOps:
       */
     def effectiveCommandRunnerCursorGapRows: Double =
       appConfig.surfaceConfig.commandRunnerCursorGapRows.getOrElse(
-        Option
-          .when(appConfig.uiElementGap > 0.0)(appConfig.uiElementGap)
+        appConfig.uiElementGap
+          .filter(_ > 0.0)
           .getOrElse(InterfaceDensityMetrics.forDensity(appConfig.interfaceDensity).overlayGapRows.toDouble)
       )
 

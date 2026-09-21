@@ -409,7 +409,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.uiElementGap shouldBe 3
+    stateManager.getCurrentState.unsafeRunSync().persisted.config.uiElementGap shouldBe Some(3)
   }
 
   it should "update the UI corner radius config" in {

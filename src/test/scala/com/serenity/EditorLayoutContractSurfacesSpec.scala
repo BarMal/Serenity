@@ -35,7 +35,7 @@ class EditorLayoutContractSurfacesSpec extends AnyFlatSpec with Matchers:
           .withLineNumbers(true)
           .withStatusLinePlacement(StatusLinePlacement.Pinned)
           .withTextAreaInsets(TextAreaInsets(left = 0.05, right = 0.05))
-          .withUiElementGap(1),
+          .withUiElementGap(Some(1)),
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
         layout = AppState.initial.persisted.layout.copy(

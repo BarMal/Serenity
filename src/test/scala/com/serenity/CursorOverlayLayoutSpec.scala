@@ -75,7 +75,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
   it should "clamp an above-cursor peek overlay into the active pane when the cursor is near the top" in {
     val base = baseState(cursor = CursorPosition(0, 5))
     val state = base.copy(
-      persisted = base.persisted.copy(config = AppState.initial.persisted.config.withUiElementGap(0.5)),
+      persisted = base.persisted.copy(config = AppState.initial.persisted.config.withUiElementGap(Some(0.5))),
       runtime = base.runtime.copy(uiSurfaces =
         List(
           UiSurface(
@@ -181,7 +181,9 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val base = baseState()
     val state = base.copy(
       persisted = base.persisted
-        .copy(config = AppState.initial.persisted.config.withUiElementGap(0).withCommandRunnerCursorGapRows(Some(3))),
+        .copy(config =
+          AppState.initial.persisted.config.withUiElementGap(Some(0)).withCommandRunnerCursorGapRows(Some(3))
+        ),
       runtime = base.runtime.copy(uiSurfaces =
         List(
           UiSurface(
@@ -405,7 +407,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val cursor = CursorPosition(1, 2)
     val base   = baseState(cursor = cursor)
     val state = base.copy(
-      persisted = base.persisted.copy(config = AppState.initial.persisted.config.withUiElementGap(2)),
+      persisted = base.persisted.copy(config = AppState.initial.persisted.config.withUiElementGap(Some(2))),
       runtime = base.runtime.copy(uiSurfaces =
         List(
           UiSurface(
@@ -441,7 +443,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val state = base.copy(
       persisted = base.persisted.copy(config =
         AppState.initial.persisted.config
-          .withUiElementGap(0.25)
+          .withUiElementGap(Some(0.25))
           .withCommandRunnerCursorGapRows(Some(0.5))
       ),
       runtime = base.runtime.copy(uiSurfaces =

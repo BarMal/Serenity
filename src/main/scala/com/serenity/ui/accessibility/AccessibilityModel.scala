@@ -328,7 +328,7 @@ object AccessibilitySnapshot:
         itemCount = rows.size,
         hasHeader = false,
         hasFooter = false,
-        itemGapRows = state.persisted.config.uiElementGap,
+        itemGapRows = state.effectiveUiElementGap,
         itemTargetRows = targetRows
       )
       .collect { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), y) => index -> y }

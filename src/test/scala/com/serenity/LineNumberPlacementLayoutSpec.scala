@@ -42,25 +42,32 @@ class LineNumberPlacementLayoutSpec extends AnyFlatSpec with Matchers:
   // 3-line buffer -> max(3, digits+1) = 3 cells.
   private val counterWidth = 3
 
-  "Default left placement" should "put the counter at the left edge with content immediately after it" in {
+  // An unset margin/padding now resolves to a cell of breathing room on the GUI surface this spec runs under
+  // (`AppState.effectiveLineNumberMarginLeft`/`effectiveLineNumberPadding`) -- not the flush-to-edge zero the TUI
+  // keeps -- so a bare `LineNumberLayout()` no longer sits the counter flush against the panel edge.
+  private val defaultGuiSpacing = 1
+
+  "Default left placement" should "offset the counter and the content by the GUI's default cell of breathing room" in {
     val layout = layoutFor(stateWith(LineNumberLayout()))
     val left   = layout.lineNumberRect.getOrElse(fail("expected a left counter"))
     layout.rightLineNumberRect shouldBe None
-    left.x shouldBe 0
+    left.x shouldBe defaultGuiSpacing
     left.width shouldBe counterWidth
-    layout.editorPanelRect.x shouldBe left.right
+    layout.editorPanelRect.x shouldBe (left.right + defaultGuiSpacing)
   }
 
   "Left placement with margin and padding" should "offset the counter and the content by those cells" in {
-    val layout = layoutFor(stateWith(LineNumberLayout(side = LineNumberSide.Left, marginLeft = 2, padding = 3)))
-    val left   = layout.lineNumberRect.getOrElse(fail("expected a left counter"))
+    val layout =
+      layoutFor(stateWith(LineNumberLayout(side = LineNumberSide.Left, marginLeft = Some(2), padding = Some(3))))
+    val left = layout.lineNumberRect.getOrElse(fail("expected a left counter"))
     left.x shouldBe 2
     left.width shouldBe counterWidth
     layout.editorPanelRect.x shouldBe (2 + counterWidth + 3)
   }
 
   "Right placement" should "put the counter on the content's right, no left counter" in {
-    val layout = layoutFor(stateWith(LineNumberLayout(side = LineNumberSide.Right, marginRight = 1, padding = 2)))
+    val layout =
+      layoutFor(stateWith(LineNumberLayout(side = LineNumberSide.Right, marginRight = 1, padding = Some(2))))
     layout.lineNumberRect shouldBe None
     val right = layout.rightLineNumberRect.getOrElse(fail("expected a right counter"))
     right.width shouldBe counterWidth
@@ -73,18 +80,18 @@ class LineNumberPlacementLayoutSpec extends AnyFlatSpec with Matchers:
     val layout = layoutFor(stateWith(LineNumberLayout(side = LineNumberSide.Both)))
     val left   = layout.lineNumberRect.getOrElse(fail("expected a left counter"))
     val right  = layout.rightLineNumberRect.getOrElse(fail("expected a right counter"))
-    left.x shouldBe 0
+    left.x shouldBe defaultGuiSpacing
     left.width shouldBe counterWidth
     right.width shouldBe counterWidth
-    layout.editorPanelRect.x shouldBe left.right
-    right.x shouldBe layout.editorPanelRect.right
+    layout.editorPanelRect.x shouldBe (left.right + defaultGuiSpacing)
+    right.x shouldBe (layout.editorPanelRect.right + defaultGuiSpacing)
     right.right shouldBe viewport.width
   }
 
-  "Both placement" should "leave the content narrower by both counters" in {
+  "Both placement" should "leave the content narrower by both counters, plus the GUI default's own padding" in {
     val plain = layoutFor(stateWith(LineNumberLayout(side = LineNumberSide.Left)))
     val both  = layoutFor(stateWith(LineNumberLayout(side = LineNumberSide.Both)))
-    both.editorPanelRect.width shouldBe (plain.editorPanelRect.width - counterWidth)
+    both.editorPanelRect.width shouldBe (plain.editorPanelRect.width - counterWidth - defaultGuiSpacing)
   }
 
   "The right counter" should "share the left counter's vertical extent" in {

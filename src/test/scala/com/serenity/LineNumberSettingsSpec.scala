@@ -106,8 +106,8 @@ class LineNumberSettingsSpec extends AnyFlatSpec with Matchers:
 
     val layout = stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.lineNumberLayout
     layout.side shouldBe LineNumberSide.Both
-    layout.marginLeft shouldBe 4
-    layout.padding shouldBe 2
+    layout.marginLeft shouldBe Some(4)
+    layout.padding shouldBe Some(2)
 
     dispatch(stateManager, TextDisplayIntent.SetLineNumberMarginRight(LineNumberLayout.MaxCells + 100))
     stateManager.getCurrentState

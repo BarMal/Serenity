@@ -36,7 +36,9 @@ private[config] object ConfigFieldsCursorAndWindow:
       enumerated(InterfaceDensity.fromConfigKey, _.configKey, text => InterfaceDensity.values.find(_.toString == text))
     )(_.interfaceDensity, (config, value) => config.withInterfaceDensity(value)),
     named("ui.element_gap", "uiElementGap", "ui.element.gap", "ui_element_gap")(
-      double.filtered(gap => gap.isFinite && gap >= AppConfig.MinUiElementGap && gap <= AppConfig.MaxUiElementGap)
+      double
+        .filtered(gap => gap.isFinite && gap >= AppConfig.MinUiElementGap && gap <= AppConfig.MaxUiElementGap)
+        .orAuto
     )(_.uiElementGap, (config, value) => config.withUiElementGap(value)),
     named("ui.corner_radius", "uiCornerRadiusPx", "ui.corner.radius", "ui_corner_radius")(
       int.filtered(radius => radius >= AppConfig.MinUiCornerRadiusPx && radius <= AppConfig.MaxUiCornerRadiusPx)

@@ -96,7 +96,7 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
           ),
           interfaceConfig = InterfaceConfig(
             density = InterfaceDensity.Spacious,
-            elementGap = 3,
+            elementGap = Some(3),
             cornerRadiusPx = 12,
             outlineThicknessPx = 4
           ),
@@ -162,7 +162,7 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
     )
     decoded.config.interfaceConfig shouldBe InterfaceConfig(
       density = InterfaceDensity.Spacious,
-      elementGap = 3,
+      elementGap = Some(3),
       cornerRadiusPx = 12,
       outlineThicknessPx = 4
     )
@@ -231,7 +231,7 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         config = AppConfig.default
-          .withUiElementGap(0.75)
+          .withUiElementGap(Some(0.75))
           .withCommandRunnerItemGapRows(Some(0.25))
           .withCommandRunnerCursorGapRows(Some(0.5))
       )
@@ -239,7 +239,7 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
 
     val decoded = SessionState.fromAppState(state).asJson.as[SessionState].toOption.get
 
-    decoded.config.uiElementGap shouldBe 0.75
+    decoded.config.uiElementGap shouldBe Some(0.75)
     decoded.config.surfaceConfig.commandRunnerItemGapRows shouldBe Some(0.25)
     decoded.config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(0.5)
   }

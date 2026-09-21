@@ -139,7 +139,7 @@ final private[manager] class ContextualToolbarHitTesting(port: ContextualToolbar
               itemCount = rowCount,
               hasHeader = false,
               hasFooter = false,
-              itemGapRows = state.persisted.config.uiElementGap,
+              itemGapRows = state.effectiveUiElementGap,
               itemTargetRows = SurfaceFrameLayout.itemTargetRowsFor(
                 SurfaceContent.ContextualToolbar(toolbarState),
                 state.persisted.config.interfaceDensity
