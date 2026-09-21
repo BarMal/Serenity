@@ -34,6 +34,11 @@ object TabBarSurfaceComposition:
     */
   private val CloseHitWidth = 2
 
+  /** Close (x) affordance glyph, following the same "leading space, glyph flush against the region's trailing edge"
+    * convention [[NewTabGlyph]] uses for its own 2-column affordance.
+    */
+  private val CloseGlyph = " x"
+
   def closeFocusId(bufferId: BufferId): SurfaceFocusId = SurfaceFocusId(s"$CloseFocusIdPrefix${bufferId.value}")
 
   /** Recovers the `BufferId` a `closeAffordances` hit's focus id addresses, the inverse of `closeFocusId`. */
@@ -257,6 +262,21 @@ object TabBarSurfaceComposition:
         )
       }
 
+      // Each tab's close (x) affordance paints as its own plain-text box at its own reserved rect, the same way
+      // `newTabBox` does above, rather than as another `Distributed` segment of `rowBox` -- and is derived from
+      // `closeAffordances` itself (not re-walked here) so the painted glyph and its click target can never drift
+      // apart (issue #1078).
+      val closeBoxes = closeAffordances(entries, activeBufferId, rect).map { region =>
+        SurfacePaintBox(
+          kind = SurfacePaintKind.Text,
+          rect = region.rect,
+          text = Some(CloseGlyph),
+          focusId = Some(region.focusId),
+          actionId = region.actionId,
+          semanticLabel = Some(region.semanticLabel)
+        )
+      }
+
       val hitRegions = allocations.zip(layout.positions).map {
         case (allocation, (startX, width)) =>
           val id = focusId(allocation.entry.bufferId)
@@ -271,7 +291,7 @@ object TabBarSurfaceComposition:
       ResolvedSurfaceComposition(
         bounds = bounds,
         intrinsicSize = SurfaceIntrinsicSize(bounds.width, bounds.height),
-        paintBoxes = List(rowBox) ++ newTabBox,
+        paintBoxes = List(rowBox) ++ newTabBox ++ closeBoxes,
         hitRegions = hitRegions,
         focusOrder = hitRegions.map(_.focusId)
       )
@@ -297,9 +317,9 @@ object TabBarSurfaceComposition:
     * `tabPositions`) `forTabBar` uses for its own hit regions -- including its overflow window (issue #1081), so a
     * scrolled-out tab has no close region either. Deliberately not part of `forTabBar`'s own
     * `ResolvedSurfaceComposition` -- resolved as its own list so a close click (here) and a switch click (`forTabBar`'s
-    * existing hit regions, issue #1077) always come from two disjoint region sets rather than one overloaded one;
-    * painting the glyph itself into the shared `Distributed`-row renderer is not yet wired up (tracked on the issue,
-    * not a silent gap).
+    * existing hit regions, issue #1077) always come from two disjoint region sets rather than one overloaded one.
+    * `forTabBar` paints each of these regions' glyph by calling this same method rather than folding it into the
+    * shared `Distributed`-row renderer, so the painted glyph and its click target can never drift apart.
     *
     * `activeBufferId` must be the same value passed to `forTabBar` for this same `rect`/`entries`, so both resolve the
     * same visible window under overflow.

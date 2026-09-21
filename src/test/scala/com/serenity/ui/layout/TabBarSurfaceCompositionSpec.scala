@@ -63,8 +63,9 @@ class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     val entries  = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
     val resolved = TabBarSurfaceComposition.forTabBar(entries, Some(BufferId(1)), LayoutRect(0, 0, 30, 1))
 
-    // Second paint box is the trailing new-tab (+) affordance (issue #1080) -- see its own coverage below.
-    resolved.paintBoxes should have size 2
+    // Paint box 1 is the trailing new-tab (+) affordance (issue #1080); boxes 2-4 are the three tabs' own close (x)
+    // affordances (issue #1078) -- see their own coverage below.
+    resolved.paintBoxes should have size 5
     val box = resolved.paintBoxes.head
     box.layout shouldBe SurfacePaintLayout.Distributed
     box.segments should have size 3
@@ -79,6 +80,41 @@ class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     val newTabBox = resolved.paintBoxes(1)
     newTabBox.text shouldBe Some(" +")
     newTabBox.focusId shouldBe Some(TabBarSurfaceComposition.NewTabFocusId)
+  }
+
+  it should
+    "paint each tab's close (x) affordance as its own plain-text box, positioned at its own close hit region" in {
+      val entries  = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
+      val rect     = LayoutRect(0, 0, 21, 1)
+      val resolved = TabBarSurfaceComposition.forTabBar(entries, None, rect)
+      val closes   = TabBarSurfaceComposition.closeAffordances(entries, None, rect)
+
+      // Paint boxes: [0] the tabs' own Distributed row, [1] the new-tab (+) affordance, [2..] one close-glyph box
+      // per tab in entry order -- derived from the exact same `closeAffordances` regions used for hit-testing, so
+      // painted glyph and clickable region can never drift apart.
+      val closeBoxes = resolved.paintBoxes.drop(2)
+      closeBoxes should have size closes.size
+      closeBoxes.map(_.rect) shouldBe closes.map(_.rect)
+      closeBoxes.map(_.focusId) shouldBe closes.map(region => Some(region.focusId))
+      closeBoxes.map(_.actionId) shouldBe closes.map(_.actionId)
+      closeBoxes.foreach(_.text shouldBe Some(" x"))
+    }
+
+  it should "paint the same close-glyph boxes regardless of which tab is active (no hover state in this system)" in {
+    val entries  = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
+    val rect     = LayoutRect(0, 0, 21, 1)
+    val active   = TabBarSurfaceComposition.forTabBar(entries, Some(BufferId(0)), rect).paintBoxes.drop(2)
+    val inactive = TabBarSurfaceComposition.forTabBar(entries, None, rect).paintBoxes.drop(2)
+
+    active shouldBe inactive
+  }
+
+  it should "produce no close-glyph paint boxes for a tab too narrow to leave room for one" in {
+    val entries  = List.tabulate(5)(i => entry(i, s"tab-$i"))
+    val rect     = LayoutRect(0, 0, 3, 1)
+    val resolved = TabBarSurfaceComposition.forTabBar(entries, None, rect)
+
+    resolved.paintBoxes.drop(2) shouldBe Nil
   }
 
   it should "mark exactly the active buffer's segment as selected" in {
