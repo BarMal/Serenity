@@ -15,6 +15,10 @@ final case class CommandRunner(
     // no `activeCategory` accessor -- category browsing is retired outright, not migrated anywhere.
     surface: CommandRunnerSurface = CommandRunnerSurface.Palette(),
     optionSelections: Map[String, Int] = Map.empty,
+    // In-place flips of a `CommandSurfaceItem.ToggleItem`'s `checked` value, keyed by item id -- the same
+    // override-map convention `optionSelections` uses for `OptionItem.selectedIndex` (`CommandRunnerSubmenuEditing`'s
+    // `effectiveChecked`/`toggling`).
+    toggleSelections: Map[String, Boolean] = Map.empty,
     inputItems: List[CommandSurfaceItem.InputItem] = List.empty,
     editingItemId: Option[String] = None,
     editingText: String = "",

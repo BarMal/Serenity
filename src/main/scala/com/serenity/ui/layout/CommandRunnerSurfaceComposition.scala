@@ -189,6 +189,8 @@ object CommandRunnerSurfaceComposition:
         CommandPaletteContentResolver.commandRow(command, selected, prefix, runner.bindingFor(command))
       case option: CommandSurfaceItem.OptionItem =>
         CommandPaletteContentResolver.optionRow(option, selected)
+      case toggle: CommandSurfaceItem.ToggleItem =>
+        CommandPaletteContentResolver.toggleRow(toggle, runner.effectiveChecked(toggle), selected)
       case item: CommandSurfaceItem.InputItem =>
         val editingText = if runner.editingItemId.contains(item.id) then Some(runner.editingText) else None
         CommandPaletteContentResolver.inputRow(item, selected, editingText)
@@ -206,6 +208,8 @@ object CommandRunnerSurfaceComposition:
         CommandPaletteContentResolver.commandRow(command, selected, binding = runner.bindingFor(command))
       case option: CommandSurfaceItem.OptionItem =>
         CommandPaletteContentResolver.optionRow(option, selected)
+      case toggle: CommandSurfaceItem.ToggleItem =>
+        CommandPaletteContentResolver.toggleRow(toggle, runner.effectiveChecked(toggle), selected)
       case item: CommandSurfaceItem.InputItem =>
         val editingText =
           runner.activeSettingsSurface.filter(_.current.editingItemId.contains(item.id)).map(_.current.draftText)

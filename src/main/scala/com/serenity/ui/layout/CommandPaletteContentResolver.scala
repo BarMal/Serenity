@@ -81,6 +81,8 @@ private[layout] object CommandPaletteContentResolver:
                 commandRow(command, selected, prefix, runner.bindingFor(command))
               case option: CommandSurfaceItem.OptionItem =>
                 optionRow(option, selected)
+              case toggle: CommandSurfaceItem.ToggleItem =>
+                toggleRow(toggle, runner.effectiveChecked(toggle), selected)
               case item: CommandSurfaceItem.InputItem =>
                 val editingText = if runner.editingItemId.contains(item.id) then Some(runner.editingText) else None
                 inputRow(item, selected, editingText)
@@ -158,6 +160,8 @@ private[layout] object CommandPaletteContentResolver:
             commandRow(command, selected, binding = runner.bindingFor(command))
           case option: CommandSurfaceItem.OptionItem =>
             optionRow(option, selected)
+          case toggle: CommandSurfaceItem.ToggleItem =>
+            toggleRow(toggle, runner.effectiveChecked(toggle), selected)
           case item: CommandSurfaceItem.InputItem =>
             val editingText =
               runner.activeSettingsSurface
@@ -249,6 +253,7 @@ private[layout] object CommandPaletteContentResolver:
     selectedItem match
       case Some(_: CommandSurfaceItem.GroupItem) | Some(_: CommandSurfaceItem.SettingSearchItem) => "Open"
       case Some(_: CommandSurfaceItem.OptionItem)                                                => "Apply"
+      case Some(_: CommandSurfaceItem.ToggleItem)                                                => "Toggle"
       case Some(item: CommandSurfaceItem.InputItem) =>
         if runner.activeSettingsSurface.exists(_.current.editingItemId.contains(item.id)) then "Save" else "Edit"
       case Some(_: CommandSurfaceItem.CommandItem) => "Run"
@@ -354,6 +359,20 @@ private[layout] object CommandPaletteContentResolver:
         OverlaySegment(selectedHint, tone = OverlayTone.Normal),
         OverlaySegment(option.selectedOption, selected = true)
       ),
+      layout = OverlayRowLayout.Columns
+    )
+
+  /** Renders a `ToggleItem` (independent checkbox row) -- `checked` is passed in rather than read off `item.checked`
+    * directly, mirroring how `inputRow` takes `editingText` separately from the item: the effective, possibly
+    * in-place-flipped state (`CommandRunner.effectiveChecked`) lives on the runner, not baked into the item.
+    */
+  private[layout] def toggleRow(item: CommandSurfaceItem.ToggleItem, checked: Boolean, selected: Boolean): OverlayRow =
+    val glyph = if checked then "[x]" else "[ ]"
+    OverlayRow(
+      plainText = s"$glyph ${item.label}".trim,
+      selected = selected,
+      segments = List(OverlaySegment(glyph), OverlaySegment(item.label)) ++
+        item.hint.toList.map(hint => OverlaySegment(hint, tone = OverlayTone.Muted)),
       layout = OverlayRowLayout.Columns
     )
 

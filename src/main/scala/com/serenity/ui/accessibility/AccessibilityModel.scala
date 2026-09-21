@@ -498,6 +498,7 @@ object AccessibilitySnapshot:
     item match
       case CommandSurfaceItem.CommandItem(command)                             => command.label
       case CommandSurfaceItem.OptionItem(_, label, _, _, _, _)                 => label
+      case CommandSurfaceItem.ToggleItem(_, label, _, _, _)                    => label
       case CommandSurfaceItem.InputItem(_, label, _, _, _, _, _, _)            => label
       case CommandSurfaceItem.SettingSearchItem(_, _, _, label, _, _, _, _, _) => label
       case CommandSurfaceItem.GroupItem(_, label, _, _, _)                     => label

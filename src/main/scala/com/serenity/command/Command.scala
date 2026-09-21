@@ -423,6 +423,22 @@ object CommandSurfaceItem:
         val wrappedIndex = if rawIndex < 0 then options.length + rawIndex else rawIndex
         copy(selectedIndex = wrappedIndex)
 
+  /** A single independent boolean row -- e.g. a checkbox in a list of toggleable changes -- distinct from
+    * [[OptionItem]]'s single choice among N options. `checked` is the item's own baseline value; a runner tracks any
+    * in-place flip separately (`CommandRunner.toggleSelections`), the same override-map convention `optionSelections`
+    * already uses for `OptionItem.selectedIndex`.
+    */
+  final case class ToggleItem(
+      id: String,
+      label: String,
+      checked: Boolean,
+      category: CommandCategory,
+      hint: Option[String] = None
+  ) extends CommandSurfaceItem:
+    override lazy val searchText: String = s"$label ${hint.getOrElse("")}".trim
+
+    def toggled: ToggleItem = copy(checked = !checked)
+
   /** What kind of text an [[InputItem]] accepts -- previously encoded as three independent booleans
     * (`isDecimal`/`acceptsBindingText`/`acceptsFreeText`) that were really a single priority-ordered choice, since no
     * call site ever set more than one of them.
