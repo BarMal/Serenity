@@ -35,10 +35,16 @@ final private[manager] class StateManagerEditorCapability(
   val focusManager: FocusManager = FocusManager(switchFocus = switchFocus)
 
   private def switchFocus(newFocus: Focus): IO[Unit] =
-    stateRef.update(state => state.copy(persisted = state.persisted.copy(focus = newFocus)))
+    stateRef.get.flatMap { state =>
+      val newState = state.copy(persisted = state.persisted.copy(focus = newFocus))
+      validateAndUpdateState(newState, state)
+    }
 
   def updateState(update: AppState => AppState): IO[Unit] =
     stateRef.update(update)
+
+  def updateStateValidated(update: AppState => AppState): IO[Unit] =
+    stateRef.get.flatMap(state => validateAndUpdateState(update(state), state))
 
   def updateBufferAnimations(
     update: Map[BufferId, com.serenity.animation.AnimationState] => Map[BufferId, com.serenity.animation.AnimationState]

@@ -393,7 +393,7 @@ object AppRuntime:
   ): IO[Unit] =
     event match
       case _: com.serenity.keystroke.events.InsertChar =>
-        stateManager.updateState(state =>
+        stateManager.updateStateValidated(state =>
           state.copy(runtime = state.runtime.observeTyping(System.nanoTime(), state.persisted.config))
         )
       case _ => IO.unit
@@ -635,7 +635,7 @@ object AppRuntime:
     () =>
       dispatcher.unsafeRunAndForget(
         stateManager
-          .updateState(closeMarkdownPreviewWindowInState)
+          .updateStateValidated(closeMarkdownPreviewWindowInState)
           .handleErrorWith(error => logger.error(error)("[RUNTIME] markdown preview close callback failed"))
       )
 

@@ -429,9 +429,10 @@ final private[manager] class StateManagerConfigEffects(
   private def interpretGeneralSettingsIntent(intent: GeneralSettingsIntent, state: AppState): IO[Unit] =
     intent match
       case GeneralSettingsIntent.OpenSettings =>
-        editor.updateState(current =>
-          CommandRunnerReducer.openSettings(current, CommandRegistry.withToggleUI)(using balance)
-        )
+        stateRef.get.flatMap { current =>
+          val newState = CommandRunnerReducer.openSettings(current, CommandRegistry.withToggleUI)(using balance)
+          editor.validateAndUpdateState(newState, current)
+        }
       case GeneralSettingsIntent.SaveConfig =>
         persistConfigFile(state.persisted.config)
       case GeneralSettingsIntent.SetMaterialPreset(preset) =>
