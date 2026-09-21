@@ -10,7 +10,7 @@ class AlphaModeSpec extends AnyFlatSpec with Matchers:
 
   private val customized: AppConfig = AppConfig.default
     .withFontConfig(AppConfig.default.editorConfig.fontConfig.copy(codeFontFamily = "Iosevka"))
-    .withUiElementGap(4.0)
+    .withUiElementGap(Some(4.0))
     .withInterfaceDensity(InterfaceDensity.Compact)
     .withWindowChromeMode(WindowChromeMode.Native)
     .withMotionPreset(MotionPreset.Expressive)

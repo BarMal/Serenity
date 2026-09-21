@@ -182,7 +182,10 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
       .activeContentRect(state)
       .getOrElse(fail("Expected active content rect"))
 
-    toolbarRect(state).bottom should be <= contentRect.y + 12
+    // +13, not +12: the toolbar's floating stack gap now defaults to a GUI cell of breathing room (unset
+    // `ui.element_gap`), one cell more than the zero it used to fall back to, via `FloatingSurfaceLayout.
+    // floatingStackGapRows`/`AppState.effectiveUiElementGap`.
+    toolbarRect(state).bottom should be <= contentRect.y + 13
   }
 
   it should "center on the bounding box of a same-line selection" in {
@@ -221,7 +224,10 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
   it should "place below a top-edge multi-line selection without covering its selected text" in {
     val stateManager = createStateManager("ContextualToolbarSpec-top-edge-selection-placement")
 
-    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 20))).unsafeRunSync()
+    // A few rows taller than the bare minimum this test used to need: with the gutter now claiming 2 more cells
+    // for the unset line-number margin/padding's GUI default, the toolbar's available width narrows enough that
+    // it can wrap into an extra row, and this test's job is placement, not exercising that wrap.
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 26))).unsafeRunSync()
     stateManager
       .updateState { state =>
         val bufferId  = activeBufferId(state)

@@ -33,7 +33,9 @@ class TextAreaResizeSpec extends AnyFlatSpec with Matchers with StateManagerTest
     val after       = stateManager.getCurrentState.unsafeRunSync()
     val afterLayout = LayoutEngine.calculateLayout(after, ViewportSize(100, 30))
 
-    after.persisted.config.surfaceConfig.textAreaInsets.left shouldBe (4.0 / 70.0) +- 0.0001
+    // Denominator is 68, not 70: with both Left and Right docked, the workspace width now also gives up a cell to
+    // each side for the unset `ui.element_gap`'s GUI default (previously zero on both).
+    after.persisted.config.surfaceConfig.textAreaInsets.left shouldBe (4.0 / 68.0) +- 0.0001
     after.persisted.config.surfaceConfig.textAreaInsets.right shouldBe before.persisted.config.surfaceConfig.textAreaInsets.right
     afterLayout.pinnedPanelRects(PanelPosition.Left).width shouldBe 10
     afterLayout.pinnedPanelRects(PanelPosition.Right).width shouldBe 20

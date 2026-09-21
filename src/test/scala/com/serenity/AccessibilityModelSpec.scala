@@ -352,7 +352,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val initialState = AppState.initial
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
-        config = AppConfig.default.withUiElementGap(1),
+        config = AppConfig.default.withUiElementGap(Some(1)),
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(

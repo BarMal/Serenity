@@ -31,16 +31,20 @@ object LineNumberSide:
   */
 final case class LineNumberLayout(
     side: LineNumberSide = LineNumberSide.Left,
-    marginLeft: Int = 0,
+    // `None` means the user never set this: resolved by a surface-aware default (GUI a cell, TUI the flush-to-edge
+    // density it always had), rather than baking either surface's default in here -- see
+    // `AppState.effectiveLineNumberMarginLeft`. `Some` is honoured on both surfaces unchanged. `marginRight` carries
+    // no such default and stays a plain `Int` -- only the left margin and the padding were flagged as reading flush.
+    marginLeft: Option[Int] = None,
     marginRight: Int = 0,
-    padding: Int = 0
+    padding: Option[Int] = None
 ):
 
   def normalized: LineNumberLayout =
     copy(
-      marginLeft = LineNumberLayout.clampCells(marginLeft),
+      marginLeft = marginLeft.map(LineNumberLayout.clampCells),
       marginRight = LineNumberLayout.clampCells(marginRight),
-      padding = LineNumberLayout.clampCells(padding)
+      padding = padding.map(LineNumberLayout.clampCells)
     )
 
 object LineNumberLayout:

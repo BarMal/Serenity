@@ -57,52 +57,64 @@ object PinnedPanelLayoutEngine:
       (first.paneIds.isEmpty && second.paneIds.nonEmpty) ||
         (second.paneIds.isEmpty && first.paneIds.nonEmpty)
 
-    def minimumWidth(node: WorkspaceNode): Int =
+    /** Gap cells a child owes on the axis being split, carried down to whichever child holds the editor.
+      *
+      * Each dock-vs-editor boundary costs a gap, and `LayoutEngine` subtracts every one of them from the editor
+      * workspace after this pass. Adding the gap only to a subtree's *total* is not enough: within that subtree the
+      * spare cell is unclaimed, so a dock asking for a large ratio takes it and the editor finishes a cell short for
+      * every ancestor boundary. Carrying the debt to the leaf makes it part of the editor's own protected minimum,
+      * where the clamp defends it.
+      */
+    def gapDebtFor(child: WorkspaceNode, split: WorkspaceNode.Split, inherited: Int, axisCharges: Boolean): Int =
+      if child.paneIds.isEmpty then 0
+      else if axisCharges && separatesDockFromEditor(split.first, split.second) then inherited + uiElementGap
+      else inherited
+
+    def minimumWidth(node: WorkspaceNode, gapDebt: Int): Int =
       node match
-        case _: WorkspaceNode.Leaf          => minimumEditorWidth
+        case _: WorkspaceNode.Leaf          => minimumEditorWidth + gapDebt
         case _: WorkspaceNode.DockedSurface => 1
         case split: WorkspaceNode.Split =>
-          split.splitAxis match
-            case SplitAxis.Horizontal =>
-              minimumWidth(split.first) + minimumWidth(split.second) +
-                (if separatesDockFromEditor(split.first, split.second) then uiElementGap else 0)
-            case SplitAxis.Vertical =>
-              minimumWidth(split.first).max(minimumWidth(split.second))
+          val charges = split.splitAxis == SplitAxis.Horizontal
+          val first   = minimumWidth(split.first, gapDebtFor(split.first, split, gapDebt, charges))
+          val second  = minimumWidth(split.second, gapDebtFor(split.second, split, gapDebt, charges))
+          if charges then first + second else first.max(second)
 
-    def minimumHeight(node: WorkspaceNode): Int =
+    def minimumHeight(node: WorkspaceNode, gapDebt: Int): Int =
       node match
-        case _: WorkspaceNode.Leaf          => minimumEditorHeight
+        case _: WorkspaceNode.Leaf          => minimumEditorHeight + gapDebt
         case _: WorkspaceNode.DockedSurface => 1
         case split: WorkspaceNode.Split =>
-          split.splitAxis match
-            case SplitAxis.Horizontal =>
-              minimumHeight(split.first).max(minimumHeight(split.second))
-            case SplitAxis.Vertical =>
-              minimumHeight(split.first) + minimumHeight(split.second) +
-                (if separatesDockFromEditor(split.first, split.second) then uiElementGap else 0)
+          val charges = split.splitAxis == SplitAxis.Vertical
+          val first   = minimumHeight(split.first, gapDebtFor(split.first, split, gapDebt, charges))
+          val second  = minimumHeight(split.second, gapDebtFor(split.second, split, gapDebt, charges))
+          if charges then first + second else first.max(second)
 
-    def childMinimums(split: WorkspaceNode.Split): (Int, Int) =
-      val (firstMinimum, secondMinimum) =
-        split.splitAxis match
-          case SplitAxis.Horizontal => minimumWidth(split.first)  -> minimumWidth(split.second)
-          case SplitAxis.Vertical   => minimumHeight(split.first) -> minimumHeight(split.second)
-      if !separatesDockFromEditor(split.first, split.second) then firstMinimum -> secondMinimum
-      else if split.first.paneIds.nonEmpty then (firstMinimum + uiElementGap) -> secondMinimum
-      else firstMinimum                                                       -> (secondMinimum + uiElementGap)
+    def childMinimums(split: WorkspaceNode.Split, widthDebt: Int, heightDebt: Int): (Int, Int) =
+      split.splitAxis match
+        case SplitAxis.Horizontal =>
+          minimumWidth(split.first, gapDebtFor(split.first, split, widthDebt, axisCharges = true)) ->
+            minimumWidth(split.second, gapDebtFor(split.second, split, widthDebt, axisCharges = true))
+        case SplitAxis.Vertical =>
+          minimumHeight(split.first, gapDebtFor(split.first, split, heightDebt, axisCharges = true)) ->
+            minimumHeight(split.second, gapDebtFor(split.second, split, heightDebt, axisCharges = true))
 
-    def recurse(node: WorkspaceNode, rect: LayoutRect): Map[WorkspaceNodeId, LayoutRect] =
+    def recurse(
+      node: WorkspaceNode,
+      rect: LayoutRect,
+      widthDebt: Int,
+      heightDebt: Int
+    ): Map[WorkspaceNodeId, LayoutRect] =
       node match
         case leaf: WorkspaceNode.Leaf =>
           Map(leaf.id -> rect)
         case docked: WorkspaceNode.DockedSurface =>
           Map(docked.id -> rect)
         case split: WorkspaceNode.Split =>
-          val total =
-            split.splitAxis match
-              case SplitAxis.Horizontal => rect.width
-              case SplitAxis.Vertical   => rect.height
+          val horizontal                    = split.splitAxis == SplitAxis.Horizontal
+          val total                         = if horizontal then rect.width else rect.height
           val requestedExtent               = splitWorkspaceExtent(total, split.ratio)
-          val (minimumFirst, minimumSecond) = childMinimums(split)
+          val (minimumFirst, minimumSecond) = childMinimums(split, widthDebt, heightDebt)
           val extent                        = clampWorkspaceExtent(total, requestedExtent, minimumFirst, minimumSecond)
           val (firstRect, secondRect) =
             split.splitAxis match
@@ -116,8 +128,17 @@ object PinnedPanelLayoutEngine:
                   rect.copy(height = extent),
                   LayoutRect(rect.x, rect.y + extent, rect.width, rect.height - extent)
                 )
-          Map(split.id -> rect) ++ recurse(split.first, firstRect) ++ recurse(split.second, secondRect)
-    recurse(root, workspaceRect)
+          def childDebts(child: WorkspaceNode): (Int, Int) =
+            (
+              gapDebtFor(child, split, widthDebt, axisCharges = horizontal),
+              gapDebtFor(child, split, heightDebt, axisCharges = !horizontal)
+            )
+          val (firstWidthDebt, firstHeightDebt)   = childDebts(split.first)
+          val (secondWidthDebt, secondHeightDebt) = childDebts(split.second)
+          Map(split.id -> rect) ++
+            recurse(split.first, firstRect, firstWidthDebt, firstHeightDebt) ++
+            recurse(split.second, secondRect, secondWidthDebt, secondHeightDebt)
+    recurse(root, workspaceRect, widthDebt = 0, heightDebt = 0)
 
   private def splitWorkspaceExtent(total: Int, ratio: Double): Int =
     if total <= 1 then total
@@ -151,7 +172,7 @@ object PinnedPanelLayoutEngine:
   ): Option[PinnedPanelDragResize] =
     val layout        = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
     val contentHeight = calculateContentHeight(state, viewportSize)
-    val uiElementGap  = math.ceil(math.max(0.0, state.persisted.config.uiElementGap)).toInt
+    val uiElementGap  = math.ceil(math.max(0.0, state.effectiveUiElementGap)).toInt
     // The panel's already-rendered extent at this edge -- the workspace tree's own ratio (issue #817) is the sole
     // size record for a docked panel, so this reads the geometry that ratio just produced rather than any size still
     // carried on a surface.

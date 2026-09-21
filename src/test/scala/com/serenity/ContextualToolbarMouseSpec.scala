@@ -79,7 +79,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
         state.copy(persisted =
           state.persisted.copy(config =
             state.persisted.config
-              .withUiElementGap(0.5)
+              .withUiElementGap(Some(0.5))
               .withFontConfig(
                 state.persisted.config.editorConfig.fontConfig.copy(
                   codeFontFamily = Font.MONOSPACED,
@@ -308,7 +308,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
           state.persisted.copy(config =
             state.persisted.config
               .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
-              .withUiElementGap(0.5)
+              .withUiElementGap(Some(0.5))
           )
         )
       )
@@ -358,7 +358,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
           state.persisted.copy(config =
             state.persisted.config
               .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
-              .withUiElementGap(0.5)
+              .withUiElementGap(Some(0.5))
           )
         )
       )
@@ -397,7 +397,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
           state.persisted.copy(config =
             state.persisted.config
               .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
-              .withUiElementGap(0.5)
+              .withUiElementGap(Some(0.5))
           )
         )
       )

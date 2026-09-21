@@ -76,12 +76,15 @@ object CommandRunnerSettingsInputItems:
       uiSpeedScaleValue = f"${config.effectiveUiTransitionSpeedScale}%.2f",
       cursorSpeedScaleValue = f"${config.effectiveCursorTransitionSpeedScale}%.2f",
       speedScaleValue = f"${surfaceConfig.elementTransitionSpeedScale}%.2f",
-      elementGapValue = formatDecimal(interfaceConfig.elementGap),
+      // `auto` (this format's own spelling for "unset", `FieldCodec.orAuto`) rather than the numeric surface
+      // default: this builder only has `config`, not `state.runtime.isTuiMode`, so it cannot say which surface's
+      // default would apply (issue tracked in the elementGap/margin/padding Option conversion's own follow-up).
+      elementGapValue = interfaceConfig.elementGap.fold("auto")(formatDecimal),
       cornerRadiusValue = interfaceConfig.cornerRadiusPx.toString,
       outlineThicknessValue = interfaceConfig.outlineThicknessPx.toString,
-      lineNumberMarginLeftValue = surfaceConfig.lineNumberLayout.marginLeft.toString,
+      lineNumberMarginLeftValue = surfaceConfig.lineNumberLayout.marginLeft.fold("auto")(_.toString),
       lineNumberMarginRightValue = surfaceConfig.lineNumberLayout.marginRight.toString,
-      lineNumberPaddingValue = surfaceConfig.lineNumberLayout.padding.toString,
+      lineNumberPaddingValue = surfaceConfig.lineNumberLayout.padding.fold("auto")(_.toString),
       spellCheck = languageToolsConfig.spellCheck.normalized,
       companionSpriteConfig = config.companionSpriteConfig
     )

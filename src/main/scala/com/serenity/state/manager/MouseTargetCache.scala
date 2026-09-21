@@ -170,7 +170,7 @@ private[manager] object MouseTargetLayoutKey:
       minimumPaneWidth = state.persisted.config.editorConfig.minimumPaneWidth,
       textAreaInsets = state.persisted.config.surfaceConfig.textAreaInsets,
       interfaceDensity = state.persisted.config.interfaceDensity,
-      uiElementGap = state.persisted.config.uiElementGap,
+      uiElementGap = state.effectiveUiElementGap,
       showPaneHeaders = state.persisted.config.surfaceConfig.showPaneHeaders,
       statusLine = state.persisted.config.statusLine,
       commandRunnerVisibleRows = state.persisted.config.effectiveCommandRunnerVisibleRows,

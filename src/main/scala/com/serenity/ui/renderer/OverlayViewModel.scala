@@ -300,7 +300,7 @@ object OverlayViewModel:
           com.serenity.state.models.SurfaceContent.ContextMenu(_) =>
         state.persisted.config.effectiveCommandRunnerItemGapRows
       case com.serenity.state.models.SurfaceContent.ContextualToolbar(_) =>
-        state.persisted.config.uiElementGap
+        state.effectiveUiElementGap
       case _ => 0
 
   private def compositionFor(

@@ -446,7 +446,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
           workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.Surface(SurfaceId("command-runner")),
-        config = AppConfig.default.withUiElementGap(0.25)
+        config = AppConfig.default.withUiElementGap(Some(0.25))
       ),
       runtime = AppState.initial.runtime.copy(
         uiSurfaces = List(

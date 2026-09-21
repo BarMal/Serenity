@@ -45,7 +45,9 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     // second one without closing the first -- so this fixture has 2 buffers open throughout, reserving the
     // always-visible tab bar's one row (issue #1074/#1075/#1076/#1077) on top of the pinned status line's own
     // bottom-gutter row, one row less than a single-buffer session would get.
-    initialLayout.editorPanelRect.width shouldBe 77
+    // 2 cells narrower than before the line-number margin/padding Option conversion: unset now resolves to one GUI
+    // cell of breathing room each side of the counter, not zero.
+    initialLayout.editorPanelRect.width shouldBe 75
     initialLayout.editorPanelRect.height shouldBe 22
 
     // Apply resize event
@@ -57,7 +59,8 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     val newLayout    = LayoutEngine.calculateLayout(updatedState, newSize)
 
-    newLayout.editorPanelRect.width shouldBe 117
+    // Same 2-cell reduction as above (unset line-number margin/padding's GUI default), independent of viewport size.
+    newLayout.editorPanelRect.width shouldBe 115
     newLayout.editorPanelRect.height shouldBe 38
 
     updatedState.persisted.buffers.get(bufferId) match
