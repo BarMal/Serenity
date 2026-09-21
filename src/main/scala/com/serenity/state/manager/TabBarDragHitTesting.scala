@@ -66,8 +66,8 @@ final private[manager] class TabBarDragHitTesting(port: TabBarDragHitTestingPort
       viewportSize <- state.runtime.viewportSize
       rect         <- LayoutEngine.calculateLayoutWithUI(state, viewportSize).tabBarRect
       surface      <- state.tabBarSurface
-      entries <- surface.content match
-        case SurfaceContent.TabBar(entries, _) => Some(entries)
-        case _                                 => None
-      hit <- TabBarMouseHitTesting.hitAt(entries, activeBufferId = None, rect, col, row)
+      (entries, activeBufferId) <- surface.content match
+        case SurfaceContent.TabBar(entries, activeBufferId) => Some((entries, activeBufferId))
+        case _                                               => None
+      hit                       <- TabBarMouseHitTesting.hitAt(entries, activeBufferId, rect, col, row)
     yield hit
