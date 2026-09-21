@@ -7,9 +7,15 @@
 # paydown: LspManager.scala grew by 5 lines fixing #1507 -- replacing the placeholder `anchor: CursorPosition` on
 # `startRequest`/`RequestContext` with a `RequestAnchor` ADT distinguishing cursor-anchored from whole-document
 # requests, which needed a small enum plus accessor.
+# paydown: LspManager.scala grew by another 36 lines adding textDocument/references and textDocument/rename (#1467)
+# -- two more RequestKind cases dispatched through the file's existing startRequest/isCurrent/noServerEvent pattern.
+# The request-building logic itself (the bulk of what these two methods needed) was extracted to a new file,
+# LspManagerReferenceRenameSupport.scala, rather than left inline; what's left in LspManager.scala is the same
+# per-RequestKind wiring every other kind already has here (RequestKind case, handleEffect dispatch case,
+# noServerEvent case), which isn't reasonably splittable without breaking that existing pattern.
 main/scala/com/serenity/app/AppRuntime.scala	file length	730
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	100
-main/scala/com/serenity/lsp/LspManager.scala	file length	637
+main/scala/com/serenity/lsp/LspManager.scala	file length	673
 main/scala/com/serenity/rope/Rope.scala	file length	631
 main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	616
 main/scala/com/serenity/ui/renderer/Java2DPostProcessingEffects.scala	method applyGlow	90

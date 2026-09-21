@@ -207,8 +207,8 @@ object LspProtocol:
   def definitionParams(uri: DocumentUri, line: Int, character: Int): Json =
     textDocumentPositionParams(uri, line, character)
 
-  /** `includeDeclaration` is always `true`: this client has no UI distinction for "references excluding the
-    * declaration itself" today, and including it matches what most editors show by default.
+  /** `includeDeclaration` is always `true`: this client has no UI distinction for "references excluding the declaration
+    * itself" today, and including it matches what most editors show by default.
     */
   def referencesParams(uri: DocumentUri, line: Int, character: Int): Json =
     textDocumentPositionParams(uri, line, character).deepMerge(

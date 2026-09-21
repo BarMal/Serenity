@@ -59,7 +59,7 @@ class RenameEditReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave the buffer untouched and report skipped files when the edit targets a different document" in {
-    val before = stateWith("val old = 1")
+    val before   = stateWith("val old = 1")
     val otherUri = Path.of("/tmp/serenity-rename-spec/other.scala").toUri.toString
     val edits = Map(
       otherUri -> List(LspTextEdit(LspRange(LspPosition(0, 4), LspPosition(0, 7)), "renamed"))

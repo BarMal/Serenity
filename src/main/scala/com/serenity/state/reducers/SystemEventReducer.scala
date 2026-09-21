@@ -14,6 +14,25 @@ object SystemEventReducer:
           synced.copy(runtime = synced.runtime.copy(viewportSize = Some(newSize)))
         )
 
+      case lsp: LspEvent => reduceLspEvent(lsp, state)
+
+      case ExplorerEvent.RootDirectoryLoaded(position, rootPath, size, entries, selectedPath) =>
+        val tree = DirectoryTreeData(rootPath, entries = Map(rootPath -> entries))
+        PanelStateReducer.pin(
+          PanelContent.DirectoryTree(tree, selectedPath),
+          position,
+          size,
+          state
+        )
+
+      case ExplorerEvent.DirectoryLoaded(position, path, entries) =>
+        ReducerResult.noEffects(updatePinnedDirectoryTree(state, position, path, entries))
+
+      case _ =>
+        ReducerResult.noEffects(state)
+
+  private def reduceLspEvent(event: LspEvent, state: AppState): ReducerResult =
+    event match
       case LspEvent.LspDiagnosticsReceived(uri, diagnostics) =>
         ReducerResult.noEffects(
           state.copy(runtime =
@@ -43,8 +62,10 @@ object SystemEventReducer:
       case LspEvent.LspReferencesReceived(symbol, locations, anchor) =>
         val text =
           if locations.isEmpty then s"No references found for $symbol."
-          else locations.map { case (uri, position) => s"$uri:${position.line + 1}:${position.character + 1}" }
-            .mkString("\n")
+          else
+            locations
+              .map { case (uri, position) => s"$uri:${position.line + 1}:${position.character + 1}" }
+              .mkString("\n")
         PeekStateReducer.show(PeekContent.QuickInfo(text), anchor, state)
 
       case LspEvent.LspRenameReceived(edits, anchor) =>
@@ -73,21 +94,6 @@ object SystemEventReducer:
             )
           )
         )
-
-      case ExplorerEvent.RootDirectoryLoaded(position, rootPath, size, entries, selectedPath) =>
-        val tree = DirectoryTreeData(rootPath, entries = Map(rootPath -> entries))
-        PanelStateReducer.pin(
-          PanelContent.DirectoryTree(tree, selectedPath),
-          position,
-          size,
-          state
-        )
-
-      case ExplorerEvent.DirectoryLoaded(position, path, entries) =>
-        ReducerResult.noEffects(updatePinnedDirectoryTree(state, position, path, entries))
-
-      case _ =>
-        ReducerResult.noEffects(state)
 
   private def updatePinnedDirectoryTree(
     state: AppState,

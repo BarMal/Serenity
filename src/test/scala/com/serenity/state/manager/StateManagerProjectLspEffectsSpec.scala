@@ -41,7 +41,7 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
     val stateRef             = Ref.of[IO, AppState](AppState.initial).unsafeRunSync()
     val pinCalls             = Ref.of[IO, List[(String, PanelPosition, Int)]](Nil).unsafeRunSync()
     val peeks                = Ref.of[IO, List[(PeekContent, CursorPosition)]](Nil).unsafeRunSync()
-    val modals                = Ref.of[IO, List[Modal]](Nil).unsafeRunSync()
+    val modals               = Ref.of[IO, List[Modal]](Nil).unsafeRunSync()
     val projectTaskFiberRef  = Ref.of[IO, Option[ManagedProjectTask]](None).unsafeRunSync()
     val projectTaskSemaphore = Semaphore[IO](1).unsafeRunSync()
     val lspQueue             = LspEffectQueue.create.unsafeRunSync()

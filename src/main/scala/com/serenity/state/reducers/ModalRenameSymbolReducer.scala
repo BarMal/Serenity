@@ -6,9 +6,9 @@ import com.serenity.state.models.*
 import com.serenity.text.TextEditing
 
 /** Rename-symbol modal input (#1467) -- appending/deleting characters in the new-name field and, on submit, queuing the
-  * `textDocument/rename` request against the invocation site captured when the prompt opened (see [[Modal.RenameSymbol]]
-  * doc). Mirrors [[ModalGotoLineReducer]], except any non-empty free text is accepted rather than digits only, and
-  * submitting enqueues an [[LspEffect]] instead of acting on state directly.
+  * `textDocument/rename` request against the invocation site captured when the prompt opened (see
+  * [[Modal.RenameSymbol]] doc). Mirrors [[ModalGotoLineReducer]], except any non-empty free text is accepted rather
+  * than digits only, and submitting enqueues an [[LspEffect]] instead of acting on state directly.
   */
 private[reducers] object ModalRenameSymbolReducer:
   import ModalEventReducer.{currentModal, dismissToPane, updateModal}

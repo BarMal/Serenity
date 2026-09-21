@@ -17,6 +17,7 @@ class ModalRenameSymbolReducerSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private val anchor = CursorPosition(0, 8)
+
   private val prompt: Modal.RenameSymbol = Modal.RenameSymbol(
     uri = "file:///tmp/example.scala",
     languageId = LanguageId.Scala,

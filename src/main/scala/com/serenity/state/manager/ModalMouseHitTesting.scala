@@ -27,9 +27,9 @@ private[manager] object ModalMouseHitTesting:
       case Modal.RenameSymbol(_, _, _, _, _, _) => ModalType.RenameSymbol
       case Modal.Find(_, _, _)                  => ModalType.Find
       case Modal.FileWorkflow(_)                => ModalType.FileWorkflow
-      case Modal.ReplaceWorkflow(_)              => ModalType.ReplaceWorkflow
-      case Modal.CloseWorkflow(_)                => ModalType.CloseWorkflow
-      case Modal.Custom(name, _)                 => ModalType.Custom(name)
+      case Modal.ReplaceWorkflow(_)             => ModalType.ReplaceWorkflow
+      case Modal.CloseWorkflow(_)               => ModalType.CloseWorkflow
+      case Modal.Custom(name, _)                => ModalType.Custom(name)
 
 final private[manager] class ModalMouseHitTesting(port: ModalMouseHitTestingPort):
   import port.*
