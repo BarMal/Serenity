@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.config.*
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -72,4 +73,38 @@ class UiSpacingSurfaceDefaultsSpec extends AnyFlatSpec with Matchers:
     zeroed.uiElementGap shouldBe Some(0.0)
     gui.copy(persisted = gui.persisted.copy(config = zeroed)).effectiveUiElementGap shouldBe 0.0
     tui.copy(persisted = tui.persisted.copy(config = zeroed)).effectiveUiElementGap shouldBe 0.0
+  }
+
+  // `AppState.effectiveCommandRunnerCursorGapRows` (issue #1621 carve-out): the command palette keeps its own
+  // per-density gap on the GUI (pinned by `CursorOverlayLayoutSpec`, e.g. zero at `Compact` density) rather than
+  // `effectiveUiElementGap`'s flat one-cell default -- only the TUI's unset behaviour changes, from always
+  // inheriting that GUI-oriented density gap to the same flush-by-default zero every other TUI spacing default uses.
+  "an unset command-runner cursor gap" should "fall back to interface density's overlay gap on the GUI" in {
+    gui.persisted.config.surfaceConfig.commandRunnerCursorGapRows shouldBe None
+    gui.effectiveCommandRunnerCursorGapRows shouldBe
+      InterfaceDensityMetrics.forDensity(gui.persisted.config.interfaceDensity).overlayGapRows.toDouble
+  }
+
+  it should "default to zero on the TUI, matching every other unset TUI spacing default" in {
+    tui.persisted.config.surfaceConfig.commandRunnerCursorGapRows shouldBe None
+    tui.effectiveUiElementGap shouldBe 0.0
+    tui.effectiveCommandRunnerCursorGapRows shouldBe 0.0
+  }
+
+  it should "prefer an explicit UI element gap over interface density's overlay gap, on either surface" in {
+    val guiExplicit =
+      gui.copy(persisted = gui.persisted.copy(config = gui.persisted.config.withUiElementGap(Some(3.5))))
+    val tuiExplicit =
+      tui.copy(persisted = tui.persisted.copy(config = tui.persisted.config.withUiElementGap(Some(3.5))))
+    guiExplicit.effectiveCommandRunnerCursorGapRows shouldBe 3.5
+    tuiExplicit.effectiveCommandRunnerCursorGapRows shouldBe 3.5
+  }
+
+  "an explicit command-runner cursor gap override" should "win regardless of surface or UI element gap" in {
+    def withOverride(state: AppState): AppState =
+      state.copy(persisted =
+        state.persisted.copy(config = state.persisted.config.withCommandRunnerCursorGapRows(Some(4.0)))
+      )
+    withOverride(gui).effectiveCommandRunnerCursorGapRows shouldBe 4.0
+    withOverride(tui).effectiveCommandRunnerCursorGapRows shouldBe 4.0
   }

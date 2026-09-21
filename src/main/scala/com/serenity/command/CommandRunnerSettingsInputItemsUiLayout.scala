@@ -26,8 +26,9 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
               .Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiElementGap(commandIntentArg)))
           ),
       category = CommandCategory.Settings,
-      // `auto` rather than a surface-specific number: this builder has no `state.runtime.isTuiMode` to resolve
-      // against (see the matching note on `derivedValues.elementGapValue`).
+      // "auto" here is correct as-is: this is the *default* value (what resetting would produce), which really is
+      // "unset, surface-resolved" by design -- unlike `currentValue` above, which now shows the surface-specific
+      // number (see `derivedValues.elementGapValue`).
       defaultValue =
         Some(AppConfig.default.interfaceConfig.elementGap.fold("auto")(CommandRunnerSettingsInputItems.formatDecimal))
     ),
@@ -75,9 +76,10 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
       label: String,
       hint: String,
       currentValue: String,
-      // A string, not an `Int`: `marginLeft`/`padding`'s default is now `auto` (unset, surface-resolved), which
-      // this builder cannot spell as a number without `state.runtime.isTuiMode` -- see the matching note on
-      // `derivedValues.elementGapValue`. `marginRight` (still a plain `Int`) is just `.toString`-ed by the caller.
+      // A string, not an `Int`: `default` here is the *default* value hint ("auto", unset/surface-resolved by
+      // design) -- see the matching note on `uiSpacingItems`'s `defaultValue`. `currentValue` is a separate string
+      // for the same reason: `marginLeft`/`padding` now show the surface-specific number (`derivedValues`), while
+      // `marginRight` (still a plain `Int`, no surface-aware default) is just `.toString`-ed by the caller.
       default: String,
       intent: Int => TextDisplayIntent
     ): CommandSurfaceItem.InputItem =

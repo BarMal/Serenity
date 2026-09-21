@@ -112,6 +112,24 @@ final case class AppState(
   def effectiveLineNumberPadding: Int =
     persisted.config.surfaceConfig.lineNumberLayout.padding.getOrElse(if runtime.isTuiMode then 0 else 1)
 
+  /** The command palette's cursor gap, resolved for this state's surface. An explicit override wins; otherwise an
+    * explicit `uiElementGap` wins; otherwise unset falls back per surface -- the GUI keeps the density-derived
+    * `InterfaceDensityMetrics.overlayGapRows` this accessor always used (unlike [[effectiveUiElementGap]]'s flat
+    * one-cell default, deliberately NOT reused here: `CursorOverlayLayoutSpec` pins the command palette's own
+    * per-density gap, e.g. zero at `Compact`, so flattening it to one cell regardless of density would be a real
+    * behavior change, not just a surface fix), while the TUI now gets the same flush-by-default treatment as every
+    * other TUI spacing default rather than always inheriting the GUI-oriented density gap. Replaces
+    * `AppConfig.effectiveCommandRunnerCursorGapRows` (`AppConfigMotionOps`), which read the raw `uiElementGap` field
+    * and so had no way to tell a TUI session from a GUI one at all.
+    */
+  def effectiveCommandRunnerCursorGapRows: Double =
+    persisted.config.surfaceConfig.commandRunnerCursorGapRows.getOrElse(
+      persisted.config.uiElementGap.filter(_ > 0.0).getOrElse {
+        if runtime.isTuiMode then 0.0
+        else InterfaceDensityMetrics.forDensity(persisted.config.interfaceDensity).overlayGapRows.toDouble
+      }
+    )
+
   /** Cursor position for the currently active editor pane, if any. */
   def activeCursorPosition: Option[CursorPosition] =
     persisted.layout.activeEditorPaneId
