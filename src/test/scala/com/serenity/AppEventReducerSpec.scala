@@ -276,6 +276,43 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     movedForward.focusedBufferId shouldBe Some(BufferId(1))
   }
 
+  it should "reorder bufferOrder on MoveTabLeft/MoveTabRight, converging with drag-to-reorder (issue #1610)" in {
+    val withThreeBuffers = com.serenity.state.core.EditorState.openNewTab(
+      com.serenity.state.core.EditorState.openNewTab(
+        AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(200, 24))))
+      )
+    )
+    val threeTabState = withThreeBuffers
+    threeTabState.persisted.bufferOrder shouldBe List(BufferId(0), BufferId(1), BufferId(2))
+    threeTabState.focusedBufferId shouldBe Some(BufferId(2))
+
+    val movedLeft = AppEventReducer.reduce(MoveTabLeft, threeTabState, registry).state
+    movedLeft.persisted.bufferOrder shouldBe List(BufferId(0), BufferId(2), BufferId(1))
+    movedLeft.focusedBufferId shouldBe Some(BufferId(2))
+
+    val movedRight = AppEventReducer.reduce(MoveTabRight, movedLeft, registry).state
+    movedRight.persisted.bufferOrder shouldBe List(BufferId(0), BufferId(1), BufferId(2))
+    movedRight.focusedBufferId shouldBe Some(BufferId(2))
+  }
+
+  it should "leave bufferOrder unchanged when MoveTabLeft/MoveTabRight hit the boundary" in {
+    val newTabState = AppEventReducer.reduce(NewTab, AppState.initial, registry).state
+    val twoTabState =
+      newTabState.copy(runtime = newTabState.runtime.copy(viewportSize = Some(ViewportSize(200, 24))))
+    twoTabState.persisted.bufferOrder shouldBe List(BufferId(0), BufferId(1))
+    twoTabState.focusedBufferId shouldBe Some(BufferId(1))
+
+    val movedRightPastEnd = AppEventReducer.reduce(MoveTabRight, twoTabState, registry).state
+    movedRightPastEnd.persisted.bufferOrder shouldBe List(BufferId(0), BufferId(1))
+
+    val focusedFirst =
+      AppEventReducer.reduce(PreviousTab, movedRightPastEnd, registry).state
+    focusedFirst.focusedBufferId shouldBe Some(BufferId(0))
+
+    val movedLeftPastStart = AppEventReducer.reduce(MoveTabLeft, focusedFirst, registry).state
+    movedLeftPastStart.persisted.bufferOrder shouldBe List(BufferId(0), BufferId(1))
+  }
+
   private def enabledState: AppState =
     AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(

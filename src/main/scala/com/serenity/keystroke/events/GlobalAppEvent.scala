@@ -27,6 +27,8 @@ case object SplitPaneVertical             extends GlobalAppEvent // Ctrl+Shift+D
 case object ClosePane                     extends GlobalAppEvent // Ctrl+Shift+W
 case object NextTab                       extends GlobalAppEvent // Ctrl+Tab
 case object PreviousTab                   extends GlobalAppEvent // Ctrl+Shift+Tab
+case object MoveTabLeft                   extends GlobalAppEvent // Ctrl+Shift+PageUp (issue #1610)
+case object MoveTabRight                  extends GlobalAppEvent // Ctrl+Shift+PageDown (issue #1610)
 case object FileSearch                    extends GlobalAppEvent // Ctrl+Shift+F
 
 /** Close-by-id (issue #1078): a tab-bar close-affordance click closing a specific tab, whether or not it is focused --
