@@ -183,15 +183,17 @@ final private[manager] class StateManagerUiPresetEffects(
           .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to review UI preset $presetName"))
 
   private def openUiPresetDiffReview(preset: UiPreset): IO[Unit] =
-    stateRef.update { state =>
+    stateRef.get.flatMap { current =>
       val changes = UiPresetDiff.changes(
-        currentConfig = state.persisted.config,
-        currentThemeName = state.persisted.theme.name,
-        currentHasDockedPanels = state.pinnedSurfaces.nonEmpty,
-        currentHasWorkspaceTree = state.persisted.layout.workspaceTree.isDefined,
+        currentConfig = current.persisted.config,
+        currentThemeName = current.persisted.theme.name,
+        currentHasDockedPanels = current.pinnedSurfaces.nonEmpty,
+        currentHasWorkspaceTree = current.persisted.layout.workspaceTree.isDefined,
         preset = preset
       )
-      updateCommandRunner(ensureCommandRunnerSurfaceForReview(state))(_.openPresetDiffReview(preset.name, changes))
+      val updated =
+        updateCommandRunner(ensureCommandRunnerSurfaceForReview(current))(_.openPresetDiffReview(preset.name, changes))
+      validateAndUpdateState(updated, current)
     }
 
   /** A bare, minimally-activated command-runner surface to host the review when none is already open -- unlike
