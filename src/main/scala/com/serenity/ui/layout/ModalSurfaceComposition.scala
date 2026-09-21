@@ -35,10 +35,10 @@ object ModalSurfaceComposition:
   def frameHeight(modal: Modal, targetRows: Int): Int =
     val actionRows = math.max(1, targetRows)
     modal match
-      case Modal.GotoLine(_)     => 3
-      case Modal.Find(_, Nil, _) => 5
-      case Modal.Custom(_, _)    => 4
-      case Modal.Find(_, _, _)   => 6
+      case Modal.GotoLine(_)             => 3
+      case Modal.Find(_, Nil, _)         => 5
+      case Modal.Custom(_, _)            => 4
+      case Modal.Find(_, _, _)           => 6
       case Modal.SessionNamePrompt(_, _) => 3
       case Modal.SessionList(Nil, _, _)  => 3
       case Modal.SessionList(_, _, _)    => 6

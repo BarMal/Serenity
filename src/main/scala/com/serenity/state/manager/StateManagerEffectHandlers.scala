@@ -94,9 +94,9 @@ final private[manager] class StateManagerEffectHandlers(
             panelEffects.defaultPanelSize(PanelKind.Explorer, PanelPosition.Left)
           )
       )
-    def submitReplace(surfaceId: SurfaceId): IO[Unit]     = submitReplaceWorkflowEffect(surfaceId)
-    def submitClose(surfaceId: SurfaceId): IO[Unit]       = submitCloseWorkflowEffect(surfaceId)
-    def createDirectories(surfaceId: SurfaceId): IO[Unit] = createFileWorkflowDirectoriesEffect(surfaceId)
+    def submitReplace(surfaceId: SurfaceId): IO[Unit]           = submitReplaceWorkflowEffect(surfaceId)
+    def submitClose(surfaceId: SurfaceId): IO[Unit]             = submitCloseWorkflowEffect(surfaceId)
+    def createDirectories(surfaceId: SurfaceId): IO[Unit]       = createFileWorkflowDirectoriesEffect(surfaceId)
     def submitSessionNamePrompt(surfaceId: SurfaceId): IO[Unit] = submitSessionNamePromptEffect(surfaceId)
     def submitSessionList(surfaceId: SurfaceId): IO[Unit]       = submitSessionListEffect(surfaceId))
 
