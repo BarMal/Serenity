@@ -11,6 +11,12 @@ import org.scalatest.matchers.should.Matchers
   * of breathing room but leaves the TUI's existing density untouched, while an explicit value -- including an explicit
   * zero -- is honoured on both surfaces unchanged. See `AppState.effectiveUiElementGap` and its
   * `effectiveLineNumberMarginLeft`/`effectiveLineNumberPadding` siblings.
+  *
+  * The GUI's unset default additionally scales with `interfaceDensity` (issue #1542 re-scope), the same
+  * `SpacingScale.densityMultiplier` every other piece of density-aware UI chrome uses -- `Spacious` gets more
+  * breathing room than the historical flat one cell, while `Compact`/`Comfortable` keep that existing one-cell floor
+  * rather than shrinking below the minimum that keeps a counter/gap from visually merging into its neighbour. The TUI
+  * default and every explicit value (including an explicit zero) stay density-invariant, per the contract above.
   */
 class UiSpacingSurfaceDefaultsSpec extends AnyFlatSpec with Matchers:
 
@@ -46,6 +52,63 @@ class UiSpacingSurfaceDefaultsSpec extends AnyFlatSpec with Matchers:
     gui.effectiveLineNumberPadding shouldBe 1
     tui.effectiveLineNumberMarginLeft shouldBe 0
     tui.effectiveLineNumberPadding shouldBe 0
+  }
+
+  "an unset UI element gap" should "grow to two cells on the GUI at Spacious density, but stay one cell at Compact" in {
+    def withDensity(density: InterfaceDensity): AppState =
+      gui.copy(persisted = gui.persisted.copy(config = gui.persisted.config.withInterfaceDensity(density)))
+
+    withDensity(InterfaceDensity.Compact).effectiveUiElementGap shouldBe 1.0
+    withDensity(InterfaceDensity.Comfortable).effectiveUiElementGap shouldBe 1.0
+    withDensity(InterfaceDensity.Spacious).effectiveUiElementGap shouldBe 2.0
+  }
+
+  it should "stay at the TUI's flush zero regardless of density" in {
+    def withDensity(density: InterfaceDensity): AppState =
+      tui.copy(persisted = tui.persisted.copy(config = tui.persisted.config.withInterfaceDensity(density)))
+
+    withDensity(InterfaceDensity.Compact).effectiveUiElementGap shouldBe 0.0
+    withDensity(InterfaceDensity.Spacious).effectiveUiElementGap shouldBe 0.0
+  }
+
+  it should "not affect an explicit UI element gap, at any density" in {
+    val explicitSpacious = gui.copy(persisted =
+      gui.persisted.copy(config =
+        gui.persisted.config.withInterfaceDensity(InterfaceDensity.Spacious).withUiElementGap(Some(3.0))
+      )
+    )
+    explicitSpacious.effectiveUiElementGap shouldBe 3.0
+  }
+
+  "an unset line-number margin/padding" should "grow to two cells on the GUI at Spacious density, but stay one cell at Compact" in {
+    def withDensity(density: InterfaceDensity): AppState =
+      gui.copy(persisted = gui.persisted.copy(config = gui.persisted.config.withInterfaceDensity(density)))
+
+    withDensity(InterfaceDensity.Compact).effectiveLineNumberMarginLeft shouldBe 1
+    withDensity(InterfaceDensity.Compact).effectiveLineNumberPadding shouldBe 1
+    withDensity(InterfaceDensity.Comfortable).effectiveLineNumberMarginLeft shouldBe 1
+    withDensity(InterfaceDensity.Comfortable).effectiveLineNumberPadding shouldBe 1
+    withDensity(InterfaceDensity.Spacious).effectiveLineNumberMarginLeft shouldBe 2
+    withDensity(InterfaceDensity.Spacious).effectiveLineNumberPadding shouldBe 2
+  }
+
+  it should "stay at the TUI's flush zero regardless of density" in {
+    def withDensity(density: InterfaceDensity): AppState =
+      tui.copy(persisted = tui.persisted.copy(config = tui.persisted.config.withInterfaceDensity(density)))
+
+    withDensity(InterfaceDensity.Spacious).effectiveLineNumberMarginLeft shouldBe 0
+    withDensity(InterfaceDensity.Spacious).effectiveLineNumberPadding shouldBe 0
+  }
+
+  it should "not affect an explicit line-number margin/padding, at any density" in {
+    val explicit = LineNumberLayout(marginLeft = Some(4), padding = Some(2))
+    val explicitSpacious = gui.copy(persisted =
+      gui.persisted.copy(config =
+        gui.persisted.config.withInterfaceDensity(InterfaceDensity.Spacious).withLineNumberLayout(explicit)
+      )
+    )
+    explicitSpacious.effectiveLineNumberMarginLeft shouldBe 4
+    explicitSpacious.effectiveLineNumberPadding shouldBe 2
   }
 
   "an explicit line-number margin/padding" should "be honoured on both surfaces, including zero" in {

@@ -55,8 +55,12 @@ class CommandPaletteHeightSpec extends AnyFlatSpec with Matchers:
     )
 
     compact.editorPanelRect shouldBe comfortable.editorPanelRect
-    spacious.editorPanelRect.x shouldBe comfortable.editorPanelRect.x
-    spacious.editorPanelRect.width shouldBe comfortable.editorPanelRect.width
+    // Spacious widens the line-number gutter's left margin and padding by one cell each (issue #1542 re-scope:
+    // `AppState.effectiveLineNumberMarginLeft`/`effectiveLineNumberPadding` now scale with `interfaceDensity`, the
+    // same `SpacingScale.densityMultiplier` every other density-aware piece of UI chrome already uses), so the editor
+    // panel's left edge sits two cells further in at Spacious than at Compact/Comfortable, and is that much narrower.
+    spacious.editorPanelRect.x shouldBe comfortable.editorPanelRect.x + 2
+    spacious.editorPanelRect.width shouldBe comfortable.editorPanelRect.width - 2
     compact.gutterRect.map(_.height) shouldBe Some(1)
     spacious.gutterRect.map(_.height) shouldBe Some(2)
     // The palette's frame follows the viewport (#1045); density decides how many items fit inside it.
