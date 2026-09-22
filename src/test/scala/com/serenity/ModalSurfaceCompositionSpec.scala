@@ -49,11 +49,53 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     ModalSurfaceComposition.closeFrameHeight(targetRows = 2) shouldBe 10
   }
 
+  it should "scale reload-conflict action targets with interface density without changing action identity" in {
+    val workflow = ReloadConflictState(BufferId(7), "notes.md")
+    val frame    = LayoutRect(0, 0, 40, 12)
+
+    val compact     = ModalSurfaceComposition.forModal(Modal.ReloadConflict(workflow), frame, targetRows = 1).get
+    val comfortable = ModalSurfaceComposition.forModal(Modal.ReloadConflict(workflow), frame, targetRows = 2).get
+
+    compact.hitRegions.map(_.actionId) shouldBe comfortable.hitRegions.map(_.actionId)
+    compact.hitRegions.map(_.rect.height).distinct shouldBe List(1.0)
+    comfortable.hitRegions.map(_.rect.height).distinct shouldBe List(2.0)
+    ModalSurfaceComposition.reloadConflictFrameHeight(targetRows = 1) shouldBe 7
+    ModalSurfaceComposition.reloadConflictFrameHeight(targetRows = 2) shouldBe 10
+  }
+
   it should "map only declared close action identities back to workflow choices" in {
     ModalSurfaceComposition.closeChoice(SurfaceActionId("close-save")) shouldBe Some(CloseWorkflowChoice.Save)
     ModalSurfaceComposition.closeChoice(SurfaceActionId("close-discard")) shouldBe Some(CloseWorkflowChoice.Discard)
     ModalSurfaceComposition.closeChoice(SurfaceActionId("close-cancel")) shouldBe Some(CloseWorkflowChoice.Cancel)
     ModalSurfaceComposition.closeChoice(SurfaceActionId("unsupported")) shouldBe None
+  }
+
+  it should "derive reload-conflict paint, focus, and hit geometry from one plan (#1623)" in {
+    val workflow = ReloadConflictState(
+      BufferId(7),
+      "notes.md",
+      selectedChoice = ReloadConflictChoice.Overwrite
+    )
+
+    val plan = planFor(Modal.ReloadConflict(workflow), targetRows = 1)
+
+    plan.focusOrder shouldBe List(
+      SurfaceFocusId("reload-conflict-reload"),
+      SurfaceFocusId("reload-conflict-overwrite"),
+      SurfaceFocusId("reload-conflict-cancel")
+    )
+    plan.hitRegions.map(_.semanticLabel) shouldBe List("Reload from disk", "Overwrite", "Cancel")
+    plan.paintBoxes.find(_.actionId.contains(SurfaceActionId("reload-conflict-overwrite"))).exists(_.selected) shouldBe true
+  }
+
+  it should "map only declared reload-conflict action identities back to workflow choices" in {
+    ModalSurfaceComposition.reloadConflictChoice(SurfaceActionId("reload-conflict-reload")) shouldBe
+      Some(ReloadConflictChoice.Reload)
+    ModalSurfaceComposition.reloadConflictChoice(SurfaceActionId("reload-conflict-overwrite")) shouldBe
+      Some(ReloadConflictChoice.Overwrite)
+    ModalSurfaceComposition.reloadConflictChoice(SurfaceActionId("reload-conflict-cancel")) shouldBe
+      Some(ReloadConflictChoice.Cancel)
+    ModalSurfaceComposition.reloadConflictChoice(SurfaceActionId("unsupported")) shouldBe None
   }
 
   it should "reflow every close action inside a height-constrained frame" in {

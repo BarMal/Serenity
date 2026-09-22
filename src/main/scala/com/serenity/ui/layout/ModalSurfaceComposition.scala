@@ -19,8 +19,9 @@ object ModalSurfaceComposition:
     modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]] = ModalKeyAction.defaultBindings
   ): Option[ResolvedSurfaceComposition] =
     modal match
-      case Modal.CloseWorkflow(workflow) => Some(close(workflow, frameRect, targetRows))
-      case Modal.GotoLine(input)         => Some(inputPlan("Go to line", input, "goto-line", frameRect))
+      case Modal.CloseWorkflow(workflow)   => Some(close(workflow, frameRect, targetRows))
+      case Modal.ReloadConflict(workflow)  => Some(reloadConflict(workflow, frameRect, targetRows))
+      case Modal.GotoLine(input)           => Some(inputPlan("Go to line", input, "goto-line", frameRect))
       case Modal.RenameSymbol(_, _, _, _, _, input) =>
         Some(inputPlan("Rename symbol", input, "rename-symbol", frameRect))
       case Modal.Find(query, results, currentIndex) =>
@@ -52,7 +53,8 @@ object ModalSurfaceComposition:
         // header + filename + path + format rows, plus up to 4 suggestions, plus a status/create-dir footer and the
         // keybinding-hints footer (issue #1253).
         math.max(9, math.min(14, workflow.suggestions.take(4).size + 8))
-      case Modal.CloseWorkflow(_) => closeFrameHeight(actionRows)
+      case Modal.CloseWorkflow(_)    => closeFrameHeight(actionRows)
+      case Modal.ReloadConflict(_)   => reloadConflictFrameHeight(actionRows)
 
   private val actions: List[(CloseWorkflowChoice, String, SurfaceActionId, SurfaceFocusId)] = List(
     (CloseWorkflowChoice.Save, "Save", SurfaceActionId("close-save"), SurfaceFocusId("close-save")),
@@ -135,6 +137,84 @@ object ModalSurfaceComposition:
   /** Translate a declared close action identity into its reducer choice. */
   def closeChoice(actionId: SurfaceActionId): Option[CloseWorkflowChoice] =
     actions.collectFirst { case (choice, _, `actionId`, _) => choice }
+
+  private val reloadConflictActions: List[(ReloadConflictChoice, String, SurfaceActionId, SurfaceFocusId)] = List(
+    (
+      ReloadConflictChoice.Reload,
+      "Reload from disk",
+      SurfaceActionId("reload-conflict-reload"),
+      SurfaceFocusId("reload-conflict-reload")
+    ),
+    (
+      ReloadConflictChoice.Overwrite,
+      "Overwrite",
+      SurfaceActionId("reload-conflict-overwrite"),
+      SurfaceFocusId("reload-conflict-overwrite")
+    ),
+    (
+      ReloadConflictChoice.Cancel,
+      "Cancel",
+      SurfaceActionId("reload-conflict-cancel"),
+      SurfaceFocusId("reload-conflict-cancel")
+    )
+  )
+
+  /** Resolve the external-change-conflict prompt's (#1623) paint, focus, and hit geometry: a header line, the
+    * buffer's label, then one action row per choice -- structurally the close-confirmation layout's simpler cousin,
+    * since a reload conflict never needs the horizontal-actions fallback (its label text is short and fixed).
+    */
+  private def reloadConflict(
+    workflow: ReloadConflictState,
+    frameRect: LayoutRect,
+    targetRows: Int
+  ): ResolvedSurfaceComposition =
+    val content    = SurfaceFrameLayout(frameRect).contentRect
+    val actionRows = math.max(1, targetRows)
+    val bounds     = logicalRect(content.x, content.y, content.width, content.height)
+    val textBoxes = List("file changed on disk", workflow.bufferLabel).zipWithIndex.map { (text, index) =>
+      textBox(text, rowRect(bounds, index))
+    }
+    val actionStartY = content.y + textBoxes.length
+    val actionBoxes = reloadConflictActions.zipWithIndex.map {
+      case ((choice, label, actionId, focusId), index) =>
+        actionBox(
+          label,
+          actionId,
+          focusId,
+          selected = choice == workflow.selectedChoice,
+          logicalRect(content.x, actionStartY + index * actionRows, content.width, actionRows)
+        )
+    }
+    val clippedTextBoxes   = textBoxes.flatMap(clipBox(_, bounds))
+    val clippedActionBoxes = actionBoxes.flatMap(clipBox(_, bounds))
+    val hitRegions = clippedActionBoxes.flatMap { box =>
+      for
+        focusId       <- box.focusId
+        actionId      <- box.actionId
+        semanticLabel <- box.semanticLabel
+      yield SurfaceHitRegion(box.rect, focusId, Some(actionId), semanticLabel)
+    }
+
+    ResolvedSurfaceComposition(
+      bounds = bounds,
+      intrinsicSize = SurfaceIntrinsicSize(
+        width = ("file changed on disk" :: workflow.bufferLabel :: reloadConflictActions.map(_._2))
+          .map(_.length.toDouble)
+          .foldLeft(Double.MinValue)(_ max _),
+        height = 2 + reloadConflictActions.length * actionRows
+      ),
+      paintBoxes = clippedTextBoxes ++ clippedActionBoxes,
+      hitRegions = hitRegions,
+      focusOrder = clippedActionBoxes.flatMap(_.focusId)
+    )
+
+  /** Frame height required by the external-change-conflict composition. */
+  def reloadConflictFrameHeight(targetRows: Int): Int =
+    SurfaceFrameLayout.DefaultBorderCells * 2 + 2 + reloadConflictActions.length * math.max(1, targetRows)
+
+  /** Translate a declared reload-conflict action identity into its reducer choice. */
+  def reloadConflictChoice(actionId: SurfaceActionId): Option[ReloadConflictChoice] =
+    reloadConflictActions.collectFirst { case (choice, _, `actionId`, _) => choice }
 
   private def inputPlan(
     label: String,

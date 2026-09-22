@@ -29,6 +29,7 @@ private[manager] object ModalMouseHitTesting:
       case Modal.FileWorkflow(_)                => ModalType.FileWorkflow
       case Modal.ReplaceWorkflow(_)             => ModalType.ReplaceWorkflow
       case Modal.CloseWorkflow(_)               => ModalType.CloseWorkflow
+      case Modal.ReloadConflict(_)               => ModalType.ReloadConflict
       case Modal.SessionNamePrompt(_, _)        => ModalType.SessionNamePrompt
       case Modal.SessionList(_, _, _)           => ModalType.SessionList
       case Modal.Custom(name, _)                => ModalType.Custom(name)
@@ -49,13 +50,16 @@ final private[manager] class ModalMouseHitTesting(port: ModalMouseHitTestingPort
             )
             applyReducerResult(clicked, state) >>
               Option
-                .when(modalType == ModalType.CloseWorkflow && hit.actionId.nonEmpty)(())
+                .when(
+                  (modalType == ModalType.CloseWorkflow || modalType == ModalType.ReloadConflict) &&
+                    hit.actionId.nonEmpty
+                )(())
                 .fold(
                   IO.unit
                 )(_ =>
                   stateRef.get.flatMap { updatedState =>
                     applyReducerResult(
-                      ModalEventReducer.reduce(ModalType.CloseWorkflow, ModalSubmit, updatedState),
+                      ModalEventReducer.reduce(modalType, ModalSubmit, updatedState),
                       updatedState
                     )
                   }

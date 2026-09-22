@@ -203,7 +203,10 @@ final case class FileService(
     saveBufferAs: (BufferId, Path) => IO[Unit],
     markBufferSaved: BufferId => IO[Unit],
     checkUnsavedChanges: Option[BufferId] => IO[Boolean],
-    getRecentFiles: IO[List[Path]]
+    getRecentFiles: IO[List[Path]],
+    // #1623: re-checks the focused buffer's on-disk revision on window focus-gain, called from AppRuntime's focus
+    // callback -- see StateManagerEffectHandlers.checkExternalChangesOnFocusEffect for the reload-or-prompt logic.
+    checkExternalChangesOnFocus: IO[Unit]
 )
 
 /** Controls editor viewport scrolling.

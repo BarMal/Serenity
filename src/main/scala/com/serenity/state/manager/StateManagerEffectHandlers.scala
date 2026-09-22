@@ -27,6 +27,7 @@ private[manager] trait WorkflowEffectPort:
   def openAsProjectRoot(surfaceId: SurfaceId): IO[Unit]
   def submitReplace(surfaceId: SurfaceId): IO[Unit]
   def submitClose(surfaceId: SurfaceId): IO[Unit]
+  def submitReloadConflict(surfaceId: SurfaceId): IO[Unit]
   def createDirectories(surfaceId: SurfaceId): IO[Unit]
   def submitSessionNamePrompt(surfaceId: SurfaceId): IO[Unit]
   def submitSessionList(surfaceId: SurfaceId): IO[Unit]
@@ -44,6 +45,7 @@ final private[manager] class WorkflowEffectHandler(port: WorkflowEffectPort):
       case WorkflowEffect.OpenFileWorkflowAsProjectRoot(id) => port.openAsProjectRoot(id)
       case WorkflowEffect.SubmitReplaceWorkflow(id)         => port.submitReplace(id)
       case WorkflowEffect.SubmitCloseWorkflow(id)           => port.submitClose(id)
+      case WorkflowEffect.SubmitReloadConflict(id)          => port.submitReloadConflict(id)
       case WorkflowEffect.CreateFileWorkflowDirectories(id) => port.createDirectories(id)
       case WorkflowEffect.SubmitSessionNamePrompt(id)       => port.submitSessionNamePrompt(id)
       case WorkflowEffect.SubmitSessionList(id)             => port.submitSessionList(id)
@@ -96,6 +98,7 @@ final private[manager] class StateManagerEffectHandlers(
       )
     def submitReplace(surfaceId: SurfaceId): IO[Unit]           = submitReplaceWorkflowEffect(surfaceId)
     def submitClose(surfaceId: SurfaceId): IO[Unit]             = submitCloseWorkflowEffect(surfaceId)
+    def submitReloadConflict(surfaceId: SurfaceId): IO[Unit]    = submitReloadConflictEffect(surfaceId)
     def createDirectories(surfaceId: SurfaceId): IO[Unit]       = createFileWorkflowDirectoriesEffect(surfaceId)
     def submitSessionNamePrompt(surfaceId: SurfaceId): IO[Unit] = submitSessionNamePromptEffect(surfaceId)
     def submitSessionList(surfaceId: SurfaceId): IO[Unit]       = submitSessionListEffect(surfaceId))
@@ -426,6 +429,34 @@ final private[manager] class StateManagerEffectHandlers(
   private def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)
 
+  /** Re-checks the focused buffer's on-disk revision against its captured one (#1623), called on window focus-gain.
+    * A clean buffer (no unsaved edits) that changed externally is reloaded silently -- there's nothing of the user's
+    * to lose. A dirty one is left alone but prompted, exactly like a stale save: the user decides whether to keep
+    * their edits or take the external change.
+    */
+  private[manager] def checkExternalChangesOnFocusEffect: IO[Unit] =
+    stateRef.get.flatMap { state =>
+      state.focusedBufferId.flatMap(state.persisted.buffers.get) match
+        case Some(buffer) =>
+          buffer.document.filePath match
+            case Some(path) =>
+              fileManager.currentRevision(path).flatMap {
+                case Some(onDisk) if Some(onDisk) != buffer.document.revision =>
+                  if buffer.hasUnsavedChanges then
+                    openReloadConflictModal(state, buffer.id, bufferLabelFor(buffer))
+                  else
+                    reloadBuffer(buffer.id)
+                case _ => IO.unit
+              }
+            case None => IO.unit
+        case None => IO.unit
+    }
+
+  private def bufferLabelFor(buffer: Buffer): String =
+    buffer.document.filePath
+      .map(path => Option(path.getFileName).fold(path.toString)(_.toString))
+      .getOrElse(s"Buffer ${buffer.id.value} - unsaved")
+
   private[manager] def directLoadFileEffect(path: Path): IO[Unit] =
     IO.blocking(FileUtils.isReadableFile(path)).flatMap {
       case false => logger.debug(s"[FILE] DirectLoad: file not readable: $path")
@@ -483,6 +514,10 @@ final private[manager] class StateManagerEffectHandlers(
           saveExistingBuffer(bufferId).handleErrorWith {
             case error: com.serenity.richtext.LossyRichTextOverwriteException =>
               stateRef.get.flatMap(current => workflow.showSaveAsWorkflow(current, bufferId, error.getMessage))
+            case _: com.serenity.io.FileManagerError.ExternalConflict =>
+              stateRef.get.flatMap(current =>
+                workflow.openReloadConflictModal(current, bufferId, bufferLabelFor(buffer))
+              )
             case error =>
               logger.error(error)(s"[FILE] Failed to save buffer $bufferId")
           }

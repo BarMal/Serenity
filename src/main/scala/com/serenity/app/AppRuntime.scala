@@ -69,17 +69,20 @@ object AppRuntime:
 
   /** React to a Swing window focus transition. Losing focus parks the cursor visible-and-steady (reset to the start of
     * its blink/breathe cycle) and forces one fast render so the steady caret paints immediately, regardless of where
-    * the idle loop was in its own cadence. Regaining focus only flips the signal the idle loop is waiting on --
-    * `awaitFocusedIdleTick` picks that up and resumes the normal cadence on its own.
+    * the idle loop was in its own cadence. Regaining focus flips the signal the idle loop is waiting on --
+    * `awaitFocusedIdleTick` picks that up and resumes the normal cadence on its own -- and runs `onFocusGained`
+    * (#1623: re-checking the focused buffer's file for external changes), defaulted to a no-op for callers that don't
+    * need it (most existing tests).
     */
   private[serenity] def onWindowFocusChanged(
     focused: Boolean,
     windowFocused: SignallingRef[IO, Boolean],
     cursorVisible: Ref[IO, Boolean],
     breathIndex: Ref[IO, Int],
-    requestFastRender: IO[Unit]
+    requestFastRender: IO[Unit],
+    onFocusGained: IO[Unit] = IO.unit
   ): IO[Unit] =
-    if focused then windowFocused.set(true)
+    if focused then windowFocused.set(true) >> onFocusGained
     else windowFocused.set(false) >> resetCursorActivity(cursorVisible, breathIndex) >> requestFastRender
 
   /** The idle loop's per-tick wait: the normal cursor idle cadence while the window is focused, or an indefinite,
@@ -192,7 +195,14 @@ object AppRuntime:
         windowFocused <- SignallingRef.of[IO, Boolean](true)
         _ <- IO(
           registerFocusCallback(
-            focusCallbackBridge(windowFocused, cursorVisible, breathIndex, requestFastRender, resizeCallbackDispatcher)
+            focusCallbackBridge(
+              windowFocused,
+              cursorVisible,
+              breathIndex,
+              requestFastRender,
+              resizeCallbackDispatcher,
+              stateManager.fileService.checkExternalChangesOnFocus
+            )
           )
         )
         _ <- IO(
@@ -616,11 +626,12 @@ object AppRuntime:
     cursorVisible: Ref[IO, Boolean],
     breathIndex: Ref[IO, Int],
     requestFastRender: IO[Unit],
-    dispatcher: Dispatcher[IO]
+    dispatcher: Dispatcher[IO],
+    onFocusGained: IO[Unit] = IO.unit
   )(using logger: Logger[IO]): Boolean => Unit =
     focused =>
       dispatchIfRunning(dispatcher)(
-        onWindowFocusChanged(focused, windowFocused, cursorVisible, breathIndex, requestFastRender)
+        onWindowFocusChanged(focused, windowFocused, cursorVisible, breathIndex, requestFastRender, onFocusGained)
           .handleErrorWith(error => logger.error(error)("[RUNTIME] focus callback failed"))
       )
 

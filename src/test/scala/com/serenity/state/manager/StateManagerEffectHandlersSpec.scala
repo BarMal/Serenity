@@ -130,6 +130,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
       def saveExistingBuffer(id: BufferId): IO[Unit] =
         callsVar.update(_ :+ s"saveExistingBuffer:$id") >> saveExistingBufferHook(id)
       def saveBufferAs(id: BufferId, path: Path): IO[Unit] = callsVar.update(_ :+ s"saveBufferAs:$id:$path")
+      def reloadBuffer(id: BufferId): IO[Unit]              = callsVar.update(_ :+ s"reloadBuffer:$id")
 
     val sessions = new EffectSessionPort:
       val sessionPersistence                  = new RecordingSessionPersistence(sessionTriggersVar, sessionRoot)
@@ -157,6 +158,10 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
         callsVar.update(_ :+ s"submitReplaceWorkflowEffect:$surfaceId")
       def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
         callsVar.update(_ :+ s"submitCloseWorkflowEffect:$surfaceId")
+      def openReloadConflictModal(state: AppState, bufferId: BufferId, bufferLabel: String): IO[Unit] =
+        callsVar.update(_ :+ s"openReloadConflictModal:$bufferId:$bufferLabel")
+      def submitReloadConflictEffect(surfaceId: SurfaceId): IO[Unit] =
+        callsVar.update(_ :+ s"submitReloadConflictEffect:$surfaceId")
       def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit] =
         callsVar.update(_ :+ s"createFileWorkflowDirectoriesEffect:$surfaceId")
       def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
@@ -503,6 +508,20 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
     fixture.calls.get.unsafeRunSync() should contain(s"showSaveAsWorkflow:$bufferId:would lose styling")
   }
 
+  it should "open the reload-conflict modal instead of silently overwriting when the save hits an external conflict (#1623)" in {
+    val path = Path.of("conflicted.md")
+    val state = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(buffers = Map(bufferId -> Buffer.fromFile(bufferId, path, "local edit")))
+    )
+    val failing: BufferId => IO[Unit] = _ =>
+      IO.raiseError(com.serenity.io.FileManagerError.ExternalConflict(com.serenity.io.StorageLocation.Local(path)))
+    val fixture = harness(state, saveExistingBufferHook = failing)
+
+    fixture.handlers.saveBufferEffect(bufferId).unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() should contain(s"openReloadConflictModal:$bufferId:conflicted.md")
+  }
+
   it should "open the native Save As dialog when the buffer has no file path" in {
     val state = AppState.initial.copy(persisted =
       AppState.initial.persisted.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "unsaved")))
@@ -518,6 +537,67 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
     val fixture = harness()
 
     fixture.handlers.saveBufferEffect(BufferId(999)).unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe Nil
+  }
+
+  private def focusedBufferState(buffer: Buffer): AppState =
+    AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(
+        buffers = Map(buffer.id -> buffer),
+        bufferOrder = List(buffer.id),
+        layout = AppState.initial.persisted.layout.copy(
+          editorPanes = Map(PaneId(0) -> com.serenity.state.models.EditorPane.withBuffer(PaneId(0), buffer.id)),
+          activeEditorPaneId = Some(PaneId(0))
+        ),
+        focus = Focus.EditorPane(PaneId(0))
+      )
+    )
+
+  "checkExternalChangesOnFocusEffect" should "silently reload a clean buffer whose file changed on disk (#1623)" in {
+    val path = Files.createTempFile("focus-check-clean", ".md")
+    Files.writeString(path, "original")
+    val opened  = new FileManager().loadFile(path, bufferId).unsafeRunSync()
+    val fixture = harness(focusedBufferState(opened))
+
+    Files.writeString(path, "changed externally")
+
+    fixture.handlers.checkExternalChangesOnFocusEffect.unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() should contain(s"reloadBuffer:$bufferId")
+    fixture.calls.get.unsafeRunSync().exists(_.startsWith("openReloadConflictModal")) shouldBe false
+  }
+
+  it should "prompt instead of reloading a dirty buffer whose file changed on disk" in {
+    val path = Files.createTempFile("focus-check-dirty", ".md")
+    Files.writeString(path, "original")
+    val opened  = new FileManager().loadFile(path, bufferId).unsafeRunSync()
+    val dirty   = opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my edit"), isDirty = true))
+    val fixture = harness(focusedBufferState(dirty))
+
+    Files.writeString(path, "changed externally")
+
+    fixture.handlers.checkExternalChangesOnFocusEffect.unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() should contain(s"openReloadConflictModal:$bufferId:${path.getFileName}")
+    fixture.calls.get.unsafeRunSync().exists(_.startsWith("reloadBuffer")) shouldBe false
+  }
+
+  it should "do nothing when the focused buffer's file has not changed" in {
+    val path    = Files.createTempFile("focus-check-unchanged", ".md")
+    Files.writeString(path, "original")
+    val opened  = new FileManager().loadFile(path, bufferId).unsafeRunSync()
+    val fixture = harness(focusedBufferState(opened))
+
+    fixture.handlers.checkExternalChangesOnFocusEffect.unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe Nil
+  }
+
+  it should "do nothing when no buffer is focused" in {
+    val fixture = harness()
+
+    fixture.handlers.checkExternalChangesOnFocusEffect.unsafeRunSync()
 
     fixture.calls.get.unsafeRunSync() shouldBe Nil
   }

@@ -113,6 +113,25 @@ class FileManager(using balance: Balance):
 
   def listDirectory(directory: Path): IO[List[FileEntry]] = FileBrowser.listDirectory(directory)
 
+  /** Re-reads `buffer`'s file from disk in place (#1623): reuses `loadFile`'s per-format decode so a reload sees
+    * exactly what a fresh open would, but keeps this buffer's identity, cursor/selection, viewport, and annotations
+    * untouched -- only `document`/`richText` are replaced, the same fields `saveBuffer` updates on a successful save.
+    */
+  def reloadBuffer(buffer: Buffer): IO[Buffer] =
+    buffer.document.filePath match
+      case None => IO.raiseError(FileManagerError.NoFilePath())
+      case Some(path) =>
+        loadFile(path, buffer.id).map(reloaded =>
+          buffer.copy(document = reloaded.document, richText = reloaded.richText)
+        )
+
+  /** The on-disk revision of `path` right now, for a focus-in re-check against a buffer's captured
+    * `Document.revision` (#1623) -- `None` for a file that no longer exists or otherwise can't be read, which a
+    * focus-in check treats as nothing to compare against rather than a conflict.
+    */
+  def currentRevision(path: Path): IO[Option[DocumentRevision]] =
+    storage.open(StorageLocation.Local(path)).map(_.toOption.flatMap(_.revision))
+
   /** Editor content is LF-only, because `Rope` normalised it on the way in. A file that arrived with CRLF is written
     * back with CRLF, so an ordinary save does not rewrite every line of it.
     */

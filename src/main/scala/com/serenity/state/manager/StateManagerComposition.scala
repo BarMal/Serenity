@@ -170,6 +170,7 @@ private[manager] class StateManagerComposition(
     val fileManager                                            = runtimeFileManager
     def saveExistingBuffer(bufferId: BufferId): IO[Unit]       = filePersistence.saveExistingBuffer(bufferId)
     def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit] = filePersistence.saveBufferAs(bufferId, path)
+    def reloadBuffer(bufferId: BufferId): IO[Unit]              = filePersistence.reloadBuffer(bufferId)
 
   private val effectSessionPort: EffectSessionPort = new EffectSessionPort:
     val sessionPersistence = runtimeSessionPersistence
@@ -201,6 +202,10 @@ private[manager] class StateManagerComposition(
       workflow.submitReplaceWorkflowEffect(surfaceId)
     def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
       workflow.submitCloseWorkflowEffect(surfaceId)
+    def openReloadConflictModal(state: AppState, bufferId: BufferId, bufferLabel: String): IO[Unit] =
+      workflow.openReloadConflictModal(state, bufferId, bufferLabel)
+    def submitReloadConflictEffect(surfaceId: SurfaceId): IO[Unit] =
+      workflow.submitReloadConflictEffect(surfaceId)
     def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit] =
       workflow.createFileWorkflowDirectoriesEffect(surfaceId)
     def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =

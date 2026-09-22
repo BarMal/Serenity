@@ -99,6 +99,52 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunTimed(10.seconds) shouldBe defined
   }
 
+  it should "run onFocusGained when focus is regained, but not when focus is lost (#1623)" in {
+    val program = for
+      windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
+      cursorVisible <- Ref.of[IO, Boolean](true)
+      breathIndex   <- Ref.of[IO, Int](0)
+      gainedCount   <- Ref.of[IO, Int](0)
+      _ <- AppRuntime.onWindowFocusChanged(
+        focused = true,
+        windowFocused = windowFocused,
+        cursorVisible = cursorVisible,
+        breathIndex = breathIndex,
+        requestFastRender = IO.unit,
+        onFocusGained = gainedCount.update(_ + 1)
+      )
+      _ <- AppRuntime.onWindowFocusChanged(
+        focused = false,
+        windowFocused = windowFocused,
+        cursorVisible = cursorVisible,
+        breathIndex = breathIndex,
+        requestFastRender = IO.unit,
+        onFocusGained = gainedCount.update(_ + 1)
+      )
+      count <- gainedCount.get
+    yield count shouldBe 1
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
+  it should "default onFocusGained to a no-op for callers that don't supply one" in {
+    val program = for
+      windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
+      cursorVisible <- Ref.of[IO, Boolean](true)
+      breathIndex   <- Ref.of[IO, Int](0)
+      _ <- AppRuntime.onWindowFocusChanged(
+        focused = true,
+        windowFocused = windowFocused,
+        cursorVisible = cursorVisible,
+        breathIndex = breathIndex,
+        requestFastRender = IO.unit
+      )
+      focusedAfter <- windowFocused.get
+    yield focusedAfter shouldBe true
+
+    program.unsafeRunTimed(10.seconds) shouldBe defined
+  }
+
   it should "block the idle tick while unfocused and unblock once focus returns" in {
     val program = for
       windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)

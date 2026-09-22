@@ -4,9 +4,10 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 
 /** Thin dispatcher over the per-modal-type reducers -- [[ModalGotoLineReducer]], [[ModalRenameSymbolReducer]],
-  * [[ModalFindReducer]], [[ModalFileWorkflowReducer]], [[ModalCloseWorkflowReducer]], [[ModalReplaceWorkflowReducer]]
-  * -- plus the helpers they all share for locating and updating the currently active modal. Each modal type used to
-  * have its reducer inlined here; they were split into their own files when this file grew past its 600-line target.
+  * [[ModalFindReducer]], [[ModalFileWorkflowReducer]], [[ModalCloseWorkflowReducer]], [[ModalReloadConflictReducer]],
+  * [[ModalReplaceWorkflowReducer]] -- plus the helpers they all share for locating and updating the currently active
+  * modal. Each modal type used to have its reducer inlined here; they were split into their own files when this file
+  * grew past its 600-line target.
   */
 object ModalEventReducer:
 
@@ -30,6 +31,7 @@ object ModalEventReducer:
       case ModalType.FileWorkflow      => ModalFileWorkflowReducer.reduce(event, currentState)
       case ModalType.ReplaceWorkflow   => ModalReplaceWorkflowReducer.reduce(event, currentState)
       case ModalType.CloseWorkflow     => ModalCloseWorkflowReducer.reduce(event, currentState)
+      case ModalType.ReloadConflict    => ModalReloadConflictReducer.reduce(event, currentState)
       case ModalType.SessionNamePrompt => ModalSessionReducer.reduceNamePrompt(event, currentState)
       case ModalType.SessionList       => ModalSessionReducer.reduceList(event, currentState)
       case ModalType.Custom(_)         => ReducerResult.noEffects(currentState)

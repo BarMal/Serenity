@@ -58,6 +58,8 @@ class StateManagerComponentPortsSpec extends AnyFlatSpec with Matchers:
         def openAsProjectRoot(surfaceId: SurfaceId): IO[Unit] = calls.update(_ :+ s"open-as-root:$surfaceId")
         def submitReplace(surfaceId: SurfaceId): IO[Unit]     = calls.update(_ :+ s"replace:$surfaceId")
         def submitClose(surfaceId: SurfaceId): IO[Unit]       = calls.update(_ :+ s"close:$surfaceId")
+        def submitReloadConflict(surfaceId: SurfaceId): IO[Unit] =
+          calls.update(_ :+ s"reload-conflict:$surfaceId")
         def createDirectories(surfaceId: SurfaceId): IO[Unit] = calls.update(_ :+ s"create-dirs:$surfaceId")
         def submitSessionNamePrompt(surfaceId: SurfaceId): IO[Unit] =
           calls.update(_ :+ s"session-name-prompt:$surfaceId")
