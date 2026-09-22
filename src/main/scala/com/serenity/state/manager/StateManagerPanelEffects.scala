@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import cats.effect.{IO, Ref}
 import com.serenity.command.{PanelKind, ViewIntent}
-import com.serenity.config.{AppConfig, MarkdownViewMode}
+import com.serenity.config.{AppConfig, CommentDisplayMode, MarkdownViewMode}
 import com.serenity.io.{FileEntry, FileManager, FileUtils}
 import com.serenity.keystroke.events.{Event, ExplorerEvent}
 import com.serenity.lsp.config.LanguageId
@@ -178,15 +178,21 @@ final private[manager] class StateManagerPanelEffects(
         }
       case PanelKind.Comments =>
         stateRef.get.flatMap { state =>
-          val symbols = PanelSymbolLookup.commentPanelSymbols(state)
-          updatePanelStateWithUndo(
-            upsertPanelKind(
-              kind,
-              SurfaceContent.Comments(symbols, PanelSymbolLookup.currentSymbolActiveLocation(symbols, state)),
-              position,
-              defaultPanelSize(kind, position)
+          // #1551: the pin-to-side command and the `CommentDisplayMode` setting used to disagree about whether
+          // comments are visible -- pinning always showed live comment content regardless of the setting. Mirrors
+          // `toggleMarkdownPreviewWindow`'s unavailable case below: report why instead of silently pinning nothing.
+          if state.persisted.config.surfaceConfig.commentDisplayMode == CommentDisplayMode.Off then
+            showCommentsHiddenPeek(state)
+          else
+            val symbols = PanelSymbolLookup.commentPanelSymbols(state)
+            updatePanelStateWithUndo(
+              upsertPanelKind(
+                kind,
+                SurfaceContent.Comments(symbols, PanelSymbolLookup.currentSymbolActiveLocation(symbols, state)),
+                position,
+                defaultPanelSize(kind, position)
+              )
             )
-          )
         }
       case PanelKind.Diagnostics =>
         updatePanelStateWithUndo(
@@ -241,6 +247,12 @@ final private[manager] class StateManagerPanelEffects(
   private def showMarkdownPreviewUnavailablePeek(state: AppState, message: String): IO[Unit] =
     showPeek(
       com.serenity.ui.layout.PeekContent.QuickInfo(message),
+      state.activeCursorPosition.getOrElse(CursorPosition(0, 0))
+    )
+
+  private def showCommentsHiddenPeek(state: AppState): IO[Unit] =
+    showPeek(
+      com.serenity.ui.layout.PeekContent.QuickInfo("Comments are hidden -- comment display is turned off in Settings."),
       state.activeCursorPosition.getOrElse(CursorPosition(0, 0))
     )
 

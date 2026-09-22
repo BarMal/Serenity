@@ -137,23 +137,30 @@ object CursorMode:
   * `Margin`: every comment for the visible buffer would render persistently in a side margin, with click-to-navigate
   * vs. click-in-body-to-edit routing. Reserved for a follow-up (see #1222) -- the margin layout/rendering does not
   * exist yet, so selecting it currently only turns off the `Floating` click-to-open behaviour without replacing it.
+  *
+  * `Off`: comments are hidden outright -- no floating lens (same as `Margin` today) and, per #1551, the pin-to-side
+  * `PinCommentsPanel`/`SetPanelPin(Comments, _)` commands stop short of pinning a live panel too, so the panel-pin
+  * command and this setting can no longer disagree about whether comments are visible.
   */
 enum CommentDisplayMode:
   case Floating
   case Margin
+  case Off
 
   def configKey: String =
     this match
       case Floating => "floating"
       case Margin   => "margin"
+      case Off      => "off"
 
 object CommentDisplayMode:
 
   def fromConfigKey(value: String): Option[CommentDisplayMode] =
     value.trim.toLowerCase match
-      case "floating" => Some(CommentDisplayMode.Floating)
-      case "margin"   => Some(CommentDisplayMode.Margin)
-      case _          => None
+      case "floating"                  => Some(CommentDisplayMode.Floating)
+      case "margin"                    => Some(CommentDisplayMode.Margin)
+      case "off" | "none" | "disabled" => Some(CommentDisplayMode.Off)
+      case _                           => None
 
 enum WindowChromeMode(val configKey: String):
   case Auto         extends WindowChromeMode("auto")
