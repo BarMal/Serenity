@@ -1,5 +1,6 @@
 package com.serenity.io
 
+import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
 import cats.effect.IO
@@ -32,45 +33,77 @@ object FileManagerError:
   final case class UnsupportedForSave(fileType: FileType)
       extends FileManagerError(s"Unsupported document format for save: ${fileType.displayName}")
 
+  /** Raised when the on-disk file changed since the buffer's revision was captured (#1623) -- saving would silently
+    * discard whatever changed it. Callers surface this as a reload/overwrite prompt rather than retrying the save.
+    */
+  final case class ExternalConflict(location: StorageLocation)
+      extends FileManagerError(s"File changed on disk since it was opened: $location")
+
+  /** Raised for any other [[DocumentStorageError]] the local storage provider reports (not found, access denied,
+    * etc.) -- distinguishable from the format-decode failures the RTF/ODT/DOCX codecs raise directly.
+    */
+  final case class StorageFailure(error: DocumentStorageError)
+      extends FileManagerError(s"Document storage error: $error")
+
 class FileManager(using balance: Balance):
 
+  private val storage: DocumentStorageProvider = LocalDocumentStorageProvider()
+
   def loadFile(path: Path, bufferId: BufferId): IO[Buffer] =
+    val location = StorageLocation.Local(path)
     FileUtils.detectFileType(path) match
       case FileType.RichText =>
-        RtfDocumentCodec.read(path).map(document => bufferFromRichText(bufferId, path, document))
+        openStored(location).flatMap { stored =>
+          IO.blocking(RtfDocumentCodec.readBytes(stored.content))
+            .map(document => bufferFromRichText(bufferId, path, document, revision = stored.revision))
+        }
       case FileType.OpenDocumentText =>
-        OdtDocumentCodec
-          .readWithFidelity(path)
-          .map(imported => bufferFromRichText(bufferId, path, imported.document, Some(imported.fidelity)))
+        openStored(location).flatMap { stored =>
+          IO.fromEither(OdtDocumentCodec.readBytesWithFidelity(stored.content))
+            .map(imported =>
+              bufferFromRichText(bufferId, path, imported.document, Some(imported.fidelity), stored.revision)
+            )
+        }
       case FileType.WordOpenXmlDocument =>
-        com.serenity.richtext.DocxDocumentCodec
-          .readWithFidelity(path)
-          .map(imported => bufferFromRichText(bufferId, path, imported.document, Some(imported.fidelity)))
+        openStored(location).flatMap { stored =>
+          IO.fromEither(com.serenity.richtext.DocxDocumentCodec.readBytesWithFidelity(stored.content))
+            .map(imported =>
+              bufferFromRichText(bufferId, path, imported.document, Some(imported.fidelity), stored.revision)
+            )
+        }
       case _ =>
         ensureSupported(path, _.canOpen, FileManagerError.UnsupportedForOpen.apply) >>
-          FileUtils.readFileContent(path).map(content => bufferFromContent(bufferId, path, content))
+          openStored(location).map { stored =>
+            bufferFromContent(bufferId, path, new String(stored.content, StandardCharsets.UTF_8), stored.revision)
+          }
 
   def saveBuffer(buffer: Buffer, path: Path): IO[Buffer] =
+    val expectedRevision = expectedRevisionFor(buffer, path)
     preventLossyOverwrite(buffer, path) >> (FileUtils.detectFileType(path) match
       case FileType.Markdown =>
         for
-          _ <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
-          _ <- FileUtils.writeFileContent(path, contentForSave(buffer, markdownContentForSave(buffer)))
-        yield savedBuffer(buffer, path, None)
+          _      <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
+          content = contentForSave(buffer, markdownContentForSave(buffer)).getBytes(StandardCharsets.UTF_8)
+          stored <- saveStored(path, content, expectedRevision)
+        yield savedBuffer(buffer, path, None, stored.revision)
       case FileType.RichText =>
         val document = richTextDocumentForSave(buffer)
-        RtfDocumentCodec.write(document, path).as(savedBuffer(buffer, path, Some(document)))
+        saveStored(path, RtfDocumentCodec.writeBytes(document), expectedRevision)
+          .map(stored => savedBuffer(buffer, path, Some(document), stored.revision))
       case FileType.OpenDocumentText =>
         val document = richTextDocumentForSave(buffer)
-        OdtDocumentCodec.write(document, path).as(savedBuffer(buffer, path, Some(document)))
+        saveStored(path, OdtDocumentCodec.writeBytes(document), expectedRevision)
+          .map(stored => savedBuffer(buffer, path, Some(document), stored.revision))
       case FileType.WordOpenXmlDocument =>
         val document = richTextDocumentForSave(buffer)
-        com.serenity.richtext.DocxDocumentCodec.write(document, path).as(savedBuffer(buffer, path, Some(document)))
+        saveStored(path, com.serenity.richtext.DocxDocumentCodec.writeBytes(document), expectedRevision)
+          .map(stored => savedBuffer(buffer, path, Some(document), stored.revision))
       case _ =>
         for
-          _ <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
-          _ <- FileUtils.writeFileContent(path, contentForSave(buffer, buffer.document.content.collect()))
-        yield savedBuffer(buffer, path, None))
+          _      <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
+          content = contentForSave(buffer, buffer.document.content.collect()).getBytes(StandardCharsets.UTF_8)
+          stored <- saveStored(path, content, expectedRevision)
+        yield savedBuffer(buffer, path, None, stored.revision))
 
   /** Save buffer to its existing file path */
   def saveBuffer(buffer: Buffer): IO[Buffer] =
@@ -86,14 +119,15 @@ class FileManager(using balance: Balance):
   private def contentForSave(buffer: Buffer, normalizedContent: String): String =
     buffer.document.lineEnding.applyTo(normalizedContent)
 
-  private def bufferFromContent(bufferId: BufferId, path: Path, content: String): Buffer =
+  private def bufferFromContent(bufferId: BufferId, path: Path, content: String, revision: Option[DocumentRevision]): Buffer =
     Buffer(
       id = bufferId,
       document = com.serenity.state.models.Document(
         content = com.serenity.rope.Rope(content),
         filePath = Some(path),
         language = languageFromPath(path),
-        lineEnding = LineEnding.detect(content)
+        lineEnding = LineEnding.detect(content),
+        revision = revision
       )
     )
 
@@ -101,14 +135,16 @@ class FileManager(using balance: Balance):
     bufferId: BufferId,
     path: Path,
     document: RichTextDocument,
-    fidelity: Option[RichTextFidelity] = None
+    fidelity: Option[RichTextFidelity] = None,
+    revision: Option[DocumentRevision]
   ): Buffer =
     val normalized = document.normalized
     Buffer(
       id = bufferId,
       document = com.serenity.state.models.Document(
         content = com.serenity.rope.Rope(normalized.plainText),
-        filePath = Some(path)
+        filePath = Some(path),
+        revision = revision
       ),
       richText = com.serenity.state.models.RichTextState(
         richTextDocument = Some(normalized),
@@ -116,18 +152,48 @@ class FileManager(using balance: Balance):
       )
     )
 
-  private def savedBuffer(buffer: Buffer, path: Path, richTextDocument: Option[RichTextDocument]): Buffer =
+  private def savedBuffer(
+    buffer: Buffer,
+    path: Path,
+    richTextDocument: Option[RichTextDocument],
+    revision: Option[DocumentRevision]
+  ): Buffer =
     buffer.copy(
       document = buffer.document.copy(
         filePath = Some(path),
         isDirty = false,
-        language = languageFromPath(path)
+        language = languageFromPath(path),
+        revision = revision
       ),
       richText = buffer.richText.copy(
         richTextDocument = richTextDocument.map(_.normalized),
         richTextFidelity = None
       )
     )
+
+  /** The buffer's captured revision is only a valid conflict check against `path` when `path` is the same file the
+    * buffer was last opened from or saved to -- a Save As to a different (or brand new) path has nothing to compare
+    * that revision against, so no conflict check applies there.
+    */
+  private def expectedRevisionFor(buffer: Buffer, path: Path): Option[DocumentRevision] =
+    if buffer.document.filePath.contains(path) then buffer.document.revision else None
+
+  private def openStored(location: StorageLocation): IO[StoredDocument] =
+    storage.open(location).flatMap {
+      case Right(stored) => IO.pure(stored)
+      case Left(error)   => IO.raiseError(FileManagerError.StorageFailure(error))
+    }
+
+  private def saveStored(
+    path: Path,
+    content: Array[Byte],
+    expectedRevision: Option[DocumentRevision]
+  ): IO[StoredDocument] =
+    storage.save(StorageLocation.Local(path), content, expectedRevision).flatMap {
+      case Right(stored)                               => IO.pure(stored)
+      case Left(DocumentStorageError.Conflict(location)) => IO.raiseError(FileManagerError.ExternalConflict(location))
+      case Left(error)                                  => IO.raiseError(FileManagerError.StorageFailure(error))
+    }
 
   private def preventLossyOverwrite(buffer: Buffer, path: Path): IO[Unit] =
     val replacesImportedFile = buffer.document.filePath.contains(path)

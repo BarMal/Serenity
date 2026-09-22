@@ -271,6 +271,64 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
     fileManager.saveBuffer(buffer).attempt.unsafeRunSync() shouldBe Left(FileManagerError.NoFilePath())
   }
 
+  it should "capture a revision on load and refresh it on save, for #1623 external-change detection" in {
+    val fileManager = new FileManager()
+    val file         = Files.createTempFile("serenity-revision-capture", ".md")
+
+    try
+      Files.writeString(file, "original")
+
+      val opened = fileManager.loadFile(file, BufferId(99)).unsafeRunSync()
+      opened.document.revision shouldBe defined
+
+      val edited = opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("edited"), isDirty = true))
+      val saved  = fileManager.saveBuffer(edited, file).unsafeRunSync()
+
+      saved.document.revision shouldBe defined
+      saved.document.revision should not be opened.document.revision
+    finally Files.deleteIfExists(file)
+  }
+
+  it should "reject a save with a conflict instead of silently overwriting a file that changed on disk since it was opened" in {
+    val fileManager = new FileManager()
+    val file         = Files.createTempFile("serenity-revision-conflict", ".md")
+
+    try
+      Files.writeString(file, "original")
+      val opened = fileManager.loadFile(file, BufferId(99)).unsafeRunSync()
+
+      // Simulate another program (another editor, a git checkout) changing the file after Serenity opened it.
+      Files.writeString(file, "changed externally")
+
+      val edited = opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my local edit"), isDirty = true))
+      val result = fileManager.saveBuffer(edited, file).attempt.unsafeRunSync()
+
+      result shouldBe Left(
+        FileManagerError.ExternalConflict(StorageLocation.Local(file))
+      )
+      Files.readString(file) shouldBe "changed externally"
+    finally Files.deleteIfExists(file)
+  }
+
+  it should "not conflict-check a Save As to a different path, even when the buffer carries a revision from its original file" in {
+    val fileManager = new FileManager()
+    val original     = Files.createTempFile("serenity-revision-save-as-source", ".md")
+    val destination  = Files.createTempFile("serenity-revision-save-as-dest", ".md")
+
+    try
+      Files.writeString(original, "original")
+      Files.writeString(destination, "unrelated pre-existing content")
+      val opened = fileManager.loadFile(original, BufferId(99)).unsafeRunSync()
+
+      val result = fileManager.saveBuffer(opened, destination).attempt.unsafeRunSync()
+
+      result.isRight shouldBe true
+      Files.readString(destination) shouldBe "original"
+    finally
+      Files.deleteIfExists(original)
+      Files.deleteIfExists(destination)
+  }
+
   it should "open RTF files as editable plain text with rich document metadata" in {
     val fileManager = new FileManager()
     val rtfFile     = Files.createTempFile("serenity-rich-open", ".rtf")
