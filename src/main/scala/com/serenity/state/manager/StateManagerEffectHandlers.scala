@@ -452,7 +452,11 @@ final private[manager] class StateManagerEffectHandlers(
               fileManager.currentRevision(path).flatMap {
                 case Some(onDisk) if Some(onDisk) != buffer.document.revision =>
                   if buffer.hasUnsavedChanges then
-                    openReloadConflictModal(state, buffer.id, bufferLabelFor(buffer))
+                    // A blocking modal already up (most likely this same buffer's own reload-conflict prompt,
+                    // re-triggered by another poll cycle or focus-gain before the user answered the first one)
+                    // must not get a second one stacked on top of it -- code review finding on PR #1664.
+                    if state.hasBlockingModal then IO.unit
+                    else openReloadConflictModal(state, buffer.id, bufferLabelFor(buffer))
                   else
                     reloadBuffer(buffer.id)
                 case _ => IO.unit
@@ -473,6 +477,12 @@ final private[manager] class StateManagerEffectHandlers(
     buffer.document.filePath
       .map(path => Option(path.getFileName).fold(path.toString)(_.toString))
       .getOrElse(s"Buffer ${buffer.id.value} - unsaved")
+
+  /** Same label, looked up fresh from `state` -- used where the caller only has a `bufferId` and wants the label as
+    * of a specific (usually just-re-read) state snapshot rather than one captured earlier.
+    */
+  private def bufferLabelFor(state: AppState, bufferId: BufferId): String =
+    state.persisted.buffers.get(bufferId).fold(s"Buffer ${bufferId.value} - unsaved")(bufferLabelFor)
 
   private[manager] def directLoadFileEffect(path: Path): IO[Unit] =
     IO.blocking(FileUtils.isReadableFile(path)).flatMap {
@@ -532,9 +542,11 @@ final private[manager] class StateManagerEffectHandlers(
             case error: com.serenity.richtext.LossyRichTextOverwriteException =>
               stateRef.get.flatMap(current => workflow.showSaveAsWorkflow(current, bufferId, error.getMessage))
             case _: com.serenity.io.FileManagerError.ExternalConflict =>
-              stateRef.get.flatMap(current =>
-                workflow.openReloadConflictModal(current, bufferId, bufferLabelFor(buffer))
-              )
+              // Label from state re-read after the failure, not the pre-save `buffer` snapshot above -- keeps this
+              // consistent with StateManagerWorkflowCapability's own ExternalConflict handler, which does the same
+              // (code review finding on PR #1664: the two copies previously sourced the label from different points
+              // in time, which could show different labels for the same conflict if the buffer changed in between).
+              stateRef.get.flatMap(current => workflow.openReloadConflictModal(current, bufferId, bufferLabelFor(current, bufferId)))
             case error =>
               logger.error(error)(s"[FILE] Failed to save buffer $bufferId")
           }

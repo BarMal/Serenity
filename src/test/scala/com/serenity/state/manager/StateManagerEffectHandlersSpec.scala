@@ -618,6 +618,32 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
     fixture.calls.get.unsafeRunSync() should contain(s"openReloadConflictModal:$bufferId:${path.getFileName}")
   }
 
+  it should "not stack a second reload-conflict prompt when one is already open (code review finding, PR #1664)" in {
+    val path = Files.createTempFile("watch-check-already-prompted", ".md")
+    Files.writeString(path, "original")
+    val opened = new FileManager().loadFile(path, bufferId).unsafeRunSync()
+    val dirty  = opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my edit"), isDirty = true))
+    val stateWithOpenPrompt = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> dirty)),
+      runtime = AppState.initial.runtime.copy(
+        modalStack = List(
+          ModalDialog(
+            SurfaceId("existing-conflict"),
+            Modal.ReloadConflict(ReloadConflictState(bufferId, "watch-check-already-prompted.md")),
+            ModalPlacement.Centered
+          )
+        )
+      )
+    )
+    val fixture = harness(stateWithOpenPrompt)
+
+    Files.writeString(path, "changed externally, again")
+
+    fixture.handlers.checkBufferForExternalChangesEffect(bufferId).unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync().exists(_.startsWith("openReloadConflictModal")) shouldBe false
+  }
+
   "openBufferPathsEffect" should "report every open buffer's file path keyed by its buffer id" in {
     val pathA = Files.createTempFile("open-paths-a", ".md")
     val pathB = Files.createTempFile("open-paths-b", ".md")
