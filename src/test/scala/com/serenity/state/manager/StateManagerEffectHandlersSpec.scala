@@ -602,6 +602,36 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
     fixture.calls.get.unsafeRunSync() shouldBe Nil
   }
 
+  "checkBufferForExternalChangesEffect" should "check any given buffer, not only the focused one (#1623)" in {
+    val path = Files.createTempFile("watch-check-unfocused", ".md")
+    Files.writeString(path, "original")
+    val opened  = new FileManager().loadFile(path, bufferId).unsafeRunSync()
+    val dirty   = opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my edit"), isDirty = true))
+    // No focus wiring at all -- state.focusedBufferId is None, unlike focusedBufferState.
+    val state   = AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> dirty)))
+    val fixture = harness(state)
+
+    Files.writeString(path, "changed externally")
+
+    fixture.handlers.checkBufferForExternalChangesEffect(bufferId).unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() should contain(s"openReloadConflictModal:$bufferId:${path.getFileName}")
+  }
+
+  "openBufferPathsEffect" should "report every open buffer's file path keyed by its buffer id" in {
+    val pathA = Files.createTempFile("open-paths-a", ".md")
+    val pathB = Files.createTempFile("open-paths-b", ".md")
+    val bufferA = Buffer.fromFile(BufferId(1), pathA, "a")
+    val bufferB = Buffer.fromFile(BufferId(2), pathB, "b")
+    val unsaved = Buffer.fromString(BufferId(3), "no path yet")
+    val state = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(buffers = Map(bufferA.id -> bufferA, bufferB.id -> bufferB, unsaved.id -> unsaved))
+    )
+    val fixture = harness(state)
+
+    fixture.handlers.openBufferPathsEffect.unsafeRunSync() shouldBe Map(pathA -> bufferA.id, pathB -> bufferB.id)
+  }
+
   it should "save an existing buffer as, but not a missing one" in {
     val path = Path.of("target.txt")
     val state = AppState.initial.copy(persisted =

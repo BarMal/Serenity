@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.*
 import cats.effect.std.Dispatcher
+import cats.syntax.foldable.*
 import cats.syntax.parallel.*
 import cats.syntax.semigroup.*
 import com.serenity.config.{AppConfig, CursorMode, RenderFpsTarget}
@@ -259,13 +260,16 @@ object AppRuntime:
                 val renderLoop: Stream[IO, Unit] =
                   Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
 
-                runRuntimeLoops(
-                  stateManager,
-                  inputHandler,
-                  inputFiber.joinWithNever,
-                  renderLoop,
-                  awaitExternalQuit,
-                  appConfig
+                com.serenity.io.FileChangeWatcher.create.use(watcher =>
+                  runRuntimeLoops(
+                    stateManager,
+                    inputHandler,
+                    inputFiber.joinWithNever,
+                    renderLoop,
+                    watcher,
+                    awaitExternalQuit,
+                    appConfig
+                  )
                 )
               }
           }
@@ -278,6 +282,7 @@ object AppRuntime:
     inputHandler: InputHandler[IO],
     awaitInputLoop: IO[Unit],
     renderLoop: Stream[IO, Unit],
+    fileChangeWatcher: com.serenity.io.FileChangeWatcher,
     awaitExternalQuit: IO[Unit],
     appConfig: AppConfig
   )(using logger: Logger[IO]): IO[Unit] =
@@ -300,8 +305,36 @@ object AppRuntime:
           logger,
           appConfig.languageToolsConfig.lspUserConfig
         )
+      ),
+      superviseLoop("external change watch loop", lifecycle.forceQuit)(
+        externalChangeWatchLoop(
+          fileChangeWatcher,
+          stateManager.fileService.openBufferPaths,
+          stateManager.fileService.checkBufferForExternalChanges
+        ).interruptWhen(quitSignal).compile.drain
       )
-    ).parMapN((_, _, _, _, _, _, _) => ())
+    ).parMapN((_, _, _, _, _, _, _, _) => ())
+
+  /** Background half of external-change detection (#1623), complementing the focus-in re-check: each cycle,
+    * re-derives the watched directory set from the currently open local buffers (`FileChangeWatcher.sync` handles
+    * buffers opening/closing since the last cycle), polls for real filesystem events, and re-checks every buffer
+    * whose file a poll window actually saw change -- reload-or-prompt exactly like the focus-in path, just not
+    * gated on the window regaining focus.
+    */
+  private[serenity] def externalChangeWatchLoop(
+    watcher: com.serenity.io.FileChangeWatcher,
+    openBufferPaths: IO[Map[Path, BufferId]],
+    checkBufferForExternalChanges: BufferId => IO[Unit],
+    pollInterval: FiniteDuration = 2.seconds
+  ): Stream[IO, Unit] =
+    Stream.repeatEval(
+      for
+        paths   <- openBufferPaths
+        _       <- watcher.sync(paths.keys.flatMap(path => Option(path.getParent)).toSet)
+        changed <- watcher.pollChangedFiles(pollInterval)
+        _       <- changed.flatMap(paths.get).toList.traverse_(checkBufferForExternalChanges)
+      yield ()
+    )
 
   private def runInputLoop(
     stateManager: StateManager,

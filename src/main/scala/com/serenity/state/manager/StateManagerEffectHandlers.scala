@@ -429,14 +429,23 @@ final private[manager] class StateManagerEffectHandlers(
   private def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)
 
-  /** Re-checks the focused buffer's on-disk revision against its captured one (#1623), called on window focus-gain.
+  /** Re-checks the focused buffer's on-disk revision against its captured one (#1623), called on window focus-gain. */
+  private[manager] def checkExternalChangesOnFocusEffect: IO[Unit] =
+    stateRef.get.flatMap { state =>
+      state.focusedBufferId match
+        case Some(bufferId) => checkBufferForExternalChangesEffect(bufferId)
+        case None            => IO.unit
+    }
+
+  /** Re-checks one buffer's on-disk revision against its captured one (#1623) -- the shared decision both the
+    * focus-gain check and `FileChangeWatcher`'s background poll loop (`AppRuntime.externalChangeWatchLoop`) drive.
     * A clean buffer (no unsaved edits) that changed externally is reloaded silently -- there's nothing of the user's
     * to lose. A dirty one is left alone but prompted, exactly like a stale save: the user decides whether to keep
     * their edits or take the external change.
     */
-  private[manager] def checkExternalChangesOnFocusEffect: IO[Unit] =
+  private[manager] def checkBufferForExternalChangesEffect(bufferId: BufferId): IO[Unit] =
     stateRef.get.flatMap { state =>
-      state.focusedBufferId.flatMap(state.persisted.buffers.get) match
+      state.persisted.buffers.get(bufferId) match
         case Some(buffer) =>
           buffer.document.filePath match
             case Some(path) =>
@@ -451,6 +460,14 @@ final private[manager] class StateManagerEffectHandlers(
             case None => IO.unit
         case None => IO.unit
     }
+
+  /** The paths of every currently open local buffer, for `FileChangeWatcher.sync`'s directory set -- `AppRuntime`'s
+    * background watch loop re-derives this each poll cycle so it tracks buffers opening and closing over time.
+    */
+  private[manager] def openBufferPathsEffect: IO[Map[Path, BufferId]] =
+    stateRef.get.map(state =>
+      state.persisted.buffers.values.flatMap(buffer => buffer.document.filePath.map(_ -> buffer.id)).toMap
+    )
 
   private def bufferLabelFor(buffer: Buffer): String =
     buffer.document.filePath

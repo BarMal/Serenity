@@ -101,5 +101,7 @@ final private[manager] class StateManagerFileCapability(
     markBufferSaved = markBufferSaved,
     checkUnsavedChanges = checkUnsavedChanges,
     getRecentFiles = getRecentFiles,
-    checkExternalChangesOnFocus = effects.checkExternalChangesOnFocusEffect
+    checkExternalChangesOnFocus = effects.checkExternalChangesOnFocusEffect,
+    openBufferPaths = effects.openBufferPathsEffect,
+    checkBufferForExternalChanges = effects.checkBufferForExternalChangesEffect
   )
