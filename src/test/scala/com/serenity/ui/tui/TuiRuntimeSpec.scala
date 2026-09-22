@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
 import scala.concurrent.duration.*
+import scala.jdk.CollectionConverters.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -42,18 +43,19 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
   private def ctrl(c: Char): Byte = (c.toUpper - 'A' + 1).toByte
 
   /** Wraps `fiber.joinWithNever.unsafeRunTimed` for issue #1564: a wedged input loop currently times out silently,
-    * leaving nothing to diagnose the stuck fiber with. On timeout this dumps every thread's stack to stderr first, so
-    * a flake caught by this spec leaves the one artifact the issue is actually blocked on.
+    * leaving nothing to diagnose the stuck fiber with. On timeout this logs every thread's stack first, so a flake
+    * caught by this spec leaves the one artifact the issue is actually blocked on.
     */
-  private def awaitOrDumpThreads(fiber: cats.effect.FiberIO[Unit], timeout: FiniteDuration): Option[Unit] =
+  private def awaitOrDumpThreads(fiber: cats.effect.FiberIO[Unit], timeout: FiniteDuration)(using
+      logger: Logger[IO]
+  ): Option[Unit] =
     fiber.joinWithNever.unsafeRunTimed(timeout) match
       case done @ Some(_) => done
       case None =>
-        System.err.println(s"[TuiRuntimeSpec] fiber did not complete within $timeout -- dumping thread stacks:")
-        Thread.getAllStackTraces.forEach { (thread, trace) =>
-          System.err.println(s"\n\"${thread.getName}\" ${thread.getState}")
-          trace.foreach(frame => System.err.println(s"\tat $frame"))
-        }
+        val dump = Thread.getAllStackTraces.asScala.map { (thread, trace) =>
+          s"\"${thread.getName}\" ${thread.getState}\n" + trace.map(frame => s"\tat $frame").mkString("\n")
+        }.mkString("\n\n")
+        logger.error(s"fiber did not complete within $timeout -- dumping thread stacks:\n\n$dump").unsafeRunSync()
         None
 
   final private class StaticHarness(val terminal: Terminal, private val out: ByteArrayOutputStream):

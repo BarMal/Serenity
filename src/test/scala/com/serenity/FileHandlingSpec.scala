@@ -88,6 +88,8 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
         )
       )
 
+  private def bytes(content: String): Array[Byte] = content.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+
   "LocalDocumentStorageProvider" should "open, list, save, and copy local documents through the provider boundary" in {
     val directory   = Files.createTempDirectory("serenity-document-storage")
     val source      = directory.resolve("source.txt")
@@ -98,17 +100,19 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       Files.writeString(source, "initial")
 
       val opened = provider.open(StorageLocation.Local(source)).unsafeRunSync()
-      opened.map(_.content) shouldBe Right("initial")
+      opened.map(_.content.toSeq) shouldBe Right(bytes("initial").toSeq)
 
       val listed = provider.list(StorageLocation.Local(directory)).compile.toList.unsafeRunSync()
       listed.collect { case Right(metadata) => metadata.location } should contain(StorageLocation.Local(source))
 
       val saved =
-        opened.flatMap(document => provider.save(document.location, "updated", document.revision).unsafeRunSync())
-      saved.map(_.content) shouldBe Right("updated")
+        opened.flatMap(document =>
+          provider.save(document.location, bytes("updated"), document.revision).unsafeRunSync()
+        )
+      saved.map(_.content.toSeq) shouldBe Right(bytes("updated").toSeq)
 
       val copied = provider.copy(StorageLocation.Local(source), StorageLocation.Local(destination)).unsafeRunSync()
-      copied.map(_.content) shouldBe Right("updated")
+      copied.map(_.content.toSeq) shouldBe Right(bytes("updated").toSeq)
     finally
       Files.deleteIfExists(destination)
       Files.deleteIfExists(source)
@@ -125,10 +129,47 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       Files.writeString(path, "remote change")
 
       val result =
-        opened.flatMap(document => provider.save(document.location, "local change", document.revision).unsafeRunSync())
+        opened.flatMap(document =>
+          provider.save(document.location, bytes("local change"), document.revision).unsafeRunSync()
+        )
 
       result shouldBe Left(DocumentStorageError.Conflict(StorageLocation.Local(path)))
       Files.readString(path) shouldBe "remote change"
+    finally Files.deleteIfExists(path)
+  }
+
+  it should "carry binary content that is not valid UTF-8 through open, save, and copy unmodified" in {
+    val directory   = Files.createTempDirectory("serenity-document-storage-binary")
+    val source      = directory.resolve("source.bin")
+    val destination = directory.resolve("copy.bin")
+    val provider    = LocalDocumentStorageProvider()
+    val binary      = Array[Byte](0x50, 0x4b, 0x03, 0x04, -1, -128, 0)
+
+    try
+      Files.write(source, binary)
+
+      val opened = provider.open(StorageLocation.Local(source)).unsafeRunSync()
+      opened.map(_.content.toSeq) shouldBe Right(binary.toSeq)
+
+      val copied = provider.copy(StorageLocation.Local(source), StorageLocation.Local(destination)).unsafeRunSync()
+      copied.map(_.content.toSeq) shouldBe Right(binary.toSeq)
+    finally
+      Files.deleteIfExists(destination)
+      Files.deleteIfExists(source)
+      Files.deleteIfExists(directory)
+  }
+
+  it should "not conflict-check a save when no expected revision is supplied" in {
+    val path     = Files.createTempFile("serenity-document-storage-no-check", ".txt")
+    val provider = LocalDocumentStorageProvider()
+
+    try
+      Files.writeString(path, "existing")
+
+      val result = provider.save(StorageLocation.Local(path), bytes("overwritten"), None).unsafeRunSync()
+
+      result.isRight shouldBe true
+      Files.readString(path) shouldBe "overwritten"
     finally Files.deleteIfExists(path)
   }
 
