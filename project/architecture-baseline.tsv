@@ -13,13 +13,11 @@
 # LspManagerReferenceRenameSupport.scala, rather than left inline; what's left in LspManager.scala is the same
 # per-RequestKind wiring every other kind already has here (RequestKind case, handleEffect dispatch case,
 # noServerEvent case), which isn't reasonably splittable without breaking that existing pattern.
-main/scala/com/serenity/app/AppRuntime.scala	file length	730
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	100
 main/scala/com/serenity/lsp/LspManager.scala	file length	673
 main/scala/com/serenity/rope/Rope.scala	file length	631
 main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	616
 main/scala/com/serenity/ui/renderer/Java2DPostProcessingEffects.scala	method applyGlow	90
-test/scala/com/serenity/FileHandlingSpec.scala	file length	634
 test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	639
 test/scala/com/serenity/GutterAndLineNumbersSpec.scala	file length	636
 test/scala/com/serenity/LayoutEngineSpec.scala	file length	669
