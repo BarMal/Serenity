@@ -9,6 +9,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.app.AppRuntime
 import com.serenity.io.FileChangeWatcher
 import com.serenity.state.models.BufferId
+import com.serenity.testkit.VirtualTime.runVirtual
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -72,4 +73,29 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
     yield checked
 
     program.unsafeRunTimed(10.seconds) shouldBe Some(Nil)
+  }
+
+  it should "stay virtual-time-compatible when there is nothing to watch, instead of blocking on WatchService.poll" in {
+    // Regression test: with no open buffers, the loop must sleep rather than call the real, genuinely-blocking
+    // WatchService.poll -- otherwise any virtual-time test harness driving AppRuntime.run (VirtualTime.runVirtual's
+    // TestControl treats IO.blocking as non-terminating) hangs the instant this loop starts, even though the test
+    // itself never opens a file.
+    val checked = FileChangeWatcher.create.use { watcher =>
+      for
+        checkedBuffers <- Ref.of[IO, List[BufferId]](Nil)
+        _ <- AppRuntime
+          .externalChangeWatchLoop(
+            watcher,
+            openBufferPaths = IO.pure(Map.empty),
+            checkBufferForExternalChanges = id => checkedBuffers.update(_ :+ id),
+            pollInterval = 2.seconds
+          )
+          .take(3)
+          .compile
+          .drain
+        checked <- checkedBuffers.get
+      yield checked
+    }
+
+    runVirtual(checked) shouldBe Nil
   }

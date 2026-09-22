@@ -320,6 +320,12 @@ object AppRuntime:
     * buffers opening/closing since the last cycle), polls for real filesystem events, and re-checks every buffer
     * whose file a poll window actually saw change -- reload-or-prompt exactly like the focus-in path, just not
     * gated on the window regaining focus.
+    *
+    * `WatchService.poll` is a genuine blocking OS call, so it only runs when there is at least one directory to
+    * watch -- with nothing open, the cycle sleeps instead. This isn't just an efficiency nicety: a real blocking call
+    * left running unconditionally makes this loop, and therefore any `AppRuntime.run` caller, incompatible with a
+    * virtual-time test harness (`VirtualTime.runVirtual`'s own `TestControl` treats `IO.blocking` as non-terminating)
+    * -- a plain buffer-less startup (the common case every such test starts from) must stay virtual-time-compatible.
     */
   private[serenity] def externalChangeWatchLoop(
     watcher: com.serenity.io.FileChangeWatcher,
@@ -329,10 +335,14 @@ object AppRuntime:
   ): Stream[IO, Unit] =
     Stream.repeatEval(
       for
-        paths   <- openBufferPaths
-        _       <- watcher.sync(paths.keys.flatMap(path => Option(path.getParent)).toSet)
-        changed <- watcher.pollChangedFiles(pollInterval)
-        _       <- changed.flatMap(paths.get).toList.traverse_(checkBufferForExternalChanges)
+        paths <- openBufferPaths
+        _     <- watcher.sync(paths.keys.flatMap(path => Option(path.getParent)).toSet)
+        _ <-
+          if paths.isEmpty then IO.sleep(pollInterval)
+          else
+            watcher
+              .pollChangedFiles(pollInterval)
+              .flatMap(changed => changed.flatMap(paths.get).toList.traverse_(checkBufferForExternalChanges))
       yield ()
     )
 
