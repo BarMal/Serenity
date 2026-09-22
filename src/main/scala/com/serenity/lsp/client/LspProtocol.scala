@@ -84,6 +84,8 @@ object LspProtocol:
           "publishDiagnostics" -> Json.obj("relatedInformation" -> true.asJson),
           "hover"              -> Json.obj("contentFormat" -> Json.arr("markdown".asJson, "plaintext".asJson)),
           "definition"         -> Json.obj("linkSupport" -> false.asJson),
+          "references"         -> Json.obj("dynamicRegistration" -> false.asJson),
+          "rename"             -> Json.obj("prepareSupport" -> false.asJson),
           "completion" -> Json.obj(
             "completionItem" -> Json.obj(
               "snippetSupport"      -> false.asJson,
