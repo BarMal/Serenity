@@ -22,8 +22,8 @@ final case class DocumentMetadata(
     revision: Option[DocumentRevision]
 )
 
-/** A document read through a [[DocumentStorageProvider]]. Content is raw bytes, not `String`, so a provider can
-  * carry binary formats (RTF/ODT/DOCX) as well as text -- callers that need text decode it themselves.
+/** A document read through a [[DocumentStorageProvider]]. Content is raw bytes, not `String`, so a provider can carry
+  * binary formats (RTF/ODT/DOCX) as well as text -- callers that need text decode it themselves.
   */
 final case class StoredDocument(content: Array[Byte], metadata: DocumentMetadata):
   def location: StorageLocation = metadata.location

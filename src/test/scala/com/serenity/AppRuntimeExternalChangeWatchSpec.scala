@@ -13,10 +13,10 @@ import com.serenity.testkit.VirtualTime.runVirtual
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Covers `AppRuntime.externalChangeWatchLoop` (#1623): the background half of external-change detection, driven by
-  * a real `FileChangeWatcher` rather than a fake, so this exercises the same directory-sync-then-poll-then-check
-  * cycle the running app uses. `FileChangeWatcherSpec` covers the watcher's own sync/poll contract directly; this
-  * spec covers the loop wiring that turns "a watched file changed" into "check this specific buffer."
+/** Covers `AppRuntime.externalChangeWatchLoop` (#1623): the background half of external-change detection, driven by a
+  * real `FileChangeWatcher` rather than a fake, so this exercises the same directory-sync-then-poll-then-check cycle
+  * the running app uses. `FileChangeWatcherSpec` covers the watcher's own sync/poll contract directly; this spec covers
+  * the loop wiring that turns "a watched file changed" into "check this specific buffer."
   */
 class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
 

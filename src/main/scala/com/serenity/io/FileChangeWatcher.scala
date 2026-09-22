@@ -11,8 +11,8 @@ import cats.syntax.all.*
 
 /** A real `java.nio.file.WatchService`-backed directory watcher (#1623): the background half of external-change
   * detection, complementing the focus-in re-check `StateManagerEffectHandlers.checkExternalChangesOnFocusEffect`
-  * already does. `WatchService` only watches directories, not individual files, so `sync` takes the set of
-  * directories the caller currently cares about (an open local buffer's parent) rather than individual file paths;
+  * already does. `WatchService` only watches directories, not individual files, so `sync` takes the set of directories
+  * the caller currently cares about (an open local buffer's parent) rather than individual file paths;
   * `pollChangedFiles` reports which specific files inside those directories a poll window actually saw change.
   */
 final class FileChangeWatcher private (
@@ -32,19 +32,18 @@ final class FileChangeWatcher private (
         added <- toAdd.toList.traverse(directory =>
           IO.blocking(
             directory.register(watchService, ENTRY_MODIFY, ENTRY_CREATE)
-          ).attempt.map(_.toOption.map(directory -> _))
+          ).attempt
+            .map(_.toOption.map(directory -> _))
         )
-        _ <- toRemove.toList.traverse_(directory =>
-          IO.blocking(current(directory).cancel()).attempt.void
-        )
+        _ <- toRemove.toList.traverse_(directory => IO.blocking(current(directory).cancel()).attempt.void)
         _ <- registrations.set((current -- toRemove) ++ added.flatten)
       yield ()
     }
 
   /** Polls for filesystem events up to `timeout`, resolving each event's directory-relative filename against its
-    * `WatchKey`'s own watched directory to report the absolute path that changed. A key is reset after being
-    * drained so it keeps reporting later changes rather than only firing once (the JDK `WatchService` contract:
-    * an unreset key stops queuing new events for its directory).
+    * `WatchKey`'s own watched directory to report the absolute path that changed. A key is reset after being drained so
+    * it keeps reporting later changes rather than only firing once (the JDK `WatchService` contract: an unreset key
+    * stops queuing new events for its directory).
     */
   def pollChangedFiles(timeout: FiniteDuration): IO[Set[Path]] =
     for

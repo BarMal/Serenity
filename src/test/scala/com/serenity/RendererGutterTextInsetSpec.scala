@@ -91,7 +91,7 @@ class RendererGutterTextInsetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not apply the gutter's margin inset to a code buffer, which already draws line numbers cell-perfect" in {
-    val lines  = (1 to 5).map(i => s"line $i").mkString("\n")
+    val lines = (1 to 5).map(i => s"line $i").mkString("\n")
     val plain = Buffer.fromString(BufferId(1), lines)
     val buffer = plain.copy(
       document = plain.document.copy(language = Some(com.serenity.lsp.config.LanguageId.Scala)),
@@ -115,4 +115,3 @@ class RendererGutterTextInsetSpec extends AnyFlatSpec with Matchers:
     val insetPx = SurfaceTextInset.px(state.persisted.config)
     surface.pixelTranslationCalls.map(_.xPx) should not contain insetPx
   }
-

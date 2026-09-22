@@ -434,14 +434,14 @@ final private[manager] class StateManagerEffectHandlers(
     stateRef.get.flatMap { state =>
       state.focusedBufferId match
         case Some(bufferId) => checkBufferForExternalChangesEffect(bufferId)
-        case None            => IO.unit
+        case None           => IO.unit
     }
 
   /** Re-checks one buffer's on-disk revision against its captured one (#1623) -- the shared decision both the
-    * focus-gain check and `FileChangeWatcher`'s background poll loop (`AppRuntime.externalChangeWatchLoop`) drive.
-    * A clean buffer (no unsaved edits) that changed externally is reloaded silently -- there's nothing of the user's
-    * to lose. A dirty one is left alone but prompted, exactly like a stale save: the user decides whether to keep
-    * their edits or take the external change.
+    * focus-gain check and `FileChangeWatcher`'s background poll loop (`AppRuntime.externalChangeWatchLoop`) drive. A
+    * clean buffer (no unsaved edits) that changed externally is reloaded silently -- there's nothing of the user's to
+    * lose. A dirty one is left alone but prompted, exactly like a stale save: the user decides whether to keep their
+    * edits or take the external change.
     */
   private[manager] def checkBufferForExternalChangesEffect(bufferId: BufferId): IO[Unit] =
     stateRef.get.flatMap { state =>
@@ -457,8 +457,7 @@ final private[manager] class StateManagerEffectHandlers(
                     // must not get a second one stacked on top of it -- code review finding on PR #1664.
                     if state.hasBlockingModal then IO.unit
                     else openReloadConflictModal(state, buffer.id, bufferLabelFor(buffer))
-                  else
-                    reloadBuffer(buffer.id)
+                  else reloadBuffer(buffer.id)
                 case _ => IO.unit
               }
             case None => IO.unit
@@ -478,8 +477,8 @@ final private[manager] class StateManagerEffectHandlers(
       .map(path => Option(path.getFileName).fold(path.toString)(_.toString))
       .getOrElse(s"Buffer ${buffer.id.value} - unsaved")
 
-  /** Same label, looked up fresh from `state` -- used where the caller only has a `bufferId` and wants the label as
-    * of a specific (usually just-re-read) state snapshot rather than one captured earlier.
+  /** Same label, looked up fresh from `state` -- used where the caller only has a `bufferId` and wants the label as of
+    * a specific (usually just-re-read) state snapshot rather than one captured earlier.
     */
   private def bufferLabelFor(state: AppState, bufferId: BufferId): String =
     state.persisted.buffers.get(bufferId).fold(s"Buffer ${bufferId.value} - unsaved")(bufferLabelFor)
@@ -546,7 +545,9 @@ final private[manager] class StateManagerEffectHandlers(
               // consistent with StateManagerWorkflowCapability's own ExternalConflict handler, which does the same
               // (code review finding on PR #1664: the two copies previously sourced the label from different points
               // in time, which could show different labels for the same conflict if the buffer changed in between).
-              stateRef.get.flatMap(current => workflow.openReloadConflictModal(current, bufferId, bufferLabelFor(current, bufferId)))
+              stateRef.get.flatMap(current =>
+                workflow.openReloadConflictModal(current, bufferId, bufferLabelFor(current, bufferId))
+              )
             case error =>
               logger.error(error)(s"[FILE] Failed to save buffer $bufferId")
           }

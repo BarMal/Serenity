@@ -36,10 +36,10 @@ final private[manager] class StateManagerFilePersistence(
         case None => IO.unit
     }
 
-  /** Re-saves the buffer bypassing the revision conflict check (#1623) -- the "Overwrite" choice on the reload
-    * conflict prompt, after the user has explicitly confirmed they want their edits to win over the external change.
-    * Clearing the buffer's captured revision before saving is what tells `FileManager` there's nothing to check
-    * against, mirroring the "no expected revision" case a first-ever save already goes through.
+  /** Re-saves the buffer bypassing the revision conflict check (#1623) -- the "Overwrite" choice on the reload conflict
+    * prompt, after the user has explicitly confirmed they want their edits to win over the external change. Clearing
+    * the buffer's captured revision before saving is what tells `FileManager` there's nothing to check against,
+    * mirroring the "no expected revision" case a first-ever save already goes through.
     */
   def forceSaveExistingBuffer(bufferId: BufferId): IO[Unit] =
     stateRef.get.flatMap { state =>

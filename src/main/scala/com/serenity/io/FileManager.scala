@@ -39,8 +39,8 @@ object FileManagerError:
   final case class ExternalConflict(location: StorageLocation)
       extends FileManagerError(s"File changed on disk since it was opened: $location")
 
-  /** Raised for any other [[DocumentStorageError]] the local storage provider reports (not found, access denied,
-    * etc.) -- distinguishable from the format-decode failures the RTF/ODT/DOCX codecs raise directly.
+  /** Raised for any other [[DocumentStorageError]] the local storage provider reports (not found, access denied, etc.)
+    * -- distinguishable from the format-decode failures the RTF/ODT/DOCX codecs raise directly.
     */
   final case class StorageFailure(error: DocumentStorageError)
       extends FileManagerError(s"Document storage error: $error")
@@ -82,7 +82,7 @@ class FileManager(using balance: Balance):
     preventLossyOverwrite(buffer, path) >> (FileUtils.detectFileType(path) match
       case FileType.Markdown =>
         for
-          _      <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
+          _ <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
           content = contentForSave(buffer, markdownContentForSave(buffer)).getBytes(StandardCharsets.UTF_8)
           stored <- saveStored(path, content, expectedRevision)
         yield savedBuffer(buffer, path, None, stored.revision)
@@ -100,7 +100,7 @@ class FileManager(using balance: Balance):
           .map(stored => savedBuffer(buffer, path, Some(document), stored.revision))
       case _ =>
         for
-          _      <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
+          _ <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
           content = contentForSave(buffer, buffer.document.content.collect()).getBytes(StandardCharsets.UTF_8)
           stored <- saveStored(path, content, expectedRevision)
         yield savedBuffer(buffer, path, None, stored.revision))
@@ -125,9 +125,9 @@ class FileManager(using balance: Balance):
           buffer.copy(document = reloaded.document, richText = reloaded.richText)
         )
 
-  /** The on-disk revision of `path` right now, for a focus-in re-check against a buffer's captured
-    * `Document.revision` (#1623) -- `None` for a file that no longer exists or otherwise can't be read, which a
-    * focus-in check treats as nothing to compare against rather than a conflict.
+  /** The on-disk revision of `path` right now, for a focus-in re-check against a buffer's captured `Document.revision`
+    * (#1623) -- `None` for a file that no longer exists or otherwise can't be read, which a focus-in check treats as
+    * nothing to compare against rather than a conflict.
     */
   def currentRevision(path: Path): IO[Option[DocumentRevision]] =
     storage.open(StorageLocation.Local(path)).map(_.toOption.flatMap(_.revision))
@@ -138,7 +138,12 @@ class FileManager(using balance: Balance):
   private def contentForSave(buffer: Buffer, normalizedContent: String): String =
     buffer.document.lineEnding.applyTo(normalizedContent)
 
-  private def bufferFromContent(bufferId: BufferId, path: Path, content: String, revision: Option[DocumentRevision]): Buffer =
+  private def bufferFromContent(
+    bufferId: BufferId,
+    path: Path,
+    content: String,
+    revision: Option[DocumentRevision]
+  ): Buffer =
     Buffer(
       id = bufferId,
       document = com.serenity.state.models.Document(
@@ -209,9 +214,9 @@ class FileManager(using balance: Balance):
     expectedRevision: Option[DocumentRevision]
   ): IO[StoredDocument] =
     storage.save(StorageLocation.Local(path), content, expectedRevision).flatMap {
-      case Right(stored)                               => IO.pure(stored)
+      case Right(stored)                                 => IO.pure(stored)
       case Left(DocumentStorageError.Conflict(location)) => IO.raiseError(FileManagerError.ExternalConflict(location))
-      case Left(error)                                  => IO.raiseError(FileManagerError.StorageFailure(error))
+      case Left(error)                                   => IO.raiseError(FileManagerError.StorageFailure(error))
     }
 
   private def preventLossyOverwrite(buffer: Buffer, path: Path): IO[Unit] =

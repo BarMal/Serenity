@@ -13,10 +13,10 @@ import org.scalatest.matchers.should.Matchers
   * `effectiveLineNumberMarginLeft`/`effectiveLineNumberPadding` siblings.
   *
   * The GUI's unset default additionally scales with `interfaceDensity` (issue #1542 re-scope), the same
-  * `SpacingScale.densityMultiplier` every other piece of density-aware UI chrome uses -- `Spacious` gets more
-  * breathing room than the historical flat one cell, while `Compact`/`Comfortable` keep that existing one-cell floor
-  * rather than shrinking below the minimum that keeps a counter/gap from visually merging into its neighbour. The TUI
-  * default and every explicit value (including an explicit zero) stay density-invariant, per the contract above.
+  * `SpacingScale.densityMultiplier` every other piece of density-aware UI chrome uses -- `Spacious` gets more breathing
+  * room than the historical flat one cell, while `Compact`/`Comfortable` keep that existing one-cell floor rather than
+  * shrinking below the minimum that keeps a counter/gap from visually merging into its neighbour. The TUI default and
+  * every explicit value (including an explicit zero) stay density-invariant, per the contract above.
   */
 class UiSpacingSurfaceDefaultsSpec extends AnyFlatSpec with Matchers:
 

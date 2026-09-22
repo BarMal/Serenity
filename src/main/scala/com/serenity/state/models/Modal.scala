@@ -67,9 +67,9 @@ enum CloseWorkflowChoice:
   case Discard
   case Cancel
 
-/** The choices offered when a save discovers the file changed on disk since it was opened (#1623): reload discards
-  * this buffer's edits in favour of the on-disk content, overwrite proceeds with the save regardless, cancel leaves
-  * the buffer dirty and the file untouched.
+/** The choices offered when a save discovers the file changed on disk since it was opened (#1623): reload discards this
+  * buffer's edits in favour of the on-disk content, overwrite proceeds with the save regardless, cancel leaves the
+  * buffer dirty and the file untouched.
   */
 enum ReloadConflictChoice:
   case Reload
@@ -105,10 +105,10 @@ final case class ReloadConflictState(
 ):
 
   def moveChoice(delta: Int): ReloadConflictState =
-    val choices       = List(ReloadConflictChoice.Reload, ReloadConflictChoice.Overwrite, ReloadConflictChoice.Cancel)
-    val currentIndex  = choices.indexOf(selectedChoice)
-    val rawIndex      = (currentIndex + delta) % choices.length
-    val wrappedIndex  = if rawIndex < 0 then choices.length + rawIndex else rawIndex
+    val choices      = List(ReloadConflictChoice.Reload, ReloadConflictChoice.Overwrite, ReloadConflictChoice.Cancel)
+    val currentIndex = choices.indexOf(selectedChoice)
+    val rawIndex     = (currentIndex + delta) % choices.length
+    val wrappedIndex = if rawIndex < 0 then choices.length + rawIndex else rawIndex
     copy(selectedChoice = choices(wrappedIndex))
 
 final case class ReplaceWorkflowState(

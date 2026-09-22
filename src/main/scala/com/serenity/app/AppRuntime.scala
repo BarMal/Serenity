@@ -71,9 +71,9 @@ object AppRuntime:
   /** React to a Swing window focus transition. Losing focus parks the cursor visible-and-steady (reset to the start of
     * its blink/breathe cycle) and forces one fast render so the steady caret paints immediately, regardless of where
     * the idle loop was in its own cadence. Regaining focus flips the signal the idle loop is waiting on --
-    * `awaitFocusedIdleTick` picks that up and resumes the normal cadence on its own -- and runs `onFocusGained`
-    * (#1623: re-checking the focused buffer's file for external changes), defaulted to a no-op for callers that don't
-    * need it (most existing tests).
+    * `awaitFocusedIdleTick` picks that up and resumes the normal cadence on its own -- and runs `onFocusGained` (#1623:
+    * re-checking the focused buffer's file for external changes), defaulted to a no-op for callers that don't need it
+    * (most existing tests).
     */
   private[serenity] def onWindowFocusChanged(
     focused: Boolean,
@@ -315,15 +315,15 @@ object AppRuntime:
       )
     ).parMapN((_, _, _, _, _, _, _, _) => ())
 
-  /** Background half of external-change detection (#1623), complementing the focus-in re-check: each cycle,
-    * re-derives the watched directory set from the currently open local buffers (`FileChangeWatcher.sync` handles
-    * buffers opening/closing since the last cycle), polls for real filesystem events, and re-checks every buffer
-    * whose file a poll window actually saw change -- reload-or-prompt exactly like the focus-in path, just not
-    * gated on the window regaining focus.
+  /** Background half of external-change detection (#1623), complementing the focus-in re-check: each cycle, re-derives
+    * the watched directory set from the currently open local buffers (`FileChangeWatcher.sync` handles buffers
+    * opening/closing since the last cycle), polls for real filesystem events, and re-checks every buffer whose file a
+    * poll window actually saw change -- reload-or-prompt exactly like the focus-in path, just not gated on the window
+    * regaining focus.
     *
-    * `WatchService.poll` is a genuine blocking OS call, so it only runs when there is at least one directory to
-    * watch -- with nothing open, the cycle sleeps instead. This isn't just an efficiency nicety: a real blocking call
-    * left running unconditionally makes this loop, and therefore any `AppRuntime.run` caller, incompatible with a
+    * `WatchService.poll` is a genuine blocking OS call, so it only runs when there is at least one directory to watch
+    * -- with nothing open, the cycle sleeps instead. This isn't just an efficiency nicety: a real blocking call left
+    * running unconditionally makes this loop, and therefore any `AppRuntime.run` caller, incompatible with a
     * virtual-time test harness (`VirtualTime.runVirtual`'s own `TestControl` treats `IO.blocking` as non-terminating)
     * -- a plain buffer-less startup (the common case every such test starts from) must stay virtual-time-compatible.
     */

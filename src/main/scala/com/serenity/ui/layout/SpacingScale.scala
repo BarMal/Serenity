@@ -42,9 +42,9 @@ object SpacingScale:
     * Public (not just [[forUi]]'s private concern) so a caller that still has to reason in whole grid cells --
     * `AppState.effectiveUiElementGap`/`effectiveLineNumberMarginLeft`/`effectiveLineNumberPadding`, whose consumers
     * (`LayoutEngine`, `PinnedPanelLayoutEngine`, `EditorLayoutContract`) lay out panes in a cell grid shared with the
-    * TUI and have no pixel/font-metric input to resolve a [[SpacingStep]] against -- can still apply the same
-    * density curve to its cell count, rather than every unset default staying flat regardless of density (issue
-    * #1542 re-scope) while every pixel-resolved piece of chrome already varies with it.
+    * TUI and have no pixel/font-metric input to resolve a [[SpacingStep]] against -- can still apply the same density
+    * curve to its cell count, rather than every unset default staying flat regardless of density (issue #1542 re-scope)
+    * while every pixel-resolved piece of chrome already varies with it.
     */
   def densityMultiplier(density: InterfaceDensity): Double =
     density match

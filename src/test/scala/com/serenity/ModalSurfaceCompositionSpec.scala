@@ -85,7 +85,9 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       SurfaceFocusId("reload-conflict-cancel")
     )
     plan.hitRegions.map(_.semanticLabel) shouldBe List("Reload from disk", "Overwrite", "Cancel")
-    plan.paintBoxes.find(_.actionId.contains(SurfaceActionId("reload-conflict-overwrite"))).exists(_.selected) shouldBe true
+    plan.paintBoxes
+      .find(_.actionId.contains(SurfaceActionId("reload-conflict-overwrite")))
+      .exists(_.selected) shouldBe true
   }
 
   it should "map only declared reload-conflict action identities back to workflow choices" in {

@@ -130,7 +130,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
       def saveExistingBuffer(id: BufferId): IO[Unit] =
         callsVar.update(_ :+ s"saveExistingBuffer:$id") >> saveExistingBufferHook(id)
       def saveBufferAs(id: BufferId, path: Path): IO[Unit] = callsVar.update(_ :+ s"saveBufferAs:$id:$path")
-      def reloadBuffer(id: BufferId): IO[Unit]              = callsVar.update(_ :+ s"reloadBuffer:$id")
+      def reloadBuffer(id: BufferId): IO[Unit]             = callsVar.update(_ :+ s"reloadBuffer:$id")
 
     val sessions = new EffectSessionPort:
       val sessionPersistence                  = new RecordingSessionPersistence(sessionTriggersVar, sessionRoot)
@@ -513,8 +513,8 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
     val state = AppState.initial.copy(persisted =
       AppState.initial.persisted.copy(buffers = Map(bufferId -> Buffer.fromFile(bufferId, path, "local edit")))
     )
-    val failing: BufferId => IO[Unit] = _ =>
-      IO.raiseError(com.serenity.io.FileManagerError.ExternalConflict(com.serenity.io.StorageLocation.Local(path)))
+    val failing: BufferId => IO[Unit] =
+      _ => IO.raiseError(com.serenity.io.FileManagerError.ExternalConflict(com.serenity.io.StorageLocation.Local(path)))
     val fixture = harness(state, saveExistingBufferHook = failing)
 
     fixture.handlers.saveBufferEffect(bufferId).unsafeRunSync()
@@ -571,8 +571,9 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
   it should "prompt instead of reloading a dirty buffer whose file changed on disk" in {
     val path = Files.createTempFile("focus-check-dirty", ".md")
     Files.writeString(path, "original")
-    val opened  = new FileManager().loadFile(path, bufferId).unsafeRunSync()
-    val dirty   = opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my edit"), isDirty = true))
+    val opened = new FileManager().loadFile(path, bufferId).unsafeRunSync()
+    val dirty =
+      opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my edit"), isDirty = true))
     val fixture = harness(focusedBufferState(dirty))
 
     Files.writeString(path, "changed externally")
@@ -584,7 +585,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "do nothing when the focused buffer's file has not changed" in {
-    val path    = Files.createTempFile("focus-check-unchanged", ".md")
+    val path = Files.createTempFile("focus-check-unchanged", ".md")
     Files.writeString(path, "original")
     val opened  = new FileManager().loadFile(path, bufferId).unsafeRunSync()
     val fixture = harness(focusedBufferState(opened))
@@ -605,8 +606,9 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
   "checkBufferForExternalChangesEffect" should "check any given buffer, not only the focused one (#1623)" in {
     val path = Files.createTempFile("watch-check-unfocused", ".md")
     Files.writeString(path, "original")
-    val opened  = new FileManager().loadFile(path, bufferId).unsafeRunSync()
-    val dirty   = opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my edit"), isDirty = true))
+    val opened = new FileManager().loadFile(path, bufferId).unsafeRunSync()
+    val dirty =
+      opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my edit"), isDirty = true))
     // No focus wiring at all -- state.focusedBufferId is None, unlike focusedBufferState.
     val state   = AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> dirty)))
     val fixture = harness(state)
@@ -622,7 +624,8 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
     val path = Files.createTempFile("watch-check-already-prompted", ".md")
     Files.writeString(path, "original")
     val opened = new FileManager().loadFile(path, bufferId).unsafeRunSync()
-    val dirty  = opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my edit"), isDirty = true))
+    val dirty =
+      opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my edit"), isDirty = true))
     val stateWithOpenPrompt = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> dirty)),
       runtime = AppState.initial.runtime.copy(
@@ -645,13 +648,14 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers:
   }
 
   "openBufferPathsEffect" should "report every open buffer's file path keyed by its buffer id" in {
-    val pathA = Files.createTempFile("open-paths-a", ".md")
-    val pathB = Files.createTempFile("open-paths-b", ".md")
+    val pathA   = Files.createTempFile("open-paths-a", ".md")
+    val pathB   = Files.createTempFile("open-paths-b", ".md")
     val bufferA = Buffer.fromFile(BufferId(1), pathA, "a")
     val bufferB = Buffer.fromFile(BufferId(2), pathB, "b")
     val unsaved = Buffer.fromString(BufferId(3), "no path yet")
     val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(buffers = Map(bufferA.id -> bufferA, bufferB.id -> bufferB, unsaved.id -> unsaved))
+      AppState.initial.persisted
+        .copy(buffers = Map(bufferA.id -> bufferA, bufferB.id -> bufferB, unsaved.id -> unsaved))
     )
     val fixture = harness(state)
 

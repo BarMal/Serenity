@@ -202,7 +202,7 @@ object RendererGutter:
       // right for a left counter, left for a right one -- the same `SurfaceTextInset` value every other piece of framed
       // chrome already insets by. Purely a paint-time refinement, entirely inside the whole cell `lineRect` already
       // reserves: `LayoutEngine`'s cell grid (hit-testing, drag-resize, the TUI's own rendering) is untouched.
-      val insetPx = SurfaceTextInset.px(state.persisted.config)
+      val insetPx       = SurfaceTextInset.px(state.persisted.config)
       val marginInsetPx = if dividerOnLeft then -insetPx else insetPx
       surface.pixels.withPixelTranslation(marginInsetPx, 0.0) {
         surface.text.drawRunPx(

@@ -58,7 +58,9 @@ class ModalReloadConflictReducerSpec extends AnyFlatSpec with Matchers:
 
     clicked.effects shouldBe Nil
     clicked.state.modalSurface.map(_.content) shouldBe Some(
-      SurfaceContent.ModalWorkflow(Modal.ReloadConflict(initialWorkflow.copy(selectedChoice = ReloadConflictChoice.Cancel)))
+      SurfaceContent.ModalWorkflow(
+        Modal.ReloadConflict(initialWorkflow.copy(selectedChoice = ReloadConflictChoice.Cancel))
+      )
     )
   }
 

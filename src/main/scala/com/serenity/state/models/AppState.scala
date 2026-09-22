@@ -98,12 +98,12 @@ final case class AppState(
   /** `InterfaceConfig.elementGap`, resolved for this state's surface. `AppConfig` alone can't make this call --
     * `runtime.isTuiMode` lives only here -- and it must not: the config is shared and persisted across both surfaces,
     * so baking either one's default into it would be wrong. Unset (`None`) defaults to a GUI cell of breathing room
-    * (flush-to-edge content there reads as unfinished), scaled by [[SpacingScale.densityMultiplier]] the same way
-    * every pixel-resolved piece of UI chrome already varies with `interfaceDensity` (issue #1542 re-scope) --
-    * `ceil`ed rather than rounded so `Compact`/`Comfortable` keep the existing one-cell floor instead of a gap that
-    * visually merges into its neighbour, while `Spacious` visibly grows past it. TUI's existing density is left
-    * alone (a cell there is a whole column out of a typical 80). An explicit value is honoured on both surfaces,
-    * unscaled -- a user who set a cell count meant exactly that count, not that count re-interpreted per density.
+    * (flush-to-edge content there reads as unfinished), scaled by [[SpacingScale.densityMultiplier]] the same way every
+    * pixel-resolved piece of UI chrome already varies with `interfaceDensity` (issue #1542 re-scope) -- `ceil`ed rather
+    * than rounded so `Compact`/`Comfortable` keep the existing one-cell floor instead of a gap that visually merges
+    * into its neighbour, while `Spacious` visibly grows past it. TUI's existing density is left alone (a cell there is
+    * a whole column out of a typical 80). An explicit value is honoured on both surfaces, unscaled -- a user who set a
+    * cell count meant exactly that count, not that count re-interpreted per density.
     */
   def effectiveUiElementGap: Double =
     persisted.config.uiElementGap.getOrElse(
@@ -122,10 +122,9 @@ final case class AppState(
       if runtime.isTuiMode then 0 else effectiveUiElementGapDefaultCells.toInt
     )
 
-  /** The GUI's density-scaled default cell count shared by [[effectiveUiElementGap]],
-    * [[effectiveLineNumberMarginLeft]] and [[effectiveLineNumberPadding]]: one cell scaled by
-    * [[SpacingScale.densityMultiplier]] and `ceil`ed to the next whole cell, since none of the three has a pixel
-    * metric to resolve a fractional cell against.
+  /** The GUI's density-scaled default cell count shared by [[effectiveUiElementGap]], [[effectiveLineNumberMarginLeft]]
+    * and [[effectiveLineNumberPadding]]: one cell scaled by [[SpacingScale.densityMultiplier]] and `ceil`ed to the next
+    * whole cell, since none of the three has a pixel metric to resolve a fractional cell against.
     */
   private def effectiveUiElementGapDefaultCells: Double =
     math.ceil(1.0 * SpacingScale.densityMultiplier(persisted.config.interfaceDensity))

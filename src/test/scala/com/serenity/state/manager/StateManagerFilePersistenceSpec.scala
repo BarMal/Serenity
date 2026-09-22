@@ -122,7 +122,7 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
   }
 
   "forceSaveExistingBuffer" should "overwrite the file even though its on-disk content changed since the buffer's captured revision (#1623)" in {
-    val path     = Files.createTempFile("force-save", ".txt")
+    val path = Files.createTempFile("force-save", ".txt")
     Files.writeString(path, "original")
     val bufferId = BufferId(1)
     val opened   = new FileManager().loadFile(path, bufferId).unsafeRunSync()
@@ -130,8 +130,9 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
     // Simulate another program changing the file after Serenity opened it.
     Files.writeString(path, "changed externally")
 
-    val edited = opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my edit"), isDirty = true))
-    val h      = harness(stateWithBuffer(edited))
+    val edited =
+      opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my edit"), isDirty = true))
+    val h = harness(stateWithBuffer(edited))
 
     h.persistence.forceSaveExistingBuffer(bufferId).unsafeRunSync()
 
@@ -140,14 +141,15 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
   }
 
   "reloadBuffer" should "replace the buffer's content with what is on disk, discarding local edits" in {
-    val path     = Files.createTempFile("reload", ".txt")
+    val path = Files.createTempFile("reload", ".txt")
     Files.writeString(path, "original")
     val bufferId = BufferId(1)
     val opened   = new FileManager().loadFile(path, bufferId).unsafeRunSync()
 
     Files.writeString(path, "changed externally")
-    val edited = opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my edit"), isDirty = true))
-    val h      = harness(stateWithBuffer(edited))
+    val edited =
+      opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my edit"), isDirty = true))
+    val h = harness(stateWithBuffer(edited))
 
     h.persistence.reloadBuffer(bufferId).unsafeRunSync()
 

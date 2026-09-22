@@ -273,7 +273,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
   it should "capture a revision on load and refresh it on save, for #1623 external-change detection" in {
     val fileManager = new FileManager()
-    val file         = Files.createTempFile("serenity-revision-capture", ".md")
+    val file        = Files.createTempFile("serenity-revision-capture", ".md")
 
     try
       Files.writeString(file, "original")
@@ -281,8 +281,9 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       val opened = fileManager.loadFile(file, BufferId(99)).unsafeRunSync()
       opened.document.revision shouldBe defined
 
-      val edited = opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("edited"), isDirty = true))
-      val saved  = fileManager.saveBuffer(edited, file).unsafeRunSync()
+      val edited =
+        opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("edited"), isDirty = true))
+      val saved = fileManager.saveBuffer(edited, file).unsafeRunSync()
 
       saved.document.revision shouldBe defined
       saved.document.revision should not be opened.document.revision
@@ -291,7 +292,7 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
   it should "reject a save with a conflict instead of silently overwriting a file that changed on disk since it was opened" in {
     val fileManager = new FileManager()
-    val file         = Files.createTempFile("serenity-revision-conflict", ".md")
+    val file        = Files.createTempFile("serenity-revision-conflict", ".md")
 
     try
       Files.writeString(file, "original")
@@ -300,7 +301,8 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
       // Simulate another program (another editor, a git checkout) changing the file after Serenity opened it.
       Files.writeString(file, "changed externally")
 
-      val edited = opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my local edit"), isDirty = true))
+      val edited =
+        opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my local edit"), isDirty = true))
       val result = fileManager.saveBuffer(edited, file).attempt.unsafeRunSync()
 
       result shouldBe Left(
@@ -312,8 +314,8 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
   it should "not conflict-check a Save As to a different path, even when the buffer carries a revision from its original file" in {
     val fileManager = new FileManager()
-    val original     = Files.createTempFile("serenity-revision-save-as-source", ".md")
-    val destination  = Files.createTempFile("serenity-revision-save-as-dest", ".md")
+    val original    = Files.createTempFile("serenity-revision-save-as-source", ".md")
+    val destination = Files.createTempFile("serenity-revision-save-as-dest", ".md")
 
     try
       Files.writeString(original, "original")

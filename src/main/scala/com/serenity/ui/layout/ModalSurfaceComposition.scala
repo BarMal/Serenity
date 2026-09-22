@@ -19,9 +19,9 @@ object ModalSurfaceComposition:
     modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]] = ModalKeyAction.defaultBindings
   ): Option[ResolvedSurfaceComposition] =
     modal match
-      case Modal.CloseWorkflow(workflow)   => Some(close(workflow, frameRect, targetRows))
-      case Modal.ReloadConflict(workflow)  => Some(reloadConflict(workflow, frameRect, targetRows))
-      case Modal.GotoLine(input)           => Some(inputPlan("Go to line", input, "goto-line", frameRect))
+      case Modal.CloseWorkflow(workflow)  => Some(close(workflow, frameRect, targetRows))
+      case Modal.ReloadConflict(workflow) => Some(reloadConflict(workflow, frameRect, targetRows))
+      case Modal.GotoLine(input)          => Some(inputPlan("Go to line", input, "goto-line", frameRect))
       case Modal.RenameSymbol(_, _, _, _, _, input) =>
         Some(inputPlan("Rename symbol", input, "rename-symbol", frameRect))
       case Modal.Find(query, results, currentIndex) =>
@@ -53,8 +53,8 @@ object ModalSurfaceComposition:
         // header + filename + path + format rows, plus up to 4 suggestions, plus a status/create-dir footer and the
         // keybinding-hints footer (issue #1253).
         math.max(9, math.min(14, workflow.suggestions.take(4).size + 8))
-      case Modal.CloseWorkflow(_)    => closeFrameHeight(actionRows)
-      case Modal.ReloadConflict(_)   => reloadConflictFrameHeight(actionRows)
+      case Modal.CloseWorkflow(_)  => closeFrameHeight(actionRows)
+      case Modal.ReloadConflict(_) => reloadConflictFrameHeight(actionRows)
 
   private val actions: List[(CloseWorkflowChoice, String, SurfaceActionId, SurfaceFocusId)] = List(
     (CloseWorkflowChoice.Save, "Save", SurfaceActionId("close-save"), SurfaceFocusId("close-save")),
@@ -159,9 +159,9 @@ object ModalSurfaceComposition:
     )
   )
 
-  /** Resolve the external-change-conflict prompt's (#1623) paint, focus, and hit geometry: a header line, the
-    * buffer's label, then one action row per choice -- structurally the close-confirmation layout's simpler cousin,
-    * since a reload conflict never needs the horizontal-actions fallback (its label text is short and fixed).
+  /** Resolve the external-change-conflict prompt's (#1623) paint, focus, and hit geometry: a header line, the buffer's
+    * label, then one action row per choice -- structurally the close-confirmation layout's simpler cousin, since a
+    * reload conflict never needs the horizontal-actions fallback (its label text is short and fixed).
     */
   private def reloadConflict(
     workflow: ReloadConflictState,

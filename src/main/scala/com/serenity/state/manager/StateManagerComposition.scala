@@ -170,7 +170,7 @@ private[manager] class StateManagerComposition(
     val fileManager                                            = runtimeFileManager
     def saveExistingBuffer(bufferId: BufferId): IO[Unit]       = filePersistence.saveExistingBuffer(bufferId)
     def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit] = filePersistence.saveBufferAs(bufferId, path)
-    def reloadBuffer(bufferId: BufferId): IO[Unit]              = filePersistence.reloadBuffer(bufferId)
+    def reloadBuffer(bufferId: BufferId): IO[Unit]             = filePersistence.reloadBuffer(bufferId)
 
   private val effectSessionPort: EffectSessionPort = new EffectSessionPort:
     val sessionPersistence = runtimeSessionPersistence

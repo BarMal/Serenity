@@ -235,7 +235,7 @@ class LspProtocolSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "advertise references and rename capabilities, since the client already requests both (#1467)" in {
-    val params = LspProtocol.initializeParams(12345, WorkspaceRootUri("file:///workspace"))
+    val params                   = LspProtocol.initializeParams(12345, WorkspaceRootUri("file:///workspace"))
     val textDocumentCapabilities = params.hcursor.downField("capabilities").downField("textDocument")
     textDocumentCapabilities.downField("references").succeeded shouldBe true
     textDocumentCapabilities.downField("rename").succeeded shouldBe true
