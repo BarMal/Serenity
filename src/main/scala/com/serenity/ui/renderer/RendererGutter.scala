@@ -198,14 +198,22 @@ object RendererGutter:
     val measuredLineNumberFont = buffer.filter(useMeasuredLineNumberFont(_, context))
     if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) && measuredLineNumberFont.nonEmpty then
       measuredLineNumberFont.foreach(buf => surface.text.setFont(context.fontForBuffer(buf)))
-      surface.text.drawRunPx(
-        context.cellMetrics.toPixelX(lineRect.x).toFloat,
-        lineTopPx,
-        lineRect.width * context.cellMetrics.charWidth.toFloat,
-        snapshot.lineHeightPx,
-        snapshot.ascentPx,
-        lineNumberText
-      )
+      // Issue #1542 (pixel-precision follow-up): nudge the digits a sub-cell amount away from the pane's outer edge --
+      // right for a left counter, left for a right one -- the same `SurfaceTextInset` value every other piece of framed
+      // chrome already insets by. Purely a paint-time refinement, entirely inside the whole cell `lineRect` already
+      // reserves: `LayoutEngine`'s cell grid (hit-testing, drag-resize, the TUI's own rendering) is untouched.
+      val insetPx = SurfaceTextInset.px(state.persisted.config)
+      val marginInsetPx = if dividerOnLeft then -insetPx else insetPx
+      surface.pixels.withPixelTranslation(marginInsetPx, 0.0) {
+        surface.text.drawRunPx(
+          context.cellMetrics.toPixelX(lineRect.x).toFloat,
+          lineTopPx,
+          lineRect.width * context.cellMetrics.charWidth.toFloat,
+          snapshot.lineHeightPx,
+          snapshot.ascentPx,
+          lineNumberText
+        )
+      }
       surface.text.setFont(context.uiFont)
     else surface.putString(lineRect.x, rowY, lineNumberText)
     if rendersLineNumber then
