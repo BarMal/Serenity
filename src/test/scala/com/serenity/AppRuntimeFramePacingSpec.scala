@@ -7,7 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import cats.syntax.semigroup.*
-import com.serenity.app.AppRuntime
+import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.input.{InputRouter, SystemClipboard}
@@ -112,7 +112,7 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
       clipboard                        = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
       emitDamage: (Damage => IO[Unit]) = damage => pendingDamage.update(_ |+| damage) >> fastModeSignal.set(true)
       given Logger[IO]                 = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
-      _ <- AppRuntime
+      _ <- AppRuntimeRenderLoops
         .inputEventPhase(
           stateManager,
           inputRouter,
@@ -124,7 +124,7 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
         )(Stream.emit(InsertChar('a')))
         .compile
         .drain
-      _ <- AppRuntime
+      _ <- AppRuntimeRenderLoops
         .fastRenderPhase(
           stateManager,
           animationTicker,

@@ -7,7 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.animation.AnimationState
-import com.serenity.app.AppRuntime
+import com.serenity.app.AppRuntimeRenderLoops
 import com.serenity.config.AppConfig
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.input.{InputRouter, SystemClipboard}
@@ -468,7 +468,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val cursorVisible = Ref.of[IO, Boolean](true).unsafeRunSync()
     val breathIndex   = Ref.of[IO, Int](0).unsafeRunSync()
 
-    AppRuntime
+    AppRuntimeRenderLoops
       .inputEventPhase(capabilities, router, clipboard, IO.unit, cursorVisible, breathIndex, (_: Damage) => IO.unit)(
         Stream.emit(Paste)
       )

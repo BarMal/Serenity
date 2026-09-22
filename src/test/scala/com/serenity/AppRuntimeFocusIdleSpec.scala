@@ -6,7 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
-import com.serenity.app.AppRuntime
+import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.input.InputHandler
@@ -224,7 +224,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
       breathIndex        <- Ref.of[IO, Int](0)
       renderCalls        <- Ref.of[IO, Int](0)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
-      fiber <- AppRuntime
+      fiber <- AppRuntimeRenderLoops
         .idleRenderPhase(
           loadState = IO.pure(state),
           loadBufferAnimations = IO.pure(Map.empty),
@@ -272,7 +272,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
       breathIndex        <- Ref.of[IO, Int](0)
       renderCalls        <- Ref.of[IO, Int](0)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
-      fiber <- AppRuntime
+      fiber <- AppRuntimeRenderLoops
         .idleRenderPhase(
           loadState = IO.pure(state),
           loadBufferAnimations = IO.pure(Map.empty),
@@ -315,7 +315,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
       breathIndex        <- Ref.of[IO, Int](0)
       renderCalls        <- Ref.of[IO, Int](0)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
-      fiber <- AppRuntime
+      fiber <- AppRuntimeRenderLoops
         .idleRenderPhase(
           loadState = IO.pure(state),
           loadBufferAnimations = IO.pure(Map.empty),

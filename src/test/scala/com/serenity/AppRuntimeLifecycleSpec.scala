@@ -7,7 +7,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
-import com.serenity.app.AppRuntime
+import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.*
 import com.serenity.input.InputHandler
 import com.serenity.keystroke.KeyStrokeInfo
@@ -251,7 +251,7 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
     val state =
       AppState.initial.copy(runtime = AppState.initial.runtime.copy(viewportSize = Some(ViewportSize(120, 40))))
 
-    val result = AppRuntime
+    val result = AppRuntimeRenderLoops
       .withRuntimeDiagnostics(
         loopName = "render loop",
         phase = "fast.full-render",
@@ -281,7 +281,7 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
       cause = RuntimeException("already wrapped")
     )
 
-    val result = AppRuntime
+    val result = AppRuntimeRenderLoops
       .withRuntimeDiagnostics(
         loopName = "render loop",
         phase = "ignored",
@@ -298,7 +298,7 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
       logs      <- Ref.of[IO, Vector[LogEntry]](Vector.empty)
       forceQuit <- Ref.of[IO, Boolean](false)
       given Logger[IO] = new RecordingLogger(logs)
-      _ <- AppRuntime.superviseLoop("render loop", forceQuit.set(true))(
+      _ <- AppRuntimeRenderLoops.superviseLoop("render loop", forceQuit.set(true))(
         IO.raiseError(
           AppRuntime.RuntimeFailure(
             loopName = "render loop",

@@ -9,7 +9,7 @@ import scala.concurrent.duration.*
 import cats.effect.std.Queue
 import cats.effect.{FiberIO, IO, Ref, Resource}
 import cats.syntax.all.*
-import com.serenity.app.{AppRuntime, AppStartup}
+import com.serenity.app.{AppRuntimeRenderLoops, AppStartup}
 import com.serenity.input.{FocusedInputTranslator, InProcessClipboard, InputRouter, Osc52Clipboard, SystemClipboard}
 import com.serenity.keystroke.events.{Event, MousePress}
 import com.serenity.keystroke.translators.TextEntryTranslator
@@ -95,7 +95,7 @@ final class TuiSession private (
 
   /** One frame painted the way `AppRuntime`'s fast render phase paints it: always the full content path (issue #934 v2
     * removed the fast phase's one cursor-only shortcut along with the window sitter it existed for -- see
-    * `AppRuntime.needsFullContentRender`'s doc).
+    * `AppRuntimeRenderLoops.needsFullContentRender`'s doc).
     *
     * [[screen]] always paints the full frame too, which is what most scenarios want -- what is on screen once the
     * runtime has caught up. This one reproduces the runtime's own per-frame choice explicitly, so a future change to
@@ -113,8 +113,8 @@ final class TuiSession private (
       updated <- screenRef.get
     yield TuiScreen(updated, emitted)
 
-  /** One frame of the *idle* render phase: the cursor-only paint `AppRuntime.runIdleRenderStep` makes on each tick of
-    * the cursor's own cadence, with the visibility and colour `AppRuntime.computeIdleCursorFrame` computes for that
+  /** One frame of the *idle* render phase: the cursor-only paint `AppRuntimeRenderLoops.runIdleRenderStep` makes on each tick of
+    * the cursor's own cadence, with the visibility and colour `AppRuntimeRenderLoops.computeIdleCursorFrame` computes for that
     * tick. Successive calls advance the same blink/breathe cycle a running session would, because they share the refs
     * the input phase resets on a keystroke.
     *
@@ -124,7 +124,7 @@ final class TuiSession private (
   def idleCursorScreen: IO[TuiScreen] =
     for
       current <- state
-      frame   <- AppRuntime.computeIdleCursorFrame(current, cursorVisible, breathIndex)
+      frame   <- AppRuntimeRenderLoops.computeIdleCursorFrame(current, cursorVisible, breathIndex)
       (visible, colour) = frame
       size <- shell.viewportSize
       surface = surfaces.forSize(size)
@@ -154,7 +154,7 @@ final class TuiSession private (
     (0 until ticks).toList.foldLeft(IO.pure(false))((previous, _) => previous >> tickAnimations)
 
   def animationsActive: IO[Boolean] =
-    (state, stateManager.getBufferAnimations).mapN(AppRuntime.hasActiveAnimations)
+    (state, stateManager.getBufferAnimations).mapN(AppRuntimeRenderLoops.hasActiveAnimations)
 
   private def tickAnimations: IO[Boolean] =
     for
@@ -385,7 +385,7 @@ object TuiSession:
         clipboard = clipboard,
         workspace = workspace
       )
-      funnel = AppRuntime.inputEventPhase(
+      funnel = AppRuntimeRenderLoops.inputEventPhase(
         stateManager,
         router,
         clipboard,
