@@ -56,18 +56,18 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
 
   it should "configure RendererFrameState's cache capacity from the loaded config at startup (#1433)" taggedAs
     CacheCapacityIsolatedTest in {
-    given com.serenity.rope.Balance = com.serenity.rope.Balance.default
-    given LoggerFactory[IO]         = Slf4jFactory.create[IO]
+      given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+      given LoggerFactory[IO]         = Slf4jFactory.create[IO]
 
-    val logger           = LoggerFactory[IO].getLogger(using LoggerName("Main"))
-    val previousCapacity = RendererFrameState.currentCacheCapacity
-    try
-      val config = AppConfig.default.withRendererFrameStateCacheCapacity(128)
-      StateManager.apply(logger, initialConfig = config).unsafeRunSync()
+      val logger           = LoggerFactory[IO].getLogger(using LoggerName("Main"))
+      val previousCapacity = RendererFrameState.currentCacheCapacity
+      try
+        val config = AppConfig.default.withRendererFrameStateCacheCapacity(128)
+        StateManager.apply(logger, initialConfig = config).unsafeRunSync()
 
-      RendererFrameState.currentCacheCapacity shouldBe 128
-    finally RendererFrameState.configureCacheCapacity(previousCapacity)
-  }
+        RendererFrameState.currentCacheCapacity shouldBe 128
+      finally RendererFrameState.configureCacheCapacity(previousCapacity)
+    }
 
   it should "default isTuiMode to false and thread it through when requested (issue #1112)" in {
     given com.serenity.rope.Balance = com.serenity.rope.Balance.default
