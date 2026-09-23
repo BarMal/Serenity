@@ -4,10 +4,10 @@ import com.serenity.config.{HotkeyTrigger, ModalKeyAction}
 import com.serenity.session.SessionMetadata
 import com.serenity.state.models.*
 
-/** Declarative composition plans for blocking workflow surfaces. The close-confirmation and reload-conflict
-  * ("N choices, pick one") compositions live in `ModalConfirmationComposition` -- split out purely to keep both
-  * files under this repo's architecture-ratchet file-length limit -- and are forwarded here unchanged for existing
-  * external callers.
+/** Declarative composition plans for blocking workflow surfaces. The close-confirmation and reload-conflict ("N
+  * choices, pick one") compositions live in `ModalConfirmationComposition` -- split out purely to keep both files under
+  * this repo's architecture-ratchet file-length limit -- and are forwarded here unchanged for existing external
+  * callers.
   */
 object ModalSurfaceComposition:
 

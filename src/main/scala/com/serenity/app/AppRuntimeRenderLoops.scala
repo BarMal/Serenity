@@ -6,10 +6,10 @@ import scala.concurrent.duration.*
 
 import cats.effect.*
 import cats.syntax.semigroup.*
+import com.serenity.config.{AppConfig, CursorMode}
 import com.serenity.diagnostics.Trace
 import com.serenity.input.*
 import com.serenity.keystroke.events.Event
-import com.serenity.config.{AppConfig, CursorMode}
 import com.serenity.state.manager.*
 import com.serenity.state.models.{AppState, BufferId, Damage}
 import com.serenity.ui.theme.ColorFormat.withAlpha
@@ -18,10 +18,10 @@ import fs2.concurrent.SignallingRef
 import org.typelevel.log4cats.Logger
 
 /** The render loop internals `AppRuntime.run` drives: the idle phase (cursor-only ticks while nothing is animating),
-  * the fast phase (full-content frames while something is), and the diagnostics/supervision wrappers both share.
-  * Split out of `AppRuntime.scala` (which stayed the orchestration entry point, buffer-load/quit wiring, and the
-  * background loops) purely to keep both files under this repo's architecture-ratchet file-length limit -- no
-  * behavior changed by this split.
+  * the fast phase (full-content frames while something is), and the diagnostics/supervision wrappers both share. Split
+  * out of `AppRuntime.scala` (which stayed the orchestration entry point, buffer-load/quit wiring, and the background
+  * loops) purely to keep both files under this repo's architecture-ratchet file-length limit -- no behavior changed by
+  * this split.
   */
 private[serenity] object AppRuntimeRenderLoops:
 
@@ -146,7 +146,7 @@ private[serenity] object AppRuntimeRenderLoops:
               isInitialFrame <- IO.pure(frameIndex == 0L)
               interval <-
                 IO.pure(AppRuntime.fastFrameInterval(stateAtFrameStart.persisted.config.surfaceConfig.renderFpsTarget))
-              _        <- sleep(AppRuntime.fastFrameDelay(interval, isInitialFrame))
+              _ <- sleep(AppRuntime.fastFrameDelay(interval, isInitialFrame))
               _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(
                 checkResizeAndHandle
               )
@@ -199,7 +199,9 @@ private[serenity] object AppRuntimeRenderLoops:
         case error =>
           stateForDiagnostics.attempt.flatMap {
             case Right(Some(state)) =>
-              IO.raiseError(AppRuntime.RuntimeFailure(loopName, phase, AppRuntime.describeStateForDiagnostics(state), error))
+              IO.raiseError(
+                AppRuntime.RuntimeFailure(loopName, phase, AppRuntime.describeStateForDiagnostics(state), error)
+              )
             case Right(None) =>
               IO.raiseError(AppRuntime.RuntimeFailure(loopName, phase, "state=unavailable", error))
             case Left(stateError) =>

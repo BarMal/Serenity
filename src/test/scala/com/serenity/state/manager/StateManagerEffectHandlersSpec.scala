@@ -4,8 +4,8 @@ import java.nio.file.{Files, Path}
 
 import scala.concurrent.duration.*
 
-import cats.effect.unsafe.implicits.global
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.AppMode

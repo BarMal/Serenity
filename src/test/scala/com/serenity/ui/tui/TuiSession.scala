@@ -113,10 +113,10 @@ final class TuiSession private (
       updated <- screenRef.get
     yield TuiScreen(updated, emitted)
 
-  /** One frame of the *idle* render phase: the cursor-only paint `AppRuntimeRenderLoops.runIdleRenderStep` makes on each tick of
-    * the cursor's own cadence, with the visibility and colour `AppRuntimeRenderLoops.computeIdleCursorFrame` computes for that
-    * tick. Successive calls advance the same blink/breathe cycle a running session would, because they share the refs
-    * the input phase resets on a keystroke.
+  /** One frame of the *idle* render phase: the cursor-only paint `AppRuntimeRenderLoops.runIdleRenderStep` makes on
+    * each tick of the cursor's own cadence, with the visibility and colour
+    * `AppRuntimeRenderLoops.computeIdleCursorFrame` computes for that tick. Successive calls advance the same
+    * blink/breathe cycle a running session would, because they share the refs the input phase resets on a keystroke.
     *
     * This is the path that owns the caret while nothing else is happening, so it is the one that has to leave the
     * terminal's cursor where the editing position is (#1215).

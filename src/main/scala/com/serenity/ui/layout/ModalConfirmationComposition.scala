@@ -57,7 +57,12 @@ private[layout] object ModalConfirmationComposition:
               label,
               actionId,
               focusId,
-              ModalSurfaceComposition.logicalRect(content.x, actionStartY + index * actionRows, content.width, actionRows)
+              ModalSurfaceComposition.logicalRect(
+                content.x,
+                actionStartY + index * actionRows,
+                content.width,
+                actionRows
+              )
             )
         }
     val clippedTextBoxes   = textBoxes.flatMap(ModalSurfaceComposition.clipBox(_, bounds))
@@ -113,9 +118,9 @@ private[layout] object ModalConfirmationComposition:
     )
   )
 
-  /** Resolve the external-change-conflict prompt's (#1623) paint, focus, and hit geometry: a header line, the
-    * buffer's label, then one action row per choice -- structurally the close-confirmation layout's simpler cousin,
-    * since a reload conflict never needs the horizontal-actions fallback (its label text is short and fixed).
+  /** Resolve the external-change-conflict prompt's (#1623) paint, focus, and hit geometry: a header line, the buffer's
+    * label, then one action row per choice -- structurally the close-confirmation layout's simpler cousin, since a
+    * reload conflict never needs the horizontal-actions fallback (its label text is short and fixed).
     */
   def reloadConflict(
     workflow: ReloadConflictState,

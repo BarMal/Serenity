@@ -17,8 +17,8 @@ import com.serenity.ui.theme.config.AppThemeManager
 import com.serenity.ui.tui.MarkdownPreviewWindowAvailability
 import org.typelevel.log4cats.noop.NoOpLogger
 
-/** Shared harness for [[StateManagerEffectHandlers]] specs: wires a `StateManagerEffectHandlers` whose capability
-  * ports (runtime, editor, surfaces, files, sessions, modal-workflow) are all recording doubles, so
+/** Shared harness for [[StateManagerEffectHandlers]] specs: wires a `StateManagerEffectHandlers` whose capability ports
+  * (runtime, editor, surfaces, files, sessions, modal-workflow) are all recording doubles, so
   * `StateManagerEffectHandlersSpec` and `StateManagerExternalChangeEffectHandlersSpec` can each check "which
   * collaborator fired, with what" or "what landed in state" without duplicating the wiring.
   */
