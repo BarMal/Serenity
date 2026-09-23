@@ -49,6 +49,10 @@ jobs:
         shell: bash
         run: sbt -v clean test assembly
 
+      - name: Run cache-capacity-isolated tests
+        shell: bash
+        run: sbt -v cacheCapacityTest
+
       # The console log capture for this workflow's Windows/macOS jobs has repeatedly dropped the actual assertion
       # message and stack trace for a failing test, surfacing only a bare suite-name summary -- true even with
       # ScalaTest's "-oF" full-stack-trace flag (see build.sbt's Test/testOptions comment), and the JUnit XML artifact

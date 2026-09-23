@@ -187,12 +187,16 @@ lazy val root = (project in file("."))
       Tests.Argument(TestFrameworks.ScalaTest, "-u", "target/test-reports")
     ),
     // Real-OS-boundary specs (a genuine loopback socket, a genuine sun.misc.Signal.raise -- see
-    // com.serenity.testkit.RealBoundaryTest's doc comment) are excluded from `sbt test`'s discovery of the whole
-    // suite, but not from `testOnly`: this is scoped to the `test` task specifically (`Test / test / testOptions`),
-    // one level more specific than the plain `Test / testOptions` above that `testOnly` still falls back to
-    // unfiltered, so `realBoundaryTest` below can name these two specs directly and still run them.
-    Test / test / testOptions := (Test / testOptions).value :+
-      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.RealBoundaryTest")
+    // com.serenity.testkit.RealBoundaryTest's doc comment) and cache-capacity-isolated tests (a genuine JVM-wide
+    // singleton -- see com.serenity.testkit.CacheCapacityIsolatedTest's doc comment) are excluded from `sbt test`'s
+    // discovery of the whole suite, but not from `testOnly`: this is scoped to the `test` task specifically
+    // (`Test / test / testOptions`), one level more specific than the plain `Test / testOptions` above that
+    // `testOnly` still falls back to unfiltered, so `realBoundaryTest`/`cacheCapacityTest` below can name these
+    // specs directly and still run them.
+    Test / test / testOptions := (Test / testOptions).value ++ Seq(
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.RealBoundaryTest"),
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.CacheCapacityIsolatedTest")
+    )
   )
 
 // Runs only the two real-OS-boundary specs (a real loopback socket, a real OS signal delivered via
@@ -204,6 +208,23 @@ lazy val realBoundaryTest = taskKey[Unit]("Run the real-OS-boundary integration 
 realBoundaryTest := (Test / testOnly)
   .toTask(
     " com.serenity.lsp.LspConnectionRealSocketIntegrationSpec com.serenity.ui.tui.TerminalShellRealSignalIntegrationSpec"
+  )
+  .value
+
+// Runs only the tests tagged com.serenity.testkit.CacheCapacityIsolatedTest that `sbt test` excludes -- see that
+// tag's doc comment. Filtered by `-n` (include tag) rather than dropped straight into one `testOnly` invocation
+// naming both specs: sbt parallelizes distinct *suites* within a single test task regardless of what `-n` filters
+// out within each one, which would just replace "raced by the other 82 specs" with "raced by MainStartupSpec" for
+// RendererFrameStateSpec's own tagged tests. `Def.sequential` instead runs one spec's tagged tests to completion
+// before the next spec's test task even starts, so exactly one suite ever touches the shared singleton at a time.
+lazy val cacheCapacityTest = taskKey[Unit]("Run the cache-capacity-isolated tests excluded from `sbt test`")
+
+cacheCapacityTest := Def
+  .sequential(
+    (Test / testOnly)
+      .toTask(" com.serenity.ui.renderer.RendererFrameStateSpec -- -n com.serenity.testkit.CacheCapacityIsolatedTest"),
+    (Test / testOnly)
+      .toTask(" com.serenity.MainStartupSpec -- -n com.serenity.testkit.CacheCapacityIsolatedTest")
   )
   .value
 

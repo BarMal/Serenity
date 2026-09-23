@@ -127,6 +127,9 @@ jobs:
       - name: Run tests
         run: sbt -v clean test
 
+      - name: Run cache-capacity-isolated tests
+        run: sbt -v cacheCapacityTest
+
   perf:
     name: Performance benchmarks
     runs-on: ubuntu-latest
