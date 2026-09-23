@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
 import scala.concurrent.duration.*
+import scala.jdk.CollectionConverters.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -40,6 +41,24 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
   private val cursorShown = s"$esc[?12l$esc[?25h"
 
   private def ctrl(c: Char): Byte = (c.toUpper - 'A' + 1).toByte
+
+  /** Wraps `fiber.joinWithNever.unsafeRunTimed` for issue #1564: a wedged input loop currently times out silently,
+    * leaving nothing to diagnose the stuck fiber with. On timeout this logs every thread's stack first, so a flake
+    * caught by this spec leaves the one artifact the issue is actually blocked on.
+    */
+  private def awaitOrDumpThreads(fiber: cats.effect.FiberIO[Unit], timeout: FiniteDuration)(using
+    logger: Logger[IO]
+  ): Option[Unit] =
+    fiber.joinWithNever.unsafeRunTimed(timeout) match
+      case done @ Some(_) => done
+      case None =>
+        val dump = Thread.getAllStackTraces.asScala
+          .map { (thread, trace) =>
+            s"\"${thread.getName}\" ${thread.getState}\n" + trace.map(frame => s"\tat $frame").mkString("\n")
+          }
+          .mkString("\n\n")
+        logger.error(s"fiber did not complete within $timeout -- dumping thread stacks:\n\n$dump").unsafeRunSync()
+        None
 
   final private class StaticHarness(val terminal: Terminal, private val out: ByteArrayOutputStream):
     def written: String = out.toString(StandardCharsets.UTF_8)
@@ -91,7 +110,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     harness.send(Array(ctrl('q')))
 
-    fiber.joinWithNever.unsafeRunTimed(15.seconds) shouldBe defined
+    awaitOrDumpThreads(fiber, 15.seconds) shouldBe defined
     harness.written should include(exitCaMode)
     harness.written should include(cursorShown)
   }
@@ -127,7 +146,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
 
     harness.send(Array(ctrl('q')))
 
-    fiber.joinWithNever.unsafeRunTimed(15.seconds) shouldBe defined
+    awaitOrDumpThreads(fiber, 15.seconds) shouldBe defined
     harness.written should include(exitCaMode)
     harness.written should include(cursorShown)
   }
@@ -208,7 +227,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
     }
 
     harness.send(Array(ctrl('q')))
-    fiber.joinWithNever.unsafeRunTimed(15.seconds) shouldBe defined
+    awaitOrDumpThreads(fiber, 15.seconds) shouldBe defined
   }
 
   it should "repaint typed characters and move the terminal's own caret with them" in {
@@ -246,7 +265,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
     }
 
     harness.send(Array(ctrl('q')))
-    fiber.joinWithNever.unsafeRunTimed(15.seconds) shouldBe defined
+    awaitOrDumpThreads(fiber, 15.seconds) shouldBe defined
 
     // Restoring the terminal leaves the alternate screen and shows the cursor again.
     val finalScreen = screenOf(harness)
@@ -276,7 +295,7 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
     }
 
     harness.send(Array(ctrl('q')))
-    fiber.joinWithNever.unsafeRunTimed(15.seconds) shouldBe defined
+    awaitOrDumpThreads(fiber, 15.seconds) shouldBe defined
   }
 
   "TuiRuntime.markdownPreviewSourceWindow" should "return an empty window for an empty buffer" in {

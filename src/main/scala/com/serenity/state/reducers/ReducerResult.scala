@@ -40,6 +40,8 @@ enum WorkflowEffect:
   case SubmitFileWorkflow(surfaceId: SurfaceId)
   case SubmitReplaceWorkflow(surfaceId: SurfaceId)
   case SubmitCloseWorkflow(surfaceId: SurfaceId)
+  // #1623: the reload-conflict prompt's Reload/Overwrite/Cancel submission -- see ModalReloadConflictReducer.
+  case SubmitReloadConflict(surfaceId: SurfaceId)
   case CreateFileWorkflowDirectories(surfaceId: SurfaceId)
   // Named sessions (issue #1390): submitting the name-prompt (save-as or rename) and selecting an entry from the
   // session-list picker each need IO (SessionManager calls), unlike GotoLine's pure jump-to-line submit.

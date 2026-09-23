@@ -38,8 +38,15 @@ object SpacingScale:
   /** Density's effect on chrome spacing. Density already chooses row counts and heights (`InterfaceDensityMetrics`);
     * these multipliers extend the same one control to the space *inside* and *between* surfaces, which is what makes
     * the setting read as a density setting rather than a row-count setting.
+    *
+    * Public (not just [[forUi]]'s private concern) so a caller that still has to reason in whole grid cells --
+    * `AppState.effectiveUiElementGap`/`effectiveLineNumberMarginLeft`/`effectiveLineNumberPadding`, whose consumers
+    * (`LayoutEngine`, `PinnedPanelLayoutEngine`, `EditorLayoutContract`) lay out panes in a cell grid shared with the
+    * TUI and have no pixel/font-metric input to resolve a [[SpacingStep]] against -- can still apply the same density
+    * curve to its cell count, rather than every unset default staying flat regardless of density (issue #1542 re-scope)
+    * while every pixel-resolved piece of chrome already varies with it.
     */
-  private def densityMultiplier(density: InterfaceDensity): Double =
+  def densityMultiplier(density: InterfaceDensity): Double =
     density match
       case InterfaceDensity.Compact     => 0.75
       case InterfaceDensity.Comfortable => 1.0

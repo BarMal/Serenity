@@ -44,6 +44,7 @@ private[manager] object FocusHandlerRouting:
   private val modalFileWorkflow: LocalEventHandler      = new ModalComponent(ModalType.FileWorkflow)
   private val modalReplaceWorkflow: LocalEventHandler   = new ModalComponent(ModalType.ReplaceWorkflow)
   private val modalCloseWorkflow: LocalEventHandler     = new ModalComponent(ModalType.CloseWorkflow)
+  private val modalReloadConflict: LocalEventHandler    = new ModalComponent(ModalType.ReloadConflict)
   private val modalSessionNamePrompt: LocalEventHandler = new ModalComponent(ModalType.SessionNamePrompt)
   private val modalSessionList: LocalEventHandler       = new ModalComponent(ModalType.SessionList)
 
@@ -67,6 +68,7 @@ private[manager] object FocusHandlerRouting:
       case ModalType.FileWorkflow      => modalFileWorkflow
       case ModalType.ReplaceWorkflow   => modalReplaceWorkflow
       case ModalType.CloseWorkflow     => modalCloseWorkflow
+      case ModalType.ReloadConflict    => modalReloadConflict
       case ModalType.SessionNamePrompt => modalSessionNamePrompt
       case ModalType.SessionList       => modalSessionList
       case custom: ModalType.Custom    => new ModalComponent(custom)

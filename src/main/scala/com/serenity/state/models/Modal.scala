@@ -67,6 +67,15 @@ enum CloseWorkflowChoice:
   case Discard
   case Cancel
 
+/** The choices offered when a save discovers the file changed on disk since it was opened (#1623): reload discards this
+  * buffer's edits in favour of the on-disk content, overwrite proceeds with the save regardless, cancel leaves the
+  * buffer dirty and the file untouched.
+  */
+enum ReloadConflictChoice:
+  case Reload
+  case Overwrite
+  case Cancel
+
 final case class CloseWorkflowState(
     scope: CloseScope,
     currentBufferId: BufferId,
@@ -81,6 +90,22 @@ final case class CloseWorkflowState(
       CloseWorkflowChoice.Discard,
       CloseWorkflowChoice.Cancel
     )
+    val currentIndex = choices.indexOf(selectedChoice)
+    val rawIndex     = (currentIndex + delta) % choices.length
+    val wrappedIndex = if rawIndex < 0 then choices.length + rawIndex else rawIndex
+    copy(selectedChoice = choices(wrappedIndex))
+
+/** #1623: the buffer whose save was rejected as stale, or whose focus-in re-check found the on-disk file changed
+  * underneath it. `bufferLabel` is captured at prompt time exactly like [[CloseWorkflowState.currentBufferLabel]].
+  */
+final case class ReloadConflictState(
+    bufferId: BufferId,
+    bufferLabel: String,
+    selectedChoice: ReloadConflictChoice = ReloadConflictChoice.Reload
+):
+
+  def moveChoice(delta: Int): ReloadConflictState =
+    val choices      = List(ReloadConflictChoice.Reload, ReloadConflictChoice.Overwrite, ReloadConflictChoice.Cancel)
     val currentIndex = choices.indexOf(selectedChoice)
     val rawIndex     = (currentIndex + delta) % choices.length
     val wrappedIndex = if rawIndex < 0 then choices.length + rawIndex else rawIndex
@@ -500,4 +525,8 @@ enum Modal:
 
   case CloseWorkflow(
       workflow: CloseWorkflowState
+  )
+
+  case ReloadConflict(
+      workflow: ReloadConflictState
   )

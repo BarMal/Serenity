@@ -44,4 +44,7 @@ object ModalStateReducer:
       // A blocking modal is centred (`ModalPlacement.Centered`) and painted by the modal layer even from the startup
       // page, where a floating overlay anchored to a cursor that does not exist would be invisible (#1289).
       case _: Modal.FileWorkflow => true
-      case _                     => false
+      // Same reasoning as CloseWorkflow: an external-change conflict (#1623) is a data-loss decision, not a
+      // dismissible convenience prompt.
+      case _: Modal.ReloadConflict => true
+      case _                       => false

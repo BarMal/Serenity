@@ -28,6 +28,8 @@ Iterate on the proposal via discussion until it's agreed. Then implement one cha
 
 **Prefer surgical changes.** Make the smallest change that solves the problem. Don't refactor unrelated code, rename things for style, or add abstractions that weren't requested. If you notice something worth fixing while working, mention it separately rather than silently changing it.
 
+**Favour the richer, more correct fix over the smaller one when the two genuinely conflict.** "Surgical" bounds scope creep (don't touch what the task doesn't need); it is not a license to pick a shallower or architecturally weaker fix just because it churns fewer lines. When a real design choice exists between a smaller patch and a fuller, more correct one, "smaller churn" is never on its own an adequate reason to choose the former — weigh it on correctness and architecture fit, present the tradeoff, and let the user decide.
+
 **Never delete files or make destructive changes without explicit instruction.**
 
 **Be honest, not agreeable.** If a plan has a flaw, if an approach is wrong, or if something won't work — say so directly. Don't validate ideas just to avoid friction. Pushback that saves time later is more useful than agreement that feels good now.

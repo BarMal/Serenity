@@ -6,7 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
-import com.serenity.app.AppRuntime
+import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.*
 import com.serenity.input.{InputHandler, InputRouter, SystemClipboard}
 import com.serenity.keystroke.KeyStrokeInfo
@@ -81,7 +81,7 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
         ): IO[Unit] = IO.unit
         def applyEvent(event: Event): IO[Unit] = IO.unit
       clipboard = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
-      _ <- AppRuntime
+      _ <- AppRuntimeRenderLoops
         .inputEventPhase(
           stateManager,
           router,
@@ -126,7 +126,7 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
         ): IO[Unit] = IO.unit
         def applyEvent(event: Event): IO[Unit] = IO.unit
       clipboard = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
-      _ <- AppRuntime
+      _ <- AppRuntimeRenderLoops
         .inputEventPhase(
           stateManager,
           router,
@@ -267,7 +267,7 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
         ): IO[Unit] = IO.unit
         def applyEvent(event: Event): IO[Unit] = IO.unit
       clipboard = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
-      _ <- AppRuntime
+      _ <- AppRuntimeRenderLoops
         .inputEventPhase(stateManager, router, clipboard, IO.unit, cursorVisible, breathIndex, (_: Damage) => IO.unit)(
           Stream.emit(OpenFind)
         )

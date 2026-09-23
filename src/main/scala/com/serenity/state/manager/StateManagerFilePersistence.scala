@@ -36,6 +36,44 @@ final private[manager] class StateManagerFilePersistence(
         case None => IO.unit
     }
 
+  /** Re-saves the buffer bypassing the revision conflict check (#1623) -- the "Overwrite" choice on the reload conflict
+    * prompt, after the user has explicitly confirmed they want their edits to win over the external change. Clearing
+    * the buffer's captured revision before saving is what tells `FileManager` there's nothing to check against,
+    * mirroring the "no expected revision" case a first-ever save already goes through.
+    */
+  def forceSaveExistingBuffer(bufferId: BufferId): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      state.persisted.buffers.get(bufferId).fold(IO.unit) { buffer =>
+        fileManager
+          .saveBuffer(buffer.copy(document = buffer.document.copy(revision = None)))
+          .flatMap(saved =>
+            stateRef.update(current =>
+              current
+                .copy(persisted = current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> saved)))
+            )
+          )
+          .flatTap(_ => persistAfterSave)
+      }
+    }
+
+  /** Re-reads the buffer's file from disk in place (#1623) -- the "Reload" choice on the reload conflict prompt, and
+    * the silent path a clean (no unsaved edits) buffer takes on a focus-in re-check that finds the file changed.
+    */
+  def reloadBuffer(bufferId: BufferId): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      state.persisted.buffers.get(bufferId).fold(IO.unit) { buffer =>
+        fileManager
+          .reloadBuffer(buffer)
+          .flatMap(reloaded =>
+            stateRef.update(current =>
+              current
+                .copy(persisted = current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> reloaded)))
+            )
+          )
+          .flatTap(_ => persistAfterSave)
+      }
+    }
+
   def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit] =
     stateRef.get.flatMap { state =>
       state.persisted.buffers.get(bufferId).fold(IO.unit) { buffer =>

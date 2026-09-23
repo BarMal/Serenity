@@ -209,6 +209,51 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "pin the comments panel when comment display is not turned off" in {
+    val fixture = harness()
+
+    fixture.panels.interpret(ViewIntent.PinCommentsPanel, AppState.initial).unsafeRunSync()
+
+    fixture.currentSurfaces.map(_.content) shouldBe List(SurfaceContent.Comments(Nil, None))
+    fixture.peeks.get.unsafeRunSync() shouldBe Nil
+  }
+
+  it should "report that comments are hidden instead of pinning a panel when comment display is off" in {
+    val offState = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(config =
+        AppState.initial.persisted.config.withCommentDisplayMode(com.serenity.config.CommentDisplayMode.Off)
+      )
+    )
+    val fixture = harness(offState)
+
+    fixture.panels.interpret(ViewIntent.PinCommentsPanel, offState).unsafeRunSync()
+
+    fixture.currentSurfaces shouldBe Nil
+    fixture.peeks.get.unsafeRunSync() shouldBe List(
+      PeekContent.QuickInfo("Comments are hidden -- comment display is turned off in Settings.")
+    )
+  }
+
+  it should "report that comments are hidden instead of replacing an already-pinned panel when comment display is off" in {
+    val alreadyPinned =
+      pinnedState(SurfaceId("comments"), SurfaceContent.Comments(Nil, None), PanelPosition.Right, 30)
+    val offState = alreadyPinned.copy(persisted =
+      alreadyPinned.persisted.copy(config =
+        alreadyPinned.persisted.config.withCommentDisplayMode(com.serenity.config.CommentDisplayMode.Off)
+      )
+    )
+    val fixture = harness(offState)
+
+    fixture.panels
+      .interpret(ViewIntent.SetPanelPin(PanelKind.Comments, Some(PanelPosition.Left)), offState)
+      .unsafeRunSync()
+
+    fixture.currentSurfaces.map(_.content) shouldBe List(SurfaceContent.Comments(Nil, None))
+    fixture.peeks.get.unsafeRunSync() shouldBe List(
+      PeekContent.QuickInfo("Comments are hidden -- comment display is turned off in Settings.")
+    )
+  }
+
   it should "load the explorer root directory and announce it as an explorer event" in {
     val directory = Files.createTempDirectory("panel-effects-explorer")
     val child     = Files.createDirectory(directory.resolve("src"))

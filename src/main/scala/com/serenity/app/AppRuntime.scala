@@ -7,10 +7,10 @@ import scala.concurrent.duration.*
 
 import cats.effect.*
 import cats.effect.std.Dispatcher
+import cats.syntax.foldable.*
 import cats.syntax.parallel.*
 import cats.syntax.semigroup.*
 import com.serenity.config.{AppConfig, CursorMode, RenderFpsTarget}
-import com.serenity.diagnostics.Trace
 import com.serenity.input.*
 import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.keystroke.events.Event
@@ -20,7 +20,6 @@ import com.serenity.state.manager.*
 import com.serenity.state.models.{AppState, BufferId, Damage}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
-import com.serenity.ui.theme.ColorFormat.withAlpha
 import fs2.Stream
 import fs2.concurrent.SignallingRef
 import org.typelevel.log4cats.{Logger, LoggerFactory}
@@ -69,17 +68,20 @@ object AppRuntime:
 
   /** React to a Swing window focus transition. Losing focus parks the cursor visible-and-steady (reset to the start of
     * its blink/breathe cycle) and forces one fast render so the steady caret paints immediately, regardless of where
-    * the idle loop was in its own cadence. Regaining focus only flips the signal the idle loop is waiting on --
-    * `awaitFocusedIdleTick` picks that up and resumes the normal cadence on its own.
+    * the idle loop was in its own cadence. Regaining focus flips the signal the idle loop is waiting on --
+    * `awaitFocusedIdleTick` picks that up and resumes the normal cadence on its own -- and runs `onFocusGained` (#1623:
+    * re-checking the focused buffer's file for external changes), defaulted to a no-op for callers that don't need it
+    * (most existing tests).
     */
   private[serenity] def onWindowFocusChanged(
     focused: Boolean,
     windowFocused: SignallingRef[IO, Boolean],
     cursorVisible: Ref[IO, Boolean],
     breathIndex: Ref[IO, Int],
-    requestFastRender: IO[Unit]
+    requestFastRender: IO[Unit],
+    onFocusGained: IO[Unit] = IO.unit
   ): IO[Unit] =
-    if focused then windowFocused.set(true)
+    if focused then windowFocused.set(true) >> onFocusGained
     else windowFocused.set(false) >> resetCursorActivity(cursorVisible, breathIndex) >> requestFastRender
 
   /** The idle loop's per-tick wait: the normal cursor idle cadence while the window is focused, or an indefinite,
@@ -192,7 +194,14 @@ object AppRuntime:
         windowFocused <- SignallingRef.of[IO, Boolean](true)
         _ <- IO(
           registerFocusCallback(
-            focusCallbackBridge(windowFocused, cursorVisible, breathIndex, requestFastRender, resizeCallbackDispatcher)
+            focusCallbackBridge(
+              windowFocused,
+              cursorVisible,
+              breathIndex,
+              requestFastRender,
+              resizeCallbackDispatcher,
+              stateManager.fileService.checkExternalChangesOnFocus
+            )
           )
         )
         _ <- IO(
@@ -201,10 +210,10 @@ object AppRuntime:
           )
         )
         animationTickCadence <- Ref.of[IO, AnimationTickCadence](AnimationTickCadence.empty)
-        translatorCache      <- Ref.of[IO, Option[FocusedTranslatorCacheEntry]](None)
+        translatorCache      <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
         currentStateForDiagnostics = stateManager.getCurrentState.map(Some(_))
         checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, requestFastRender))
-        inputFunnel = inputEventPhase(
+        inputFunnel = AppRuntimeRenderLoops.inputEventPhase(
           stateManager,
           inputRouter,
           systemClipboard,
@@ -220,7 +229,7 @@ object AppRuntime:
             renderFull(initialState, true, None, Damage.Everything, Map.empty) >>
               logger.info("Initial render completed, starting main loop") >>
               {
-                val idlePhase = idleRenderPhase(
+                val idlePhase = AppRuntimeRenderLoops.idleRenderPhase(
                   loadState = stateManager.getCurrentState,
                   loadBufferAnimations = stateManager.getBufferAnimations,
                   fastModeSignal = fastModeSignal,
@@ -234,7 +243,7 @@ object AppRuntime:
                   requestFastRender = requestFastRender
                 )
 
-                val fastPhase = fastRenderPhase(
+                val fastPhase = AppRuntimeRenderLoops.fastRenderPhase(
                   stateManager,
                   stateManager.animationTicker,
                   fastModeSignal,
@@ -249,13 +258,16 @@ object AppRuntime:
                 val renderLoop: Stream[IO, Unit] =
                   Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
 
-                runRuntimeLoops(
-                  stateManager,
-                  inputHandler,
-                  inputFiber.joinWithNever,
-                  renderLoop,
-                  awaitExternalQuit,
-                  appConfig
+                com.serenity.io.FileChangeWatcher.create.use(watcher =>
+                  runRuntimeLoops(
+                    stateManager,
+                    inputHandler,
+                    inputFiber.joinWithNever,
+                    renderLoop,
+                    watcher,
+                    awaitExternalQuit,
+                    appConfig
+                  )
                 )
               }
           }
@@ -268,30 +280,73 @@ object AppRuntime:
     inputHandler: InputHandler[IO],
     awaitInputLoop: IO[Unit],
     renderLoop: Stream[IO, Unit],
+    fileChangeWatcher: com.serenity.io.FileChangeWatcher,
     awaitExternalQuit: IO[Unit],
     appConfig: AppConfig
   )(using logger: Logger[IO]): IO[Unit] =
     val (lifecycle, quitSignal) = (stateManager.runtimeLifecycle, stateManager.runtimeLifecycle.awaitQuit.attempt)
     (
       awaitInputLoop,
-      superviseLoop("render loop", lifecycle.forceQuit)(renderLoop.interruptWhen(quitSignal).compile.drain),
+      AppRuntimeRenderLoops.superviseLoop("render loop", lifecycle.forceQuit)(
+        renderLoop.interruptWhen(quitSignal).compile.drain
+      ),
       lifecycle.awaitQuit,
-      superviseLoop("interval save loop", lifecycle.forceQuit)(lifecycle.intervalSaveStream.compile.drain),
-      superviseLoop("external quit coordinator", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("interval save loop", lifecycle.forceQuit)(
+        lifecycle.intervalSaveStream.compile.drain
+      ),
+      AppRuntimeRenderLoops.superviseLoop("external quit coordinator", lifecycle.forceQuit)(
         coordinateExternalQuit(awaitExternalQuit, lifecycle.forceQuit, lifecycle.awaitQuit)
       ),
-      superviseLoop("input shutdown", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("input shutdown", lifecycle.forceQuit)(
         shutdownInputAfterQuit(lifecycle.awaitQuit, inputHandler.shutdown)
       ),
-      superviseLoop("LSP loop", lifecycle.forceQuit)(
+      AppRuntimeRenderLoops.superviseLoop("LSP loop", lifecycle.forceQuit)(
         LspManager.run(
           stateManager.lspEffectSource.lspEffectStream,
           stateManager.applyEvent,
           logger,
           appConfig.languageToolsConfig.lspUserConfig
         )
+      ),
+      AppRuntimeRenderLoops.superviseLoop("external change watch loop", lifecycle.forceQuit)(
+        externalChangeWatchLoop(
+          fileChangeWatcher,
+          stateManager.fileService.openBufferPaths,
+          stateManager.fileService.checkBufferForExternalChanges
+        ).interruptWhen(quitSignal).compile.drain
       )
-    ).parMapN((_, _, _, _, _, _, _) => ())
+    ).parMapN((_, _, _, _, _, _, _, _) => ())
+
+  /** Background half of external-change detection (#1623), complementing the focus-in re-check: each cycle, re-derives
+    * the watched directory set from the currently open local buffers (`FileChangeWatcher.sync` handles buffers
+    * opening/closing since the last cycle), polls for real filesystem events, and re-checks every buffer whose file a
+    * poll window actually saw change -- reload-or-prompt exactly like the focus-in path, just not gated on the window
+    * regaining focus.
+    *
+    * `WatchService.poll` is a genuine blocking OS call, so it only runs when there is at least one directory to watch
+    * -- with nothing open, the cycle sleeps instead. This isn't just an efficiency nicety: a real blocking call left
+    * running unconditionally makes this loop, and therefore any `AppRuntime.run` caller, incompatible with a
+    * virtual-time test harness (`VirtualTime.runVirtual`'s own `TestControl` treats `IO.blocking` as non-terminating)
+    * -- a plain buffer-less startup (the common case every such test starts from) must stay virtual-time-compatible.
+    */
+  private[serenity] def externalChangeWatchLoop(
+    watcher: com.serenity.io.FileChangeWatcher,
+    openBufferPaths: IO[Map[Path, BufferId]],
+    checkBufferForExternalChanges: BufferId => IO[Unit],
+    pollInterval: FiniteDuration = 2.seconds
+  ): Stream[IO, Unit] =
+    Stream.repeatEval(
+      for
+        paths <- openBufferPaths
+        _     <- watcher.sync(paths.keys.flatMap(path => Option(path.getParent)).toSet)
+        _ <-
+          if paths.isEmpty then IO.sleep(pollInterval)
+          else
+            watcher
+              .pollChangedFiles(pollInterval)
+              .flatMap(changed => changed.flatMap(paths.get).toList.traverse_(checkBufferForExternalChanges))
+      yield ()
+    )
 
   private def runInputLoop(
     stateManager: StateManager,
@@ -299,7 +354,7 @@ object AppRuntime:
     inputFunnel: Stream[IO, Event] => Stream[IO, Unit]
   )(using logger: Logger[IO]): IO[Unit] =
     val quitSignal = stateManager.runtimeLifecycle.awaitQuit.attempt
-    superviseLoop("input loop", stateManager.runtimeLifecycle.forceQuit)(
+    AppRuntimeRenderLoops.superviseLoop("input loop", stateManager.runtimeLifecycle.forceQuit)(
       inputHandler.eventStream
         .evalTap(event =>
           stateManager.getCurrentState.flatMap(s =>
@@ -321,274 +376,6 @@ object AppRuntime:
 
   private[serenity] def shutdownInputAfterQuit(awaitQuit: IO[Unit], shutdownInput: IO[Unit]): IO[Unit] =
     awaitQuit >> shutdownInput
-
-  private[serenity] def idleRenderPhase(
-    loadState: IO[AppState],
-    loadBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]],
-    fastModeSignal: SignallingRef[IO, Boolean],
-    windowFocused: SignallingRef[IO, Boolean],
-    pendingPaintDamage: Ref[IO, Damage],
-    currentStateForDiagnostics: IO[Option[AppState]],
-    checkResizeAndHandle: IO[Unit],
-    cursorVisible: Ref[IO, Boolean],
-    breathIndex: Ref[IO, Int],
-    renderCursorOnly: RenderFn,
-    requestFastRender: IO[Unit]
-  )(using Logger[IO]): Stream[IO, Unit] =
-    Stream
-      .repeatEval(awaitFocusedIdleTick(loadState, windowFocused))
-      .interruptWhen(fastModeSignal.discrete)
-      .evalMap(_ =>
-        runIdleRenderStep(
-          currentStateForDiagnostics,
-          loadState,
-          loadBufferAnimations,
-          pendingPaintDamage,
-          checkResizeAndHandle,
-          cursorVisible,
-          breathIndex,
-          renderCursorOnly,
-          requestFastRender
-        )
-      )
-
-  private[serenity] def inputEventPhase(
-    stateManager: StateEngine,
-    inputRouter: InputRouter[IO, Event],
-    systemClipboard: SystemClipboard[IO],
-    checkResizeAndHandle: IO[Unit],
-    cursorVisible: Ref[IO, Boolean],
-    breathIndex: Ref[IO, Int],
-    emitDamage: Damage => IO[Unit],
-    translatorCache: Ref[IO, Option[FocusedTranslatorCacheEntry]] = Ref.unsafe[IO, Option[FocusedTranslatorCacheEntry]](
-      None
-    )
-  )(using balance: com.serenity.rope.Balance): Stream[IO, Event] => Stream[IO, Unit] =
-    _.evalMap { event =>
-      for
-        before           <- stateManager.getCurrentState
-        beforeAnimations <- stateManager.getBufferAnimations
-        _ <-
-          checkResizeBeforeInput(event, checkResizeAndHandle) >>
-            ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
-            observeCompanionSpriteTyping(event, stateManager) >>
-            stateManager.applyEvent(event) >>
-            ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
-            refreshFocusedInputTranslator(stateManager, inputRouter, translatorCache) >>
-            resetCursorActivity(cursorVisible, breathIndex)
-        after           <- stateManager.getCurrentState
-        afterAnimations <- stateManager.getBufferAnimations
-        _               <- emitDamage(DamageProducer.forTransition(before, after, beforeAnimations, afterAnimations))
-      yield ()
-    }.drain
-
-  /** Keyed on `AppConfig` identity (structural equality): the focused-translator set changes only when the config does,
-    * far less often than every keystroke/mouse-move that flows through `refreshFocusedInputTranslator` (issue #1409).
-    */
-  private[serenity] type FocusedTranslatorCacheEntry = (AppConfig, FocusedInputTranslator.TranslatorSet)
-
-  private[serenity] def observeCompanionSpriteTyping(
-    event: Event,
-    stateManager: StateUpdater
-  ): IO[Unit] =
-    event match
-      case _: com.serenity.keystroke.events.InsertChar =>
-        stateManager.updateStateValidated(state =>
-          state.copy(runtime = state.runtime.observeTyping(System.nanoTime(), state.persisted.config))
-        )
-      case _ => IO.unit
-
-  private def checkResizeBeforeInput(event: Event, checkResizeAndHandle: IO[Unit]): IO[Unit] =
-    event match
-      case _: com.serenity.keystroke.events.MouseInputEvent => checkResizeAndHandle
-      case _                                                => IO.unit
-
-  private def refreshFocusedInputTranslator(
-    stateManager: StateReader,
-    inputRouter: InputRouter[IO, Event],
-    translatorCache: Ref[IO, Option[FocusedTranslatorCacheEntry]]
-  ): IO[Unit] =
-    stateManager.getCurrentState.flatMap { state =>
-      val config = state.persisted.config
-      translatorCache.get
-        .flatMap {
-          case Some((cachedConfig, cachedTranslators)) if cachedConfig == config =>
-            IO.pure(cachedTranslators)
-          case _ =>
-            val translators = FocusedInputTranslator.TranslatorSet.forConfig(config)
-            translatorCache.set(Some(config -> translators)).as(translators)
-        }
-        .flatMap(translators => inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state, translators)))
-    }
-
-  private[serenity] def fastRenderPhase(
-    stateManager: StateReader,
-    animationTicker: AnimationTicker,
-    fastModeSignal: SignallingRef[IO, Boolean],
-    pendingDamage: Ref[IO, Damage],
-    pendingPaintDamage: Ref[IO, Damage],
-    animationTickCadence: Ref[IO, AnimationTickCadence],
-    currentStateForDiagnostics: IO[Option[AppState]],
-    checkResizeAndHandle: IO[Unit],
-    renderFull: RenderFn,
-    sleep: FiniteDuration => IO[Unit] = IO.sleep
-  )(using logger: Logger[IO], balance: com.serenity.rope.Balance): Stream[IO, Unit] =
-    Stream.eval(pendingDamage.getAndSet(Damage.Nothing)).flatMap { _ =>
-      Stream
-        .repeatEval(stateManager.getCurrentState)
-        .zipWithIndex
-        .evalMap {
-          case (stateAtFrameStart, frameIndex) =>
-            for
-              isInitialFrame <- IO.pure(frameIndex == 0L)
-              interval <- IO.pure(fastFrameInterval(stateAtFrameStart.persisted.config.surfaceConfig.renderFpsTarget))
-              _        <- sleep(fastFrameDelay(interval, isInitialFrame))
-              _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(
-                checkResizeAndHandle
-              )
-              active <-
-                if isInitialFrame then
-                  for
-                    initialState     <- stateManager.getCurrentState
-                    bufferAnimations <- stateManager.getBufferAnimations
-                  yield hasActiveAnimations(initialState, bufferAnimations)
-                else
-                  animationTickCadence.modify(_.advance(interval)).flatMap { animationTicks =>
-                    withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(
-                      advanceAnimationsForCadence(animationTicks, stateManager, animationTicker, pendingPaintDamage)
-                    )
-                  }
-              state <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
-                stateManager.getCurrentState
-              )
-              bufferAnimations <- stateManager.getBufferAnimations
-              paintDamage      <- pendingPaintDamage.getAndSet(Damage.Nothing)
-              _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(state)))(
-                renderFull(state, true, None, paintDamage, bufferAnimations)
-              )
-            yield active
-        }
-        .takeWhile(identity)
-        .map(_ => ())
-        .onFinalize {
-          stateManager.getCurrentState.flatMap { state =>
-            stateManager.getBufferAnimations.flatMap { bufferAnimations =>
-              pendingDamage.get.flatMap { damage =>
-                if shouldClearFastMode(hasActiveAnimations(state, bufferAnimations), damage) then
-                  fastModeSignal.set(false)
-                else IO.unit
-              }
-            }
-          }
-        }
-    }
-
-  private[serenity] def withRuntimeDiagnostics[A](
-    loopName: String,
-    phase: String,
-    stateForDiagnostics: IO[Option[AppState]]
-  )(effect: IO[A])(using logger: Logger[IO]): IO[A] =
-    Trace.timed(s"$loopName.$phase") {
-      effect.handleErrorWith {
-        case failure: RuntimeFailure =>
-          IO.raiseError(failure)
-        case error =>
-          stateForDiagnostics.attempt.flatMap {
-            case Right(Some(state)) =>
-              IO.raiseError(RuntimeFailure(loopName, phase, describeStateForDiagnostics(state), error))
-            case Right(None) =>
-              IO.raiseError(RuntimeFailure(loopName, phase, "state=unavailable", error))
-            case Left(stateError) =>
-              val reason = Option(stateError.getMessage).getOrElse(stateError.getClass.getSimpleName)
-              IO.raiseError(RuntimeFailure(loopName, phase, s"state=unavailable reason=$reason", error))
-          }
-      }
-    }
-
-  private[serenity] def superviseLoop(
-    name: String,
-    forceQuit: IO[Unit]
-  )(effect: IO[Unit])(using logger: Logger[IO]): IO[Unit] =
-    effect.handleErrorWith { error =>
-      val (phase, diagnostics, loggedError) = error match
-        case RuntimeFailure(_, failedPhase, failureDiagnostics, cause) =>
-          (s" phase=$failedPhase", s"; $failureDiagnostics", cause)
-        case other =>
-          ("", "", other)
-      logger.error(loggedError)(s"[RUNTIME] $name failed$phase$diagnostics; forcing safe shutdown") >>
-        forceQuit.attempt.void
-    }
-
-  private[serenity] def computeIdleCursorFrame(
-    state: AppState,
-    cursorVisible: Ref[IO, Boolean],
-    breathIndex: Ref[IO, Int]
-  ): IO[(Boolean, Option[Color])] =
-    state.persisted.config.cursorMode match
-      case CursorMode.Blink =>
-        cursorVisible.updateAndGet(!_).map(vis => (vis, None))
-      case CursorMode.Breathe =>
-        for
-          i <- breathIndex.updateAndGet(i => (i + 1) % 48)
-          c     = state.persisted.config.cursorColors.activeOr(state.persisted.theme.cursor)
-          alpha = ((math.sin(i * math.Pi / 24) + 1.0) / 2.0 * 255).toInt
-        yield (true, Some(c.withAlpha(alpha)))
-
-  private[serenity] def recoverIdleCursorRenderFailure(
-    error: Throwable,
-    requestFastRender: IO[Unit]
-  )(using logger: Logger[IO]): IO[Unit] =
-    val (phase, diagnostics, cause) = error match
-      case RuntimeFailure(_, failedPhase, failureDiagnostics, failureCause) =>
-        (failedPhase, failureDiagnostics, failureCause)
-      case other =>
-        ("idle.cursor-render", "state=unavailable", other)
-    logger.warn(cause)(
-      s"[RUNTIME] idle cursor render failed phase=$phase; $diagnostics; requesting full render"
-    ) >> requestFastRender
-
-  private[serenity] def runIdleRenderStep(
-    currentStateForDiagnostics: IO[Option[AppState]],
-    loadState: IO[AppState],
-    loadBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]],
-    pendingPaintDamage: Ref[IO, Damage],
-    checkResizeAndHandle: IO[Unit],
-    cursorVisible: Ref[IO, Boolean],
-    breathIndex: Ref[IO, Int],
-    renderCursorOnly: RenderFn,
-    requestFastRender: IO[Unit]
-  )(using logger: Logger[IO]): IO[Unit] =
-    for
-      _ <- withRuntimeDiagnostics("render loop", "idle.resize", currentStateForDiagnostics)(
-        checkResizeAndHandle
-      )
-      state <- withRuntimeDiagnostics("render loop", "idle.state", currentStateForDiagnostics)(
-        loadState
-      )
-      _ <- cursorIdleInterval(state.persisted.config, state.runtime.isTuiMode) match
-        case Some(_) =>
-          for
-            (visible, cursor) <- withRuntimeDiagnostics(
-              "render loop",
-              "idle.cursor",
-              IO.pure(Some(state))
-            )(computeIdleCursorFrame(state, cursorVisible, breathIndex))
-            // Read without draining: this frame paints the cursor overlay, never content, so consuming content
-            // damage here would lose it -- an input event that lands just as an idle tick fires would have its
-            // glyphs dropped until something else damaged the same rows. The fast phase that same event wakes
-            // drains it instead.
-            paintDamage      <- pendingPaintDamage.get
-            bufferAnimations <- loadBufferAnimations
-            _ <- withRuntimeDiagnostics(
-              "render loop",
-              "idle.cursor-render",
-              IO.pure(Some(state))
-            )(renderCursorOnly(state, visible, cursor, paintDamage, bufferAnimations))
-              .handleErrorWith(recoverIdleCursorRenderFailure(_, requestFastRender))
-          yield ()
-        case None =>
-          IO.unit
-    yield ()
 
   /** Dispatches an AWT/JLine callback's effect onto the runtime, tolerating the dispatcher having already shut down.
     *
@@ -616,11 +403,12 @@ object AppRuntime:
     cursorVisible: Ref[IO, Boolean],
     breathIndex: Ref[IO, Int],
     requestFastRender: IO[Unit],
-    dispatcher: Dispatcher[IO]
+    dispatcher: Dispatcher[IO],
+    onFocusGained: IO[Unit] = IO.unit
   )(using logger: Logger[IO]): Boolean => Unit =
     focused =>
       dispatchIfRunning(dispatcher)(
-        onWindowFocusChanged(focused, windowFocused, cursorVisible, breathIndex, requestFastRender)
+        onWindowFocusChanged(focused, windowFocused, cursorVisible, breathIndex, requestFastRender, onFocusGained)
           .handleErrorWith(error => logger.error(error)("[RUNTIME] focus callback failed"))
       )
 
@@ -641,60 +429,6 @@ object AppRuntime:
 
   private[serenity] def closeMarkdownPreviewWindowInState(state: AppState): AppState =
     state.copy(runtime = state.runtime.copy(markdownPreviewWindowBuffer = None))
-
-  private def advanceAnimationsForCadence(
-    ticks: Int,
-    stateManager: StateReader,
-    animationTicker: AnimationTicker,
-    pendingPaintDamage: Ref[IO, Damage]
-  )(using balance: com.serenity.rope.Balance): IO[Boolean] =
-    if ticks <= 0 then
-      for
-        state            <- stateManager.getCurrentState
-        bufferAnimations <- stateManager.getBufferAnimations
-      yield hasActiveAnimations(state, bufferAnimations)
-    else
-      for
-        before           <- stateManager.getCurrentState
-        beforeAnimations <- stateManager.getBufferAnimations
-        stillActive <- (0 until ticks).toList.foldLeft(IO.pure(false)) { (previous, _) =>
-          previous.flatMap(_ => animationTicker.advanceAnimationsOnTick)
-        }
-        after           <- stateManager.getCurrentState
-        afterAnimations <- stateManager.getBufferAnimations
-        _ <- pendingPaintDamage.update(
-          _ |+| DamageProducer.forTransition(before, after, beforeAnimations, afterAnimations)
-        )
-      yield stillActive
-
-  private[serenity] def hasActiveAnimations(
-    state: AppState,
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
-  ): Boolean =
-    needsFullContentRender(state, bufferAnimations) || state.runtime.typingActivity.isActive
-
-  /** Whether the fast render loop's current frame needs a full content repaint, as opposed to the cheaper cursor-only
-    * overlay path. Character-reveal animations paint into document glyphs, and a theme transition cross-fades every
-    * visible glyph/background colour (see RendererEntryPoints.withEffectiveTheme) -- both require the full canvas.
-    * Surface animations (command palette, panel fades) are drawn through the same overlay-scene machinery as full
-    * renders, not the cursor-only path, so they need it too. A column-to-column sweep (issue #1338) repaints the whole
-    * pane's content for as long as it is mid-flight, for the same reason.
-    *
-    * The retired window sitter (issue #934 v2) used to be the one exception here: its glyph lived entirely in the
-    * window chrome and never touched the canvas, so `canStandDownToCursorOnly` could skip a full repaint while it alone
-    * was animating. Its typing-reactivity now lives in the companion sprite panel instead, which paints into panel
-    * content like any other pinned panel -- there is no longer a canvas-free animation source, so that cursor-only
-    * shortcut no longer applies to anything and has been removed rather than left checking a condition nothing can
-    * satisfy.
-    */
-  private[serenity] def needsFullContentRender(
-    state: AppState,
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
-  ): Boolean =
-    state.persisted.buffers.keys.exists(id => bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
-      state.runtime.themeTransition.isDefined ||
-      state.runtime.surfaceAnimations.nonEmpty ||
-      state.runtime.columnTransitions.nonEmpty
 
   private[serenity] def describeStateForDiagnostics(state: AppState): String =
     val viewport   = state.runtime.viewportSize.map(size => s"${size.width}x${size.height}").getOrElse("unknown")

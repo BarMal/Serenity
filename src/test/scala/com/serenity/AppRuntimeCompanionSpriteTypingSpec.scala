@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.app.AppRuntime
+import com.serenity.app.AppRuntimeRenderLoops
 import com.serenity.config.*
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
@@ -28,7 +28,7 @@ class AppRuntimeCompanionSpriteTypingSpec extends AnyFlatSpec with Matchers:
     val logger       = LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeCompanionSpriteTypingSpec"))
     val stateManager = StateManager(logger, initialConfig = enabledConfig).unsafeRunSync()
 
-    AppRuntime
+    AppRuntimeRenderLoops
       .observeCompanionSpriteTyping(InsertChar('a'), stateManager)
       .unsafeRunSync()
 
@@ -50,7 +50,7 @@ class AppRuntimeCompanionSpriteTypingSpec extends AnyFlatSpec with Matchers:
     val logger       = LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeCompanionSpriteTypingSpec"))
     val stateManager = StateManager(logger, initialConfig = AppConfig.default).unsafeRunSync()
 
-    AppRuntime
+    AppRuntimeRenderLoops
       .observeCompanionSpriteTyping(InsertChar('a'), stateManager)
       .unsafeRunSync()
 

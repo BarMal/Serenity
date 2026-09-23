@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import cats.Order
 import cats.data.NonEmptyList
+import com.serenity.io.DocumentRevision
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{RichTextDocument, RichTextFidelity, RichTextStyle}
 import com.serenity.rope.Rope
@@ -65,7 +66,11 @@ final case class Document(
     isNewEmpty: Boolean = false,
     // Recorded on load so saving can reproduce the file it came from; `Rope` has already normalised the content
     // itself to LF by the time it reaches here.
-    lineEnding: LineEnding = LineEnding.default
+    lineEnding: LineEnding = LineEnding.default,
+    // Captured from `DocumentStorageProvider` on every successful open and save (#1623), so a later save or
+    // focus-in re-check can tell whether the on-disk file changed underneath this buffer since it was last
+    // read, rather than only detecting a stale write after silently overwriting external changes.
+    revision: Option[DocumentRevision] = None
 )
 
 /** A buffer's cursor/selection state: one entry per live cursor, each carrying its own position, in-flight selection

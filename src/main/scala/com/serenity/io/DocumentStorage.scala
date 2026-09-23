@@ -1,6 +1,5 @@
 package com.serenity.io
 
-import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 import java.security.MessageDigest
 import java.time.Instant
@@ -23,8 +22,10 @@ final case class DocumentMetadata(
     revision: Option[DocumentRevision]
 )
 
-/** A document read through a [[DocumentStorageProvider]]. */
-final case class StoredDocument(content: String, metadata: DocumentMetadata):
+/** A document read through a [[DocumentStorageProvider]]. Content is raw bytes, not `String`, so a provider can carry
+  * binary formats (RTF/ODT/DOCX) as well as text -- callers that need text decode it themselves.
+  */
+final case class StoredDocument(content: Array[Byte], metadata: DocumentMetadata):
   def location: StorageLocation = metadata.location
 
   def revision: Option[DocumentRevision] = metadata.revision
@@ -59,7 +60,7 @@ final case class DocumentStorageProvider(
     /** Open a document and return the storage revision used for stale-save detection. */
     open: StorageLocation => IO[Either[DocumentStorageError, StoredDocument]],
     /** Save document content, rejecting an out-of-date expected revision with [[DocumentStorageError.Conflict]]. */
-    save: (StorageLocation, String, Option[DocumentRevision]) => IO[Either[DocumentStorageError, StoredDocument]],
+    save: (StorageLocation, Array[Byte], Option[DocumentRevision]) => IO[Either[DocumentStorageError, StoredDocument]],
     /** Copy a document to another location handled by this provider. */
     copy: (StorageLocation, StorageLocation) => IO[Either[DocumentStorageError, StoredDocument]]
 )
@@ -131,14 +132,14 @@ object LocalDocumentStorageProvider:
       else if !Files.isRegularFile(path) || !Files.isReadable(path) then
         Left(DocumentStorageError.AccessDenied(location))
       else
-        val content = Files.readString(path)
+        val content = Files.readAllBytes(path)
         Right(StoredDocument(content, metadata(path, Some(content))))
     }.handleError(error => Left(storageError(location, error)))
 
   private def saveLocal(
     path: Path,
     location: StorageLocation,
-    content: String,
+    content: Array[Byte],
     expectedRevision: Option[DocumentRevision]
   ): IO[Either[DocumentStorageError, StoredDocument]] =
     IO.blocking {
@@ -148,7 +149,7 @@ object LocalDocumentStorageProvider:
       // hash nothing will consult.
       val currentRevision =
         if expectedRevision.isDefined && Files.exists(path) && Files.isRegularFile(path) then
-          Some(revision(Files.readString(path)))
+          Some(revision(Files.readAllBytes(path)))
         else None
       if expectedRevision.exists(expected => !currentRevision.contains(expected)) then
         Left(DocumentStorageError.Conflict(location))
@@ -157,11 +158,11 @@ object LocalDocumentStorageProvider:
       case Left(conflict) => IO.pure(Left(conflict))
       case Right(_) =>
         AtomicFileWriter
-          .writeString(path, content)
+          .writeBytes(path, content)
           .flatMap(_ => IO.blocking(Right(StoredDocument(content, metadata(path, Some(content))))))
     }.handleError(error => Left(storageError(location, error)))
 
-  private def metadata(path: Path, content: Option[String]): DocumentMetadata =
+  private def metadata(path: Path, content: Option[Array[Byte]]): DocumentMetadata =
     DocumentMetadata(
       location = StorageLocation.Local(path),
       displayName = Option(path.getFileName).fold(path.toString)(_.toString),
@@ -170,8 +171,8 @@ object LocalDocumentStorageProvider:
       revision = content.map(revision)
     )
 
-  private def revision(content: String): DocumentRevision =
-    val digest = MessageDigest.getInstance("SHA-256").digest(content.getBytes(StandardCharsets.UTF_8))
+  private def revision(content: Array[Byte]): DocumentRevision =
+    val digest = MessageDigest.getInstance("SHA-256").digest(content)
     DocumentRevision(digest.map(byte => f"$byte%02x").mkString)
 
   private def storageError(location: StorageLocation, error: Throwable): DocumentStorageError =

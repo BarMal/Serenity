@@ -11,9 +11,9 @@ import com.serenity.ui.layout.{SpacingScale, SpacingStep}
   * Deliberately smaller than a cell: a row's text is measured and truncated against the full content width, so an inset
   * at or beyond a cell would push a full-width row's last glyph past the margin the border sits in.
   *
-  * Shared by [[TextOverlayRenderer]] (floating surfaces) and [[PinnedPanelRenderer]] (docked panels) so the two
-  * families of framed surfaces -- which every other piece of border/frame chrome already treats identically -- can't
-  * drift into computing "the same" inset two different ways.
+  * Shared by [[TextOverlayRenderer]] (floating surfaces), [[PinnedPanelRenderer]] (docked panels) and
+  * [[RendererGutter]] (the line-number counter's own sub-cell margin refinement, issue #1542) so surfaces that all
+  * treat their other border/frame chrome identically can't drift into computing "the same" inset two different ways.
   */
 object SurfaceTextInset:
 

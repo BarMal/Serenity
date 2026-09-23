@@ -121,6 +121,51 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
     h.currentState shouldBe before
   }
 
+  "forceSaveExistingBuffer" should "overwrite the file even though its on-disk content changed since the buffer's captured revision (#1623)" in {
+    val path = Files.createTempFile("force-save", ".txt")
+    Files.writeString(path, "original")
+    val bufferId = BufferId(1)
+    val opened   = new FileManager().loadFile(path, bufferId).unsafeRunSync()
+
+    // Simulate another program changing the file after Serenity opened it.
+    Files.writeString(path, "changed externally")
+
+    val edited =
+      opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my edit"), isDirty = true))
+    val h = harness(stateWithBuffer(edited))
+
+    h.persistence.forceSaveExistingBuffer(bufferId).unsafeRunSync()
+
+    Files.readString(path) shouldBe "my edit"
+    h.currentState.persisted.buffers(bufferId).document.isDirty shouldBe false
+  }
+
+  "reloadBuffer" should "replace the buffer's content with what is on disk, discarding local edits" in {
+    val path = Files.createTempFile("reload", ".txt")
+    Files.writeString(path, "original")
+    val bufferId = BufferId(1)
+    val opened   = new FileManager().loadFile(path, bufferId).unsafeRunSync()
+
+    Files.writeString(path, "changed externally")
+    val edited =
+      opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my edit"), isDirty = true))
+    val h = harness(stateWithBuffer(edited))
+
+    h.persistence.reloadBuffer(bufferId).unsafeRunSync()
+
+    h.currentState.persisted.buffers(bufferId).document.content.collect() shouldBe "changed externally"
+    h.currentState.persisted.buffers(bufferId).document.isDirty shouldBe false
+  }
+
+  it should "no-op for a buffer id that isn't tracked" in {
+    val before = AppState.initial
+    val h      = harness(before)
+
+    h.persistence.reloadBuffer(BufferId(999)).unsafeRunSync()
+
+    h.currentState shouldBe before
+  }
+
   "saveBufferAs" should "write the buffer to the new path, update state, and remember it as a recent file" in {
     val newPath  = Files.createTempFile("save-as", ".txt")
     val bufferId = BufferId(1)

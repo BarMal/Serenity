@@ -66,8 +66,35 @@ final private[manager] class StateManagerWorkflowCapability(
     filePersistence.saveExistingBuffer(bufferId).handleErrorWith {
       case error: com.serenity.richtext.LossyRichTextOverwriteException =>
         stateRef.get.flatMap(current => showSaveAsWorkflow(current, bufferId, error.getMessage))
+      case _: com.serenity.io.FileManagerError.ExternalConflict =>
+        stateRef.get.flatMap(current => openReloadConflictModal(current, bufferId, closeBufferLabel(current, bufferId)))
       case error =>
         logger.error(error)(s"[FILE] Failed to save buffer $bufferId")
+    }
+
+  /** Opens the reload/overwrite/cancel prompt (#1623) for `bufferId` -- either because a save just discovered the
+    * on-disk file changed since it was opened, or because a focus-in re-check found the same thing.
+    */
+  private[manager] def openReloadConflictModal(state: AppState, bufferId: BufferId, bufferLabel: String): IO[Unit] =
+    val modalState =
+      ModalStateReducer.show(Modal.ReloadConflict(ReloadConflictState(bufferId, bufferLabel)), state).state
+    validateAndUpdateState(modalState, state)
+
+  private def reloadConflictSurface(state: AppState, surfaceId: SurfaceId): Option[ReloadConflictState] =
+    state.runtime.modalStack.find(_.id == surfaceId).collect {
+      case ModalDialog(_, Modal.ReloadConflict(workflow), _) => workflow
+    }
+
+  private[manager] def submitReloadConflictEffect(surfaceId: SurfaceId): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      reloadConflictSurface(state, surfaceId) match
+        case Some(workflow) =>
+          val dismiss = stateRef.get.flatMap(current => validateAndUpdateState(current.dismissTopModal, current))
+          workflow.selectedChoice match
+            case ReloadConflictChoice.Cancel    => dismiss
+            case ReloadConflictChoice.Reload    => filePersistence.reloadBuffer(workflow.bufferId) >> dismiss
+            case ReloadConflictChoice.Overwrite => filePersistence.forceSaveExistingBuffer(workflow.bufferId) >> dismiss
+        case None => IO.unit
     }
 
   private def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =

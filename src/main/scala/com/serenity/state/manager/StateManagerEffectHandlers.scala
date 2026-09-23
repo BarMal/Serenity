@@ -17,46 +17,6 @@ import com.serenity.state.reducers.*
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.theme.config.ThemeConfigWriter
 
-/** Workflow operations selected by command effects. */
-private[manager] trait WorkflowEffectPort:
-  def requestOpenFile: IO[Unit]
-  def requestSaveAs: IO[Unit]
-  def refresh(surfaceId: SurfaceId): IO[Unit]
-  def refreshFind(request: FindSearchRequest): IO[Unit]
-  def submitFile(surfaceId: SurfaceId): IO[Unit]
-  def openAsProjectRoot(surfaceId: SurfaceId): IO[Unit]
-  def submitReplace(surfaceId: SurfaceId): IO[Unit]
-  def submitClose(surfaceId: SurfaceId): IO[Unit]
-  def createDirectories(surfaceId: SurfaceId): IO[Unit]
-  def submitSessionNamePrompt(surfaceId: SurfaceId): IO[Unit]
-  def submitSessionList(surfaceId: SurfaceId): IO[Unit]
-
-/** Interprets workflow effects without editor, theme, file, or runtime dependencies. */
-final private[manager] class WorkflowEffectHandler(port: WorkflowEffectPort):
-
-  def interpret(effect: WorkflowEffect): IO[Unit] =
-    effect match
-      case WorkflowEffect.RequestOpenFile                   => port.requestOpenFile
-      case WorkflowEffect.RequestSaveAs                     => port.requestSaveAs
-      case WorkflowEffect.RefreshFileWorkflow(id)           => port.refresh(id)
-      case WorkflowEffect.RefreshFind(request)              => port.refreshFind(request)
-      case WorkflowEffect.SubmitFileWorkflow(id)            => port.submitFile(id)
-      case WorkflowEffect.OpenFileWorkflowAsProjectRoot(id) => port.openAsProjectRoot(id)
-      case WorkflowEffect.SubmitReplaceWorkflow(id)         => port.submitReplace(id)
-      case WorkflowEffect.SubmitCloseWorkflow(id)           => port.submitClose(id)
-      case WorkflowEffect.CreateFileWorkflowDirectories(id) => port.createDirectories(id)
-      case WorkflowEffect.SubmitSessionNamePrompt(id)       => port.submitSessionNamePrompt(id)
-      case WorkflowEffect.SubmitSessionList(id)             => port.submitSessionList(id)
-
-/** Lifecycle operation required by lifecycle effects. */
-private[manager] trait LifecycleEffectPort:
-  def completeQuit: IO[Unit]
-
-/** Interprets lifecycle effects without runtime, editor, or workflow dependencies. */
-final private[manager] class LifecycleEffectHandler(port: LifecycleEffectPort):
-
-  def interpret: IO[Unit] = port.completeQuit
-
 /** Owns ordered I/O interpretation for reducer effects. */
 final private[manager] class StateManagerEffectHandlers(
     runtime: EffectRuntimePort,
@@ -96,6 +56,7 @@ final private[manager] class StateManagerEffectHandlers(
       )
     def submitReplace(surfaceId: SurfaceId): IO[Unit]           = submitReplaceWorkflowEffect(surfaceId)
     def submitClose(surfaceId: SurfaceId): IO[Unit]             = submitCloseWorkflowEffect(surfaceId)
+    def submitReloadConflict(surfaceId: SurfaceId): IO[Unit]    = submitReloadConflictEffect(surfaceId)
     def createDirectories(surfaceId: SurfaceId): IO[Unit]       = createFileWorkflowDirectoriesEffect(surfaceId)
     def submitSessionNamePrompt(surfaceId: SurfaceId): IO[Unit] = submitSessionNamePromptEffect(surfaceId)
     def submitSessionList(surfaceId: SurfaceId): IO[Unit]       = submitSessionListEffect(surfaceId))
@@ -426,6 +387,60 @@ final private[manager] class StateManagerEffectHandlers(
   private def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)
 
+  /** Re-checks the focused buffer's on-disk revision against its captured one (#1623), called on window focus-gain. */
+  private[manager] def checkExternalChangesOnFocusEffect: IO[Unit] =
+    stateRef.get.flatMap { state =>
+      state.focusedBufferId match
+        case Some(bufferId) => checkBufferForExternalChangesEffect(bufferId)
+        case None           => IO.unit
+    }
+
+  /** Re-checks one buffer's on-disk revision against its captured one (#1623) -- the shared decision both the
+    * focus-gain check and `FileChangeWatcher`'s background poll loop (`AppRuntime.externalChangeWatchLoop`) drive. A
+    * clean buffer (no unsaved edits) that changed externally is reloaded silently -- there's nothing of the user's to
+    * lose. A dirty one is left alone but prompted, exactly like a stale save: the user decides whether to keep their
+    * edits or take the external change.
+    */
+  private[manager] def checkBufferForExternalChangesEffect(bufferId: BufferId): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      state.persisted.buffers.get(bufferId) match
+        case Some(buffer) =>
+          buffer.document.filePath match
+            case Some(path) =>
+              fileManager.currentRevision(path).flatMap {
+                case Some(onDisk) if Some(onDisk) != buffer.document.revision =>
+                  if buffer.hasUnsavedChanges then
+                    // A blocking modal already up (most likely this same buffer's own reload-conflict prompt,
+                    // re-triggered by another poll cycle or focus-gain before the user answered the first one)
+                    // must not get a second one stacked on top of it -- code review finding on PR #1664.
+                    if state.hasBlockingModal then IO.unit
+                    else openReloadConflictModal(state, buffer.id, bufferLabelFor(buffer))
+                  else reloadBuffer(buffer.id)
+                case _ => IO.unit
+              }
+            case None => IO.unit
+        case None => IO.unit
+    }
+
+  /** The paths of every currently open local buffer, for `FileChangeWatcher.sync`'s directory set -- `AppRuntime`'s
+    * background watch loop re-derives this each poll cycle so it tracks buffers opening and closing over time.
+    */
+  private[manager] def openBufferPathsEffect: IO[Map[Path, BufferId]] =
+    stateRef.get.map(state =>
+      state.persisted.buffers.values.flatMap(buffer => buffer.document.filePath.map(_ -> buffer.id)).toMap
+    )
+
+  private def bufferLabelFor(buffer: Buffer): String =
+    buffer.document.filePath
+      .map(path => Option(path.getFileName).fold(path.toString)(_.toString))
+      .getOrElse(s"Buffer ${buffer.id.value} - unsaved")
+
+  /** Same label, looked up fresh from `state` -- used where the caller only has a `bufferId` and wants the label as of
+    * a specific (usually just-re-read) state snapshot rather than one captured earlier.
+    */
+  private def bufferLabelFor(state: AppState, bufferId: BufferId): String =
+    state.persisted.buffers.get(bufferId).fold(s"Buffer ${bufferId.value} - unsaved")(bufferLabelFor)
+
   private[manager] def directLoadFileEffect(path: Path): IO[Unit] =
     IO.blocking(FileUtils.isReadableFile(path)).flatMap {
       case false => logger.debug(s"[FILE] DirectLoad: file not readable: $path")
@@ -483,6 +498,14 @@ final private[manager] class StateManagerEffectHandlers(
           saveExistingBuffer(bufferId).handleErrorWith {
             case error: com.serenity.richtext.LossyRichTextOverwriteException =>
               stateRef.get.flatMap(current => workflow.showSaveAsWorkflow(current, bufferId, error.getMessage))
+            case _: com.serenity.io.FileManagerError.ExternalConflict =>
+              // Label from state re-read after the failure, not the pre-save `buffer` snapshot above -- keeps this
+              // consistent with StateManagerWorkflowCapability's own ExternalConflict handler, which does the same
+              // (code review finding on PR #1664: the two copies previously sourced the label from different points
+              // in time, which could show different labels for the same conflict if the buffer changed in between).
+              stateRef.get.flatMap(current =>
+                workflow.openReloadConflictModal(current, bufferId, bufferLabelFor(current, bufferId))
+              )
             case error =>
               logger.error(error)(s"[FILE] Failed to save buffer $bufferId")
           }

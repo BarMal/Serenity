@@ -6,7 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
-import com.serenity.app.AppRuntime
+import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.CursorMode
 import com.serenity.rope.Balance
@@ -40,8 +40,8 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
     val program = for
       cursorVisible <- Ref.of[IO, Boolean](true)
       breathIndex   <- Ref.of[IO, Int](0)
-      first         <- AppRuntime.computeIdleCursorFrame(AppState.initial, cursorVisible, breathIndex)
-      second        <- AppRuntime.computeIdleCursorFrame(AppState.initial, cursorVisible, breathIndex)
+      first         <- AppRuntimeRenderLoops.computeIdleCursorFrame(AppState.initial, cursorVisible, breathIndex)
+      second        <- AppRuntimeRenderLoops.computeIdleCursorFrame(AppState.initial, cursorVisible, breathIndex)
     yield
       first shouldBe ((false, None))
       second shouldBe ((true, None))
@@ -59,7 +59,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
     val program = for
       cursorVisible <- Ref.of[IO, Boolean](true)
       breathIndex   <- Ref.of[IO, Int](0)
-      frame         <- AppRuntime.computeIdleCursorFrame(state, cursorVisible, breathIndex)
+      frame         <- AppRuntimeRenderLoops.computeIdleCursorFrame(state, cursorVisible, breathIndex)
       nextIndex     <- breathIndex.get
     yield
       frame._1 shouldBe true
@@ -78,7 +78,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
       logs          <- Ref.of[IO, Vector[LogEntry]](Vector.empty)
       requestedFast <- Ref.of[IO, Boolean](false)
       given Logger[IO] = new RecordingLogger(logs)
-      _ <- AppRuntime.recoverIdleCursorRenderFailure(
+      _ <- AppRuntimeRenderLoops.recoverIdleCursorRenderFailure(
         AppRuntime.RuntimeFailure(
           loopName = "render loop",
           phase = "idle.cursor-render",
@@ -113,7 +113,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
       pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
       renderCalls        <- Ref.of[IO, Int](0)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
-      _ <- AppRuntime.runIdleRenderStep(
+      _ <- AppRuntimeRenderLoops.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
         loadState = IO.pure(state),
         loadBufferAnimations = IO.pure(Map.empty),
@@ -145,7 +145,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
       breathIndex        <- Ref.of[IO, Int](0)
       pendingPaintDamage <- Ref.of[IO, Damage](damage)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
-      _ <- AppRuntime.runIdleRenderStep(
+      _ <- AppRuntimeRenderLoops.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
         loadState = IO.pure(state),
         loadBufferAnimations = IO.pure(Map.empty),
@@ -177,7 +177,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
       pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
       rendered           <- Ref.of[IO, Vector[(Boolean, Option[Color])]](Vector.empty)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
-      _ <- AppRuntime.runIdleRenderStep(
+      _ <- AppRuntimeRenderLoops.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
         loadState = IO.pure(state),
         loadBufferAnimations = IO.pure(Map.empty),
