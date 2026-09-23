@@ -223,9 +223,9 @@ object TerminalShell:
     */
   def resource: Resource[IO, TerminalShell] =
     Resource
-      .make(IO.blocking(TerminalBuilder.builder().system(true).nativeSignals(true).build()))(terminal =>
-        IO.blocking(terminal.close()).attempt.void
-      )
+      .make(
+        IO.blocking(TerminalBuilder.builder().system(true).nativeSignals(true).dumb(false).build())
+      )(terminal => IO.blocking(terminal.close()).attempt.void)
       .flatMap(forTerminal(_))
 
   /** Build a shell over an already-constructed [[Terminal]] -- the real system terminal in production, or a
