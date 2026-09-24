@@ -121,3 +121,84 @@ class PinnedPanelContentReducerSpec extends AnyFlatSpec with Matchers:
     directoryTrees(result.state).map(_._1.entries.getOrElse(repo, Nil)) shouldBe List(Nil)
     valid(result) shouldBe true
   }
+
+  "PinnedPanelContentReducer.pinExplorerRoot" should "pin an unlisted explorer on the root and declare its undo boundary" in {
+    val result = PinnedPanelContentReducer.pinExplorerRoot(PanelPosition.Left, repo, 30, AppState.initial)
+
+    result.effects shouldBe List(
+      AppEffect.Undo(
+        UndoEffect.RecordBoundary(
+          com.serenity.state.undo.HistoryEntry.PanelChange.capture(AppState.initial),
+          groupable = false
+        )
+      )
+    )
+    directoryTrees(result.state) shouldBe List(DirectoryTreeData(repo) -> None)
+    result.state.persisted.layout.workspaceTree.flatMap(
+      _.positionForSurface(result.state.pinnedSurfaces.head.id)
+    ) shouldBe Some(PanelPosition.Left)
+    PanelStateReducer.currentSize(result.state.pinnedSurfaces.head.id, result.state) shouldBe Some(30)
+    valid(result) shouldBe true
+  }
+
+  "PinnedPanelContentReducer.applyRootListing" should "fill the root listing and select its first entry" in {
+    val entries = List(
+      DirEntry(repo.resolve("src"), "src", isDirectory = true),
+      DirEntry(repo.resolve("build.sbt"), "build.sbt", isDirectory = false)
+    )
+    val pinned = PinnedPanelContentReducer.pinExplorerRoot(PanelPosition.Left, repo, 30, AppState.initial).state
+
+    val listed = PinnedPanelContentReducer.applyRootListing(PanelPosition.Left, repo, entries, pinned)
+
+    directoryTrees(listed) shouldBe List(
+      DirectoryTreeData(repo, entries = Map(repo -> entries)) -> Some(repo.resolve("src"))
+    )
+  }
+
+  it should "drop a listing for a root the explorer no longer shows" in {
+    val pinned = PinnedPanelContentReducer.pinExplorerRoot(PanelPosition.Left, repo, 30, AppState.initial).state
+
+    PinnedPanelContentReducer.applyRootListing(PanelPosition.Left, Paths.get("/other"), Nil, pinned) shouldBe pinned
+    PinnedPanelContentReducer.applyRootListing(PanelPosition.Right, repo, Nil, pinned) shouldBe pinned
+  }
+
+  "PinnedPanelContentReducer.applyDirectoryListing" should "expand a nested directory with its listing" in {
+    val selectedPath   = repo.resolve("src")
+    val initialEntries = List(DirEntry(selectedPath, "src", isDirectory = true))
+    val nestedEntries  = List(DirEntry(selectedPath.resolve("Main.scala"), "Main.scala", isDirectory = false))
+    val initialState = com.serenity.DockedPanelFixtures.dock(
+      AppState.initial,
+      SurfaceId("left-panel"),
+      PanelContent.DirectoryTree(DirectoryTreeData(repo, entries = Map(repo -> initialEntries)), Some(selectedPath)),
+      PanelPosition.Left,
+      24
+    )
+
+    val listed =
+      PinnedPanelContentReducer.applyDirectoryListing(PanelPosition.Left, selectedPath, nestedEntries, initialState)
+
+    directoryTrees(listed) shouldBe List(
+      DirectoryTreeData(
+        repo,
+        expandedPaths = Set(selectedPath),
+        entries = Map(repo -> initialEntries, selectedPath -> nestedEntries)
+      ) -> Some(selectedPath)
+    )
+  }
+
+  it should "drop a listing for a directory outside the tree the explorer now shows" in {
+    val initialState = com.serenity.DockedPanelFixtures.dock(
+      AppState.initial,
+      SurfaceId("left-panel"),
+      PanelContent.DirectoryTree(DirectoryTreeData(repo), None),
+      PanelPosition.Left,
+      24
+    )
+
+    PinnedPanelContentReducer.applyDirectoryListing(
+      PanelPosition.Left,
+      Paths.get("/other/src"),
+      Nil,
+      initialState
+    ) shouldBe initialState
+  }
