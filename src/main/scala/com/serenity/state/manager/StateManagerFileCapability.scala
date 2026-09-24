@@ -63,7 +63,8 @@ final private[manager] class StateManagerFileFacade(
 final private[manager] class StateManagerFileCapability(
     stateRef: Ref[IO, AppState],
     effects: StateManagerEffectHandlers,
-    dispatch: IO[Unit] => IO[Unit]
+    dispatch: IO[Unit] => IO[Unit],
+    openFileAndWait: Path => IO[Unit]
 ):
 
   // The disk read runs here, off the dispatcher; the decision re-reads state on it, after any in-flight save has
@@ -73,7 +74,7 @@ final private[manager] class StateManagerFileCapability(
 
   private lazy val fileFacade = new StateManagerFileFacade(
     stateRef,
-    effects.directLoadFileEffect,
+    openFileAndWait,
     effects.saveBufferEffect,
     effects.saveBufferAsEffect
   )

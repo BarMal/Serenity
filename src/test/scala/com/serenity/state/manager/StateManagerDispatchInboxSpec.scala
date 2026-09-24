@@ -238,7 +238,10 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
         _     <- race.release.complete(())
         _     <- save.joinWithNever
         _     <- probe.joinWithNever
-        after <- race.stateManager.getCurrentState
+        // The save lands after `applyEvent(SaveFile)` returns: its result is posted from its file lane (#1671).
+        after <- (IO.sleep(20.millis) >> race.stateManager.getCurrentState).iterateUntil(state =>
+          state.focusedBufferId.flatMap(state.persisted.buffers.get).exists(!_.hasUnsavedChanges)
+        )
       yield after
     program.timeout(30.seconds).unsafeRunSync()
 

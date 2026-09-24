@@ -63,7 +63,7 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
       )
       _             <- stateManager3.applyEvent(MoveDown) // Move to option 2
       _             <- stateManager3.applyEvent(Enter)
-      openFileState <- stateManager3.getCurrentState
+      openFileState <- awaitOpened(stateManager3, selectedFile)
 
       _ =
         openFileState.startPageSurface shouldBe None

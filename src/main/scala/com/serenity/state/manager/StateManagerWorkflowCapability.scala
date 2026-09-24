@@ -112,6 +112,9 @@ final private[manager] class StateManagerWorkflowCapability(
     openFileWorkflowModal(FileWorkflowMode.SaveAs, state, Some(bufferId), Some(statusMessage))
 
   private[manager] def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
+    filePersistence.settlePendingSaves(closeTargets(scope, state)) >> stateRef.get.flatMap(decideClose(scope, _))
+
+  private def decideClose(scope: CloseScope, state: AppState): IO[Unit] =
     val targetBufferIds = closeTargets(scope, state)
     val dirtyBufferIds =
       targetBufferIds.filter(bufferId => state.persisted.buffers.get(bufferId).exists(_.hasUnsavedChanges))

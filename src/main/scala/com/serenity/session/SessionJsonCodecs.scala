@@ -105,6 +105,7 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     bookmarks        <- cursor.getOrElse[List[SessionCursorPosition]]("bookmarks")(Nil)
     documentComments <- cursor.getOrElse[List[SessionDocumentComment]]("documentComments")(Nil)
     lineEnding       <- cursor.getOrElse[Option[String]]("lineEnding")(None)
+    revision         <- cursor.getOrElse[Option[String]]("revision")(None)
   yield SessionBuffer(
     id,
     filePath,
@@ -119,7 +120,8 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     findState,
     bookmarks,
     documentComments,
-    lineEnding
+    lineEnding,
+    revision
   )
 }
 

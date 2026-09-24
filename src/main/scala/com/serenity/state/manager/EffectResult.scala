@@ -1,8 +1,11 @@
 package com.serenity.state.manager
 
+import java.nio.file.Path
+
 import com.serenity.config.SpellCheckDictionaryFingerprint
+import com.serenity.rope.Rope
 import com.serenity.spellcheck.SpellChecker
-import com.serenity.state.models.{AppState, BufferId, FindResult, FindSearchRequest, SpellCheckFingerprint}
+import com.serenity.state.models.{AppState, Buffer, BufferId, FindResult, FindSearchRequest, SpellCheckFingerprint}
 import com.serenity.state.reducers.ModalEventReducer
 
 /** What a background lane job hands back to the dispatcher (#1697). Each result carries the version it was computed
@@ -18,6 +21,13 @@ private[manager] enum EffectResult:
       expected: Map[String, SpellCheckFingerprint],
       dictionaryFingerprints: List[SpellCheckDictionaryFingerprint]
   )
+
+  // File I/O (#1671, #1672): posted by StateManagerFilePersistence's file-lane jobs; see FileResults.
+  case FileSaved(save: FileSave, saved: Buffer)
+  case FileSaveFailed(save: FileSave, error: Throwable)
+  case FileReloaded(bufferId: BufferId, path: Path, contentAtRequest: Rope, disk: Buffer)
+  case FileLoaded(path: Path, loaded: Buffer)
+  case FileLoadFailed(path: Path, error: Throwable)
 
 private[manager] object EffectResult:
 
@@ -36,3 +46,9 @@ private[manager] object EffectResult:
         }
       case DocumentAnalysisCompleted(analyzed, expected, dictionaryFingerprints) =>
         SpellChecker.applyIfCurrent(state, analyzed, expected, dictionaryFingerprints)
+
+      case FileSaved(save, saved) => FileResults.saved(state, save, saved)
+      case FileReloaded(bufferId, path, contentAtRequest, disk) =>
+        FileResults.reloaded(state, bufferId, path, contentAtRequest, disk)
+      case FileLoaded(path, loaded)                    => FileResults.loaded(state, path, loaded)
+      case FileSaveFailed(_, _) | FileLoadFailed(_, _) => state

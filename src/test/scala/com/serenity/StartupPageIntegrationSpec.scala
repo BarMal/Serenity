@@ -163,6 +163,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         com.serenity.command.CommandIntent.File(com.serenity.command.FileIntent.OpenRecentFile(recentFile))
       )
       _ <- firstManager.commandExecutor.executeCommand(openRecentSeed)
+      _ <- awaitOpened(firstManager, recentFile)
       saveSessionCommand = CommandRegistry.default
         .findCommand("save-session")
         .getOrElse(fail("\"save-session\" command not registered in CommandRegistry.default"))
@@ -190,7 +191,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       // Navigate to the recent-file entry and press Enter, exactly as the user does.
       _         <- (0 until recentIndex).toList.traverse_(_ => secondManager.applyEvent(MoveDown))
       _         <- secondManager.applyEvent(Enter)
-      afterOpen <- secondManager.getCurrentState
+      afterOpen <- awaitOpened(secondManager, recentFile)
 
       // The bug: opening a recent file left the StartPage surface in place, so Renderer's `startPageSurface`
       // short-circuit kept drawing the splash over the editor -- keystrokes reached the hidden buffer but nothing

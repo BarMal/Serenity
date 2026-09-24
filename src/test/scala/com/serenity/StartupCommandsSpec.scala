@@ -47,7 +47,7 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
       _         = startPage.selectedIndex shouldBe 1
 
       _          <- stateManager.applyEvent(Enter)
-      finalState <- stateManager.getCurrentState
+      finalState <- awaitOpened(stateManager, selectedFile)
     yield
       finalState.startPageSurface shouldBe None
       finalState.modalSurface shouldBe None

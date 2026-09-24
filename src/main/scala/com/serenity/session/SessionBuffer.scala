@@ -1,6 +1,9 @@
 package com.serenity.session
 
+import java.nio.file.Paths
+
 import cats.effect.IO
+import com.serenity.io.{DocumentRevision, FileManager}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
 import com.serenity.state.models.*
@@ -21,7 +24,10 @@ final case class SessionBuffer(
     findState: Option[SessionFindState] = None,
     bookmarks: List[SessionCursorPosition] = Nil,
     documentComments: List[SessionDocumentComment] = Nil,
-    lineEnding: Option[String] = None
+    lineEnding: Option[String] = None,
+    // The on-disk revision the buffer's content was based on (#1670), so a dirty buffer restored from the session
+    // still detects a file changed since.
+    revision: Option[String] = None
 )
 
 final case class SessionCursorPosition(
@@ -76,7 +82,8 @@ object SessionBuffer:
       richTextFidelity = buffer.richText.richTextFidelity,
       findState = buffer.findState.map(SessionFindState.fromFindState),
       bookmarks = buffer.annotations.bookmarks.map(SessionCursorPosition.fromCursorPosition),
-      documentComments = buffer.annotations.documentComments.map(SessionDocumentComment.fromDocumentComment)
+      documentComments = buffer.annotations.documentComments.map(SessionDocumentComment.fromDocumentComment),
+      revision = buffer.document.revision.map(_.value)
     )
 
   def toBuffer(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): Buffer =
@@ -93,7 +100,8 @@ object SessionBuffer:
         isNewEmpty = sessionBuffer.isNewEmpty,
         // A session written before line endings were recorded has no key to restore; LineEnding.default matches
         // what that session's buffers would have been saved with anyway.
-        lineEnding = sessionBuffer.lineEnding.flatMap(LineEnding.fromConfigKey).getOrElse(LineEnding.default)
+        lineEnding = sessionBuffer.lineEnding.flatMap(LineEnding.fromConfigKey).getOrElse(LineEnding.default),
+        revision = sessionBuffer.revision.map(DocumentRevision.apply)
       ),
       editing = EditingState(sessionBuffer.cursors.map(SessionCursorPosition.toCursorPosition)),
       viewport = SessionViewport.toViewport(sessionBuffer.viewport),
@@ -108,30 +116,37 @@ object SessionBuffer:
       )
     )
 
+  /** A clean file-backed buffer is read from disk through `FileManager` (#1670): the disk is the truth for it, and the
+    * read captures the revision a later save checks against. A dirty one keeps the session's unsaved text and the
+    * revision it was edited from. Anything unreadable falls back to what the session recorded.
+    */
   def toBufferIO(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): IO[Buffer] =
-    import com.serenity.rope.Rope
-    import java.nio.file.{Files, Paths}
+    val recorded = recordedBuffer(sessionBuffer)
+    sessionBuffer.filePath.map(Paths.get(_)) match
+      case Some(path) if !(sessionBuffer.isDirty && sessionBuffer.unsavedContent.isDefined) =>
+        FileManager().loadFile(path, recorded.id).map(fromDisk(recorded, _)).handleError(_ => recorded)
+      case _ => IO.pure(recorded)
 
-    sessionBuffer.unsavedContent match
-      case Some(_) =>
-        IO.pure(toBuffer(sessionBuffer))
-      case None =>
-        sessionBuffer.richTextDocument match
-          case Some(document) =>
-            val buffer = toBuffer(sessionBuffer)
-            IO.pure(buffer.copy(document = buffer.document.copy(content = Rope(document.plainText), isDirty = false)))
-          case None =>
-            sessionBuffer.filePath match
-              case Some(pathText) =>
-                val path = Paths.get(pathText)
-                IO.blocking(Files.readString(path))
-                  .map { diskContent =>
-                    val buffer = toBuffer(sessionBuffer)
-                    buffer.copy(document = buffer.document.copy(content = Rope(diskContent), isDirty = false))
-                  }
-                  .handleError(_ => toBuffer(sessionBuffer))
-              case None =>
-                IO.pure(toBuffer(sessionBuffer))
+  private def recordedBuffer(sessionBuffer: SessionBuffer)(using com.serenity.rope.Balance): Buffer =
+    val buffer = toBuffer(sessionBuffer)
+    (sessionBuffer.unsavedContent, sessionBuffer.richTextDocument) match
+      case (None, Some(document)) =>
+        buffer.copy(document =
+          buffer.document.copy(content = com.serenity.rope.Rope(document.plainText), isDirty = false)
+        )
+      case _ => buffer
+
+  private def fromDisk(recorded: Buffer, disk: Buffer): Buffer =
+    if disk.document.content.collect() == recorded.document.content.collect() then
+      recorded.copy(document = recorded.document.copy(revision = disk.document.revision, isDirty = false))
+    else
+      recorded
+        .copy(
+          document = disk.document.copy(language = recorded.document.language.orElse(disk.document.language)),
+          richText = disk.richText,
+          findState = None
+        )
+        .clampedToContent
 
 object SessionCursorPosition:
   def fromCursorPosition(cursor: CursorPosition): SessionCursorPosition =

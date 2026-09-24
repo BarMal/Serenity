@@ -42,7 +42,14 @@ the state itself. The external-change check (#1623) reads the disk off the dispa
 observation that a save or reload has since superseded. Events enqueued while a dispatch interprets its effects are
 replayed on the dispatcher by `drainPendingOperations`; code already on the dispatcher never offers-and-waits, which
 would deadlock. The render tick advances animations only when the dispatcher is idle (`runIfIdle`); otherwise it
-skips the frame's advance and reports still-active so the next frame retries. The dispatch pipeline itself still
+skips the frame's advance and reports still-active so the next frame retries. File reads and writes
+(`StateManagerFilePersistence`) run on a `LaneKey.File` Sequential lane per canonical path and come back as
+`EffectResult.FileSaved`/`FileLoaded`/`FileReloaded`, merged into the state current when they land: a save marks the
+buffer clean only if its content is still the content written, and ignores a buffer closed meanwhile (#1671). A plain
+save and a file open never wait on the disk on the dispatcher; save-as, save-before-close, the reload prompt's choices
+and `FileOpener.openFile` wait for their lane job because their next step depends on its outcome. The external-change
+check ignores a path while a save to it is in flight, and quitting waits for pending saves (a `Lane.Exclusive`
+barrier). The dispatch pipeline itself still
 performs I/O, and the capability ports still hold the state `Ref` (other direct writers remain until later slices).
 
 Event processing applies a reducer result's state before interpreting its effects. Document-analysis
