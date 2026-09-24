@@ -9,6 +9,9 @@ enum LaneKey:
   /** Callers pass canonical paths, so two buffers on one file share a lane. */
   case File(path: Path)
   case Buffer(id: BufferId)
+
+  /** Separate from [[Buffer]] so other switch-latest work on the buffer cannot cancel a pending preview commit. */
+  case MarkdownPreview(id: BufferId)
   case Lsp(language: LanguageId)
   case Directory(path: Path)
   case Search, Analysis, Theme, Config, Presets, Keybindings, Session, Project, Dialog, Timer

@@ -151,7 +151,7 @@ final private[manager] class StateManagerOperationBoundary private (
     )
 
   private def markdownPreviewCommitLane(bufferId: BufferId): Lane.Keyed =
-    Lane.Keyed(LaneKey.Buffer(bufferId), LanePolicy.SwitchLatest)
+    Lane.Keyed(LaneKey.MarkdownPreview(bufferId), LanePolicy.SwitchLatest)
 
   // A request arriving after shutdown has nothing left to run on, and quitting does not want it anyway.
   private def submit(lane: Lane.Scheduled, job: IO[Unit]): IO[Unit] =

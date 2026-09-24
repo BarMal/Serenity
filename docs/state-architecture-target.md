@@ -68,6 +68,7 @@ type Event = EditorEvent | AppEvent | SystemEvent | SurfaceEvent | MouseInputEve
 enum LaneKey:
   case File(path: Path)              // canonical path: two buffers on one file share a lane
   case Buffer(id: BufferId)
+  case MarkdownPreview(id: BufferId) // own key: other Buffer work never cancels a pending preview commit
   case Lsp(language: LanguageId)
   case Directory(path: Path)
   case Search, Analysis, Theme, Config, Presets, Keybindings, Session, Project, Dialog, Timer

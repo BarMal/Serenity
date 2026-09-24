@@ -160,6 +160,20 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
     runVirtual(program) shouldBe ((0L, 0L), (0L, 1L), (1L, 1L))
   }
 
+  it should "not be cancelled by other switch-latest work on the same buffer" in {
+    val program =
+      for
+        (stateRef, operations) <- boundaryOver(previewState(editGeneration = 1L))
+        _                      <- operations.scheduleMarkdownPreviewCommit(previewA, 1L)
+        _                      <- IO.sleep(50.millis)
+        _     <- operations.effectLanes.submit(Lane.Keyed(LaneKey.Buffer(previewA), LanePolicy.SwitchLatest), IO.never)
+        _     <- IO.sleep(1.second)
+        after <- stateRef.get
+      yield committedGenerations(after)
+
+    runVirtual(program) shouldBe (1L, 0L)
+  }
+
   it should "drop a commit whose generation an edit has since moved past" in {
     val program =
       for
