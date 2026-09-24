@@ -6,7 +6,14 @@ import com.serenity.command.ThemeIntent
 import com.serenity.io.FileUtils
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, PopupSurfaceReducer, ReducerResult, ThemeEffect, ThemeStateReducer}
+import com.serenity.state.reducers.{
+  AppEffect,
+  PopupSurfaceReducer,
+  ReducerResult,
+  SurfaceEffect,
+  ThemeEffect,
+  ThemeStateReducer
+}
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.{AppThemeManager, ThemeConfig, ThemeConfigWriter}
 
@@ -34,8 +41,8 @@ final private[manager] class StateManagerSurfacePopupEffects(
   private def commitCurrent(reduce: AppState => ReducerResult): IO[Unit] =
     stateRef.get.flatMap(state => validateAndUpdateState(reduce(state).state, state))
 
-  // The chooser and creator stay direct calls: `SurfaceEffect` would re-read the state, which stops them overwriting
-  // the command-usage record `interpretCommand` commits just before -- a change to the palette's recent-commands order.
+  // The chooser and creator go through `SurfaceEffect`, which reads the live state: `state` predates the command-usage
+  // record `interpretCommand` commits just before, and committing from it would drop that record (#1714).
   private[manager] def interpretThemeIntent(intent: ThemeIntent, state: AppState): IO[Unit] =
     intent match
       case ThemeIntent.ToggleTheme =>
@@ -45,9 +52,9 @@ final private[manager] class StateManagerSurfacePopupEffects(
       case ThemeIntent.ReloadTheme =>
         interpretEffect(AppEffect.Theme(ThemeEffect.ReloadTheme(state.persisted.theme.name)))
       case ThemeIntent.OpenThemeChooser =>
-        openThemePickerEffect(state)
+        interpretEffect(AppEffect.Surface(SurfaceEffect.OpenThemePicker))
       case ThemeIntent.OpenThemeCreator =>
-        openThemeCreatorEffect(state)
+        interpretEffect(AppEffect.Surface(SurfaceEffect.OpenThemeCreator))
       case ThemeIntent.ExportCurrentTheme =>
         interpretEffect(AppEffect.Theme(ThemeEffect.ExportCurrentTheme))
       case ThemeIntent.ReloadThemes =>

@@ -2,8 +2,8 @@ package com.serenity
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.keystroke.events.ToggleCommandRunner
-import com.serenity.state.models.SurfaceContent
+import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
+import com.serenity.state.models.{AppState, SurfaceContent}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -52,4 +52,58 @@ class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTes
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     runnerFrom(sm).commandUsage should contain key command.name
+  }
+
+  // #1714: a command that opens a surface commits it on top of the state `interpretCommand` left, so the MRU bump
+  // recorded just before is not overwritten by the snapshot the command started from.
+  private val earlierCommand =
+    Command.typed(
+      "test-mru-earlier-command",
+      "An earlier command",
+      CommandIntent.Edit(EditIntent.Undo),
+      label = "Earlier"
+    )
+
+  private def runFromPalette(sm: com.serenity.state.manager.StateManager, label: String, commandName: String): Unit =
+    sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    label.foreach(char => sm.applyEvent(InsertChar(char)).unsafeRunSync())
+    runnerFrom(sm).selectedCommand.map(_.name) shouldBe Some(commandName)
+    sm.applyEvent(Enter).unsafeRunSync()
+
+  private def mostRecentCommand(state: AppState): Option[String] =
+    state.runtime.commandUsage.maxByOption(_._2).map(_._1)
+
+  "running a surface-opening command from the palette" should "leave the theme chooser open and most recent" in {
+    val sm = createStateManager("CommandUsageMruThemeChooser")
+    sm.executeCommand(earlierCommand).unsafeRunSync()
+
+    runFromPalette(sm, "Open Theme Chooser", "theme-chooser")
+
+    val state = sm.getCurrentState.unsafeRunSync()
+    mostRecentCommand(state) shouldBe Some("theme-chooser")
+    state.runtime.uiSurfaces.map(_.content).collect { case picker: SurfaceContent.ThemePicker => picker } should
+      have size 1
+  }
+
+  it should "leave the theme creator open and most recent" in {
+    val sm = createStateManager("CommandUsageMruThemeCreator")
+    sm.executeCommand(earlierCommand).unsafeRunSync()
+
+    runFromPalette(sm, "Open Theme Creator", "theme-creator")
+
+    val state = sm.getCurrentState.unsafeRunSync()
+    mostRecentCommand(state) shouldBe Some("theme-creator")
+    state.runtime.uiSurfaces.map(_.content).collect { case creator: SurfaceContent.ThemeCreator => creator } should
+      have size 1
+  }
+
+  it should "leave file search open and most recent" in {
+    val sm = createStateManager("CommandUsageMruFileSearch")
+    sm.executeCommand(earlierCommand).unsafeRunSync()
+
+    runFromPalette(sm, "File Search", "file-search")
+
+    val state = sm.getCurrentState.unsafeRunSync()
+    mostRecentCommand(state) shouldBe Some("file-search")
+    state.fileSearchSurface shouldBe defined
   }

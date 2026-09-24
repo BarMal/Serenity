@@ -10,7 +10,7 @@ import com.serenity.command.ThemeIntent
 import com.serenity.io.FileDialog
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, ThemeEffect}
+import com.serenity.state.reducers.{AppEffect, SurfaceEffect, ThemeEffect}
 import com.serenity.testkit.AwaitCondition.awaitValue
 import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.ui.theme.config.{AppThemeManager, ThemeConfig, ThemeConfigWriter}
@@ -75,8 +75,10 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
       validateAndUpdateState,
       lanes,
       {
-        case AppEffect.Theme(effect) => popups.interpretThemeEffect(effect)
-        case _                       => IO.unit
+        case AppEffect.Theme(effect)                           => popups.interpretThemeEffect(effect)
+        case AppEffect.Surface(SurfaceEffect.OpenThemePicker)  => stateRef.get.flatMap(popups.openThemePickerEffect)
+        case AppEffect.Surface(SurfaceEffect.OpenThemeCreator) => stateRef.get.flatMap(popups.openThemeCreatorEffect)
+        case _                                                 => IO.unit
       }
     )
     popups
