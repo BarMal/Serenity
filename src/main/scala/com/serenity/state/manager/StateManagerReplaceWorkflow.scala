@@ -1,79 +1,71 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import com.serenity.rope.*
 import com.serenity.state.models.*
 import com.serenity.state.undo.{BufferSnapshot, HistoryEntry, UndoState}
 
-/** Find/Replace workflow mechanics: replace-all, replace-next, and the offset/selection bookkeeping they share. */
+/** Submits the Find/Replace prompt: the decision is [[ReplaceWorkflowTransitions.submitted]], committed as one model
+  * write so the replaced text, its undo entry and the prompt's new state are never seen apart.
+  */
 final private[manager] class StateManagerReplaceWorkflow(
-    stateRef: Ref[IO, AppState],
-    undoRef: Ref[IO, UndoState],
-    activeEditorBufferId: AppState => Option[BufferId],
-    updateReplaceWorkflowSurface: (SurfaceId, ReplaceWorkflowState) => IO[Unit],
-    validateAndUpdateState: (AppState, AppState) => IO[Unit]
+    updateModelValidated: (Model => Option[Model]) => IO[Unit]
 )(using balance: Balance):
 
   private[manager] def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
-    stateRef.get.flatMap { state =>
-      replaceWorkflowSurface(state, surfaceId) match
-        case Some((_, workflow)) =>
+    updateModelValidated(ReplaceWorkflowTransitions.submitted(_, surfaceId))
+
+  private[manager] def replaceWorkflowSurface(
+    state: AppState,
+    surfaceId: SurfaceId
+  ): Option[(UiSurface, ReplaceWorkflowState)] =
+    ReplaceWorkflowTransitions.replaceWorkflowSurface(state, surfaceId)
+
+/** Replace-all, replace-next, and the offset/selection bookkeeping they share, as pure functions of the model. */
+private[manager] object ReplaceWorkflowTransitions:
+
+  /** `None` when `surfaceId` is not an open replace prompt. */
+  def submitted(model: Model, surfaceId: SurfaceId)(using Balance): Option[Model] =
+    replaceWorkflowSurface(model.app, surfaceId).map { (_, workflow) =>
+      resolveTarget(model.app, workflow) match
+        case Left(status) => model.copy(app = withReplaceWorkflowSurface(model.app, surfaceId, status))
+        case Right((bufferId, buffer, matches)) =>
           workflow.selectedAction match
             case ReplaceWorkflowAction.ReplaceAll =>
-              submitReplaceAllEffect(surfaceId, workflow, state)
+              replaceAllMatches(model, surfaceId, workflow, bufferId, buffer, matches)
             case ReplaceWorkflowAction.ReplaceNext =>
-              submitReplaceNextEffect(surfaceId, workflow, state)
-
-        case None =>
-          IO.unit
+              replaceNextMatch(model, surfaceId, workflow, bufferId, buffer, matches)
     }
 
-  private def submitReplaceAllEffect(surfaceId: SurfaceId, workflow: ReplaceWorkflowState, state: AppState): IO[Unit] =
-    activeEditorBufferId(state) match
-      case None =>
-        updateReplaceWorkflowSurface(
-          surfaceId,
-          workflow.copy(statusMessage = Some("No active buffer"))
-        )
-      case Some(_) if workflow.findText.isEmpty =>
-        updateReplaceWorkflowSurface(
-          surfaceId,
-          workflow.copy(statusMessage = Some("Enter text to find"))
-        )
-      case Some(bufferId) =>
-        state.persisted.buffers.get(bufferId) match
-          case Some(buffer) =>
-            workflow.selectedScope.resolve(buffer.primarySelection, offsetForCursor(buffer.document.content, _)) match
-              case Left(error) =>
-                updateReplaceWorkflowSurface(
-                  surfaceId,
-                  workflow.copy(statusMessage = Some(error.message))
-                )
-              case Right(range) =>
-                val matches = scopedReplaceMatches(buffer, workflow.findText, range)
-                if matches.isEmpty then
-                  updateReplaceWorkflowSurface(
-                    surfaceId,
-                    workflow.copy(statusMessage = Some("No matches found"))
-                  )
-                else replaceAllMatches(surfaceId, workflow, state, bufferId, buffer, matches)
-          case None =>
-            updateReplaceWorkflowSurface(
-              surfaceId,
-              workflow.copy(statusMessage = Some("No active buffer"))
-            )
+  /** The buffer and matches to replace, or the prompt showing why there are none. */
+  private def resolveTarget(
+    state: AppState,
+    workflow: ReplaceWorkflowState
+  ): Either[ReplaceWorkflowState, (BufferId, Buffer, List[Int])] =
+    def status(message: String) = workflow.copy(statusMessage = Some(message))
+    activeEditorBufferId(state).flatMap(id => state.persisted.buffers.get(id).map(id -> _)) match
+      case None                                 => Left(status("No active buffer"))
+      case Some(_) if workflow.findText.isEmpty => Left(status("Enter text to find"))
+      case Some((bufferId, buffer)) =>
+        workflow.selectedScope.resolve(buffer.primarySelection, offsetForCursor(buffer.document.content, _)) match
+          case Left(error) => Left(status(error.message))
+          case Right(range) =>
+            val matches = scopedReplaceMatches(buffer, workflow.findText, range)
+            if matches.isEmpty then Left(status("No matches found")) else Right((bufferId, buffer, matches))
 
-  /** The state transition for `submitReplaceAllEffect`'s match-found case, split out so the dispatcher above stays
-    * under the method-length ratchet -- behaviorally this is still one linear step of that method.
-    */
+  private def activeEditorBufferId(state: AppState): Option[BufferId] =
+    state.persisted.layout.activeEditorPaneId
+      .flatMap(state.persisted.layout.editorPanes.get)
+      .flatMap(_.bufferId)
+
   private def replaceAllMatches(
+    model: Model,
     surfaceId: SurfaceId,
     workflow: ReplaceWorkflowState,
-    state: AppState,
     bufferId: BufferId,
     buffer: Buffer,
     matches: List[Int]
-  ): IO[Unit] =
+  ): Model =
     val updatedContent =
       replaceMatchesInRanges(
         rope = buffer.document.content,
@@ -99,64 +91,25 @@ final private[manager] class StateManagerReplaceWorkflow(
       editing = EditingState(List(newCursor)),
       findState = updatedFindState
     )
-    recordWorkflowUndo(state, bufferId, buffer) >> stateRef.get.flatMap { current =>
-      val withReplacement = current.copy(
-        persisted = current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer)),
-        runtime = current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(_.id == surfaceId))
-      )
-      val updatedState = current.persisted.layout.activeEditorPaneId match
-        case Some(paneId) =>
-          withReplacement.copy(persisted = withReplacement.persisted.copy(focus = Focus.EditorPane(paneId)))
-        case None => withReplacement
-      validateAndUpdateState(updatedState, current)
-    }
+    val current = model.app
+    val withReplacement = current.copy(
+      persisted = current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer)),
+      runtime = current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(_.id == surfaceId))
+    )
+    val updatedState = current.persisted.layout.activeEditorPaneId match
+      case Some(paneId) =>
+        withReplacement.copy(persisted = withReplacement.persisted.copy(focus = Focus.EditorPane(paneId)))
+      case None => withReplacement
+    Model(updatedState, withWorkflowUndo(model.undo, current, bufferId, buffer), model.bufferAnimations)
 
-  private def submitReplaceNextEffect(surfaceId: SurfaceId, workflow: ReplaceWorkflowState, state: AppState): IO[Unit] =
-    activeEditorBufferId(state) match
-      case None =>
-        updateReplaceWorkflowSurface(
-          surfaceId,
-          workflow.copy(statusMessage = Some("No active buffer"))
-        )
-      case Some(_) if workflow.findText.isEmpty =>
-        updateReplaceWorkflowSurface(
-          surfaceId,
-          workflow.copy(statusMessage = Some("Enter text to find"))
-        )
-      case Some(bufferId) =>
-        state.persisted.buffers.get(bufferId) match
-          case Some(buffer) =>
-            workflow.selectedScope.resolve(buffer.primarySelection, offsetForCursor(buffer.document.content, _)) match
-              case Left(error) =>
-                updateReplaceWorkflowSurface(
-                  surfaceId,
-                  workflow.copy(statusMessage = Some(error.message))
-                )
-              case Right(range) =>
-                val matches = scopedReplaceMatches(buffer, workflow.findText, range)
-                if matches.isEmpty then
-                  updateReplaceWorkflowSurface(
-                    surfaceId,
-                    workflow.copy(statusMessage = Some("No matches found"))
-                  )
-                else replaceNextMatch(surfaceId, workflow, state, bufferId, buffer, matches)
-          case None =>
-            updateReplaceWorkflowSurface(
-              surfaceId,
-              workflow.copy(statusMessage = Some("No active buffer"))
-            )
-
-  /** The state transition for `submitReplaceNextEffect`'s match-found case, split out so the dispatcher above stays
-    * under the method-length ratchet -- behaviorally this is still one linear step of that method.
-    */
   private def replaceNextMatch(
+    model: Model,
     surfaceId: SurfaceId,
     workflow: ReplaceWorkflowState,
-    state: AppState,
     bufferId: BufferId,
     buffer: Buffer,
     matches: List[Int]
-  ): IO[Unit] =
+  )(using Balance): Model =
     val startOffset = nextReplaceMatchOffset(buffer, matches)
     val endOffset   = startOffset + workflow.findText.length
     // startOffset/endOffset come from a match found against this same content, so this is expected to
@@ -195,17 +148,27 @@ final private[manager] class StateManagerReplaceWorkflow(
       ),
       findState = updatedFindState
     )
-    recordWorkflowUndo(state, bufferId, buffer) >> stateRef.get.flatMap { current =>
-      validateAndUpdateState(
-        current.copy(persisted =
-          current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer))
-        ),
-        current
+    val current = model.app
+    val replaced =
+      current.copy(persisted =
+        current.persisted.copy(buffers = current.persisted.buffers + (bufferId -> updatedBuffer))
       )
-    } >> updateReplaceWorkflowSurface(
-      surfaceId,
-      workflow.copy(statusMessage = Some("Replaced next match"))
+    Model(
+      withReplaceWorkflowSurface(replaced, surfaceId, workflow.copy(statusMessage = Some("Replaced next match"))),
+      withWorkflowUndo(model.undo, current, bufferId, buffer),
+      model.bufferAnimations
     )
+
+  /** Shows `workflow` in the replace prompt `surfaceId`, raised to the top of the surfaces. */
+  def withReplaceWorkflowSurface(state: AppState, surfaceId: SurfaceId, workflow: ReplaceWorkflowState): AppState =
+    state.surfaceById(surfaceId) match
+      case Some(surface) =>
+        val updatedSurface = surface.copy(content = SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)))
+        state.copy(runtime =
+          state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.movedToEndWhere(_.id == surfaceId)(updatedSurface))
+        )
+      case None =>
+        state
 
   /** Searches forward from the currently highlighted match's own start, not its end (the cursor position/selection
     * focus) -- so replacing the match find-next just landed on replaces that match itself rather than skipping past it
@@ -300,7 +263,7 @@ final private[manager] class StateManagerReplaceWorkflow(
     startOffset: Int,
     endOffset: Int,
     replacementLength: Int
-  ): Selection =
+  )(using Balance): Selection =
     val oldText = buffer.document.content.collect()
     val delta   = replacementLength - (endOffset - startOffset)
 
@@ -314,16 +277,12 @@ final private[manager] class StateManagerReplaceWorkflow(
 
     Selection(adjust(selection.anchor), adjust(selection.focus))
 
-  private def recordWorkflowUndo(bufferState: AppState, bufferId: BufferId, buffer: Buffer): IO[Unit] =
+  private def withWorkflowUndo(undo: UndoState, bufferState: AppState, bufferId: BufferId, buffer: Buffer): UndoState =
     bufferState.persisted.layout.activeEditorPaneId match
       case Some(paneId) =>
-        undoRef.update { undo =>
-          val flushed = undo.flushPendingGroup
-          val entry   = HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(buffer))
-          flushed.pushUndo(entry)
-        }
+        undo.flushPendingGroup.pushUndo(HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(buffer)))
       case None =>
-        IO.unit
+        undo
 
   private def offsetForCursor(text: String, cursor: CursorPosition): Int =
     val linesBefore = text.split("\n", -1).take(cursor.line)
@@ -337,16 +296,13 @@ final private[manager] class StateManagerReplaceWorkflow(
 
   // Routed through the canonical Rope-based `offsetToCursorPosition` rather than a hand-rolled character walk,
   // so the string-backed replace path can never drift from the rope-backed one (see #1061).
-  private def cursorPositionForOffset(text: String, offset: Int): CursorPosition =
+  private def cursorPositionForOffset(text: String, offset: Int)(using Balance): CursorPosition =
     com.serenity.rope.Rope(text).offsetToCursorPosition(offset)
 
   private def isWholeGraphemeMatch(content: com.serenity.rope.Rope, offset: Int, length: Int): Boolean =
     content.isWholeGraphemeRange(offset, offset + length)
 
-  private[manager] def replaceWorkflowSurface(
-    state: AppState,
-    surfaceId: SurfaceId
-  ): Option[(UiSurface, ReplaceWorkflowState)] =
+  def replaceWorkflowSurface(state: AppState, surfaceId: SurfaceId): Option[(UiSurface, ReplaceWorkflowState)] =
     state.surfaceById(surfaceId).flatMap { surface =>
       surface.content match
         case SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)) => Some((surface, workflow))

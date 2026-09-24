@@ -148,7 +148,7 @@ private[manager] class StateManagerComposition(
 
   private val workflow = new StateManagerWorkflowCapability(
     runtimeStateRef,
-    runtimeUndoRef,
+    modelCommit,
     runtimeQuitSignal,
     runtimeLogger,
     runtimeFileDialog,

@@ -38,42 +38,19 @@ class StateManagerReplaceWorkflowSpec extends AnyFlatSpec with Matchers:
       runtime = base.runtime.copy(uiSurfaces = List(surface))
     )
 
-  final private class Harness(
-      val stateRef: Ref[IO, AppState],
-      val undoRef: Ref[IO, UndoState],
-      val surfaceUpdates: Ref[IO, List[ReplaceWorkflowState]],
-      val workflow: StateManagerReplaceWorkflow
-  ):
-    def currentState: AppState = stateRef.get.unsafeRunSync()
+  final private class Harness(val modelRef: Ref[IO, Model], val workflow: StateManagerReplaceWorkflow):
+    def currentState: AppState = modelRef.get.unsafeRunSync().app
+    def undo: UndoState        = modelRef.get.unsafeRunSync().undo
     def lastSurfaceUpdate: ReplaceWorkflowState =
-      surfaceUpdates.get.unsafeRunSync().lastOption.getOrElse(fail("no surface update recorded"))
+      workflow.replaceWorkflowSurface(currentState, surfaceId).map(_._2).getOrElse(fail("no replace prompt showing"))
 
   private def harness(initialState: AppState): Harness =
-    val stateRefVar = Ref.of[IO, AppState](initialState).unsafeRunSync()
-    val undoRefVar  = Ref.of[IO, UndoState](UndoState()).unsafeRunSync()
-    val updatesVar  = Ref.of[IO, List[ReplaceWorkflowState]](Nil).unsafeRunSync()
-    def activeEditorBufferId(state: AppState): Option[BufferId] =
-      state.persisted.layout.activeEditorPaneId.flatMap(state.persisted.layout.editorPanes.get).flatMap(_.bufferId)
-    def updateSurface(id: SurfaceId, updated: ReplaceWorkflowState): IO[Unit] =
-      updatesVar.update(_ :+ updated) >> stateRefVar.update { state =>
-        state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
-          case s if s.id == id => s.copy(content = SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(updated)))
-          case other           => other
-        }))
-      }
-
-    new Harness(
-      stateRefVar,
-      undoRefVar,
-      updatesVar,
-      new StateManagerReplaceWorkflow(
-        stateRefVar,
-        undoRefVar,
-        activeEditorBufferId,
-        updateSurface,
-        (newState, fallbackState) => stateRefVar.set(AppStateValidation.validated(newState).getOrElse(fallbackState))
+    val modelRef = Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty)).unsafeRunSync()
+    def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
+      modelRef.update(model =>
+        transition(model).filter(next => AppStateValidation.validated(next.app).isRight).getOrElse(model)
       )
-    )
+    new Harness(modelRef, new StateManagerReplaceWorkflow(updateModelValidated))
 
   "submitReplaceWorkflowEffect with no active buffer" should "report a status message and change nothing else" in {
     val before = stateWith(ReplaceWorkflowState(findText = "a"), "irrelevant", hasActiveBuffer = false)
@@ -131,8 +108,8 @@ class StateManagerReplaceWorkflowSpec extends AnyFlatSpec with Matchers:
 
     h.currentState.persisted.buffers(bufferId).document.content.collect() shouldBe "dog sat, dog ran"
     h.currentState.runtime.uiSurfaces.exists(_.id == surfaceId) shouldBe false
-    h.undoRef.get.unsafeRunSync().undoStack should have size 1
-    h.undoRef.get.unsafeRunSync().undoStack.head shouldBe a[HistoryEntry.BufferEdit]
+    h.undo.undoStack should have size 1
+    h.undo.undoStack.head shouldBe a[HistoryEntry.BufferEdit]
   }
 
   it should "move focus to the active editor pane after replacing" in {
@@ -182,7 +159,7 @@ class StateManagerReplaceWorkflowSpec extends AnyFlatSpec with Matchers:
 
     h.workflow.submitReplaceWorkflowEffect(surfaceId).unsafeRunSync()
 
-    h.undoRef.get.unsafeRunSync().undoStack should have size 1
+    h.undo.undoStack should have size 1
   }
 
   "submitReplaceWorkflowEffect when the surface isn't a replace-workflow surface" should "do nothing" in {

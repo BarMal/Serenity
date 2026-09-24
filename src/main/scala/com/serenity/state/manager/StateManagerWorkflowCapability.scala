@@ -8,13 +8,12 @@ import com.serenity.session.{SessionManager, SessionPersistence}
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
-import com.serenity.state.undo.UndoState
 import com.serenity.ui.layout.LayoutEngine
 import org.typelevel.log4cats.Logger
 
 final private[manager] class StateManagerWorkflowCapability(
     stateRef: Ref[IO, AppState],
-    undoRef: Ref[IO, UndoState],
+    modelCommit: ModelCommit,
     quitSignal: Deferred[IO, Unit],
     logger: Logger[IO],
     fileDialog: Option[com.serenity.io.FileDialog],
@@ -53,14 +52,7 @@ final private[manager] class StateManagerWorkflowCapability(
     continueCloseAfterFormSaveAs
   )
 
-  private val replaceWorkflow =
-    new StateManagerReplaceWorkflow(
-      stateRef,
-      undoRef,
-      activeEditorBufferId,
-      updateReplaceWorkflowSurface,
-      validateAndUpdateState
-    )
+  private val replaceWorkflow = new StateManagerReplaceWorkflow(modelCommit.updateValidated)
 
   /** Opens the reload/overwrite/cancel prompt (#1623) for `bufferId` -- either because a save just discovered the
     * on-disk file changed since it was opened, or because a focus-in re-check found the same thing.
@@ -446,18 +438,6 @@ final private[manager] class StateManagerWorkflowCapability(
           )
         )
       else state
-    }
-
-  protected def updateReplaceWorkflowSurface(surfaceId: SurfaceId, workflow: ReplaceWorkflowState): IO[Unit] =
-    stateRef.update { state =>
-      state.surfaceById(surfaceId) match
-        case Some(surface) =>
-          val updatedSurface = surface.copy(content = SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)))
-          state.copy(runtime =
-            state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.movedToEndWhere(_.id == surfaceId)(updatedSurface))
-          )
-        case None =>
-          state
     }
 
   protected def dismissSurfaceAndFocusEditor(surfaceId: SurfaceId): IO[Unit] =

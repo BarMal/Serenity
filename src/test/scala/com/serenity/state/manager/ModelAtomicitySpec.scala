@@ -20,7 +20,7 @@ import com.serenity.command.{
   ViewIntent
 }
 import com.serenity.config.{AppConfig, MotionAccessibility, PreferredWindowSize}
-import com.serenity.keystroke.events.{InsertChar, NextTab, Undo}
+import com.serenity.keystroke.events.{Enter, InsertChar, NextTab, Undo}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.*
@@ -293,4 +293,60 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     after.undo.undoStack should have size 2
     writes should not be empty
     all(writes.map(model => diagnosticsPinned(model) == (model.undo.undoStack.size == 1))) shouldBe true
+  }
+
+  private def replace(stateManager: StateManager, action: ReplaceWorkflowAction): IO[Unit] =
+    stateManager.modalService.showModal(
+      Modal.ReplaceWorkflow(ReplaceWorkflowState(findText = "l", replacementText = "L", selectedAction = action))
+    ) >> stateManager.applyEvent(Enter)
+
+  private def replacePrompt(model: Model): Option[ReplaceWorkflowState] =
+    model.app.runtime.uiSurfaces.map(_.content).collectFirst {
+      case SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)) => workflow
+    }
+
+  "Replace all" should "commit the replaced text and its undo entry in one write" in {
+    val program =
+      for
+        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        stateManager <- stateManagerOver(recorded.modelRef)
+        bufferId     <- focusedHelloBuffer(stateManager)
+        _            <- recorded.clear
+        _            <- replace(stateManager, ReplaceWorkflowAction.ReplaceAll)
+        writes       <- recorded.recordedWrites
+        after        <- stateManager.getModel
+      yield (bufferId, writes, after)
+
+    val (bufferId, writes, after) = program.unsafeRunSync()
+
+    content(after, bufferId) shouldBe Some("HeLLo")
+    after.undo.undoStack should have size 1
+    writes should not be empty
+    all(writes.map(model => content(model, bufferId).contains("HeLLo") == model.undo.undoStack.nonEmpty)) shouldBe true
+  }
+
+  "Replace next" should "commit the replaced text, its undo entry and the prompt's status in one write" in {
+    val program =
+      for
+        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        stateManager <- stateManagerOver(recorded.modelRef)
+        bufferId     <- focusedHelloBuffer(stateManager)
+        _            <- recorded.clear
+        _            <- replace(stateManager, ReplaceWorkflowAction.ReplaceNext)
+        writes       <- recorded.recordedWrites
+        after        <- stateManager.getModel
+      yield (bufferId, writes, after)
+
+    val (bufferId, writes, after) = program.unsafeRunSync()
+
+    content(after, bufferId) shouldBe Some("HeLlo")
+    replacePrompt(after).flatMap(_.statusMessage) shouldBe Some("Replaced next match")
+    writes should not be empty
+    all(writes.map(model => content(model, bufferId).contains("HeLlo") == model.undo.undoStack.nonEmpty)) shouldBe true
+    all(
+      writes.map(model =>
+        content(model, bufferId).contains("HeLlo") ==
+          replacePrompt(model).flatMap(_.statusMessage).contains("Replaced next match")
+      )
+    ) shouldBe true
   }
