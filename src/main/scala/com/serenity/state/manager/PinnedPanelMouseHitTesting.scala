@@ -170,6 +170,7 @@ private[manager] object PinnedPanelMouseHitTesting:
           state.runtime.uiSurfaces.replacedWhere(_.id == surfaceId)(_.copy(content = content))
         )
       )
+
   /** Resolves hover/click against the directory tree's own `ResolvedSurfaceComposition` (issue #819, slice 4) -- the
     * same composition `PinnedPanelViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than a generic row-index
     * walk. A hit region is addressed by the filesystem path it represents (mirroring

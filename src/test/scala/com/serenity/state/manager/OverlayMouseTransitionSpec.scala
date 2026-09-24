@@ -12,8 +12,8 @@ import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** The overlay mouse handlers as pure transitions: each is run straight against a constructed `AppState`, with no
-  * `Ref` and no `IO`, and asserted on the state and the effects it hands back. Commands a click triggers come back as
+/** The overlay mouse handlers as pure transitions: each is run straight against a constructed `AppState`, with no `Ref`
+  * and no `IO`, and asserted on the state and the effects it hands back. Commands a click triggers come back as
   * `AppEffect.ExecuteCommand` values rather than being run.
   */
 class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with ContextualToolbarTestSupport:
@@ -177,7 +177,8 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
     val (opened, menu, frame) = withOpenContextMenu
     val item                  = contextMenuItem(opened, menu, frame, 1)
 
-    val (result, claimed) = run(opened)(EditorContextMenuHitTesting.hover(MouseMove(item.rect.x.toInt, item.rect.y.toInt), opened))
+    val (result, claimed) =
+      run(opened)(EditorContextMenuHitTesting.hover(MouseMove(item.rect.x.toInt, item.rect.y.toInt), opened))
 
     claimed shouldBe true
     result.effects shouldBe Nil
@@ -187,12 +188,16 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
   }
 
   "ContextualToolbarHitTesting.click" should "emit a button's command and hand focus back to the editor" in {
-    val base   = editorState("alpha beta", ViewportSize(160, 40))
-    val buffer = base.persisted.buffers(BufferId(0))
+    val base      = editorState("alpha beta", ViewportSize(160, 40))
+    val buffer    = base.persisted.buffers(BufferId(0))
     val selection = Selection(CursorPosition(0, 6), CursorPosition(0, 10))
     val selected = base.copy(persisted =
       base.persisted.copy(buffers =
-        Map(BufferId(0) -> buffer.copy(editing = EditingState.fromCursors(List(Cursor(selection.focus, Some(selection.anchor))))))
+        Map(
+          BufferId(0) -> buffer.copy(editing =
+            EditingState.fromCursors(List(Cursor(selection.focus, Some(selection.anchor))))
+          )
+        )
       )
     )
     val state = AppEventReducer.reduce(ToggleContextualToolbar, selected, registry).state

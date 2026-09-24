@@ -15,8 +15,8 @@ private[manager] object MouseTransition:
 
   /** Runs from the live state rather than the dispatch snapshot the handler hit-tested against, so a write that landed
     * in between (e.g. a background diagnostics pass) is kept. A transition that returned its input untouched and
-    * emitted nothing -- a miss, or a hover over what is already hovered -- skips the commit, and with it the
-    * validation and document-analysis scheduling every commit runs.
+    * emitted nothing -- a miss, or a hover over what is already hovered -- skips the commit, and with it the validation
+    * and document-analysis scheduling every commit runs.
     */
   def commit[A](
     stateRef: Ref[IO, AppState],

@@ -35,8 +35,8 @@ private[manager] object ModalMouseHitTesting:
       case Modal.SessionList(_, _, _)           => ModalType.SessionList
       case Modal.Custom(name, _)                => ModalType.Custom(name)
 
-  /** A click on an action button of the close or reload-conflict prompt also submits it: those prompts have no
-    * separate confirm step, so picking Save/Discard/Cancel (or Reload/Overwrite/Cancel) is the decision itself.
+  /** A click on an action button of the close or reload-conflict prompt also submits it: those prompts have no separate
+    * confirm step, so picking Save/Discard/Cancel (or Reload/Overwrite/Cancel) is the decision itself.
     */
   def input(event: MouseInputEvent, state: AppState): Transition[Unit] =
     event match

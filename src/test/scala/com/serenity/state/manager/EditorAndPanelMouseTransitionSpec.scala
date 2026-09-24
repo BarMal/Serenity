@@ -41,9 +41,12 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
     val state = editorState("alpha beta\ngamma")
     val rect  = contentRect(state)
 
-    val target = EditorMouseTargeting.targetAt(MouseClick(rect.x, rect.y), state, MouseTargetCache.fromState(state, viewport))
+    val target =
+      EditorMouseTargeting.targetAt(MouseClick(rect.x, rect.y), state, MouseTargetCache.fromState(state, viewport))
 
-    target.map(_.map((paneId, targetBuffer, _) => (paneId, targetBuffer.id))) shouldBe Right(Some((PaneId(0), BufferId(0))))
+    target.map(_.map((paneId, targetBuffer, _) => (paneId, targetBuffer.id))) shouldBe Right(
+      Some((PaneId(0), BufferId(0)))
+    )
   }
 
   it should "resolve a point outside every pane to no target" in {
@@ -90,15 +93,19 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
     val state = editorState("alpha beta")
 
     val result = run(state)(
-      MouseHitTesting.editorClick(MouseClick(0, 0, clickCount = 2), Some((PaneId(0), buffer(state), CursorPosition(0, 7))))
+      MouseHitTesting.editorClick(
+        MouseClick(0, 0, clickCount = 2),
+        Some((PaneId(0), buffer(state), CursorPosition(0, 7)))
+      )
     )._1
 
     buffer(result.state).primarySelection shouldBe Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
   }
 
   it should "only dismiss an open context menu when it lands on no editor target" in {
-    val state  = editorState("alpha")
-    val opened = run(state)(EditorContextMenuHitTesting.open(Some((PaneId(0), buffer(state), CursorPosition(0, 1)))))._1.state
+    val state = editorState("alpha")
+    val opened =
+      run(state)(EditorContextMenuHitTesting.open(Some((PaneId(0), buffer(state), CursorPosition(0, 1)))))._1.state
 
     val result = run(opened)(MouseHitTesting.editorClick(MouseClick(0, 0), None))._1
 
@@ -107,8 +114,10 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
   }
 
   "MouseHitTesting.editorPress and editorDrag" should "extend a selection from the pressed position to the dragged one" in {
-    val state   = editorState("alpha beta")
-    val pressed = run(state)(MouseHitTesting.editorPress(MousePress(0, 0), Some((PaneId(0), buffer(state), CursorPosition(0, 1)))))._1.state
+    val state = editorState("alpha beta")
+    val pressed = run(state)(
+      MouseHitTesting.editorPress(MousePress(0, 0), Some((PaneId(0), buffer(state), CursorPosition(0, 1))))
+    )._1.state
 
     val dragged = run(pressed)(MouseHitTesting.editorDrag(Some((PaneId(0), buffer(pressed), CursorPosition(0, 4)))))._1
 
@@ -124,7 +133,8 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
   private def withExplorer: AppState =
     val tree = DirectoryTreeData(
       root,
-      entries = Map(root -> List(DirEntry(src, "src", isDirectory = true), DirEntry(readme, "README.md", isDirectory = false)))
+      entries =
+        Map(root -> List(DirEntry(src, "src", isDirectory = true), DirEntry(readme, "README.md", isDirectory = false)))
     )
     DockedPanelFixtures.dock(
       editorState("text"),
@@ -149,8 +159,8 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
       case other                                           => fail(s"Expected the explorer tree, got $other")
 
   "PinnedPanelMouseHitTesting.select" should "select and focus the clicked directory row" in {
-    val state    = withExplorer
-    val (x, y)   = explorerRowPoint(state, 2)
+    val state  = withExplorer
+    val (x, y) = explorerRowPoint(state, 2)
 
     val (result, claimed) = run(state)(PinnedPanelMouseHitTesting.select(MouseClick(x, y), state, focusPanel = true))
 
@@ -178,7 +188,9 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
     val selected = run(state)(PinnedPanelMouseHitTesting.select(MouseClick(x, y), state, focusPanel = true))._1.state
 
     PinnedPanelMouseHitTesting.activation(MouseClick(x, y, clickCount = 2), selected) should matchPattern {
-      case Some(ComponentResult.ReducerUpdate(ReducerResult(_, List(AppEffect.File(FileEffect.DirectLoadFile(`readme`)))))) =>
+      case Some(
+            ComponentResult.ReducerUpdate(ReducerResult(_, List(AppEffect.File(FileEffect.DirectLoadFile(`readme`)))))
+          ) =>
     }
     PinnedPanelMouseHitTesting.activation(MouseClick(x, y), selected) shouldBe None
   }
