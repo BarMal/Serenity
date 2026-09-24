@@ -12,12 +12,16 @@ import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
+import org.scalatest.concurrent.Eventually
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.{Slf4jFactory, Slf4jLogger}
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 
-class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
+class EditorBehaviorSpec extends AnyFlatSpec with Matchers with Eventually:
+
+  override given patienceConfig: PatienceConfig =
+    PatienceConfig(timeout = org.scalatest.time.Span(20, org.scalatest.time.Seconds))
 
   private val bareConfig = AppConfig.default.withLineNumbers(false).withoutStatusLine
 
@@ -570,11 +574,14 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers:
       // When: Save the file
       stateManager.fileService.saveBuffer(bufferId).unsafeRunSync()
 
-      // Then: Buffer should no longer be dirty and the file on disk should hold the new content
-      val afterSaveState = stateManager.getCurrentState.unsafeRunSync()
-      afterSaveState.persisted.buffers(bufferId).document.isDirty shouldBe false
-      afterSaveState.persisted.buffers(bufferId).document.content.collect() shouldBe "Original content + mods"
-      java.nio.file.Files.readString(savePath) shouldBe "Original content + mods"
+      // Then: Buffer should no longer be dirty and the file on disk should hold the new content. The save runs on a
+      // file lane and lands after `saveBuffer` returns (#1671).
+      eventually {
+        val afterSaveState = stateManager.getCurrentState.unsafeRunSync()
+        afterSaveState.persisted.buffers(bufferId).document.isDirty shouldBe false
+        afterSaveState.persisted.buffers(bufferId).document.content.collect() shouldBe "Original content + mods"
+        java.nio.file.Files.readString(savePath) shouldBe "Original content + mods"
+      }
     finally java.nio.file.Files.deleteIfExists(savePath)
 
   trait EditorFixture:

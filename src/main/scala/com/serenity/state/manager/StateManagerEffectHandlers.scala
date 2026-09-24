@@ -7,11 +7,9 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.*
-import com.serenity.io.FileUtils
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.*
-import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.ui.layout.PanelPosition
@@ -271,18 +269,7 @@ final private[manager] class StateManagerEffectHandlers(
       case FileIntent.OpenFile =>
         requestOpenFileDialog
       case FileIntent.OpenRecentFile(path) =>
-        IO.blocking(java.nio.file.Files.isRegularFile(path) && java.nio.file.Files.isReadable(path)).flatMap {
-          case true =>
-            // Dismiss the startup-page surface before loading, exactly like the native open-file dialog path
-            // (requestOpenFileDialog) and every other startup action (new/restore/default-buffer). This intent is
-            // only ever dispatched from the startup page's recent-file entries, so clearing uiSurfaces is safe here.
-            // Without it the StartPage surface lingers and Renderer's `state.startPageSurface` short-circuit keeps
-            // drawing the (now stale) splash over the editor: keystrokes reach the hidden buffer but nothing
-            // repaints, so the app looks completely frozen (issue: opening a recent file wedges the TUI).
-            updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List.empty))) >>
-              directLoadFileEffect(path)
-          case false => logger.warn(s"[STARTUP] Recent file is unavailable: $path")
-        }
+        loadFile(path)
       case FileIntent.OpenFileSearch =>
         surfacePopupEffects.openFileSearchEffect(state)
       case FileIntent.CloseAll =>
@@ -293,8 +280,11 @@ final private[manager] class StateManagerEffectHandlers(
         beginCloseAction(CloseScope.Current, state)
       case FileIntent.NewFile =>
         val registry = CommandRegistry.withToggleUI
-        updateState(current =>
-          AppEventReducer.reduce(com.serenity.keystroke.events.NewTab, current, registry)(using balance).state
+        stateRef.get.flatMap(current =>
+          validateAndUpdateState(
+            AppEventReducer.reduce(com.serenity.keystroke.events.NewTab, current, registry)(using balance).state,
+            current
+          )
         )
       case FileIntent.SetBufferLanguage(language) =>
         setBufferLanguage(state, language)
@@ -303,11 +293,16 @@ final private[manager] class StateManagerEffectHandlers(
     (state.focusedBufferId, state.focusedBufferId.flatMap(state.persisted.buffers.get)) match
       case (Some(bufferId), Some(buffer)) =>
         val updateLanguage =
-          updateState(s =>
-            s.copy(persisted =
-              s.persisted.copy(buffers =
-                s.persisted.buffers + (bufferId -> buffer.copy(document = buffer.document.copy(language = language)))
-              )
+          stateRef.get.flatMap(current =>
+            validateAndUpdateState(
+              current.copy(persisted =
+                current.persisted.copy(buffers =
+                  current.persisted.buffers.updatedWith(bufferId)(
+                    _.map(live => live.copy(document = live.document.copy(language = language)))
+                  )
+                )
+              ),
+              current
             )
           )
 
@@ -389,9 +384,6 @@ final private[manager] class StateManagerEffectHandlers(
       case SessionIntent.OpenRenameSessionPicker =>
         openSessionPicker(state, SessionListPurpose.Rename)
 
-  private def trackRecentFile(current: List[Path], path: Path): List[Path] =
-    (path :: current.filterNot(_ == path)).take(20)
-
   /** Reads the focused buffer's on-disk revision (#1623), for the window focus-gain re-check. Runs off the dispatcher;
     * the decision is `resolveExternalRevisionEffect`'s.
     */
@@ -420,6 +412,9 @@ final private[manager] class StateManagerEffectHandlers(
     * stale save.
     */
   private[manager] def resolveExternalRevisionEffect(observation: ExternalRevisionObservation): IO[Unit] =
+    isSaving(observation.path).ifM(IO.unit, decideExternalRevision(observation))
+
+  private def decideExternalRevision(observation: ExternalRevisionObservation): IO[Unit] =
     stateRef.get.flatMap { state =>
       state.persisted.buffers
         .get(observation.bufferId)
@@ -455,74 +450,15 @@ final private[manager] class StateManagerEffectHandlers(
   private def bufferLabelFor(state: AppState, bufferId: BufferId): String =
     state.persisted.buffers.get(bufferId).fold(s"Buffer ${bufferId.value} - unsaved")(bufferLabelFor)
 
+  /** Opens `path` in the background (#1672): the read runs on the file's lane and the buffer lands when it is done. */
   private[manager] def directLoadFileEffect(path: Path): IO[Unit] =
-    IO.blocking(FileUtils.isReadableFile(path)).flatMap {
-      case false => logger.debug(s"[FILE] DirectLoad: file not readable: $path")
-      case true =>
-        val load =
-          for
-            bufferId <- stateRef.modify { state =>
-              val bufferId = state.runtime.nextBufferId
-              (state.copy(runtime = state.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))), bufferId)
-            }
-            loadedBuffer <- fileManager.loadFile(path, bufferId)
-            // Structural mutation (adds a buffer, reorders bufferOrder, reassigns pane focus): routed through the
-            // checked commit so a drifted `nextBufferId` (see #858) can't silently duplicate a bufferOrder entry or
-            // overwrite a live buffer instead of being rejected.
-            state <- stateRef.get
-            newBufferId = loadedBuffer.id
-            stateWithBuffer = state
-              .copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (newBufferId -> loadedBuffer)))
-            updatedState = EditorState.insertBufferInOrder(stateWithBuffer, newBufferId)
-            rebalanced   = EditorState.rebalancePanes(updatedState, Some(newBufferId))
-            focused      = EditorState.focusBuffer(rebalanced, newBufferId)
-            resized =
-              focused.runtime.viewportSize
-                .map(viewportSize => com.serenity.ui.layout.LayoutEngine.syncViewportDimensions(focused, viewportSize))
-                .getOrElse(focused)
-            _ <- validateAndUpdateState(resized, state)
-            _ <- loadedBuffer.document.language match
-              case Some(languageId) =>
-                val uri  = path.toUri.toString
-                val text = loadedBuffer.document.content.collect()
-                stateRef.get.flatMap { currentState =>
-                  if currentState.editingContext.hasCodeTooling then
-                    lspQueue.enqueue(LspEffect.FileOpened(uri, languageId, text))
-                  else IO.unit
-                }
-              case None => IO.unit
-            _ <- stateRef.update(s =>
-              s.copy(persisted =
-                s.persisted.copy(
-                  recentFiles = trackRecentFile(s.persisted.recentFiles, path),
-                  recentFilesByMode =
-                    Persisted.trackRecentFile(s.persisted.recentFilesByMode, s.persisted.config.appMode, path)
-                )
-              )
-            )
-          yield ()
-
-        load.handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to load file at $path")).void
-    }
+    loadFile(path)
 
   private[manager] def saveBufferEffect(bufferId: BufferId): IO[Unit] =
     stateRef.get.flatMap { state =>
       state.persisted.buffers.get(bufferId) match
         case Some(buffer) if buffer.document.filePath.isDefined =>
-          saveExistingBuffer(bufferId).handleErrorWith {
-            case error: com.serenity.richtext.LossyRichTextOverwriteException =>
-              stateRef.get.flatMap(current => workflow.showSaveAsWorkflow(current, bufferId, error.getMessage))
-            case _: com.serenity.io.FileManagerError.ExternalConflict =>
-              // Label from state re-read after the failure, not the pre-save `buffer` snapshot above -- keeps this
-              // consistent with StateManagerWorkflowCapability's own ExternalConflict handler, which does the same
-              // (code review finding on PR #1664: the two copies previously sourced the label from different points
-              // in time, which could show different labels for the same conflict if the buffer changed in between).
-              stateRef.get.flatMap(current =>
-                workflow.openReloadConflictModal(current, bufferId, bufferLabelFor(current, bufferId))
-              )
-            case error =>
-              logger.error(error)(s"[FILE] Failed to save buffer $bufferId")
-          }
+          submitSave(bufferId, saveFailed(bufferId))
         case Some(_) =>
           logger.debug(s"[FILE] Buffer $bufferId has no file path; opening native Save As dialog") >>
             requestSaveAsFileDialog(state, Some(bufferId))
@@ -530,18 +466,26 @@ final private[manager] class StateManagerEffectHandlers(
           logger.debug(s"[FILE] Buffer $bufferId not found for save")
     }
 
+  /** Runs on the dispatcher once a background save has failed. */
+  private def saveFailed(bufferId: BufferId)(error: Throwable): IO[Unit] =
+    error match
+      case lossy: com.serenity.richtext.LossyRichTextOverwriteException =>
+        stateRef.get.flatMap(current => workflow.showSaveAsWorkflow(current, bufferId, lossy.getMessage))
+      case _: com.serenity.io.FileManagerError.ExternalConflict =>
+        // Label from state re-read after the failure, not the pre-save `buffer` snapshot above -- keeps this
+        // consistent with StateManagerWorkflowCapability's own ExternalConflict handler, which does the same
+        // (code review finding on PR #1664: the two copies previously sourced the label from different points
+        // in time, which could show different labels for the same conflict if the buffer changed in between).
+        stateRef.get.flatMap(current =>
+          workflow.openReloadConflictModal(current, bufferId, bufferLabelFor(current, bufferId))
+        )
+      case other =>
+        logger.error(other)(s"[FILE] Failed to save buffer $bufferId")
+
   protected def requestOpenFileDialog: IO[Unit] =
     fileDialog match
       case Some(dialog) =>
-        FileUtils.getCurrentDirectory
-          .flatMap(currentDirectory => dialog.chooseOpenFile(Some(currentDirectory)))
-          .flatMap {
-            case Some(path) =>
-              updateState(s => s.copy(runtime = s.runtime.copy(uiSurfaces = List.empty))) >> directLoadFileEffect(path)
-            case None =>
-              IO.unit
-          }
-          .handleErrorWith(ex => logger.error(ex)("[FILE] Native open-file dialog failed"))
+        openFromDialog(dialog)
       case None =>
         // No native dialog to show at all -- fall back to the in-app form, same as the save-as path.
         stateRef.get.flatMap(state => openFileWorkflowModal(FileWorkflowMode.Open, state))

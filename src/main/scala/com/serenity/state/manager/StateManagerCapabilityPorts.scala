@@ -55,8 +55,12 @@ private[manager] trait EffectSurfacePort:
 private[manager] trait EffectFilePort:
   def fileDialog: Option[com.serenity.io.FileDialog]
   def fileManager: FileManager
-  def saveExistingBuffer(bufferId: BufferId): IO[Unit]
+  // Returns once the save is queued; `onFailure` runs on the dispatcher if it fails (#1671).
+  def submitSave(bufferId: BufferId, onFailure: Throwable => IO[Unit]): IO[Unit]
   def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit]
+  def loadFile(path: Path): IO[Unit]
+  def openFromDialog(dialog: com.serenity.io.FileDialog): IO[Unit]
+  def isSaving(path: Path): IO[Boolean]
   // #1623: re-reads the buffer's file from disk in place (same BufferId, cursor/viewport/undo state untouched),
   // replacing only its document/rich-text content and capturing a fresh revision.
   def reloadBuffer(bufferId: BufferId): IO[Unit]

@@ -1,5 +1,8 @@
 package com.serenity.ui.tui
 
+import scala.concurrent.duration.*
+
+import cats.effect.IO
 import cats.syntax.all.*
 
 import TuiScript.*
@@ -39,7 +42,20 @@ object TuiScenarios:
       }
     loop(maxLevels)
 
-  val save: TuiScript[Unit]           = ctrl('s')
+  /** Ctrl+S. The write runs on a file lane and lands after the key has been handled (#1671), so this waits -- for a
+    * bounded time -- until the focused buffer is clean or a prompt has opened, as a user waits for "unsaved" to clear.
+    */
+  val save: TuiScript[Unit] = ctrl('s') >> awaitSaveLanded(500)
+
+  private def awaitSaveLanded(remaining: Int): TuiScript[Unit] =
+    TuiScript.state.flatMap { current =>
+      val landed =
+        current.topModal.isDefined ||
+          current.focusedBufferId.flatMap(current.persisted.buffers.get).forall(!_.hasUnsavedChanges)
+      if landed || remaining <= 0 then TuiScript.unit
+      else TuiScript.liftIO(IO.sleep(20.millis)) >> awaitSaveLanded(remaining - 1)
+    }
+
   val saveAs: TuiScript[Unit]         = ctrlShift('s')
   val newTab: TuiScript[Unit]         = ctrl('t')
   val closeTab: TuiScript[Unit]       = ctrl('w')

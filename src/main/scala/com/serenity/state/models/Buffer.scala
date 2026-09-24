@@ -160,6 +160,31 @@ final case class Buffer(
   def withCursorList(updated: NonEmptyList[Cursor]): Buffer =
     copy(editing = EditingState(updated))
 
+  /** Moves cursors and selection ends past the last line onto it, and drops bookmarks and comments past it -- for
+    * content replaced from disk (a reload, or a session restore that prefers the disk), which may be shorter than the
+    * positions recorded against the old content.
+    */
+  def clampedToContent: Buffer =
+    val lineCount                         = document.content.lineCount
+    def inRange(position: CursorPosition) = position.line < lineCount
+    def clamp(position: CursorPosition) =
+      if inRange(position) then position
+      else
+        val lastLine = (lineCount - 1).max(0)
+        CursorPosition(lastLine, document.content.getLine(lastLine).fold(0)(_.length))
+    copy(
+      editing = EditingState(
+        editing.cursors.map(cursor =>
+          cursor.copy(position = clamp(cursor.position), selectionAnchor = cursor.selectionAnchor.map(clamp))
+        )
+      ),
+      annotations = annotations.copy(
+        bookmarks = annotations.bookmarks.filter(inRange),
+        documentComments =
+          annotations.documentComments.filter(comment => inRange(comment.anchor) && inRange(comment.focus))
+      )
+    )
+
   /** True when closing this buffer may lose user-authored content. */
   def hasUnsavedChanges: Boolean =
     document.isDirty || (document.filePath.isEmpty && !document.isNewEmpty)

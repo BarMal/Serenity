@@ -29,7 +29,9 @@ final private[manager] class StateManagerOperationBoundary private (
     effectsShutdownRef: Ref[IO, Boolean],
     beforeDocumentAnalysisStart: IO[Unit],
     beforeEffectsShutdown: IO[Unit],
-    dispatcher: StateManagerDispatcher
+    dispatcher: StateManagerDispatcher,
+    fileWriteLedger: FileWriteLedger,
+    effectsReleased: Deferred[IO, Unit]
 ):
   private val DocumentAnalysisDebounce         = 150.millis
   private val FindSearchDebounce               = 50.millis
@@ -129,7 +131,25 @@ final private[manager] class StateManagerOperationBoundary private (
   def shutdownEffects(): IO[Unit] =
     beforeEffectsShutdown >> effectsShutdownRef
       .getAndSet(true)
-      .flatMap(alreadyShut => if alreadyShut then IO.unit else releaseEffectLanes)
+      .flatMap(alreadyShut => if alreadyShut then IO.unit else releaseEffectLanes >> effectsReleased.complete(()).void)
+
+  /** Waits for queued and running Sequential work -- file saves above all -- to finish, cancelling search, analysis and
+    * dialogs: the `Lane.Exclusive` quit barrier of docs/state-architecture-target.md. Returns at once after shutdown.
+    */
+  def awaitPendingWrites: IO[Unit] =
+    IO.deferred[Unit].flatMap { barrier =>
+      val passed = effectLanes.submit(Lane.Exclusive, barrier.complete(()).void) >> barrier.get
+      IO.race(passed, effectsReleased.get).void.recover { case _: EffectLanes.Released => () }
+    }
+
+  /** What file persistence needs from this boundary (#1697 Wave 3). */
+  val fileLanes: FileEffectLanes = new FileEffectLanes:
+    val fileWrites: FileWriteLedger                                 = fileWriteLedger
+    def submitToLane(lane: Lane.Scheduled, job: IO[Unit]): IO[Unit] = effectLanes.submit(lane, job)
+    def post(update: IO[Unit]): IO[Unit]                            = dispatcher.post(update)
+    def dispatchUpdate(update: IO[Unit]): IO[Unit]                  = dispatcher.submit(update)
+    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+      StateManagerOperationBoundary.this.validateAndUpdateState(newState, fallbackState)
 
   def scheduleFindSearch(request: FindSearchRequest): IO[Unit] =
     submit(
@@ -215,7 +235,9 @@ private[manager] object StateManagerOperationBoundary:
       (effectLanes, releaseEffectLanes) <- EffectLanes
         .resource((lane, error) => logger.error(error)(s"[EFFECTS] Job on $lane failed"))
         .allocated
-      dispatcher <- StateManagerDispatcher.create(logger)
+      dispatcher      <- StateManagerDispatcher.create(logger)
+      fileWriteLedger <- FileWriteLedger.create
+      effectsReleased <- Deferred[IO, Unit]
     yield new StateManagerOperationBoundary(
       pendingOperations,
       stateRef,
@@ -226,5 +248,7 @@ private[manager] object StateManagerOperationBoundary:
       effectsShutdownRef,
       beforeDocumentAnalysisStart,
       beforeEffectsShutdown,
-      dispatcher
+      dispatcher,
+      fileWriteLedger,
+      effectsReleased
     )

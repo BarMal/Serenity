@@ -64,12 +64,17 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
         new FileManager(),
         sessionPersistence,
         NoOpLogger.impl[IO],
-        lspQueueVar
+        lspQueueVar,
+        StateManagerOperationBoundary.create(stateRefVar, NoOpLogger.impl[IO]).unsafeRunSync().fileLanes
       )
     )
 
+  // Results are committed through validation (#1671), so the fixture must be a state validation accepts.
   private def stateWithBuffer(buffer: Buffer): AppState =
-    AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(buffer.id -> buffer)))
+    AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(buffers = AppState.initial.persisted.buffers + (buffer.id -> buffer)),
+      runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(buffer.id.value + 1))
+    )
 
   "saveExistingBuffer" should "write the buffer's content to its existing file path and update state with the saved buffer" in {
     val path = Files.createTempFile("existing", ".txt")

@@ -11,12 +11,17 @@ import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import org.scalatest.concurrent.Eventually
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class FileHandlingSpec extends AnyFlatSpec with Matchers:
+class FileHandlingSpec extends AnyFlatSpec with Matchers with Eventually:
+
+  // Saves run on a file lane and land after `applyEvent(SaveFile)` returns (#1671).
+  override given patienceConfig: PatienceConfig =
+    PatienceConfig(timeout = org.scalatest.time.Span(20, org.scalatest.time.Seconds))
 
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
@@ -521,11 +526,11 @@ class FileHandlingSpec extends AnyFlatSpec with Matchers:
 
       stateManager.applyEvent(SaveFile).unsafeRunSync()
 
-      // Verify file was saved
-      val savedContent = Files.readString(tempFile)
-      savedContent shouldBe "val x = 43"
-      val updatedState = stateManager.getCurrentState.unsafeRunSync()
-      updatedState.persisted.buffers(modifiedBuffer.id).document.isDirty shouldBe false
+      eventually {
+        Files.readString(tempFile) shouldBe "val x = 43"
+        val updatedState = stateManager.getCurrentState.unsafeRunSync()
+        updatedState.persisted.buffers(modifiedBuffer.id).document.isDirty shouldBe false
+      }
 
     finally Files.deleteIfExists(tempFile)
   }

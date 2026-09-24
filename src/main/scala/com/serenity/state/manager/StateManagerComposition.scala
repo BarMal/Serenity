@@ -79,7 +79,8 @@ private[manager] class StateManagerComposition(
       runtimeFileManager,
       runtimeSessionPersistence,
       runtimeLogger,
-      runtimeLspQueue
+      runtimeLspQueue,
+      operations.fileLanes
     )
 
   // Stateless facade over stateRef/bufferAnimationsRef, reused by `editor` (`events` builds its own
@@ -168,11 +169,15 @@ private[manager] class StateManagerComposition(
       surfaces.resizePinnedPanel(target, newSize)
 
   private val effectFilePort: EffectFilePort = new EffectFilePort:
-    val fileDialog                                             = runtimeFileDialog
-    val fileManager                                            = runtimeFileManager
-    def saveExistingBuffer(bufferId: BufferId): IO[Unit]       = filePersistence.saveExistingBuffer(bufferId)
-    def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit] = filePersistence.saveBufferAs(bufferId, path)
-    def reloadBuffer(bufferId: BufferId): IO[Unit]             = filePersistence.reloadBuffer(bufferId)
+    val fileDialog  = runtimeFileDialog
+    val fileManager = runtimeFileManager
+    def submitSave(bufferId: BufferId, onFailure: Throwable => IO[Unit]): IO[Unit] =
+      filePersistence.submitSave(bufferId, onFailure)
+    def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit]       = filePersistence.saveBufferAs(bufferId, path)
+    def reloadBuffer(bufferId: BufferId): IO[Unit]                   = filePersistence.reloadBuffer(bufferId)
+    def loadFile(path: Path): IO[Unit]                               = filePersistence.loadFile(path)
+    def openFromDialog(dialog: com.serenity.io.FileDialog): IO[Unit] = filePersistence.openFromDialog(dialog)
+    def isSaving(path: Path): IO[Boolean]                            = filePersistence.isSaving(path)
 
   private val effectSessionPort: EffectSessionPort = new EffectSessionPort:
     val sessionPersistence = runtimeSessionPersistence
@@ -265,7 +270,7 @@ private[manager] class StateManagerComposition(
 
   private val viewport =
     new StateManagerViewportCapability(stateRef, logger, deviceTextScaleProvider, events, effects)
-  private val files = new StateManagerFileCapability(stateRef, effects, events.dispatch)
+  private val files = new StateManagerFileCapability(stateRef, effects, events.dispatch, filePersistence.openFile)
 
   // PaneManager's methods are excluded from the facade export and re-assembled into the `paneManager` record below,
   // since #1017 replaces the mixed-in trait with a field. They stay public on the capability classes so this
@@ -395,7 +400,7 @@ private[manager] class StateManagerComposition(
   )
 
   val runtimeLifecycle: RuntimeLifecycle = RuntimeLifecycle(
-    awaitQuit = quitSignal.get,
+    awaitQuit = quitSignal.get >> operations.awaitPendingWrites,
     forceQuit = forceQuit,
     intervalSaveStream = intervalSaveStream
   )

@@ -10,6 +10,7 @@ import com.serenity.io.{FileDialog, FileManager}
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
+import com.serenity.state.effects.Lane
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, PeekContent}
@@ -117,16 +118,38 @@ private[manager] trait StateManagerEffectHandlersHarness:
       def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit] =
         callsVar.update(_ :+ s"resizePinnedPanel:$target:$newSize")
 
+    val sessionPersistenceVar = new RecordingSessionPersistence(sessionTriggersVar, sessionRoot)
+
+    // Real file loading, with every lane job and posted result run inline on the caller.
+    val inlineLanes = new FileEffectLanes:
+      val fileWrites                                                  = FileWriteLedger.create.unsafeRunSync()
+      def submitToLane(lane: Lane.Scheduled, job: IO[Unit]): IO[Unit] = job
+      def post(update: IO[Unit]): IO[Unit]                            = update
+      def dispatchUpdate(update: IO[Unit]): IO[Unit]                  = update
+      def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+        editor.validateAndUpdateState(newState, fallbackState)
+    val filePersistence = new StateManagerFilePersistence(
+      stateRefVar,
+      new FileManager(),
+      sessionPersistenceVar,
+      NoOpLogger.impl[IO],
+      lspQueueVar,
+      inlineLanes
+    )
+
     val files = new EffectFilePort:
       val fileDialog  = fileDialogOpt
       val fileManager = new FileManager()
-      def saveExistingBuffer(id: BufferId): IO[Unit] =
-        callsVar.update(_ :+ s"saveExistingBuffer:$id") >> saveExistingBufferHook(id)
+      def submitSave(id: BufferId, onFailure: Throwable => IO[Unit]): IO[Unit] =
+        callsVar.update(_ :+ s"saveExistingBuffer:$id") >> saveExistingBufferHook(id).handleErrorWith(onFailure)
       def saveBufferAs(id: BufferId, path: Path): IO[Unit] = callsVar.update(_ :+ s"saveBufferAs:$id:$path")
       def reloadBuffer(id: BufferId): IO[Unit]             = callsVar.update(_ :+ s"reloadBuffer:$id")
+      def loadFile(path: Path): IO[Unit]                   = filePersistence.loadFile(path)
+      def openFromDialog(dialog: FileDialog): IO[Unit]     = filePersistence.openFromDialog(dialog)
+      def isSaving(path: Path): IO[Boolean]                = filePersistence.isSaving(path)
 
     val sessions = new EffectSessionPort:
-      val sessionPersistence                  = new RecordingSessionPersistence(sessionTriggersVar, sessionRoot)
+      val sessionPersistence                  = sessionPersistenceVar
       def saveSession(): IO[Unit]             = callsVar.update(_ :+ "saveSession")
       def loadSession(): IO[Option[AppState]] = callsVar.update(_ :+ "loadSession") >> loadSessionResult
       def clearSession(): IO[Unit]            = callsVar.update(_ :+ "clearSession")
