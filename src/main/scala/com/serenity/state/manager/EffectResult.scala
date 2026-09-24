@@ -2,7 +2,9 @@ package com.serenity.state.manager
 
 import java.nio.file.Path
 
+import com.serenity.command.CommandRegistry
 import com.serenity.config.SpellCheckDictionaryFingerprint
+import com.serenity.keystroke.events.RunnerBindingRecordingExpired
 import com.serenity.rope.Rope
 import com.serenity.session.SessionMetadata
 import com.serenity.spellcheck.SpellChecker
@@ -17,7 +19,13 @@ import com.serenity.state.models.{
   SpellCheckFingerprint,
   SurfaceId
 }
-import com.serenity.state.reducers.{ModalEventReducer, PinnedPanelContentReducer, ThemeStateReducer}
+import com.serenity.state.reducers.{
+  CommandRunnerReducer,
+  ModalEventReducer,
+  PinnedPanelContentReducer,
+  ReducerResult,
+  ThemeStateReducer
+}
 import com.serenity.ui.layout.{DirEntry, PanelPosition}
 import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.Theme
@@ -76,6 +84,10 @@ private[manager] enum EffectResult:
   case SessionsListed(purpose: SessionListPurpose, sessions: List[SessionMetadata])
   case NamedSessionLoaded(pickerId: SurfaceId, restored: Option[AppState])
 
+  // Timers (#1697 Wave 3): posted by `LaneKey.Timer` jobs once their delay has run out.
+  /** The double-tap window of the binding recorded at `recordedAtMillis` has closed. */
+  case CommandRunnerBindingExpired(recordedAtMillis: Long)
+
 private[manager] object EffectResult:
 
   def applyIfCurrent(state: AppState, result: EffectResult): AppState =
@@ -133,3 +145,16 @@ private[manager] object EffectResult:
         SessionWorkflowTransitions.withSessionPicker(state, purpose, sessions)
       case NamedSessionLoaded(pickerId, restored) =>
         SessionWorkflowTransitions.withNamedSessionLoaded(state, pickerId, restored)
+
+      case expired: CommandRunnerBindingExpired => reduce(state, expired).state
+
+  /** [[applyIfCurrent]] together with the effects its transition emits; only the cases matched here emit any. */
+  def reduce(state: AppState, result: EffectResult): ReducerResult =
+    result match
+      case CommandRunnerBindingExpired(recordedAtMillis) =>
+        CommandRunnerReducer.reduce(
+          RunnerBindingRecordingExpired(recordedAtMillis),
+          state,
+          CommandRegistry.withToggleUI
+        )
+      case other => ReducerResult.noEffects(applyIfCurrent(state, other))

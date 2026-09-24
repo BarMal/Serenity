@@ -13,6 +13,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence}
 import com.serenity.state.effects.Lane
 import com.serenity.state.models.*
+import com.serenity.state.reducers.{AppEffect, UndoEffect}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, PeekContent}
@@ -134,7 +135,14 @@ private[manager] class StateManagerComposition(
     // Called from lane jobs, off the dispatcher, so events `onApplied` enqueues are replayed the way `executeCommand`
     // replays them.
     def dispatchEffectResult(result: EffectResult, onApplied: AppState => IO[Unit]): IO[Unit] =
-      operations.dispatch(operations.applyResult(result, onApplied)) >> drainPendingOperations
+      operations.dispatch(operations.applyResult(result, onApplied, interpretResultEffect)) >> drainPendingOperations
+
+  // `effects` is built further down; this only runs once a lane result lands, long after construction.
+  private def interpretResultEffect(effect: AppEffect): IO[Unit] =
+    effect match
+      case AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable)) =>
+        undoRecording.recordUndoBoundary(entry, groupable)
+      case other => effects.interpretEffect(other)
 
   private val surfaces =
     new StateManagerSurfaceCapability(stateRef, logger, operations, undoRecording.recordUndoBoundary)
