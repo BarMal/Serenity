@@ -292,11 +292,11 @@ final private[manager] class StateManagerWorkflowCapability(
     }
 
   /** Opens the "Save Session As..." name prompt (issue #1390), pre-filled empty -- `ModalSessionReducer` routes its
-    * Enter into `submitSessionNamePromptEffect` below.
+    * Enter into `submitSessionNamePromptEffect` below. Shown on the current state, so the palette's record of the
+    * command that opened it is kept.
     */
-  private[manager] def openSaveSessionAsPrompt(state: AppState): IO[Unit] =
-    val shown = ModalStateReducer.show(Modal.SessionNamePrompt(SessionNamePromptMode.SaveAs, ""), state).state
-    validateAndUpdateState(shown, state)
+  private[manager] def openSaveSessionAsPrompt(): IO[Unit] =
+    commit(ModalStateReducer.show(Modal.SessionNamePrompt(SessionNamePromptMode.SaveAs, ""), _).state)
 
   /** Lists the saved sessions on the Session lane, then opens the picker (issue #1390) for either purpose: `Open` loads
     * the selected session directly on Enter, `Rename` hands it off to the name prompt.
