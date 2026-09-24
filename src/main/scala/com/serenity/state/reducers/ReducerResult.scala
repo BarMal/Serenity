@@ -8,7 +8,7 @@ import com.serenity.command.Command
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Rope
-import com.serenity.state.models.{AppState, BufferId, SurfaceId}
+import com.serenity.state.models.{AppState, BufferId, CloseScope, SurfaceId}
 import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.theme.config.ThemeConfig
@@ -39,6 +39,8 @@ enum WorkflowEffect:
   case RefreshFind(request: com.serenity.state.models.FindSearchRequest)
   case SubmitFileWorkflow(surfaceId: SurfaceId)
   case SubmitReplaceWorkflow(surfaceId: SurfaceId)
+  // Starts the close workflow (`beginCloseAction`) for `scope`: closes clean buffers, prompts for dirty ones.
+  case BeginClose(scope: CloseScope)
   case SubmitCloseWorkflow(surfaceId: SurfaceId)
   // #1623: the reload-conflict prompt's Reload/Overwrite/Cancel submission -- see ModalReloadConflictReducer.
   case SubmitReloadConflict(surfaceId: SurfaceId)

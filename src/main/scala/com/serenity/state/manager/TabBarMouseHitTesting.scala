@@ -1,11 +1,10 @@
 package com.serenity.state.manager
 
 import cats.syntax.all.*
-import com.serenity.command.CommandRegistry
 import com.serenity.keystroke.events.MouseClick
 import com.serenity.state.core.EditorState
-import com.serenity.state.models.{AppState, BufferId, SurfaceContent, TabListEntry}
-import com.serenity.state.reducers.{AppEffect, Transition}
+import com.serenity.state.models.{AppState, BufferId, CloseScope, SurfaceContent, TabListEntry}
+import com.serenity.state.reducers.{AppEffect, Transition, WorkflowEffect}
 import com.serenity.ui.layout.{LayoutEngine, LayoutRect, TabBarSurfaceComposition}
 
 /** Per-tab hit regions for the always-visible tab strip (issue #1075: Foundation; close affordance, #1078), and
@@ -118,8 +117,9 @@ private[manager] object TabBarMouseHitTesting:
   def click(click: MouseClick, state: AppState)(using com.serenity.rope.Balance): Transition[Boolean] =
     if newTabClickTarget(state, click.col, click.row) then Transition.modify(EditorState.openNewTab).as(true)
     else
-      closeClickTarget(state, click.col, click.row).flatMap(closeTab) match
-        case Some(close) => close.as(true)
+      closeClickTarget(state, click.col, click.row) match
+        case Some(bufferId) =>
+          Transition.emit(AppEffect.Workflow(WorkflowEffect.BeginClose(closeScope(state, bufferId)))).as(true)
         case None =>
           clickTarget(state, click.col, click.row) match
             case Some(switchTo) =>
@@ -139,11 +139,10 @@ private[manager] object TabBarMouseHitTesting:
       bufferId <- closeHitAt(entries, activeBufferId, rect, col.toDouble, row.toDouble)
     yield bufferId
 
-  /** #1673: a close click must prompt for unsaved changes exactly as keyboard `CloseTab` does, so it runs the same
-    * `close` command rather than dropping the buffer here. That workflow only ever closes the active editor's buffer,
-    * hence the switch to the clicked tab first -- which also puts the buffer a save prompt asks about on screen.
+  /** #1673: a close click goes through the close workflow, which prompts for unsaved changes, rather than dropping the
+    * buffer here. The active tab closes exactly as keyboard `CloseTab` does; any other tab closes by id and leaves the
+    * active one active.
     */
-  private def closeTab(bufferId: BufferId): Option[Transition[Unit]] =
-    CommandRegistry.withToggleUI.findCommand("close").map { close =>
-      Transition.modify(EditorState.switchToBuffer(_, bufferId)) *> Transition.emit(AppEffect.ExecuteCommand(close))
-    }
+  private def closeScope(state: AppState, bufferId: BufferId): CloseScope =
+    val active = state.activeBuffer.map(_.id)
+    if active.contains(bufferId) then CloseScope.Current else CloseScope.Tab(bufferId, returnTo = active)

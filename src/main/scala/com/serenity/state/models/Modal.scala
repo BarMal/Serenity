@@ -61,6 +61,10 @@ enum CloseScope:
   // #6: like Quit for the save/discard prompts, but no buffer is dropped -- the whole session is snapshotted and the
   // editor is replaced by the start page, so [Tab] Quick-resume restores everything exactly as it was left.
   case ReturnToStartPage
+  // #1673: one tab closed from its close affordance, which need not be the active one. The workflow only ever closes
+  // the active buffer (and shows a dirty one while prompting about it), so `returnTo` -- the tab active when the close
+  // began -- is made active again once `bufferId` is closed or the prompt is cancelled.
+  case Tab(bufferId: BufferId, returnTo: Option[BufferId])
 
 enum CloseWorkflowChoice:
   case Save

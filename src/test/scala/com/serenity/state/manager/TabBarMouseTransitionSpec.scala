@@ -1,11 +1,10 @@
 package com.serenity.state.manager
 
-import com.serenity.command.{CommandIntent, FileIntent}
 import com.serenity.keystroke.events.{MouseClick, MouseDrag, MousePress}
 import com.serenity.rope.Balance
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, ReducerResult, Transition}
+import com.serenity.state.reducers.{AppEffect, ReducerResult, Transition, WorkflowEffect}
 import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -30,11 +29,6 @@ class TabBarMouseTransitionSpec extends AnyFlatSpec with Matchers:
 
   private def run[A](state: AppState)(transition: Transition[A]): (ReducerResult, A) =
     MouseTransition.run(state)(transition)
-
-  private def isCloseCommand(effect: AppEffect): Boolean =
-    effect match
-      case AppEffect.ExecuteCommand(command) => command.intent == CommandIntent.File(FileIntent.CloseCurrentFile)
-      case _                                 => false
 
   "TabBarMouseHitTesting.click" should "switch to a clicked background tab" in {
     val state = twoBufferState
@@ -67,35 +61,28 @@ class TabBarMouseTransitionSpec extends AnyFlatSpec with Matchers:
     run(state)(TabBarMouseHitTesting.click(MouseClick(3, 2), state)) shouldBe ((ReducerResult(state, Nil), false))
   }
 
-  // #1673: the close affordance goes through the `close` command -- the same workflow as keyboard CloseTab, which
-  // prompts before discarding unsaved changes -- rather than dropping the buffer itself.
-  it should "close a tab through the close command rather than dropping the buffer itself" in {
+  // #1673: the close affordance starts the same close workflow as keyboard CloseTab, which prompts before discarding
+  // unsaved changes, rather than dropping the buffer itself.
+  it should "start the close workflow for a background tab, keeping the active tab active" in {
     val state = twoBufferState
 
     val (result, claimed) = run(state)(TabBarMouseHitTesting.click(MouseClick(17, 0), state))
 
     claimed shouldBe true
-    result.effects should have size 1
-    result.effects.forall(isCloseCommand) shouldBe true
-    result.state.persisted.buffers.keySet shouldBe state.persisted.buffers.keySet
+    result.state shouldBe theSameInstanceAs(state)
+    result.effects shouldBe List(
+      AppEffect.Workflow(WorkflowEffect.BeginClose(CloseScope.Tab(BufferId(1), returnTo = Some(BufferId(0)))))
+    )
   }
 
-  it should "make a background tab active before closing it, since the close workflow closes the active buffer" in {
-    val state = twoBufferState
-
-    val (result, _) = run(state)(TabBarMouseHitTesting.click(MouseClick(17, 0), state))
-
-    result.state.focusedBufferId shouldBe Some(BufferId(1))
-  }
-
-  it should "close the active tab without switching away from it" in {
+  it should "close the active tab exactly as keyboard CloseTab does" in {
     val state = twoBufferState
 
     val (result, claimed) = run(state)(TabBarMouseHitTesting.click(MouseClick(7, 0), state))
 
     claimed shouldBe true
-    result.effects.forall(isCloseCommand) shouldBe true
-    result.state.focusedBufferId shouldBe Some(BufferId(0))
+    result.state shouldBe theSameInstanceAs(state)
+    result.effects shouldBe List(AppEffect.Workflow(WorkflowEffect.BeginClose(CloseScope.Current)))
   }
 
   "TabBarDragHitTesting.press" should "start a drag session on the pressed tab" in {
