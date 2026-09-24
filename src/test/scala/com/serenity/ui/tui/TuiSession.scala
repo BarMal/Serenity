@@ -64,11 +64,10 @@ final class TuiSession private (
     if endsOnLoneEscape(key.bytes) then feedEscape(key)
     else write(key.bytes) >> write(SentinelKey.bytes) >> awaitSentinel(key)
 
-  /** A lone `ESC` is genuinely ambiguous at a real terminal: the input handler holds it for
-    * [[TerminalInputHandler.EscDisambiguationDeadline]] to see whether an escape sequence follows. Sending the sentinel
-    * during that window would let the handler read `ESC` and the sentinel's own `CSI` introducer as one sequence, and
-    * the Escape keystroke would vanish -- so the sentinel is held back until the Escape has actually been applied,
-    * which is an observation rather than a sleep long enough to hope.
+  /** A lone `ESC` is genuinely ambiguous at a real terminal until the input pauses. The pause is marked explicitly
+    * rather than left to the input handler's deadline (see [[TuiEnvironment.PausesOnlyEscDeadline]]), and the sentinel
+    * is held back until the Escape has actually been applied, so its own `CSI` introducer can never be read as the rest
+    * of the sequence.
     */
   private def feedEscape(key: TuiKey): IO[Unit] =
     require(
@@ -78,6 +77,7 @@ final class TuiSession private (
     for
       _ <- appliedSignals.tryTakeN(None)
       _ <- write(key.bytes)
+      _ <- IO(reader.feedPause())
       _ <- appliedSignals.take.timeoutTo(
         SentinelTimeout,
         IO.raiseError(new AssertionError(s"Timed out waiting for ${key.name} to be applied"))

@@ -3,7 +3,7 @@ package com.serenity.ui.tui
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 import cats.effect.IO
 import com.serenity.config.AppConfig
@@ -33,7 +33,7 @@ final case class TuiEnvironment(
     config: AppConfig = AppConfig.default,
     file: Option[TuiEnvironment.SourceFile] = None,
     useOsc52Clipboard: Boolean = true,
-    escDeadline: FiniteDuration = TerminalInputHandler.EscDisambiguationDeadline
+    escDeadline: FiniteDuration = TuiEnvironment.PausesOnlyEscDeadline
 ):
   def withViewport(size: ViewportSize): TuiEnvironment = copy(viewport = size)
 
@@ -66,6 +66,12 @@ object TuiEnvironment:
   final case class SourceFile(name: String, content: String)
 
   val DefaultFileName = "scratch.md"
+
+  /** Long enough never to fire within a scenario. [[TuiSession.feed]] marks the pause after a lone Escape itself, so
+    * the clock never decides whether an `ESC` starts a sequence -- under load it could otherwise expire before the rest
+    * of a sequence written in one piece had been read, splitting it into Escape plus literal text.
+    */
+  val PausesOnlyEscDeadline: FiniteDuration = 1.hour
 
   /** An empty document open in a full-screen terminal: the starting point for anything about editing. */
   val default: TuiEnvironment = TuiEnvironment(file = Some(SourceFile(DefaultFileName, "")))
