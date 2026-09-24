@@ -61,8 +61,7 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
     themeNamesRef: Ref[IO, List[String]],
     lanes: EffectLanePort,
     themeManager: AppThemeManager,
-    fileDialog: Option[FileDialog] = None,
-    writeUserTheme: ThemeConfig => IO[Path] = ThemeConfigWriter.writeUserTheme(_)
+    fileDialog: Option[FileDialog] = None
   ): StateManagerSurfacePopupEffects =
     def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
       committed.update(_ :+ newState) >> stateRef.set(newState)
@@ -78,8 +77,7 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
       {
         case AppEffect.Theme(effect) => popups.interpretThemeEffect(effect)
         case _                       => IO.unit
-      },
-      writeUserTheme
+      }
     )
     popups
 
@@ -205,9 +203,7 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
 
   it should "refresh the theme names only once a saved theme has been written" in {
     val savedNames = List("dark", "light", "my-theme")
-    val listing = new AppThemeManager:
-      override def listAvailableThemes: IO[List[String]] = IO.pure(savedNames)
-    val config = ThemeConfigWriter.themeToConfig(AppState.initial.persisted.theme).copy(name = "my-theme")
+    val config     = ThemeConfigWriter.themeToConfig(AppState.initial.persisted.theme).copy(name = "my-theme")
 
     val program =
       for
@@ -215,14 +211,16 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
         committed     <- Ref.of[IO, List[AppState]](Nil)
         themeNamesRef <- Ref.of[IO, List[String]](List("dark", "light"))
         written       <- Deferred[IO, Unit]
+        gatedWrites = new AppThemeManager:
+          override def listAvailableThemes: IO[List[String]]         = IO.pure(savedNames)
+          override def writeUserTheme(config: ThemeConfig): IO[Path] = written.get.as(Path.of("my-theme.conf"))
         result <- EffectLanePortFixtures.laned(stateRef).use { lanes =>
           val popups = popupsOver(
             stateRef,
             committed,
             themeNamesRef,
             lanes,
-            listing,
-            writeUserTheme = _ => written.get.as(Path.of("my-theme.conf"))
+            gatedWrites
           )
           for
             _           <- popups.interpretThemeEffect(ThemeEffect.SaveThemeConfig(config))

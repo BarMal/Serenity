@@ -1,7 +1,5 @@
 package com.serenity.state.manager
 
-import java.nio.file.Path
-
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
 import com.serenity.command.ThemeIntent
@@ -23,8 +21,7 @@ final private[manager] class StateManagerSurfacePopupEffects(
     fileDialog: Option[com.serenity.io.FileDialog],
     validateAndUpdateState: (AppState, AppState) => IO[Unit],
     lanes: EffectLanePort,
-    interpretEffect: AppEffect => IO[Unit],
-    writeUserTheme: ThemeConfig => IO[Path] = ThemeConfigWriter.writeUserTheme(_)
+    interpretEffect: AppEffect => IO[Unit]
 ):
 
   private val ThemeLoadLane: Lane.Keyed = Lane.Keyed(LaneKey.Theme, LanePolicy.SwitchLatest)
@@ -81,7 +78,8 @@ final private[manager] class StateManagerSurfacePopupEffects(
       )
 
   private def saveUserTheme(config: ThemeConfig): IO[Unit] =
-    writeUserTheme(config)
+    themeManager
+      .writeUserTheme(config)
       .flatTap(path => logger.info(s"[THEMES] Saved user theme '${config.name}' to $path"))
       .flatMap(_ => listThemeNames)
       .handleErrorWith(ex => logger.error(ex)(s"[THEMES] Failed to save user theme '${config.name}'"))

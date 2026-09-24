@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.BufferId
+import com.serenity.ui.layout.PanelPosition
 
 enum LaneKey:
   /** Callers pass canonical paths, so two buffers on one file share a lane. */
@@ -14,6 +15,11 @@ enum LaneKey:
   case MarkdownPreview(id: BufferId)
   case Lsp(language: LanguageId)
   case Directory(path: Path)
+
+  /** One explorer panel's listing of `path`: a newer listing supersedes it, another panel's listing of the same
+    * directory does not.
+    */
+  case ExplorerListing(position: PanelPosition, path: Path)
   case Search, Analysis, Theme, Config, Presets, Keybindings, Session, Project, Dialog, Timer
 
 enum LanePolicy:

@@ -20,7 +20,7 @@ import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{DirEntry, DirectoryTreeData, PanelPosition, PanelTarget}
 import com.serenity.ui.presets.UiPresetStore
-import com.serenity.ui.theme.config.AppThemeManager
+import com.serenity.ui.theme.config.{AppThemeManager, ThemeConfig, ThemeCreatorState}
 import com.serenity.ui.theme.{DefaultThemes, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -38,24 +38,34 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
   private type Outcome[A] = Either[Throwable, A]
 
   /** I/O that parks each request until the spec settles it, so a spec decides when -- and in what order -- it lands. */
-  final private class Gates[K, A](pending: Ref[IO, List[(K, Deferred[IO, Outcome[A]])]]):
+  final private class Gates[K, A](pending: Ref[IO, List[(K, Deferred[IO, Outcome[A]])]], delivered: Ref[IO, List[K]]):
+
     def await(key: K): IO[A] =
-      Deferred[IO, Outcome[A]].flatMap(gate => pending.update(_ :+ (key -> gate)) >> gate.get.rethrow)
-    def requested(key: K): IO[Boolean] = pending.get.map(_.exists(_._1 == key))
+      Deferred[IO, Outcome[A]].flatMap(gate =>
+        pending.update(_ :+ (key -> gate)) >> gate.get.rethrow.flatTap(_ => delivered.update(_ :+ key))
+      )
+
+    def requested(key: K): IO[Boolean]  = pending.get.map(_.exists(_._1 == key))
+    def pendingCount(key: K): IO[Int]   = pending.get.map(_.count(_._1 == key))
+    def deliveredCount(key: K): IO[Int] = delivered.get.map(_.count(_ == key))
 
     def settle(key: K, outcome: Outcome[A]): IO[Unit] =
       awaitValue(requested(key))(identity) >>
         pending.get.flatMap(_.collect { case (`key`, gate) => gate }.traverse_(_.complete(outcome).void))
 
   private object Gates:
-    def apply[K, A]: IO[Gates[K, A]] = Ref.of[IO, List[(K, Deferred[IO, Outcome[A]])]](Nil).map(new Gates(_))
+    def apply[K, A]: IO[Gates[K, A]] =
+      (Ref.of[IO, List[(K, Deferred[IO, Outcome[A]])]](Nil), Ref.of[IO, List[K]](Nil)).mapN(new Gates(_, _))
 
   final private class GatedFileManager(listings: Gates[Path, List[FileEntry]]) extends FileManager:
     override def listDirectory(directory: Path): IO[List[FileEntry]] = listings.await(directory)
 
-  final private class GatedThemeManager(loads: Gates[String, Theme]) extends AppThemeManager:
+  final private class GatedThemeManager(loads: Gates[String, Theme], writes: Option[Gates[String, Path]])
+      extends AppThemeManager:
     override def loadTheme(themeName: String): IO[Theme] = loads.await(themeName)
     override def listAvailableThemes: IO[List[String]]   = IO.pure(Nil)
+    override def writeUserTheme(config: ThemeConfig): IO[Path] =
+      writes.fold(IO.raiseError(new IllegalStateException("no theme writes expected")))(_.await(config.name))
 
   private class ErrorRecordingLogger(ref: Ref[IO, List[String]]) extends Logger[IO]:
     def error(message: => String): IO[Unit]               = ref.update(_ :+ message)
@@ -74,7 +84,8 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
   private def managerWith(
     listings: Gates[Path, List[FileEntry]],
     themes: Gates[String, Theme],
-    logger: Logger[IO] = NoOpLogger.impl[IO]
+    logger: Logger[IO] = NoOpLogger.impl[IO],
+    themeWrites: Option[Gates[String, Path]] = None
   ): IO[StateManager] =
     for
       modelRef             <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
@@ -92,7 +103,7 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
           logger = logger,
           policy = SessionManager.SessionPolicy(),
           sessionRootOverride = Some(sessionRoot),
-          themeManager = new GatedThemeManager(themes),
+          themeManager = new GatedThemeManager(themes, themeWrites),
           lspQueue = lspQueue,
           projectTaskFiberRef = projectTaskFiberRef,
           projectTaskSemaphore = projectTaskSemaphore,
@@ -213,17 +224,22 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
         listings <- Gates[Path, List[FileEntry]]
         themes   <- Gates[String, Theme]
         manager  <- managerWith(listings, themes)
-        _ <- manager.commandExecutor.executeCommand(
-          com.serenity.command.Command.typed(
-            "open-root",
-            "Opens a project root.",
-            com.serenity.command.CommandIntent.View(com.serenity.command.ViewIntent.PinExplorerPanel),
-            com.serenity.command.CommandCategory.View
+        // The executor returns only once the command's lane work has settled, so it runs alongside the listing gate.
+        opening <- manager.commandExecutor
+          .executeCommand(
+            com.serenity.command.Command.typed(
+              "open-root",
+              "Opens a project root.",
+              com.serenity.command.CommandIntent.View(com.serenity.command.ViewIntent.PinExplorerPanel),
+              com.serenity.command.CommandCategory.View
+            )
           )
-        )
-        pinned <- manager.getCurrentState.map(explorerTree)
+          .start
         cwd    <- com.serenity.io.FileUtils.getCurrentDirectory
+        _      <- awaitValue(listings.requested(cwd))(identity)
+        pinned <- manager.getCurrentState.map(explorerTree)
         _      <- listings.settle(cwd, Right(List(readme)))
+        _      <- opening.joinWithNever
         filled <- awaitValue(manager.getCurrentState)(explorerTree(_).exists(_.entries.contains(cwd)))
         selected = filled.pinnedSurfaces.collectFirst {
           case UiSurface(_, SurfaceContent.DirectoryTree(_, sel), _, _) =>
@@ -270,6 +286,81 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
       yield (initial, afterAlpha, afterBeta)
 
     runVirtual(program) shouldBe ("dark", "dark", "beta")
+  }
+
+  it should "fill two explorers showing the same directory, not let one listing supersede the other" in {
+    val nested = entry(child.resolve("Main.scala"), isDirectory = false)
+    def explorerAt(position: PanelPosition, id: String)(state: AppState): AppState =
+      com.serenity.DockedPanelFixtures.dock(
+        state,
+        SurfaceId(id),
+        SurfaceContent.DirectoryTree(
+          DirectoryTreeData(root, entries = Map(root -> List(DirEntry(child, "src", isDirectory = true)))),
+          Some(child)
+        ),
+        position,
+        30
+      )
+    def listingIn(position: PanelPosition)(state: AppState): Option[List[DirEntry]] =
+      state.pinnedSurfaces
+        .find(surface =>
+          state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(position)
+        )
+        .collect { case UiSurface(_, SurfaceContent.DirectoryTree(tree, _), _, _) => tree }
+        .flatMap(_.entries.get(child))
+    val program =
+      for
+        listings <- Gates[Path, List[FileEntry]]
+        themes   <- Gates[String, Theme]
+        manager  <- managerWith(listings, themes)
+        _ <- manager.updateStateValidated(
+          explorerAt(PanelPosition.Left, "left").andThen(explorerAt(PanelPosition.Right, "right"))
+        )
+        _ <- manager.panelManager.switchToPinnedPanel(PanelTarget.ByPosition(PanelPosition.Left))
+        _ <- manager.applyEvent(Enter)
+        _ <- manager.panelManager.switchToPinnedPanel(PanelTarget.ByPosition(PanelPosition.Right))
+        _ <- manager.applyEvent(Enter)
+        _ <- awaitValue(listings.pendingCount(child))(_ == 2)
+        _ <- listings.settle(child, Right(List(nested)))
+        filled <- awaitValue(manager.getCurrentState)(state =>
+          listingIn(PanelPosition.Left)(state).nonEmpty && listingIn(PanelPosition.Right)(state).nonEmpty
+        )
+      yield (listingIn(PanelPosition.Left)(filled), listingIn(PanelPosition.Right)(filled))
+
+    val expected = Some(List(DirEntry(nested.path, "Main.scala", isDirectory = false)))
+    runVirtual(program) shouldBe (expected, expected)
+  }
+
+  "A theme save" should "still land when a forced quit arrives while it is being written" in {
+    val saved   = root.resolve("my-theme.conf")
+    val creator = ThemeCreatorState.fromTheme(DefaultThemes.default.copy(name = "my-theme")).selectPath("theme.name")
+    val program =
+      for
+        listings <- Gates[Path, List[FileEntry]]
+        themes   <- Gates[String, Theme]
+        writes   <- Gates[String, Path]
+        manager  <- managerWith(listings, themes, themeWrites = Some(writes))
+        _ <- manager.updateStateValidated { state =>
+          val surface = UiSurface(
+            SurfaceId("theme-creator"),
+            SurfaceContent.ThemeCreator(creator),
+            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+          )
+          state.copy(
+            persisted = state.persisted.copy(focus = Focus.Surface(surface.id)),
+            runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces :+ surface)
+          )
+        }
+        _        <- manager.applyEvent(Enter)
+        _        <- awaitValue(writes.requested("my-theme"))(identity)
+        quitting <- manager.runtimeLifecycle.forceQuit.start
+        _        <- IO.sleep(1.second)
+        _        <- writes.settle("my-theme", Right(saved))
+        _        <- quitting.joinWithNever
+        landed   <- writes.deliveredCount("my-theme")
+      yield landed
+
+    runVirtual(program) shouldBe 1
   }
 
   "A theme load result" should "be dropped once a newer theme has been requested" in {

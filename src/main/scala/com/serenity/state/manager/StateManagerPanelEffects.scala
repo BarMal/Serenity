@@ -195,14 +195,16 @@ final private[manager] class StateManagerPanelEffects(
     commitModel { model =>
       val pinned = PinnedPanelContentReducer.pinExplorerRoot(position, path, size, model.app)
       ModelCommit.applyModelEffects(model.copy(app = pinned.state), pinned.effects)
-    } >> listDirectoryOnLane(path)(EffectResult.ExplorerRootListed(position, path, _))
+    } >> listDirectoryOnLane(position, path)(EffectResult.ExplorerRootListed(position, path, _))
 
   private[manager] def loadPinnedDirectoryEffect(position: PanelPosition, path: Path): IO[Unit] =
-    listDirectoryOnLane(path)(EffectResult.DirectoryListed(position, path, _))
+    listDirectoryOnLane(position, path)(EffectResult.DirectoryListed(position, path, _))
 
-  private def listDirectoryOnLane(path: Path)(listed: List[DirEntry] => EffectResult): IO[Unit] =
+  private def listDirectoryOnLane(position: PanelPosition, path: Path)(
+    listed: List[DirEntry] => EffectResult
+  ): IO[Unit] =
     lanes.submitEffect(
-      Lane.Keyed(LaneKey.Directory(path.toAbsolutePath.normalize), LanePolicy.SwitchLatest),
+      Lane.Keyed(LaneKey.ExplorerListing(position, path.toAbsolutePath.normalize), LanePolicy.SwitchLatest),
       fileManager
         .listDirectory(path)
         .flatMap(entries => lanes.dispatchEffectResult(listed(toDirEntries(entries)), _ => IO.unit))
