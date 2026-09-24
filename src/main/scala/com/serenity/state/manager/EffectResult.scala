@@ -5,7 +5,18 @@ import java.nio.file.Path
 import com.serenity.config.SpellCheckDictionaryFingerprint
 import com.serenity.rope.Rope
 import com.serenity.spellcheck.SpellChecker
-import com.serenity.state.models.{AppState, Buffer, BufferId, FindResult, FindSearchRequest, SpellCheckFingerprint}
+import com.serenity.session.SessionMetadata
+import com.serenity.state.models.{
+  AppState,
+  Buffer,
+  BufferId,
+  FileWorkflowState,
+  FindResult,
+  FindSearchRequest,
+  SessionListPurpose,
+  SpellCheckFingerprint,
+  SurfaceId
+}
 import com.serenity.state.reducers.{ModalEventReducer, PinnedPanelContentReducer, ThemeStateReducer}
 import com.serenity.ui.layout.{DirEntry, PanelPosition}
 import com.serenity.ui.presets.UiPreset
@@ -47,6 +58,23 @@ private[manager] enum EffectResult:
   case ThemeReloaded(requestedName: String, theme: Theme)
   case ThemeNamesListed(names: List[String])
   // ---- end explorer and theme results ----
+
+  // File dialog (#1697 Wave 3): posted by StateManagerFileWorkflow's lane jobs, each for the dialog `surfaceId` showing
+  // the input `requested`; dropped once the dialog is gone or shows other input. See FileWorkflowTransitions.
+  case FileWorkflowListed(surfaceId: SurfaceId, requested: FileWorkflowState, listing: FileWorkflowListing)
+  case FileWorkflowTargetResolved(surfaceId: SurfaceId, requested: FileWorkflowState, target: FileWorkflowTarget)
+
+  case FileWorkflowProjectRootResolved(
+      surfaceId: SurfaceId,
+      requested: FileWorkflowState,
+      target: Path,
+      isDirectory: Boolean
+  )
+
+  // Named sessions (#1390, #1697 Wave 3): posted by StateManagerWorkflowCapability's Session-lane jobs. A loaded session
+  // applies only while the picker it was chosen from is open. See SessionWorkflowTransitions.
+  case SessionsListed(purpose: SessionListPurpose, sessions: List[SessionMetadata])
+  case NamedSessionLoaded(pickerId: SurfaceId, restored: Option[AppState])
 
 private[manager] object EffectResult:
 
@@ -93,3 +121,15 @@ private[manager] object EffectResult:
       case ThemeNamesListed(names) =>
         ThemeStateReducer.withAvailableThemeNames(names, state).state
       // ---- end explorer and theme results ----
+
+      case FileWorkflowListed(surfaceId, requested, listing) =>
+        FileWorkflowTransitions.withListing(state, surfaceId, requested, listing)
+      case FileWorkflowTargetResolved(surfaceId, requested, target) =>
+        FileWorkflowTransitions.withTargetResolved(state, surfaceId, requested, target)
+      case FileWorkflowProjectRootResolved(surfaceId, requested, target, isDirectory) =>
+        FileWorkflowTransitions.withProjectRootResolved(state, surfaceId, requested, target, isDirectory)
+
+      case SessionsListed(purpose, sessions) =>
+        SessionWorkflowTransitions.withSessionPicker(state, purpose, sessions)
+      case NamedSessionLoaded(pickerId, restored) =>
+        SessionWorkflowTransitions.withNamedSessionLoaded(state, pickerId, restored)

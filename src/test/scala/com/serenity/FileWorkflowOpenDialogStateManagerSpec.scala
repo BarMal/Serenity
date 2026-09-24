@@ -65,7 +65,7 @@ class FileWorkflowOpenDialogStateManagerSpec extends AnyFlatSpec with Matchers:
         )
         .unsafeRunSync()
 
-      stateManager.applyEvent(InsertChar('/')).unsafeRunSync()
+      (stateManager.applyEvent(InsertChar('/')) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
       val workflow        = currentWorkflow(stateManager)
       val suggestionPaths = workflow.suggestions.map(_.value)
@@ -100,12 +100,12 @@ class FileWorkflowOpenDialogStateManagerSpec extends AnyFlatSpec with Matchers:
         )
         .unsafeRunSync()
 
-      stateManager.applyEvent(InsertChar('/')).unsafeRunSync()
+      (stateManager.applyEvent(InsertChar('/')) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
       val beforeTab = currentWorkflow(stateManager)
       beforeTab.suggestions.map(_.value) should contain(textFile.toString)
 
-      stateManager.applyEvent(TabKey).unsafeRunSync()
+      (stateManager.applyEvent(TabKey) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
       val finalState   = stateManager.getCurrentState.unsafeRunSync()
       val openedBuffer = finalState.persisted.buffers.values.find(_.document.filePath.contains(textFile))
@@ -136,7 +136,7 @@ class FileWorkflowOpenDialogStateManagerSpec extends AnyFlatSpec with Matchers:
         )
         .unsafeRunSync()
 
-      stateManager.applyEvent(Enter).unsafeRunSync()
+      (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
       val workflow = currentWorkflow(stateManager)
       workflow.statusMessage shouldBe None

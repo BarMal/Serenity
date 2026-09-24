@@ -156,7 +156,7 @@ private[manager] class StateManagerComposition(
     runtimeSessionPersistence,
     sessionManager,
     operations,
-    editor,
+    effectEditorPort,
     filePersistence
   )
 
@@ -228,7 +228,7 @@ private[manager] class StateManagerComposition(
     def activeEditorBufferId(state: AppState): Option[BufferId] = workflow.activeEditorBufferId(state)
     def openSaveSessionAsPrompt(state: AppState): IO[Unit]      = workflow.openSaveSessionAsPrompt(state)
     def openSessionPicker(state: AppState, purpose: SessionListPurpose): IO[Unit] =
-      workflow.openSessionPicker(state, purpose)
+      workflow.openSessionPicker(purpose)
     def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit] =
       workflow.submitSessionNamePromptEffect(surfaceId)
     def submitSessionListEffect(surfaceId: SurfaceId): IO[Unit] =

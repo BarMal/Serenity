@@ -50,7 +50,14 @@ skips the frame's advance and reports still-active so the next frame retries. Fi
 buffer clean only if its content is still the content written, and ignores a buffer closed meanwhile (#1671). A plain
 save and a file open never wait on the disk on the dispatcher; save-as, save-before-close, the reload prompt's choices
 and `FileOpener.openFile` wait for their lane job because their next step depends on its outcome. The external-change
-check ignores a path while a save to it is in flight. Quitting -- normal or forced, e.g. closing the window -- is one
+check ignores a path while a save to it is in flight. The file, close, replace and session workflows decide in pure
+transitions (`CloseWorkflowTransitions`, `FileWorkflowTransitions`, `SessionWorkflowTransitions`,
+`ReplaceWorkflowTransitions`) and commit each step once, validated; a replace commits its edit and undo entry in one
+model write. The Open/Save-As dialog lists directories on a `Directory` switch-latest lane and checks an Open target
+on a `Directory` sequential lane; named-session list/save/rename/load run on the `Session` Sequential lane. Their
+results are `EffectResult`s dropped once the dialog or picker they were computed for has moved on. Saving from the
+unsaved-changes prompt closes the buffer only once the save has landed; a failed or conflicting save abandons the
+close, quit included (#1708). Quitting -- normal or forced, e.g. closing the window -- is one
 step, `shutdownEffects`: a `Lane.Exclusive` barrier lets every Sequential lane (file saves, config, presets) finish,
 bounded by a grace period, cancels search and analysis, then releases the lanes. The dispatch pipeline itself still
 performs I/O, and the capability ports still hold the state `Ref` (other direct writers remain until later slices).

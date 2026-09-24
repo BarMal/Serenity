@@ -98,6 +98,11 @@ final private[manager] class StateManagerFilePersistence(
   def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit] =
     saveAndWait(bufferId, SaveKind.SaveAs, Some(path))
 
+  /** Runs `check` on `path`'s file lane and waits for it: a save-as reading, just before it writes, what the write
+    * would have to create. Like the save that follows, it runs after any write already queued for `path`.
+    */
+  def inspectBeforeSave[A](path: Path, check: IO[A]): IO[A] = awaitLane(fileLane(path), check)
+
   /** Whether a save to `path` has not yet been applied -- until it has, the disk may hold this process's own write
     * while the buffer still records the revision before it.
     */

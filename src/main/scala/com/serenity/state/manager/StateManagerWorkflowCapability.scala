@@ -6,11 +6,14 @@ import cats.effect.{Deferred, IO, Ref}
 import com.serenity.io.FileManager
 import com.serenity.session.{SessionManager, SessionPersistence}
 import com.serenity.state.core.EditorState
+import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
-import com.serenity.ui.layout.LayoutEngine
 import org.typelevel.log4cats.Logger
 
+/** The file, close and session workflows. Their decisions are the pure [[CloseWorkflowTransitions]],
+  * [[FileWorkflowTransitions]] and [[SessionWorkflowTransitions]]; each step here commits its result once, validated.
+  */
 final private[manager] class StateManagerWorkflowCapability(
     stateRef: Ref[IO, AppState],
     modelCommit: ModelCommit,
@@ -21,34 +24,28 @@ final private[manager] class StateManagerWorkflowCapability(
     sessionPersistence: SessionPersistence,
     sessionManager: SessionManager,
     operations: StateManagerOperationBoundary,
-    editor: StateManagerEditorCapability,
+    lanes: EffectLanePort,
     filePersistence: StateManagerFilePersistence
 )(using balance: com.serenity.rope.Balance):
+  import StateManagerWorkflowCapability.SessionLane
 
-  private def updateState(update: AppState => AppState): IO[Unit] = stateRef.update(update)
+  private val close = new CloseWorkflowTransitions(operations.ensureCommandRunnerSurface)
 
   private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
     operations.validateAndUpdateState(newState, fallbackState)
 
-  private def createNewEmptyBuffer(): IO[BufferId] = editor.bufferManager.createNewEmptyBuffer
-
-  private def createPane(bufferId: Option[BufferId]): IO[PaneId] = editor.createPane(bufferId)
-
-  private def switchToPane(paneId: PaneId): IO[Unit] = editor.switchToPane(paneId)
-
-  private def loadSession(): IO[Option[AppState]] = sessionManager.loadSession()
-
-  private def ensureCommandRunnerSurface(state: AppState): AppState = operations.ensureCommandRunnerSurface(state)
+  private def commit(transition: AppState => AppState): IO[Unit] =
+    stateRef.get.flatMap(current => validateAndUpdateState(transition(current), current))
 
   private val fileWorkflow = new StateManagerFileWorkflow(
     stateRef,
     logger,
     fileManager,
     validateAndUpdateState,
-    updateFileWorkflowSurface,
-    fileWorkflowSurface,
-    activeEditorBufferId,
-    saveBufferAsEffect,
+    lanes,
+    filePersistence.openFile,
+    filePersistence.inspectBeforeSave,
+    filePersistence.saveBufferAs,
     continueCloseAfterFormSaveAs
   )
 
@@ -71,16 +68,13 @@ final private[manager] class StateManagerWorkflowCapability(
     stateRef.get.flatMap { state =>
       reloadConflictSurface(state, surfaceId) match
         case Some(workflow) =>
-          val dismiss = stateRef.get.flatMap(current => validateAndUpdateState(current.dismissTopModal, current))
+          val dismiss = commit(_.dismissTopModal)
           workflow.selectedChoice match
             case ReloadConflictChoice.Cancel    => dismiss
             case ReloadConflictChoice.Reload    => filePersistence.reloadBuffer(workflow.bufferId) >> dismiss
             case ReloadConflictChoice.Overwrite => filePersistence.forceSaveExistingBuffer(workflow.bufferId) >> dismiss
         case None => IO.unit
     }
-
-  private def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
-    filePersistence.saveBufferAs(bufferId, path)
 
   private[manager] def openFileWorkflowModal(
     mode: FileWorkflowMode,
@@ -94,56 +88,13 @@ final private[manager] class StateManagerWorkflowCapability(
     openFileWorkflowModal(FileWorkflowMode.SaveAs, state, Some(bufferId), Some(statusMessage))
 
   private[manager] def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
-    filePersistence.settlePendingSaves(closeTargets(scope, state)) >> stateRef.get.flatMap(decideClose(scope, _))
+    filePersistence.settlePendingSaves(close.closeTargets(scope, state)) >>
+      stateRef.get.flatMap(current => commitClose(current, close.begun(scope, current)))
 
-  private def decideClose(scope: CloseScope, state: AppState): IO[Unit] =
-    val targetBufferIds = closeTargets(scope, state)
-    val dirtyBufferIds =
-      targetBufferIds.filter(bufferId => state.persisted.buffers.get(bufferId).exists(_.hasUnsavedChanges))
-    val cleanBufferIds =
-      if preservesBuffers(scope) then Nil
-      else targetBufferIds.filterNot(dirtyBufferIds.contains)
-    val stateAfterClean = cleanBufferIds.foldLeft(state)(closeForScope(scope, _, _))
-
-    dirtyBufferIds match
-      case Nil =>
-        val finalState = clearCloseActions(stateAfterClean)
-        validateAndUpdateState(finalState, state) >>
-          stateRef.get.flatMap(committed => finishCloseScope(scope, committed))
-      case currentBufferId :: remaining =>
-        promptCloseWorkflow(
-          stateAfterClean,
-          CloseWorkflowState(
-            scope = scope,
-            currentBufferId = currentBufferId,
-            currentBufferLabel = closeBufferLabel(stateAfterClean, currentBufferId),
-            remainingBufferIds = remaining
-          )
-        )
-
-  /** Scopes that leave clean buffers open rather than closing them as they go: Quit (state is discarded on exit anyway)
-    * and ReturnToStartPage (the whole session is snapshotted, then replaced by the start page).
-    */
-  private def preservesBuffers(scope: CloseScope): Boolean =
-    scope == CloseScope.Quit || scope == CloseScope.ReturnToStartPage
-
-  /** In the return-to-start-page flow a resolved dirty buffer (saved or discarded) stays open so it is captured by the
-    * session snapshot -- unlike Quit/Close, which drop it. Every other scope closes it as before.
-    */
-  private def closeUnlessSnapshotting(scope: CloseScope, state: AppState, bufferId: BufferId): AppState =
-    if scope == CloseScope.ReturnToStartPage then state
-    else closeForScope(scope, state, bufferId)
-
-  private def closeForScope(scope: CloseScope, state: AppState, bufferId: BufferId): AppState =
-    restoreActiveTab(scope, closeBufferUsingExistingFlow(state, bufferId))
-
-  /** A `CloseScope.Tab` close hands the active tab back to the one active when the close began -- see its doc. */
-  private def restoreActiveTab(scope: CloseScope, state: AppState): AppState =
-    scope match
-      case CloseScope.Tab(_, Some(returnTo)) if state.persisted.buffers.contains(returnTo) =>
-        focusBufferForWorkflow(state, returnTo)
-      case _ =>
-        state
+  /** Commits a close step, then -- if it resolved the last buffer -- quits or shows the start page. */
+  private def commitClose(fallback: AppState, transition: CloseTransition): IO[Unit] =
+    validateAndUpdateState(transition.state, fallback) >>
+      transition.completed.fold(IO.unit)(scope => stateRef.get.flatMap(finishCloseScope(scope, _)))
 
   /** The terminal step once every buffer a close action targets has been resolved: Quit persists and quits;
     * ReturnToStartPage snapshots the session and swaps the editor for a freshly-built start page; the rest do nothing.
@@ -197,36 +148,15 @@ final private[manager] class StateManagerWorkflowCapability(
       )
     )
 
-  protected def closeTargets(scope: CloseScope, state: AppState): List[BufferId] =
-    scope match
-      case CloseScope.Current => activeEditorBufferId(state).toList
-      case CloseScope.All     => state.persisted.bufferOrder
-      case CloseScope.Others =>
-        activeEditorBufferId(state) match
-          case Some(focused) => state.persisted.bufferOrder.filterNot(_ == focused)
-          case None          => state.persisted.bufferOrder
-      case CloseScope.Quit              => state.persisted.bufferOrder
-      case CloseScope.ReturnToStartPage => state.persisted.bufferOrder
-      case CloseScope.Tab(bufferId, _)  => List(bufferId).filter(state.persisted.buffers.contains)
-
-  protected def promptCloseWorkflow(state: AppState, workflow: CloseWorkflowState): IO[Unit] =
-    val focusedState = focusBufferForWorkflow(state, workflow.currentBufferId)
-    val modalState =
-      ModalStateReducer.show(Modal.CloseWorkflow(workflow), withCloseAction(focusedState, workflow)).state
-    validateAndUpdateState(modalState, state)
-
   private[manager] def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     stateRef.get.flatMap { state =>
-      closeWorkflowSurface(state, surfaceId) match
+      close.closePrompt(state, surfaceId) match
         case Some(workflow) =>
           workflow.selectedChoice match
             case CloseWorkflowChoice.Cancel =>
-              validateAndUpdateState(abandonedClose(surfaceId, workflow, state), state)
+              validateAndUpdateState(close.abandoned(surfaceId, workflow, state), state)
             case CloseWorkflowChoice.Discard =>
-              val dismissedState = clearCloseActions(dismissModalSurface(state))
-              val nextState      = closeUnlessSnapshotting(workflow.scope, dismissedState, workflow.currentBufferId)
-              validateAndUpdateState(nextState, state) >>
-                stateRef.get.flatMap(committed => continueCloseWorkflow(workflow, committed))
+              commitClose(state, close.resolved(workflow, state))
             case CloseWorkflowChoice.Save =>
               state.persisted.buffers.get(workflow.currentBufferId) match
                 case Some(buffer) if buffer.document.filePath.isDefined =>
@@ -234,7 +164,7 @@ final private[manager] class StateManagerWorkflowCapability(
                 case Some(_) =>
                   requestSaveAsFileDialog(state, Some(workflow.currentBufferId))
                 case None =>
-                  validateAndUpdateState(clearCloseActions(dismissModalSurface(state)), state)
+                  validateAndUpdateState(close.clearCloseActions(close.dismissModalSurface(state)), state)
         case None =>
           IO.unit
     }
@@ -246,88 +176,22 @@ final private[manager] class StateManagerWorkflowCapability(
     val bufferId = workflow.currentBufferId
     filePersistence.saveExistingBuffer(bufferId).attempt.flatMap {
       case Right(()) =>
-        stateRef.get.flatMap { savedState =>
-          if savedState.persisted.buffers.get(bufferId).exists(!_.hasUnsavedChanges) then
-            val dismissedState = clearCloseActions(dismissModalSurface(savedState))
-            val nextState      = closeUnlessSnapshotting(workflow.scope, dismissedState, bufferId)
-            validateAndUpdateState(nextState, savedState) >>
-              stateRef.get.flatMap(committed => continueCloseWorkflow(workflow, committed))
-          else validateAndUpdateState(abandonedClose(surfaceId, workflow, savedState), savedState)
+        stateRef.get.flatMap { saved =>
+          if saved.persisted.buffers.get(bufferId).exists(!_.hasUnsavedChanges) then
+            commitClose(saved, close.resolved(workflow, saved))
+          else validateAndUpdateState(close.abandoned(surfaceId, workflow, saved), saved)
         }
       case Left(error: com.serenity.richtext.LossyRichTextOverwriteException) =>
         // The Save-As form opens over the prompt and resumes this close once it saves (continueCloseAfterFormSaveAs).
         stateRef.get.flatMap(current => showSaveAsWorkflow(current, bufferId, error.getMessage))
       case Left(_: com.serenity.io.FileManagerError.ExternalConflict) =>
-        stateRef.get.flatMap { current =>
-          val conflict = ReloadConflictState(bufferId, closeBufferLabel(current, bufferId))
-          val prompted =
-            ModalStateReducer.show(Modal.ReloadConflict(conflict), abandonedClose(surfaceId, workflow, current)).state
-          validateAndUpdateState(prompted, current)
-        }
+        commit(close.conflicted(surfaceId, workflow, _))
       case Left(error) =>
         logger.error(error)(s"[FILE] Failed to save buffer $bufferId before closing it") >>
-          stateRef.get.flatMap(current => validateAndUpdateState(abandonedClose(surfaceId, workflow, current), current))
+          commit(close.abandoned(surfaceId, workflow, _))
     }
 
-  /** What cancelling the prompt leaves: the prompt gone, no close pending, and a tab close's original tab active. */
-  private def abandonedClose(surfaceId: SurfaceId, workflow: CloseWorkflowState, state: AppState): AppState =
-    restoreActiveTab(workflow.scope, clearCloseActions(withoutSurfaceFocusingEditor(state, surfaceId)))
-
-  protected def continueCloseWorkflow(workflow: CloseWorkflowState, state: AppState): IO[Unit] =
-    workflow.remainingBufferIds match
-      case nextBufferId :: remaining =>
-        promptCloseWorkflow(
-          state,
-          CloseWorkflowState(
-            scope = workflow.scope,
-            currentBufferId = nextBufferId,
-            currentBufferLabel = closeBufferLabel(state, nextBufferId),
-            remainingBufferIds = remaining
-          )
-        )
-      case Nil =>
-        val finalState = clearCloseActions(state)
-        validateAndUpdateState(finalState, state) >>
-          stateRef.get.flatMap(committed => finishCloseScope(workflow.scope, committed))
-
-  protected def focusBufferForWorkflow(state: AppState, bufferId: BufferId): AppState =
-    EditorState.focusBuffer(EditorState.rebalancePanes(state, Some(bufferId)), bufferId)
-
-  protected def closeBufferUsingExistingFlow(state: AppState, bufferId: BufferId): AppState =
-    val focusedState = focusBufferForWorkflow(state, bufferId)
-    val closedState  = EditorState.closeFocusedTab(focusedState)
-    if closedState.persisted.layout.activeEditorPaneId.isDefined then closedState
-    else ensureCommandRunnerSurface(closedState)
-
-  protected def closeBufferLabel(state: AppState, bufferId: BufferId): String =
-    state.persisted.buffers
-      .get(bufferId)
-      .flatMap(_.document.filePath.flatMap(path => Option(path.getFileName).map(_.toString)))
-      .getOrElse(s"Buffer ${bufferId.value} - unsaved")
-
-  protected def withCloseAction(state: AppState, workflow: CloseWorkflowState): AppState =
-    state.copy(runtime =
-      state.runtime.copy(actionStack =
-        AppAction.CloseWorkflow(workflow) :: clearCloseActions(state).runtime.actionStack
-      )
-    )
-
-  private[manager] def clearCloseActions(state: AppState): AppState =
-    state.copy(runtime = state.runtime.copy(actionStack = Nil))
-
-  protected def dismissModalSurface(state: AppState): AppState =
-    state.copy(runtime =
-      state.runtime.copy(
-        uiSurfaces = state.runtime.uiSurfaces.filterNot {
-          case UiSurface(_, SurfaceContent.ModalWorkflow(_), _, _) => true
-          case _                                                   => false
-        },
-        // CloseWorkflow/FileWorkflow (#814) live here instead of uiSurfaces -- every caller of this function is
-        // finishing a close/save workflow chain (including a Save-As dialog nested on top of a close confirmation),
-        // so clearing the whole stack matches the uiSurfaces filter's original "every ModalWorkflow surface" intent.
-        modalStack = Nil
-      )
-    )
+  private[manager] def clearCloseActions(state: AppState): AppState = close.clearCloseActions(state)
 
   private[manager] def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     fileWorkflow.refreshFileWorkflowEffect(surfaceId)
@@ -335,28 +199,23 @@ final private[manager] class StateManagerWorkflowCapability(
   private[manager] def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     fileWorkflow.submitFileWorkflowEffect(surfaceId)
 
-  /** Opens the directory an Open dialog is targeting as a project root (issue #1525): resolves and validates the target
-    * through `fileWorkflow` (reporting back into the dialog on failure, exactly like a regular Open submit), then -- on
-    * a confirmed directory -- dismisses the dialog and hands the path to `openProjectRoot`, which the caller supplies
-    * so this capability doesn't need its own route to the panel-pinning machinery (`StateManagerPanelEffects`, owned by
-    * `StateManagerEffectHandlers`, isn't available to this capability -- issue #1525 reuses it rather than duplicating
-    * it).
+  /** Opens the directory an Open dialog is targeting as a project root (issue #1525). `openProjectRoot` is the caller's
+    * route to the panel-pinning machinery (`StateManagerPanelEffects`, owned by `StateManagerEffectHandlers`), which
+    * this capability has no access to.
     */
   private[manager] def openFileWorkflowAsProjectRootEffect(
     surfaceId: SurfaceId,
     openProjectRoot: Path => IO[Unit]
   ): IO[Unit] =
-    fileWorkflow.resolveOpenAsProjectRoot(surfaceId).flatMap {
-      case Some(path) => dismissSurfaceAndFocusEditor(surfaceId) >> openProjectRoot(path)
-      case None       => IO.unit
-    }
+    fileWorkflow.openAsProjectRoot(surfaceId, openProjectRoot)
 
   private[manager] def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     replaceWorkflow.submitReplaceWorkflowEffect(surfaceId)
 
   /** The explicit, single-step counterpart to submitting twice (Enter to flag `missingPathSegments`, Enter again to
     * confirm): creates the missing directories -- as a side effect of performing the save itself, exactly like the
-    * confirmed double-submit path -- immediately, without a second submit (issue #1253).
+    * confirmed double-submit path -- immediately, without a second submit (issue #1253). The directories are created by
+    * that save's write, on the target's `File` sequential lane, so they are ordered with every other write to it.
     */
   private[manager] def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit] =
     fileWorkflow.createFileWorkflowDirectoriesEffect(surfaceId)
@@ -365,17 +224,10 @@ final private[manager] class StateManagerWorkflowCapability(
     * or -- when no close workflow is waiting on this buffer -- just dismiss the dialog.
     */
   private def continueCloseAfterFormSaveAs(surfaceId: SurfaceId, bufferId: BufferId): IO[Unit] =
-    stateRef.get.flatMap { savedState =>
-      savedState.runtime.actionStack.collectFirst { case AppAction.CloseWorkflow(closeWorkflow) => closeWorkflow } match
-        case Some(closeWorkflow) if closeWorkflow.currentBufferId == bufferId =>
-          val dismissedState = dismissModalSurface(savedState)
-          val nextState =
-            if preservesBuffers(closeWorkflow.scope) then dismissedState
-            else closeForScope(closeWorkflow.scope, dismissedState, bufferId)
-          validateAndUpdateState(nextState, savedState) >>
-            stateRef.get.flatMap(committed => continueCloseWorkflow(closeWorkflow, committed))
-        case _ =>
-          dismissSurfaceAndFocusEditor(surfaceId)
+    stateRef.get.flatMap { saved =>
+      close.pendingOn(saved, bufferId) match
+        case Some(closeWorkflow) => commitClose(saved, close.resolvedBySaveAs(closeWorkflow, saved))
+        case None                => validateAndUpdateState(WorkflowSurfaces.dismissedToEditor(saved, surfaceId), saved)
     }
 
   private[manager] def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit] =
@@ -394,7 +246,7 @@ final private[manager] class StateManagerWorkflowCapability(
               .flatMap(directory => dialog.chooseSaveFile(Some(directory), suggestedFileName))
               .flatMap {
                 case Some(path) =>
-                  saveBufferAsEffect(bufferId, path) >> continueCloseAfterNativeSaveAs(bufferId)
+                  filePersistence.saveBufferAs(bufferId, path) >> continueCloseAfterNativeSaveAs(bufferId)
                 case None =>
                   IO.unit
               }
@@ -407,107 +259,36 @@ final private[manager] class StateManagerWorkflowCapability(
         logger.debug("[FILE] Save As requested without a focused buffer")
 
   private def continueCloseAfterNativeSaveAs(bufferId: BufferId): IO[Unit] =
-    stateRef.get.flatMap { savedState =>
-      savedState.runtime.actionStack.collectFirst {
-        case AppAction.CloseWorkflow(closeWorkflow) if closeWorkflow.currentBufferId == bufferId => closeWorkflow
-      } match
-        case Some(closeWorkflow) =>
-          val dismissedState = dismissModalSurface(savedState)
-          val nextState =
-            if preservesBuffers(closeWorkflow.scope) then dismissedState
-            else closeForScope(closeWorkflow.scope, dismissedState, bufferId)
-          validateAndUpdateState(nextState, savedState) >>
-            stateRef.get.flatMap(committed => continueCloseWorkflow(closeWorkflow, committed))
-        case None =>
-          IO.unit
-    }
+    stateRef.get.flatMap(saved =>
+      close
+        .pendingOn(saved, bufferId)
+        .fold(IO.unit)(workflow => commitClose(saved, close.resolvedBySaveAs(workflow, saved)))
+    )
 
   private[manager] def activeEditorBufferId(state: AppState): Option[BufferId] =
-    state.persisted.layout.activeEditorPaneId
-      .flatMap(state.persisted.layout.editorPanes.get)
-      .flatMap(_.bufferId)
+    WorkflowSurfaces.activeEditorBufferId(state)
 
-  protected def updateFileWorkflowSurface(surfaceId: SurfaceId, workflow: FileWorkflowState): IO[Unit] =
-    stateRef.update { state =>
-      if state.runtime.modalStack.exists(_.id == surfaceId) then
-        state.copy(runtime =
-          state.runtime.copy(modalStack =
-            state.runtime.modalStack.map(dialog =>
-              if dialog.id == surfaceId then dialog.copy(modal = Modal.FileWorkflow(workflow)) else dialog
-            )
-          )
-        )
-      else state
-    }
-
-  protected def dismissSurfaceAndFocusEditor(surfaceId: SurfaceId): IO[Unit] =
-    stateRef.get.flatMap(state => validateAndUpdateState(withoutSurfaceFocusingEditor(state, surfaceId), state))
-
-  private def withoutSurfaceFocusingEditor(state: AppState, surfaceId: SurfaceId): AppState =
-    val baseState = state.copy(runtime =
-      state.runtime.copy(
-        uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surfaceId),
-        modalStack = state.runtime.modalStack.filterNot(_.id == surfaceId)
-      )
-    )
-    state.persisted.layout.activeEditorPaneId match
-      case Some(paneId) => baseState.copy(persisted = baseState.persisted.copy(focus = Focus.EditorPane(paneId)))
-      case None         => baseState
-
-  protected def fileWorkflowSurface(state: AppState, surfaceId: SurfaceId): Option[FileWorkflowState] =
-    state.runtime.modalStack.find(_.id == surfaceId).collect {
-      case ModalDialog(_, Modal.FileWorkflow(workflow), _) =>
-        workflow
-    }
-
-  protected def closeWorkflowSurface(state: AppState, surfaceId: SurfaceId): Option[CloseWorkflowState] =
-    state.runtime.modalStack.find(_.id == surfaceId).collect {
-      case ModalDialog(_, Modal.CloseWorkflow(workflow), _) => workflow
-    }
-
-  /** Every branch here ends its own structural commit unchecked (session deserialization, or the buffer/pane creation
-    * in `createDefaultStartupBuffer`), with nothing downstream re-validating the result -- unlike, say,
-    * `ComponentResult.Dismiss`'s equivalent buffer/pane creation, whose caller re-validates the composed result before
-    * committing (`StateManagerEventPipeline.applyEvent`). A corrupted or hand-edited session file, restored unchecked
-    * on literal app startup, is exactly the kind of public mutation path #858 asks every commit to go through, so each
-    * branch below re-validates its own final result rather than trusting the unchecked intermediate steps.
+  /** Every branch commits its whole result once, validated: a corrupted or hand-edited session file, restored on
+    * literal app startup, must go through the same check as any other commit (#858).
     */
   private[manager] def restoreStartupSession(): IO[Unit] =
     logger.info("[CMD] Session restore requested") >>
-      loadSession().flatMap {
+      sessionManager.loadSession().flatMap {
         case Some(restoredState) if restoredState.persisted.bufferOrder.nonEmpty =>
           logger.info("[CMD] Session loaded successfully") >>
-            stateRef.get.flatMap(current =>
-              validateAndUpdateState(restoreSessionIntoCurrentViewport(restoredState, current), current)
-            )
+            commit(SessionWorkflowTransitions.restoredIntoViewport(restoredState, _))
         case Some(_) =>
           logger.info("[CMD] Session loaded with no buffers - creating default session") >>
-            createDefaultStartupBuffer()
+            commit(SessionWorkflowTransitions.withDefaultStartupBuffer)
         case None =>
           logger.info("[CMD] No session found - creating default session") >>
-            createDefaultStartupBuffer()
+            commit(SessionWorkflowTransitions.withDefaultStartupBuffer)
       }
-
-  // `createNewEmptyBuffer`/`createPane`/`switchToPane` each now commit through `validateAndUpdateState` in their own
-  // right, so clearing `uiSurfaces` (and with it the startup page's surface) has to wait until focus has already
-  // moved to the new pane -- doing it first, as this used to, left focus dangling on the just-removed surface for
-  // every step in between, which each of those steps' own validation now (correctly) rejects.
-  private def createDefaultStartupBuffer(): IO[Unit] =
-    stateRef.get.flatMap { before =>
-      createNewEmptyBuffer().flatMap { bufferId =>
-        updateState(s => s.copy(persisted = s.persisted.copy(bufferOrder = s.persisted.bufferOrder :+ bufferId))) >>
-          createPane(Some(bufferId)).flatMap { paneId =>
-            switchToPane(paneId) >>
-              updateState(state => state.copy(runtime = state.runtime.copy(uiSurfaces = List.empty))) >>
-              stateRef.get.flatMap(finalState => validateAndUpdateState(finalState, before))
-          }
-      }
-    }
 
   private[manager] def createStartupSession(): IO[Unit] =
-    stateRef.get.flatMap { before =>
+    commit { before =>
       val opened = EditorState.openNewTab(before)
-      validateAndUpdateState(opened.copy(runtime = opened.runtime.copy(uiSurfaces = List.empty)), before)
+      opened.copy(runtime = opened.runtime.copy(uiSurfaces = List.empty))
     }
 
   /** Opens the "Save Session As..." name prompt (issue #1390), pre-filled empty -- `ModalSessionReducer` routes its
@@ -517,80 +298,60 @@ final private[manager] class StateManagerWorkflowCapability(
     val shown = ModalStateReducer.show(Modal.SessionNamePrompt(SessionNamePromptMode.SaveAs, ""), state).state
     validateAndUpdateState(shown, state)
 
-  /** Opens the `SessionManager.listSessions()` picker (issue #1390) for either purpose: `Open` loads the selected
-    * session directly on Enter, `Rename` hands it off to `openSaveSessionAsPrompt`'s sibling name prompt.
+  /** Lists the saved sessions on the Session lane, then opens the picker (issue #1390) for either purpose: `Open` loads
+    * the selected session directly on Enter, `Rename` hands it off to the name prompt.
     */
-  private[manager] def openSessionPicker(state: AppState, purpose: SessionListPurpose): IO[Unit] =
-    sessionManager.listSessions().flatMap { sessions =>
-      val shown = ModalStateReducer.show(Modal.SessionList(sessions, 0, purpose), state).state
-      validateAndUpdateState(shown, state)
-    }
+  private[manager] def openSessionPicker(purpose: SessionListPurpose): IO[Unit] =
+    lanes.submitEffect(
+      SessionLane,
+      sessionManager
+        .listSessions()
+        .flatMap(sessions => lanes.dispatchEffectResult(EffectResult.SessionsListed(purpose, sessions), _ => IO.unit))
+    )
 
   /** Completes the name prompt: `saveSessionAs` for a brand-new named session, `renameSession` for one already picked
-    * from the list. A blank (post-trim) name is treated as a cancel, matching `ModalSessionReducer`'s own guard on
-    * `ModalSubmit`.
+    * from the list. The prompt closes at once; the write runs on the Session lane. A blank (post-trim) name is treated
+    * as a cancel, matching `ModalSessionReducer`'s own guard on `ModalSubmit`.
     */
   private[manager] def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit] =
     stateRef.get.flatMap { state =>
-      sessionNamePromptSurface(state, surfaceId) match
+      val dismissed = WorkflowSurfaces.dismissedToEditor(state, surfaceId)
+      val write = SessionWorkflowTransitions.sessionNamePrompt(state, surfaceId) match
         case Some((SessionNamePromptMode.SaveAs, input)) if input.trim.nonEmpty =>
-          sessionManager.saveSessionAs(input.trim, state).void >> dismissSurfaceAndFocusEditor(surfaceId)
+          Some(sessionManager.saveSessionAs(input.trim, dismissed).void)
         case Some((SessionNamePromptMode.Rename(sessionId), input)) if input.trim.nonEmpty =>
-          sessionManager.renameSession(sessionId, input.trim) >> dismissSurfaceAndFocusEditor(surfaceId)
+          Some(sessionManager.renameSession(sessionId, input.trim))
         case _ =>
-          dismissSurfaceAndFocusEditor(surfaceId)
+          None
+      validateAndUpdateState(dismissed, state) >> write.fold(IO.unit)(lanes.submitEffect(SessionLane, _))
     }
 
-  /** Completes an `Open`-purpose `SessionList` selection: loads the picked session and restores it into the current
-    * viewport, exactly like `SessionIntent.RestoreSession` does for the implicit "current" session.
+  /** Completes an `Open`-purpose `SessionList` selection: the picked session loads on the Session lane and replaces the
+    * current one, as `SessionIntent.RestoreSession` does, if the picker is still open when it arrives.
     */
   private[manager] def submitSessionListEffect(surfaceId: SurfaceId): IO[Unit] =
     stateRef.get.flatMap { state =>
-      sessionListSurface(state, surfaceId) match
-        case Some((sessions, selectedIndex, SessionListPurpose.Open)) =>
-          sessions.lift(selectedIndex) match
-            case Some(session) =>
-              // `restoreSessionIntoCurrentViewport` replaces `runtime.uiSurfaces` wholesale (see its own doc), which
-              // already clears this picker along with everything else -- no separate dismiss needed, exactly like
-              // `SessionIntent.RestoreSession`'s equivalent call.
-              sessionManager.loadSession(session.id).flatMap {
-                case Some(restored) =>
-                  validateAndUpdateState(restoreSessionIntoCurrentViewport(restored, state), state)
-                case None =>
-                  dismissSurfaceAndFocusEditor(surfaceId)
-              }
-            case None =>
-              dismissSurfaceAndFocusEditor(surfaceId)
-        case _ =>
-          dismissSurfaceAndFocusEditor(surfaceId)
-    }
-
-  private def sessionNamePromptSurface(
-    state: AppState,
-    surfaceId: SurfaceId
-  ): Option[(SessionNamePromptMode, String)] =
-    state.runtime.uiSurfaces.find(_.id == surfaceId).collect {
-      case UiSurface(_, SurfaceContent.ModalWorkflow(Modal.SessionNamePrompt(mode, input)), _, _) => (mode, input)
-    }
-
-  private def sessionListSurface(
-    state: AppState,
-    surfaceId: SurfaceId
-  ): Option[(List[com.serenity.session.SessionMetadata], Int, SessionListPurpose)] =
-    state.runtime.uiSurfaces.find(_.id == surfaceId).collect {
-      case UiSurface(_, SurfaceContent.ModalWorkflow(Modal.SessionList(sessions, index, purpose)), _, _) =>
-        (sessions, index, purpose)
+      SessionWorkflowTransitions
+        .sessionPicker(state, surfaceId)
+        .collect { case (sessions, selectedIndex, SessionListPurpose.Open) => sessions.lift(selectedIndex) }
+        .flatten match
+        case Some(session) =>
+          lanes.submitEffect(
+            SessionLane,
+            sessionManager
+              .loadSession(session.id)
+              .flatMap(restored =>
+                lanes.dispatchEffectResult(EffectResult.NamedSessionLoaded(surfaceId, restored), _ => IO.unit)
+              )
+          )
+        case None =>
+          validateAndUpdateState(WorkflowSurfaces.dismissedToEditor(state, surfaceId), state)
     }
 
   private[manager] def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
-    val restored = restoredState.copy(
-      runtime = restoredState.runtime.copy(
-        uiSurfaces = List.empty,
-        viewportSize = currentState.runtime.viewportSize,
-        isTuiMode = currentState.runtime.isTuiMode,
-        keyboardFidelityTier = currentState.runtime.keyboardFidelityTier
-      )
-    )
-    currentState.runtime.viewportSize
-      .map(viewportSize => LayoutEngine.syncViewportDimensions(restored, viewportSize))
-      .getOrElse(restored)
+    SessionWorkflowTransitions.restoredIntoViewport(restoredState, currentState)
+
+private[manager] object StateManagerWorkflowCapability:
+
+  /** Named-session reads and writes, one at a time: a rename never overtakes the save it renames. */
+  val SessionLane: Lane.Keyed = Lane.Keyed(LaneKey.Session, LanePolicy.Sequential)
