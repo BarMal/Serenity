@@ -69,6 +69,8 @@ enum AnimationEffect:
   case Merge(bufferId: BufferId, delta: Map[CharacterKey, AnimatedCell])
   case ClearAll(bufferId: BufferId)
   case ClearOwner(bufferId: BufferId, owner: AnimationOwner)
+  // Not `ClearOwner` + `Merge`: `Merge` overwrites, and a UI sweep must not clobber an in-flight editor-text animation.
+  case RestartUiTransitions(bufferId: BufferId, cells: Map[CharacterKey, AnimatedCell])
 
 /** A reducer's own declaration that the change it just performed is undoable, carrying the [[HistoryEntry]] that
   * restores it -- see #1016. `groupable` marks whether this should coalesce into an already-open run of edits
