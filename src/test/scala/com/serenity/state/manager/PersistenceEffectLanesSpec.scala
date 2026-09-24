@@ -11,6 +11,7 @@ import com.serenity.config.{AppConfig, ConfigError, HotkeyAction, HotkeyTrigger}
 import com.serenity.keystroke.events.{Event, InsertChar}
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
+import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.state.undo.UndoState
@@ -56,7 +57,7 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
         modelCommit.updateValidated(transition)
       def scheduleDocumentAnalysis(): IO[Unit]                     = IO.unit
       def scheduleFindSearch(request: FindSearchRequest): IO[Unit] = IO.unit
-      def submitEffect(lane: com.serenity.state.effects.Lane.Keyed, job: IO[Unit]): IO[Unit] =
+      def submitEffect(lane: Lane.Keyed, job: IO[Unit]): IO[Unit] =
         operations.submitEffect(lane, job)
       def dispatchEffectResult(result: EffectResult, onApplied: AppState => IO[Unit]): IO[Unit] =
         operations.dispatch(operations.applyResult(result, onApplied))
@@ -280,7 +281,33 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
     runVirtual(program) shouldBe (1, List(PanelPosition.Left -> Path.of(".")), None)
   }
 
-  "Shutting down effects" should "let a pending config write finish before releasing the lanes" in {
+  "Shutting down effects" should "finish at once when no persistence work is pending" in {
+    val program =
+      for
+        rig     <- rig()
+        started <- IO.monotonic
+        _       <- rig.operations.shutdownEffects()
+        _       <- rig.operations.shutdownEffects()
+        ended   <- IO.monotonic
+      yield ended - started
+
+    runVirtual(program) shouldBe Duration.Zero
+  }
+
+  it should "cancel switch-latest work rather than wait for it" in {
+    val program =
+      for
+        rig     <- rig()
+        _       <- rig.operations.effectLanes.submit(Lane.Keyed(LaneKey.Search, LanePolicy.SwitchLatest), IO.never)
+        started <- IO.monotonic
+        _       <- rig.operations.shutdownEffects()
+        ended   <- IO.monotonic
+      yield ended - started
+
+    runVirtual(program) shouldBe Duration.Zero
+  }
+
+  it should "let a pending config write finish before releasing the lanes" in {
     val root = Files.createTempDirectory("persistence-lanes-shutdown-drain")
     val program =
       for
