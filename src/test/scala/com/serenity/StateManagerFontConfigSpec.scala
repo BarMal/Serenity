@@ -164,6 +164,8 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     if FontLoader.availableUiFamilies.size > 1 then stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(Enter).unsafeRunSync()
 
+    // The session auto-save runs on the Config lane after the dispatch returns (#1697).
+    stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
     val loaded = stateManager.sessionService.loadSession.unsafeRunSync()
 
     loaded.map(_.persisted.config.editorConfig.fontConfig.uiFontFamily) shouldBe Some(expectedFont)
@@ -185,6 +187,8 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     List('1', '6').foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
 
+    // The config file is written on the Config lane after the dispatch returns (#1697).
+    stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
     val saved = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
     saved.editorConfig.fontConfig.codeFontSize shouldBe 16.0f
   }
@@ -205,6 +209,8 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
     if FontLoader.availableUiFamilies.size > 1 then stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(Enter).unsafeRunSync()
 
+    // The config file is written on the Config lane after the dispatch returns (#1697).
+    stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
     val saved = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
     saved.editorConfig.fontConfig.uiFontFamily shouldBe expectedFont
   }

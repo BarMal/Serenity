@@ -7,6 +7,7 @@ import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.session.SessionPersistence
+import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, PeekContent}
@@ -33,7 +34,24 @@ private[manager] trait EffectRuntimePort:
   def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)
 
-private[manager] trait EffectEditorPort:
+/** How an effect family hands disk work to `EffectLanes` and brings its result back (#1697). */
+private[manager] trait EffectLanePort:
+  /** Returns once `job` is queued on `lane`; the job itself runs off the dispatcher. */
+  def submitEffect(lane: Lane.Keyed, job: IO[Unit]): IO[Unit]
+
+  /** Applies `result` on the dispatcher if it is still current, then runs `onApplied` there with the committed state;
+    * returns once that has happened. For lane jobs only: code already on the dispatcher would deadlock waiting here.
+    */
+  def dispatchEffectResult(result: EffectResult, onApplied: AppState => IO[Unit]): IO[Unit]
+
+/** The persistence lanes. Keybindings live in the config file, so they are written on [[PersistenceLanes.Config]] too:
+  * two lanes writing one file would give no order between the writes.
+  */
+private[manager] object PersistenceLanes:
+  val Config: Lane.Keyed  = Lane.Keyed(LaneKey.Config, LanePolicy.Sequential)
+  val Presets: Lane.Keyed = Lane.Keyed(LaneKey.Presets, LanePolicy.Sequential)
+
+private[manager] trait EffectEditorPort extends EffectLanePort:
   def updateState(update: AppState => AppState): IO[Unit]
   def enqueueEvent(event: Event): IO[Unit]
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]

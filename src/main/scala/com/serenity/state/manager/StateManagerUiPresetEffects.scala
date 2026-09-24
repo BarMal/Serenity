@@ -1,22 +1,23 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import cats.syntax.all.*
-import com.serenity.command.{CommandRunner, SettingsPage, SettingsSurfaceState, UiPresetsIntent}
-import com.serenity.config.{AppConfig, DefaultDocumentMode, MarkdownViewMode}
-import com.serenity.lsp.config.LanguageId
-import com.serenity.richtext.RichTextDocument
+import com.serenity.command.UiPresetsIntent
+import com.serenity.config.{AppConfig, MarkdownViewMode}
 import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
-import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.{UiPreset, UiPresetDiff}
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.AppThemeManager
 
-/** Saves, applies, and manages named UI presets (workspace layout + theme + config snapshots). */
+/** Saves, applies, and manages named UI presets (workspace layout + theme + config snapshots).
+  *
+  * Every preset-store read and write runs FIFO on the Presets lane, off the dispatcher (#1697); what it means for the
+  * state comes back as an [[EffectResult]] and is committed through the validated path.
+  */
 final private[manager] class StateManagerUiPresetEffects(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     logger: org.typelevel.log4cats.Logger[IO],
     uiPresetStore: com.serenity.ui.presets.UiPresetStore,
     windowSizeProvider: IO[Option[com.serenity.config.PreferredWindowSize]],
@@ -27,7 +28,8 @@ final private[manager] class StateManagerUiPresetEffects(
     withUpdatedRunnerConfig: (AppState, AppConfig) => AppState,
     openMarkdownPreview: IO[Unit],
     loadPinnedDirectoryEffect: (com.serenity.ui.layout.PanelPosition, java.nio.file.Path) => IO[Unit],
-    validateAndUpdateState: (AppState, AppState) => IO[Unit]
+    commitValidated: (AppState => AppState) => IO[Unit],
+    lanes: EffectLanePort
 )(using balance: com.serenity.rope.Balance):
 
   private[manager] def interpret(intent: UiPresetsIntent): IO[Unit] =
@@ -51,19 +53,24 @@ final private[manager] class StateManagerUiPresetEffects(
       case UiPresetsIntent.ResetUiPreset(name) =>
         resetUiPresetEffect(name)
 
-  /** Captures the live workspace as a new custom preset, rejecting names that already exist. */
+  /** Captures the workspace as it is when the command runs as a new custom preset, rejecting existing names. */
   private def saveUiPresetAsNewEffect(name: String): IO[Unit] =
     normalizedPresetName(name) match
       case None =>
         logger.warn("[PRESET] Ignoring empty UI preset name")
       case Some(presetName) =>
-        capturedPreset(presetName).flatMap { preset =>
-          uiPresetStore.create(preset).attempt.flatMap {
-            case Left(error) =>
-              reportPresetFailure(presetName, s"Could not save $presetName", error)
-            case Right(_) =>
-              refreshCommandRunnerUiPresetPreviews >>
-                focusCreatedPresetOptions(presetName, s"Preset saved. Configure $presetName.")
+        currentState.flatMap { snapshot =>
+          onPresetsLane(s"save UI preset $presetName") {
+            capturedPreset(presetName, snapshot).flatMap { preset =>
+              uiPresetStore.create(preset).attempt.flatMap {
+                case Left(error) =>
+                  reportPresetFailure(presetName, s"Could not save $presetName", error)
+                case Right(_) =>
+                  reportWithPreviews(
+                    UiPresetContext.CreatedPresetFocused(presetName, s"Preset saved. Configure $presetName.")
+                  )
+              }
+            }
           }
         }
 
@@ -78,51 +85,48 @@ final private[manager] class StateManagerUiPresetEffects(
           s"Built-in preset cannot be overwritten. Duplicate $presetName first."
         )
       case Some(presetName) =>
-        uiPresetStore
-          .find(presetName)
-          .flatMap {
-            case None =>
-              updateCommandRunnerPresetContext(
-                Some(presetName),
-                s"Custom preset '$presetName' was not found. Use Save As New Preset."
-              )
-            case Some(existing) =>
-              capturedPreset(existing.name).flatMap { preset =>
-                uiPresetStore.upsert(preset).attempt.flatMap {
-                  case Left(error) =>
-                    reportPresetFailure(existing.name, s"Could not save ${existing.name}", error)
-                  case Right(_) =>
-                    refreshCommandRunnerUiPresetPreviews >>
-                      updateCommandRunnerPresetContext(
-                        Some(existing.name),
-                        s"Preset overwritten. Configure ${existing.name}."
+        currentState.flatMap { snapshot =>
+          onPresetsLane(s"overwrite UI preset $presetName") {
+            uiPresetStore.find(presetName).flatMap {
+              case None =>
+                report(
+                  UiPresetContext.Status(
+                    Some(presetName),
+                    s"Custom preset '$presetName' was not found. Use Save As New Preset."
+                  )
+                )
+              case Some(existing) =>
+                capturedPreset(existing.name, snapshot).flatMap { preset =>
+                  uiPresetStore.upsert(preset).attempt.flatMap {
+                    case Left(error) =>
+                      reportPresetFailure(existing.name, s"Could not save ${existing.name}", error)
+                    case Right(_) =>
+                      reportWithPreviews(
+                        UiPresetContext.Status(Some(existing.name), s"Preset overwritten. Configure ${existing.name}.")
                       )
+                  }
                 }
-              }
+            }
           }
-          .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to overwrite UI preset $presetName"))
+        }
 
-  private def capturedPreset(presetName: String): IO[UiPreset] =
-    for
-      state <- stateRef.get
-      windowSize <- windowSizeProvider.handleErrorWith(error =>
-        logger.error(error)("[PRESET] Window size capture failed").as(None)
-      )
-    yield UiPreset.capture(presetName, state, windowSize)
+  private def capturedPreset(presetName: String, snapshot: AppState): IO[UiPreset] =
+    windowSizeProvider
+      .handleErrorWith(error => logger.error(error)("[PRESET] Window size capture failed").as(None))
+      .map(UiPreset.capture(presetName, snapshot, _))
 
   private def reportPresetFailure(presetName: String, summary: String, error: Throwable): IO[Unit] =
     logger.error(error)(s"[PRESET] $summary") >>
-      updateCommandRunnerPresetContext(
-        Some(presetName),
-        s"$summary: ${Option(error.getMessage).getOrElse(error.getClass.getSimpleName)}"
+      report(
+        UiPresetContext.Status(
+          Some(presetName),
+          s"$summary: ${Option(error.getMessage).getOrElse(error.getClass.getSimpleName)}"
+        )
       )
 
-  /** Resolves `presetName` to a preset the same way [[applyUiPresetEffect]]/[[confirmUiPresetDiffApplyEffect]] both
-    * need to: a custom preset shadows a built-in of the same name, so this is not simply "check custom, then built-in"
-    * done twice with different results.
-    */
-  private def resolveUiPreset(presetName: String): IO[Option[UiPreset]] =
-    uiPresetStore.find(presetName).map(_.orElse(UiPreset.builtIn(presetName)))
+  /** A custom preset shadows a built-in of the same name; the flag says whether the built-in is what was found. */
+  private def resolveUiPreset(presetName: String): IO[Option[(UiPreset, Boolean)]] =
+    uiPresetStore.find(presetName).map(_.map(_ -> false).orElse(UiPreset.builtIn(presetName).map(_ -> true)))
 
   /** The one-shot "just apply it" path -- the splash's workflow shortcuts and the top-level searchable "Apply <Name>
     * Preset" commands both use this, applying every setting immediately via the real, unconditional
@@ -133,214 +137,112 @@ final private[manager] class StateManagerUiPresetEffects(
     * exposed this. [[reviewUiPresetEffect]]/[[confirmUiPresetDiffApplyEffect]] are the deliberate, genuinely-partial
     * alternative, where that limitation is inherent to "apply only some of the changes" anyway.
     *
-    * Resolution here (not [[resolveUiPreset]]) mirrors the pre-existing behavior this restores: a custom preset shadows
-    * a built-in of the same name, and *which* source it came from decides `applyBuiltInWorkflowToState` vs.
-    * `applyToState` -- not `UiPresetDiff`'s own name-only check, which does not have "was this shadowed" to go on.
+    * *Which* source the preset came from decides `applyBuiltInWorkflowToState` vs. `applyToState` -- not
+    * `UiPresetDiff`'s own name-only check, which does not have "was this shadowed" to go on.
     */
   private def applyUiPresetEffect(name: String): IO[Unit] =
-    normalizedPresetName(name) match
-      case None =>
-        logger.warn("[PRESET] Ignoring empty UI preset name")
-      case Some(presetName) =>
-        uiPresetStore
-          .find(presetName)
-          .map(_.map(_ -> false).orElse(UiPreset.builtIn(presetName).map(_ -> true)))
-          .flatMap {
-            case None =>
-              logger.warn(s"[PRESET] UI preset not found: $presetName")
-            case Some((preset, isBuiltInWorkflow)) =>
-              loadUiPresetResources(preset).flatMap {
-                case Left(reason) =>
-                  rejectUiPresetPreview(presetName, reason)
-                case Right(theme) =>
-                  applyLoadedUiPresetWith(
-                    preset,
-                    base =>
-                      if isBuiltInWorkflow then UiPreset.applyBuiltInWorkflowToState(preset, base, theme)
-                      else UiPreset.applyToState(preset, base, theme)
-                  )
-              }
-          }
-          .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to apply UI preset $presetName"))
+    requestApply(name)((preset, isBuiltInWorkflow, theme) =>
+      base =>
+        if isBuiltInWorkflow then UiPreset.applyBuiltInWorkflowToState(preset, base, theme)
+        else UiPreset.applyToState(preset, base, theme)
+    )
 
   /** Opens the preset diff-toggle review rather than applying immediately -- [[confirmUiPresetDiffApplyEffect]] does
-    * the actual apply once the user confirms (default: every change selected). Reached from a preset's own settings
-    * group ("Apply Preset" there), always from within an already-open command runner in practice, but
-    * `ensureCommandRunnerSurfaceForReview` covers the case where one is not (e.g. dispatched directly, as tests do).
+    * the actual apply once the user confirms (default: every change selected).
     */
   private def reviewUiPresetEffect(name: String): IO[Unit] =
     normalizedPresetName(name) match
       case None =>
         logger.warn("[PRESET] Ignoring empty UI preset name")
       case Some(presetName) =>
-        resolveUiPreset(presetName)
-          .flatMap {
+        onPresetsLane(s"review UI preset $presetName") {
+          resolveUiPreset(presetName).flatMap {
             case None =>
               logger.warn(s"[PRESET] UI preset not found: $presetName")
-            case Some(preset) =>
-              openUiPresetDiffReview(preset)
+            case Some((preset, _)) =>
+              lanes.dispatchEffectResult(EffectResult.UiPresetReviewReady(preset), _ => IO.unit)
           }
-          .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to review UI preset $presetName"))
-
-  private def openUiPresetDiffReview(preset: UiPreset): IO[Unit] =
-    stateRef.get.flatMap { current =>
-      val changes = UiPresetDiff.changes(
-        currentConfig = current.persisted.config,
-        currentThemeName = current.persisted.theme.name,
-        currentHasDockedPanels = current.pinnedSurfaces.nonEmpty,
-        currentHasWorkspaceTree = current.persisted.layout.workspaceTree.isDefined,
-        preset = preset
-      )
-      val updated =
-        updateCommandRunner(ensureCommandRunnerSurfaceForReview(current))(_.openPresetDiffReview(preset.name, changes))
-      validateAndUpdateState(updated, current)
-    }
-
-  /** A bare, minimally-activated command-runner surface to host the review when none is already open -- unlike
-    * `StateManagerOperationBoundary.ensureCommandRunnerSurface`, this needs no `CommandRegistry` (the review's own
-    * items come entirely from `CommandRunner.openPresetDiffReview`, not the palette's command list), so it is its own
-    * small, self-contained version rather than threading that collaborator through this class for one call site.
-    */
-  private def ensureCommandRunnerSurfaceForReview(state: AppState): AppState =
-    state.commandRunnerSurface match
-      case Some(_) => state
-      case None =>
-        val (stateWithId, surfaceId) = state.allocateSurfaceId
-        val surface = UiSurface(
-          id = surfaceId,
-          content = SurfaceContent.CommandPalette(CommandRunner.empty.copy(isActive = true)),
-          presentation = SurfacePresentation.Floating(stateWithId.activeCursorPosition, SurfacePlacement.BelowCursor)
-        )
-        stateWithId
-          .copy(runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ surface))
-          .pushFocus(Focus.Surface(surfaceId))
+        }
 
   /** Re-resolves and re-validates the preset rather than trusting what the review opened with -- the store or the theme
     * could plausibly have changed in the time the review sat open.
     */
   private def confirmUiPresetDiffApplyEffect(name: String, selectedKeys: Set[String]): IO[Unit] =
+    requestApply(name)((preset, _, theme) => base => UiPresetDiff.applySelected(base, theme, preset, selectedKeys))
+
+  /** Records the request on the dispatcher, then loads the preset and its theme on the Presets lane. The loaded preset
+    * is applied only if no later apply was requested meanwhile.
+    */
+  private def requestApply(name: String)(restoreWith: (UiPreset, Boolean, Theme) => AppState => AppState): IO[Unit] =
     normalizedPresetName(name) match
       case None =>
         logger.warn("[PRESET] Ignoring empty UI preset name")
       case Some(presetName) =>
-        resolveUiPreset(presetName)
-          .flatMap {
-            case None =>
-              logger.warn(s"[PRESET] UI preset not found: $presetName")
-            case Some(preset) =>
-              loadUiPresetResources(preset).flatMap {
-                case Left(reason) =>
-                  rejectUiPresetPreview(presetName, reason)
-                case Right(theme) =>
-                  applyLoadedUiPresetWith(preset, base => UiPresetDiff.applySelected(base, theme, preset, selectedKeys))
-              }
-          }
-          .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to apply UI preset $presetName"))
+        commitValidated(UiPresetTransitions.requestApply(_)._1) >>
+          currentState
+            .map(_.runtime.pendingUiPresetApply)
+            .flatMap(_.traverse_ { request =>
+              lanes.submitEffect(
+                PersistenceLanes.Presets,
+                loadPresetResolution(presetName, restoreWith)
+                  .handleErrorWith(error =>
+                    logger
+                      .error(error)(s"[PRESET] Failed to apply UI preset $presetName")
+                      .as(UiPresetApplyResolution.Abandon)
+                  )
+                  .flatMap(resolution =>
+                    lanes.dispatchEffectResult(
+                      EffectResult.UiPresetApplyResolved(request, resolution),
+                      committed =>
+                        resolution match
+                          case UiPresetApplyResolution.Apply(preset, _) => afterPresetApplied(preset, committed)
+                          case _                                        => IO.unit
+                    )
+                  )
+              )
+            })
 
-  private def updateCommandRunner(state: AppState)(f: CommandRunner => CommandRunner): AppState =
-    state.commandRunnerSurface match
-      case Some(surface) =>
-        surface.content match
-          case SurfaceContent.CommandPalette(runner) =>
-            val updatedSurfaces = state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
-              _.copy(content = SurfaceContent.CommandPalette(f(runner)))
-            )
-            state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
-          case _ =>
-            state
+  private def loadPresetResolution(
+    presetName: String,
+    restoreWith: (UiPreset, Boolean, Theme) => AppState => AppState
+  ): IO[UiPresetApplyResolution] =
+    resolveUiPreset(presetName).flatMap {
       case None =>
-        state
-
-  /** Shared tail for both `applyUiPresetEffect`'s full apply and `confirmUiPresetDiffApplyEffect`'s selective one --
-    * `restore` is the one step that differs between them; committing the result (validation, config persistence, font
-    * reload, pinned directories, markdown preview, session auto-save) is identical either way.
-    */
-  private def applyLoadedUiPresetWith(preset: UiPreset, restore: AppState => AppState): IO[Unit] =
-    for
-      current <- stateRef.get
-      // From the splash there is no editor pane/buffer/tree to apply onto, so seed a fresh "New document" workspace
-      // first (dropping the splash) and apply the preset on top -- the same valid base a runtime preset-apply sees.
-      // The preset then docks its panels into a real tree, its document mode lands on a real empty buffer, and there
-      // is a focused buffer to type into (#1524 and its buffer-less-pane fallout).
-      base                = seedEditorFromSplash(current)
-      restoredPresetState = restore(base)
-      restoredDocumentState =
-        applyPresetDocumentModeToActiveEmptyBuffer(restoredPresetState, preset.config.defaultDocumentMode)
-      restoredOutlineState = hydratePresetSymbolPanels(restoredDocumentState)
-      restored             = withUpdatedRunnerConfig(restoredOutlineState, restoredOutlineState.persisted.config)
-      // A preset can rewrite the entire workspace/layout/theme/config in one shot (highest single-call blast radius
-      // of any UI-preset mutation, #1183), so it is committed through the checked path rather than a bare
-      // `stateRef.modify` -- an invalid preset (e.g. one referencing a pane/buffer layout stale relative to the
-      // live session) is rejected instead of silently corrupting the running state.
-      _             <- validateAndUpdateState(restored, current)
-      appliedConfig <- stateRef.get.map(_.persisted.config)
-      _             <- persistConfigFile(appliedConfig)
-      _ <- onFontConfigChanged(appliedConfig.editorConfig.fontConfig)
-        .handleErrorWith(error => logger.error(error)("[PRESET] Failed to apply preset font config"))
-      _ <- reloadPresetDirectories(preset)
-      _ <- openPresetMarkdownPreviewIfNeeded(preset)
-      _ <- stateRef.get
-        .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
-        .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after preset apply failed"))
-    yield ()
-
-  /** Choosing a workflow preset from the startup splash is a startup action that must leave the splash and land in a
-    * usable editor (#1524). The splash state has no editor pane, buffer, or workspace tree, so applying a preset onto
-    * it directly produced a buffer-less pane (or, for a preset that docks a panel but sets no editor-pane target like
-    * Code, a tree with no editor leaf that failed validation and silently reverted). Seeding a fresh "New document"
-    * workspace here -- dropping the splash -- gives the preset the same valid base a runtime apply sees. A no-op at
-    * runtime (no splash), leaving a settings-driven preset apply untouched.
-    */
-  private def seedEditorFromSplash(state: AppState): AppState =
-    if state.startPageSurface.isEmpty then state
-    else
-      val withoutStartPage =
-        state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot { surface =>
-          surface.content match
-            case SurfaceContent.StartPage(_) => true
-            case _                           => false
-        }))
-      EditorState.openNewTab(withoutStartPage)
-
-  private def applyPresetDocumentModeToActiveEmptyBuffer(state: AppState, mode: DefaultDocumentMode): AppState =
-    state.focusedBufferId.flatMap(state.persisted.buffers.get) match
-      case Some(buffer)
-          if buffer.document.isNewEmpty && buffer.document.content.weight == 0 && buffer.document.filePath.isEmpty =>
-        val updatedBuffer =
-          mode match
-            case DefaultDocumentMode.PlainText =>
-              buffer.copy(
-                document = buffer.document.copy(language = None),
-                richText = buffer.richText.copy(richTextDocument = None)
+        logger.warn(s"[PRESET] UI preset not found: $presetName").as(UiPresetApplyResolution.Abandon)
+      case Some((preset, isBuiltInWorkflow)) =>
+        loadUiPresetResources(preset).flatMap {
+          case Left(reason) =>
+            logger
+              .warn(s"[PRESET] Cannot preview UI preset '$presetName': $reason")
+              .as(UiPresetApplyResolution.Reject(presetName, s"Cannot preview $presetName: $reason"))
+          case Right(theme) =>
+            IO.pure(
+              UiPresetApplyResolution.Apply(
+                preset,
+                UiPresetTransitions.restored(
+                  preset,
+                  restoreWith(preset, isBuiltInWorkflow, theme),
+                  withUpdatedRunnerConfig
+                )
               )
-            case DefaultDocumentMode.Markdown =>
-              buffer.copy(
-                document = buffer.document.copy(language = Some(LanguageId.Markdown)),
-                richText = buffer.richText.copy(richTextDocument = None)
-              )
-            case DefaultDocumentMode.RichText =>
-              buffer.copy(
-                document = buffer.document.copy(language = None),
-                richText = buffer.richText.copy(richTextDocument = Some(RichTextDocument.fromPlainText("")))
-              )
-        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> updatedBuffer)))
-      case _ =>
-        state
-
-  private def hydratePresetSymbolPanels(state: AppState): AppState =
-    val outlineSymbolsList = PanelSymbolLookup.outlineSymbols(state)
-    val outlineActive      = PanelSymbolLookup.currentSymbolActiveLocation(outlineSymbolsList, state)
-    val commentSymbolsList = PanelSymbolLookup.commentPanelSymbols(state)
-    val commentActive      = PanelSymbolLookup.currentSymbolActiveLocation(commentSymbolsList, state)
-    val hydratedSurfaces = state.runtime.uiSurfaces.map {
-      case surface @ UiSurface(_, SurfaceContent.Outline(_, _), SurfacePresentation.Docked, _) =>
-        surface.copy(content = SurfaceContent.Outline(outlineSymbolsList, outlineActive))
-      case surface @ UiSurface(_, SurfaceContent.Comments(_, _), SurfacePresentation.Docked, _) =>
-        surface.copy(content = SurfaceContent.Comments(commentSymbolsList, commentActive))
-      case surface =>
-        surface
+            )
+        }
     }
-    state.copy(runtime = state.runtime.copy(uiSurfaces = hydratedSurfaces))
+
+  /** Runs on the dispatcher with the committed state, so a preset that validation rejected (#1183) never gets here. */
+  private def afterPresetApplied(preset: UiPreset, committed: AppState): IO[Unit] =
+    val appliedConfig = committed.persisted.config
+    persistConfigFile(appliedConfig) >>
+      onFontConfigChanged(appliedConfig.editorConfig.fontConfig)
+        .handleErrorWith(error => logger.error(error)("[PRESET] Failed to apply preset font config")) >>
+      reloadPresetDirectories(preset) >>
+      openPresetMarkdownPreviewIfNeeded(preset) >>
+      lanes.submitEffect(
+        PersistenceLanes.Config,
+        currentState
+          .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
+          .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after preset apply failed"))
+      )
 
   private def openPresetMarkdownPreviewIfNeeded(preset: UiPreset): IO[Unit] =
     if preset.config.markdownViewMode == MarkdownViewMode.SplitPreview then openMarkdownPreview
@@ -360,22 +262,19 @@ final private[manager] class StateManagerUiPresetEffects(
   private def duplicateUiPresetEffect(sourceName: String, targetName: String): IO[Unit] =
     (normalizedPresetName(sourceName), normalizedPresetName(targetName)) match
       case (Some(source), Some(target)) =>
-        uiPresetStore
-          .find(source)
-          .map(_.orElse(UiPreset.builtIn(source)))
-          .flatMap {
+        onPresetsLane(s"duplicate UI preset $source") {
+          uiPresetStore.find(source).map(_.orElse(UiPreset.builtIn(source))).flatMap {
             case Some(preset) =>
               uiPresetStore.create(preset.copy(name = target)).attempt.flatMap {
                 case Left(error) =>
                   reportPresetFailure(target, s"Could not duplicate $source", error)
                 case Right(_) =>
-                  refreshCommandRunnerUiPresetPreviews >>
-                    updateCommandRunnerPresetContext(Some(target), s"Preset duplicated. Configure $target.")
+                  reportWithPreviews(UiPresetContext.Status(Some(target), s"Preset duplicated. Configure $target."))
               }
             case None =>
               logger.warn(s"[PRESET] UI preset not found: $source")
           }
-          .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to duplicate UI preset $source"))
+        }
       case _ =>
         logger.warn("[PRESET] Ignoring duplicate request with empty UI preset name")
 
@@ -384,13 +283,10 @@ final private[manager] class StateManagerUiPresetEffects(
       case (Some(source), _) if UiPreset.builtIn(source).nonEmpty =>
         updateCommandRunnerPresetContext(Some(source), s"Built-in preset cannot be renamed. Duplicate $source first.")
       case (Some(source), Some(target)) =>
-        uiPresetStore
-          .rename(source, target)
-          .flatTap(_ =>
-            refreshCommandRunnerUiPresetPreviews >>
-              updateCommandRunnerPresetContext(Some(target), s"Preset renamed. Configure $target.")
-          )
-          .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to rename UI preset $source"))
+        onPresetsLane(s"rename UI preset $source") {
+          uiPresetStore.rename(source, target) >>
+            reportWithPreviews(UiPresetContext.Status(Some(target), s"Preset renamed. Configure $target."))
+        }
       case _ =>
         logger.warn("[PRESET] Ignoring rename request with empty UI preset name")
 
@@ -402,12 +298,9 @@ final private[manager] class StateManagerUiPresetEffects(
           "Built-in preset cannot be deleted. Use Reset Preset to discard overrides."
         )
       case Some(presetName) =>
-        uiPresetStore
-          .delete(presetName)
-          .flatTap(_ =>
-            refreshCommandRunnerUiPresetPreviews >> updateCommandRunnerPresetContext(None, "Preset deleted.")
-          )
-          .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to delete UI preset $presetName"))
+        onPresetsLane(s"delete UI preset $presetName") {
+          uiPresetStore.delete(presetName) >> reportWithPreviews(UiPresetContext.Status(None, "Preset deleted."))
+        }
       case None =>
         logger.warn("[PRESET] Ignoring empty UI preset name")
 
@@ -416,13 +309,10 @@ final private[manager] class StateManagerUiPresetEffects(
       case Some(presetName) =>
         UiPreset.builtIn(presetName) match
           case Some(_) =>
-            uiPresetStore
-              .delete(presetName)
-              .flatTap(_ =>
-                refreshCommandRunnerUiPresetPreviews >>
-                  updateCommandRunnerPresetContext(Some(presetName), s"Preset reset. Configure $presetName.")
-              )
-              .handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to reset UI preset $presetName"))
+            onPresetsLane(s"reset UI preset $presetName") {
+              uiPresetStore.delete(presetName) >>
+                reportWithPreviews(UiPresetContext.Status(Some(presetName), s"Preset reset. Configure $presetName."))
+            }
           case None =>
             logger.warn(s"[PRESET] Built-in UI preset not found: $presetName")
       case None =>
@@ -431,27 +321,24 @@ final private[manager] class StateManagerUiPresetEffects(
   private def normalizedPresetName(name: String): Option[String] =
     Option(UiPreset.normalizedName(name)).filter(_.nonEmpty)
 
-  private def refreshCommandRunnerUiPresetPreviews: IO[Unit] =
+  /** Queues `job` on the Presets lane; a failure is logged against `operation` the way the inline code used to. */
+  private def onPresetsLane(operation: String)(job: IO[Unit]): IO[Unit] =
+    lanes.submitEffect(
+      PersistenceLanes.Presets,
+      job.handleErrorWith(error => logger.error(error)(s"[PRESET] Failed to $operation"))
+    )
+
+  private def report(context: UiPresetContext): IO[Unit] =
+    lanes.dispatchEffectResult(EffectResult.UiPresetFeedback(None, context), _ => IO.unit)
+
+  private def reportWithPreviews(context: UiPresetContext): IO[Unit] =
     uiPresetStore
       .list()
       .map(_.map(UiPreset.Preview.fromPreset))
       .handleErrorWith(error => logger.error(error)("[PRESET] Failed to list UI presets").as(Nil))
-      .flatMap(previews => stateRef.update(state => updateCommandRunnerUiPresetPreviews(state, previews)))
-
-  private def updateCommandRunnerUiPresetPreviews(state: AppState, previews: List[UiPreset.Preview]): AppState =
-    state.commandRunnerSurface match
-      case Some(surface) =>
-        surface.content match
-          case SurfaceContent.CommandPalette(runner) =>
-            val updatedRunner = runner.withUiPresetPreviews(previews)
-            val updatedSurfaces = state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
-              _.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-            )
-            state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
-          case _ =>
-            state
-      case None =>
-        state
+      .flatMap(previews =>
+        lanes.dispatchEffectResult(EffectResult.UiPresetFeedback(Some(previews), context), _ => IO.unit)
+      )
 
   private def loadUiPresetResources(preset: UiPreset): IO[Either[String, Theme]] =
     FontLoader.missingFamilies(preset.config.editorConfig.fontConfig) match
@@ -464,69 +351,5 @@ final private[manager] class StateManagerUiPresetEffects(
             Left(s"Theme '${preset.themeName}' could not be loaded: $detail")
         }
 
-  private def rejectUiPresetPreview(name: String, reason: String): IO[Unit] =
-    logger.warn(s"[PRESET] Cannot preview UI preset '$name': $reason") >>
-      updateCommandRunnerPresetContext(Some(name), s"Cannot preview $name: $reason")
-
   private def updateCommandRunnerPresetContext(presetName: Option[String], statusMessage: String): IO[Unit] =
-    stateRef.update(updateCommandRunnerPresetContextInState(_, presetName, statusMessage))
-
-  private def updateCommandRunnerPresetContextInState(
-    state: AppState,
-    presetName: Option[String],
-    statusMessage: String
-  ): AppState =
-    state.commandRunnerSurface match
-      case Some(surface) =>
-        surface.content match
-          case SurfaceContent.CommandPalette(runner) =>
-            val updatedRunner = runner.copy(
-              editingPresetName = presetName,
-              editingItemId = None,
-              editingText = "",
-              statusMessage = Some(statusMessage)
-            )
-            val updatedSurfaces = state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
-              _.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-            )
-            state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
-          case _ =>
-            state
-      case None =>
-        state
-
-  /** Focuses the just-created preset's own editing group (issue #1059: renders on the one `CommandPalette` surface,
-    * like every other settings drill-in, rather than spawning a second floating one).
-    */
-  private def focusCreatedPresetOptions(name: String, statusMessage: String): IO[Unit] =
-    stateRef.update { state =>
-      state.commandRunnerSurface match
-        case Some(surface) =>
-          surface.content match
-            case SurfaceContent.CommandPalette(runner) =>
-              val updatedRunner = runner
-                .withDrilledSettingsSurface(
-                  SettingsSurfaceState(
-                    SettingsPage.Group("settings-preset-edit"),
-                    List(SettingsPage.Group("settings-ui-presets", 2))
-                  )
-                )
-                .copy(
-                  submenuSelections = runner.submenuSelections + ("settings-ui-presets" -> 2),
-                  editingItemId = None,
-                  editingText = "",
-                  editingPresetName = Some(name.trim),
-                  statusMessage = Some(statusMessage)
-                )
-              val updatedSurfaces = state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
-                _.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-              )
-              state.copy(
-                persisted = state.persisted.copy(focus = Focus.Surface(surface.id)),
-                runtime = state.runtime.copy(uiSurfaces = updatedSurfaces)
-              )
-            case _ =>
-              state
-        case None =>
-          state
-    }
+    commitValidated(UiPresetTransitions.withPresetContext(_, presetName, statusMessage))

@@ -76,7 +76,7 @@ final private[manager] class StateManagerEffectHandlers(
   private val animationEffects = new AnimationEffectHandler(bufferAnimationsRef)
 
   private val configEffects = new StateManagerConfigEffects(
-    stateRef,
+    stateRef.get,
     logger,
     configPersistencePath,
     sessionPersistence,
@@ -85,7 +85,11 @@ final private[manager] class StateManagerEffectHandlers(
     editor
   )
 
-  private val keybindingEffects = new StateManagerKeybindingEffects(stateRef, configEffects.updateConfig)
+  private def commitAppValidated(transition: AppState => AppState): IO[Unit] =
+    updateModelValidated(model => Some(model.copy(app = transition(model.app))))
+
+  private val keybindingEffects =
+    new StateManagerKeybindingEffects(stateRef.get, commitAppValidated, configEffects.updateConfig)
 
   private val richTextEffects = new StateManagerRichTextEffects(stateRef, validateAndUpdateState, interpretEffect)
 
@@ -119,7 +123,7 @@ final private[manager] class StateManagerEffectHandlers(
   )
 
   private val uiPresetEffects = new StateManagerUiPresetEffects(
-    stateRef,
+    stateRef.get,
     logger,
     uiPresetStore,
     windowSizeProvider,
@@ -127,10 +131,11 @@ final private[manager] class StateManagerEffectHandlers(
     onFontConfigChanged,
     sessionPersistence,
     configEffects.persistConfigFile,
-    configEffects.withUpdatedRunnerConfig,
+    StateManagerConfigEffects.withUpdatedRunnerConfig,
     panelEffects.openMarkdownPreview,
     panelEffects.loadPinnedDirectoryEffect,
-    validateAndUpdateState
+    commitAppValidated,
+    editor
   )
 
   private val surfacePopupEffects = new StateManagerSurfacePopupEffects(

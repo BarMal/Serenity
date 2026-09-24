@@ -102,6 +102,12 @@ private[manager] trait StateManagerEffectHandlersHarness:
       def scheduleDocumentAnalysis(): IO[Unit] = IO.unit
       def scheduleFindSearch(request: FindSearchRequest): IO[Unit] =
         callsVar.update(_ :+ s"scheduleFindSearch:$request")
+      def submitEffect(lane: com.serenity.state.effects.Lane.Keyed, job: IO[Unit]): IO[Unit] = job
+      def dispatchEffectResult(result: EffectResult, onApplied: AppState => IO[Unit]): IO[Unit] =
+        stateRefVar.get.flatMap { current =>
+          val next = EffectResult.applyIfCurrent(current, result)
+          if next eq current then IO.unit else stateRefVar.set(next) >> onApplied(next)
+        }
 
     val surfaces = new EffectSurfacePort:
       def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] = callsVar.update(_ :+ s"showPeek:$content")

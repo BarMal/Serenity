@@ -27,17 +27,19 @@ final private[manager] class StateManagerOperationBoundary private (
     val effectLanes: EffectLanes,
     releaseEffectLanes: IO[Unit],
     effectsShutdownRef: Ref[IO, Boolean],
+    effectsShutDown: Deferred[IO, Unit],
+    submittedEffects: Ref[IO, Long],
     beforeDocumentAnalysisStart: IO[Unit],
     beforeEffectsShutdown: IO[Unit],
     dispatcher: StateManagerDispatcher,
-    fileWriteLedger: FileWriteLedger,
-    effectsReleased: Deferred[IO, Unit]
+    fileWriteLedger: FileWriteLedger
 ):
   private val DocumentAnalysisDebounce         = 150.millis
   private val FindSearchDebounce               = 50.millis
   private val MarkdownPreviewCommitDebounce    = 150.millis
   private val FindSearchLane: Lane.Keyed       = Lane.Keyed(LaneKey.Search, LanePolicy.SwitchLatest)
   private val DocumentAnalysisLane: Lane.Keyed = Lane.Keyed(LaneKey.Analysis, LanePolicy.SwitchLatest)
+  private val ShutdownGracePeriod              = 5.seconds
 
   def enqueueEvent(event: com.serenity.keystroke.events.Event): IO[Unit] =
     pendingOperations.update(_ :+ StateManagerOperation.Event(event))
@@ -127,27 +129,47 @@ final private[manager] class StateManagerOperationBoundary private (
       }
     }
 
-  /** Cancels every running lane job and ignores later requests; called on quit. */
+  /** The one quit step, for both a normal and a forced quit: the `Lane.Exclusive` barrier of
+    * docs/state-architecture-target.md. Queued and running Sequential work -- file saves, config and preset writes --
+    * finishes first, for at most [[ShutdownGracePeriod]] so a write that hangs cannot wedge quitting; switch-latest and
+    * drop-if-busy work is cancelled. The lanes are then released and later requests become no-ops. Runs once; every
+    * caller returns when it has finished.
+    */
   def shutdownEffects(): IO[Unit] =
     beforeEffectsShutdown >> effectsShutdownRef
       .getAndSet(true)
-      .flatMap(alreadyShut => if alreadyShut then IO.unit else releaseEffectLanes >> effectsReleased.complete(()).void)
+      .flatMap(alreadyShut =>
+        if alreadyShut then IO.unit
+        // Started on its own fiber so a caller cancelled while waiting (a lost race on quit) cannot abandon it.
+        else (drainPersistence >> releaseEffectLanes).guarantee(effectsShutDown.complete(()).void).start.void
+      ) >> effectsShutDown.get
 
-  /** Waits for queued and running Sequential work -- file saves above all -- to finish, cancelling search, analysis and
-    * dialogs: the `Lane.Exclusive` quit barrier of docs/state-architecture-target.md. Returns at once after shutdown.
+  private def drainPersistence: IO[Unit] =
+    IO.deferred[Unit].flatMap { drained =>
+      effectLanes.submit(Lane.Exclusive, drained.complete(()).void) >>
+        drained.get.timeoutTo(
+          ShutdownGracePeriod,
+          logger.warn(s"[EFFECTS] Pending persistence still running after $ShutdownGracePeriod; abandoning it on quit")
+        )
+    }
+
+  /** Returns once every lane job accepted so far has settled and every result it handed the dispatcher has been
+    * applied, including follow-up work those results queued. Never call from code on the dispatcher.
     */
-  def awaitPendingWrites: IO[Unit] =
-    IO.deferred[Unit].flatMap { barrier =>
-      val passed = effectLanes.submit(Lane.Exclusive, barrier.complete(()).void) >> barrier.get
-      IO.race(passed, effectsReleased.get).void.recover { case _: EffectLanes.Released => () }
+  def awaitEffects: IO[Unit] =
+    submittedEffects.get.flatMap { before =>
+      effectLanes.drain >> dispatcher.submit(IO.unit) >> submittedEffects.get.flatMap(after =>
+        if after == before then IO.unit else awaitEffects
+      )
     }
 
   /** What file persistence needs from this boundary (#1697 Wave 3). */
   val fileLanes: FileEffectLanes = new FileEffectLanes:
-    val fileWrites: FileWriteLedger                                 = fileWriteLedger
-    def submitToLane(lane: Lane.Scheduled, job: IO[Unit]): IO[Unit] = effectLanes.submit(lane, job)
-    def post(update: IO[Unit]): IO[Unit]                            = dispatcher.post(update)
-    def dispatchUpdate(update: IO[Unit]): IO[Unit]                  = dispatcher.submit(update)
+    val fileWrites: FileWriteLedger = fileWriteLedger
+    def submitToLane(lane: Lane.Scheduled, job: IO[Unit]): IO[Unit] =
+      submittedEffects.update(_ + 1) >> effectLanes.submit(lane, job)
+    def post(update: IO[Unit]): IO[Unit]           = dispatcher.post(update)
+    def dispatchUpdate(update: IO[Unit]): IO[Unit] = dispatcher.submit(update)
     def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
       StateManagerOperationBoundary.this.validateAndUpdateState(newState, fallbackState)
 
@@ -173,9 +195,24 @@ final private[manager] class StateManagerOperationBoundary private (
   private def markdownPreviewCommitLane(bufferId: BufferId): Lane.Keyed =
     Lane.Keyed(LaneKey.MarkdownPreview(bufferId), LanePolicy.SwitchLatest)
 
+  private[manager] def submitEffect(lane: Lane.Keyed, job: IO[Unit]): IO[Unit] = submit(lane, job)
+
   // A request arriving after shutdown has nothing left to run on, and quitting does not want it anyway.
   private def submit(lane: Lane.Scheduled, job: IO[Unit]): IO[Unit] =
-    effectLanes.submit(lane, job).recover { case _: EffectLanes.Released => () }
+    submittedEffects.update(_ + 1) >> effectLanes.submit(lane, job).recover { case _: EffectLanes.Released => () }
+
+  /** Applies `result` through the validated commit path if it is still current, then runs `onApplied` with the
+    * committed state. Runs on the dispatcher: a lane job reaches it through `dispatch`.
+    */
+  private[manager] def applyResult(result: EffectResult, onApplied: AppState => IO[Unit]): IO[Unit] =
+    stateRef.flatModify { current =>
+      val next = EffectResult.applyIfCurrent(current, result)
+      if next eq current then (current, IO.unit)
+      else
+        StateManagerOperationBoundary.prepareCommit(next, current) match
+          case Right(committed) => (committed, afterCommit(current, committed) >> onApplied(committed))
+          case Left(errors)     => (current, logRejectedCommit(errors))
+    }
 
   private def postResult(result: EffectResult): IO[Unit] =
     dispatcher.post(stateRef.update(EffectResult.applyIfCurrent(_, result)))
@@ -232,12 +269,13 @@ private[manager] object StateManagerOperationBoundary:
       pendingOperations         <- Ref.of[IO, List[StateManagerOperation]](Nil)
       documentAnalysisInputsRef <- Ref.of[IO, Option[Map[String, SpellCheckFingerprint]]](None)
       effectsShutdownRef        <- Ref.of[IO, Boolean](false)
+      effectsShutDown           <- Deferred[IO, Unit]
+      submittedEffects          <- Ref.of[IO, Long](0L)
       (effectLanes, releaseEffectLanes) <- EffectLanes
         .resource((lane, error) => logger.error(error)(s"[EFFECTS] Job on $lane failed"))
         .allocated
       dispatcher      <- StateManagerDispatcher.create(logger)
       fileWriteLedger <- FileWriteLedger.create
-      effectsReleased <- Deferred[IO, Unit]
     yield new StateManagerOperationBoundary(
       pendingOperations,
       stateRef,
@@ -246,9 +284,10 @@ private[manager] object StateManagerOperationBoundary:
       effectLanes,
       releaseEffectLanes,
       effectsShutdownRef,
+      effectsShutDown,
+      submittedEffects,
       beforeDocumentAnalysisStart,
       beforeEffectsShutdown,
       dispatcher,
-      fileWriteLedger,
-      effectsReleased
+      fileWriteLedger
     )

@@ -72,7 +72,10 @@ final case class Runtime(
     commandUsage: Map[String, Int] = Map.empty,
     // The in-progress tab-bar drag-to-reorder gesture (issue #1079), if a primary press picked up a tab -- see
     // `TabDragSession`'s own doc comment for why this is reset by press rather than by a release this app never sees.
-    tabDragSession: Option[TabDragSession] = None
+    tabDragSession: Option[TabDragSession] = None,
+    // The UI-preset apply whose preset is still being loaded off the dispatcher (#1697), so its result can be dropped
+    // once a later apply has been requested. Cleared when that request resolves.
+    pendingUiPresetApply: Option[Long] = None
 ):
 
   /** A typed character: the quiet window for cursor-adjacent surfaces always restarts; the companion sprite panel

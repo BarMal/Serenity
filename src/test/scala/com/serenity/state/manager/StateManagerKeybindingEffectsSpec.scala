@@ -36,7 +36,8 @@ class StateManagerKeybindingEffectsSpec extends AnyFlatSpec with Matchers:
       stateRef,
       committedConfigs,
       new StateManagerKeybindingEffects(
-        stateRef,
+        stateRef.get,
+        transition => stateRef.update(transition),
         update =>
           stateRef
             .modify { state =>
