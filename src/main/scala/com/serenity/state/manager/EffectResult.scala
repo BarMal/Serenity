@@ -4,8 +4,8 @@ import java.nio.file.Path
 
 import com.serenity.config.SpellCheckDictionaryFingerprint
 import com.serenity.rope.Rope
-import com.serenity.spellcheck.SpellChecker
 import com.serenity.session.SessionMetadata
+import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.{
   AppState,
   Buffer,
