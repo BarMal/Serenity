@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import cats.syntax.foldable.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
@@ -12,7 +12,7 @@ import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
   * and a record fakes trivially without one (#1017).
   */
 final private[manager] case class LspDocumentSyncPort(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     interpretEffect: AppEffect => IO[Unit],
     candidateLspBufferIds: (AppState, AppState) => Set[BufferId]
 )
@@ -24,7 +24,7 @@ final private[manager] class LspDocumentSync(port: LspDocumentSyncPort):
   import port.*
 
   def enqueueChangedLspDocuments(previousState: AppState): IO[Unit] =
-    stateRef.get.flatMap { currentState =>
+    currentState.flatMap { currentState =>
       candidateLspBufferIds(previousState, currentState).toList.traverse_ { bufferId =>
         currentState.persisted.buffers.get(bufferId) match
           case None => IO.unit

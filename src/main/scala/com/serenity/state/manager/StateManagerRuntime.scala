@@ -16,10 +16,16 @@ import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import org.typelevel.log4cats.Logger
 
-/** Non-blocking, coalescing hand-off from editor state changes to the LSP runtime. */
+/** Non-blocking, coalescing hand-off from editor state changes to the LSP runtime -- the LSP lane of #1697. It is
+  * already the lane's shape, so it is not routed through `EffectLanes`: one FIFO drained by `LspManager`'s single
+  * consumer keeps every server's notifications and requests in the order they were enqueued, and results come back
+  * through `applyEvent` on the dispatcher. An edit coalesces into a change still queued for its document only when
+  * nothing else for that document was queued after it, so coalescing never moves an edit ahead of a request, a close or
+  * a reopen.
+  */
 final private[manager] class LspEffectQueue private (
     queue: Queue[IO, LspEffectQueue.Entry],
-    pendingChanges: Ref[IO, Map[String, LspEffectQueue.PendingChange]],
+    pendingChanges: Ref[IO, LspEffectQueue.PendingChanges],
     documentVersions: Ref[IO, Map[String, Int]]
 ):
 
@@ -28,16 +34,19 @@ final private[manager] class LspEffectQueue private (
   def enqueue(effect: LspEffect): IO[Unit] =
     effect match
       case LspEffect.FileChanged(uri, languageId, text, _) => enqueueDocumentChange(uri, languageId, text)
-      case other                                           => queue.offer(Entry.Immediate(other))
+      case other => pendingChanges.update(_.closedFor(other.uri)) >> queue.offer(Entry.Immediate(other))
 
   def enqueueDocumentChange(uri: String, languageId: com.serenity.lsp.config.LanguageId, text: String): IO[Unit] =
-    pendingChanges.modify { changes =>
-      if changes.contains(uri) then (changes.updated(uri, PendingChange(languageId, text)), IO.unit)
-      else
-        (
-          changes.updated(uri, PendingChange(languageId, text)),
-          queue.offer(Entry.Change(uri))
-        )
+    pendingChanges.modify { pending =>
+      val change = PendingChange(languageId, text)
+      pending.open.get(uri) match
+        case Some(token) => (pending.copy(texts = pending.texts.updated(token, change)), IO.unit)
+        case None =>
+          val token = pending.nextToken
+          (
+            PendingChanges(token + 1, pending.open.updated(uri, token), pending.texts.updated(token, change)),
+            queue.offer(Entry.Change(uri, token))
+          )
     }.flatten
 
   def stream: Stream[IO, LspEffect] =
@@ -51,9 +60,9 @@ final private[manager] class LspEffectQueue private (
         documentVersions.update(_ - uri).as(closed)
       case Entry.Immediate(effect) =>
         IO.pure(effect)
-      case Entry.Change(uri) =>
+      case Entry.Change(uri, token) =>
         pendingChanges
-          .modify(changes => (changes - uri, changes.get(uri)))
+          .modify(pending => (pending.taken(uri, token), pending.texts.get(token)))
           .flatMap {
             case Some(PendingChange(languageId, text)) =>
               documentVersions.modify { versions =>
@@ -69,14 +78,21 @@ private[manager] object LspEffectQueue:
 
   private enum Entry:
     case Immediate(effect: LspEffect)
-    case Change(uri: String)
+    case Change(uri: String, token: Long)
 
   final private case class PendingChange(languageId: com.serenity.lsp.config.LanguageId, text: String)
+
+  /** Queued changes' latest text by token; `open` names, per document, the queued change a new edit may still join. */
+  final private case class PendingChanges(nextToken: Long, open: Map[String, Long], texts: Map[Long, PendingChange]):
+    def closedFor(uri: String): PendingChanges = copy(open = open - uri)
+
+    def taken(uri: String, token: Long): PendingChanges =
+      copy(open = if open.get(uri).contains(token) then open - uri else open, texts = texts - token)
 
   def create: IO[LspEffectQueue] =
     for
       queue            <- Queue.unbounded[IO, Entry]
-      pendingChanges   <- Ref.of[IO, Map[String, PendingChange]](Map.empty)
+      pendingChanges   <- Ref.of[IO, PendingChanges](PendingChanges(0L, Map.empty, Map.empty))
       documentVersions <- Ref.of[IO, Map[String, Int]](Map.empty)
     yield new LspEffectQueue(queue, pendingChanges, documentVersions)
 

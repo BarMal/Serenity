@@ -4,6 +4,8 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.CursorPosition
 
 enum LspEffect:
+  def uri: String
+
   case FileOpened(uri: String, languageId: LanguageId, text: String)
   case FileChanged(uri: String, languageId: LanguageId, text: String, version: Int)
   case FileClosed(uri: String, languageId: LanguageId)
