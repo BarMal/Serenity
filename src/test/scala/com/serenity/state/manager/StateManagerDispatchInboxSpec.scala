@@ -75,8 +75,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
         }
       effectPort = EventEffectPort(
         interpretEffect = snapshotCommittingEffect,
-        interpretCommand = (_, _) => IO.unit,
-        executeCommand = _ => IO.unit
+        interpretCommand = (_, _) => IO.unit
       )
       workflowPort = new EventWorkflowPort:
         def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]      = IO.unit

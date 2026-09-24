@@ -49,8 +49,7 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
         val bufferAnimationsRef      = sharedBufferAnimations
       effectPort = EventEffectPort(
         interpretEffect = effect => onEffect(operations, effect),
-        interpretCommand = (_, _) => IO.unit,
-        executeCommand = _ => IO.unit
+        interpretCommand = (_, _) => IO.unit
       )
       workflowPort = new EventWorkflowPort:
         def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]      = IO.unit

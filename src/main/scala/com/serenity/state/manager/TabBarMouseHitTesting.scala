@@ -1,7 +1,10 @@
 package com.serenity.state.manager
 
+import cats.syntax.all.*
+import com.serenity.keystroke.events.MouseClick
 import com.serenity.state.core.EditorState
-import com.serenity.state.models.{AppState, BufferId, SurfaceContent, TabListEntry}
+import com.serenity.state.models.{AppState, BufferId, CloseScope, SurfaceContent, TabListEntry}
+import com.serenity.state.reducers.{AppEffect, Transition, WorkflowEffect}
 import com.serenity.ui.layout.{LayoutEngine, LayoutRect, TabBarSurfaceComposition}
 
 /** Per-tab hit regions for the always-visible tab strip (issue #1075: Foundation; close affordance, #1078), and
@@ -105,3 +108,41 @@ private[manager] object TabBarMouseHitTesting:
     */
   def handleNewTabClick(state: AppState, col: Int, row: Int)(using com.serenity.rope.Balance): Option[AppState] =
     Option.when(newTabClickTarget(state, col, row))(EditorState.openNewTab(state))
+
+  /** Resolves a primary click against the always-visible tab strip: the trailing new-tab affordance (issue #1080), a
+    * tab's close affordance (#1078, #1673), or a tab itself (issue #1077). `false` means the click missed the strip and
+    * the caller should keep resolving other mouse targets; a click inside the strip that hits nothing is still claimed,
+    * so it never reaches the editor beneath.
+    */
+  def click(click: MouseClick, state: AppState)(using com.serenity.rope.Balance): Transition[Boolean] =
+    if newTabClickTarget(state, click.col, click.row) then Transition.modify(EditorState.openNewTab).as(true)
+    else
+      closeClickTarget(state, click.col, click.row) match
+        case Some(bufferId) =>
+          Transition.emit(AppEffect.Workflow(WorkflowEffect.BeginClose(closeScope(state, bufferId)))).as(true)
+        case None =>
+          clickTarget(state, click.col, click.row) match
+            case Some(switchTo) =>
+              Transition.modify(current => switchTo.fold(current)(EditorState.switchToBuffer(current, _))).as(true)
+            case None =>
+              Transition.pure(false)
+
+  /** [[closeHitAt]] resolved against `state`'s own tab strip, the same surface and frame [[clickTarget]] uses. */
+  def closeClickTarget(state: AppState, col: Int, row: Int): Option[BufferId] =
+    for
+      surface      <- state.tabBarSurface
+      viewportSize <- state.runtime.viewportSize
+      rect         <- LayoutEngine.calculateLayoutWithUI(state, viewportSize).tabBarRect
+      (entries, activeBufferId) <- surface.content match
+        case SurfaceContent.TabBar(entries, activeBufferId) => Some((entries, activeBufferId))
+        case _                                              => None
+      bufferId <- closeHitAt(entries, activeBufferId, rect, col.toDouble, row.toDouble)
+    yield bufferId
+
+  /** #1673: a close click goes through the close workflow, which prompts for unsaved changes, rather than dropping the
+    * buffer here. The active tab closes exactly as keyboard `CloseTab` does; any other tab closes by id and leaves the
+    * active one active.
+    */
+  private def closeScope(state: AppState, bufferId: BufferId): CloseScope =
+    val active = state.activeBuffer.map(_.id)
+    if active.contains(bufferId) then CloseScope.Current else CloseScope.Tab(bufferId, returnTo = active)

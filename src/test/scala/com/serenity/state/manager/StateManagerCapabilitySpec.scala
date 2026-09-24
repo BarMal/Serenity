@@ -45,8 +45,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       val mouseTargetCacheRef = currentCacheRef; val bufferAnimationsRef = currentBufferAnimationsRef
     val effectPort = EventEffectPort(
       interpretEffect = runEffect,
-      interpretCommand = (_, _) => IO.unit,
-      executeCommand = _ => IO.unit
+      interpretCommand = (_, _) => IO.unit
     )
     val workflowPort = new EventWorkflowPort:
       def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]      = IO.unit

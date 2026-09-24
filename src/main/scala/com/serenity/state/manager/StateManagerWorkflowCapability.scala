@@ -118,7 +118,7 @@ final private[manager] class StateManagerWorkflowCapability(
     val cleanBufferIds =
       if preservesBuffers(scope) then Nil
       else targetBufferIds.filterNot(dirtyBufferIds.contains)
-    val stateAfterClean = cleanBufferIds.foldLeft(state)(closeBufferUsingExistingFlow)
+    val stateAfterClean = cleanBufferIds.foldLeft(state)(closeForScope(scope, _, _))
 
     dirtyBufferIds match
       case Nil =>
@@ -147,7 +147,18 @@ final private[manager] class StateManagerWorkflowCapability(
     */
   private def closeUnlessSnapshotting(scope: CloseScope, state: AppState, bufferId: BufferId): AppState =
     if scope == CloseScope.ReturnToStartPage then state
-    else closeBufferUsingExistingFlow(state, bufferId)
+    else closeForScope(scope, state, bufferId)
+
+  private def closeForScope(scope: CloseScope, state: AppState, bufferId: BufferId): AppState =
+    restoreActiveTab(scope, closeBufferUsingExistingFlow(state, bufferId))
+
+  /** A `CloseScope.Tab` close hands the active tab back to the one active when the close began -- see its doc. */
+  private def restoreActiveTab(scope: CloseScope, state: AppState): AppState =
+    scope match
+      case CloseScope.Tab(_, Some(returnTo)) if state.persisted.buffers.contains(returnTo) =>
+        focusBufferForWorkflow(state, returnTo)
+      case _ =>
+        state
 
   /** The terminal step once every buffer a close action targets has been resolved: Quit persists and quits;
     * ReturnToStartPage snapshots the session and swaps the editor for a freshly-built start page; the rest do nothing.
@@ -211,6 +222,7 @@ final private[manager] class StateManagerWorkflowCapability(
           case None          => state.persisted.bufferOrder
       case CloseScope.Quit              => state.persisted.bufferOrder
       case CloseScope.ReturnToStartPage => state.persisted.bufferOrder
+      case CloseScope.Tab(bufferId, _)  => List(bufferId).filter(state.persisted.buffers.contains)
 
   protected def promptCloseWorkflow(state: AppState, workflow: CloseWorkflowState): IO[Unit] =
     val focusedState = focusBufferForWorkflow(state, workflow.currentBufferId)
@@ -225,7 +237,9 @@ final private[manager] class StateManagerWorkflowCapability(
           workflow.selectedChoice match
             case CloseWorkflowChoice.Cancel =>
               dismissSurfaceAndFocusEditor(surfaceId) >>
-                stateRef.get.flatMap(current => validateAndUpdateState(clearCloseActions(current), current))
+                stateRef.get.flatMap(current =>
+                  validateAndUpdateState(restoreActiveTab(workflow.scope, clearCloseActions(current)), current)
+                )
             case CloseWorkflowChoice.Discard =>
               val dismissedState = clearCloseActions(dismissModalSurface(state))
               val nextState      = closeUnlessSnapshotting(workflow.scope, dismissedState, workflow.currentBufferId)
@@ -347,7 +361,7 @@ final private[manager] class StateManagerWorkflowCapability(
           val dismissedState = dismissModalSurface(savedState)
           val nextState =
             if preservesBuffers(closeWorkflow.scope) then dismissedState
-            else closeBufferUsingExistingFlow(dismissedState, bufferId)
+            else closeForScope(closeWorkflow.scope, dismissedState, bufferId)
           validateAndUpdateState(nextState, savedState) >>
             stateRef.get.flatMap(committed => continueCloseWorkflow(closeWorkflow, committed))
         case _ =>
@@ -391,7 +405,7 @@ final private[manager] class StateManagerWorkflowCapability(
           val dismissedState = dismissModalSurface(savedState)
           val nextState =
             if preservesBuffers(closeWorkflow.scope) then dismissedState
-            else closeBufferUsingExistingFlow(dismissedState, bufferId)
+            else closeForScope(closeWorkflow.scope, dismissedState, bufferId)
           validateAndUpdateState(nextState, savedState) >>
             stateRef.get.flatMap(committed => continueCloseWorkflow(closeWorkflow, committed))
         case None =>

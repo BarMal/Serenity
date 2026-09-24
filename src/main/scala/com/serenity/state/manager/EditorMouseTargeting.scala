@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import cats.effect.{IO, Ref}
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
+import com.serenity.state.reducers.Transition
 import com.serenity.text.TextEditing
 import com.serenity.ui.layout.*
 
@@ -11,17 +12,17 @@ import com.serenity.ui.layout.*
   * the only reason this needs an interface at all, and a record fakes trivially without one (#1017).
   */
 final private[manager] case class EditorMouseTargetingPort(
-    stateRef: Ref[IO, AppState],
     mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]]
 )
 
-/** Resolves a mouse event's screen position to an editor pane/buffer/cursor via the shared [[MouseTargetCache]],
-  * derives word/line/range selections from a resolved cursor, and tracks the currently hovered editor target. Every
+/** Resolves a mouse event's screen position to an editor pane/buffer/cursor via the shared [[MouseTargetCache]]. Every
   * other mouse-hit-testing module that needs an editor click target goes through here so the cache stays the single
   * source of truth for the prepared scene shared with rendering.
+  *
+  * Refreshing the cache is the only IO here; the targeting decision is [[EditorMouseTargeting.targetAt]], a pure
+  * function of the cache contents.
   */
 final private[manager] class EditorMouseTargeting(port: EditorMouseTargetingPort):
-  import port.*
 
   def resolveMouseTarget(
     click: MouseInputEvent,
@@ -29,106 +30,138 @@ final private[manager] class EditorMouseTargeting(port: EditorMouseTargetingPort
   ): IO[Option[(PaneId, Buffer, CursorPosition)]] =
     state.runtime.viewportSize match
       case None => IO.pure(None)
-      case Some(tSize) =>
-        mouseTargetLayout(state, tSize).flatMap { cache =>
-          cache.scene.paneLayouts.find {
-            case (_, paneLayout) =>
-              paneLayout.contentRect.contains(click.col, click.row)
-          } match
-            case Some((paneId, paneLayout)) =>
-              state.persisted.layout.editorPanes
-                .get(paneId)
-                .flatMap(pane => pane.bufferId.flatMap(state.persisted.buffers.get)) match
-                case Some(buffer) =>
-                  val contentRect = paneLayout.contentRect
-                  val vp          = buffer.viewport
-                  mouseTargetSnapshot(cache, paneId).map { activeSnapshot =>
-                    // Multi-column e-reader layout (issue #1338, Phase 2 / slice 5): a column-mode page carries one
-                    // `ColumnSnapshotPlacement` per painted column. The click's cell column selects which one it lands in
-                    // (its `xOffsetCells`/`columnWidthCells` band, inter-column gaps resolving to the nearer column), and
-                    // from there the click resolves against *that* column's snapshot and x-origin -- not the shared
-                    // (column-0) active snapshot every non-column consumer still reads. A non-column pane has no
-                    // placements, so `snapshot`/`columnXOriginCells`/`columnWidthCells` stay the pane's own, leaving the
-                    // single-column path below unchanged.
-                    val placements         = cache.scene.columnSnapshotsFor(paneId)
-                    val columnXCells       = (click.col - contentRect.x).max(0)
-                    val placement          = MouseHitTestGeometry.columnPlacementForX(placements, columnXCells)
-                    val snapshot           = placement.map(_.snapshot).getOrElse(activeSnapshot)
-                    val columnXOriginCells = placement.map(_.xOffsetCells).getOrElse(0)
-                    // Slice 2 reserves a line-number rail on each column's left, so the text starts `gutterWidthCells`
-                    // past the band's left edge and wraps in the remaining width. A click therefore resolves against the
-                    // text region, not the whole band. A non-column pane has no rail (`0`), leaving the single-column
-                    // path below unchanged.
-                    val columnGutterCells = placement.map(_.gutterWidthCells).getOrElse(0)
-                    val columnTextWidthCells =
-                      placement.map(p => (p.columnWidthCells - p.gutterWidthCells).max(1)).getOrElse(contentRect.width)
-                    // A column's own snapshot is expressed in its own TEXT width (band minus rail), so its cell size is
-                    // that text width per its own cell count; a non-column pane keeps the pane-width divisor it used.
-                    val cellWidthDivisor = columnTextWidthCells
-                    // With variable per-line heights a cell row no longer maps to a visual line, so reverse the click's
-                    // pixel Y through the same cumulative row geometry the renderer used. Falls back to the cell row when
-                    // there's no pixel Y (TUI) or the layout is uniform (cell mode).
-                    val rowMetrics = TextRowMetrics(
-                      contentRect = contentRect,
-                      gridMetrics = MouseHitTestGeometry.floatingCellMetrics(state),
-                      rowLineHeightPx = snapshot.lineHeightPx,
-                      usesMeasuredLayout = snapshot.usesMeasuredLayout,
-                      rowHeightsPx = snapshot.visualLines.map(line =>
-                        if line.heightPx > 0 then line.heightPx else snapshot.lineHeightPx
-                      )
-                    )
-                    val visualRow = click.pixelY match
-                      case Some(pixelY) if snapshot.usesMeasuredLayout => rowMetrics.visualRowAt(pixelY)
-                      case _                                           => (click.row - contentRect.y).max(0)
-                    val cellWidthPx =
-                      if cellWidthDivisor > 0 then snapshot.panelWidthPx.toFloat / cellWidthDivisor.toFloat else 1.0f
-                    val columnOriginPx = (contentRect.x + columnXOriginCells + columnGutterCells) * cellWidthPx
-                    val rawXPx = click.pixelX match
-                      case Some(pixelX) => pixelX.toFloat - columnOriginPx
-                      case None         => (columnXCells - columnXOriginCells - columnGutterCells) * cellWidthPx
-                    // Clamp into the selected column's own text region: a click on its rail, in a gap, or off-page
-                    // resolves to that column's near text edge rather than reaching into (or past) it.
-                    val columnWidthPx = placement.map(_ => columnTextWidthCells * cellWidthPx).getOrElse(Float.MaxValue)
-                    val xPx           = rawXPx.max(0.0f).min(columnWidthPx)
-                    val clickedCursor = snapshot
-                      .cursorForVisualRowAndXPx(visualRow, xPx.max(0.0f))
-                      .orElse {
-                        // Below the last rendered visual row (#1547): the click's X still lands inside a wrap
-                        // group, so it must resolve against that group's LAST visual row -- reusing the raw
-                        // click column as a direct offset into the logical line (as the line-count-only clamp
-                        // below does) is only correct for a wrap group's first row, putting the cursor at the
-                        // logical start of whatever line the click falls back to instead of its lowest row.
-                        snapshot.visualLines.lastOption
-                          .map(lastVisualLine =>
-                            CursorPosition(lastVisualLine.bufferLine, lastVisualLine.nearestColumnForXPx(xPx.max(0.0f)))
-                          )
-                          .orElse {
-                            val bufferLine  = (vp.topLine + visualRow).max(0)
-                            val bufferCol   = (vp.leftColumn + (click.col - contentRect.x)).max(0)
-                            val clampedLine = bufferLine.min(math.max(0, buffer.document.content.lineCount - 1))
-                            val lineLen     = buffer.document.content.getLine(clampedLine).getOrElse("").length
-                            Some(CursorPosition(clampedLine, bufferCol.min(lineLen)))
-                          }
-                      }
-                    clickedCursor.map(cursor => (paneId, buffer, cursor))
-                  }
-                case None =>
-                  IO.pure(None)
-            case None => IO.pure(None)
+      case Some(viewportSize) =>
+        mouseTargetLayout(state, viewportSize).flatMap { cache =>
+          IO.fromEither(
+            EditorMouseTargeting
+              .targetAt(click, state, cache)
+              .left
+              .map(missing => new IllegalStateException(s"missing text snapshot for pane ${missing.paneId}"))
+          )
         }
 
-  def updateEditorHoverTarget(move: MouseMove, state: AppState): IO[Unit] =
-    resolveMouseTarget(move, state).flatMap {
-      case Some((paneId, buffer, cursor)) =>
-        stateRef.update(s =>
-          s.copy(runtime = s.runtime.copy(hoveredEditorTarget = Some(HoveredEditorTarget(paneId, buffer.id, cursor))))
-        )
-      case None =>
-        clearEditorHoverTarget
+  private def mouseTargetLayout(state: AppState, viewportSize: ViewportSize): IO[MouseTargetCache] =
+    val key = MouseTargetLayoutKey.from(state, viewportSize)
+    port.mouseTargetCacheRef.modify {
+      case Some(cache) if cache.layoutKey == key =>
+        val scene = AuthoritativeUiScene.forState(state, viewportSize)
+        val next  = if cache.scene eq scene then cache else cache.copy(scene = scene)
+        Some(next) -> next
+      case _ =>
+        val next = MouseTargetCache.fromState(state, viewportSize)
+        Some(next) -> next
     }
 
-  def clearEditorHoverTarget: IO[Unit] =
-    stateRef.update(s => s.copy(runtime = s.runtime.copy(hoveredEditorTarget = None)))
+private[manager] object EditorMouseTargeting:
+
+  /** The cache holds a text snapshot for every pane that shows a buffer, so this is an invariant breach, not a miss. */
+  final case class MissingTextSnapshot(paneId: PaneId)
+
+  def targetAt(
+    event: MouseInputEvent,
+    state: AppState,
+    cache: MouseTargetCache
+  ): Either[MissingTextSnapshot, Option[(PaneId, Buffer, CursorPosition)]] =
+    cache.scene.paneLayouts.find((_, paneLayout) => paneLayout.contentRect.contains(event.col, event.row)) match
+      case None => Right(None)
+      case Some((paneId, paneLayout)) =>
+        state.persisted.layout.editorPanes
+          .get(paneId)
+          .flatMap(pane => pane.bufferId.flatMap(state.persisted.buffers.get)) match
+          case None => Right(None)
+          case Some(buffer) =>
+            cache.scene
+              .textSnapshot(paneId)
+              .toRight(MissingTextSnapshot(paneId))
+              .map(snapshot =>
+                cursorAt(event, state, cache, paneId, paneLayout.contentRect, buffer, snapshot)
+                  .map(cursor => (paneId, buffer, cursor))
+              )
+
+  /** Records the editor position under the pointer, leaving `state` untouched when it is already the hovered one. */
+  def hover(target: Option[(PaneId, Buffer, CursorPosition)]): Transition[Unit] =
+    val hovered = target.map((paneId, buffer, cursor) => HoveredEditorTarget(paneId, buffer.id, cursor))
+    Transition.modify(state =>
+      if state.runtime.hoveredEditorTarget == hovered then state
+      else state.copy(runtime = state.runtime.copy(hoveredEditorTarget = hovered))
+    )
+
+  private def cursorAt(
+    click: MouseInputEvent,
+    state: AppState,
+    cache: MouseTargetCache,
+    paneId: PaneId,
+    contentRect: LayoutRect,
+    buffer: Buffer,
+    activeSnapshot: TextLayoutSnapshot
+  ): Option[CursorPosition] =
+    val vp = buffer.viewport
+    // Multi-column e-reader layout (issue #1338, Phase 2 / slice 5): a column-mode page carries one
+    // `ColumnSnapshotPlacement` per painted column. The click's cell column selects which one it lands in
+    // (its `xOffsetCells`/`columnWidthCells` band, inter-column gaps resolving to the nearer column), and
+    // from there the click resolves against *that* column's snapshot and x-origin -- not the shared
+    // (column-0) active snapshot every non-column consumer still reads. A non-column pane has no
+    // placements, so `snapshot`/`columnXOriginCells`/`columnWidthCells` stay the pane's own, leaving the
+    // single-column path below unchanged.
+    val placements         = cache.scene.columnSnapshotsFor(paneId)
+    val columnXCells       = (click.col - contentRect.x).max(0)
+    val placement          = MouseHitTestGeometry.columnPlacementForX(placements, columnXCells)
+    val snapshot           = placement.map(_.snapshot).getOrElse(activeSnapshot)
+    val columnXOriginCells = placement.map(_.xOffsetCells).getOrElse(0)
+    // Slice 2 reserves a line-number rail on each column's left, so the text starts `gutterWidthCells`
+    // past the band's left edge and wraps in the remaining width. A click therefore resolves against the
+    // text region, not the whole band. A non-column pane has no rail (`0`), leaving the single-column
+    // path below unchanged.
+    val columnGutterCells = placement.map(_.gutterWidthCells).getOrElse(0)
+    val columnTextWidthCells =
+      placement.map(p => (p.columnWidthCells - p.gutterWidthCells).max(1)).getOrElse(contentRect.width)
+    // A column's own snapshot is expressed in its own TEXT width (band minus rail), so its cell size is
+    // that text width per its own cell count; a non-column pane keeps the pane-width divisor it used.
+    val cellWidthDivisor = columnTextWidthCells
+    // With variable per-line heights a cell row no longer maps to a visual line, so reverse the click's
+    // pixel Y through the same cumulative row geometry the renderer used. Falls back to the cell row when
+    // there's no pixel Y (TUI) or the layout is uniform (cell mode).
+    val rowMetrics = TextRowMetrics(
+      contentRect = contentRect,
+      gridMetrics = MouseHitTestGeometry.floatingCellMetrics(state),
+      rowLineHeightPx = snapshot.lineHeightPx,
+      usesMeasuredLayout = snapshot.usesMeasuredLayout,
+      rowHeightsPx =
+        snapshot.visualLines.map(line => if line.heightPx > 0 then line.heightPx else snapshot.lineHeightPx)
+    )
+    val visualRow = click.pixelY match
+      case Some(pixelY) if snapshot.usesMeasuredLayout => rowMetrics.visualRowAt(pixelY)
+      case _                                           => (click.row - contentRect.y).max(0)
+    val cellWidthPx =
+      if cellWidthDivisor > 0 then snapshot.panelWidthPx.toFloat / cellWidthDivisor.toFloat else 1.0f
+    val columnOriginPx = (contentRect.x + columnXOriginCells + columnGutterCells) * cellWidthPx
+    val rawXPx = click.pixelX match
+      case Some(pixelX) => pixelX.toFloat - columnOriginPx
+      case None         => (columnXCells - columnXOriginCells - columnGutterCells) * cellWidthPx
+    // Clamp into the selected column's own text region: a click on its rail, in a gap, or off-page
+    // resolves to that column's near text edge rather than reaching into (or past) it.
+    val columnWidthPx = placement.map(_ => columnTextWidthCells * cellWidthPx).getOrElse(Float.MaxValue)
+    val xPx           = rawXPx.max(0.0f).min(columnWidthPx)
+    snapshot
+      .cursorForVisualRowAndXPx(visualRow, xPx.max(0.0f))
+      .orElse {
+        // Below the last rendered visual row (#1547): the click's X still lands inside a wrap
+        // group, so it must resolve against that group's LAST visual row -- reusing the raw
+        // click column as a direct offset into the logical line (as the line-count-only clamp
+        // below does) is only correct for a wrap group's first row, putting the cursor at the
+        // logical start of whatever line the click falls back to instead of its lowest row.
+        snapshot.visualLines.lastOption
+          .map(lastVisualLine =>
+            CursorPosition(lastVisualLine.bufferLine, lastVisualLine.nearestColumnForXPx(xPx.max(0.0f)))
+          )
+          .orElse {
+            val bufferLine  = (vp.topLine + visualRow).max(0)
+            val bufferCol   = (vp.leftColumn + (click.col - contentRect.x)).max(0)
+            val clampedLine = bufferLine.min(math.max(0, buffer.document.content.lineCount - 1))
+            val lineLen     = buffer.document.content.getLine(clampedLine).getOrElse("").length
+            Some(CursorPosition(clampedLine, bufferCol.min(lineLen)))
+          }
+      }
 
   def wordSelectionAtCursor(buffer: Buffer, cursor: CursorPosition): Option[Selection] =
     val source        = RopeCharacterSource(buffer.document.content)
@@ -174,26 +207,6 @@ final private[manager] class EditorMouseTargeting(port: EditorMouseTargetingPort
   private def offsetToCursorPosition(content: com.serenity.rope.Rope, offset: Int): CursorPosition =
     val (line, column) = content.offsetToLineColumn(offset)
     CursorPosition(line, column)
-
-  private def mouseTargetLayout(state: AppState, viewportSize: ViewportSize): IO[MouseTargetCache] =
-    val key = MouseTargetLayoutKey.from(state, viewportSize)
-    mouseTargetCacheRef.modify {
-      case Some(cache) if cache.layoutKey == key =>
-        val scene = AuthoritativeUiScene.forState(state, viewportSize)
-        val next  = if cache.scene eq scene then cache else cache.copy(scene = scene)
-        Some(next) -> next
-      case _ =>
-        val next = MouseTargetCache.fromState(state, viewportSize)
-        Some(next) -> next
-    }
-
-  private def mouseTargetSnapshot(
-    cache: MouseTargetCache,
-    paneId: PaneId
-  ): IO[TextLayoutSnapshot] =
-    cache.scene.textSnapshot(paneId) match
-      case Some(snapshot) => IO.pure(snapshot)
-      case None           => IO.raiseError(new IllegalStateException(s"missing text snapshot for pane $paneId"))
 
   final private case class RopeCharacterSource(content: com.serenity.rope.Rope) extends TextEditing.CharacterSource:
     override def length: Int =

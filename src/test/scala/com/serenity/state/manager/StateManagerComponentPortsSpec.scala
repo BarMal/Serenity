@@ -4,7 +4,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.keystroke.events.ResizeEvent
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, SurfaceId}
+import com.serenity.state.models.{AppState, CloseScope, SurfaceId}
 import com.serenity.state.reducers.{ReducerResult, WorkflowEffect}
 import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
@@ -57,6 +57,7 @@ class StateManagerComponentPortsSpec extends AnyFlatSpec with Matchers:
         def submitFile(surfaceId: SurfaceId): IO[Unit]        = calls.update(_ :+ s"file:$surfaceId")
         def openAsProjectRoot(surfaceId: SurfaceId): IO[Unit] = calls.update(_ :+ s"open-as-root:$surfaceId")
         def submitReplace(surfaceId: SurfaceId): IO[Unit]     = calls.update(_ :+ s"replace:$surfaceId")
+        def beginClose(scope: CloseScope): IO[Unit]           = calls.update(_ :+ s"begin-close:$scope")
         def submitClose(surfaceId: SurfaceId): IO[Unit]       = calls.update(_ :+ s"close:$surfaceId")
         def submitReloadConflict(surfaceId: SurfaceId): IO[Unit] =
           calls.update(_ :+ s"reload-conflict:$surfaceId")

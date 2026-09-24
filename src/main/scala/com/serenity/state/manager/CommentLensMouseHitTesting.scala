@@ -1,14 +1,19 @@
 package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
+import cats.syntax.all.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
+import com.serenity.state.reducers.{ReducerResult, Transition}
 
 /** State the event pipeline exposes for clicking inside the floating comment lens's body, as a capability record rather
   * than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is the only reason this needs
   * an interface at all, and a record fakes trivially without one (#1017).
   */
-final private[manager] case class CommentLensMouseHitTestingPort(stateRef: Ref[IO, AppState])
+final private[manager] case class CommentLensMouseHitTestingPort(
+    stateRef: Ref[IO, AppState],
+    applyReducerResult: (ReducerResult, AppState) => IO[Unit]
+)
 
 /** Routes a primary click that lands inside a *read-only* floating comment lens's body to the existing editable state
   * (#1222) -- the read-only display only reachable by clicking a highlighted comment range in floating display mode
@@ -23,14 +28,18 @@ final private[manager] case class CommentLensMouseHitTestingPort(stateRef: Ref[I
   * be a hit-testing surface with nothing for it to resolve differently than this existing check already does.
   */
 final private[manager] class CommentLensMouseHitTesting(port: CommentLensMouseHitTestingPort):
-  import port.*
 
   def handleCommentLensMouseClick(click: MouseClick, state: AppState): IO[Boolean] =
+    MouseTransition.commit(port.stateRef, port.applyReducerResult)(CommentLensMouseHitTesting.click(click, state))
+
+private[manager] object CommentLensMouseHitTesting:
+
+  def click(click: MouseClick, state: AppState): Transition[Boolean] =
     readOnlyLensClickedInBody(click, state) match
       case Some((surface, lens)) =>
-        stateRef.update(s => replaceLensMode(s, surface, lens.copy(mode = CommentLensMode.Editable))).as(true)
+        Transition.modify(replaceLensMode(_, surface, lens.copy(mode = CommentLensMode.Editable))).as(true)
       case None =>
-        IO.pure(false)
+        Transition.pure(false)
 
   private def readOnlyLensClickedInBody(
     click: MouseClick,

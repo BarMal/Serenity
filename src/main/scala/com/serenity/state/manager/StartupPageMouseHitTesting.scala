@@ -1,25 +1,37 @@
 package com.serenity.state.manager
 
-import cats.effect.IO
+import cats.effect.{IO, Ref}
+import cats.syntax.all.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
+import com.serenity.state.reducers.{AppEffect, ReducerResult, Transition}
 
 /** State the event pipeline exposes for routing a primary click on the startup page's launch actions, as a capability
   * record rather than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is the only
   * reason this needs an interface at all, and a record fakes trivially without one (#1017).
   */
 final private[manager] case class StartupPageMouseHitTestingPort(
-    executeCommand: com.serenity.command.Command => IO[Unit]
+    stateRef: Ref[IO, AppState],
+    applyReducerResult: (ReducerResult, AppState) => IO[Unit]
 )
 
 /** Hit-tests a primary click against the startup page's launch actions and, on a hit, executes the selected action's
   * command.
   */
 final private[manager] class StartupPageMouseHitTesting(port: StartupPageMouseHitTestingPort):
-  import port.*
 
   def handleStartupPageMouseClick(click: MouseClick, state: AppState): IO[Boolean] =
-    val action = state.startPageSurface.flatMap { surface =>
+    MouseTransition.commit(port.stateRef, port.applyReducerResult)(StartupPageMouseHitTesting.click(click, state))
+
+private[manager] object StartupPageMouseHitTesting:
+
+  def click(click: MouseClick, state: AppState): Transition[Boolean] =
+    launchActionAt(click, state).fold(Transition.pure(false))(action =>
+      Transition.emit(AppEffect.ExecuteCommand(action.command)).as(true)
+    )
+
+  private def launchActionAt(click: MouseClick, state: AppState): Option[StartupAction] =
+    state.startPageSurface.flatMap { surface =>
       surface.content match
         case SurfaceContent.StartPage(page) =>
           for
@@ -33,4 +45,3 @@ final private[manager] class StartupPageMouseHitTesting(port: StartupPageMouseHi
         case _ =>
           None
     }
-    action.fold(IO.pure(false))(selected => executeCommand(selected.command).as(true))

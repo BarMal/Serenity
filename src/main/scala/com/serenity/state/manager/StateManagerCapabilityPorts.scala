@@ -110,8 +110,7 @@ private[manager] trait EventStatePort:
   */
 final private[manager] case class EventEffectPort(
     interpretEffect: com.serenity.state.reducers.AppEffect => IO[Unit],
-    interpretCommand: (com.serenity.command.Command, AppState) => IO[Unit],
-    executeCommand: com.serenity.command.Command => IO[Unit]
+    interpretCommand: (com.serenity.command.Command, AppState) => IO[Unit]
 )
 
 /** Workflow operations requested by event routing. */
