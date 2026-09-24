@@ -266,7 +266,7 @@ private[manager] class StateManagerComposition(
 
   private val viewport =
     new StateManagerViewportCapability(stateRef, logger, deviceTextScaleProvider, events, effects)
-  private val files = new StateManagerFileCapability(stateRef, effects)
+  private val files = new StateManagerFileCapability(stateRef, effects, events.dispatch)
 
   // PaneManager's methods are excluded from the facade export and re-assembled into the `paneManager` record below,
   // since #1017 replaces the mixed-in trait with a field. They stay public on the capability classes so this

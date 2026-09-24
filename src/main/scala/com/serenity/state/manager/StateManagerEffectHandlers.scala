@@ -17,6 +17,14 @@ import com.serenity.state.reducers.*
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.theme.config.ThemeConfigWriter
 
+/** A buffer's file seen on disk at a revision other than the one the buffer held when it was read (#1623). */
+final private[manager] case class ExternalRevisionObservation(
+    bufferId: BufferId,
+    path: Path,
+    bufferRevision: Option[com.serenity.io.DocumentRevision],
+    onDisk: com.serenity.io.DocumentRevision
+)
+
 /** Owns ordered I/O interpretation for reducer effects. */
 final private[manager] class StateManagerEffectHandlers(
     runtime: EffectRuntimePort,
@@ -387,39 +395,47 @@ final private[manager] class StateManagerEffectHandlers(
   private def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)
 
-  /** Re-checks the focused buffer's on-disk revision against its captured one (#1623), called on window focus-gain. */
-  private[manager] def checkExternalChangesOnFocusEffect: IO[Unit] =
+  /** Reads the focused buffer's on-disk revision (#1623), for the window focus-gain re-check. Runs off the dispatcher;
+    * the decision is `resolveExternalRevisionEffect`'s.
+    */
+  private[manager] def observeFocusedExternalRevisionEffect: IO[Option[ExternalRevisionObservation]] =
+    stateRef.get.flatMap(_.focusedBufferId.flatTraverse(observeExternalRevisionEffect))
+
+  /** Reads one buffer's on-disk revision (#1623) when it differs from the revision the buffer holds -- the blocking half
+    * of the check both the focus-gain callback and `AppRuntime.externalChangeWatchLoop` drive, run off the dispatcher.
+    */
+  private[manager] def observeExternalRevisionEffect(bufferId: BufferId): IO[Option[ExternalRevisionObservation]] =
     stateRef.get.flatMap { state =>
-      state.focusedBufferId match
-        case Some(bufferId) => checkBufferForExternalChangesEffect(bufferId)
-        case None           => IO.unit
+      state.persisted.buffers.get(bufferId).flatMap(buffer => buffer.document.filePath.map(buffer -> _)) match
+        case Some((buffer, path)) =>
+          fileManager.currentRevision(path).map {
+            case Some(onDisk) if Some(onDisk) != buffer.document.revision =>
+              Some(ExternalRevisionObservation(bufferId, path, buffer.document.revision, onDisk))
+            case _ => None
+          }
+        case None => IO.none
     }
 
-  /** Re-checks one buffer's on-disk revision against its captured one (#1623) -- the shared decision both the
-    * focus-gain check and `FileChangeWatcher`'s background poll loop (`AppRuntime.externalChangeWatchLoop`) drive. A
-    * clean buffer (no unsaved edits) that changed externally is reloaded silently -- there's nothing of the user's to
-    * lose. A dirty one is left alone but prompted, exactly like a stale save: the user decides whether to keep their
-    * edits or take the external change.
+  /** Decides an external change on the dispatcher. An observation whose buffer has since been saved, reloaded, closed
+    * or re-pathed is stale and dropped: a save's own disk write is not an external change, and the watcher sees the
+    * file again on its next poll anyway. A clean buffer is reloaded silently; a dirty one is prompted, exactly like a
+    * stale save.
     */
-  private[manager] def checkBufferForExternalChangesEffect(bufferId: BufferId): IO[Unit] =
+  private[manager] def resolveExternalRevisionEffect(observation: ExternalRevisionObservation): IO[Unit] =
     stateRef.get.flatMap { state =>
-      state.persisted.buffers.get(bufferId) match
-        case Some(buffer) =>
-          buffer.document.filePath match
-            case Some(path) =>
-              fileManager.currentRevision(path).flatMap {
-                case Some(onDisk) if Some(onDisk) != buffer.document.revision =>
-                  if buffer.hasUnsavedChanges then
-                    // A blocking modal already up (most likely this same buffer's own reload-conflict prompt,
-                    // re-triggered by another poll cycle or focus-gain before the user answered the first one)
-                    // must not get a second one stacked on top of it -- code review finding on PR #1664.
-                    if state.hasBlockingModal then IO.unit
-                    else openReloadConflictModal(state, buffer.id, bufferLabelFor(buffer))
-                  else reloadBuffer(buffer.id)
-                case _ => IO.unit
-              }
-            case None => IO.unit
-        case None => IO.unit
+      state.persisted.buffers
+        .get(observation.bufferId)
+        .filter(buffer =>
+          buffer.document.filePath.contains(observation.path) &&
+            buffer.document.revision == observation.bufferRevision
+        ) match
+        case Some(buffer) if buffer.hasUnsavedChanges =>
+          // A blocking modal already up (most likely this buffer's own reload-conflict prompt from an earlier poll or
+          // focus-gain) must not get a second one stacked on top of it -- code review finding on PR #1664.
+          if state.hasBlockingModal then IO.unit
+          else openReloadConflictModal(state, buffer.id, bufferLabelFor(buffer))
+        case Some(buffer) => reloadBuffer(buffer.id)
+        case None         => IO.unit
     }
 
   /** The paths of every currently open local buffer, for `FileChangeWatcher.sync`'s directory set -- `AppRuntime`'s

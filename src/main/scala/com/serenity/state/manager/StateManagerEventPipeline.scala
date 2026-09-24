@@ -58,10 +58,9 @@ final private[manager] class StateManagerEventPipeline(
       case Nil => cats.effect.IO.unit
       case pendingOperations =>
         pendingOperations.traverse_ {
-          // Already running inside `applyEvent`'s locked dispatch (drained from an effect interpreted during that
-          // same call, on the same fiber) -- replays via `applyEventLocked` directly, never the public `applyEvent`,
-          // which would try to re-acquire the non-reentrant dispatch lock this call already holds and self-deadlock.
-          case StateManagerOperation.Event(event)                       => applyEventLocked(event)
+          // Already on the dispatcher: offering through the public `applyEvent` would queue behind this very dispatch
+          // and deadlock waiting for it.
+          case StateManagerOperation.Event(event)                       => applyEventOnDispatcher(event)
           case StateManagerOperation.ApplyAnimationHooks(previousState) => applyAnimationHooks(previousState)
         } >> drainPendingOperations
     }
@@ -156,14 +155,17 @@ final private[manager] class StateManagerEventPipeline(
     tabBarDragHitTesting
   )
 
-  /** Serialized against every other top-level call into the pipeline (#1570) -- see
-    * `StateManagerOperationBoundary.serializeDispatch`. A call already inside a dispatch must use `applyEventLocked`
-    * directly instead of recursing back through here.
+  /** Offers `event` to the state dispatcher and returns once it has been applied (#1570, #1697). Never called from
+    * code already on the dispatcher -- follow-up events enqueued there are replayed by `drainPendingOperations`.
     */
   def applyEvent(event: Event): cats.effect.IO[Unit] =
-    operations.serializeDispatch(applyEventLocked(event))
+    operations.dispatch(applyEventOnDispatcher(event))
 
-  private def applyEventLocked(event: Event): cats.effect.IO[Unit] =
+  /** Runs a state decision on the dispatcher, replaying whatever operations it enqueues there too. */
+  def dispatch(decision: cats.effect.IO[Unit]): cats.effect.IO[Unit] =
+    operations.dispatch(decision >> drainPendingOperations)
+
+  private def applyEventOnDispatcher(event: Event): cats.effect.IO[Unit] =
     given org.typelevel.log4cats.Logger[cats.effect.IO] = logger
     def eventLabel                                      = s"event.${event.getClass.getSimpleName}"
     Trace.timed(eventLabel) {

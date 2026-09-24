@@ -205,7 +205,7 @@ final case class FileService(
     checkUnsavedChanges: Option[BufferId] => IO[Boolean],
     getRecentFiles: IO[List[Path]],
     // #1623: re-checks the focused buffer's on-disk revision on window focus-gain, called from AppRuntime's focus
-    // callback -- see StateManagerEffectHandlers.checkExternalChangesOnFocusEffect for the reload-or-prompt logic.
+    // callback -- see StateManagerEffectHandlers.resolveExternalRevisionEffect for the reload-or-prompt logic.
     checkExternalChangesOnFocus: IO[Unit],
     // #1623: the background counterpart -- AppRuntime's FileChangeWatcher poll loop calls openBufferPaths each cycle
     // to keep its watched directory set current, then checkBufferForExternalChanges for whichever buffers' files a

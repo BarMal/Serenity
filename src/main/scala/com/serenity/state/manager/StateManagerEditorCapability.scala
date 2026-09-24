@@ -44,7 +44,7 @@ final private[manager] class StateManagerEditorCapability(
     stateRef.update(update)
 
   def updateStateValidated(update: AppState => AppState): IO[Unit] =
-    stateRef.get.flatMap(state => validateAndUpdateState(update(state), state))
+    operations.dispatch(stateRef.get.flatMap(state => validateAndUpdateState(update(state), state)))
 
   def updateBufferAnimations(
     update: Map[BufferId, com.serenity.animation.AnimationState] => Map[BufferId, com.serenity.animation.AnimationState]
@@ -75,56 +75,66 @@ final private[manager] class StateManagerEditorCapability(
             !hasTypingActivity
         then IO.pure(false)
         else
-          // `stateRef.modify`, not a `set` built from the `state` read above: this tick runs on the render loop's own
-          // fiber, concurrently with `AppRuntime.inputEventPhase`'s fiber applying a keystroke (or the quit
-          // transition) to the same ref (#1564). A `set` computed from a stale snapshot would silently overwrite
-          // whatever the input fiber committed in the meantime -- observed as a dropped keystroke, or the whole
-          // runtime wedged because the quit signal it clobbered never landed. Recomputing from `current` inside
-          // `modify` keeps this tick's write atomic with that concurrent one instead of blindly replacing it.
-          for
-            newState <- stateRef.modify { current =>
-              val updatedTransition = current.runtime.themeTransition.map(_.advance).filterNot(_.isComplete)
-              val advancedCompanionSprite =
-                if hasCompanionSprite then
-                  current.runtime.companionSprite
-                    .tick(companionSpriteRandom, reducedRate = flairLevel == VisualFlairLevel.Reduced)
-                else current.runtime.companionSprite
-              val updatedColumnTransitions =
-                current.runtime.columnTransitions.view.mapValues(_.advance).toMap.filterNot(_._2.isComplete)
-              val stateWithAdvancedBuffers = current.copy(
-                persisted = current.persisted.copy(
-                  buffers = current.persisted.buffers.view
-                    .mapValues(advanceCursorGlides andThen advanceSelectionGeometries)
-                    .toMap
-                ),
-                runtime = current.runtime.copy(
-                  themeTransition = updatedTransition,
-                  typingActivity = current.runtime.typingActivity.advance,
-                  companionSprite = advancedCompanionSprite,
-                  columnTransitions = updatedColumnTransitions
-                )
-              )
-              val next = animations.advancePanelGeometry(animations.advanceSurfaceAnimations(stateWithAdvancedBuffers))
-              (next, next)
-            }
-            updatedBufferAnimations <- bufferAnimationsRef.updateAndGet(_.map {
-              case (id, animations) =>
-                val advanced = newState.persisted.buffers.get(id) match
-                  case Some(buffer) => animations.advanceAllAnimations(isWithinViewport(buffer.viewport))
-                  case None         => animations
-                id -> advanced
-            })
-          yield newState.persisted.buffers.keys
-            .exists(id => updatedBufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
-            newState.runtime.themeTransition.isDefined ||
-            newState.runtime.surfaceAnimations.nonEmpty ||
-            newState.runtime.columnTransitions.nonEmpty ||
-            newState.runtime.panelGeometry.nonEmpty ||
-            newState.persisted.buffers.values.exists(hasInFlightGlide) ||
-            newState.persisted.buffers.values.exists(hasInFlightSelectionGeometry) ||
-            newState.runtime.typingActivity.isActive ||
-            hasCompanionSprite
+          // A dispatch in flight would commit a state built from its own earlier snapshot over this tick's write
+          // (#1564), and waiting for it would stall the render loop behind its I/O -- so skip this tick and report
+          // still-active so the next frame retries.
+          IO(companionSpriteRandom.nextLong()).flatMap { companionSpriteSeed =>
+            operations
+              .runIfDispatcherIdle(advanceOneTick(hasCompanionSprite, flairLevel, companionSpriteSeed))
+              .map(_.getOrElse(true))
+          }
     yield stillActive
+
+  private def advanceOneTick(
+    hasCompanionSprite: Boolean,
+    flairLevel: VisualFlairLevel,
+    companionSpriteSeed: Long
+  ): IO[Boolean] =
+    // `modify` rather than a `set`: writers outside the dispatcher (`updateState`, the buffer/panel records) still
+    // exist, and `modify` keeps this tick atomic with them. It may retry, so everything it reads is passed in.
+    for
+      newState <- stateRef.modify { current =>
+        val updatedTransition = current.runtime.themeTransition.map(_.advance).filterNot(_.isComplete)
+        val advancedCompanionSprite =
+          if hasCompanionSprite then
+            current.runtime.companionSprite
+              .tick(new Random(companionSpriteSeed), reducedRate = flairLevel == VisualFlairLevel.Reduced)
+          else current.runtime.companionSprite
+        val updatedColumnTransitions =
+          current.runtime.columnTransitions.view.mapValues(_.advance).toMap.filterNot(_._2.isComplete)
+        val stateWithAdvancedBuffers = current.copy(
+          persisted = current.persisted.copy(
+            buffers = current.persisted.buffers.view
+              .mapValues(advanceCursorGlides andThen advanceSelectionGeometries)
+              .toMap
+          ),
+          runtime = current.runtime.copy(
+            themeTransition = updatedTransition,
+            typingActivity = current.runtime.typingActivity.advance,
+            companionSprite = advancedCompanionSprite,
+            columnTransitions = updatedColumnTransitions
+          )
+        )
+        val next = animations.advancePanelGeometry(animations.advanceSurfaceAnimations(stateWithAdvancedBuffers))
+        (next, next)
+      }
+      updatedBufferAnimations <- bufferAnimationsRef.updateAndGet(_.map {
+        case (id, animations) =>
+          val advanced = newState.persisted.buffers.get(id) match
+            case Some(buffer) => animations.advanceAllAnimations(isWithinViewport(buffer.viewport))
+            case None         => animations
+          id -> advanced
+      })
+    yield newState.persisted.buffers.keys
+      .exists(id => updatedBufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
+      newState.runtime.themeTransition.isDefined ||
+      newState.runtime.surfaceAnimations.nonEmpty ||
+      newState.runtime.columnTransitions.nonEmpty ||
+      newState.runtime.panelGeometry.nonEmpty ||
+      newState.persisted.buffers.values.exists(hasInFlightGlide) ||
+      newState.persisted.buffers.values.exists(hasInFlightSelectionGeometry) ||
+      newState.runtime.typingActivity.isActive ||
+      hasCompanionSprite
 
   /** Caret-glide (issue #1085 phase 2): whether `buffer` has any cursor with a glide still mid-flight -- checked before
     * paying the cost of advancing every buffer's cursors on a tick that has nothing else to do either.
