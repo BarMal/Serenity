@@ -155,8 +155,8 @@ final private[manager] class StateManagerEventPipeline(
     tabBarDragHitTesting
   )
 
-  /** Offers `event` to the state dispatcher and returns once it has been applied (#1570, #1697). Never called from
-    * code already on the dispatcher -- follow-up events enqueued there are replayed by `drainPendingOperations`.
+  /** Offers `event` to the state dispatcher and returns once it has been applied (#1570, #1697). Never called from code
+    * already on the dispatcher -- follow-up events enqueued there are replayed by `drainPendingOperations`.
     */
   def applyEvent(event: Event): cats.effect.IO[Unit] =
     operations.dispatch(applyEventOnDispatcher(event))

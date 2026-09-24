@@ -213,7 +213,7 @@ private[manager] object StateManagerOperationBoundary:
       documentAnalysisInputsRef      <- Ref.of[IO, Option[Map[String, SpellCheckFingerprint]]](None)
       findSearchFiberRef             <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
       markdownPreviewCommitFibersRef <- Ref.of[IO, Map[BufferId, Fiber[IO, Throwable, Unit]]](Map.empty)
-      dispatcher                     <- StateManagerDispatcher.start(logger)
+      dispatcher                     <- StateManagerDispatcher.create(logger)
     yield new StateManagerOperationBoundary(
       pendingOperations,
       stateRef,

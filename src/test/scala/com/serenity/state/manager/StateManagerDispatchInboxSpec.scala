@@ -5,9 +5,9 @@ import java.nio.file.{Files, Path}
 import scala.concurrent.duration.*
 import scala.util.Random
 
+import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, Fiber, IO, Ref}
-import cats.effect.std.Semaphore
 import cats.syntax.all.*
 import com.serenity.animation.AnimationState
 import com.serenity.config.PreferredWindowSize
@@ -250,14 +250,14 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
     after.runtime.modalStack shouldBe empty
     after.focusedBufferId.flatMap(after.persisted.buffers.get).map(_.hasUnsavedChanges) shouldBe Some(false)
 
-  "The #1623 watcher check" should "not open a reload conflict for a save that has written the disk but not committed" in {
+  "The #1623 watcher check" should "not open a reload conflict for a save that has written the disk but not committed" in
     assertCleanWithoutConflict(
-      raceExternalChangeCheckAgainstSave(race => race.stateManager.fileService.checkBufferForExternalChanges(race.bufferId))
+      raceExternalChangeCheckAgainstSave(race =>
+        race.stateManager.fileService.checkBufferForExternalChanges(race.bufferId)
+      )
     )
-  }
 
-  "The #1623 focus-in check" should "not open a reload conflict for a save that has written the disk but not committed" in {
+  "The #1623 focus-in check" should "not open a reload conflict for a save that has written the disk but not committed" in
     assertCleanWithoutConflict(
       raceExternalChangeCheckAgainstSave(race => race.stateManager.fileService.checkExternalChangesOnFocus)
     )
-  }

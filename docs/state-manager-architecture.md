@@ -33,7 +33,9 @@ alone consumes the operation boundary; effect handlers and their surface/workflo
 depend on the event pipeline or effect handlers.
 
 Event dispatch is serialized by a single inbox (`StateManagerDispatcher`, first slice of
-`docs/state-architecture-target.md`): one `Queue` consumed by one dispatcher fiber that runs requests one at a time.
+`docs/state-architecture-target.md`): one `Queue` consumed by a single dispatcher fiber that runs requests one at a
+time. The fiber is started by the first offer into an idle inbox and exits when the inbox drains, so it needs no
+owning `Resource`.
 `applyEvent` and `updateStateValidated` offer their work and wait for it to be applied. Background work (find search,
 markdown-preview commit, document analysis) runs off the dispatcher and *posts* its state update instead of writing
 the state itself. The external-change check (#1623) reads the disk off the dispatcher and decides on it, dropping an

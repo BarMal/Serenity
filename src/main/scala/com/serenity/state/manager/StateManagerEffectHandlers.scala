@@ -401,8 +401,9 @@ final private[manager] class StateManagerEffectHandlers(
   private[manager] def observeFocusedExternalRevisionEffect: IO[Option[ExternalRevisionObservation]] =
     stateRef.get.flatMap(_.focusedBufferId.flatTraverse(observeExternalRevisionEffect))
 
-  /** Reads one buffer's on-disk revision (#1623) when it differs from the revision the buffer holds -- the blocking half
-    * of the check both the focus-gain callback and `AppRuntime.externalChangeWatchLoop` drive, run off the dispatcher.
+  /** Reads one buffer's on-disk revision (#1623) when it differs from the revision the buffer holds -- the blocking
+    * half of the check both the focus-gain callback and `AppRuntime.externalChangeWatchLoop` drive, run off the
+    * dispatcher.
     */
   private[manager] def observeExternalRevisionEffect(bufferId: BufferId): IO[Option[ExternalRevisionObservation]] =
     stateRef.get.flatMap { state =>
