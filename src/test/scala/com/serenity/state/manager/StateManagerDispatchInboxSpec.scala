@@ -101,7 +101,8 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       )
       animations = new AnimationChoreography(new AnimationChoreographyPort:
         val stateRef            = sharedStateRef
-        val bufferAnimationsRef = bufferAnimations)
+        val bufferAnimationsRef = bufferAnimations
+        export operations.validateAndUpdateState)
       editor = new StateManagerEditorCapability(
         sharedStateRef,
         lspQueue,

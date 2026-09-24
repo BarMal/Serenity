@@ -1,7 +1,6 @@
 package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
-import cats.syntax.foldable.*
 import com.serenity.animation.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.state.models.*
@@ -12,68 +11,81 @@ import com.serenity.ui.theme.config.ColorParser.transparent
 private[manager] trait AnimationChoreographyPort:
   def stateRef: Ref[IO, AppState]
   def bufferAnimationsRef: Ref[IO, Map[BufferId, AnimationState]]
+  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
 
 /** Drives command-runner and pinned-panel open/close/transition animations, the buffer sweep animation used for
   * tab-cycling, and advances all in-flight surface animations by one tick. This orchestrates the existing
   * motion/animation model from `com.serenity.animation` (`AnimationState`, `ElementTransitionPlanner`/`Lowerer`,
   * `Tween`, etc. -- landed via #846/#874, #1574) against `AppState`'s surface-animation runtime state; it does not
-  * introduce a competing duration/easing/animation abstraction of its own.
+  * introduce a competing duration/easing/animation abstraction of its own. The choreography itself is the pure
+  * companion object; this class only reads the refs and commits its results.
   */
 final private[manager] class AnimationChoreography(port: AnimationChoreographyPort):
   import port.*
 
   def applyPaneFlowAnimation(sweep: SweepDirection): IO[Unit] =
-    stateRef.get.flatMap { state =>
-      val animOpt = for
-        config <- state.persisted.config.scaledUiAnimation
-        paneId <- state.persisted.layout.activeEditorPaneId
-        pane   <- state.persisted.layout.editorPanes.get(paneId)
-        buffId <- pane.bufferId
-        buffer <- state.persisted.buffers.get(buffId)
-        cells = VisibleBufferAnimationCells.fromBuffer(
-          buffer,
-          state.persisted.config.surfaceConfig.wordWrapEnabled,
-          state.persisted.theme.background,
-          state.persisted.theme.foreground
-        )
-        if cells.nonEmpty
-      yield
-        val animated = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, sweep, config.steps)
-        val uiAnimations =
-          animated.view.mapValues(_.copy(owner = AnimationOwner.UiTransitions)).toMap
-        buffId -> ((animations: AnimationState) =>
-          animations
-            .clear(AnimationOwner.UiTransitions)
-            .mergeUiTransitionAnimations(uiAnimations)
-        )
-      animOpt match
-        case Some((buffId, f)) =>
-          bufferAnimationsRef.update(map => map.updated(buffId, f(map.getOrElse(buffId, AnimationState.empty))))
-        case None => IO.unit
-    }
+    stateRef.get.flatMap(state => bufferAnimationsRef.update(AnimationChoreography.withPaneFlowAnimation(state, sweep)))
 
   def applyAnimationHooks(prevState: AppState): IO[Unit] =
     if !shouldApplySurfaceAnimationHooks(prevState) then IO.unit
     else
-      stateRef.get.flatMap { currentState =>
-        val prevSurfaces    = animatedCommandSurfaces(prevState)
-        val currentSurfaces = animatedCommandSurfaces(currentState)
-        val openedSurfaces =
-          currentSurfaces.filter(surface => !prevSurfaces.exists(_.id == surface.id))
-        val closedSurfaces =
-          prevSurfaces.filter(surface => !currentSurfaces.exists(_.id == surface.id))
-        val prevPanels    = animatedPanelSurfaces(prevState)
-        val currentPanels = animatedPanelSurfaces(currentState)
-        val openedPanels =
-          currentPanels.filter(surface => !prevPanels.exists(_.id == surface.id))
-        val closedPanels =
-          prevPanels.filter(surface => !currentPanels.exists(_.id == surface.id))
+      stateRef.get.flatMap(currentState =>
+        AnimationChoreography
+          .animateSurfaceTransitions(prevState, currentState)
+          .fold(IO.unit)(validateAndUpdateState(_, currentState))
+      )
 
-        openedSurfaces.traverse_(surface => applyCommandRunnerOpenAnimation(surface, currentState)) >>
-          closedSurfaces.traverse_(surface => applyCommandRunnerCloseAnimation(surface, prevState)) >>
-          openedPanels.traverse_(surface => applyPinnedPanelOpenAnimation(surface)) >>
-          closedPanels.traverse_(surface => applyPinnedPanelCloseAnimation(surface, prevState))
-      }
+  def shouldApplySurfaceAnimationHooks(state: AppState): Boolean =
+    AnimationChoreography.shouldApplySurfaceAnimationHooks(state)
+
+  def advanceSurfaceAnimations(state: AppState): AppState = AnimationChoreography.advanceSurfaceAnimations(state)
+
+  def advancePanelGeometry(state: AppState): AppState = AnimationChoreography.advancePanelGeometry(state)
+
+private[manager] object AnimationChoreography:
+
+  def withPaneFlowAnimation(state: AppState, sweep: SweepDirection)(
+    bufferAnimations: Map[BufferId, AnimationState]
+  ): Map[BufferId, AnimationState] =
+    val sweptBuffer = for
+      config <- state.persisted.config.scaledUiAnimation
+      paneId <- state.persisted.layout.activeEditorPaneId
+      pane   <- state.persisted.layout.editorPanes.get(paneId)
+      buffId <- pane.bufferId
+      buffer <- state.persisted.buffers.get(buffId)
+      cells = VisibleBufferAnimationCells.fromBuffer(
+        buffer,
+        state.persisted.config.surfaceConfig.wordWrapEnabled,
+        state.persisted.theme.background,
+        state.persisted.theme.foreground
+      )
+      if cells.nonEmpty
+    yield
+      val animated = FlowAnimationBuilder.build(cells, FlowDirection.ByColumn, sweep, config.steps)
+      buffId -> animated.view.mapValues(_.copy(owner = AnimationOwner.UiTransitions)).toMap
+    sweptBuffer.fold(bufferAnimations) { (buffId, uiAnimations) =>
+      val animations = bufferAnimations.getOrElse(buffId, AnimationState.empty)
+      bufferAnimations.updated(
+        buffId,
+        animations.clear(AnimationOwner.UiTransitions).mergeUiTransitionAnimations(uiAnimations)
+      )
+    }
+
+  /** The state after seeding open/close animations for every command surface and docked panel that appeared or
+    * disappeared between `prevState` and `currentState`; `None` when nothing did, or when no hook applies.
+    */
+  def animateSurfaceTransitions(prevState: AppState, currentState: AppState): Option[AppState] =
+    val (openedSurfaces, closedSurfaces) =
+      openedAndClosed(animatedCommandSurfaces(prevState), animatedCommandSurfaces(currentState))
+    val (openedPanels, closedPanels) =
+      openedAndClosed(animatedPanelSurfaces(prevState), animatedPanelSurfaces(currentState))
+    val transitions: List[AppState => AppState] =
+      openedSurfaces.map(surface => withCommandRunnerOpenAnimation(surface, currentState)) ++
+        closedSurfaces.map(surface => withCommandRunnerCloseAnimation(surface, prevState)) ++
+        openedPanels.map(surface => PinnedPanelAnimations.open(surface, _)) ++
+        closedPanels.map(surface => PinnedPanelAnimations.close(surface, prevState, _))
+    if transitions.isEmpty || !shouldApplySurfaceAnimationHooks(prevState) then None
+    else Some(transitions.foldLeft(currentState)((state, transition) => transition(state)))
 
   def shouldApplySurfaceAnimationHooks(state: AppState): Boolean =
     state.runtime.surfaceAnimations.nonEmpty ||
@@ -81,10 +93,19 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
       state.persisted.config.pinnedPanelTransitionSettings.enabled ||
       state.persisted.config.scaledPanelGeometryAnimation.isDefined
 
-  private def applyCommandRunnerOpenAnimation(surface: UiSurface, state: AppState): IO[Unit] =
+  private def openedAndClosed(
+    previous: List[UiSurface],
+    current: List[UiSurface]
+  ): (List[UiSurface], List[UiSurface]) =
+    (
+      current.filter(surface => !previous.exists(_.id == surface.id)),
+      previous.filter(surface => !current.exists(_.id == surface.id))
+    )
+
+  private def withCommandRunnerOpenAnimation(surface: UiSurface, state: AppState): AppState => AppState =
     state.persisted.config.scaledCommandRunnerAnimation match
       case Some(config) if !config.isDisabled =>
-        stateRef.update { s =>
+        (s: AppState) =>
           val steps         = config.steps
           val tSize         = s.runtime.viewportSize.getOrElse(ViewportSize(80, 24))
           val layout        = LayoutEngine.calculateLayoutWithUI(s, tSize)
@@ -134,11 +155,8 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
               )
             )
           }
-        }
       case _ =>
-        stateRef.update(s =>
-          s.copy(runtime = s.runtime.copy(surfaceAnimations = s.runtime.surfaceAnimations - surface.id))
-        )
+        (s: AppState) => s.copy(runtime = s.runtime.copy(surfaceAnimations = s.runtime.surfaceAnimations - surface.id))
 
   private def commandRunnerFadeInAnimation(
     overlayHeight: Int,
@@ -183,13 +201,10 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
         .toMap
     ElementTransitionCells(frame = Map(borderCell), content = contentCells)
 
-  private def applyCommandRunnerCloseAnimation(
-    closedSurface: UiSurface,
-    prevState: AppState
-  ): IO[Unit] =
+  private def withCommandRunnerCloseAnimation(closedSurface: UiSurface, prevState: AppState): AppState => AppState =
     prevState.persisted.config.scaledCommandRunnerAnimation match
       case Some(config) if !config.isDisabled =>
-        stateRef.update { s =>
+        (s: AppState) =>
           val steps = config.steps
           val tSize = prevState.runtime.viewportSize.orElse(s.runtime.viewportSize).getOrElse(ViewportSize(80, 24))
           val previousLayout = LayoutEngine.calculateLayoutWithUI(prevState, tSize)
@@ -247,11 +262,9 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
                 + (ghostId -> ghostAnimState)
             )
           )
-        }
       case _ =>
-        stateRef.update(s =>
+        (s: AppState) =>
           s.copy(runtime = s.runtime.copy(surfaceAnimations = s.runtime.surfaceAnimations - closedSurface.id))
-        )
 
   private def animatedCommandSurfaces(state: AppState): List[UiSurface] =
     state.runtime.uiSurfaces.filter {
@@ -279,12 +292,6 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
         case SurfacePresentation.Docked => true
         case _                          => false
     }
-
-  private def applyPinnedPanelOpenAnimation(surface: UiSurface): IO[Unit] =
-    stateRef.update(state => PinnedPanelAnimations.open(surface, state))
-
-  private def applyPinnedPanelCloseAnimation(closedSurface: UiSurface, prevState: AppState): IO[Unit] =
-    stateRef.update(state => PinnedPanelAnimations.close(closedSurface, prevState, state))
 
   private def completedFadeSteps(totalFadeFrames: Int, remainingFrames: Int): Int =
     (totalFadeFrames - remainingFrames + 1).max(1)
