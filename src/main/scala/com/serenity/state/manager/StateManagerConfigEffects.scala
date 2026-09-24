@@ -116,7 +116,8 @@ final private[manager] class StateManagerConfigEffects(
       )
     else state
 
-  private val motionCancellation = StateManagerMotionCancellation(stateRef, bufferAnimationsRef)
+  private val motionCancellation =
+    StateManagerMotionCancellation(stateRef, bufferAnimationsRef, editor.validateAndUpdateState)
 
   private def updateCustomMotionConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     updateMotionConfig(config => update(config).withCustomMotionBaseline)

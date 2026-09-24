@@ -36,7 +36,12 @@ class StateManagerSelectionGeometryCancellationSpec extends AnyFlatSpec with Mat
       val geometry = SelectionGeometryState(List(SelectionLineGeometry(SelectionLineKey(0, 0), tween)))
       val cursor   = Cursor(CursorPosition(0, 0), Some(CursorPosition(0, 0)), selectionGeometry = Some(geometry))
       val buffer   = Buffer.fromString(bufferId, "hello world").copy(editing = EditingState.fromCursors(List(cursor)))
-      state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
+      // Advances `nextBufferId` past the seeded buffer, as a real allocation would: cancellation now commits through
+      // validation, which rejects a state whose next buffer ID collides with a live one.
+      state.copy(
+        persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)),
+        runtime = state.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
+      )
     }.unsafeRunSync()
 
   "disabling motion accessibility" should "cancel every in-flight selection geometry" in {

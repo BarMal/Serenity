@@ -1,152 +1,150 @@
 package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
-import cats.syntax.all.*
-import com.serenity.config.AppConfig
+import com.serenity.animation.{AnimationOwner, AnimationState}
+import com.serenity.config.{AppConfig, MotionFamily}
 import com.serenity.state.models.*
 
 /** Cancels in-flight animation state for one or every motion family, called whenever a config change turns a
-  * previously-enabled family off (`StateManagerConfigEffects.updateMotionConfig`'s `cancelDisabledMotion` call). Split
-  * out of `StateManagerConfigEffects` (which otherwise crossed this session's architecture ratchet) as its own
-  * self-contained cluster -- everything here is either called from [[cancelDisabledMotion]] or from another method in
-  * this same file.
+  * previously-enabled family off (`StateManagerConfigEffects.updateMotionConfig`'s `cancelDisabledMotion` call). The
+  * decision and its effect on state are the pure [[MotionCancellation]]; this shell reads, applies and commits it.
   */
 final private[manager] class StateManagerMotionCancellation(
     stateRef: Ref[IO, AppState],
-    bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]]
+    bufferAnimationsRef: Ref[IO, Map[BufferId, AnimationState]],
+    validateAndUpdateState: (AppState, AppState) => IO[Unit]
 ):
 
-  def cancelActiveMotion(): IO[Unit] =
-    clearBufferAnimations() >>
-      stateRef.update(state =>
-        state.copy(
-          persisted = state.persisted.copy(buffers =
-            state.persisted.buffers.view.mapValues(clearCursorGlides andThen clearSelectionGeometries).toMap
-          ),
-          runtime = state.runtime.copy(
-            themeTransition = None,
-            uiSurfaces = state.runtime.uiSurfaces.filterNot(isGhostOverlay),
-            surfaceAnimations = Map.empty,
-            companionSprite = state.runtime.companionSprite.resetTyping,
-            columnTransitions = Map.empty,
-            panelGeometry = Map.empty
-          )
-        )
-      )
+  def cancelActiveMotion(): IO[Unit] = cancel(MotionCancellation.Everything)
 
   def cancelDisabledMotion(previous: AppConfig, current: AppConfig): IO[Unit] =
+    cancel(MotionCancellation.between(previous, current))
+
+  private def cancel(cancellation: MotionCancellation): IO[Unit] =
+    if cancellation.isEmpty then IO.unit
+    else
+      bufferAnimationsRef.update(cancellation.cancelBufferAnimations) >>
+        stateRef.get.flatMap(state => validateAndUpdateState(cancellation.cancelState(state), state))
+
+/** Which in-flight motion a config change cancels: everything once motion as a whole goes off, otherwise just the
+  * families that went from enabled to disabled.
+  */
+private[manager] enum MotionCancellation:
+  case Everything
+  case Families(families: List[MotionFamily])
+
+  def isEmpty: Boolean =
+    this match
+      case Everything         => false
+      case Families(families) => families.isEmpty
+
+  def cancelState(state: AppState): AppState =
+    this match
+      case Everything => MotionCancellation.cancelAllState(state)
+      case Families(families) =>
+        families.foldLeft(state)((current, family) => MotionCancellation.cancelFamilyState(family, current))
+
+  def cancelBufferAnimations(animations: Map[BufferId, AnimationState]): Map[BufferId, AnimationState] =
+    this match
+      case Everything => animations.view.mapValues(_.clearAll()).toMap
+      case Families(families) =>
+        families
+          .flatMap(MotionCancellation.bufferAnimationOwner)
+          .foldLeft(animations)((current, owner) => current.view.mapValues(_.clear(owner)).toMap)
+
+private[manager] object MotionCancellation:
+
+  def between(previous: AppConfig, current: AppConfig): MotionCancellation =
     val previousFamilies = previous.surfaceConfig.effectiveMotionConfiguration
     val currentFamilies  = current.surfaceConfig.effectiveMotionConfiguration
     if currentFamilies.families.values.forall(!_.enabled) && previousFamilies.families.values.exists(_.enabled) then
-      cancelActiveMotion()
+      Everything
     else
-      com.serenity.config.MotionFamily.values.toList
-        .filter(family => previousFamilies.family(family).enabled && !currentFamilies.family(family).enabled)
-        .traverse_(cancelMotionFamily)
+      Families(
+        MotionFamily.values.toList
+          .filter(family => previousFamilies.family(family).enabled && !currentFamilies.family(family).enabled)
+      )
 
-  private def cancelMotionFamily(family: com.serenity.config.MotionFamily): IO[Unit] =
+  private def bufferAnimationOwner(family: MotionFamily): Option[AnimationOwner] =
     family match
-      case com.serenity.config.MotionFamily.EditorText =>
-        clearBufferAnimations(com.serenity.animation.AnimationOwner.EditorText)
-      case com.serenity.config.MotionFamily.CommandSurfaces =>
-        cancelSurfaceMotion(isCommandSurface)
-      case com.serenity.config.MotionFamily.PinnedPanels =>
-        cancelSurfaceMotion(isDockedSurface)
-      case com.serenity.config.MotionFamily.UiTransitions =>
-        clearBufferAnimations(com.serenity.animation.AnimationOwner.UiTransitions) >>
-          stateRef.update(state =>
-            state.copy(runtime =
-              state.runtime.copy(
-                themeTransition = None,
-                companionSprite = state.runtime.companionSprite.resetTyping
-              )
-            )
-          )
-      case com.serenity.config.MotionFamily.Cursor =>
+      case MotionFamily.EditorText    => Some(AnimationOwner.EditorText)
+      case MotionFamily.UiTransitions => Some(AnimationOwner.UiTransitions)
+      case _                          => None
+
+  private def cancelAllState(state: AppState): AppState =
+    state.copy(
+      persisted = state.persisted.copy(buffers =
+        state.persisted.buffers.view.mapValues(clearCursorGlides andThen clearSelectionGeometries).toMap
+      ),
+      runtime = state.runtime.copy(
+        themeTransition = None,
+        uiSurfaces = state.runtime.uiSurfaces.filterNot(isGhostOverlay),
+        surfaceAnimations = Map.empty,
+        companionSprite = state.runtime.companionSprite.resetTyping,
+        columnTransitions = Map.empty,
+        panelGeometry = Map.empty
+      )
+    )
+
+  private def cancelFamilyState(family: MotionFamily, state: AppState): AppState =
+    family match
+      case MotionFamily.EditorText      => state
+      case MotionFamily.CommandSurfaces => cancelSurfaceMotion(isCommandSurface, state)
+      case MotionFamily.PinnedPanels    => cancelSurfaceMotion(isDockedSurface, state)
+      case MotionFamily.UiTransitions =>
+        state.copy(runtime =
+          state.runtime.copy(themeTransition = None, companionSprite = state.runtime.companionSprite.resetTyping)
+        )
+      case MotionFamily.Cursor =>
         // Caret-glide (issue #1085 phase 2): clears every buffer's in-flight `Cursor.glide` -- the one piece of
         // `Cursor`-family state that is actually cancellable (unlike blink/breathe cadence, which has no state to
         // cancel, only a tick interval it stops requesting).
-        stateRef.update(state =>
-          state.copy(persisted =
-            state.persisted.copy(buffers = state.persisted.buffers.view.mapValues(clearCursorGlides).toMap)
-          )
+        state.copy(persisted =
+          state.persisted.copy(buffers = state.persisted.buffers.view.mapValues(clearCursorGlides).toMap)
         )
-      case com.serenity.config.MotionFamily.SelectionGeometry =>
+      case MotionFamily.SelectionGeometry =>
         // Selection grow/settle (issue #1085 phase 3): clears every buffer's in-flight `Cursor.selectionGeometry` --
         // the one piece of `SelectionGeometry`-family state that is actually cancellable, the same way `Cursor`'s own
         // case clears `Cursor.glide`.
-        stateRef.update(state =>
-          state.copy(persisted =
-            state.persisted.copy(buffers = state.persisted.buffers.view.mapValues(clearSelectionGeometries).toMap)
-          )
+        state.copy(persisted =
+          state.persisted.copy(buffers = state.persisted.buffers.view.mapValues(clearSelectionGeometries).toMap)
         )
-      case com.serenity.config.MotionFamily.ColumnTransitions =>
-        stateRef.update(state => state.copy(runtime = state.runtime.copy(columnTransitions = Map.empty)))
-      case com.serenity.config.MotionFamily.PanelGeometry =>
+      case MotionFamily.ColumnTransitions =>
+        state.copy(runtime = state.runtime.copy(columnTransitions = Map.empty))
+      case MotionFamily.PanelGeometry =>
         // Clears every in-flight scale-in/out, then drops any close ghost that existed only for this geometry (no
         // `surfaceAnimations` entry of its own) -- otherwise, with its geometry gone and no colour fade left to
         // eventually remove it (`AnimationChoreography.advancePanelGeometry`'s ordinary path), it would sit in
         // `uiSurfaces` forever.
-        stateRef.update { state =>
-          val orphanedGhostIds = state.runtime.panelGeometry.keySet.filterNot(state.runtime.surfaceAnimations.contains)
-          val ghostIdsToDrop = state.runtime.uiSurfaces.collect {
-            case UiSurface(id, SurfaceContent.GhostOverlay(_, _), _, _) if orphanedGhostIds.contains(id) => id
-          }.toSet
-          state.copy(runtime =
-            state.runtime.copy(
-              panelGeometry = Map.empty,
-              uiSurfaces = state.runtime.uiSurfaces.filterNot(surface => ghostIdsToDrop.contains(surface.id))
-            )
+        val orphanedGhostIds = state.runtime.panelGeometry.keySet.filterNot(state.runtime.surfaceAnimations.contains)
+        val ghostIdsToDrop = state.runtime.uiSurfaces.collect {
+          case UiSurface(id, SurfaceContent.GhostOverlay(_, _), _, _) if orphanedGhostIds.contains(id) => id
+        }.toSet
+        state.copy(runtime =
+          state.runtime.copy(
+            panelGeometry = Map.empty,
+            uiSurfaces = state.runtime.uiSurfaces.filterNot(surface => ghostIdsToDrop.contains(surface.id))
           )
-        }
+        )
 
-  /** Drops every cursor's in-flight glide on `buffer`, leaving everything else untouched -- the `Cursor` family's
-    * cancellation (`cancelActiveMotion`/`cancelMotionFamily`'s `Cursor` case).
-    */
   private def clearCursorGlides(buffer: Buffer): Buffer =
     if buffer.editing.cursors.exists(_.glide.isDefined) then
       buffer.withCursorList(buffer.editing.cursors.map(_.copy(glide = None)))
     else buffer
 
-  /** Drops every cursor's in-flight selection geometry on `buffer` -- the `SelectionGeometry` family's cancellation
-    * (`cancelActiveMotion`/`cancelMotionFamily`'s `SelectionGeometry` case).
-    */
   private def clearSelectionGeometries(buffer: Buffer): Buffer =
     if buffer.editing.cursors.exists(_.selectionGeometry.isDefined) then
       buffer.withCursorList(buffer.editing.cursors.map(_.copy(selectionGeometry = None)))
     else buffer
 
-  private def clearBufferAnimations(): IO[Unit] =
-    bufferAnimationsRef.update(
-      _.view
-        .mapValues { animations =>
-          val cleared = animations.clearAll()
-          if cleared eq animations then animations else cleared
-        }
-        .toMap
-    )
-
-  private def clearBufferAnimations(owner: com.serenity.animation.AnimationOwner): IO[Unit] =
-    bufferAnimationsRef.update(
-      _.view
-        .mapValues { animations =>
-          val cleared = animations.clear(owner)
-          if cleared eq animations then animations else cleared
-        }
-        .toMap
-    )
-
-  private def cancelSurfaceMotion(matches: UiSurface => Boolean): IO[Unit] =
-    stateRef.update { state =>
-      val matchingIds = state.runtime.uiSurfaces.collect { case surface if matches(surface) => surface.id }.toSet
-      state.copy(runtime =
-        state.runtime.copy(
-          uiSurfaces = state.runtime.uiSurfaces.filterNot(surface => matches(surface) && isGhostOverlay(surface)),
-          surfaceAnimations =
-            state.runtime.surfaceAnimations.filterNot((surfaceId, _) => matchingIds.contains(surfaceId))
-        )
+  private def cancelSurfaceMotion(matches: UiSurface => Boolean, state: AppState): AppState =
+    val matchingIds = state.runtime.uiSurfaces.collect { case surface if matches(surface) => surface.id }.toSet
+    state.copy(runtime =
+      state.runtime.copy(
+        uiSurfaces = state.runtime.uiSurfaces.filterNot(surface => matches(surface) && isGhostOverlay(surface)),
+        surfaceAnimations = state.runtime.surfaceAnimations.filterNot((surfaceId, _) => matchingIds.contains(surfaceId))
       )
-    }
+    )
 
   private def isCommandSurface(surface: UiSurface): Boolean =
     surface.content match

@@ -8,8 +8,8 @@ import com.serenity.ui.theme.config.ColorParser.transparent
 
 /** Pure computation of the open/close transition for a pinned or expanded panel surface: lays out transition cells
   * against the panel's on-screen rect and lowers them via the existing `ElementTransitionPlanner`/
-  * `ElementTransitionLowerer` motion model (`com.serenity.animation`, #846/#874). Called by [[AnimationChoreography]],
-  * which owns the `stateRef` plumbing around these pure `AppState => AppState` transforms.
+  * `ElementTransitionLowerer` motion model (`com.serenity.animation`, #846/#874). Folded into the surface transitions
+  * by `AnimationChoreography.animateSurfaceTransitions`, whose shell validates and commits the result.
   */
 private[manager] object PinnedPanelAnimations:
 

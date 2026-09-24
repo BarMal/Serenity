@@ -87,7 +87,9 @@ private[manager] class StateManagerComposition(
   // order needs correct `val` placement, not a `lazy val` or deferred `def` port.
   private val animations = new AnimationChoreography(new AnimationChoreographyPort:
     val stateRef            = runtimeStateRef
-    val bufferAnimationsRef = runtimeBufferAnimationsRef)
+    val bufferAnimationsRef = runtimeBufferAnimationsRef
+    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+      operations.validateAndUpdateState(newState, fallbackState))
 
   // Built here, before `effects` and `events`, same reasoning as `animations` above: `StateManagerPanelEffects`
   // (owned by `effects`) and `StateManagerSurfaceCapability` (`surfaces`, below) both need to record undo boundaries

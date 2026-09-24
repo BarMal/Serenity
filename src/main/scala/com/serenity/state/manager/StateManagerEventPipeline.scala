@@ -95,7 +95,9 @@ final private[manager] class StateManagerEventPipeline(
   private val animations = new AnimationChoreography(new AnimationChoreographyPort:
     def stateRef: cats.effect.Ref[cats.effect.IO, AppState] = state.stateRef
     def bufferAnimationsRef: cats.effect.Ref[cats.effect.IO, Map[BufferId, AnimationState]] =
-      state.bufferAnimationsRef)
+      state.bufferAnimationsRef
+    def validateAndUpdateState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
+      StateManagerEventPipeline.this.validateAndUpdateState(newState, fallbackState))
 
   private val editorMouseTargeting = new EditorMouseTargeting(
     EditorMouseTargetingPort(stateRef = state.stateRef, mouseTargetCacheRef = state.mouseTargetCacheRef)
