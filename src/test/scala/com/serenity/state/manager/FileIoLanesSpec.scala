@@ -181,6 +181,50 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
     AppStateValidation.validationErrors(f.state) shouldBe Nil
   }
 
+  private def quitIn(f: Fixture): IO[Unit] =
+    f.stateManager.applyEvent(com.serenity.keystroke.events.Quit)
+
+  private def quitCompleted(f: Fixture): Boolean =
+    f.stateManager.runtimeLifecycle.awaitQuit.timeout(5.seconds).attempt.unsafeRunSync().isRight
+
+  "Quitting right after a save" should "wait for the save to land and quit without an unsaved-changes prompt" in {
+    val f  = fixture()
+    val id = f.open(file(f.directory, "gated.txt", "draft"))
+    f.type_('a')
+
+    f.fireSave()
+    f.awaitHeld(1)
+    val quit = quitIn(f).start.unsafeRunSync()
+    IO.sleep(200.millis).unsafeRunSync()
+    f.releaseNext()
+    quit.joinWithNever.timeout(20.seconds).unsafeRunSync()
+
+    f.state.runtime.modalStack shouldBe empty
+    Files.readString(f.directory.resolve("gated.txt")) shouldBe "adraft"
+    f.buffer(id).map(_.document.isDirty) shouldBe Some(false)
+    quitCompleted(f) shouldBe true
+  }
+
+  it should "keep the buffer open and dirty, and prompt, when that save fails" in {
+    val f    = fixture()
+    val path = file(f.directory, "gated.txt", "draft")
+    val id   = f.open(path)
+    f.type_('a')
+
+    f.fireSave()
+    f.awaitHeld(1)
+    Files.writeString(path, "changed elsewhere")
+    val quit = quitIn(f).start.unsafeRunSync()
+    IO.sleep(200.millis).unsafeRunSync()
+    f.releaseNext()
+    quit.joinWithNever.timeout(20.seconds).unsafeRunSync()
+
+    f.buffer(id).map(_.document.isDirty) shouldBe Some(true)
+    f.state.runtime.modalStack.map(_.modal) should matchPattern { case List(_: Modal.CloseWorkflow) => }
+    Files.readString(path) shouldBe "changed elsewhere"
+    quitCompleted(f) shouldBe false
+  }
+
   "Two saves to one file" should "write in submission order, the second checked against the first's revision" in {
     val f  = fixture()
     val id = f.open(file(f.directory, "gated.txt", "draft"))

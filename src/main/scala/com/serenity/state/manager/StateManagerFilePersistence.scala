@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.{Deferred, IO, Ref}
+import cats.syntax.all.*
 import com.serenity.io.{FileDialog, FileManager, FileUtils}
 import com.serenity.lsp.LspEffect
 import com.serenity.session.SessionPersistence
@@ -48,11 +49,42 @@ final private[manager] class StateManagerFilePersistence(
 
   /** Saves in the background; `onFailure` runs on the dispatcher if the save fails. */
   def submitSave(bufferId: BufferId, onFailure: Throwable => IO[Unit]): IO[Unit] =
-    request(bufferId, SaveKind.Save, None).flatMap(
-      _.fold(IO.unit)(save =>
-        submitOrSettle(save, saveJob(save).flatMap(result => lanes.post(commitSave(result, onFailure))))
-      )
+    request(bufferId, SaveKind.Save, None).flatMap(_.fold(IO.unit) { save =>
+      PendingSave.create.flatTap(writes.addPending(bufferId, _)).flatMap { pending =>
+        val job = saveJob(save)
+          .onCancel(pending.result.complete(EffectResult.FileSaveFailed(save, JobCancelled())).void)
+          .flatTap(pending.result.complete)
+          .flatMap(result => lanes.post(applyOnce(bufferId, pending, commitSave(result, onFailure))))
+        lanes.submitToLane(fileLane(save.target), job).recoverWith {
+          case _: EffectLanes.Released =>
+            writes.settle(canonical(save.target)) >> writes.removePending(bufferId, pending)
+        }
+      }
+    })
+
+  /** Waits for the background saves of `bufferIds` and applies their results now, so a close deciding whether these
+    * buffers are unsaved sees the outcome of a save the user already asked for. A failed save leaves its buffer dirty,
+    * so the close goes on to prompt for it.
+    */
+  def settlePendingSaves(bufferIds: List[BufferId]): IO[Unit] =
+    bufferIds.traverse_(bufferId =>
+      writes
+        .pendingFor(bufferId)
+        .flatMap(
+          _.traverse_(pending =>
+            pending.result.get.flatMap(result =>
+              applyOnce(
+                bufferId,
+                pending,
+                commitSave(result, error => logger.warn(error)(s"[FILE] Save of buffer $bufferId failed before close"))
+              )
+            )
+          )
+        )
     )
+
+  private def applyOnce(bufferId: BufferId, pending: PendingSave, apply: IO[Unit]): IO[Unit] =
+    pending.claim.flatMap(claimed => if claimed then writes.removePending(bufferId, pending) >> apply else IO.unit)
 
   def saveExistingBuffer(bufferId: BufferId): IO[Unit] =
     saveAndWait(bufferId, SaveKind.Save, None)
@@ -125,12 +157,6 @@ final private[manager] class StateManagerFilePersistence(
           .flatMap(commitSave(_, IO.raiseError))
       )
     )
-
-  private def submitOrSettle(save: FileSave, job: IO[Unit]): IO[Unit] =
-    lanes.submitToLane(fileLane(save.target), job).recoverWith {
-      case _: EffectLanes.Released =>
-        writes.settle(canonical(save.target))
-    }
 
   /** Never fails: a failed write comes back as [[EffectResult.FileSaveFailed]]. */
   private def saveJob(save: FileSave): IO[EffectResult] =

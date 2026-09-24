@@ -111,7 +111,13 @@ final private[manager] class StateManagerWorkflowCapability(
   private[manager] def showSaveAsWorkflow(state: AppState, bufferId: BufferId, statusMessage: String): IO[Unit] =
     openFileWorkflowModal(FileWorkflowMode.SaveAs, state, Some(bufferId), Some(statusMessage))
 
+  /** A save the user already asked for decides whether a buffer is unsaved, so its outcome is awaited first: Ctrl+S
+    * then Ctrl+Q must not prompt for a buffer whose save is still writing (#1671).
+    */
   private[manager] def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
+    filePersistence.settlePendingSaves(closeTargets(scope, state)) >> stateRef.get.flatMap(decideClose(scope, _))
+
+  private def decideClose(scope: CloseScope, state: AppState): IO[Unit] =
     val targetBufferIds = closeTargets(scope, state)
     val dirtyBufferIds =
       targetBufferIds.filter(bufferId => state.persisted.buffers.get(bufferId).exists(_.hasUnsavedChanges))
