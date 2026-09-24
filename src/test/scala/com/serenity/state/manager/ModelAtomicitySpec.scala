@@ -6,7 +6,7 @@ import java.nio.file.Files
 import cats.data.State
 import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
-import cats.effect.{Deferred, Fiber, IO, Ref}
+import cats.effect.{Deferred, IO, Ref}
 import com.serenity.StateManagerTestFixtures
 import com.serenity.animation.AnimationState
 import com.serenity.animation.sprite.CompanionSpriteState
@@ -70,14 +70,13 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
 
   private def stateManagerOver(modelRef: Ref[IO, Model]): IO[StateManager] =
     for
-      directory                <- IO.blocking(Files.createTempDirectory("model-atomicity-spec"))
-      themeNamesRef            <- Ref.of[IO, List[String]](Nil)
-      quitSignal               <- Deferred[IO, Unit]
-      lspQueue                 <- LspEffectQueue.create
-      projectTaskFiberRef      <- Ref.of[IO, Option[ManagedProjectTask]](None)
-      projectTaskSemaphore     <- Semaphore[IO](1)
-      mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
-      documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
+      directory            <- IO.blocking(Files.createTempDirectory("model-atomicity-spec"))
+      themeNamesRef        <- Ref.of[IO, List[String]](Nil)
+      quitSignal           <- Deferred[IO, Unit]
+      lspQueue             <- LspEffectQueue.create
+      projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
+      projectTaskSemaphore <- Semaphore[IO](1)
+      mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
       runtime = StateManagerRuntime.create(
         modelRef = modelRef,
         themeNamesRef = themeNamesRef,
@@ -90,7 +89,6 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
         projectTaskFiberRef = projectTaskFiberRef,
         projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
-        documentAnalysisFiberRef = documentAnalysisFiberRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
         deviceTextScaleProvider = IO.pure(1.0),
         configPersistencePath = None,
@@ -213,8 +211,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     val program =
       for
         recorded   <- recording(before)
-        fiberRef   <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
-        operations <- StateManagerOperationBoundary.create(Model.appRef(recorded.modelRef), fiberRef, quietLogger)
+        operations <- StateManagerOperationBoundary.create(Model.appRef(recorded.modelRef), quietLogger)
         commit = new ModelCommit(recorded.modelRef, operations)
         _     <- commit.updateValidated(_ => Some(Model(invalid, UndoState(maxUndoDepth = 3), Map.empty)))
         after <- recorded.modelRef.get

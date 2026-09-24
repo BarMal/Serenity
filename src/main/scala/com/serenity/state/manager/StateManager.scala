@@ -288,13 +288,12 @@ object StateManager:
           bufferAnimations = Map.empty
         )
       )
-      mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
-      documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
-      themeNamesRef            <- Ref.of[IO, List[String]](themeNames)
-      quitSignal               <- Deferred[IO, Unit]
-      lspQueue                 <- LspEffectQueue.create
-      projectTaskFiberRef      <- Ref.of[IO, Option[ManagedProjectTask]](None)
-      projectTaskSemaphore     <- Semaphore[IO](1)
+      mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
+      themeNamesRef        <- Ref.of[IO, List[String]](themeNames)
+      quitSignal           <- Deferred[IO, Unit]
+      lspQueue             <- LspEffectQueue.create
+      projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
+      projectTaskSemaphore <- Semaphore[IO](1)
       runtime = StateManagerRuntime.create(
         modelRef = modelRef,
         themeNamesRef = themeNamesRef,
@@ -307,7 +306,6 @@ object StateManager:
         projectTaskFiberRef = projectTaskFiberRef,
         projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
-        documentAnalysisFiberRef = documentAnalysisFiberRef,
         onFontConfigChanged = onFontConfigChanged,
         deviceTextScaleProvider = deviceTextScaleProvider,
         configPersistencePath = configPersistencePath,
@@ -325,7 +323,7 @@ object StateManager:
     */
   private[manager] def fromRuntime(runtime: StateManagerRuntime)(using Balance): IO[StateManager] =
     StateManagerOperationBoundary
-      .create(Model.appRef(runtime.modelRef), runtime.documentAnalysisFiberRef, runtime.logger)
+      .create(Model.appRef(runtime.modelRef), runtime.logger)
       .map(operations => new StateManagerImpl(runtime, operations))
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
@@ -378,7 +376,6 @@ object StateManager:
       runtime.projectTaskFiberRef,
       runtime.projectTaskSemaphore,
       runtime.mouseTargetCacheRef,
-      runtime.documentAnalysisFiberRef,
       runtime.onFontConfigChanged,
       runtime.deviceTextScaleProvider,
       runtime.configPersistencePath,
