@@ -312,12 +312,16 @@ object StateManager:
         fileDialog = fileDialog,
         markdownPreviewWindow = markdownPreviewWindow
       )
-      operations <- StateManagerOperationBoundary.create(
-        stateRef,
-        documentAnalysisFiberRef,
-        runtime.logger
-      )
-    yield new StateManagerImpl(runtime, operations)
+      stateManager <- fromRuntime(runtime)
+    yield stateManager
+
+  /** Assembles a state manager over an already-built runtime -- the seam specs use to substitute infrastructure such as
+    * a gated `FileManager`.
+    */
+  private[manager] def fromRuntime(runtime: StateManagerRuntime)(using Balance): IO[StateManager] =
+    StateManagerOperationBoundary
+      .create(runtime.stateRef, runtime.documentAnalysisFiberRef, runtime.logger)
+      .map(operations => new StateManagerImpl(runtime, operations))
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
     // issue #931: category tabs (and the `activeCategory` field they drove) are retired, so this no longer names a
