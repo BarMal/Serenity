@@ -91,7 +91,9 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
         Theme.default,
         ViewportSize(80, 24)
       )
-      _     <- stateManager.applyEvent(InsertChar('w'))
+      _ <- stateManager.applyEvent(InsertChar('w'))
+      // The preset loads on the Presets lane and is applied once that settles (#1697).
+      _     <- stateManager.runtimeLifecycle.awaitEffects
       state <- stateManager.getCurrentState
     yield state
 
@@ -121,7 +123,9 @@ class StartupOptionsEndToEndSpec extends AnyFlatSpec with Matchers with StateMan
         Theme.default,
         ViewportSize(80, 24)
       )
-      _     <- stateManager.applyEvent(InsertChar('c'))
+      _ <- stateManager.applyEvent(InsertChar('c'))
+      // The preset loads on the Presets lane and is applied once that settles (#1697).
+      _     <- stateManager.runtimeLifecycle.awaitEffects
       state <- stateManager.getCurrentState
     yield state
 
