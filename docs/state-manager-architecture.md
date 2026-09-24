@@ -40,8 +40,7 @@ owning `Resource`.
 markdown-preview commit, document analysis) runs off the dispatcher and *posts* its state update instead of writing
 the state itself. Config, keybinding and UI-preset persistence commits its state decision once, validated, then writes
 on the Sequential `Config`/`Presets` lanes (keybindings live in the config file, so they share `Config`); a preset
-result comes back as an `EffectResult` applied only while still current. Quitting drains Sequential lane work (bounded
-by a grace period) before releasing the lanes. The external-change check (#1623) reads the disk off the dispatcher and decides on it, dropping an
+result comes back as an `EffectResult` applied only while still current. The external-change check (#1623) reads the disk off the dispatcher and decides on it, dropping an
 observation that a save or reload has since superseded. Events enqueued while a dispatch interprets its effects are
 replayed on the dispatcher by `drainPendingOperations`; code already on the dispatcher never offers-and-waits, which
 would deadlock. The render tick advances animations only when the dispatcher is idle (`runIfIdle`); otherwise it
@@ -51,8 +50,9 @@ skips the frame's advance and reports still-active so the next frame retries. Fi
 buffer clean only if its content is still the content written, and ignores a buffer closed meanwhile (#1671). A plain
 save and a file open never wait on the disk on the dispatcher; save-as, save-before-close, the reload prompt's choices
 and `FileOpener.openFile` wait for their lane job because their next step depends on its outcome. The external-change
-check ignores a path while a save to it is in flight, and quitting waits for pending saves (a `Lane.Exclusive`
-barrier). The dispatch pipeline itself still
+check ignores a path while a save to it is in flight. Quitting -- normal or forced, e.g. closing the window -- is one
+step, `shutdownEffects`: a `Lane.Exclusive` barrier lets every Sequential lane (file saves, config, presets) finish,
+bounded by a grace period, cancels search and analysis, then releases the lanes. The dispatch pipeline itself still
 performs I/O, and the capability ports still hold the state `Ref` (other direct writers remain until later slices).
 
 Event processing applies a reducer result's state before interpreting its effects. Document-analysis

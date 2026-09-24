@@ -225,6 +225,25 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
     quitCompleted(f) shouldBe false
   }
 
+  "A forced quit (window close) with a save in flight" should "wait for the save to land before quitting" in {
+    val f  = fixture()
+    val id = f.open(file(f.directory, "gated.txt", "draft"))
+    f.type_('a')
+
+    f.fireSave()
+    f.awaitHeld(1)
+    val forced = f.stateManager.runtimeLifecycle.forceQuit.start.unsafeRunSync()
+    IO.sleep(200.millis).unsafeRunSync()
+    val quitBeforeRelease = forced.join.map(_ => true).timeoutTo(1.milli, IO.pure(false)).unsafeRunSync()
+    f.releaseNext()
+    forced.joinWithNever.timeout(20.seconds).unsafeRunSync()
+
+    quitBeforeRelease shouldBe false
+    Files.readString(f.directory.resolve("gated.txt")) shouldBe "adraft"
+    f.buffer(id).map(_.document.isDirty) shouldBe Some(false)
+    quitCompleted(f) shouldBe true
+  }
+
   "Two saves to one file" should "write in submission order, the second checked against the first's revision" in {
     val f  = fixture()
     val id = f.open(file(f.directory, "gated.txt", "draft"))

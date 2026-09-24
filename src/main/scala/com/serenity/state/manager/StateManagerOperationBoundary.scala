@@ -165,11 +165,11 @@ final private[manager] class StateManagerOperationBoundary private (
 
   /** What file persistence needs from this boundary (#1697 Wave 3). */
   val fileLanes: FileEffectLanes = new FileEffectLanes:
-    val fileWrites: FileWriteLedger                                 = fileWriteLedger
+    val fileWrites: FileWriteLedger = fileWriteLedger
     def submitToLane(lane: Lane.Scheduled, job: IO[Unit]): IO[Unit] =
       submittedEffects.update(_ + 1) >> effectLanes.submit(lane, job)
-    def post(update: IO[Unit]): IO[Unit]                            = dispatcher.post(update)
-    def dispatchUpdate(update: IO[Unit]): IO[Unit]                  = dispatcher.submit(update)
+    def post(update: IO[Unit]): IO[Unit]           = dispatcher.post(update)
+    def dispatchUpdate(update: IO[Unit]): IO[Unit] = dispatcher.submit(update)
     def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
       StateManagerOperationBoundary.this.validateAndUpdateState(newState, fallbackState)
 
