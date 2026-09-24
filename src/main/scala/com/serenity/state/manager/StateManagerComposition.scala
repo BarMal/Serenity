@@ -242,8 +242,7 @@ private[manager] class StateManagerComposition(
 
   private val eventEffectPort: EventEffectPort = EventEffectPort(
     interpretEffect = effects.interpretEffect,
-    interpretCommand = effects.interpretCommand,
-    executeCommand = command => runtimeStateRef.get.flatMap(state => effects.interpretCommand(command, state))
+    interpretCommand = effects.interpretCommand
   )
 
   private val eventWorkflowPort: EventWorkflowPort =
