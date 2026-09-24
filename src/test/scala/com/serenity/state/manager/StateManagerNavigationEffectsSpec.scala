@@ -2,8 +2,8 @@ package com.serenity.state.manager
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
-import com.serenity.command.{CommentsIntent, NavigationIntent}
 import com.serenity.animation.{AnimationConfig, AnimationOwner}
+import com.serenity.command.{CommentsIntent, NavigationIntent}
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.MotionPreset
 import com.serenity.rope.Balance
