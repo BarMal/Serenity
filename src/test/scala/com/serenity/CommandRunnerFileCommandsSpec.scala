@@ -2,6 +2,8 @@ package com.serenity
 
 import java.nio.file.{Files, Path}
 
+import scala.concurrent.duration.*
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.io.FileDialog
@@ -142,7 +144,11 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "open", "open")
 
-    val updatedState = stateManager.getCurrentState.unsafeRunSync()
+    // The dialog and the read run on lanes; the buffer lands after the command returns (#1672).
+    val updatedState = (IO.sleep(20.millis) >> stateManager.getCurrentState)
+      .iterateUntil(_.persisted.buffers.values.exists(_.document.filePath.contains(sourcePath)))
+      .timeout(20.seconds)
+      .unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
     updatedState.topModal shouldBe None
     val openedBuffer = updatedState.persisted.buffers.values.find(_.document.filePath.contains(sourcePath))
