@@ -14,6 +14,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.AwaitCondition.awaitValue
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.ThemeConfigLoader
 import org.scalatest.flatspec.AnyFlatSpec
@@ -102,14 +103,12 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "toggle-theme", "toggle-theme")
 
-    val lightState = stateManager.getCurrentState.unsafeRunSync()
+    val lightState = awaitValue(stateManager.getCurrentState)(_.persisted.theme.name == "light").unsafeRunSync()
     lightState.commandRunnerSurface shouldBe None
-    lightState.persisted.theme.name shouldBe "light"
 
     executeCommandThroughRunner(stateManager, "toggle-theme", "toggle-theme")
 
-    val darkState = stateManager.getCurrentState.unsafeRunSync()
-    darkState.persisted.theme.name shouldBe "dark"
+    awaitValue(stateManager.getCurrentState)(_.persisted.theme.name == "dark").unsafeRunSync()
   }
 
   it should "reload the current theme for the reload-theme command" in {
@@ -140,7 +139,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
-    Files.exists(targetPath) shouldBe true
+    awaitValue(IO.blocking(Files.exists(targetPath)))(identity).unsafeRunSync()
     val loaded = ThemeConfigLoader().loadThemeFromFile(targetPath).unsafeRunSync()
     loaded.name shouldBe "quiet-focus"
     loaded.ui.background shouldBe "#112233"

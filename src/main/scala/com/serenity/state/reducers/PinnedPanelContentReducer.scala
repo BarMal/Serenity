@@ -30,6 +30,35 @@ object PinnedPanelContentReducer:
         val content = PanelContent.DirectoryTree(tree, selectedPath = None)
         PanelStateReducer.pin(content, PanelPosition.Left, ExplorerSize, state)
 
+  /** Pins an explorer on `root` before its listing is read, so the panel appears at once; [[applyRootListing]] fills it
+    * in when the listing arrives.
+    */
+  def pinExplorerRoot(position: PanelPosition, root: Path, size: Int, state: AppState): ReducerResult =
+    PanelStateReducer.pin(
+      PanelContent.DirectoryTree(DirectoryTreeData(root), selectedPath = None),
+      position,
+      size,
+      state
+    )
+
+  /** Applied only while the explorer at `position` is still rooted at `root`. */
+  def applyRootListing(position: PanelPosition, root: Path, listing: List[DirEntry], state: AppState): AppState =
+    explorerAt(position, state)(_.rootPath == root).fold(state) { (surface, tree, selectedPath) =>
+      val listed   = tree.copy(entries = tree.entries.updated(root, listing))
+      val selected = selectedPath.orElse(listing.headOption.map(_.path))
+      replaceSurface(state, surface.copy(content = SurfaceContent.DirectoryTree(listed, selected)))
+    }
+
+  /** Expands `path` with its listing -- applied only while the explorer at `position` still shows the tree `path` is
+    * in.
+    */
+  def applyDirectoryListing(position: PanelPosition, path: Path, listing: List[DirEntry], state: AppState): AppState =
+    explorerAt(position, state)(tree => path.startsWith(tree.rootPath)).fold(state) { (surface, tree, selectedPath) =>
+      val expanded = tree.copy(expandedPaths = tree.expandedPaths + path, entries = tree.entries.updated(path, listing))
+      val selected = if selectedPath.forall(_ == path) then Some(path) else selectedPath
+      replaceSurface(state, surface.copy(content = SurfaceContent.DirectoryTree(expanded, selected)))
+    }
+
   def selectFileInExplorer(targetPath: Path, state: AppState): ReducerResult =
     val selected = newestPinned(state)(isDirectoryTree).flatMap { surface =>
       surface.content match
@@ -53,6 +82,16 @@ object PinnedPanelContentReducer:
       }
     }
     ReducerResult.noEffects(withoutSource)
+
+  private def explorerAt(position: PanelPosition, state: AppState)(
+    shows: DirectoryTreeData => Boolean
+  ): Option[(UiSurface, DirectoryTreeData, Option[Path])] =
+    state.pinnedSurfaces.reverse.collectFirst {
+      case surface @ UiSurface(_, SurfaceContent.DirectoryTree(tree, selectedPath), _, _)
+          if shows(tree) &&
+            state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(position) =>
+        (surface, tree, selectedPath)
+    }
 
   private def newestPinned(state: AppState)(matches: SurfaceContent => Boolean): Option[UiSurface] =
     state.pinnedSurfaces.reverse.find(surface => matches(surface.content))

@@ -6,7 +6,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.{PanelKind, ViewIntent}
 import com.serenity.io.FileManager
-import com.serenity.keystroke.events.{Event, ExplorerEvent}
+import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.undo.{HistoryEntry, UndoState}
@@ -57,6 +57,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
         stateRef,
         NoOpLogger.impl[IO],
         new FileManager(),
+        EffectLanePortFixtures.immediate(stateRef),
         markdownPreviewWindow,
         transition =>
           modelRef.get.flatMap(model =>
@@ -271,7 +272,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "load the explorer root directory and announce it as an explorer event" in {
+  it should "pin the explorer root as an undo step and fill in its listing, selecting the first entry" in {
     val directory = Files.createTempDirectory("panel-effects-explorer")
     val child     = Files.createDirectory(directory.resolve("src"))
     try
@@ -279,15 +280,19 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
 
       fixture.panels.pinExplorerPanelEffect(PanelPosition.Left, directory, 30).unsafeRunSync()
 
-      fixture.events.get.unsafeRunSync() match
-        case List(ExplorerEvent.RootDirectoryLoaded(position, rootPath, size, entries, selectedPath)) =>
-          position shouldBe PanelPosition.Left
-          rootPath shouldBe directory
-          size shouldBe 30
-          entries.map(_.path) shouldBe List(child)
+      val model = fixture.modelRef.get.unsafeRunSync()
+      model.app.pinnedSurfaces.map(_.content) match
+        case List(SurfaceContent.DirectoryTree(tree, selectedPath)) =>
+          tree.rootPath shouldBe directory
+          tree.entries.get(directory).map(_.map(_.path)) shouldBe Some(List(child))
           selectedPath shouldBe Some(child)
         case other =>
-          fail(s"Expected a single RootDirectoryLoaded event, got $other")
+          fail(s"Expected a single pinned explorer, got $other")
+      model.app.persisted.layout.workspaceTree.flatMap(
+        _.positionForSurface(model.app.pinnedSurfaces.head.id)
+      ) shouldBe Some(PanelPosition.Left)
+      model.undo.undoStack shouldBe Vector(HistoryEntry.PanelChange.capture(AppState.initial))
+      fixture.events.get.unsafeRunSync() shouldBe Nil
     finally
       Files.deleteIfExists(child)
       Files.deleteIfExists(directory)

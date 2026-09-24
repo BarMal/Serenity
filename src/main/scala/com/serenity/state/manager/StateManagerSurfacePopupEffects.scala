@@ -1,12 +1,16 @@
 package com.serenity.state.manager
 
+import java.nio.file.Path
+
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
 import com.serenity.command.ThemeIntent
 import com.serenity.io.FileUtils
+import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{PopupSurfaceReducer, ReducerResult, ThemeStateReducer}
-import com.serenity.ui.theme.config.{AppThemeManager, ThemeConfigWriter}
+import com.serenity.state.reducers.{AppEffect, PopupSurfaceReducer, ReducerResult, ThemeEffect, ThemeStateReducer}
+import com.serenity.ui.theme.Theme
+import com.serenity.ui.theme.config.{AppThemeManager, ThemeConfig, ThemeConfigWriter}
 
 /** Floating popup surfaces triggered by commands or effects: the theme picker/creator, theme switching, theme export,
   * and the file-search overlay.
@@ -17,53 +21,78 @@ final private[manager] class StateManagerSurfacePopupEffects(
     themeManager: AppThemeManager,
     themeNamesRef: Ref[IO, List[String]],
     fileDialog: Option[com.serenity.io.FileDialog],
-    validateAndUpdateState: (AppState, AppState) => IO[Unit]
+    validateAndUpdateState: (AppState, AppState) => IO[Unit],
+    lanes: EffectLanePort,
+    interpretEffect: AppEffect => IO[Unit],
+    writeUserTheme: ThemeConfig => IO[Path] = ThemeConfigWriter.writeUserTheme(_)
 ):
 
-  /** Commits against the state as it is once the theme I/O has finished, not the snapshot the command started from. */
+  private val ThemeLoadLane: Lane.Keyed = Lane.Keyed(LaneKey.Theme, LanePolicy.SwitchLatest)
+
+  // Writes and listings share one FIFO lane: a listing queued behind a save sees the saved file, and a theme switch --
+  // on the SwitchLatest lane, which is a separate lane despite the shared key -- can never cancel a write.
+  private val ThemeFileLane: Lane.Keyed = Lane.Keyed(LaneKey.Theme, LanePolicy.Sequential)
+
+  /** Commits against the live state, not the snapshot the command started from. */
   private def commitCurrent(reduce: AppState => ReducerResult): IO[Unit] =
     stateRef.get.flatMap(state => validateAndUpdateState(reduce(state).state, state))
 
+  // The chooser and creator stay direct calls: `SurfaceEffect` would re-read the state, which stops them overwriting
+  // the command-usage record `interpretCommand` commits just before -- a change to the palette's recent-commands order.
   private[manager] def interpretThemeIntent(intent: ThemeIntent, state: AppState): IO[Unit] =
     intent match
       case ThemeIntent.ToggleTheme =>
-        toggleThemeEffect(state)
+        interpretEffect(AppEffect.Theme(ThemeEffect.SwitchTheme(ThemeStateReducer.toggleTarget(state))))
       case ThemeIntent.ApplyTheme(name) =>
-        applyThemeByName(name)
+        interpretEffect(AppEffect.Theme(ThemeEffect.SwitchTheme(name)))
       case ThemeIntent.ReloadTheme =>
-        reloadThemeEffect(state)
+        interpretEffect(AppEffect.Theme(ThemeEffect.ReloadTheme(state.persisted.theme.name)))
       case ThemeIntent.OpenThemeChooser =>
         openThemePickerEffect(state)
       case ThemeIntent.OpenThemeCreator =>
         openThemeCreatorEffect(state)
       case ThemeIntent.ExportCurrentTheme =>
-        exportCurrentThemeEffect(state)
+        interpretEffect(AppEffect.Theme(ThemeEffect.ExportCurrentTheme))
       case ThemeIntent.ReloadThemes =>
-        refreshThemeNames
+        interpretEffect(AppEffect.Theme(ThemeEffect.RefreshThemeNames))
+
+  private[manager] def interpretThemeEffect(effect: ThemeEffect): IO[Unit] =
+    effect match
+      case ThemeEffect.SwitchTheme(themeName) =>
+        requestTheme(themeName, EffectResult.ThemeLoaded(themeName, _), s"[THEME] Failed to switch theme to $themeName")
+      case ThemeEffect.ReloadTheme(themeName) =>
+        requestTheme(themeName, EffectResult.ThemeReloaded(themeName, _), s"[THEME] Failed to reload theme $themeName")
+      case ThemeEffect.SaveThemeConfig(config) =>
+        lanes.submitEffect(ThemeFileLane, saveUserTheme(config))
+      case ThemeEffect.RefreshThemeNames =>
+        lanes.submitEffect(ThemeFileLane, listThemeNames)
+      case ThemeEffect.ExportCurrentTheme =>
+        stateRef.get.flatMap(exportCurrentThemeEffect)
+
+  /** Records `themeName` as the latest request before loading it, so a slower load of an earlier request is dropped. */
+  private def requestTheme(themeName: String, loaded: Theme => EffectResult, failure: => String): IO[Unit] =
+    commitCurrent(ThemeStateReducer.withRequestedTheme(themeName, _)) >>
+      lanes.submitEffect(
+        ThemeLoadLane,
+        themeManager
+          .loadTheme(themeName)
+          .flatMap(theme => lanes.dispatchEffectResult(loaded(theme), _ => IO.unit))
+          .handleErrorWith(ex => logger.error(ex)(failure))
+      )
+
+  private def saveUserTheme(config: ThemeConfig): IO[Unit] =
+    writeUserTheme(config)
+      .flatTap(path => logger.info(s"[THEMES] Saved user theme '${config.name}' to $path"))
+      .flatMap(_ => listThemeNames)
+      .handleErrorWith(ex => logger.error(ex)(s"[THEMES] Failed to save user theme '${config.name}'"))
 
   /** Re-list the themes on disk into both the picker's ref and `runtime.availableThemeNames` (the settings picker). */
-  private[manager] def refreshThemeNames: IO[Unit] =
+  private def listThemeNames: IO[Unit] =
     themeManager.listAvailableThemes
-      .flatMap(names => themeNamesRef.set(names) *> commitCurrent(ThemeStateReducer.withAvailableThemeNames(names, _)))
+      .flatMap(names =>
+        themeNamesRef.set(names) >> lanes.dispatchEffectResult(EffectResult.ThemeNamesListed(names), _ => IO.unit)
+      )
       .handleErrorWith(ex => logger.error(ex)("[THEMES] Failed to reload theme list"))
-
-  private def toggleThemeEffect(state: AppState): IO[Unit] =
-    applyThemeByName(ThemeStateReducer.toggleTarget(state))
-
-  private def reloadThemeEffect(state: AppState): IO[Unit] =
-    reloadThemeByName(state.persisted.theme.name)
-
-  private[manager] def applyThemeByName(themeName: String): IO[Unit] =
-    themeManager
-      .loadTheme(themeName)
-      .flatMap(newTheme => commitCurrent(ThemeStateReducer.applyTheme(newTheme, _)))
-      .handleErrorWith(ex => logger.error(ex)(s"[THEME] Failed to switch theme to $themeName"))
-
-  private[manager] def reloadThemeByName(themeName: String): IO[Unit] =
-    themeManager
-      .loadTheme(themeName)
-      .flatMap(theme => commitCurrent(ThemeStateReducer.replaceTheme(theme, _)))
-      .handleErrorWith(ex => logger.error(ex)(s"[THEME] Failed to reload theme $themeName"))
 
   private[manager] def openThemePickerEffect(state: AppState): IO[Unit] =
     themeNamesRef.get.flatMap { themeNames =>
@@ -75,22 +104,25 @@ final private[manager] class StateManagerSurfacePopupEffects(
   private[manager] def openThemeCreatorEffect(state: AppState): IO[Unit] =
     validateAndUpdateState(PopupSurfaceReducer.openThemeCreator(state).state, state)
 
-  private[manager] def exportCurrentThemeEffect(state: AppState): IO[Unit] =
+  private def exportCurrentThemeEffect(state: AppState): IO[Unit] =
     val config            = ThemeConfigWriter.themeToConfig(state.persisted.theme)
     val suggestedFileName = s"${ThemeConfigWriter.fileNameFor(config.name)}.conf"
     fileDialog match
       case Some(dialog) =>
-        FileUtils.getCurrentDirectory
-          .flatMap(currentDirectory => dialog.chooseSaveFile(Some(currentDirectory), Some(suggestedFileName)))
-          .flatMap {
-            case Some(path) =>
-              ThemeConfigWriter
-                .write(config, path)
-                .flatTap(_ => logger.info(s"[THEMES] Exported current theme '${config.name}' to $path"))
-            case None =>
-              IO.unit
-          }
-          .handleErrorWith(ex => logger.error(ex)(s"[THEMES] Failed to export current theme '${config.name}'"))
+        lanes.submitEffect(
+          ThemeFileLane,
+          FileUtils.getCurrentDirectory
+            .flatMap(currentDirectory => dialog.chooseSaveFile(Some(currentDirectory), Some(suggestedFileName)))
+            .flatMap {
+              case Some(path) =>
+                ThemeConfigWriter
+                  .write(config, path)
+                  .flatTap(_ => logger.info(s"[THEMES] Exported current theme '${config.name}' to $path"))
+              case None =>
+                IO.unit
+            }
+            .handleErrorWith(ex => logger.error(ex)(s"[THEMES] Failed to export current theme '${config.name}'"))
+        )
       case None =>
         IO.unit
 

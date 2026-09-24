@@ -33,3 +33,17 @@ object ThemeStateReducer:
 
   def withAvailableThemeNames(names: List[String], state: AppState): ReducerResult =
     ReducerResult.noEffects(state.copy(runtime = state.runtime.copy(availableThemeNames = names)))
+
+  def withRequestedTheme(themeName: String, state: AppState): ReducerResult =
+    ReducerResult.noEffects(state.copy(runtime = state.runtime.copy(requestedThemeName = Some(themeName))))
+
+  /** [[applyTheme]] for a load that finished off the dispatcher -- dropped if a newer theme was requested meanwhile. */
+  def applyRequestedTheme(requestedName: String, theme: Theme, state: AppState): AppState =
+    if isLatestRequest(requestedName, state) then applyTheme(theme, state).state else state
+
+  /** [[replaceTheme]] for a reload that finished off the dispatcher, dropped like [[applyRequestedTheme]]. */
+  def replaceRequestedTheme(requestedName: String, theme: Theme, state: AppState): AppState =
+    if isLatestRequest(requestedName, state) then replaceTheme(theme, state).state else state
+
+  private def isLatestRequest(requestedName: String, state: AppState): Boolean =
+    state.runtime.requestedThemeName.contains(requestedName)

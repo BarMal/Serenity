@@ -10,6 +10,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.AwaitCondition.awaitValue
 import com.serenity.ui.layout.*
 import org.scalatest.concurrent.Eventually
 import org.scalatest.flatspec.AnyFlatSpec
@@ -337,7 +338,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
     val stateManager = createStateManager()
 
     stateManager.applyEvent(SwitchTheme("light")).unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync().persisted.theme.name shouldBe "light"
+    awaitValue(stateManager.getCurrentState.map(_.persisted.theme.name))(_ == "light").unsafeRunSync()
 
     stateManager.applyEvent(ReloadCurrentTheme).unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync().persisted.theme.name shouldBe "light"

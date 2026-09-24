@@ -8,6 +8,7 @@ import com.serenity.keystroke.events.Enter
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.AwaitCondition.awaitValue
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -115,7 +116,11 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
 
       sm.applyEvent(Enter).unsafeRunSync()
 
-      val state = sm.getCurrentState.unsafeRunSync()
+      val state = awaitValue(sm.getCurrentState)(
+        _.pinnedSurfaces.exists(_.content match
+          case SurfaceContent.DirectoryTree(tree, _) => tree.entries.contains(childDir)
+          case _                                     => false)
+      ).unsafeRunSync()
       state.pinnedSurfaces.head.content match
         case SurfaceContent.DirectoryTree(tree, selectedPath) =>
           tree.rootPath shouldBe rootDir
@@ -138,6 +143,7 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
     try
       sm.panelManager.dragFileToDirectory(srcFile, dstDir).unsafeRunSync()
 
+      awaitValue(IO.blocking(Files.exists(dstDir.resolve("hello.txt"))))(identity).unsafeRunSync()
       Files.exists(srcFile) shouldBe false
       Files.exists(dstDir.resolve("hello.txt")) shouldBe true
       new String(Files.readAllBytes(dstDir.resolve("hello.txt"))) shouldBe "content"
@@ -155,7 +161,12 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
       sm.panelManager.loadDirectoryTree(srcDir, List("mover.txt", "keeper.txt")).unsafeRunSync()
       sm.panelManager.dragFileToDirectory(srcFile, dstDir).unsafeRunSync()
 
-      val state = sm.getCurrentState.unsafeRunSync()
+      val state = awaitValue(sm.getCurrentState)(
+        _.pinnedSurfaces.exists(_.content match
+          case SurfaceContent.DirectoryTree(tree, _) =>
+            !tree.entries.get(srcDir).exists(_.exists(_.name == "mover.txt"))
+          case _ => false)
+      ).unsafeRunSync()
       state.pinnedSurfaces.head.content match
         case SurfaceContent.DirectoryTree(tree, _) =>
           tree.entries(srcDir).map(_.name) should not contain "mover.txt"

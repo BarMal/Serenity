@@ -6,9 +6,10 @@ import cats.effect.{IO, Ref}
 import com.serenity.command.{PanelKind, ViewIntent}
 import com.serenity.config.{AppConfig, MarkdownViewMode}
 import com.serenity.io.{FileEntry, FileManager, FileUtils}
-import com.serenity.keystroke.events.{Event, ExplorerEvent}
+import com.serenity.keystroke.events.Event
+import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.PanelStateReducer
+import com.serenity.state.reducers.{PanelStateReducer, PinnedPanelContentReducer}
 import com.serenity.ui.layout.{DirEntry, PanelPosition, PanelTarget, SplitAxis}
 import com.serenity.ui.tui.MarkdownPreviewWindowAvailability
 
@@ -20,6 +21,7 @@ final private[manager] class StateManagerPanelEffects(
     stateRef: Ref[IO, AppState],
     logger: org.typelevel.log4cats.Logger[IO],
     fileManager: FileManager,
+    lanes: EffectLanePort,
     markdownPreviewWindow: MarkdownPreviewWindowAvailability,
     updateModelValidated: (Model => Option[Model]) => IO[Unit],
     enqueueEvent: Event => IO[Unit],
@@ -190,26 +192,22 @@ final private[manager] class StateManagerPanelEffects(
     )
 
   private[manager] def pinExplorerPanelEffect(position: PanelPosition, path: Path, size: Int): IO[Unit] =
-    for
-      fileEntries <- fileManager.listDirectory(path)
-      dirEntries = toDirEntries(fileEntries)
-      _ <- enqueueEvent(
-        ExplorerEvent.RootDirectoryLoaded(
-          position = position,
-          rootPath = path,
-          size = size,
-          entries = dirEntries,
-          selectedPath = dirEntries.headOption.map(_.path)
-        )
-      )
-    yield ()
+    commitModel { model =>
+      val pinned = PinnedPanelContentReducer.pinExplorerRoot(position, path, size, model.app)
+      ModelCommit.applyModelEffects(model.copy(app = pinned.state), pinned.effects)
+    } >> listDirectoryOnLane(path)(EffectResult.ExplorerRootListed(position, path, _))
 
   private[manager] def loadPinnedDirectoryEffect(position: PanelPosition, path: Path): IO[Unit] =
-    (for
-      fileEntries <- fileManager.listDirectory(path)
-      dirEntries = toDirEntries(fileEntries)
-      _ <- enqueueEvent(ExplorerEvent.DirectoryLoaded(position, path, dirEntries))
-    yield ()).handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to load directory $path"))
+    listDirectoryOnLane(path)(EffectResult.DirectoryListed(position, path, _))
+
+  private def listDirectoryOnLane(path: Path)(listed: List[DirEntry] => EffectResult): IO[Unit] =
+    lanes.submitEffect(
+      Lane.Keyed(LaneKey.Directory(path.toAbsolutePath.normalize), LanePolicy.SwitchLatest),
+      fileManager
+        .listDirectory(path)
+        .flatMap(entries => lanes.dispatchEffectResult(listed(toDirEntries(entries)), _ => IO.unit))
+        .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to load directory $path"))
+    )
 
   private def toDirEntries(entries: List[FileEntry]): List[DirEntry] =
     entries.map(entry => DirEntry(entry.path, entry.name, entry.isDirectory))
