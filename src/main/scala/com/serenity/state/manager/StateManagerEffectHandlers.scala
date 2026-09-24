@@ -270,7 +270,7 @@ final private[manager] class StateManagerEffectHandlers(
       case FileIntent.OpenRecentFile(path) =>
         loadFile(path)
       case FileIntent.OpenFileSearch =>
-        surfacePopupEffects.openFileSearchEffect(state)
+        interpretSurfaceEffect(SurfaceEffect.OpenFileSearch)
       case FileIntent.CloseAll =>
         beginCloseAction(CloseScope.All, state)
       case FileIntent.CloseOthers =>
