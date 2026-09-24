@@ -35,7 +35,12 @@ class StateManagerCursorGlideCancellationSpec extends AnyFlatSpec with Matchers:
       val glide  = Tween(start = PixelPoint(0, 0), end = PixelPoint(20, 0), curve = EasingCurve.Linear, steps = 4)
       val cursor = Cursor(CursorPosition(0, 0), glide = Some(glide))
       val buffer = Buffer.fromString(bufferId, "hello world").copy(editing = EditingState.fromCursors(List(cursor)))
-      state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
+      // Advances `nextBufferId` past the seeded buffer, as a real allocation would: cancellation now commits through
+      // validation, which rejects a state whose next buffer ID collides with a live one.
+      state.copy(
+        persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)),
+        runtime = state.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
+      )
     }.unsafeRunSync()
 
   "disabling motion accessibility" should "cancel every in-flight cursor glide" in {
