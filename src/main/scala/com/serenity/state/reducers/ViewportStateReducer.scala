@@ -10,12 +10,13 @@ object ViewportStateReducer:
   def ensureCursorVisible(paneId: PaneId, state: AppState): ReducerResult =
     val scrolled = Focused.bufferOf(state, paneId).map { buffer =>
       val cursor = buffer.editing.cursors.head.position
-      Focused.replaceBuffer(state, buffer.copy(viewport = CursorViewport.adjustForCursor(buffer, state, cursor)))
+      val viewport = CursorViewport.adjustForCursor(buffer, state, cursor)
+      Focused.replaceBuffer(state, buffer.copy(viewport = viewport))
     }
     ReducerResult.noEffects(scrolled.getOrElse(state))
 
-  /** `targetLine` comes from a click against the minimap as last rendered; a concurrent edit or undo can have shrunk the
-    * document since, so it is clamped rather than trusted to be in bounds.
+  /** `targetLine` comes from a click against the minimap as last rendered; a concurrent edit or undo can have shrunk
+    * the document since, so it is clamped rather than trusted to be in bounds.
     */
   def clickMinimap(paneId: PaneId, targetLine: Int, state: AppState): ReducerResult =
     val jumped = Focused.bufferOf(state, paneId).map { buffer =>

@@ -15,7 +15,8 @@ object PinnedPanelContentReducer:
   def pinOrUpdateTerminal(text: String, position: PanelPosition, size: Int, state: AppState): ReducerResult =
     newestPinned(state)(isTerminal) match
       case Some(surface) =>
-        ReducerResult.noEffects(replaceSurface(state, surface.copy(content = SurfaceContent.Terminal(text, text.length))))
+        val refreshed = surface.copy(content = SurfaceContent.Terminal(text, text.length))
+        ReducerResult.noEffects(replaceSurface(state, refreshed))
       case None =>
         PanelStateReducer.pin(PanelContent.Terminal(text, text.length), position, size, state)
 
@@ -26,7 +27,8 @@ object PinnedPanelContentReducer:
       case Some(surface) =>
         ReducerResult.noEffects(replaceSurface(state, surface.copy(content = SurfaceContent.DirectoryTree(tree, None))))
       case None =>
-        PanelStateReducer.pin(PanelContent.DirectoryTree(tree, selectedPath = None), PanelPosition.Left, ExplorerSize, state)
+        val content = PanelContent.DirectoryTree(tree, selectedPath = None)
+        PanelStateReducer.pin(content, PanelPosition.Left, ExplorerSize, state)
 
   def selectFileInExplorer(targetPath: Path, state: AppState): ReducerResult =
     val selected = newestPinned(state)(isDirectoryTree).flatMap { surface =>

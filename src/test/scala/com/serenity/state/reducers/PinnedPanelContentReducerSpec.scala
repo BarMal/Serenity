@@ -52,8 +52,9 @@ class PinnedPanelContentReducerSpec extends AnyFlatSpec with Matchers:
         tree.entries.getOrElse(repo, Nil).map(e => e.name -> e.isDirectory) shouldBe
           List("src/" -> true, "build.sbt" -> false)
       case other => fail(s"Expected one directory tree, got $other")
-    result.state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(result.state.pinnedSurfaces.head.id)) shouldBe
-      Some(PanelPosition.Left)
+    val explorerId = result.state.pinnedSurfaces.head.id
+    val tree       = result.state.persisted.layout.workspaceTree
+    tree.flatMap(_.positionForSurface(explorerId)) shouldBe Some(PanelPosition.Left)
     result.effects should matchPattern { case List(AppEffect.Undo(_)) => }
     valid(result) shouldBe true
   }
@@ -84,7 +85,7 @@ class PinnedPanelContentReducerSpec extends AnyFlatSpec with Matchers:
       ReducerResult.noEffects(AppState.initial)
   }
 
-  "PinnedPanelContentReducer.forgetMovedFile" should "drop the moved file from every explorer listing its directory" in {
+  "PinnedPanelContentReducer.forgetMovedFile" should "drop the moved file from explorers listing its directory" in {
     val loaded = PinnedPanelContentReducer.loadDirectoryTree(repo, List("a.txt", "b.txt"), AppState.initial).state
 
     val result = PinnedPanelContentReducer.forgetMovedFile(repo.resolve("a.txt"), loaded)
@@ -110,8 +111,8 @@ class PinnedPanelContentReducerSpec extends AnyFlatSpec with Matchers:
   it should "not touch a non-explorer panel" in {
     val withOutline = PanelStateReducer.pin(PanelContent.Outline(Nil), PanelPosition.Right, 20, AppState.initial).state
     val entries     = Map(repo -> List(DirEntry(repo.resolve("a.txt"), "a.txt", isDirectory = false)))
-    val loaded =
-      PanelStateReducer.pin(PanelContent.DirectoryTree(DirectoryTreeData(repo, entries = entries)), PanelPosition.Left, 30, withOutline).state
+    val explorer    = PanelContent.DirectoryTree(DirectoryTreeData(repo, entries = entries))
+    val loaded      = PanelStateReducer.pin(explorer, PanelPosition.Left, 30, withOutline).state
 
     val result = PinnedPanelContentReducer.forgetMovedFile(repo.resolve("a.txt"), loaded)
 

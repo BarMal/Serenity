@@ -69,7 +69,9 @@ final private[manager] class StateManagerSurfacePopupEffects(
 
   private[manager] def openThemePickerEffect(state: AppState): IO[Unit] =
     themeNamesRef.get.flatMap { themeNames =>
-      PopupSurfaceReducer.openThemePicker(themeNames, state).traverse_(result => validateAndUpdateState(result.state, state))
+      PopupSurfaceReducer
+        .openThemePicker(themeNames, state)
+        .traverse_(result => validateAndUpdateState(result.state, state))
     }
 
   private[manager] def openThemeCreatorEffect(state: AppState): IO[Unit] =

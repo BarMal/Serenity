@@ -21,7 +21,8 @@ object PopupSurfaceReducer:
         case SurfaceContent.ThemeCreator(_) => true
         case _                              => false
     }
-    val creator = belowCursor(surfaceId, SurfaceContent.ThemeCreator(ThemeCreatorState.fromTheme(state.persisted.theme)), state)
+    val creatorContent = SurfaceContent.ThemeCreator(ThemeCreatorState.fromTheme(state.persisted.theme))
+    val creator        = belowCursor(surfaceId, creatorContent, state)
     ReducerResult.noEffects(
       stateWithId
         .copy(runtime = stateWithId.runtime.copy(uiSurfaces = withoutCreator :+ creator))
@@ -33,10 +34,11 @@ object PopupSurfaceReducer:
 
   private def openFocused(content: SurfaceContent, state: AppState): ReducerResult =
     val (stateWithId, surfaceId) = state.allocateSurfaceId
+    val popup                    = belowCursor(surfaceId, content, state)
     ReducerResult.noEffects(
       stateWithId.copy(
         persisted = stateWithId.persisted.copy(focus = Focus.Surface(surfaceId)),
-        runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ belowCursor(surfaceId, content, state))
+        runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ popup)
       )
     )
 
