@@ -63,8 +63,8 @@ final private[manager] class StateManagerFilePersistence(
     })
 
   /** Waits for the background saves of `bufferIds` and applies their results now, so a close deciding whether these
-    * buffers are unsaved sees the outcome of a save the user already asked for. A failed save leaves its buffer dirty,
-    * so the close goes on to prompt for it.
+    * buffers are unsaved sees the outcome of a save the user already asked for: Ctrl+S then Ctrl+Q must not prompt. A
+    * failed save leaves its buffer dirty, so the close goes on to prompt for it.
     */
   def settlePendingSaves(bufferIds: List[BufferId]): IO[Unit] =
     bufferIds.traverse_(bufferId =>
