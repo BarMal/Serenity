@@ -31,22 +31,20 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
   given Balance = Balance.default
 
   private def newPipeline(
-    sharedStateRef: Ref[IO, AppState],
+    sharedModelRef: Ref[IO, Model],
     onEffect: (StateManagerOperationBoundary, AppEffect) => IO[Unit] = (_, _) => IO.unit
   ): IO[StateManagerEventPipeline] =
     for
-      fiberRef               <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
-      cacheRef               <- Ref.of[IO, Option[MouseTargetCache]](None)
-      sharedBufferAnimations <- Ref.of[IO, Map[BufferId, com.serenity.animation.AnimationState]](Map.empty)
-      sharedUndoRef          <- Ref.of[IO, UndoState](UndoState())
+      fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
+      cacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
+      sharedStateRef = Model.appRef(sharedModelRef)
       pipelineLogger = org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
       operations <- StateManagerOperationBoundary.create(sharedStateRef, fiberRef, pipelineLogger)
       statePort = new EventStatePort:
-        val stateRef                 = sharedStateRef
+        val modelRef                 = sharedModelRef
         val logger                   = pipelineLogger
         val documentAnalysisFiberRef = fiberRef
         val mouseTargetCacheRef      = cacheRef
-        val bufferAnimationsRef      = sharedBufferAnimations
       effectPort = EventEffectPort(
         interpretEffect = effect => onEffect(operations, effect),
         interpretCommand = (_, _) => IO.unit
@@ -55,9 +53,10 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
         def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]      = IO.unit
         def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] = IO.pure(BufferId(0))
         def createPane(bufferId: Option[BufferId]): IO[PaneId]                  = IO.pure(PaneId(0))
+      modelCommit = new ModelCommit(sharedModelRef, operations)
       undoRecording = new UndoRecording(new UndoRecordingPort:
-        val stateRef = sharedStateRef; val undoRef = sharedUndoRef
-        export operations.validateAndUpdateState)
+        val undoRef = Model.undoRef(sharedModelRef)
+        export modelCommit.updateValidated as updateModelValidated)
     yield new StateManagerEventPipeline(
       statePort,
       effectPort,
@@ -78,8 +77,9 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
 
     val program =
       for
-        stateRef <- Ref.of[IO, AppState](AppState.initial)
-        pipeline <- newPipeline(stateRef)
+        modelRef <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+        stateRef = Model.appRef(modelRef)
+        pipeline <- newPipeline(modelRef)
         before   <- stateRef.get
         _        <- List.fill(concurrency)(pipeline.applyEvent(NewTab)).parSequence_
         after    <- stateRef.get
@@ -99,8 +99,9 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
   it should "not self-deadlock when an interpreted effect enqueues a follow-up event for drainPendingOperations (#1570)" in {
     val program =
       for
-        stateRef <- Ref.of[IO, AppState](AppState.initial)
-        pipeline <- newPipeline(stateRef, onEffect = (operations, _) => operations.enqueueEvent(NewTab))
+        modelRef <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+        stateRef = Model.appRef(modelRef)
+        pipeline <- newPipeline(modelRef, onEffect = (operations, _) => operations.enqueueEvent(NewTab))
         before   <- stateRef.get
         _        <- pipeline.applyEvent(FileSearch)
         after    <- stateRef.get

@@ -53,6 +53,8 @@ final private[manager] class StateManagerEventPipeline(
   import state.*
   import workflow.*
 
+  private val modelCommit = new ModelCommit(state.modelRef, operations)
+
   private def drainPendingOperations: cats.effect.IO[Unit] =
     operations.takeOperations.flatMap {
       case Nil => cats.effect.IO.unit
@@ -334,10 +336,15 @@ final private[manager] class StateManagerEventPipeline(
               case SurfacePresentation.Floating(_, _) =>
                 FocusHandlerRouting.forSurfaceContent(surface.content)
 
+  /** Commits the result's state together with its model-only effects (animations, undo bookkeeping) in one model write,
+    * then interprets its remaining effects in order.
+    */
   private[manager] def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
     for
-      _ <- validateAndUpdateState(result.state, fallbackState)
-      _ <- result.effects.traverse_(interpretEffect)
+      _ <- modelCommit.commitValidated(fallbackState)(model =>
+        ModelCommit.applyModelEffects(model.copy(app = result.state), result.effects)
+      )
+      _ <- result.effects.filterNot(ModelCommit.isModelEffect).traverse_(interpretEffect)
     yield ()
 
   private def hydrateCommandRunnerUiPresets: cats.effect.IO[Unit] =

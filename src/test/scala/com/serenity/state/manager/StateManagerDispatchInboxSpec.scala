@@ -9,7 +9,6 @@ import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, Fiber, IO, Ref}
 import cats.syntax.all.*
-import com.serenity.animation.AnimationState
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.{DocumentRevision, FileManager}
 import com.serenity.keystroke.events.*
@@ -56,19 +55,18 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
   /** Every interpreted effect reads the state, waits on `gate`, then commits what it read. */
   private def snapshotCommittingPipeline(initialState: AppState, gate: DispatchGate): IO[PipelineHarness] =
     for
-      sharedStateRef   <- Ref.of[IO, AppState](initialState)
-      fiberRef         <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
-      cacheRef         <- Ref.of[IO, Option[MouseTargetCache]](None)
-      bufferAnimations <- Ref.of[IO, Map[BufferId, AnimationState]](Map.empty)
-      sharedUndoRef    <- Ref.of[IO, UndoState](UndoState())
-      lspQueue         <- LspEffectQueue.create
-      operations       <- StateManagerOperationBoundary.create(sharedStateRef, fiberRef, quietLogger)
+      sharedModelRef <- Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty))
+      sharedStateRef = Model.appRef(sharedModelRef)
+      fiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
+      cacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
+      bufferAnimations = Model.bufferAnimationsRef(sharedModelRef)
+      lspQueue   <- LspEffectQueue.create
+      operations <- StateManagerOperationBoundary.create(sharedStateRef, fiberRef, quietLogger)
       statePort = new EventStatePort:
-        val stateRef                 = sharedStateRef
+        val modelRef                 = sharedModelRef
         val logger                   = quietLogger
         val documentAnalysisFiberRef = fiberRef
         val mouseTargetCacheRef      = cacheRef
-        val bufferAnimationsRef      = bufferAnimations
       snapshotCommittingEffect = (_: AppEffect) =>
         sharedStateRef.get.flatMap { snapshot =>
           gate.entered.complete(()) >> gate.release.get >> operations.validateAndUpdateState(snapshot, snapshot)
@@ -81,9 +79,10 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
         def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]      = IO.unit
         def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] = IO.pure(BufferId(0))
         def createPane(bufferId: Option[BufferId]): IO[PaneId]                  = IO.pure(PaneId(0))
+      modelCommit = new ModelCommit(sharedModelRef, operations)
       undoRecording = new UndoRecording(new UndoRecordingPort:
-        val stateRef = sharedStateRef; val undoRef = sharedUndoRef
-        export operations.validateAndUpdateState)
+        val undoRef = Model.undoRef(sharedModelRef)
+        export modelCommit.updateValidated as updateModelValidated)
       pipeline = new StateManagerEventPipeline(
         statePort,
         effectPort,
@@ -103,9 +102,8 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
         val bufferAnimationsRef = bufferAnimations
         export operations.validateAndUpdateState)
       editor = new StateManagerEditorCapability(
-        sharedStateRef,
+        sharedModelRef,
         lspQueue,
-        bufferAnimations,
         animations,
         operations,
         new Random(0L)
@@ -186,8 +184,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       directory    <- IO.blocking(Files.createTempDirectory("state-manager-dispatch-inbox-spec"))
       file = directory.resolve("notes.txt")
       _                        <- IO.blocking(Files.writeString(file, "draft"))
-      stateRef                 <- Ref.of[IO, AppState](AppState.initial)
-      undoRef                  <- Ref.of[IO, UndoState](UndoState())
+      modelRef                 <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
       themeNamesRef            <- Ref.of[IO, List[String]](Nil)
       quitSignal               <- Deferred[IO, Unit]
       lspQueue                 <- LspEffectQueue.create
@@ -195,11 +192,9 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       projectTaskSemaphore     <- Semaphore[IO](1)
       mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
       documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
-      bufferAnimationsRef      <- Ref.of[IO, Map[BufferId, AnimationState]](Map.empty)
       runtime = StateManagerRuntime
         .create(
-          stateRef = stateRef,
-          undoRef = undoRef,
+          modelRef = modelRef,
           themeNamesRef = themeNamesRef,
           quitSignal = quitSignal,
           logger = quietLogger,
@@ -211,7 +206,6 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
           projectTaskSemaphore = projectTaskSemaphore,
           mouseTargetCacheRef = mouseTargetCacheRef,
           documentAnalysisFiberRef = documentAnalysisFiberRef,
-          bufferAnimationsRef = bufferAnimationsRef,
           onFontConfigChanged = (_: FontConfig) => IO.unit,
           deviceTextScaleProvider = IO.pure(1.0),
           configPersistencePath = None,

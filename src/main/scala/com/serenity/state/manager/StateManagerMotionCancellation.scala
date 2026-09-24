@@ -1,18 +1,17 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import com.serenity.animation.{AnimationOwner, AnimationState}
 import com.serenity.config.{AppConfig, MotionFamily}
 import com.serenity.state.models.*
 
 /** Cancels in-flight animation state for one or every motion family, called whenever a config change turns a
   * previously-enabled family off (`StateManagerConfigEffects.updateMotionConfig`'s `cancelDisabledMotion` call). The
-  * decision and its effect on state are the pure [[MotionCancellation]]; this shell reads, applies and commits it.
+  * decision and its effect on state are the pure [[MotionCancellation]]; this shell commits it to the app state and the
+  * buffer animations in one model write.
   */
 final private[manager] class StateManagerMotionCancellation(
-    stateRef: Ref[IO, AppState],
-    bufferAnimationsRef: Ref[IO, Map[BufferId, AnimationState]],
-    validateAndUpdateState: (AppState, AppState) => IO[Unit]
+    updateModelValidated: (Model => Option[Model]) => IO[Unit]
 ):
 
   def cancelActiveMotion(): IO[Unit] = cancel(MotionCancellation.Everything)
@@ -23,8 +22,14 @@ final private[manager] class StateManagerMotionCancellation(
   private def cancel(cancellation: MotionCancellation): IO[Unit] =
     if cancellation.isEmpty then IO.unit
     else
-      bufferAnimationsRef.update(cancellation.cancelBufferAnimations) >>
-        stateRef.get.flatMap(state => validateAndUpdateState(cancellation.cancelState(state), state))
+      updateModelValidated(model =>
+        Some(
+          model.copy(
+            app = cancellation.cancelState(model.app),
+            bufferAnimations = cancellation.cancelBufferAnimations(model.bufferAnimations)
+          )
+        )
+      )
 
 /** Which in-flight motion a config change cancels: everything once motion as a whole goes off, otherwise just the
   * families that went from enabled to disabled.

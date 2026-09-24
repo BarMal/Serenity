@@ -230,8 +230,7 @@ object AppRuntime:
               logger.info("Initial render completed, starting main loop") >>
               {
                 val idlePhase = AppRuntimeRenderLoops.idleRenderPhase(
-                  loadState = stateManager.getCurrentState,
-                  loadBufferAnimations = stateManager.getBufferAnimations,
+                  loadModel = stateManager.getModel,
                   fastModeSignal = fastModeSignal,
                   windowFocused = windowFocused,
                   pendingPaintDamage = pendingPaintDamage,

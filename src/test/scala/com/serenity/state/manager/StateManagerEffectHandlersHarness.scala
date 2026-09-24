@@ -11,6 +11,7 @@ import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
 import com.serenity.state.models.*
+import com.serenity.state.undo.UndoState
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, PeekContent}
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
@@ -55,16 +56,16 @@ private[manager] trait StateManagerEffectHandlersHarness:
     saveExistingBufferHook: BufferId => IO[Unit] = _ => IO.unit,
     loadSessionResult: IO[Option[AppState]] = IO.pure(None)
   ): Harness =
-    val stateRefVar        = Ref.of[IO, AppState](initialState).unsafeRunSync()
-    val committedVar       = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
-    val eventsVar          = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
-    val callsVar           = Ref.of[IO, List[String]](Nil).unsafeRunSync()
-    val fontConfigsVar     = Ref.of[IO, List[com.serenity.ui.fonts.FontLoader.FontConfig]](Nil).unsafeRunSync()
-    val sessionRoot        = Files.createTempDirectory("effect-handlers-spec")
-    val sessionTriggersVar = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
-    val themeNamesRefVar   = Ref.of[IO, List[String]](Nil).unsafeRunSync()
-    val bufferAnimationsRefVar =
-      Ref.of[IO, Map[BufferId, com.serenity.animation.AnimationState]](Map.empty).unsafeRunSync()
+    val modelRefVar             = Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty)).unsafeRunSync()
+    val stateRefVar             = Model.appRef(modelRefVar)
+    val committedVar            = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
+    val eventsVar               = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
+    val callsVar                = Ref.of[IO, List[String]](Nil).unsafeRunSync()
+    val fontConfigsVar          = Ref.of[IO, List[com.serenity.ui.fonts.FontLoader.FontConfig]](Nil).unsafeRunSync()
+    val sessionRoot             = Files.createTempDirectory("effect-handlers-spec")
+    val sessionTriggersVar      = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
+    val themeNamesRefVar        = Ref.of[IO, List[String]](Nil).unsafeRunSync()
+    val bufferAnimationsRefVar  = Model.bufferAnimationsRef(modelRefVar)
     val quitSignalVar           = Deferred[IO, Unit].unsafeRunSync()
     val lspQueueVar             = LspEffectQueue.create.unsafeRunSync()
     val projectTaskFiberRefVar  = Ref.of[IO, Option[ManagedProjectTask]](None).unsafeRunSync()
@@ -93,6 +94,10 @@ private[manager] trait StateManagerEffectHandlersHarness:
       def enqueueEvent(event: Event): IO[Unit]                = eventsVar.update(_ :+ event)
       def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
         committedVar.update(_ :+ newState) >> stateRefVar.set(newState)
+      def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
+        modelRefVar.get.flatMap(model =>
+          transition(model).fold(IO.unit)(next => committedVar.update(_ :+ next.app) >> modelRefVar.set(next))
+        )
       def scheduleDocumentAnalysis(): IO[Unit] = IO.unit
       def scheduleFindSearch(request: FindSearchRequest): IO[Unit] =
         callsVar.update(_ :+ s"scheduleFindSearch:$request")

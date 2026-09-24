@@ -26,8 +26,7 @@ import org.typelevel.log4cats.Logger
 private[serenity] object AppRuntimeRenderLoops:
 
   private[serenity] def idleRenderPhase(
-    loadState: IO[AppState],
-    loadBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]],
+    loadModel: IO[Model],
     fastModeSignal: SignallingRef[IO, Boolean],
     windowFocused: SignallingRef[IO, Boolean],
     pendingPaintDamage: Ref[IO, Damage],
@@ -39,13 +38,12 @@ private[serenity] object AppRuntimeRenderLoops:
     requestFastRender: IO[Unit]
   )(using Logger[IO]): Stream[IO, Unit] =
     Stream
-      .repeatEval(AppRuntime.awaitFocusedIdleTick(loadState, windowFocused))
+      .repeatEval(AppRuntime.awaitFocusedIdleTick(loadModel.map(_.app), windowFocused))
       .interruptWhen(fastModeSignal.discrete)
       .evalMap(_ =>
         runIdleRenderStep(
           currentStateForDiagnostics,
-          loadState,
-          loadBufferAnimations,
+          loadModel,
           pendingPaintDamage,
           checkResizeAndHandle,
           cursorVisible,
@@ -69,8 +67,7 @@ private[serenity] object AppRuntimeRenderLoops:
   )(using balance: com.serenity.rope.Balance): Stream[IO, Event] => Stream[IO, Unit] =
     _.evalMap { event =>
       for
-        before           <- stateManager.getCurrentState
-        beforeAnimations <- stateManager.getBufferAnimations
+        before <- stateManager.getModel
         _ <-
           checkResizeBeforeInput(event, checkResizeAndHandle) >>
             ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
@@ -79,9 +76,10 @@ private[serenity] object AppRuntimeRenderLoops:
             ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
             refreshFocusedInputTranslator(stateManager, inputRouter, translatorCache) >>
             AppRuntime.resetCursorActivity(cursorVisible, breathIndex)
-        after           <- stateManager.getCurrentState
-        afterAnimations <- stateManager.getBufferAnimations
-        _               <- emitDamage(DamageProducer.forTransition(before, after, beforeAnimations, afterAnimations))
+        after <- stateManager.getModel
+        _ <- emitDamage(
+          DamageProducer.forTransition(before.app, after.app, before.bufferAnimations, after.bufferAnimations)
+        )
       yield ()
     }.drain
 
@@ -154,36 +152,30 @@ private[serenity] object AppRuntimeRenderLoops:
               )
               active <-
                 if isInitialFrame then
-                  for
-                    initialState     <- stateManager.getCurrentState
-                    bufferAnimations <- stateManager.getBufferAnimations
-                  yield hasActiveAnimations(initialState, bufferAnimations)
+                  stateManager.getModel.map(model => hasActiveAnimations(model.app, model.bufferAnimations))
                 else
                   animationTickCadence.modify(_.advance(interval)).flatMap { animationTicks =>
                     withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(
                       advanceAnimationsForCadence(animationTicks, stateManager, animationTicker, pendingPaintDamage)
                     )
                   }
-              state <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
-                stateManager.getCurrentState
+              model <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
+                stateManager.getModel
               )
-              bufferAnimations <- stateManager.getBufferAnimations
-              paintDamage      <- pendingPaintDamage.getAndSet(Damage.Nothing)
-              _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(state)))(
-                renderFull(state, true, None, paintDamage, bufferAnimations)
+              paintDamage <- pendingPaintDamage.getAndSet(Damage.Nothing)
+              _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(model.app)))(
+                renderFull(model.app, true, None, paintDamage, model.bufferAnimations)
               )
             yield active
         }
         .takeWhile(identity)
         .map(_ => ())
         .onFinalize {
-          stateManager.getCurrentState.flatMap { state =>
-            stateManager.getBufferAnimations.flatMap { bufferAnimations =>
-              pendingDamage.get.flatMap { damage =>
-                if AppRuntime.shouldClearFastMode(hasActiveAnimations(state, bufferAnimations), damage) then
-                  fastModeSignal.set(false)
-                else IO.unit
-              }
+          stateManager.getModel.flatMap { model =>
+            pendingDamage.get.flatMap { damage =>
+              if AppRuntime.shouldClearFastMode(hasActiveAnimations(model.app, model.bufferAnimations), damage) then
+                fastModeSignal.set(false)
+              else IO.unit
             }
           }
         }
@@ -257,8 +249,7 @@ private[serenity] object AppRuntimeRenderLoops:
 
   private[serenity] def runIdleRenderStep(
     currentStateForDiagnostics: IO[Option[AppState]],
-    loadState: IO[AppState],
-    loadBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]],
+    loadModel: IO[Model],
     pendingPaintDamage: Ref[IO, Damage],
     checkResizeAndHandle: IO[Unit],
     cursorVisible: Ref[IO, Boolean],
@@ -270,9 +261,10 @@ private[serenity] object AppRuntimeRenderLoops:
       _ <- withRuntimeDiagnostics("render loop", "idle.resize", currentStateForDiagnostics)(
         checkResizeAndHandle
       )
-      state <- withRuntimeDiagnostics("render loop", "idle.state", currentStateForDiagnostics)(
-        loadState
+      model <- withRuntimeDiagnostics("render loop", "idle.state", currentStateForDiagnostics)(
+        loadModel
       )
+      state = model.app
       _ <- AppRuntime.cursorIdleInterval(state.persisted.config, state.runtime.isTuiMode) match
         case Some(_) =>
           for
@@ -285,13 +277,12 @@ private[serenity] object AppRuntimeRenderLoops:
             // damage here would lose it -- an input event that lands just as an idle tick fires would have its
             // glyphs dropped until something else damaged the same rows. The fast phase that same event wakes
             // drains it instead.
-            paintDamage      <- pendingPaintDamage.get
-            bufferAnimations <- loadBufferAnimations
+            paintDamage <- pendingPaintDamage.get
             _ <- withRuntimeDiagnostics(
               "render loop",
               "idle.cursor-render",
               IO.pure(Some(state))
-            )(renderCursorOnly(state, visible, cursor, paintDamage, bufferAnimations))
+            )(renderCursorOnly(state, visible, cursor, paintDamage, model.bufferAnimations))
               .handleErrorWith(recoverIdleCursorRenderFailure(_, requestFastRender))
           yield ()
         case None =>
@@ -304,22 +295,16 @@ private[serenity] object AppRuntimeRenderLoops:
     animationTicker: AnimationTicker,
     pendingPaintDamage: Ref[IO, Damage]
   )(using balance: com.serenity.rope.Balance): IO[Boolean] =
-    if ticks <= 0 then
-      for
-        state            <- stateManager.getCurrentState
-        bufferAnimations <- stateManager.getBufferAnimations
-      yield hasActiveAnimations(state, bufferAnimations)
+    if ticks <= 0 then stateManager.getModel.map(model => hasActiveAnimations(model.app, model.bufferAnimations))
     else
       for
-        before           <- stateManager.getCurrentState
-        beforeAnimations <- stateManager.getBufferAnimations
+        before <- stateManager.getModel
         stillActive <- (0 until ticks).toList.foldLeft(IO.pure(false)) { (previous, _) =>
           previous.flatMap(_ => animationTicker.advanceAnimationsOnTick)
         }
-        after           <- stateManager.getCurrentState
-        afterAnimations <- stateManager.getBufferAnimations
+        after <- stateManager.getModel
         _ <- pendingPaintDamage.update(
-          _ |+| DamageProducer.forTransition(before, after, beforeAnimations, afterAnimations)
+          _ |+| DamageProducer.forTransition(before.app, after.app, before.bufferAnimations, after.bufferAnimations)
         )
       yield stillActive
 

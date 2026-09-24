@@ -31,6 +31,11 @@ trait StateReader:
   def getCurrentState: IO[AppState]
   def getBufferAnimations: IO[Map[BufferId, AnimationState]]
 
+  /** One consistent snapshot of everything the dispatcher owns: use it wherever app state and buffer animations are
+    * read together, since two separate reads can straddle a write.
+    */
+  def getModel: IO[Model]
+
 trait StateUpdater:
   def updateState(update: AppState => AppState): IO[Unit]
 
@@ -276,21 +281,22 @@ object StateManager:
       resolvedSessionRootOverride <- resolveSessionRootOverride(sessionRootOverride)
       themeNames                  <- themeManager.listAvailableThemes.handleErrorWith(_ => IO.pure(Nil))
       initialState = AppState.initial(initialConfig)
-      stateRef <- Ref.of[IO, AppState](
-        initialState.copy(runtime = initialState.runtime.copy(availableThemeNames = themeNames))
+      modelRef <- Ref.of[IO, Model](
+        Model(
+          app = initialState.copy(runtime = initialState.runtime.copy(availableThemeNames = themeNames)),
+          undo = UndoState(maxUndoDepth = policy.maxUndoDepth),
+          bufferAnimations = Map.empty
+        )
       )
-      undoRef                  <- Ref.of[IO, UndoState](UndoState(maxUndoDepth = policy.maxUndoDepth))
       mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
       documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
-      bufferAnimationsRef      <- Ref.of[IO, Map[BufferId, AnimationState]](Map.empty)
       themeNamesRef            <- Ref.of[IO, List[String]](themeNames)
       quitSignal               <- Deferred[IO, Unit]
       lspQueue                 <- LspEffectQueue.create
       projectTaskFiberRef      <- Ref.of[IO, Option[ManagedProjectTask]](None)
       projectTaskSemaphore     <- Semaphore[IO](1)
       runtime = StateManagerRuntime.create(
-        stateRef = stateRef,
-        undoRef = undoRef,
+        modelRef = modelRef,
         themeNamesRef = themeNamesRef,
         quitSignal = quitSignal,
         logger = LoggerFactory[IO].getLogger(using LoggerName("com.serenity.state.manager.StateManager")),
@@ -302,7 +308,6 @@ object StateManager:
         projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
         documentAnalysisFiberRef = documentAnalysisFiberRef,
-        bufferAnimationsRef = bufferAnimationsRef,
         onFontConfigChanged = onFontConfigChanged,
         deviceTextScaleProvider = deviceTextScaleProvider,
         configPersistencePath = configPersistencePath,
@@ -320,7 +325,7 @@ object StateManager:
     */
   private[manager] def fromRuntime(runtime: StateManagerRuntime)(using Balance): IO[StateManager] =
     StateManagerOperationBoundary
-      .create(runtime.stateRef, runtime.documentAnalysisFiberRef, runtime.logger)
+      .create(Model.appRef(runtime.modelRef), runtime.documentAnalysisFiberRef, runtime.logger)
       .map(operations => new StateManagerImpl(runtime, operations))
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
@@ -363,8 +368,7 @@ object StateManager:
       extends StateManager:
 
     private val composition = new StateManagerComposition(
-      runtime.stateRef,
-      runtime.undoRef,
+      runtime.modelRef,
       runtime.themeNamesRef,
       runtime.quitSignal,
       runtime.logger,
@@ -375,7 +379,6 @@ object StateManager:
       runtime.projectTaskSemaphore,
       runtime.mouseTargetCacheRef,
       runtime.documentAnalysisFiberRef,
-      runtime.bufferAnimationsRef,
       runtime.onFontConfigChanged,
       runtime.deviceTextScaleProvider,
       runtime.configPersistencePath,

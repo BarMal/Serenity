@@ -30,19 +30,17 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private def composedPipeline(
-    currentStateRef: Ref[IO, AppState],
+    currentModelRef: Ref[IO, Model],
     operations: StateManagerOperationBoundary,
     runEffect: AppEffect => IO[Unit]
   ): StateManagerEventPipeline =
     val currentLogger   = org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
-    val currentUndoRef  = Ref.of[IO, UndoState](UndoState()).unsafeRunSync()
+    val currentStateRef = Model.appRef(currentModelRef)
     val currentFiberRef = Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None).unsafeRunSync()
     val currentCacheRef = Ref.of[IO, Option[MouseTargetCache]](None).unsafeRunSync()
-    val currentBufferAnimationsRef =
-      Ref.of[IO, Map[BufferId, AnimationState]](Map.empty).unsafeRunSync()
     val statePort = new EventStatePort:
-      val stateRef = currentStateRef; val logger = currentLogger; val documentAnalysisFiberRef = currentFiberRef
-      val mouseTargetCacheRef = currentCacheRef; val bufferAnimationsRef = currentBufferAnimationsRef
+      val modelRef = currentModelRef; val logger = currentLogger; val documentAnalysisFiberRef = currentFiberRef
+      val mouseTargetCacheRef = currentCacheRef
     val effectPort = EventEffectPort(
       interpretEffect = runEffect,
       interpretCommand = (_, _) => IO.unit
@@ -52,8 +50,9 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] = IO.pure(BufferId(0))
       def createPane(bufferId: Option[BufferId]): IO[PaneId]                  = IO.pure(PaneId(0))
     val undoRecording = new UndoRecording(new UndoRecordingPort:
-      val stateRef = currentStateRef; val undoRef = currentUndoRef
-      export operations.validateAndUpdateState)
+      val undoRef = Model.undoRef(currentModelRef)
+      def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
+        new ModelCommit(currentModelRef, operations).updateValidated(transition))
     new StateManagerEventPipeline(
       statePort,
       effectPort,
@@ -224,12 +223,12 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
         config = AppConfig.default.withMotionAccessibility(com.serenity.config.MotionAccessibility.Off)
       )
     )
-    val stateRef = Ref.of[IO, AppState](state).unsafeRunSync()
+    val modelRef = Ref.of[IO, Model](Model(state, UndoState(), Map.empty)).unsafeRunSync()
     val fiberRef = Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None).unsafeRunSync()
     val operations = StateManagerOperationBoundary
-      .create(stateRef, fiberRef, org.typelevel.log4cats.noop.NoOpLogger.impl[IO])
+      .create(Model.appRef(modelRef), fiberRef, org.typelevel.log4cats.noop.NoOpLogger.impl[IO])
       .unsafeRunSync()
-    val pipeline = composedPipeline(stateRef, operations, _ => IO.unit)
+    val pipeline = composedPipeline(modelRef, operations, _ => IO.unit)
 
     pipeline.shouldApplySurfaceAnimationHooks(state) shouldBe false
   }
@@ -359,25 +358,25 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val initialState   = AppState.initial
     val committedState = initialState.copy(runtime = initialState.runtime.copy(nextBufferId = BufferId(42)))
     val program = for
-      stateRef <- Ref.of[IO, AppState](initialState)
+      modelRef <- Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty))
       fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
       operations <- StateManagerOperationBoundary.create(
-        stateRef,
+        Model.appRef(modelRef),
         fiberRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
       )
       observed <- Ref.of[IO, List[Int]](Nil)
       pipeline = composedPipeline(
-        stateRef,
+        modelRef,
         operations,
-        _ => stateRef.get.flatMap(state => observed.update(_ :+ state.runtime.nextBufferId.value))
+        _ => Model.appRef(modelRef).get.flatMap(state => observed.update(_ :+ state.runtime.nextBufferId.value))
       )
       _ <- pipeline.applyReducerResult(
         ReducerResult.withEffect(committedState, AppEffect.CompleteQuit),
         initialState
       )
       observedStates <- observed.get
-      state          <- stateRef.get
+      state          <- Model.appRef(modelRef).get
     yield
       observedStates shouldBe List(42)
       state.runtime.nextBufferId shouldBe BufferId(42)
@@ -388,15 +387,15 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   it should "drain effect-triggered nested events through the pipeline in FIFO order" in {
     val initialState = AppState.initial
     val program = for
-      stateRef <- Ref.of[IO, AppState](initialState)
+      modelRef <- Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty))
       fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
       operations <- StateManagerOperationBoundary.create(
-        stateRef,
+        Model.appRef(modelRef),
         fiberRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
       )
       pipeline = composedPipeline(
-        stateRef,
+        modelRef,
         operations,
         _ => operations.enqueueEvent(ToggleCommandRunner) >> operations.enqueueEvent(RunnerInsertChar('x'))
       )
@@ -404,7 +403,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
         ReducerResult.withEffect(initialState, AppEffect.CompleteQuit),
         initialState
       )
-      state <- stateRef.get
+      state <- Model.appRef(modelRef).get
     yield state.commandRunnerSurface.flatMap {
       _.content match
         case SurfaceContent.CommandPalette(runner) => Some(runner.searchTerm)
@@ -450,11 +449,12 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   }
 
   "AppRuntime input phase" should "depend only on state read, update, and event application capabilities" in {
-    val stateRef = Ref.of[IO, AppState](AppState.initial).unsafeRunSync()
-    val applied  = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
-    val bufferAnimationsRef =
-      Ref.of[IO, Map[BufferId, AnimationState]](Map.empty).unsafeRunSync()
+    val modelRef            = Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty)).unsafeRunSync()
+    val stateRef            = Model.appRef(modelRef)
+    val applied             = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
+    val bufferAnimationsRef = Model.bufferAnimationsRef(modelRef)
     val capabilities = new StateEngine:
+      def getModel: IO[Model]                                          = modelRef.get
       def getCurrentState: IO[AppState]                                = stateRef.get
       def getBufferAnimations: IO[Map[BufferId, AnimationState]]       = bufferAnimationsRef.get
       def updateState(update: AppState => AppState): IO[Unit]          = stateRef.update(update)
@@ -535,12 +535,12 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val stateRef = Ref.of[IO, AppState](state).unsafeRunSync()
+    val modelRef = Ref.of[IO, Model](Model(state, UndoState(), Map.empty)).unsafeRunSync()
     val fiberRef = Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None).unsafeRunSync()
     val operations = StateManagerOperationBoundary
-      .create(stateRef, fiberRef, org.typelevel.log4cats.noop.NoOpLogger.impl[IO])
+      .create(Model.appRef(modelRef), fiberRef, org.typelevel.log4cats.noop.NoOpLogger.impl[IO])
       .unsafeRunSync()
-    val pipeline = composedPipeline(stateRef, operations, _ => IO.unit)
+    val pipeline = composedPipeline(modelRef, operations, _ => IO.unit)
 
     pipeline.hasLiveMarkdownPreview(state, bufferId) shouldBe true
     pipeline.hasLiveMarkdownPreview(state, BufferId(2)) shouldBe false
@@ -579,16 +579,16 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     )
     val currentState = prevState.copy(persisted = prevState.persisted.copy(buffers = Map(bufferId -> after)))
     val program = for
-      stateRef <- Ref.of[IO, AppState](currentState)
+      modelRef <- Ref.of[IO, Model](Model(currentState, UndoState(), Map.empty))
       fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
       operations <- StateManagerOperationBoundary.create(
-        stateRef,
+        Model.appRef(modelRef),
         fiberRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
       )
-      pipeline = composedPipeline(stateRef, operations, _ => IO.unit)
+      pipeline = composedPipeline(modelRef, operations, _ => IO.unit)
       _          <- pipeline.scheduleMarkdownPreviewCommits(prevState)
-      afterState <- stateRef.get
+      afterState <- Model.appRef(modelRef).get
     yield afterState.persisted.buffers(bufferId).markdownPreviewEditGeneration
 
     program.unsafeRunSync() shouldBe 1L
@@ -611,16 +611,16 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     )
     val currentState = prevState.copy(persisted = prevState.persisted.copy(buffers = Map(bufferId -> after)))
     val program = for
-      stateRef <- Ref.of[IO, AppState](currentState)
+      modelRef <- Ref.of[IO, Model](Model(currentState, UndoState(), Map.empty))
       fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
       operations <- StateManagerOperationBoundary.create(
-        stateRef,
+        Model.appRef(modelRef),
         fiberRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
       )
-      pipeline = composedPipeline(stateRef, operations, _ => IO.unit)
+      pipeline = composedPipeline(modelRef, operations, _ => IO.unit)
       _          <- pipeline.scheduleMarkdownPreviewCommits(prevState)
-      afterState <- stateRef.get
+      afterState <- Model.appRef(modelRef).get
     yield afterState.persisted.buffers(bufferId).markdownPreviewEditGeneration
 
     program.unsafeRunSync() shouldBe 0L
@@ -645,16 +645,16 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       bufferId
     )
     val program = for
-      stateRef <- Ref.of[IO, AppState](prevState)
+      modelRef <- Ref.of[IO, Model](Model(prevState, UndoState(), Map.empty))
       fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
       operations <- StateManagerOperationBoundary.create(
-        stateRef,
+        Model.appRef(modelRef),
         fiberRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
       )
-      pipeline = composedPipeline(stateRef, operations, _ => IO.unit)
+      pipeline = composedPipeline(modelRef, operations, _ => IO.unit)
       _          <- pipeline.scheduleMarkdownPreviewCommits(prevState)
-      afterState <- stateRef.get
+      afterState <- Model.appRef(modelRef).get
     yield afterState.persisted.buffers(bufferId).markdownPreviewEditGeneration
 
     program.unsafeRunSync() shouldBe 0L

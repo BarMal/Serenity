@@ -13,9 +13,8 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
 final private[manager] class StateManagerEditorCapability(
-    stateRef: cats.effect.Ref[IO, AppState],
+    modelRef: cats.effect.Ref[IO, Model],
     lspQueue: LspEffectQueue,
-    bufferAnimationsRef: cats.effect.Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]],
     animations: AnimationChoreography,
     operations: StateManagerOperationBoundary,
     // Seeds the companion sprite's pseudo-random idle-to-action rolls (see `CompanionSpriteState`'s transition
@@ -24,6 +23,11 @@ final private[manager] class StateManagerEditorCapability(
     // passes it. Tests construct this class with a seeded `Random` for a deterministic trace.
     companionSpriteRandom: Random = new Random()
 )(using balance: com.serenity.rope.Balance):
+
+  private val stateRef            = Model.appRef(modelRef)
+  private val bufferAnimationsRef = Model.bufferAnimationsRef(modelRef)
+
+  def getModel: IO[Model] = modelRef.get
 
   def getCurrentState: IO[AppState] = stateRef.get
 
@@ -55,8 +59,9 @@ final private[manager] class StateManagerEditorCapability(
 
   private def advanceAnimationsOnTick(): IO[Boolean] =
     for
-      state            <- stateRef.get
-      bufferAnimations <- bufferAnimationsRef.get
+      model <- modelRef.get
+      state            = model.app
+      bufferAnimations = model.bufferAnimations
       hasBufferAnimations = state.persisted.buffers.keys.exists(id =>
         bufferAnimations.get(id).exists(_.hasActiveAnimations)
       )
@@ -92,49 +97,61 @@ final private[manager] class StateManagerEditorCapability(
   ): IO[Boolean] =
     // `modify` rather than a `set`: writers outside the dispatcher (`updateState`, the buffer/panel records) still
     // exist, and `modify` keeps this tick atomic with them. It may retry, so everything it reads is passed in.
-    for
-      newState <- stateRef.modify { current =>
-        val updatedTransition = current.runtime.themeTransition.map(_.advance).filterNot(_.isComplete)
-        val advancedCompanionSprite =
-          if hasCompanionSprite then
-            current.runtime.companionSprite
-              .tick(new Random(companionSpriteSeed), reducedRate = flairLevel == VisualFlairLevel.Reduced)
-          else current.runtime.companionSprite
-        val updatedColumnTransitions =
-          current.runtime.columnTransitions.view.mapValues(_.advance).toMap.filterNot(_._2.isComplete)
-        val stateWithAdvancedBuffers = current.copy(
-          persisted = current.persisted.copy(
-            buffers = current.persisted.buffers.view
-              .mapValues(advanceCursorGlides andThen advanceSelectionGeometries)
-              .toMap
-          ),
-          runtime = current.runtime.copy(
-            themeTransition = updatedTransition,
-            typingActivity = current.runtime.typingActivity.advance,
-            companionSprite = advancedCompanionSprite,
-            columnTransitions = updatedColumnTransitions
-          )
-        )
-        val next = animations.advancePanelGeometry(animations.advanceSurfaceAnimations(stateWithAdvancedBuffers))
+    modelRef
+      .modify { current =>
+        val next = advanceModel(current, hasCompanionSprite, flairLevel, companionSpriteSeed)
         (next, next)
       }
-      updatedBufferAnimations <- bufferAnimationsRef.updateAndGet(_.map {
-        case (id, animations) =>
-          val advanced = newState.persisted.buffers.get(id) match
-            case Some(buffer) => animations.advanceAllAnimations(isWithinViewport(buffer.viewport))
-            case None         => animations
-          id -> advanced
-      })
-    yield newState.persisted.buffers.keys
-      .exists(id => updatedBufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
-      newState.runtime.themeTransition.isDefined ||
-      newState.runtime.surfaceAnimations.nonEmpty ||
-      newState.runtime.columnTransitions.nonEmpty ||
-      newState.runtime.panelGeometry.nonEmpty ||
-      newState.persisted.buffers.values.exists(hasInFlightGlide) ||
-      newState.persisted.buffers.values.exists(hasInFlightSelectionGeometry) ||
-      newState.runtime.typingActivity.isActive ||
-      hasCompanionSprite
+      .map { next =>
+        val newState = next.app
+        newState.persisted.buffers.keys.exists(id => next.bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
+        newState.runtime.themeTransition.isDefined ||
+        newState.runtime.surfaceAnimations.nonEmpty ||
+        newState.runtime.columnTransitions.nonEmpty ||
+        newState.runtime.panelGeometry.nonEmpty ||
+        newState.persisted.buffers.values.exists(hasInFlightGlide) ||
+        newState.persisted.buffers.values.exists(hasInFlightSelectionGeometry) ||
+        newState.runtime.typingActivity.isActive ||
+        hasCompanionSprite
+      }
+
+  private def advanceModel(
+    current: Model,
+    hasCompanionSprite: Boolean,
+    flairLevel: VisualFlairLevel,
+    companionSpriteSeed: Long
+  ): Model =
+    val state             = current.app
+    val updatedTransition = state.runtime.themeTransition.map(_.advance).filterNot(_.isComplete)
+    val advancedCompanionSprite =
+      if hasCompanionSprite then
+        state.runtime.companionSprite
+          .tick(new Random(companionSpriteSeed), reducedRate = flairLevel == VisualFlairLevel.Reduced)
+      else state.runtime.companionSprite
+    val updatedColumnTransitions =
+      state.runtime.columnTransitions.view.mapValues(_.advance).toMap.filterNot(_._2.isComplete)
+    val stateWithAdvancedBuffers = state.copy(
+      persisted = state.persisted.copy(
+        buffers = state.persisted.buffers.view
+          .mapValues(advanceCursorGlides andThen advanceSelectionGeometries)
+          .toMap
+      ),
+      runtime = state.runtime.copy(
+        themeTransition = updatedTransition,
+        typingActivity = state.runtime.typingActivity.advance,
+        companionSprite = advancedCompanionSprite,
+        columnTransitions = updatedColumnTransitions
+      )
+    )
+    val newState = animations.advancePanelGeometry(animations.advanceSurfaceAnimations(stateWithAdvancedBuffers))
+    val advancedBufferAnimations = current.bufferAnimations.map {
+      case (id, bufferAnimations) =>
+        val advanced = newState.persisted.buffers.get(id) match
+          case Some(buffer) => bufferAnimations.advanceAllAnimations(isWithinViewport(buffer.viewport))
+          case None         => bufferAnimations
+        id -> advanced
+    }
+    current.copy(app = newState, bufferAnimations = advancedBufferAnimations)
 
   /** Caret-glide (issue #1085 phase 2): whether `buffer` has any cursor with a glide still mid-flight -- checked before
     * paying the cost of advancing every buffer's cursors on a tick that has nothing else to do either.
