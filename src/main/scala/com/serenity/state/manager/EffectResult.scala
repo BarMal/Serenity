@@ -5,6 +5,7 @@ import java.nio.file.Path
 import com.serenity.command.CommandRegistry
 import com.serenity.config.SpellCheckDictionaryFingerprint
 import com.serenity.keystroke.events.RunnerBindingRecordingExpired
+import com.serenity.project.ProjectTaskResult
 import com.serenity.rope.Rope
 import com.serenity.session.SessionMetadata
 import com.serenity.spellcheck.SpellChecker
@@ -84,6 +85,11 @@ private[manager] enum EffectResult:
   case SessionsListed(purpose: SessionListPurpose, sessions: List[SessionMetadata])
   case NamedSessionLoaded(pickerId: SurfaceId, restored: Option[AppState])
 
+  // Project tasks (#1697 Wave 3): posted by `LaneKey.Project` jobs; see ProjectTaskTransitions.
+  /** Output the task wrote since its previous batch. */
+  case ProjectTaskOutput(taskId: Long, chunk: String)
+  case ProjectTaskFinished(taskId: Long, outcome: Either[Throwable, ProjectTaskResult])
+
   // Timers (#1697 Wave 3): posted by `LaneKey.Timer` jobs once their delay has run out.
   /** The double-tap window of the binding recorded at `recordedAtMillis` has closed. */
   case CommandRunnerBindingExpired(recordedAtMillis: Long)
@@ -146,11 +152,14 @@ private[manager] object EffectResult:
       case NamedSessionLoaded(pickerId, restored) =>
         SessionWorkflowTransitions.withNamedSessionLoaded(state, pickerId, restored)
 
-      case expired: CommandRunnerBindingExpired => reduce(state, expired).state
+      case projectTask @ (ProjectTaskOutput(_, _) | ProjectTaskFinished(_, _)) => reduce(state, projectTask).state
+      case expired: CommandRunnerBindingExpired                                => reduce(state, expired).state
 
   /** [[applyIfCurrent]] together with the effects its transition emits; only the cases matched here emit any. */
   def reduce(state: AppState, result: EffectResult): ReducerResult =
     result match
+      case ProjectTaskOutput(taskId, chunk)     => ProjectTaskTransitions.outputArrived(state, taskId, chunk)
+      case ProjectTaskFinished(taskId, outcome) => ProjectTaskTransitions.finished(state, taskId, outcome)
       case CommandRunnerBindingExpired(recordedAtMillis) =>
         CommandRunnerReducer.reduce(
           RunnerBindingRecordingExpired(recordedAtMillis),

@@ -5,7 +5,6 @@ import java.nio.file.{Files, Path}
 import scala.concurrent.duration.*
 import scala.util.Random
 
-import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
@@ -187,14 +186,12 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       revisionRead <- Deferred[IO, Unit]
       directory    <- IO.blocking(Files.createTempDirectory("state-manager-dispatch-inbox-spec"))
       file = directory.resolve("notes.txt")
-      _                    <- IO.blocking(Files.writeString(file, "draft"))
-      modelRef             <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
-      themeNamesRef        <- Ref.of[IO, List[String]](Nil)
-      quitSignal           <- Deferred[IO, Unit]
-      lspQueue             <- LspEffectQueue.create
-      projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
-      projectTaskSemaphore <- Semaphore[IO](1)
-      mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
+      _                   <- IO.blocking(Files.writeString(file, "draft"))
+      modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+      themeNamesRef       <- Ref.of[IO, List[String]](Nil)
+      quitSignal          <- Deferred[IO, Unit]
+      lspQueue            <- LspEffectQueue.create
+      mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
       runtime = StateManagerRuntime
         .create(
           modelRef = modelRef,
@@ -205,8 +202,6 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
           sessionRootOverride = Some(directory.resolve("session")),
           themeManager = AppThemeManager.create,
           lspQueue = lspQueue,
-          projectTaskFiberRef = projectTaskFiberRef,
-          projectTaskSemaphore = projectTaskSemaphore,
           mouseTargetCacheRef = mouseTargetCacheRef,
           onFontConfigChanged = (_: FontConfig) => IO.unit,
           deviceTextScaleProvider = IO.pure(1.0),

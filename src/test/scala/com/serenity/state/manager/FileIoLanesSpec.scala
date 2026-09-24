@@ -4,7 +4,6 @@ import java.nio.file.{Files, Path}
 
 import scala.concurrent.duration.*
 
-import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.command.{Command, CommandCategory, CommandIntent, FileIntent, SessionIntent}
@@ -91,15 +90,13 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
     val directory = Files.createTempDirectory("file-io-lanes-spec")
     val program =
       for
-        gates                <- Ref.of[IO, List[Deferred[IO, Unit]]](Nil)
-        log                  <- Ref.of[IO, Vector[String]](Vector.empty)
-        modelRef             <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
-        themeNamesRef        <- Ref.of[IO, List[String]](Nil)
-        quitSignal           <- Deferred[IO, Unit]
-        lspQueue             <- LspEffectQueue.create
-        projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
-        projectTaskSemaphore <- Semaphore[IO](1)
-        mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
+        gates               <- Ref.of[IO, List[Deferred[IO, Unit]]](Nil)
+        log                 <- Ref.of[IO, Vector[String]](Vector.empty)
+        modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+        themeNamesRef       <- Ref.of[IO, List[String]](Nil)
+        quitSignal          <- Deferred[IO, Unit]
+        lspQueue            <- LspEffectQueue.create
+        mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
         runtime = StateManagerRuntime
           .create(
             modelRef = modelRef,
@@ -110,8 +107,6 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
             sessionRootOverride = Some(directory.resolve("session")),
             themeManager = AppThemeManager.create,
             lspQueue = lspQueue,
-            projectTaskFiberRef = projectTaskFiberRef,
-            projectTaskSemaphore = projectTaskSemaphore,
             mouseTargetCacheRef = mouseTargetCacheRef,
             onFontConfigChanged = (_: FontConfig) => IO.unit,
             deviceTextScaleProvider = IO.pure(1.0),

@@ -3,10 +3,11 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.*
-import cats.effect.std.{Queue, Semaphore}
+import cats.effect.std.Queue
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.{FileDialog, FileManager}
 import com.serenity.lsp.LspEffect
+import com.serenity.project.{ProjectTaskCommand, ProjectTaskResult, ProjectTaskRunner}
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence}
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -79,29 +80,8 @@ private[manager] object LspEffectQueue:
       documentVersions <- Ref.of[IO, Map[String, Int]](Map.empty)
     yield new LspEffectQueue(queue, pendingChanges, documentVersions)
 
-final private[manager] case class ManagedProjectTask(
-    finished: Deferred[IO, Unit],
-    fiber: Fiber[IO, Throwable, Unit]
-)
-
-private[manager] object ProjectTaskOwnership:
-
-  def clear(
-    projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]],
-    finished: Deferred[IO, Unit]
-  ): IO[Unit] =
-    projectTaskFiberRef.update(_.filterNot(_.finished eq finished))
-
-  def cancel(
-    projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]],
-    projectTaskSemaphore: Semaphore[IO]
-  ): IO[Boolean] =
-    projectTaskSemaphore.permit.use { _ =>
-      projectTaskFiberRef.getAndSet(None).flatMap {
-        case Some(task) => task.fiber.cancel.as(true)
-        case None       => IO.pure(false)
-      }
-    }
+/** Runs a project task, handing each piece of its output to the callback as it arrives. */
+private[manager] type ProjectTaskLauncher = (ProjectTaskCommand, String => IO[Unit]) => IO[ProjectTaskResult]
 
 final private[manager] case class StateManagerRuntime(
     modelRef: Ref[IO, Model],
@@ -111,8 +91,6 @@ final private[manager] case class StateManagerRuntime(
     policy: SessionManager.SessionPolicy,
     themeManager: AppThemeManager,
     lspQueue: LspEffectQueue,
-    projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]],
-    projectTaskSemaphore: Semaphore[IO],
     mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
     onFontConfigChanged: FontConfig => IO[Unit],
     deviceTextScaleProvider: IO[Double],
@@ -122,6 +100,7 @@ final private[manager] case class StateManagerRuntime(
     onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit],
     fileDialog: Option[FileDialog],
     markdownPreviewWindow: com.serenity.ui.tui.MarkdownPreviewWindowAvailability,
+    runProjectTask: ProjectTaskLauncher,
     fileManager: FileManager,
     sessionManager: SessionManager,
     sessionPersistence: SessionPersistence
@@ -138,8 +117,6 @@ private[manager] object StateManagerRuntime:
     sessionRootOverride: Option[Path],
     themeManager: AppThemeManager,
     lspQueue: LspEffectQueue,
-    projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]],
-    projectTaskSemaphore: Semaphore[IO],
     mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
     onFontConfigChanged: FontConfig => IO[Unit],
     deviceTextScaleProvider: IO[Double],
@@ -162,8 +139,6 @@ private[manager] object StateManagerRuntime:
       policy = policy,
       themeManager = themeManager,
       lspQueue = lspQueue,
-      projectTaskFiberRef = projectTaskFiberRef,
-      projectTaskSemaphore = projectTaskSemaphore,
       mouseTargetCacheRef = mouseTargetCacheRef,
       onFontConfigChanged = onFontConfigChanged,
       deviceTextScaleProvider = deviceTextScaleProvider,
@@ -173,6 +148,7 @@ private[manager] object StateManagerRuntime:
       onPreferredWindowSizeChanged = onPreferredWindowSizeChanged,
       fileDialog = fileDialog,
       markdownPreviewWindow = markdownPreviewWindow,
+      runProjectTask = (command, onOutput) => ProjectTaskRunner.runStreaming(command)(onOutput),
       fileManager = new FileManager(),
       sessionManager = sessionManager,
       sessionPersistence = new SessionPersistence(sessionManager, policy)

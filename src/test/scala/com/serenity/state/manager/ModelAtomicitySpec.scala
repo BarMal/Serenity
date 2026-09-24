@@ -4,7 +4,6 @@ import java.awt.Color
 import java.nio.file.Files
 
 import cats.data.State
-import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.StateManagerTestFixtures
@@ -80,13 +79,11 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
 
   private def stateManagerOver(modelRef: Ref[IO, Model]): IO[StateManager] =
     for
-      directory            <- IO.blocking(Files.createTempDirectory("model-atomicity-spec"))
-      themeNamesRef        <- Ref.of[IO, List[String]](Nil)
-      quitSignal           <- Deferred[IO, Unit]
-      lspQueue             <- LspEffectQueue.create
-      projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
-      projectTaskSemaphore <- Semaphore[IO](1)
-      mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
+      directory           <- IO.blocking(Files.createTempDirectory("model-atomicity-spec"))
+      themeNamesRef       <- Ref.of[IO, List[String]](Nil)
+      quitSignal          <- Deferred[IO, Unit]
+      lspQueue            <- LspEffectQueue.create
+      mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
       runtime = StateManagerRuntime.create(
         modelRef = modelRef,
         themeNamesRef = themeNamesRef,
@@ -96,8 +93,6 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
         sessionRootOverride = Some(directory.resolve("session")),
         themeManager = AppThemeManager.create,
         lspQueue = lspQueue,
-        projectTaskFiberRef = projectTaskFiberRef,
-        projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
         deviceTextScaleProvider = IO.pure(1.0),

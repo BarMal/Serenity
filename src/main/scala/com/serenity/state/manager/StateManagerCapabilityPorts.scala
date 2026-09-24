@@ -22,8 +22,7 @@ private[manager] trait EffectRuntimePort:
   def logger: Logger[IO]
   def themeManager: AppThemeManager
   def lspQueue: LspEffectQueue
-  def projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]]
-  def projectTaskSemaphore: cats.effect.std.Semaphore[IO]
+  def runProjectTask: ProjectTaskLauncher
   def onFontConfigChanged: FontConfig => IO[Unit]
   def deviceTextScaleProvider: IO[Double]
   def configPersistencePath: Option[Path]

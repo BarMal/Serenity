@@ -3,12 +3,13 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import cats.effect.*
-import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
+import cats.syntax.all.*
 import com.serenity.command.{Command, CommandCategory, CommandIntent, ProjectIntent, ViewIntent}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
+import com.serenity.project.{ProjectTaskCommand, ProjectTaskKind, ProjectTaskResult}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
@@ -31,15 +32,104 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
 
   private val analysisLane: Lane.Keyed = Lane.Keyed(LaneKey.Analysis, LanePolicy.SwitchLatest)
 
+  private def runtimeOver(modelRef: Ref[IO, Model]): IO[StateManagerRuntime] =
+    for
+      themeNamesRef       <- Ref.of[IO, List[String]](List("dark"))
+      quitSignal          <- Deferred[IO, Unit]
+      lspQueue            <- LspEffectQueue.create
+      mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
+      sessionRoot         <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec"))
+    yield StateManagerRuntime.create(
+      modelRef = modelRef,
+      themeNamesRef = themeNamesRef,
+      quitSignal = quitSignal,
+      logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec")),
+      policy = SessionManager.SessionPolicy(),
+      sessionRootOverride = Some(sessionRoot),
+      themeManager = AppThemeManager.create,
+      lspQueue = lspQueue,
+      mouseTargetCacheRef = mouseTargetCacheRef,
+      onFontConfigChanged = (_: FontConfig) => IO.unit,
+      deviceTextScaleProvider = IO.pure(1.0),
+      configPersistencePath = None,
+      uiPresetStore = UiPresetStore.default,
+      windowSizeProvider = IO.pure(Some(PreferredWindowSize(1000, 700))),
+      onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
+      fileDialog = None
+    )
+
+  private def compose(runtime: StateManagerRuntime, operations: StateManagerOperationBoundary) =
+    new StateManagerComposition(
+      runtime.modelRef,
+      runtime.themeNamesRef,
+      runtime.quitSignal,
+      runtime.logger,
+      runtime.policy,
+      runtime.themeManager,
+      runtime.lspQueue,
+      runtime.mouseTargetCacheRef,
+      runtime.onFontConfigChanged,
+      runtime.deviceTextScaleProvider,
+      runtime.configPersistencePath,
+      runtime.uiPresetStore,
+      runtime.windowSizeProvider,
+      runtime.fileDialog,
+      runtime.markdownPreviewWindow,
+      runtime.runProjectTask,
+      runtime.fileManager,
+      runtime.sessionManager,
+      runtime.sessionPersistence,
+      operations
+    )
+
+  /** A task whose process never ends by itself: it signals once it runs, and records when it is destroyed. */
+  final private case class EndlessTask(started: Deferred[IO, Unit], destroyed: Deferred[IO, Unit])
+
+  private val endlessTask: IO[EndlessTask] = (Deferred[IO, Unit], Deferred[IO, Unit]).mapN(EndlessTask.apply)
+
+  /** A composition whose focused buffer sits in a Makefile project, launching `tasks` in turn. */
+  private def projectComposition(
+    tasks: List[EndlessTask]
+  ): IO[(StateManagerComposition, StateManagerOperationBoundary)] =
+    for
+      directory <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec-project"))
+      _         <- IO.blocking(Files.writeString(directory.resolve("Makefile"), "all:\n\ttrue\n"))
+      initial = AppState.initial
+      buffer  = initial.persisted.buffers(BufferId(0))
+      focused = initial.copy(persisted =
+        initial.persisted.copy(buffers =
+          initial.persisted.buffers.updated(
+            BufferId(0),
+            buffer.copy(document = buffer.document.copy(filePath = Some(directory.resolve("main.c"))))
+          )
+        )
+      )
+      modelRef  <- Ref.of[IO, Model](Model(focused, UndoState(), Map.empty))
+      remaining <- Ref.of[IO, List[EndlessTask]](tasks)
+      runtime   <- runtimeOver(modelRef)
+      launcher: ProjectTaskLauncher = (_, _) =>
+        remaining
+          .modify(queue => (queue.drop(1), queue.headOption))
+          .flatMap(
+            _.fold(IO.never[ProjectTaskResult])(task =>
+              (task.started.complete(()) >> IO.never[ProjectTaskResult]).onCancel(task.destroyed.complete(()).void)
+            )
+          )
+      operations <- StateManagerOperationBoundary.create(Model.appRef(modelRef), runtime.logger)
+    yield (compose(runtime.copy(runProjectTask = launcher), operations), operations)
+
+  private def projectCommand(intent: ProjectIntent): Command =
+    Command.typed("project", "Project task command.", CommandIntent.Project(intent), CommandCategory.Project)
+
+  private val runBuild = projectCommand(ProjectIntent.RunProjectTask(ProjectTaskKind.Build))
+
   "StateManagerRuntime" should "collect manager dependencies behind one runtime boundary" in {
     val program = for
-      modelRef             <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
-      themeNamesRef        <- Ref.of[IO, List[String]](List("dark"))
-      quitSignal           <- Deferred[IO, Unit]
-      lspQueue             <- LspEffectQueue.create
-      projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
-      projectTaskSemaphore <- Semaphore[IO](1)
-      mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
+      modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+      themeNamesRef       <- Ref.of[IO, List[String]](List("dark"))
+      quitSignal          <- Deferred[IO, Unit]
+      lspQueue            <- LspEffectQueue.create
+      mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
       logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
       sessionRoot <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec"))
       runtime = StateManagerRuntime.create(
@@ -51,8 +141,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         sessionRootOverride = Some(sessionRoot),
         themeManager = AppThemeManager.create,
         lspQueue = lspQueue,
-        projectTaskFiberRef = projectTaskFiberRef,
-        projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
         deviceTextScaleProvider = IO.pure(1.0),
@@ -67,8 +155,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       runtime.themeNamesRef shouldBe themeNamesRef
       runtime.quitSignal shouldBe quitSignal
       runtime.lspQueue shouldBe lspQueue
-      runtime.projectTaskFiberRef shouldBe projectTaskFiberRef
-      runtime.projectTaskSemaphore shouldBe projectTaskSemaphore
       runtime.mouseTargetCacheRef shouldBe mouseTargetCacheRef
       runtime.sessionManager.sessionExists.unsafeRunSync() shouldBe false
       runtime.fileManager should not be null
@@ -80,109 +166,29 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
 
   it should "cancel active project tasks from the cancel command and force quit" in {
     val program = for
-      modelRef             <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
-      themeNamesRef        <- Ref.of[IO, List[String]](List("dark"))
-      quitSignal           <- Deferred[IO, Unit]
-      lspQueue             <- LspEffectQueue.create
-      projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
-      projectTaskSemaphore <- Semaphore[IO](1)
-      mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
-      analysisCancelled    <- Deferred[IO, Unit]
-      analysisStarted      <- Deferred[IO, Unit]
-      logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
-      sessionRoot <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec"))
-      runtime = StateManagerRuntime.create(
-        modelRef = modelRef,
-        themeNamesRef = themeNamesRef,
-        quitSignal = quitSignal,
-        logger = logger,
-        policy = SessionManager.SessionPolicy(),
-        sessionRootOverride = Some(sessionRoot),
-        themeManager = AppThemeManager.create,
-        lspQueue = lspQueue,
-        projectTaskFiberRef = projectTaskFiberRef,
-        projectTaskSemaphore = projectTaskSemaphore,
-        mouseTargetCacheRef = mouseTargetCacheRef,
-        onFontConfigChanged = (_: FontConfig) => IO.unit,
-        deviceTextScaleProvider = IO.pure(1.0),
-        configPersistencePath = None,
-        uiPresetStore = UiPresetStore.default,
-        windowSizeProvider = IO.pure(Some(PreferredWindowSize(1000, 700))),
-        onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-        fileDialog = None
-      )
-      operations <- StateManagerOperationBoundary.create(
-        Model.appRef(modelRef),
-        logger
-      )
-      composition = new StateManagerComposition(
-        runtime.modelRef,
-        runtime.themeNamesRef,
-        runtime.quitSignal,
-        runtime.logger,
-        runtime.policy,
-        runtime.themeManager,
-        runtime.lspQueue,
-        runtime.projectTaskFiberRef,
-        runtime.projectTaskSemaphore,
-        runtime.mouseTargetCacheRef,
-        runtime.onFontConfigChanged,
-        runtime.deviceTextScaleProvider,
-        runtime.configPersistencePath,
-        runtime.uiPresetStore,
-        runtime.windowSizeProvider,
-        runtime.fileDialog,
-        runtime.markdownPreviewWindow,
-        runtime.fileManager,
-        runtime.sessionManager,
-        runtime.sessionPersistence,
-        operations
-      )
-      commandChildDestroyed <- Deferred[IO, Unit]
-      commandTaskStarted    <- Deferred[IO, Unit]
-      commandTaskFinished   <- Deferred[IO, Unit]
-      commandTask <- IO
-        .defer(commandTaskStarted.complete(()).void >> IO.never[Unit])
-        .onCancel(commandChildDestroyed.complete(()).void)
-        .start
-      _ <- commandTaskStarted.get
-      _ <- projectTaskFiberRef.set(Some(ManagedProjectTask(commandTaskFinished, commandTask)))
-      _ <- composition.interpretCommand(
-        Command.typed(
-          "project-cancel",
-          "Cancel the running project task.",
-          CommandIntent.Project(ProjectIntent.CancelProjectTask),
-          CommandCategory.Project
-        ),
-        AppState.initial
-      )
-      commandChildWasDestroyed <- commandChildDestroyed.tryGet
-      projectTaskAfterCommand  <- projectTaskFiberRef.get
-      shutdownChildDestroyed   <- Deferred[IO, Unit]
-      shutdownTaskStarted      <- Deferred[IO, Unit]
-      shutdownTaskFinished     <- Deferred[IO, Unit]
-      shutdownTask <- IO
-        .defer(shutdownTaskStarted.complete(()).void >> IO.never[Unit])
-        .onCancel(shutdownChildDestroyed.complete(()).void)
-        .start
-      _ <- shutdownTaskStarted.get
-      _ <- projectTaskFiberRef.set(Some(ManagedProjectTask(shutdownTaskFinished, shutdownTask)))
+      commandTask               <- endlessTask
+      shutdownTask              <- endlessTask
+      (composition, operations) <- projectComposition(List(commandTask, shutdownTask))
+      analysisCancelled         <- Deferred[IO, Unit]
+      analysisStarted           <- Deferred[IO, Unit]
+      _                         <- composition.interpretCommand(runBuild, AppState.initial)
+      _                         <- commandTask.started.get
+      _ <- composition.interpretCommand(projectCommand(ProjectIntent.CancelProjectTask), AppState.initial)
+      _ <- commandTask.destroyed.get
+      projectTaskAfterCommand <- composition.stateRef.get.map(_.runtime.projectTasks.running)
+      _                       <- composition.interpretCommand(runBuild, AppState.initial)
+      _                       <- shutdownTask.started.get
       _ <- operations.effectLanes.submit(
         analysisLane,
         (analysisStarted.complete(()) >> IO.never[Unit]).onCancel(analysisCancelled.complete(()).void)
       )
       _                         <- analysisStarted.get
       _                         <- composition.runtimeLifecycle.forceQuit
-      shutdownChildWasDestroyed <- shutdownChildDestroyed.tryGet
-      projectTaskAfterShutdown  <- projectTaskFiberRef.get
+      shutdownChildWasDestroyed <- shutdownTask.destroyed.tryGet
       analysisWasCancelled      <- analysisCancelled.tryGet
-      _                         <- projectTaskAfterCommand.fold(IO.unit)(_.fiber.cancel)
-      _                         <- projectTaskAfterShutdown.fold(IO.unit)(_.fiber.cancel)
     yield
-      commandChildWasDestroyed shouldBe Some(())
       projectTaskAfterCommand shouldBe None
       shutdownChildWasDestroyed shouldBe Some(())
-      projectTaskAfterShutdown shouldBe None
       analysisWasCancelled shouldBe Some(())
 
     program.unsafeRunSync()
@@ -190,74 +196,11 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
 
   it should "cancel a running project task when its output panel is closed" in {
     val program = for
-      modelRef <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
-      stateRef = Model.appRef(modelRef)
-      themeNamesRef        <- Ref.of[IO, List[String]](List("dark"))
-      quitSignal           <- Deferred[IO, Unit]
-      lspQueue             <- LspEffectQueue.create
-      projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
-      projectTaskSemaphore <- Semaphore[IO](1)
-      mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
-      logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
-      sessionRoot <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec"))
-      runtime = StateManagerRuntime.create(
-        modelRef = modelRef,
-        themeNamesRef = themeNamesRef,
-        quitSignal = quitSignal,
-        logger = logger,
-        policy = SessionManager.SessionPolicy(),
-        sessionRootOverride = Some(sessionRoot),
-        themeManager = AppThemeManager.create,
-        lspQueue = lspQueue,
-        projectTaskFiberRef = projectTaskFiberRef,
-        projectTaskSemaphore = projectTaskSemaphore,
-        mouseTargetCacheRef = mouseTargetCacheRef,
-        onFontConfigChanged = (_: FontConfig) => IO.unit,
-        deviceTextScaleProvider = IO.pure(1.0),
-        configPersistencePath = None,
-        uiPresetStore = UiPresetStore.default,
-        windowSizeProvider = IO.pure(Some(PreferredWindowSize(1000, 700))),
-        onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
-        fileDialog = None
-      )
-      operations <- StateManagerOperationBoundary.create(
-        Model.appRef(modelRef),
-        logger
-      )
-      composition = new StateManagerComposition(
-        runtime.modelRef,
-        runtime.themeNamesRef,
-        runtime.quitSignal,
-        runtime.logger,
-        runtime.policy,
-        runtime.themeManager,
-        runtime.lspQueue,
-        runtime.projectTaskFiberRef,
-        runtime.projectTaskSemaphore,
-        runtime.mouseTargetCacheRef,
-        runtime.onFontConfigChanged,
-        runtime.deviceTextScaleProvider,
-        runtime.configPersistencePath,
-        runtime.uiPresetStore,
-        runtime.windowSizeProvider,
-        runtime.fileDialog,
-        runtime.markdownPreviewWindow,
-        runtime.fileManager,
-        runtime.sessionManager,
-        runtime.sessionPersistence,
-        operations
-      )
-      _ <- composition.panelManager.pinOrUpdateTerminalPanel("Running build task...", PanelPosition.Bottom, 14)
-      taskDestroyed <- Deferred[IO, Unit]
-      taskStarted   <- Deferred[IO, Unit]
-      taskFinished  <- Deferred[IO, Unit]
-      task <- IO
-        .defer(taskStarted.complete(()).void >> IO.never[Unit])
-        .onCancel(taskDestroyed.complete(()).void)
-        .start
-      _              <- taskStarted.get
-      _              <- projectTaskFiberRef.set(Some(ManagedProjectTask(taskFinished, task)))
-      stateWithPanel <- stateRef.get
+      task             <- endlessTask
+      (composition, _) <- projectComposition(List(task))
+      _                <- composition.interpretCommand(runBuild, AppState.initial)
+      _                <- task.started.get
+      stateWithPanel   <- composition.stateRef.get
       _ <- composition.interpretCommand(
         Command.typed(
           "unpin-bottom-panel",
@@ -267,13 +210,10 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         ),
         stateWithPanel
       )
-      taskWasDestroyed <- taskDestroyed.tryGet
-      projectTaskAfter <- projectTaskFiberRef.get
-      stateAfterUnpin  <- stateRef.get
-      _                <- projectTaskAfter.fold(IO.unit)(_.fiber.cancel)
+      _               <- task.destroyed.get
+      stateAfterUnpin <- composition.stateRef.get
     yield
-      taskWasDestroyed shouldBe Some(())
-      projectTaskAfter shouldBe None
+      stateAfterUnpin.runtime.projectTasks.running shouldBe None
       stateAfterUnpin.pinnedSurfaces.exists { surface =>
         surface.content match
           case SurfaceContent.Terminal(_, _) =>
@@ -288,26 +228,19 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
-  it should "retain a replacement task when an older finalizer clears after it starts" in {
-    val program = for
-      projectTaskFiberRef <- Ref.of[IO, Option[ManagedProjectTask]](None)
-      olderFinished       <- Deferred[IO, Unit]
-      replacementFinished <- Deferred[IO, Unit]
-      releaseOlder        <- Deferred[IO, Unit]
-      olderTask           <- IO.never[Unit].start
-      replacementTask     <- IO.never[Unit].start
-      replacement = ManagedProjectTask(replacementFinished, replacementTask)
-      _              <- projectTaskFiberRef.set(Some(ManagedProjectTask(olderFinished, olderTask)))
-      olderFinalizer <- (releaseOlder.get >> ProjectTaskOwnership.clear(projectTaskFiberRef, olderFinished)).start
-      _              <- projectTaskFiberRef.set(Some(replacement))
-      _              <- releaseOlder.complete(())
-      _              <- olderFinalizer.joinWithNever
-      active         <- projectTaskFiberRef.get
-      _              <- olderTask.cancel
-      _              <- replacementTask.cancel
-    yield active shouldBe Some(replacement)
+  it should "retain a replacement task when an older task's finish lands after it starts" in {
+    val command = ProjectTaskCommand(ProjectTaskKind.Build, "make", Path.of("/tmp"), "make", Nil)
+    val older   = ProjectTaskTransitions.claimed(AppState.initial, 0L, command)
+    val replacement =
+      ProjectTaskTransitions.claimed(ProjectTaskTransitions.released(older), 1L, command)
 
-    program.unsafeRunSync()
+    val afterOlderFinish =
+      EffectResult.applyIfCurrent(
+        replacement,
+        EffectResult.ProjectTaskFinished(0L, Right(ProjectTaskResult(command, 0, "")))
+      )
+
+    afterOlderFinish.runtime.projectTasks.running.map(_.id) shouldBe Some(1L)
   }
 
   "StateManagerFileFacade" should "be testable with injected file operations only" in {

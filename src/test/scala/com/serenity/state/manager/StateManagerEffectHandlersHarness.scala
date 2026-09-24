@@ -2,7 +2,6 @@ package com.serenity.state.manager
 
 import java.nio.file.{Files, Path}
 
-import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.command.*
@@ -57,30 +56,27 @@ private[manager] trait StateManagerEffectHandlersHarness:
     saveExistingBufferHook: BufferId => IO[Unit] = _ => IO.unit,
     loadSessionResult: IO[Option[AppState]] = IO.pure(None)
   ): Harness =
-    val modelRefVar             = Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty)).unsafeRunSync()
-    val stateRefVar             = Model.appRef(modelRefVar)
-    val committedVar            = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
-    val eventsVar               = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
-    val callsVar                = Ref.of[IO, List[String]](Nil).unsafeRunSync()
-    val fontConfigsVar          = Ref.of[IO, List[com.serenity.ui.fonts.FontLoader.FontConfig]](Nil).unsafeRunSync()
-    val sessionRoot             = Files.createTempDirectory("effect-handlers-spec")
-    val sessionTriggersVar      = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
-    val themeNamesRefVar        = Ref.of[IO, List[String]](Nil).unsafeRunSync()
-    val bufferAnimationsRefVar  = Model.bufferAnimationsRef(modelRefVar)
-    val quitSignalVar           = Deferred[IO, Unit].unsafeRunSync()
-    val lspQueueVar             = LspEffectQueue.create.unsafeRunSync()
-    val projectTaskFiberRefVar  = Ref.of[IO, Option[ManagedProjectTask]](None).unsafeRunSync()
-    val projectTaskSemaphoreVar = Semaphore[IO](1).unsafeRunSync()
+    val modelRefVar            = Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty)).unsafeRunSync()
+    val stateRefVar            = Model.appRef(modelRefVar)
+    val committedVar           = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
+    val eventsVar              = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
+    val callsVar               = Ref.of[IO, List[String]](Nil).unsafeRunSync()
+    val fontConfigsVar         = Ref.of[IO, List[com.serenity.ui.fonts.FontLoader.FontConfig]](Nil).unsafeRunSync()
+    val sessionRoot            = Files.createTempDirectory("effect-handlers-spec")
+    val sessionTriggersVar     = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
+    val themeNamesRefVar       = Ref.of[IO, List[String]](Nil).unsafeRunSync()
+    val bufferAnimationsRefVar = Model.bufferAnimationsRef(modelRefVar)
+    val quitSignalVar          = Deferred[IO, Unit].unsafeRunSync()
+    val lspQueueVar            = LspEffectQueue.create.unsafeRunSync()
 
     val runtime = new EffectRuntimePort:
-      val stateRef             = stateRefVar
-      val themeNamesRef        = themeNamesRefVar
-      val quitSignal           = quitSignalVar
-      val logger               = NoOpLogger.impl[IO]
-      val themeManager         = AppThemeManager.create
-      val lspQueue             = lspQueueVar
-      val projectTaskFiberRef  = projectTaskFiberRefVar
-      val projectTaskSemaphore = projectTaskSemaphoreVar
+      val stateRef                            = stateRefVar
+      val themeNamesRef                       = themeNamesRefVar
+      val quitSignal                          = quitSignalVar
+      val logger                              = NoOpLogger.impl[IO]
+      val themeManager                        = AppThemeManager.create
+      val lspQueue                            = lspQueueVar
+      val runProjectTask: ProjectTaskLauncher = (_, _) => IO.never
       val onFontConfigChanged =
         (config: com.serenity.ui.fonts.FontLoader.FontConfig) => fontConfigsVar.update(_ :+ config)
       val deviceTextScaleProvider = IO.pure(1.0)

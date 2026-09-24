@@ -4,27 +4,35 @@ import java.nio.file.Path
 
 import scala.concurrent.duration.*
 
-import cats.effect.std.Semaphore
-import cats.effect.{Deferred, IO, Ref}
+import cats.effect.IO
+import cats.syntax.all.*
 import com.serenity.command.{LspIntent, ProjectIntent}
 import com.serenity.io.FileUtils
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.project.*
+import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
-import fs2.Stream
 
 /** Project-task execution (run/cancel a detected build/test command, piping its output into a pinned terminal panel)
   * and LSP request dispatch (hover/completion/definition) for the focused buffer.
+  *
+  * A task runs on the switch-latest [[StateManagerProjectLspEffects.TaskLane]] (#1697): the state decides that only one
+  * runs at a time, so the lane never has to drop a task the state accepted; cancelling is superseding it with an empty
+  * job; and quitting cancels it -- destroying its process -- rather than waiting for a build to finish. Its output
+  * comes back as versioned results, applied only while it is still the task the terminal panel shows.
   */
 final private[manager] class StateManagerProjectLspEffects(
     lspQueue: LspEffectQueue,
-    projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]],
-    projectTaskSemaphore: Semaphore[IO],
+    currentState: IO[AppState],
+    commitApp: (AppState => AppState) => IO[Unit],
+    lanes: EffectLanePort,
+    launchTask: ProjectTaskLauncher,
     pinOrUpdateTerminalPanel: (String, com.serenity.ui.layout.PanelPosition, Int) => IO[Unit],
     showPeek: (com.serenity.ui.layout.PeekContent, CursorPosition) => IO[Unit],
     showModal: Modal => IO[Unit]
 ):
+  import StateManagerProjectLspEffects.*
 
   private[manager] def interpretProject(intent: ProjectIntent, state: AppState): IO[Unit] =
     intent match
@@ -58,44 +66,36 @@ final private[manager] class StateManagerProjectLspEffects(
       }
 
   private def startProjectTask(command: ProjectTaskCommand): IO[Unit] =
-    projectTaskSemaphore.permit.use { _ =>
-      projectTaskFiberRef.get.flatMap {
-        case Some(_) =>
-          pinProjectTerminal(
-            "A project task is already running. Use Cancel Project Task before starting another."
+    currentState.map(_.runtime.projectTasks).flatMap { tasks =>
+      val id = tasks.nextId
+      if tasks.running.isDefined then pinProjectTerminal(AlreadyRunning)
+      else
+        commitApp(ProjectTaskTransitions.claimed(_, id, command)) >>
+          currentState.map(_.runtime.projectTasks.running.exists(_.id == id)).flatMap { claimed =>
+            if claimed then
+              pinProjectTerminal(ProjectTaskTerminal.started(command)) >>
+                lanes.submitEffect(TaskLane, taskJob(id, command))
+            else pinProjectTerminal(AlreadyRunning)
+          }
+    }
+
+  /** Reads the process output into a local buffer and hands it to the dispatcher at most once per
+    * [[OutputPublishInterval]], however fast the process writes: each hand-off waits for the dispatcher, so a busy
+    * dispatcher only makes the next batch bigger. The buffer keeps the same bounded tail the panel does.
+    */
+  private def taskJob(id: Long, command: ProjectTaskCommand): IO[Unit] =
+    IO.ref("").flatMap { unpublished =>
+      val publishOutput =
+        unpublished
+          .getAndSet("")
+          .flatMap(chunk =>
+            lanes.dispatchEffectResult(EffectResult.ProjectTaskOutput(id, chunk), _ => IO.unit).whenA(chunk.nonEmpty)
           )
-        case None =>
-          for
-            outputRef <- Ref.of[IO, String]("")
-            finished  <- Deferred[IO, Unit]
-            startTask <- Deferred[IO, Unit]
-            renderer <- Stream
-              .awakeEvery[IO](100.millis)
-              .evalMap(_ =>
-                outputRef.get.flatMap(output => pinProjectTerminal(ProjectTaskTerminal.running(command, output)))
-              )
-              .interruptWhen(Stream.eval(finished.get).as(true))
-              .compile
-              .drain
-              .start
-            task = startTask.get >> ProjectTaskRunner
-              .runStreaming(command)(chunk =>
-                outputRef.update(output => ProjectTaskRunner.appendOutputTail(output, chunk))
-              )
-              .attempt
-              .flatMap {
-                case Right(result) => pinProjectTerminal(ProjectTaskTerminal.completed(result))
-                case Left(error)   => pinProjectTerminal(ProjectTaskTerminal.failedToStart(command, error))
-              }
-              .guarantee(
-                finished.complete(()).attempt.void >> renderer.joinWithNever >> ProjectTaskOwnership
-                  .clear(projectTaskFiberRef, finished)
-              )
-            fiber <- (pinProjectTerminal(ProjectTaskTerminal.started(command)) >> task).start
-            _     <- projectTaskFiberRef.set(Some(ManagedProjectTask(finished, fiber)))
-            _     <- startTask.complete(())
-          yield ()
-      }
+      (IO.sleep(OutputPublishInterval) >> publishOutput).foreverM.background
+        .surround(
+          launchTask(command, chunk => unpublished.update(ProjectTaskRunner.appendOutputTail(_, chunk))).attempt
+        )
+        .flatMap(outcome => lanes.dispatchEffectResult(EffectResult.ProjectTaskFinished(id, outcome), _ => IO.unit))
     }
 
   private def projectTaskStartPath(state: AppState): IO[Path] =
@@ -105,19 +105,20 @@ final private[manager] class StateManagerProjectLspEffects(
       .fold(FileUtils.getCurrentDirectory)(path => IO.pure(path))
 
   private def pinProjectTerminal(text: String): IO[Unit] =
-    pinOrUpdateTerminalPanel(text, com.serenity.ui.layout.PanelPosition.Bottom, 14)
+    pinOrUpdateTerminalPanel(text, ProjectTaskTransitions.TerminalPosition, ProjectTaskTransitions.TerminalSize)
 
   private def cancelProjectTask: IO[Unit] =
-    ProjectTaskOwnership.cancel(projectTaskFiberRef, projectTaskSemaphore).flatMap {
-      case true  => pinProjectTerminal("Project task cancelled.")
-      case false => pinProjectTerminal("No project task is running.")
+    currentState.map(_.runtime.projectTasks.running.isDefined).flatMap { wasRunning =>
+      cancelProjectTaskSilently >>
+        pinProjectTerminal(if wasRunning then "Project task cancelled." else "No project task is running.")
     }
 
   /** Same cancellation as `cancelProjectTask`, without the confirmation pin -- for closing the output panel itself
-    * (issue #1294), where re-pinning a "cancelled" message would immediately undo the close.
+    * (issue #1294), where re-pinning a "cancelled" message would immediately undo the close. Supersedes the lane even
+    * when the state records no task, so a process whose record was lost (a session restore) still stops.
     */
   private[manager] def cancelProjectTaskSilently: IO[Unit] =
-    ProjectTaskOwnership.cancel(projectTaskFiberRef, projectTaskSemaphore).void
+    commitApp(ProjectTaskTransitions.released) >> lanes.submitEffect(TaskLane, IO.unit)
 
   private def requestLspHover(state: AppState): IO[Unit] =
     activeLspRequestTarget(state) match
@@ -204,3 +205,12 @@ final private[manager] class StateManagerProjectLspEffects(
 
   private def isSymbolChar(char: Char): Boolean =
     char.isLetterOrDigit || char == '_'
+
+private[manager] object StateManagerProjectLspEffects:
+
+  val TaskLane: Lane.Keyed = Lane.Keyed(LaneKey.Project, LanePolicy.SwitchLatest)
+
+  // The refresh cadence the terminal panel has always had.
+  val OutputPublishInterval: FiniteDuration = 100.millis
+
+  private val AlreadyRunning = "A project task is already running. Use Cancel Project Task before starting another."

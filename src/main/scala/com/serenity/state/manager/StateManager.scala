@@ -5,7 +5,6 @@ import java.nio.file.{Files, Path}
 import scala.annotation.unused
 
 import cats.effect.*
-import cats.effect.std.Semaphore
 import com.serenity.animation.AnimationState
 import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
@@ -292,12 +291,10 @@ object StateManager:
           bufferAnimations = Map.empty
         )
       )
-      mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
-      themeNamesRef        <- Ref.of[IO, List[String]](themeNames)
-      quitSignal           <- Deferred[IO, Unit]
-      lspQueue             <- LspEffectQueue.create
-      projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
-      projectTaskSemaphore <- Semaphore[IO](1)
+      mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
+      themeNamesRef       <- Ref.of[IO, List[String]](themeNames)
+      quitSignal          <- Deferred[IO, Unit]
+      lspQueue            <- LspEffectQueue.create
       runtime = StateManagerRuntime.create(
         modelRef = modelRef,
         themeNamesRef = themeNamesRef,
@@ -307,8 +304,6 @@ object StateManager:
         sessionRootOverride = resolvedSessionRootOverride,
         themeManager = themeManager,
         lspQueue = lspQueue,
-        projectTaskFiberRef = projectTaskFiberRef,
-        projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
         onFontConfigChanged = onFontConfigChanged,
         deviceTextScaleProvider = deviceTextScaleProvider,
@@ -377,8 +372,6 @@ object StateManager:
       runtime.policy,
       runtime.themeManager,
       runtime.lspQueue,
-      runtime.projectTaskFiberRef,
-      runtime.projectTaskSemaphore,
       runtime.mouseTargetCacheRef,
       runtime.onFontConfigChanged,
       runtime.deviceTextScaleProvider,
@@ -387,6 +380,7 @@ object StateManager:
       runtime.windowSizeProvider,
       runtime.fileDialog,
       runtime.markdownPreviewWindow,
+      runtime.runProjectTask,
       runtime.fileManager,
       runtime.sessionManager,
       runtime.sessionPersistence,

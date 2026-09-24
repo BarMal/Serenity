@@ -95,8 +95,10 @@ final private[manager] class StateManagerEffectHandlers(
 
   private val projectLspEffects = new StateManagerProjectLspEffects(
     lspQueue,
-    projectTaskFiberRef,
-    projectTaskSemaphore,
+    stateRef.get,
+    commitAppValidated,
+    editor,
+    runProjectTask,
     pinOrUpdateTerminalPanel,
     showPeek,
     showModal
