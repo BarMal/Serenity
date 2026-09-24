@@ -13,7 +13,6 @@ import com.serenity.rope.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.ui.layout.PanelPosition
-import com.serenity.ui.theme.config.ThemeConfigWriter
 
 /** A buffer's file seen on disk at a revision other than the one the buffer held when it was read (#1623). */
 final private[manager] case class ExternalRevisionObservation(
@@ -109,6 +108,7 @@ final private[manager] class StateManagerEffectHandlers(
     stateRef,
     logger,
     fileManager,
+    editor,
     markdownPreviewWindow,
     updateModelValidated,
     enqueueEvent,
@@ -144,7 +144,9 @@ final private[manager] class StateManagerEffectHandlers(
     themeManager,
     themeNamesRef,
     fileDialog,
-    validateAndUpdateState
+    validateAndUpdateState,
+    editor,
+    interpretEffect
   )
 
   private[manager] val behavior = new CommandEffectInterpreter(
@@ -183,15 +185,7 @@ final private[manager] class StateManagerEffectHandlers(
     stateRef.get.flatMap(state => interpretCommand(command, state))
 
   private def interpretThemeEffect(effect: ThemeEffect): IO[Unit] =
-    effect match
-      case ThemeEffect.SwitchTheme(themeName) => surfacePopupEffects.applyThemeByName(themeName)
-      case ThemeEffect.ReloadTheme(themeName) => surfacePopupEffects.reloadThemeByName(themeName)
-      case ThemeEffect.SaveThemeConfig(config) =>
-        ThemeConfigWriter
-          .writeUserTheme(config)
-          .flatTap(path => logger.info(s"[THEMES] Saved user theme '${config.name}' to $path"))
-          .flatMap(_ => surfacePopupEffects.refreshThemeNames)
-          .handleErrorWith(ex => logger.error(ex)(s"[THEMES] Failed to save user theme '${config.name}'"))
+    surfacePopupEffects.interpretThemeEffect(effect)
 
   private def interpretSurfaceEffect(effect: SurfaceEffect): IO[Unit] =
     effect match

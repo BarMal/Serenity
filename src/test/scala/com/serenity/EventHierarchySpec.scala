@@ -76,7 +76,7 @@ class EventHierarchySpec extends AnyFlatSpec with Matchers:
       )
 
     // The invariant is "never more than one", not "exactly one". Since Event became a union of the families, a type
-    // that *is* its own family -- ResizeEvent, LspEvent, ExplorerEvent, UnhandledEvent -- belongs to Event by union
+    // that *is* its own family -- ResizeEvent, LspEvent, UnhandledEvent -- belongs to Event by union
     // membership rather than by inheriting anything, so it legitimately reports no parent at all. Two parents is the
     // lattice #988 removed, and that is what this guards against; the positive direction is covered by the
     // family-specific assertions below.

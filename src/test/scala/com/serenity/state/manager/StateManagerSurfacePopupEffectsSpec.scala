@@ -1,14 +1,19 @@
 package com.serenity.state.manager
 
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
+
+import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
-import cats.effect.{IO, Ref}
+import cats.effect.{Deferred, IO, Ref}
 import com.serenity.command.ThemeIntent
 import com.serenity.io.FileDialog
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.theme.config.AppThemeManager
+import com.serenity.state.reducers.{AppEffect, ThemeEffect}
+import com.serenity.testkit.AwaitCondition.awaitValue
+import com.serenity.testkit.VirtualTime.runVirtual
+import com.serenity.ui.theme.config.{AppThemeManager, ThemeConfig, ThemeConfigWriter}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.noop.NoOpLogger
@@ -36,23 +41,45 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
     val stateRef      = Ref.of[IO, AppState](initialState).unsafeRunSync()
     val committed     = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
     val themeNamesRef = Ref.of[IO, List[String]](themeNames).unsafeRunSync()
-
-    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-      committed.update(_ :+ newState) >> stateRef.set(newState)
-
     new Harness(
       stateRef,
       committed,
       themeNamesRef,
-      new StateManagerSurfacePopupEffects(
+      popupsOver(
         stateRef,
-        NoOpLogger.impl[IO],
-        AppThemeManager.create,
+        committed,
         themeNamesRef,
-        fileDialog,
-        validateAndUpdateState
+        EffectLanePortFixtures.immediate(stateRef),
+        AppThemeManager.create,
+        fileDialog
       )
     )
+
+  private def popupsOver(
+    stateRef: Ref[IO, AppState],
+    committed: Ref[IO, List[AppState]],
+    themeNamesRef: Ref[IO, List[String]],
+    lanes: EffectLanePort,
+    themeManager: AppThemeManager,
+    fileDialog: Option[FileDialog] = None
+  ): StateManagerSurfacePopupEffects =
+    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+      committed.update(_ :+ newState) >> stateRef.set(newState)
+
+    lazy val popups: StateManagerSurfacePopupEffects = new StateManagerSurfacePopupEffects(
+      stateRef,
+      NoOpLogger.impl[IO],
+      themeManager,
+      themeNamesRef,
+      fileDialog,
+      validateAndUpdateState,
+      lanes,
+      {
+        case AppEffect.Theme(effect) => popups.interpretThemeEffect(effect)
+        case _                       => IO.unit
+      }
+    )
+    popups
 
   "StateManagerSurfacePopupEffects" should "toggle from the initial dark theme to light" in {
     val fixture = harness()
@@ -172,4 +199,39 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
     finally
       Files.list(directory).forEach(Files.deleteIfExists)
       Files.deleteIfExists(directory)
+  }
+
+  it should "refresh the theme names only once a saved theme has been written" in {
+    val savedNames = List("dark", "light", "my-theme")
+    val config     = ThemeConfigWriter.themeToConfig(AppState.initial.persisted.theme).copy(name = "my-theme")
+
+    val program =
+      for
+        stateRef      <- Ref.of[IO, AppState](AppState.initial)
+        committed     <- Ref.of[IO, List[AppState]](Nil)
+        themeNamesRef <- Ref.of[IO, List[String]](List("dark", "light"))
+        written       <- Deferred[IO, Unit]
+        gatedWrites = new AppThemeManager:
+          override def listAvailableThemes: IO[List[String]]         = IO.pure(savedNames)
+          override def writeUserTheme(config: ThemeConfig): IO[Path] = written.get.as(Path.of("my-theme.conf"))
+        result <- EffectLanePortFixtures.laned(stateRef).use { lanes =>
+          val popups = popupsOver(
+            stateRef,
+            committed,
+            themeNamesRef,
+            lanes,
+            gatedWrites
+          )
+          for
+            _           <- popups.interpretThemeEffect(ThemeEffect.SaveThemeConfig(config))
+            _           <- IO.sleep(1.second)
+            beforeWrite <- stateRef.get.map(_.runtime.availableThemeNames)
+            _           <- written.complete(())
+            afterWrite  <- awaitValue(stateRef.get.map(_.runtime.availableThemeNames))(_ == savedNames)
+            pickerNames <- themeNamesRef.get
+          yield (beforeWrite, afterWrite, pickerNames)
+        }
+      yield result
+
+    runVirtual(program) shouldBe (Nil, savedNames, savedNames)
   }

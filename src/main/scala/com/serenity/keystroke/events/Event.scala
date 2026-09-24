@@ -11,6 +11,6 @@ type EditorEvent = TextEntryEvent | VerticalNavigationEvent
 
 type AppEvent = GlobalAppEvent | FileEvent | ThemeEvent
 
-type SystemEvent = LspEvent | ExplorerEvent | ResizeEvent | UnhandledEvent[?]
+type SystemEvent = LspEvent | ResizeEvent | UnhandledEvent[?]
 
 type SurfaceEvent = CommandRunnerEvent | ModalInputEvent | PanelInputEvent | PeekInputEvent | StartupPageEvent

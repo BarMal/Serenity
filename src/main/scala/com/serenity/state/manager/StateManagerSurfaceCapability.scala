@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.IO
 import cats.syntax.all.*
+import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{
   AppEffect,
@@ -106,7 +107,11 @@ final private[manager] class StateManagerSurfaceCapability(
   def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit] =
     commit(PanelStateReducer.resize(target, newSize, _), withAnimationHooks = false)
 
+  // On the source file's lane, so the move waits for any save of that file still queued there.
   def dragFileToDirectory(src: Path, targetDir: Path): IO[Unit] =
-    IO.blocking(Files.move(src, targetDir.resolve(src.getFileName)))
-      .flatMap(_ => commit(PinnedPanelContentReducer.forgetMovedFile(src, _), withAnimationHooks = false))
-      .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to move $src to $targetDir"))
+    operations.submitEffect(
+      Lane.Keyed(LaneKey.File(src.toAbsolutePath.normalize), LanePolicy.Sequential),
+      IO.blocking(Files.move(src, targetDir.resolve(src.getFileName)))
+        .flatMap(_ => operations.dispatch(operations.applyResult(EffectResult.ExplorerFileMoved(src), _ => IO.unit)))
+        .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to move $src to $targetDir"))
+    )

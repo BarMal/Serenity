@@ -6,8 +6,10 @@ import com.serenity.config.SpellCheckDictionaryFingerprint
 import com.serenity.rope.Rope
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.{AppState, Buffer, BufferId, FindResult, FindSearchRequest, SpellCheckFingerprint}
-import com.serenity.state.reducers.ModalEventReducer
+import com.serenity.state.reducers.{ModalEventReducer, PinnedPanelContentReducer, ThemeStateReducer}
+import com.serenity.ui.layout.{DirEntry, PanelPosition}
 import com.serenity.ui.presets.UiPreset
+import com.serenity.ui.theme.Theme
 
 /** What a background lane job hands back to the dispatcher (#1697). Each result carries the version it was computed
   * against, and [[EffectResult.applyIfCurrent]] drops it once that version is no longer the live one: a lane's newer
@@ -36,6 +38,15 @@ private[manager] enum EffectResult:
   case UiPresetFeedback(previews: Option[List[UiPreset.Preview]], context: UiPresetContext)
   case UiPresetReviewReady(preset: UiPreset)
   case UiPresetApplyResolved(request: Long, resolution: UiPresetApplyResolution)
+
+  // ---- Explorer and theme results (#1697 Wave 3: explorer/theme lanes) ----
+  case ExplorerRootListed(position: PanelPosition, root: Path, listing: List[DirEntry])
+  case DirectoryListed(position: PanelPosition, path: Path, listing: List[DirEntry])
+  case ExplorerFileMoved(source: Path)
+  case ThemeLoaded(requestedName: String, theme: Theme)
+  case ThemeReloaded(requestedName: String, theme: Theme)
+  case ThemeNamesListed(names: List[String])
+  // ---- end explorer and theme results ----
 
 private[manager] object EffectResult:
 
@@ -67,3 +78,18 @@ private[manager] object EffectResult:
         UiPresetTransitions.openDiffReview(state, preset)
       case UiPresetApplyResolved(request, resolution) =>
         UiPresetTransitions.resolveApply(state, request, resolution)
+
+      // ---- Explorer and theme results (#1697 Wave 3: explorer/theme lanes) ----
+      case ExplorerRootListed(position, root, listing) =>
+        PinnedPanelContentReducer.applyRootListing(position, root, listing, state)
+      case DirectoryListed(position, path, listing) =>
+        PinnedPanelContentReducer.applyDirectoryListing(position, path, listing, state)
+      case ExplorerFileMoved(source) =>
+        PinnedPanelContentReducer.forgetMovedFile(source, state).state
+      case ThemeLoaded(requestedName, theme) =>
+        ThemeStateReducer.applyRequestedTheme(requestedName, theme, state)
+      case ThemeReloaded(requestedName, theme) =>
+        ThemeStateReducer.replaceRequestedTheme(requestedName, theme, state)
+      case ThemeNamesListed(names) =>
+        ThemeStateReducer.withAvailableThemeNames(names, state).state
+      // ---- end explorer and theme results ----

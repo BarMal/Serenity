@@ -71,6 +71,7 @@ enum LaneKey:
   case MarkdownPreview(id: BufferId) // own key: other Buffer work never cancels a pending preview commit
   case Lsp(language: LanguageId)
   case Directory(path: Path)
+  case ExplorerListing(position: PanelPosition, path: Path) // per panel: two explorers on one directory never supersede
   case Search, Analysis, Theme, Config, Presets, Keybindings, Session, Project, Dialog, Timer
 
 enum LanePolicy:

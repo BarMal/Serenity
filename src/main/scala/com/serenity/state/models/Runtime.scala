@@ -36,6 +36,8 @@ final case class Runtime(
     typingActivity: TypingActivity = TypingActivity.idle,
     // The theme names the theme manager found on disk, listed at startup and after a reload or save; never persisted.
     availableThemeNames: List[String] = Nil,
+    // The theme most recently asked for: a theme load that finishes after a newer request is dropped, not applied.
+    requestedThemeName: Option[String] = None,
     companionSprite: CompanionSpriteState = CompanionSpriteState.default,
     diagnosticsState: DiagnosticsState = DiagnosticsState(),
     semanticTokensState: SemanticTokensState = SemanticTokensState(),

@@ -17,6 +17,8 @@ enum ThemeEffect:
   case SwitchTheme(themeName: String)
   case ReloadTheme(themeName: String)
   case SaveThemeConfig(config: ThemeConfig)
+  case RefreshThemeNames
+  case ExportCurrentTheme
 
 enum SurfaceEffect:
   case OpenThemePicker

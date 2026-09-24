@@ -47,6 +47,9 @@ class AppThemeManager:
   def loadTheme(themeName: String): IO[Theme] =
     configurableManager.loadThemeByName(themeName)
 
+  def writeUserTheme(config: ThemeConfig): IO[java.nio.file.Path] =
+    ThemeConfigWriter.writeUserTheme(config)
+
   /** Create an AppState update function for a given theme */
   def createThemeUpdate(theme: Theme): AppState => AppState =
     state => state.copy(persisted = state.persisted.copy(theme = theme))
