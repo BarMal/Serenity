@@ -3,15 +3,14 @@ package com.serenity.state.manager
 import scala.concurrent.duration.*
 
 import cats.effect.*
-import cats.effect.std.Semaphore
-import cats.syntax.foldable.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.SpellCheckConfig
 import com.serenity.diagnostics.Trace
 import com.serenity.document.CommentRendering
 import com.serenity.spellcheck.{DictionaryLoader, SpellChecker}
+import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{CommandRunnerPanelSelections, ModalEventReducer}
+import com.serenity.state.reducers.CommandRunnerPanelSelections
 import org.typelevel.log4cats.Logger
 
 /** Operations emitted by capabilities for ordered interpretation at the event boundary. */
@@ -23,20 +22,20 @@ private[manager] enum StateManagerOperation:
 final private[manager] class StateManagerOperationBoundary private (
     pendingOperations: Ref[IO, List[StateManagerOperation]],
     stateRef: Ref[IO, AppState],
-    documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
     documentAnalysisInputsRef: Ref[IO, Option[Map[String, SpellCheckFingerprint]]],
-    findSearchFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
-    markdownPreviewCommitFibersRef: Ref[IO, Map[BufferId, Fiber[IO, Throwable, Unit]]],
     logger: Logger[IO],
-    analysisLifecycleLock: Semaphore[IO],
-    documentAnalysisShutdownRef: Ref[IO, Boolean],
+    val effectLanes: EffectLanes,
+    releaseEffectLanes: IO[Unit],
+    effectsShutdownRef: Ref[IO, Boolean],
     beforeDocumentAnalysisStart: IO[Unit],
-    beforeDocumentAnalysisShutdown: IO[Unit],
+    beforeEffectsShutdown: IO[Unit],
     dispatcher: StateManagerDispatcher
 ):
-  private val DocumentAnalysisDebounce      = 150.millis
-  private val FindSearchDebounce            = 50.millis
-  private val MarkdownPreviewCommitDebounce = 150.millis
+  private val DocumentAnalysisDebounce         = 150.millis
+  private val FindSearchDebounce               = 50.millis
+  private val MarkdownPreviewCommitDebounce    = 150.millis
+  private val FindSearchLane: Lane.Keyed       = Lane.Keyed(LaneKey.Search, LanePolicy.SwitchLatest)
+  private val DocumentAnalysisLane: Lane.Keyed = Lane.Keyed(LaneKey.Analysis, LanePolicy.SwitchLatest)
 
   def enqueueEvent(event: com.serenity.keystroke.events.Event): IO[Unit] =
     pendingOperations.update(_ :+ StateManagerOperation.Event(event))
@@ -118,58 +117,48 @@ final private[manager] class StateManagerOperationBoundary private (
           inputsChanged =>
             if !inputsChanged || !requiresDocumentAnalysis(state) then IO.unit
             else
-              analysisLifecycleLock.permit.use { _ =>
-                documentAnalysisShutdownRef.get.ifM(
-                  IO.unit,
-                  for
-                    previous <- documentAnalysisFiberRef.getAndSet(None)
-                    _        <- previous.traverse_(_.cancel)
-                    _        <- beforeDocumentAnalysisStart
-                    fiber    <- documentAnalysisJob.start
-                    _        <- documentAnalysisFiberRef.set(Some(fiber))
-                  yield ()
-                )
-              }
+              effectsShutdownRef.get.ifM(
+                IO.unit,
+                beforeDocumentAnalysisStart >> submit(DocumentAnalysisLane, documentAnalysisJob)
+              )
         }
       }
     }
 
-  def cancelDocumentAnalysis(): IO[Unit] =
-    beforeDocumentAnalysisShutdown >> analysisLifecycleLock.permit.use { _ =>
-      documentAnalysisShutdownRef.set(true) >>
-        documentAnalysisFiberRef.getAndSet(None).flatMap(_.traverse_(_.cancel))
-    }
+  /** Cancels every running lane job and ignores later requests; called on quit. */
+  def shutdownEffects(): IO[Unit] =
+    beforeEffectsShutdown >> effectsShutdownRef
+      .getAndSet(true)
+      .flatMap(alreadyShut => if alreadyShut then IO.unit else releaseEffectLanes)
 
   def scheduleFindSearch(request: FindSearchRequest): IO[Unit] =
-    findSearchFiberRef.getAndSet(None).flatMap(_.traverse_(_.cancel)) >>
-      (IO.sleep(FindSearchDebounce) >>
-        IO.delay(FindSearch.results(request.content, request.query)).flatMap { results =>
-          dispatcher.post(stateRef.update { before =>
-            val after = ModalEventReducer.applyFindSearchResults(before, request, results)
-            CursorViewport.ensureVisibleCursors(before, after)
-          })
-        }).start.flatMap(fiber => findSearchFiberRef.set(Some(fiber)))
+    submit(
+      FindSearchLane,
+      IO.sleep(FindSearchDebounce) >>
+        IO.delay(FindSearch.results(request.content, request.query))
+          .flatMap(results => postResult(EffectResult.FindSearchCompleted(request, results)))
+    )
 
-  /** Cancels any pending markdown-preview commit for `bufferId` and schedules a new one that, after
-    * `MarkdownPreviewCommitDebounce` of no further supersession, records `generation` as this buffer's committed
-    * markdown-preview generation. The renderer compares this against `Buffer.markdownPreviewEditGeneration` to decide
-    * whether an edit burst is still in flight -- see `MarkdownDocumentPreview.renderOrReuseCommitted`.
+  /** Supersedes any pending markdown-preview commit for `bufferId` with one that, after
+    * `MarkdownPreviewCommitDebounce`, records `generation` as this buffer's committed markdown-preview generation -- if
+    * no edit has moved past it by then. The renderer compares this against `Buffer.markdownPreviewEditGeneration` to
+    * decide whether an edit burst is still in flight -- see `MarkdownDocumentPreview.renderOrReuseCommitted`.
     */
   def scheduleMarkdownPreviewCommit(bufferId: BufferId, generation: Long): IO[Unit] =
-    markdownPreviewCommitFibersRef.modify(fibers => (fibers - bufferId, fibers.get(bufferId))).flatMap { prior =>
-      prior.traverse_(_.cancel) >>
-        (IO.sleep(MarkdownPreviewCommitDebounce) >>
-          dispatcher.post(stateRef.update { state =>
-            state.persisted.buffers.get(bufferId).fold(state) { buffer =>
-              state.copy(persisted =
-                state.persisted.copy(buffers =
-                  state.persisted.buffers
-                    .updated(bufferId, buffer.copy(markdownPreviewCommittedGeneration = generation))
-                )
-              )
-            }
-          })).start.flatMap(fiber => markdownPreviewCommitFibersRef.update(_ + (bufferId -> fiber)))
-    }
+    submit(
+      markdownPreviewCommitLane(bufferId),
+      IO.sleep(MarkdownPreviewCommitDebounce) >> postResult(EffectResult.MarkdownPreviewSettled(bufferId, generation))
+    )
+
+  private def markdownPreviewCommitLane(bufferId: BufferId): Lane.Keyed =
+    Lane.Keyed(LaneKey.MarkdownPreview(bufferId), LanePolicy.SwitchLatest)
+
+  // A request arriving after shutdown has nothing left to run on, and quitting does not want it anyway.
+  private def submit(lane: Lane.Scheduled, job: IO[Unit]): IO[Unit] =
+    effectLanes.submit(lane, job).recover { case _: EffectLanes.Released => () }
+
+  private def postResult(result: EffectResult): IO[Unit] =
+    dispatcher.post(stateRef.update(EffectResult.applyIfCurrent(_, result)))
 
   private def documentAnalysisJob: IO[Unit] =
     given Logger[IO] = logger
@@ -180,10 +169,7 @@ final private[manager] class StateManagerOperationBoundary private (
           IO.blocking(DictionaryLoader.loadSnapshot(spellCheckConfig)).flatMap { dictionary =>
             val expected = SpellChecker.analysisFingerprints(snapshot, dictionary.fingerprints)
             val analyzed = SpellChecker.refreshDiagnostics(snapshot, dictionary)
-            dispatcher.post(
-              stateRef
-                .update(current => SpellChecker.applyIfCurrent(current, analyzed, expected, dictionary.fingerprints))
-            )
+            postResult(EffectResult.DocumentAnalysisCompleted(analyzed, expected, dictionary.fingerprints))
           }
         }
       }).handleErrorWith(error =>
@@ -213,32 +199,32 @@ private[manager] object StateManagerOperationBoundary:
       )
     else state
 
+  /** `StateManager` is built as a plain `IO` (by the app and by many specs), so no `Resource` owns these lanes: they
+    * are allocated here and released by [[StateManagerOperationBoundary.shutdownEffects]] on the quit path.
+    */
   def create(
     stateRef: Ref[IO, AppState],
-    documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
     logger: Logger[IO],
     beforeDocumentAnalysisStart: IO[Unit] = IO.unit,
-    beforeDocumentAnalysisShutdown: IO[Unit] = IO.unit
+    beforeEffectsShutdown: IO[Unit] = IO.unit
   ): IO[StateManagerOperationBoundary] =
     for
-      pendingOperations              <- Ref.of[IO, List[StateManagerOperation]](Nil)
-      analysisLifecycleLock          <- Semaphore[IO](1)
-      documentAnalysisShutdownRef    <- Ref.of[IO, Boolean](false)
-      documentAnalysisInputsRef      <- Ref.of[IO, Option[Map[String, SpellCheckFingerprint]]](None)
-      findSearchFiberRef             <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
-      markdownPreviewCommitFibersRef <- Ref.of[IO, Map[BufferId, Fiber[IO, Throwable, Unit]]](Map.empty)
-      dispatcher                     <- StateManagerDispatcher.create(logger)
+      pendingOperations         <- Ref.of[IO, List[StateManagerOperation]](Nil)
+      documentAnalysisInputsRef <- Ref.of[IO, Option[Map[String, SpellCheckFingerprint]]](None)
+      effectsShutdownRef        <- Ref.of[IO, Boolean](false)
+      (effectLanes, releaseEffectLanes) <- EffectLanes
+        .resource((lane, error) => logger.error(error)(s"[EFFECTS] Job on $lane failed"))
+        .allocated
+      dispatcher <- StateManagerDispatcher.create(logger)
     yield new StateManagerOperationBoundary(
       pendingOperations,
       stateRef,
-      documentAnalysisFiberRef,
       documentAnalysisInputsRef,
-      findSearchFiberRef,
-      markdownPreviewCommitFibersRef,
       logger,
-      analysisLifecycleLock,
-      documentAnalysisShutdownRef,
+      effectLanes,
+      releaseEffectLanes,
+      effectsShutdownRef,
       beforeDocumentAnalysisStart,
-      beforeDocumentAnalysisShutdown,
+      beforeEffectsShutdown,
       dispatcher
     )

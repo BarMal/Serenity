@@ -11,6 +11,7 @@ import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
+import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.{AppState, BufferId, SurfaceContent}
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
 import com.serenity.state.undo.UndoState
@@ -28,16 +29,17 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
+  private val analysisLane: Lane.Keyed = Lane.Keyed(LaneKey.Analysis, LanePolicy.SwitchLatest)
+
   "StateManagerRuntime" should "collect manager dependencies behind one runtime boundary" in {
     val program = for
-      modelRef                 <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
-      themeNamesRef            <- Ref.of[IO, List[String]](List("dark"))
-      quitSignal               <- Deferred[IO, Unit]
-      lspQueue                 <- LspEffectQueue.create
-      projectTaskFiberRef      <- Ref.of[IO, Option[ManagedProjectTask]](None)
-      projectTaskSemaphore     <- Semaphore[IO](1)
-      mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
-      documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
+      modelRef             <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+      themeNamesRef        <- Ref.of[IO, List[String]](List("dark"))
+      quitSignal           <- Deferred[IO, Unit]
+      lspQueue             <- LspEffectQueue.create
+      projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
+      projectTaskSemaphore <- Semaphore[IO](1)
+      mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
       logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
       sessionRoot <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec"))
       runtime = StateManagerRuntime.create(
@@ -52,7 +54,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         projectTaskFiberRef = projectTaskFiberRef,
         projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
-        documentAnalysisFiberRef = documentAnalysisFiberRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
         deviceTextScaleProvider = IO.pure(1.0),
         configPersistencePath = None,
@@ -69,7 +70,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       runtime.projectTaskFiberRef shouldBe projectTaskFiberRef
       runtime.projectTaskSemaphore shouldBe projectTaskSemaphore
       runtime.mouseTargetCacheRef shouldBe mouseTargetCacheRef
-      runtime.documentAnalysisFiberRef shouldBe documentAnalysisFiberRef
       runtime.sessionManager.sessionExists.unsafeRunSync() shouldBe false
       runtime.fileManager should not be null
       runtime.fileDialog shouldBe None
@@ -80,20 +80,15 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
 
   it should "cancel active project tasks from the cancel command and force quit" in {
     val program = for
-      modelRef                 <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
-      themeNamesRef            <- Ref.of[IO, List[String]](List("dark"))
-      quitSignal               <- Deferred[IO, Unit]
-      lspQueue                 <- LspEffectQueue.create
-      projectTaskFiberRef      <- Ref.of[IO, Option[ManagedProjectTask]](None)
-      projectTaskSemaphore     <- Semaphore[IO](1)
-      mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
-      documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
-      analysisCancelled        <- Deferred[IO, Unit]
-      analysisStarted          <- Deferred[IO, Unit]
-      pendingAnalysis <- IO
-        .defer(analysisStarted.complete(()).void >> IO.never[Unit])
-        .onCancel(analysisCancelled.complete(()).void)
-        .start
+      modelRef             <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+      themeNamesRef        <- Ref.of[IO, List[String]](List("dark"))
+      quitSignal           <- Deferred[IO, Unit]
+      lspQueue             <- LspEffectQueue.create
+      projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
+      projectTaskSemaphore <- Semaphore[IO](1)
+      mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
+      analysisCancelled    <- Deferred[IO, Unit]
+      analysisStarted      <- Deferred[IO, Unit]
       logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
       sessionRoot <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec"))
       runtime = StateManagerRuntime.create(
@@ -108,7 +103,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         projectTaskFiberRef = projectTaskFiberRef,
         projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
-        documentAnalysisFiberRef = documentAnalysisFiberRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
         deviceTextScaleProvider = IO.pure(1.0),
         configPersistencePath = None,
@@ -119,7 +113,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       )
       operations <- StateManagerOperationBoundary.create(
         Model.appRef(modelRef),
-        documentAnalysisFiberRef,
         logger
       )
       composition = new StateManagerComposition(
@@ -133,7 +126,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         runtime.projectTaskFiberRef,
         runtime.projectTaskSemaphore,
         runtime.mouseTargetCacheRef,
-        runtime.documentAnalysisFiberRef,
         runtime.onFontConfigChanged,
         runtime.deviceTextScaleProvider,
         runtime.configPersistencePath,
@@ -173,25 +165,25 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         .defer(shutdownTaskStarted.complete(()).void >> IO.never[Unit])
         .onCancel(shutdownChildDestroyed.complete(()).void)
         .start
-      _                         <- shutdownTaskStarted.get
-      _                         <- projectTaskFiberRef.set(Some(ManagedProjectTask(shutdownTaskFinished, shutdownTask)))
+      _ <- shutdownTaskStarted.get
+      _ <- projectTaskFiberRef.set(Some(ManagedProjectTask(shutdownTaskFinished, shutdownTask)))
+      _ <- operations.effectLanes.submit(
+        analysisLane,
+        (analysisStarted.complete(()) >> IO.never[Unit]).onCancel(analysisCancelled.complete(()).void)
+      )
       _                         <- analysisStarted.get
-      _                         <- documentAnalysisFiberRef.set(Some(pendingAnalysis))
       _                         <- composition.runtimeLifecycle.forceQuit
       shutdownChildWasDestroyed <- shutdownChildDestroyed.tryGet
       projectTaskAfterShutdown  <- projectTaskFiberRef.get
       analysisWasCancelled      <- analysisCancelled.tryGet
-      pendingAnalysisFiber      <- documentAnalysisFiberRef.get
       _                         <- projectTaskAfterCommand.fold(IO.unit)(_.fiber.cancel)
       _                         <- projectTaskAfterShutdown.fold(IO.unit)(_.fiber.cancel)
-      _                         <- pendingAnalysisFiber.fold(IO.unit)(_.cancel)
     yield
       commandChildWasDestroyed shouldBe Some(())
       projectTaskAfterCommand shouldBe None
       shutdownChildWasDestroyed shouldBe Some(())
       projectTaskAfterShutdown shouldBe None
       analysisWasCancelled shouldBe Some(())
-      pendingAnalysisFiber shouldBe None
 
     program.unsafeRunSync()
   }
@@ -200,13 +192,12 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
     val program = for
       modelRef <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
       stateRef = Model.appRef(modelRef)
-      themeNamesRef            <- Ref.of[IO, List[String]](List("dark"))
-      quitSignal               <- Deferred[IO, Unit]
-      lspQueue                 <- LspEffectQueue.create
-      projectTaskFiberRef      <- Ref.of[IO, Option[ManagedProjectTask]](None)
-      projectTaskSemaphore     <- Semaphore[IO](1)
-      mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
-      documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
+      themeNamesRef        <- Ref.of[IO, List[String]](List("dark"))
+      quitSignal           <- Deferred[IO, Unit]
+      lspQueue             <- LspEffectQueue.create
+      projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
+      projectTaskSemaphore <- Semaphore[IO](1)
+      mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
       logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
       sessionRoot <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec"))
       runtime = StateManagerRuntime.create(
@@ -221,7 +212,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         projectTaskFiberRef = projectTaskFiberRef,
         projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
-        documentAnalysisFiberRef = documentAnalysisFiberRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
         deviceTextScaleProvider = IO.pure(1.0),
         configPersistencePath = None,
@@ -232,7 +222,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       )
       operations <- StateManagerOperationBoundary.create(
         Model.appRef(modelRef),
-        documentAnalysisFiberRef,
         logger
       )
       composition = new StateManagerComposition(
@@ -246,7 +235,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         runtime.projectTaskFiberRef,
         runtime.projectTaskSemaphore,
         runtime.mouseTargetCacheRef,
-        runtime.documentAnalysisFiberRef,
         runtime.onFontConfigChanged,
         runtime.deviceTextScaleProvider,
         runtime.configPersistencePath,

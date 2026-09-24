@@ -7,7 +7,7 @@ import scala.util.Random
 
 import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
-import cats.effect.{Deferred, Fiber, IO, Ref}
+import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.{DocumentRevision, FileManager}
@@ -57,16 +57,14 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
     for
       sharedModelRef <- Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty))
       sharedStateRef = Model.appRef(sharedModelRef)
-      fiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
       cacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
       bufferAnimations = Model.bufferAnimationsRef(sharedModelRef)
       lspQueue   <- LspEffectQueue.create
-      operations <- StateManagerOperationBoundary.create(sharedStateRef, fiberRef, quietLogger)
+      operations <- StateManagerOperationBoundary.create(sharedStateRef, quietLogger)
       statePort = new EventStatePort:
-        val modelRef                 = sharedModelRef
-        val logger                   = quietLogger
-        val documentAnalysisFiberRef = fiberRef
-        val mouseTargetCacheRef      = cacheRef
+        val modelRef            = sharedModelRef
+        val logger              = quietLogger
+        val mouseTargetCacheRef = cacheRef
       snapshotCommittingEffect = (_: AppEffect) =>
         sharedStateRef.get.flatMap { snapshot =>
           gate.entered.complete(()) >> gate.release.get >> operations.validateAndUpdateState(snapshot, snapshot)
@@ -110,11 +108,19 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       )
     yield PipelineHarness(sharedStateRef, operations, pipeline, editor.animationTicker)
 
+  private def previewEditedTo(generation: Long): AppState =
+    AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(buffers =
+        AppState.initial.persisted.buffers
+          .updatedWith(bufferId)(_.map(_.copy(markdownPreviewEditGeneration = generation)))
+      )
+    )
+
   "The state dispatcher" should "apply a background result offered mid-dispatch after that dispatch instead of losing it" in {
     val program =
       for
         gate     <- newGate
-        harness  <- snapshotCommittingPipeline(AppState.initial, gate)
+        harness  <- snapshotCommittingPipeline(previewEditedTo(7L), gate)
         dispatch <- harness.pipeline.applyEvent(FileSearch).start
         _        <- gate.entered.get
         _        <- harness.operations.scheduleMarkdownPreviewCommit(bufferId, 7L)
@@ -183,15 +189,14 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       revisionRead <- Deferred[IO, Unit]
       directory    <- IO.blocking(Files.createTempDirectory("state-manager-dispatch-inbox-spec"))
       file = directory.resolve("notes.txt")
-      _                        <- IO.blocking(Files.writeString(file, "draft"))
-      modelRef                 <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
-      themeNamesRef            <- Ref.of[IO, List[String]](Nil)
-      quitSignal               <- Deferred[IO, Unit]
-      lspQueue                 <- LspEffectQueue.create
-      projectTaskFiberRef      <- Ref.of[IO, Option[ManagedProjectTask]](None)
-      projectTaskSemaphore     <- Semaphore[IO](1)
-      mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
-      documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
+      _                    <- IO.blocking(Files.writeString(file, "draft"))
+      modelRef             <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+      themeNamesRef        <- Ref.of[IO, List[String]](Nil)
+      quitSignal           <- Deferred[IO, Unit]
+      lspQueue             <- LspEffectQueue.create
+      projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
+      projectTaskSemaphore <- Semaphore[IO](1)
+      mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
       runtime = StateManagerRuntime
         .create(
           modelRef = modelRef,
@@ -205,7 +210,6 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
           projectTaskFiberRef = projectTaskFiberRef,
           projectTaskSemaphore = projectTaskSemaphore,
           mouseTargetCacheRef = mouseTargetCacheRef,
-          documentAnalysisFiberRef = documentAnalysisFiberRef,
           onFontConfigChanged = (_: FontConfig) => IO.unit,
           deviceTextScaleProvider = IO.pure(1.0),
           configPersistencePath = None,

@@ -32,7 +32,6 @@ private[manager] class StateManagerComposition(
     val projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]],
     val projectTaskSemaphore: Semaphore[IO],
     val mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
-    val documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
     val onFontConfigChanged: FontConfig => IO[Unit],
     val deviceTextScaleProvider: IO[Double],
     val configPersistencePath: Option[Path],
@@ -53,27 +52,26 @@ private[manager] class StateManagerComposition(
 
   private val modelCommit = new ModelCommit(modelRef, operations)
 
-  private val runtimeStateRef                 = stateRef
-  private val runtimeUndoRef                  = undoRef
-  private val runtimeThemeNamesRef            = themeNamesRef
-  private val runtimeQuitSignal               = quitSignal
-  private val runtimeLogger                   = logger
-  private val runtimeThemeManager             = themeManager
-  private val runtimeLspQueue                 = lspQueue
-  private val runtimeProjectTaskFiberRef      = projectTaskFiberRef
-  private val runtimeProjectTaskSemaphore     = projectTaskSemaphore
-  private val runtimeMouseTargetCacheRef      = mouseTargetCacheRef
-  private val runtimeDocumentAnalysisFiberRef = documentAnalysisFiberRef
-  private val runtimeBufferAnimationsRef      = bufferAnimationsRef
-  private val runtimeOnFontConfigChanged      = onFontConfigChanged
-  private val runtimeDeviceTextScaleProvider  = deviceTextScaleProvider
-  private val runtimeConfigPersistencePath    = configPersistencePath
-  private val runtimeUiPresetStore            = uiPresetStore
-  private val runtimeWindowSizeProvider       = windowSizeProvider
-  private val runtimeFileDialog               = fileDialog
-  private val runtimeMarkdownPreviewWindow    = markdownPreviewWindow
-  private val runtimeFileManager              = fileManager
-  private val runtimeSessionPersistence       = sessionPersistence
+  private val runtimeStateRef                = stateRef
+  private val runtimeUndoRef                 = undoRef
+  private val runtimeThemeNamesRef           = themeNamesRef
+  private val runtimeQuitSignal              = quitSignal
+  private val runtimeLogger                  = logger
+  private val runtimeThemeManager            = themeManager
+  private val runtimeLspQueue                = lspQueue
+  private val runtimeProjectTaskFiberRef     = projectTaskFiberRef
+  private val runtimeProjectTaskSemaphore    = projectTaskSemaphore
+  private val runtimeMouseTargetCacheRef     = mouseTargetCacheRef
+  private val runtimeBufferAnimationsRef     = bufferAnimationsRef
+  private val runtimeOnFontConfigChanged     = onFontConfigChanged
+  private val runtimeDeviceTextScaleProvider = deviceTextScaleProvider
+  private val runtimeConfigPersistencePath   = configPersistencePath
+  private val runtimeUiPresetStore           = uiPresetStore
+  private val runtimeWindowSizeProvider      = windowSizeProvider
+  private val runtimeFileDialog              = fileDialog
+  private val runtimeMarkdownPreviewWindow   = markdownPreviewWindow
+  private val runtimeFileManager             = fileManager
+  private val runtimeSessionPersistence      = sessionPersistence
 
   private val filePersistence =
     new StateManagerFilePersistence(
@@ -239,10 +237,9 @@ private[manager] class StateManagerComposition(
 
   private val eventStatePort: EventStatePort =
     new EventStatePort:
-      val modelRef                 = StateManagerComposition.this.modelRef
-      val logger                   = runtimeLogger
-      val documentAnalysisFiberRef = runtimeDocumentAnalysisFiberRef
-      val mouseTargetCacheRef      = runtimeMouseTargetCacheRef
+      val modelRef            = StateManagerComposition.this.modelRef
+      val logger              = runtimeLogger
+      val mouseTargetCacheRef = runtimeMouseTargetCacheRef
 
   private val eventEffectPort: EventEffectPort = EventEffectPort(
     interpretEffect = effects.interpretEffect,
@@ -407,7 +404,7 @@ private[manager] class StateManagerComposition(
   )
 
   private def forceQuit: IO[Unit] =
-    cancelProjectTask() >> operations.cancelDocumentAnalysis() >> stateRef.get.flatMap { state =>
+    cancelProjectTask() >> operations.shutdownEffects() >> stateRef.get.flatMap { state =>
       sessionPersistence
         .onAppClose(clearCloseActions(state))
         .handleErrorWith(error => logger.error(error)("[SESSION] Failed to save session during forced quit")) >>

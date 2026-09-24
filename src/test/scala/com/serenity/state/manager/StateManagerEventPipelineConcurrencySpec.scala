@@ -35,16 +35,14 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
     onEffect: (StateManagerOperationBoundary, AppEffect) => IO[Unit] = (_, _) => IO.unit
   ): IO[StateManagerEventPipeline] =
     for
-      fiberRef <- Ref.of[IO, Option[cats.effect.Fiber[IO, Throwable, Unit]]](None)
       cacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
       sharedStateRef = Model.appRef(sharedModelRef)
       pipelineLogger = org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
-      operations <- StateManagerOperationBoundary.create(sharedStateRef, fiberRef, pipelineLogger)
+      operations <- StateManagerOperationBoundary.create(sharedStateRef, pipelineLogger)
       statePort = new EventStatePort:
-        val modelRef                 = sharedModelRef
-        val logger                   = pipelineLogger
-        val documentAnalysisFiberRef = fiberRef
-        val mouseTargetCacheRef      = cacheRef
+        val modelRef            = sharedModelRef
+        val logger              = pipelineLogger
+        val mouseTargetCacheRef = cacheRef
       effectPort = EventEffectPort(
         interpretEffect = effect => onEffect(operations, effect),
         interpretCommand = (_, _) => IO.unit

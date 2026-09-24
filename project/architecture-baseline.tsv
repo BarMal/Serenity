@@ -29,5 +29,5 @@ test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	712
 test/scala/com/serenity/SpellCheckerDictionaryIoSpec.scala	file length	614
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	750
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	320
-test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	663
+test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	642
 test/scala/com/serenity/ui/tui/TerminalEmulator.scala	method interpret	84

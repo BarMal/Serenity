@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import java.nio.file.Path
 
-import cats.effect.{Deferred, Fiber, IO, Ref}
+import cats.effect.{Deferred, IO, Ref}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
@@ -97,11 +97,10 @@ private[manager] trait EffectModalWorkflowPort:
   def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit]
   def submitSessionListEffect(surfaceId: SurfaceId): IO[Unit]
 
-/** State and analysis ownership required while routing editor events. */
+/** State ownership required while routing editor events. */
 private[manager] trait EventStatePort:
   def modelRef: Ref[IO, Model]
   def logger: Logger[IO]
-  def documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]]
   def mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]]
   final def stateRef: Ref[IO, AppState] = Model.appRef(modelRef)
   final def bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]] =
