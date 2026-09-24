@@ -6,6 +6,7 @@ import com.serenity.command.RichTextIntent
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.state.reducers.AppEffect
 import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -25,9 +26,16 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
   final private class Harness(val stateRef: Ref[IO, AppState], val richText: StateManagerRichTextEffects):
     def currentBuffer: Buffer = stateRef.get.unsafeRunSync().persisted.buffers(bufferId)
 
+  private def validatingCommit(stateRef: Ref[IO, AppState]): (AppState, AppState) => IO[Unit] =
+    (newState, fallbackState) => stateRef.set(AppStateValidation.validated(newState).getOrElse(fallbackState))
+
+  private val noEffectsExpected: AppEffect => IO[Unit] =
+    effect => IO.raiseError(new IllegalStateException(s"unexpected effect $effect"))
+
   private def harness(buffer: Buffer): Harness =
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
+    // nextBufferId must not collide with the fixture's buffer, or validation rejects every commit.
+    val state = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = com.serenity.ui.layout.Layout(
@@ -35,10 +43,11 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
           activeEditorPaneId = Some(paneId),
           workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
         )
-      )
+      ),
+      runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
     )
     val stateRef = Ref.of[IO, AppState](state).unsafeRunSync()
-    new Harness(stateRef, new StateManagerRichTextEffects(stateRef))
+    new Harness(stateRef, new StateManagerRichTextEffects(stateRef, validatingCommit(stateRef), noEffectsExpected))
 
   private def bufferWithSelection(text: String, selection: Selection): Buffer =
     Buffer
@@ -105,11 +114,23 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
         .copy(layout = AppState.initial.persisted.layout.copy(editorPanes = Map.empty, activeEditorPaneId = None))
     )
     val stateRef = Ref.of[IO, AppState](noActivePane).unsafeRunSync()
-    val richText = new StateManagerRichTextEffects(stateRef)
+    val richText = new StateManagerRichTextEffects(stateRef, validatingCommit(stateRef), noEffectsExpected)
 
     richText.interpret(RichTextIntent.ToggleRichTextMark(InlineMark.Bold)).unsafeRunSync()
 
     stateRef.get.unsafeRunSync() shouldBe noActivePane
+  }
+
+  it should "commit through validation, keeping the prior state when the result is invalid" in {
+    val fixture = harness(bufferWithSelection("hello world", selection(0, 0, 0, 5)))
+    val invalid = fixture.stateRef
+      .updateAndGet(state => state.copy(persisted = state.persisted.copy(bufferOrder = List(bufferId, bufferId))))
+      .unsafeRunSync()
+    AppStateValidation.validationErrors(invalid) should not be empty
+
+    fixture.richText.interpret(RichTextIntent.ToggleRichTextMark(InlineMark.Bold)).unsafeRunSync()
+
+    fixture.stateRef.get.unsafeRunSync() shouldBe invalid
   }
 
   it should "apply a font family to the selected range" in {

@@ -90,7 +90,7 @@ final private[manager] class StateManagerEffectHandlers(
 
   private val keybindingEffects = new StateManagerKeybindingEffects(stateRef, configEffects.updateConfig)
 
-  private val richTextEffects = new StateManagerRichTextEffects(stateRef)
+  private val richTextEffects = new StateManagerRichTextEffects(stateRef, validateAndUpdateState, interpretEffect)
 
   private val projectLspEffects = new StateManagerProjectLspEffects(
     lspQueue,
@@ -102,7 +102,7 @@ final private[manager] class StateManagerEffectHandlers(
   )
 
   private val navigationEffects =
-    new StateManagerNavigationEffects(stateRef, bufferAnimationsRef, logger, validateAndUpdateState)
+    new StateManagerNavigationEffects(stateRef, logger, validateAndUpdateState, interpretEffect)
 
   private val panelEffects = new StateManagerPanelEffects(
     stateRef,
@@ -240,8 +240,8 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.File(intent)        => interpretFileIntent(intent, state)
       case CommandIntent.Edit(intent)        => interpretEditIntent(intent)
       case CommandIntent.RichText(intent)    => richTextEffects.interpret(intent)
-      case CommandIntent.Comments(intent)    => navigationEffects.interpretComments(intent, state)
-      case CommandIntent.Navigation(intent)  => navigationEffects.interpretNavigation(intent, state)
+      case CommandIntent.Comments(intent)    => navigationEffects.interpretComments(intent)
+      case CommandIntent.Navigation(intent)  => navigationEffects.interpretNavigation(intent)
       case CommandIntent.Lsp(intent)         => projectLspEffects.interpretLsp(intent, state)
       case CommandIntent.Theme(intent)       => surfacePopupEffects.interpretThemeIntent(intent, state)
       case CommandIntent.View(intent)        => panelEffects.interpret(intent, state)

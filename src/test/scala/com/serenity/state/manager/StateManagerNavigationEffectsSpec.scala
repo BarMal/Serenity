@@ -3,8 +3,12 @@ package com.serenity.state.manager
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.{CommentsIntent, NavigationIntent}
+import com.serenity.animation.{AnimationConfig, AnimationOwner}
+import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.MotionPreset
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.state.reducers.AppEffect
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.noop.NoOpLogger
@@ -31,10 +35,14 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
       Ref.of[IO, Map[BufferId, com.serenity.animation.AnimationState]](Map.empty).unsafeRunSync()
     val validateAndUpdateState: (AppState, AppState) => IO[Unit] =
       (newState, fallbackState) => stateRef.set(AppStateValidation.validated(newState).getOrElse(fallbackState))
+    val animationEffects = new AnimationEffectHandler(bufferAnimationsRef)
+    val interpretEffect: AppEffect => IO[Unit] =
+      case AppEffect.Animation(effect) => animationEffects.interpret(effect)
+      case other                       => IO.raiseError(new IllegalStateException(s"unexpected effect $other"))
     new Harness(
       stateRef,
       bufferAnimationsRef,
-      new StateManagerNavigationEffects(stateRef, bufferAnimationsRef, NoOpLogger.impl[IO], validateAndUpdateState)
+      new StateManagerNavigationEffects(stateRef, NoOpLogger.impl[IO], validateAndUpdateState, interpretEffect)
     )
 
   /** A state with a single editor pane/buffer -- the buffer built from `content`, with the given cursor and annotations
@@ -66,7 +74,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer("line0\nline1\nline2", cursor = CursorPosition(1, 0))
     val fixture = harness(state)
 
-    fixture.nav.interpretNavigation(NavigationIntent.ToggleBookmark, state).unsafeRunSync()
+    fixture.nav.interpretNavigation(NavigationIntent.ToggleBookmark).unsafeRunSync()
 
     fixture.currentBuffer.annotations.bookmarks shouldBe List(CursorPosition(1, 0))
   }
@@ -76,7 +84,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer("line0\nline1\nline2", cursor = cursor, bookmarks = List(cursor))
     val fixture = harness(state)
 
-    fixture.nav.interpretNavigation(NavigationIntent.ToggleBookmark, state).unsafeRunSync()
+    fixture.nav.interpretNavigation(NavigationIntent.ToggleBookmark).unsafeRunSync()
 
     fixture.currentBuffer.annotations.bookmarks shouldBe Nil
   }
@@ -85,7 +93,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = withoutActiveEditor(stateWithBuffer("line0"))
     val fixture = harness(state)
 
-    fixture.nav.interpretNavigation(NavigationIntent.ToggleBookmark, state).unsafeRunSync()
+    fixture.nav.interpretNavigation(NavigationIntent.ToggleBookmark).unsafeRunSync()
 
     fixture.currentState shouldBe state
   }
@@ -96,7 +104,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer("line0\nline1\nline2", cursor = first, bookmarks = List(first, second))
     val fixture = harness(state)
 
-    fixture.nav.interpretNavigation(NavigationIntent.NextBookmark, state).unsafeRunSync()
+    fixture.nav.interpretNavigation(NavigationIntent.NextBookmark).unsafeRunSync()
 
     val after = fixture.currentState
     after.activeCursorPosition shouldBe Some(second)
@@ -110,16 +118,44 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer("line0\nline1\nline2", cursor = second, bookmarks = List(first, second))
     val fixture = harness(state)
 
-    fixture.nav.interpretNavigation(NavigationIntent.PreviousBookmark, state).unsafeRunSync()
+    fixture.nav.interpretNavigation(NavigationIntent.PreviousBookmark).unsafeRunSync()
 
     fixture.currentState.activeCursorPosition shouldBe Some(first)
+  }
+
+  it should "sweep UI transitions across the target buffer after a jump when UI transitions are enabled" in {
+    val first  = CursorPosition(0, 0)
+    val second = CursorPosition(2, 0)
+    val base   = stateWithBuffer("line0\nline1\nline2", cursor = first, bookmarks = List(first, second))
+    val state = base.copy(persisted =
+      base.persisted.copy(config =
+        base.persisted.config.withMotionPreset(MotionPreset.Smooth).withUiAnimation(AnimationConfig.subtle)
+      )
+    )
+    val fixture = harness(state)
+
+    fixture.nav.interpretNavigation(NavigationIntent.NextBookmark).unsafeRunSync()
+
+    val animations = fixture.bufferAnimationsRef.get.unsafeRunSync().get(BufferId(0)).map(_.animations.values)
+    animations.map(_.map(_.owner).toSet) shouldBe Some(Set(AnimationOwner.UiTransitions))
+  }
+
+  it should "keep the committed state when a transition's result fails validation" in {
+    val state   = stateWithBuffer("line0\nline1\nline2", cursor = CursorPosition(1, 0))
+    val invalid = state.copy(persisted = state.persisted.copy(bufferOrder = List(BufferId(0), BufferId(0))))
+    AppStateValidation.validationErrors(invalid) should not be empty
+    val fixture = harness(invalid)
+
+    fixture.nav.interpretNavigation(NavigationIntent.ToggleBookmark).unsafeRunSync()
+
+    fixture.currentState shouldBe invalid
   }
 
   it should "do nothing navigating bookmarks when there are none" in {
     val state   = stateWithBuffer("line0\nline1")
     val fixture = harness(state)
 
-    fixture.nav.interpretNavigation(NavigationIntent.NextBookmark, state).unsafeRunSync()
+    fixture.nav.interpretNavigation(NavigationIntent.NextBookmark).unsafeRunSync()
 
     fixture.currentState shouldBe state
   }
@@ -129,7 +165,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer("line0\nline1\nline2", cursor = only, bookmarks = List(only))
     val fixture = harness(state)
 
-    fixture.nav.interpretNavigation(NavigationIntent.NextBookmark, state).unsafeRunSync()
+    fixture.nav.interpretNavigation(NavigationIntent.NextBookmark).unsafeRunSync()
 
     fixture.currentState shouldBe state
   }
@@ -140,7 +176,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer(sections, cursor = CursorPosition(0, 0))
     val fixture = harness(state)
 
-    fixture.nav.interpretNavigation(NavigationIntent.NextDocumentSymbol, state).unsafeRunSync()
+    fixture.nav.interpretNavigation(NavigationIntent.NextDocumentSymbol).unsafeRunSync()
 
     fixture.currentState.activeCursorPosition shouldBe Some(CursorPosition(2, 0))
   }
@@ -149,7 +185,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer(sections, cursor = CursorPosition(2, 0))
     val fixture = harness(state)
 
-    fixture.nav.interpretNavigation(NavigationIntent.PreviousDocumentSymbol, state).unsafeRunSync()
+    fixture.nav.interpretNavigation(NavigationIntent.PreviousDocumentSymbol).unsafeRunSync()
 
     fixture.currentState.activeCursorPosition shouldBe Some(CursorPosition(0, 0))
   }
@@ -158,7 +194,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer(sections, cursor = CursorPosition(4, 0))
     val fixture = harness(state)
 
-    fixture.nav.interpretNavigation(NavigationIntent.NextDocumentSymbol, state).unsafeRunSync()
+    fixture.nav.interpretNavigation(NavigationIntent.NextDocumentSymbol).unsafeRunSync()
 
     fixture.currentState.activeCursorPosition shouldBe Some(CursorPosition(0, 0))
   }
@@ -167,7 +203,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer("just one paragraph, no blank-line sections")
     val fixture = harness(state)
 
-    fixture.nav.interpretNavigation(NavigationIntent.NextDocumentSymbol, state).unsafeRunSync()
+    fixture.nav.interpretNavigation(NavigationIntent.NextDocumentSymbol).unsafeRunSync()
 
     fixture.currentState shouldBe state
   }
@@ -181,7 +217,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
       .pipeCopyNavigation(backStack = List(NavigationPoint(PaneId(0), BufferId(0), target)))
     val fixture = harness(state)
 
-    fixture.nav.interpretNavigation(NavigationIntent.NavigateBack, state).unsafeRunSync()
+    fixture.nav.interpretNavigation(NavigationIntent.NavigateBack).unsafeRunSync()
 
     val after = fixture.currentState
     after.activeCursorPosition shouldBe Some(target)
@@ -196,7 +232,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
       .pipeCopyNavigation(forwardStack = List(NavigationPoint(PaneId(0), BufferId(0), target)))
     val fixture = harness(state)
 
-    fixture.nav.interpretNavigation(NavigationIntent.NavigateForward, state).unsafeRunSync()
+    fixture.nav.interpretNavigation(NavigationIntent.NavigateForward).unsafeRunSync()
 
     val after = fixture.currentState
     after.activeCursorPosition shouldBe Some(target)
@@ -208,7 +244,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer("line0")
     val fixture = harness(state)
 
-    fixture.nav.interpretNavigation(NavigationIntent.NavigateBack, state).unsafeRunSync()
+    fixture.nav.interpretNavigation(NavigationIntent.NavigateBack).unsafeRunSync()
 
     fixture.currentState shouldBe state
   }
@@ -217,7 +253,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer("line0")
     val fixture = harness(state)
 
-    fixture.nav.interpretNavigation(NavigationIntent.NavigateForward, state).unsafeRunSync()
+    fixture.nav.interpretNavigation(NavigationIntent.NavigateForward).unsafeRunSync()
 
     fixture.currentState shouldBe state
   }
@@ -228,7 +264,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = AppState.initial
     val fixture = harness(state)
 
-    fixture.nav.interpretNavigation(NavigationIntent.OpenGotoLine, state).unsafeRunSync()
+    fixture.nav.interpretNavigation(NavigationIntent.OpenGotoLine).unsafeRunSync()
 
     fixture.currentState.runtime.uiSurfaces.map(_.content) match
       case List(SurfaceContent.ModalWorkflow(Modal.GotoLine(input))) => input shouldBe ""
@@ -243,7 +279,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer("hello world", cursor = cursor, comments = List(comment))
     val fixture = harness(state)
 
-    fixture.nav.interpretComments(CommentsIntent.ToggleCommentLens, state).unsafeRunSync()
+    fixture.nav.interpretComments(CommentsIntent.ToggleCommentLens).unsafeRunSync()
 
     fixture.currentState.runtime.uiSurfaces.map(_.content) match
       case List(SurfaceContent.CommentLens(lensState)) => lensState.target shouldBe Some(comment)
@@ -255,10 +291,9 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val comment = DocumentComment(CursorPosition(0, 0), CursorPosition(0, 5), "Needs work")
     val state   = stateWithBuffer("hello world", cursor = cursor, comments = List(comment))
     val fixture = harness(state)
-    fixture.nav.interpretComments(CommentsIntent.ToggleCommentLens, state).unsafeRunSync()
-    val withLens = fixture.currentState
+    fixture.nav.interpretComments(CommentsIntent.ToggleCommentLens).unsafeRunSync()
 
-    fixture.nav.interpretComments(CommentsIntent.ToggleCommentLens, withLens).unsafeRunSync()
+    fixture.nav.interpretComments(CommentsIntent.ToggleCommentLens).unsafeRunSync()
 
     fixture.currentState.runtime.uiSurfaces shouldBe Nil
   }
@@ -267,7 +302,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer("hello world", cursor = CursorPosition(0, 2))
     val fixture = harness(state)
 
-    fixture.nav.interpretComments(CommentsIntent.ToggleCommentLens, state).unsafeRunSync()
+    fixture.nav.interpretComments(CommentsIntent.ToggleCommentLens).unsafeRunSync()
 
     fixture.currentState shouldBe state
   }
@@ -278,7 +313,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer("hello world", cursor = CursorPosition(0, 0))
     val fixture = harness(state)
 
-    fixture.nav.interpretComments(CommentsIntent.AddDocumentComment("A note"), state).unsafeRunSync()
+    fixture.nav.interpretComments(CommentsIntent.AddDocumentComment("A note")).unsafeRunSync()
 
     fixture.currentBuffer.annotations.documentComments.map(_.text) shouldBe List("A note")
     fixture.currentBuffer.document.isDirty shouldBe true
@@ -290,7 +325,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state    = stateWithBuffer("hello world", cursor = cursor, comments = List(existing))
     val fixture  = harness(state)
 
-    fixture.nav.interpretComments(CommentsIntent.AddDocumentComment("New text"), state).unsafeRunSync()
+    fixture.nav.interpretComments(CommentsIntent.AddDocumentComment("New text")).unsafeRunSync()
 
     fixture.currentBuffer.annotations.documentComments.map(_.text) shouldBe List("New text")
   }
@@ -299,7 +334,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer("hello world", cursor = CursorPosition(0, 0))
     val fixture = harness(state)
 
-    fixture.nav.interpretComments(CommentsIntent.AddDocumentComment("   "), state).unsafeRunSync()
+    fixture.nav.interpretComments(CommentsIntent.AddDocumentComment("   ")).unsafeRunSync()
 
     fixture.currentBuffer.annotations.documentComments.map(_.text) shouldBe List("Comment")
   }
@@ -310,7 +345,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state    = stateWithBuffer("hello world", cursor = cursor, comments = List(existing))
     val fixture  = harness(state)
 
-    fixture.nav.interpretComments(CommentsIntent.DeleteDocumentComment, state).unsafeRunSync()
+    fixture.nav.interpretComments(CommentsIntent.DeleteDocumentComment).unsafeRunSync()
 
     fixture.currentBuffer.annotations.documentComments shouldBe Nil
   }
@@ -321,7 +356,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer("aaaaa\nbbbbb\nccccc", cursor = CursorPosition(0, 0), comments = List(first, second))
     val fixture = harness(state)
 
-    fixture.nav.interpretComments(CommentsIntent.NextDocumentComment, state).unsafeRunSync()
+    fixture.nav.interpretComments(CommentsIntent.NextDocumentComment).unsafeRunSync()
 
     val after = fixture.currentState
     after.activeCursorPosition shouldBe Some(CursorPosition(2, 0))
@@ -336,7 +371,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val state   = stateWithBuffer("aaaaa\nbbbbb\nccccc", cursor = CursorPosition(2, 0), comments = List(first, second))
     val fixture = harness(state)
 
-    fixture.nav.interpretComments(CommentsIntent.PreviousDocumentComment, state).unsafeRunSync()
+    fixture.nav.interpretComments(CommentsIntent.PreviousDocumentComment).unsafeRunSync()
 
     fixture.currentState.activeCursorPosition shouldBe Some(CursorPosition(0, 0))
   }

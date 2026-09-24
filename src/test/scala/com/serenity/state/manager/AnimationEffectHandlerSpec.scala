@@ -78,3 +78,37 @@ class AnimationEffectHandlerSpec extends AnyFlatSpec with Matchers:
     remaining.getCell(0, 0) shouldBe empty
     remaining.getCell(1, 0) shouldBe defined
   }
+
+  it should "restart UI transitions: replace the old ones without overwriting an active editor-text animation" in {
+    val activeEditorCell = AnimatedCell.parametricForeground('a', Color.BLACK, Color.WHITE, 5)
+    val staleUiCell =
+      AnimatedCell.parametricForeground('b', Color.BLACK, Color.WHITE, 5).copy(owner = AnimationOwner.UiTransitions)
+    val incomingUiCell = AnimatedCell.completed('x', Color.RED).copy(owner = AnimationOwner.UiTransitions)
+    val state          = AnimationState(Map(CharacterKey(0, 0) -> activeEditorCell, CharacterKey(1, 0) -> staleUiCell))
+    val (handler, ref) = handlerWith(Map(bufferId -> state))
+
+    handler
+      .interpret(
+        AnimationEffect.RestartUiTransitions(
+          bufferId,
+          Map(CharacterKey(0, 0) -> incomingUiCell, CharacterKey(2, 0) -> incomingUiCell)
+        )
+      )
+      .unsafeRunSync()
+
+    val after = ref.get.unsafeRunSync().apply(bufferId)
+    after.getCell(0, 0) shouldBe Some(activeEditorCell)
+    after.getCell(1, 0) shouldBe empty
+    after.getCell(2, 0) shouldBe Some(incomingUiCell)
+  }
+
+  it should "restart UI transitions on a buffer with no prior animations" in {
+    val incomingUiCell = AnimatedCell.completed('x', Color.RED).copy(owner = AnimationOwner.UiTransitions)
+    val (handler, ref) = handlerWith(Map.empty)
+
+    handler
+      .interpret(AnimationEffect.RestartUiTransitions(bufferId, Map(CharacterKey(0, 0) -> incomingUiCell)))
+      .unsafeRunSync()
+
+    ref.get.unsafeRunSync().apply(bufferId).getCell(0, 0) shouldBe Some(incomingUiCell)
+  }

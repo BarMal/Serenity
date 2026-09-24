@@ -1,7 +1,7 @@
 package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
-import com.serenity.animation.AnimationState
+import com.serenity.animation.{AnimationOwner, AnimationState}
 import com.serenity.state.models.BufferId
 import com.serenity.state.reducers.AnimationEffect
 
@@ -33,4 +33,9 @@ final private[manager] class AnimationEffectHandler(bufferAnimationsRef: Ref[IO,
           animations.get(bufferId) match
             case Some(state) => animations.updated(bufferId, state.clear(owner))
             case None        => animations
+        }
+      case AnimationEffect.RestartUiTransitions(bufferId, cells) =>
+        bufferAnimationsRef.update { animations =>
+          val current = animations.getOrElse(bufferId, AnimationState.empty)
+          animations.updated(bufferId, current.clear(AnimationOwner.UiTransitions).mergeUiTransitionAnimations(cells))
         }
