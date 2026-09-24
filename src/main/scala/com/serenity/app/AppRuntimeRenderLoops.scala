@@ -96,8 +96,10 @@ private[serenity] object AppRuntimeRenderLoops:
   ): IO[Unit] =
     event match
       case _: com.serenity.keystroke.events.InsertChar =>
-        stateManager.updateStateValidated(state =>
-          state.copy(runtime = state.runtime.observeTyping(System.nanoTime(), state.persisted.config))
+        IO.monotonic.flatMap(now =>
+          stateManager.updateStateValidated(state =>
+            state.copy(runtime = state.runtime.observeTyping(now.toNanos, state.persisted.config))
+          )
         )
       case _ => IO.unit
 

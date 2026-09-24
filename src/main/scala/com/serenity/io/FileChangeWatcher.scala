@@ -10,7 +10,7 @@ import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
 
 /** A real `java.nio.file.WatchService`-backed directory watcher (#1623): the background half of external-change
-  * detection, complementing the focus-in re-check `StateManagerEffectHandlers.checkExternalChangesOnFocusEffect`
+  * detection, complementing the focus-in re-check `StateManagerEffectHandlers.observeFocusedExternalRevisionEffect`
   * already does. `WatchService` only watches directories, not individual files, so `sync` takes the set of directories
   * the caller currently cares about (an open local buffer's parent) rather than individual file paths;
   * `pollChangedFiles` reports which specific files inside those directories a poll window actually saw change.

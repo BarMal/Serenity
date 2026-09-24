@@ -32,6 +32,19 @@ event pipeline → effect handlers → capability port → operation boundary, w
 alone consumes the operation boundary; effect handlers and their surface/workflow capabilities never
 depend on the event pipeline or effect handlers.
 
+Event dispatch is serialized by a single inbox (`StateManagerDispatcher`, first slice of
+`docs/state-architecture-target.md`): one `Queue` consumed by a single dispatcher fiber that runs requests one at a
+time. The fiber is started by the first offer into an idle inbox and exits when the inbox drains, so it needs no
+owning `Resource`.
+`applyEvent` and `updateStateValidated` offer their work and wait for it to be applied. Background work (find search,
+markdown-preview commit, document analysis) runs off the dispatcher and *posts* its state update instead of writing
+the state itself. The external-change check (#1623) reads the disk off the dispatcher and decides on it, dropping an
+observation that a save or reload has since superseded. Events enqueued while a dispatch interprets its effects are
+replayed on the dispatcher by `drainPendingOperations`; code already on the dispatcher never offers-and-waits, which
+would deadlock. The render tick advances animations only when the dispatcher is idle (`runIfIdle`); otherwise it
+skips the frame's advance and reports still-active so the next frame retries. The dispatch pipeline itself still
+performs I/O, and the capability ports still hold the state `Ref` (other direct writers remain until later slices).
+
 Event processing applies a reducer result's state before interpreting its effects. Document-analysis
 replacement cancels the previous analysis fiber before starting a replacement. Failures in optional
 analysis and persistence work are logged at their owning boundary and do not replace valid editor

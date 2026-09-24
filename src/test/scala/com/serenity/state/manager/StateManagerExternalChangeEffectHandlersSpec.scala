@@ -2,20 +2,29 @@ package com.serenity.state.manager
 
 import java.nio.file.Files
 
+import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import cats.syntax.all.*
 import com.serenity.io.FileManager
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Exercises [[StateManagerEffectHandlers]]'s external file-change detection (#1623):
-  * `checkExternalChangesOnFocusEffect`, `checkBufferForExternalChangesEffect`, and `openBufferPathsEffect`. Split out
-  * of `StateManagerEffectHandlersSpec`; both specs share [[StateManagerEffectHandlersHarness]].
+/** Exercises [[StateManagerEffectHandlers]]'s external file-change detection (#1623): the off-dispatcher
+  * `observe*ExternalRevisionEffect` reads, the on-dispatcher `resolveExternalRevisionEffect` decision, and
+  * `openBufferPathsEffect`. Split out of `StateManagerEffectHandlersSpec`; both specs share
+  * [[StateManagerEffectHandlersHarness]].
   */
 class StateManagerExternalChangeEffectHandlersSpec
     extends AnyFlatSpec
     with Matchers
     with StateManagerEffectHandlersHarness:
+
+  private def checkFocused(handlers: StateManagerEffectHandlers): IO[Unit] =
+    handlers.observeFocusedExternalRevisionEffect.flatMap(_.traverse_(handlers.resolveExternalRevisionEffect))
+
+  private def checkBuffer(handlers: StateManagerEffectHandlers, id: BufferId): IO[Unit] =
+    handlers.observeExternalRevisionEffect(id).flatMap(_.traverse_(handlers.resolveExternalRevisionEffect))
 
   private def focusedBufferState(buffer: Buffer): AppState =
     AppState.initial.copy(persisted =
@@ -30,7 +39,7 @@ class StateManagerExternalChangeEffectHandlersSpec
       )
     )
 
-  "checkExternalChangesOnFocusEffect" should "silently reload a clean buffer whose file changed on disk (#1623)" in {
+  "The focus-gain external-change check" should "silently reload a clean buffer whose file changed on disk (#1623)" in {
     val path = Files.createTempFile("focus-check-clean", ".md")
     Files.writeString(path, "original")
     val opened  = new FileManager().loadFile(path, bufferId).unsafeRunSync()
@@ -38,7 +47,7 @@ class StateManagerExternalChangeEffectHandlersSpec
 
     Files.writeString(path, "changed externally")
 
-    fixture.handlers.checkExternalChangesOnFocusEffect.unsafeRunSync()
+    checkFocused(fixture.handlers).unsafeRunSync()
 
     fixture.calls.get.unsafeRunSync() should contain(s"reloadBuffer:$bufferId")
     fixture.calls.get.unsafeRunSync().exists(_.startsWith("openReloadConflictModal")) shouldBe false
@@ -54,7 +63,7 @@ class StateManagerExternalChangeEffectHandlersSpec
 
     Files.writeString(path, "changed externally")
 
-    fixture.handlers.checkExternalChangesOnFocusEffect.unsafeRunSync()
+    checkFocused(fixture.handlers).unsafeRunSync()
 
     fixture.calls.get.unsafeRunSync() should contain(s"openReloadConflictModal:$bufferId:${path.getFileName}")
     fixture.calls.get.unsafeRunSync().exists(_.startsWith("reloadBuffer")) shouldBe false
@@ -66,7 +75,7 @@ class StateManagerExternalChangeEffectHandlersSpec
     val opened  = new FileManager().loadFile(path, bufferId).unsafeRunSync()
     val fixture = harness(focusedBufferState(opened))
 
-    fixture.handlers.checkExternalChangesOnFocusEffect.unsafeRunSync()
+    checkFocused(fixture.handlers).unsafeRunSync()
 
     fixture.calls.get.unsafeRunSync() shouldBe Nil
   }
@@ -74,12 +83,12 @@ class StateManagerExternalChangeEffectHandlersSpec
   it should "do nothing when no buffer is focused" in {
     val fixture = harness()
 
-    fixture.handlers.checkExternalChangesOnFocusEffect.unsafeRunSync()
+    checkFocused(fixture.handlers).unsafeRunSync()
 
     fixture.calls.get.unsafeRunSync() shouldBe Nil
   }
 
-  "checkBufferForExternalChangesEffect" should "check any given buffer, not only the focused one (#1623)" in {
+  "The watcher external-change check" should "check any given buffer, not only the focused one (#1623)" in {
     val path = Files.createTempFile("watch-check-unfocused", ".md")
     Files.writeString(path, "original")
     val opened = new FileManager().loadFile(path, bufferId).unsafeRunSync()
@@ -91,7 +100,7 @@ class StateManagerExternalChangeEffectHandlersSpec
 
     Files.writeString(path, "changed externally")
 
-    fixture.handlers.checkBufferForExternalChangesEffect(bufferId).unsafeRunSync()
+    checkBuffer(fixture.handlers, bufferId).unsafeRunSync()
 
     fixture.calls.get.unsafeRunSync() should contain(s"openReloadConflictModal:$bufferId:${path.getFileName}")
   }
@@ -118,9 +127,27 @@ class StateManagerExternalChangeEffectHandlersSpec
 
     Files.writeString(path, "changed externally, again")
 
-    fixture.handlers.checkBufferForExternalChangesEffect(bufferId).unsafeRunSync()
+    checkBuffer(fixture.handlers, bufferId).unsafeRunSync()
 
     fixture.calls.get.unsafeRunSync().exists(_.startsWith("openReloadConflictModal")) shouldBe false
+  }
+
+  it should "drop an observation made before the buffer recorded a newer revision, such as its own save's (#1564)" in {
+    val path = Files.createTempFile("watch-check-stale", ".md")
+    Files.writeString(path, "original")
+    val opened = new FileManager().loadFile(path, bufferId).unsafeRunSync()
+    val dirty =
+      opened.copy(document = opened.document.copy(content = com.serenity.rope.Rope("my edit"), isDirty = true))
+    val fixture = harness(focusedBufferState(dirty))
+
+    Files.writeString(path, "saved by this process")
+    val observed = fixture.handlers.observeExternalRevisionEffect(bufferId).unsafeRunSync()
+    val saved    = new FileManager().loadFile(path, bufferId).unsafeRunSync()
+    fixture.stateRef.set(focusedBufferState(saved)).unsafeRunSync()
+    observed.traverse_(fixture.handlers.resolveExternalRevisionEffect).unsafeRunSync()
+
+    observed.map(_.bufferRevision) shouldBe Some(dirty.document.revision)
+    fixture.calls.get.unsafeRunSync() shouldBe Nil
   }
 
   "openBufferPathsEffect" should "report every open buffer's file path keyed by its buffer id" in {

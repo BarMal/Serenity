@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.{IO, Ref}
+import cats.syntax.foldable.*
 import com.serenity.state.models.*
 
 final private[manager] class StateManagerFileFacade(
@@ -61,8 +62,14 @@ final private[manager] class StateManagerFileFacade(
 
 final private[manager] class StateManagerFileCapability(
     stateRef: Ref[IO, AppState],
-    effects: StateManagerEffectHandlers
+    effects: StateManagerEffectHandlers,
+    dispatch: IO[Unit] => IO[Unit]
 ):
+
+  // The disk read runs here, off the dispatcher; the decision re-reads state on it, after any in-flight save has
+  // recorded its revision -- otherwise that save's own write looks like an external change (#1564).
+  private def resolveOnDispatcher(observation: IO[Option[ExternalRevisionObservation]]): IO[Unit] =
+    observation.flatMap(_.traverse_(observed => dispatch(effects.resolveExternalRevisionEffect(observed))))
 
   private lazy val fileFacade = new StateManagerFileFacade(
     stateRef,
@@ -101,7 +108,7 @@ final private[manager] class StateManagerFileCapability(
     markBufferSaved = markBufferSaved,
     checkUnsavedChanges = checkUnsavedChanges,
     getRecentFiles = getRecentFiles,
-    checkExternalChangesOnFocus = effects.checkExternalChangesOnFocusEffect,
+    checkExternalChangesOnFocus = resolveOnDispatcher(effects.observeFocusedExternalRevisionEffect),
     openBufferPaths = effects.openBufferPathsEffect,
-    checkBufferForExternalChanges = effects.checkBufferForExternalChangesEffect
+    checkBufferForExternalChanges = bufferId => resolveOnDispatcher(effects.observeExternalRevisionEffect(bufferId))
   )

@@ -32,7 +32,7 @@ final private[manager] class StateManagerOperationBoundary private (
     documentAnalysisShutdownRef: Ref[IO, Boolean],
     beforeDocumentAnalysisStart: IO[Unit],
     beforeDocumentAnalysisShutdown: IO[Unit],
-    dispatchLock: Semaphore[IO]
+    dispatcher: StateManagerDispatcher
 ):
   private val DocumentAnalysisDebounce      = 150.millis
   private val FindSearchDebounce            = 50.millis
@@ -46,17 +46,14 @@ final private[manager] class StateManagerOperationBoundary private (
 
   def takeOperations: IO[List[StateManagerOperation]] = pendingOperations.getAndSet(Nil)
 
-  /** Serializes top-level calls into the event-dispatch pipeline against each other, so a call's eventual
-    * `stateRef.set` (built from a snapshot read at its own start -- see `validateAndUpdateState`) can never land
-    * concurrently with, and silently discard, another top-level call's commit (#1570; the same non-atomic
-    * get/compute/set shape as the animation ticker race fixed in #1564/#1571, but here between e.g. the input loop's
-    * and the LSP loop's own direct `applyEvent` calls rather than within a single method). Callers already inside a
-    * dispatch that recurses back into the pipeline on the same fiber --
-    * `StateManagerEventPipeline.drainPendingOperations` replaying an event enqueued while interpreting an effect --
-    * must use the already-locked entry point instead of this one: re-acquiring a non-reentrant `Semaphore` here would
-    * self-deadlock.
+  /** Runs `request` on the single state dispatcher and waits for it (#1570, #1697): a dispatch commits a state built
+    * from a snapshot read at its own start, so it must never overlap another writer. Never call this from code already
+    * running on the dispatcher -- see `StateManagerDispatcher.submit`.
     */
-  def serializeDispatch[A](dispatch: IO[A]): IO[A] = dispatchLock.permit.use(_ => dispatch)
+  def dispatch[A](request: IO[A]): IO[A] = dispatcher.submit(request)
+
+  /** Runs `request` only if no dispatch is in flight -- the render tick's way to stay off a slow dispatch. */
+  def runIfDispatcherIdle[A](request: IO[A]): IO[Option[A]] = dispatcher.runIfIdle(request)
 
   def ensureCommandRunnerSurface(state: AppState): AppState =
     val registry = CommandRegistry.default
@@ -144,10 +141,10 @@ final private[manager] class StateManagerOperationBoundary private (
     findSearchFiberRef.getAndSet(None).flatMap(_.traverse_(_.cancel)) >>
       (IO.sleep(FindSearchDebounce) >>
         IO.delay(FindSearch.results(request.content, request.query)).flatMap { results =>
-          stateRef.update { before =>
+          dispatcher.post(stateRef.update { before =>
             val after = ModalEventReducer.applyFindSearchResults(before, request, results)
             CursorViewport.ensureVisibleCursors(before, after)
-          }
+          })
         }).start.flatMap(fiber => findSearchFiberRef.set(Some(fiber)))
 
   /** Cancels any pending markdown-preview commit for `bufferId` and schedules a new one that, after
@@ -159,7 +156,7 @@ final private[manager] class StateManagerOperationBoundary private (
     markdownPreviewCommitFibersRef.modify(fibers => (fibers - bufferId, fibers.get(bufferId))).flatMap { prior =>
       prior.traverse_(_.cancel) >>
         (IO.sleep(MarkdownPreviewCommitDebounce) >>
-          stateRef.update { state =>
+          dispatcher.post(stateRef.update { state =>
             state.persisted.buffers.get(bufferId).fold(state) { buffer =>
               state.copy(persisted =
                 state.persisted.copy(buffers =
@@ -168,7 +165,7 @@ final private[manager] class StateManagerOperationBoundary private (
                 )
               )
             }
-          }).start.flatMap(fiber => markdownPreviewCommitFibersRef.update(_ + (bufferId -> fiber)))
+          })).start.flatMap(fiber => markdownPreviewCommitFibersRef.update(_ + (bufferId -> fiber)))
     }
 
   private def documentAnalysisJob: IO[Unit] =
@@ -180,8 +177,10 @@ final private[manager] class StateManagerOperationBoundary private (
           IO.blocking(DictionaryLoader.loadSnapshot(spellCheckConfig)).flatMap { dictionary =>
             val expected = SpellChecker.analysisFingerprints(snapshot, dictionary.fingerprints)
             val analyzed = SpellChecker.refreshDiagnostics(snapshot, dictionary)
-            stateRef
-              .update(current => SpellChecker.applyIfCurrent(current, analyzed, expected, dictionary.fingerprints))
+            dispatcher.post(
+              stateRef
+                .update(current => SpellChecker.applyIfCurrent(current, analyzed, expected, dictionary.fingerprints))
+            )
           }
         }
       }).handleErrorWith(error =>
@@ -214,7 +213,7 @@ private[manager] object StateManagerOperationBoundary:
       documentAnalysisInputsRef      <- Ref.of[IO, Option[Map[String, SpellCheckFingerprint]]](None)
       findSearchFiberRef             <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
       markdownPreviewCommitFibersRef <- Ref.of[IO, Map[BufferId, Fiber[IO, Throwable, Unit]]](Map.empty)
-      dispatchLock                   <- Semaphore[IO](1)
+      dispatcher                     <- StateManagerDispatcher.create(logger)
     yield new StateManagerOperationBoundary(
       pendingOperations,
       stateRef,
@@ -227,5 +226,5 @@ private[manager] object StateManagerOperationBoundary:
       documentAnalysisShutdownRef,
       beforeDocumentAnalysisStart,
       beforeDocumentAnalysisShutdown,
-      dispatchLock
+      dispatcher
     )

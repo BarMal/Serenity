@@ -205,7 +205,7 @@ final case class FileService(
     checkUnsavedChanges: Option[BufferId] => IO[Boolean],
     getRecentFiles: IO[List[Path]],
     // #1623: re-checks the focused buffer's on-disk revision on window focus-gain, called from AppRuntime's focus
-    // callback -- see StateManagerEffectHandlers.checkExternalChangesOnFocusEffect for the reload-or-prompt logic.
+    // callback -- see StateManagerEffectHandlers.resolveExternalRevisionEffect for the reload-or-prompt logic.
     checkExternalChangesOnFocus: IO[Unit],
     // #1623: the background counterpart -- AppRuntime's FileChangeWatcher poll loop calls openBufferPaths each cycle
     // to keep its watched directory set current, then checkBufferForExternalChanges for whichever buffers' files a
@@ -312,12 +312,16 @@ object StateManager:
         fileDialog = fileDialog,
         markdownPreviewWindow = markdownPreviewWindow
       )
-      operations <- StateManagerOperationBoundary.create(
-        stateRef,
-        documentAnalysisFiberRef,
-        runtime.logger
-      )
-    yield new StateManagerImpl(runtime, operations)
+      stateManager <- fromRuntime(runtime)
+    yield stateManager
+
+  /** Assembles a state manager over an already-built runtime -- the seam specs use to substitute infrastructure such as
+    * a gated `FileManager`.
+    */
+  private[manager] def fromRuntime(runtime: StateManagerRuntime)(using Balance): IO[StateManager] =
+    StateManagerOperationBoundary
+      .create(runtime.stateRef, runtime.documentAnalysisFiberRef, runtime.logger)
+      .map(operations => new StateManagerImpl(runtime, operations))
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
     // issue #931: category tabs (and the `activeCategory` field they drove) are retired, so this no longer names a
