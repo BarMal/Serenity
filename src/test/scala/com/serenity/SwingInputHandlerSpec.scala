@@ -4,6 +4,7 @@ import java.awt.event.{InputEvent, KeyEvent}
 import javax.swing.JPanel
 
 import scala.concurrent.duration.*
+import scala.jdk.CollectionConverters.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO}
@@ -34,7 +35,8 @@ import org.scalatest.matchers.should.Matchers
 
 class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
 
-  private val StreamObservationTimeout = 10.seconds
+  private val StreamObservationTimeout  = 10.seconds
+  private val WaitingThreadPollInterval = 10.millis
 
   "SwingInputHandler" should "terminate its event stream when shutdown is requested while idle" in {
     val component = new JPanel()
@@ -60,6 +62,23 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     val program = handler.shutdown >> handler.eventStream.compile.drain
 
     program.unsafeRunTimed(StreamObservationTimeout).shouldBe(defined)
+  }
+
+  it should "release the thread waiting for input when the event stream is cancelled while idle" in {
+    val component      = new JPanel()
+    val router         = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler        = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val alreadyWaiting = threadsWaitingForSwingInput()
+
+    val program = for
+      stream <- handler.eventStream.compile.drain.start
+      waiter <- awaitNewThreadWaitingForSwingInput(alreadyWaiting)
+      // Cancelling a fiber inside an uninterruptible blocking wait would itself wait for input that never arrives.
+      cancelled <- stream.cancel.as(true).timeoutTo(StreamObservationTimeout, IO.pure(false))
+      released  <- awaitReleased(waiter)
+    yield (cancelled, released)
+
+    program.unsafeRunTimed(StreamObservationTimeout * 3).shouldBe(Some((true, true)))
   }
 
   it should "preserve callback order across keyboard and mouse input" in {
@@ -494,3 +513,26 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     handler.eventStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
       Some(InsertChar('a'))
   }
+
+  private def isWaitingForSwingInput(thread: Thread, trace: Array[StackTraceElement]): Boolean =
+    thread.getState == Thread.State.WAITING &&
+      trace.exists(frame => frame.getClassName.startsWith(classOf[SwingInputHandler[?, ?]].getName)) &&
+      trace.exists(frame => frame.getClassName == classOf[java.util.concurrent.Semaphore].getName)
+
+  private def threadsWaitingForSwingInput(): Set[Thread] =
+    Thread.getAllStackTraces.asScala.collect {
+      case (thread, trace) if isWaitingForSwingInput(thread, trace) => thread
+    }.toSet
+
+  private def awaitNewThreadWaitingForSwingInput(excluding: Set[Thread]): IO[Thread] =
+    IO.blocking((threadsWaitingForSwingInput() -- excluding).headOption).flatMap {
+      case Some(thread) => IO.pure(thread)
+      case None         => IO.sleep(WaitingThreadPollInterval) >> awaitNewThreadWaitingForSwingInput(excluding)
+    }
+
+  private def awaitReleased(thread: Thread): IO[Boolean] =
+    def poll: IO[Boolean] =
+      IO.blocking(threadsWaitingForSwingInput().contains(thread)).flatMap { stillWaiting =>
+        if stillWaiting then IO.sleep(WaitingThreadPollInterval) >> poll else IO.pure(true)
+      }
+    poll.timeoutTo(StreamObservationTimeout, IO.pure(false))

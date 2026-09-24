@@ -235,9 +235,10 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
       case false => Stream.repeatEval(takeInput).takeWhile(_ != QueuedShutdown)
     }
 
+  // Interruptible so cancelling an idle stream frees the parked thread instead of waiting on input that may never come.
   private def takeInput: F[QueuedInput] =
     Sync[F].map(
-      Sync[F].blocking {
+      Sync[F].interruptible {
         inputAvailable.acquire()
         inputQueue.poll()
       }
