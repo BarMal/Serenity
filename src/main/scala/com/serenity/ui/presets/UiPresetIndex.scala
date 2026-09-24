@@ -72,7 +72,7 @@ object UiPresetIndex:
     }
   }
 
-class UiPresetStore private (path: Path):
+class UiPresetStore private[serenity] (path: Path):
   import UiPresetIndex.given
 
   private val mutationLockPath = path.resolveSibling(s".${path.getFileName.toString}.lock")

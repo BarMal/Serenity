@@ -38,7 +38,10 @@ time. The fiber is started by the first offer into an idle inbox and exits when 
 owning `Resource`.
 `applyEvent` and `updateStateValidated` offer their work and wait for it to be applied. Background work (find search,
 markdown-preview commit, document analysis) runs off the dispatcher and *posts* its state update instead of writing
-the state itself. The external-change check (#1623) reads the disk off the dispatcher and decides on it, dropping an
+the state itself. Config, keybinding and UI-preset persistence commits its state decision once, validated, then writes
+on the Sequential `Config`/`Presets` lanes (keybindings live in the config file, so they share `Config`); a preset
+result comes back as an `EffectResult` applied only while still current. Quitting drains Sequential lane work (bounded
+by a grace period) before releasing the lanes. The external-change check (#1623) reads the disk off the dispatcher and decides on it, dropping an
 observation that a save or reload has since superseded. Events enqueued while a dispatch interprets its effects are
 replayed on the dispatcher by `drainPendingOperations`; code already on the dispatcher never offers-and-waits, which
 would deadlock. The render tick advances animations only when the dispatcher is idle (`runIfIdle`); otherwise it

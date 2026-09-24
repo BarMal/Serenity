@@ -7,6 +7,7 @@ import com.serenity.rope.Rope
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.{AppState, Buffer, BufferId, FindResult, FindSearchRequest, SpellCheckFingerprint}
 import com.serenity.state.reducers.ModalEventReducer
+import com.serenity.ui.presets.UiPreset
 
 /** What a background lane job hands back to the dispatcher (#1697). Each result carries the version it was computed
   * against, and [[EffectResult.applyIfCurrent]] drops it once that version is no longer the live one: a lane's newer
@@ -28,6 +29,13 @@ private[manager] enum EffectResult:
   case FileReloaded(bufferId: BufferId, path: Path, contentAtRequest: Rope, disk: Buffer)
   case FileLoaded(path: Path, loaded: Buffer)
   case FileLoadFailed(path: Path, error: Throwable)
+
+  /** A preset store operation finished: `previews` is the store's listing afterwards, when it was read. Always applied,
+    * so a failed write is still reported.
+    */
+  case UiPresetFeedback(previews: Option[List[UiPreset.Preview]], context: UiPresetContext)
+  case UiPresetReviewReady(preset: UiPreset)
+  case UiPresetApplyResolved(request: Long, resolution: UiPresetApplyResolution)
 
 private[manager] object EffectResult:
 
@@ -52,3 +60,10 @@ private[manager] object EffectResult:
         FileResults.reloaded(state, bufferId, path, contentAtRequest, disk)
       case FileLoaded(path, loaded)                    => FileResults.loaded(state, path, loaded)
       case FileSaveFailed(_, _) | FileLoadFailed(_, _) => state
+
+      case UiPresetFeedback(previews, context) =>
+        UiPresetTransitions.withFeedback(state, previews, context)
+      case UiPresetReviewReady(preset) =>
+        UiPresetTransitions.openDiffReview(state, preset)
+      case UiPresetApplyResolved(request, resolution) =>
+        UiPresetTransitions.resolveApply(state, request, resolution)

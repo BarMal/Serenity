@@ -78,7 +78,7 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
       previews,
       loads,
       new StateManagerUiPresetEffects(
-        stateRef,
+        stateRef.get,
         NoOpLogger.impl[IO],
         store,
         IO.pure(windowSize),
@@ -89,9 +89,20 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
         (state, _) => state,
         previews.update(_ + 1),
         (position, path) => loads.update(_ :+ (position -> path)),
-        (newState, fallbackState) => stateRef.set(AppStateValidation.validated(newState).getOrElse(fallbackState))
+        transition => stateRef.update(state => AppStateValidation.validated(transition(state)).getOrElse(state)),
+        inlineLanes(stateRef)
       )
     )
+
+  /** Runs lane jobs and applies their results in place, so each case can be asserted as soon as it returns. */
+  private def inlineLanes(stateRef: Ref[IO, AppState]): EffectLanePort =
+    new EffectLanePort:
+      def submitEffect(lane: com.serenity.state.effects.Lane.Keyed, job: IO[Unit]): IO[Unit] = job
+      def dispatchEffectResult(result: EffectResult, onApplied: AppState => IO[Unit]): IO[Unit] =
+        stateRef.get.flatMap { current =>
+          val next = EffectResult.applyIfCurrent(current, result)
+          if next eq current then IO.unit else stateRef.set(next) >> onApplied(next)
+        }
 
   /** A live workspace with an open `CommandPalette` surface -- the surface every "context" side effect
     * (`editingPresetName`, `statusMessage`, drilled settings group, focus) is written onto.

@@ -74,6 +74,8 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
     } shouldBe Some(expectedCommandName)
 
     stateManager.applyEvent(Enter).unsafeRunSync()
+    // Persistence and preset loading run on effect lanes after the dispatch returns (#1697).
+    stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
 
   private def awaitDiagnosticMessages(
     stateManager: StateManager,

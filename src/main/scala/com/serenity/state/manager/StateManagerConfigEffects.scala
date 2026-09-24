@@ -1,60 +1,40 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.animation.AnimationConfig
 import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.command.*
 import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.{AppConfig, LineNumberLayout, StatusLinePlacement, StatusSegment, VisualFlairLevel}
+import com.serenity.config.{
+  AppConfig,
+  ConfigError,
+  ConfigManager,
+  LineNumberLayout,
+  StatusLinePlacement,
+  StatusSegment,
+  VisualFlairLevel
+}
 import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
 import com.serenity.spellcheck.{DictionaryWord, SpellChecker}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CommandRunnerPanelSelections, CommandRunnerReducer}
 
 /** Config-update infrastructure and the settings-intent dispatch that drives it: appearance, motion, cursor, panel
-  * chrome, spell-check, and general settings all funnel through the same persist-then-auto-save path.
+  * chrome, spell-check, and general settings all funnel through the same commit-then-persist path. The state change
+  * commits once, validated, on the dispatcher; the config file write and the session auto-save run FIFO on the Config
+  * lane (#1697).
   */
 final private[manager] class StateManagerConfigEffects(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     logger: org.typelevel.log4cats.Logger[IO],
     configPersistencePath: Option[java.nio.file.Path],
     sessionPersistence: SessionPersistence,
     onFontConfigChanged: com.serenity.ui.fonts.FontLoader.FontConfig => IO[Unit],
     deviceTextScaleProvider: IO[Double],
-    editor: EffectEditorPort
+    editor: EffectEditorPort,
+    saveConfig: (AppConfig, java.nio.file.Path) => IO[Either[ConfigError, Unit]] = ConfigManager.saveConfigIO
 )(using balance: com.serenity.rope.Balance):
-
-  private[manager] def withUpdatedRunnerConfig(state: AppState, config: AppConfig): AppState =
-    val commandRunnerSurfaceId = state.commandRunnerSurface.map(_.id)
-    val updatedRunner =
-      state.commandRunnerSurface.flatMap { surface =>
-        surface.content match
-          case SurfaceContent.CommandPalette(runner) =>
-            val configRunner = runner.updateInputItems(config)
-            Some(
-              configRunner.copy(optionSelections =
-                configRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
-              )
-            )
-          case _ =>
-            None
-      }
-    val updatedSurfaces = state.runtime.uiSurfaces.map {
-      // When updatedRunner is None, .fold falls back to the surface unchanged -- the same outcome the
-      // original `if updatedRunner.isDefined` guard produced by skipping to the `case other => other` tail.
-      case current if commandRunnerSurfaceId.contains(current.id) =>
-        updatedRunner.fold(current)(runner => current.copy(content = SurfaceContent.CommandPalette(runner)))
-      case current @ UiSurface(_, SurfaceContent.ContextualToolbar(toolbarState), _, _) =>
-        current.copy(
-          content = SurfaceContent.ContextualToolbar(
-            toolbarState.copy(displayMode = config.surfaceConfig.contextualToolbarDisplayMode)
-          )
-        )
-      case other =>
-        other
-    }
-    state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
 
   private[manager] def updateConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     applyConfigUpdate(update)
@@ -63,60 +43,22 @@ final private[manager] class StateManagerConfigEffects(
     applyConfigUpdate(update)
 
   private def updateMotionConfig(update: AppConfig => AppConfig): IO[AppConfig] =
-    stateRef.get.flatMap { previousState =>
-      applyConfigUpdate(update).flatTap(motionCancellation.cancelDisabledMotion(previousState.persisted.config, _))
-    }
+    applyConfigUpdate(update, cancelsDisabledMotion = true)
 
   private def updateMotionAccessibility(accessibility: com.serenity.config.MotionAccessibility): IO[AppConfig] =
     updateMotionConfig(_.withMotionAccessibility(accessibility))
 
   private[manager] def updateCompanionSpriteConfig(update: CompanionSpriteConfig => CompanionSpriteConfig): IO[Unit] =
-    updateAppearanceConfig(config => config.withCompanionSpriteConfig(update(config.companionSpriteConfig)))
-      .flatTap(config => stateRef.update(state => syncCompanionSpritePanel(state, config)))
-      .void
+    applyConfigUpdate(
+      config => config.withCompanionSpriteConfig(update(config.companionSpriteConfig)),
+      syncState = StateManagerConfigEffects.withCompanionSpritePanel
+    ).void
 
   private[manager] def updateVisualFlairLevel(level: VisualFlairLevel): IO[Unit] =
-    updateAppearanceConfig(_.withVisualFlairLevel(level))
-      .flatTap(config => stateRef.update(state => syncCompanionSpritePanel(state, config)))
-      .void
-
-  /** Adds or removes the companion sprite's pinned panel surface to match the config: visible exactly when the
-    * companion sprite is enabled and visual flair is not `Off` (matching item 8/9's "Off = don't render" rule). Called
-    * after either setting changes, since either can flip the panel's visibility.
-    */
-  private def syncCompanionSpritePanel(state: AppState, config: AppConfig): AppState =
-    val shouldShow = config.companionSpriteConfig.enabled && config.visualFlairLevel != VisualFlairLevel.Off
-    val exists     = state.runtime.uiSurfaces.exists(_.id == SurfaceId.CompanionSprite)
-    if shouldShow && !exists then
-      val surface = UiSurface(
-        id = SurfaceId.CompanionSprite,
-        content = SurfaceContent.CompanionSprite,
-        presentation = SurfacePresentation.Docked
-      )
-      // Docking is the tree's job alone (issue #817) -- `AppState.dockCompanionSprite` is the one place that seeds a
-      // companion sprite's position/ratio, reused here so startup and this runtime toggle can't drift apart.
-      state.copy(
-        persisted = state.persisted.copy(layout = AppState.dockCompanionSprite(state.persisted.layout, config)),
-        runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces :+ surface)
-      )
-    else if !shouldShow && exists then
-      val prunedTree = state.persisted.layout.workspaceTree.flatMap(_.removeSurface(SurfaceId.CompanionSprite))
-      val maximized = state.persisted.layout.maximizedWorkspaceNodeId.filterNot(nodeId =>
-        state.persisted.layout.workspaceTree.flatMap(_.surfaceIdForNode(nodeId)).contains(SurfaceId.CompanionSprite)
-      )
-      state.copy(
-        persisted = state.persisted.copy(layout =
-          state.persisted.layout.copy(
-            workspaceTree = prunedTree.orElse(state.persisted.layout.workspaceTree),
-            maximizedWorkspaceNodeId = maximized
-          )
-        ),
-        runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == SurfaceId.CompanionSprite))
-      )
-    else state
-
-  private val motionCancellation =
-    StateManagerMotionCancellation(editor.updateModelValidated)
+    applyConfigUpdate(
+      _.withVisualFlairLevel(level),
+      syncState = StateManagerConfigEffects.withCompanionSpritePanel
+    ).void
 
   private def updateCustomMotionConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     updateMotionConfig(config => update(config).withCustomMotionBaseline)
@@ -124,38 +66,35 @@ final private[manager] class StateManagerConfigEffects(
   private[manager] def updateTextDisplayConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     applyConfigUpdate(update)
 
-  /** Applies a configuration change to live state, persists it, and auto-saves the session. */
-  private def applyConfigUpdate(update: AppConfig => AppConfig): IO[AppConfig] =
-    stateRef
-      .modify { state =>
-        val newConfig = update(state.persisted.config)
-        val newState =
-          withUpdatedRunnerConfig(state.copy(persisted = state.persisted.copy(config = newConfig)), newConfig)
-        (newState, newConfig)
-      }
-      .flatTap(config =>
-        IO(
-          com.serenity.ui.renderer.RendererFrameState
-            .configureCacheCapacity(config.surfaceConfig.rendererFrameStateCacheCapacity)
+  /** Commits `update` (plus `syncState`, and cancelling motion it disabled) as one validated model write, then queues
+    * the config write and session auto-save on the Config lane. Returns the config live afterwards -- the old one if
+    * validation rejected the change.
+    */
+  private def applyConfigUpdate(
+    update: AppConfig => AppConfig,
+    syncState: (AppState, AppConfig) => AppState = (state, _) => state,
+    cancelsDisabledMotion: Boolean = false
+  ): IO[AppConfig] =
+    editor.updateModelValidated(model =>
+      Some(StateManagerConfigEffects.configTransition(model, update, syncState, cancelsDisabledMotion))
+    ) >>
+      currentState
+        .map(_.persisted.config)
+        .flatTap(config =>
+          IO(
+            com.serenity.ui.renderer.RendererFrameState
+              .configureCacheCapacity(config.surfaceConfig.rendererFrameStateCacheCapacity)
+          )
         )
-      )
-      .flatTap(config =>
-        configPersistencePath match
-          case Some(path) =>
-            com.serenity.config.ConfigManager.saveConfigIO(config, path).flatMap {
-              case Right(_) => IO.unit
-              case Left(error) =>
-                logger
-                  .warn(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}")
-            }
-          case None =>
-            IO.unit
-      )
-      .flatTap(_ =>
-        stateRef.get
-          .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
-          .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after config change failed"))
-      )
+        .flatTap(config =>
+          editor.submitEffect(
+            PersistenceLanes.Config,
+            writeConfigFile(config) >>
+              currentState
+                .flatMap(state => sessionPersistence.maybeSaveSession(state, SessionSaveTrigger.Manual))
+                .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after config change failed"))
+          )
+        )
 
   private[manager] def updateFontConfig(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig
@@ -429,7 +368,7 @@ final private[manager] class StateManagerConfigEffects(
   private def interpretGeneralSettingsIntent(intent: GeneralSettingsIntent, state: AppState): IO[Unit] =
     intent match
       case GeneralSettingsIntent.OpenSettings =>
-        stateRef.get.flatMap { current =>
+        currentState.flatMap { current =>
           val newState = CommandRunnerReducer.openSettings(current, CommandRegistry.withToggleUI)(using balance)
           editor.validateAndUpdateState(newState, current)
         }
@@ -476,13 +415,110 @@ final private[manager] class StateManagerConfigEffects(
         )
     config.withEditorTextAnimation(newAnim)
 
+  /** Queues a write of `config` to the config file, behind any config write already queued. */
   private[manager] def persistConfigFile(config: AppConfig): IO[Unit] =
+    editor.submitEffect(PersistenceLanes.Config, writeConfigFile(config))
+
+  private def writeConfigFile(config: AppConfig): IO[Unit] =
     configPersistencePath match
       case Some(path) =>
-        com.serenity.config.ConfigManager.saveConfigIO(config, path).flatMap {
+        saveConfig(config, path).flatMap {
           case Right(_) => IO.unit
           case Left(error) =>
             logger.warn(error.cause.getOrElse(new RuntimeException(error.message)))(s"[CONFIG] ${error.message}")
         }
       case None =>
         IO.unit
+
+private[manager] object StateManagerConfigEffects:
+
+  /** The whole state change of a config update: the new config, the live command runner and contextual toolbar
+    * refreshed for it, `syncState`, and -- for a motion change -- in-flight motion of families it switched off.
+    */
+  def configTransition(
+    model: Model,
+    update: AppConfig => AppConfig,
+    syncState: (AppState, AppConfig) => AppState,
+    cancelsDisabledMotion: Boolean
+  ): Model =
+    val previous = model.app.persisted.config
+    val config   = update(previous)
+    val app      = syncState(configUpdated(model.app, _ => config), config)
+    val cancellation =
+      if cancelsDisabledMotion then MotionCancellation.between(previous, config) else MotionCancellation.Families(Nil)
+    if cancellation.isEmpty then model.copy(app = app)
+    else
+      model.copy(
+        app = cancellation.cancelState(app),
+        bufferAnimations = cancellation.cancelBufferAnimations(model.bufferAnimations)
+      )
+
+  def configUpdated(state: AppState, update: AppConfig => AppConfig): AppState =
+    val config = update(state.persisted.config)
+    withUpdatedRunnerConfig(state.copy(persisted = state.persisted.copy(config = config)), config)
+
+  def withUpdatedRunnerConfig(state: AppState, config: AppConfig): AppState =
+    val commandRunnerSurfaceId = state.commandRunnerSurface.map(_.id)
+    val updatedRunner =
+      state.commandRunnerSurface.flatMap { surface =>
+        surface.content match
+          case SurfaceContent.CommandPalette(runner) =>
+            val configRunner = runner.updateInputItems(config)
+            Some(
+              configRunner.copy(optionSelections =
+                configRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
+              )
+            )
+          case _ =>
+            None
+      }
+    val updatedSurfaces = state.runtime.uiSurfaces.map {
+      // When updatedRunner is None, .fold falls back to the surface unchanged -- the same outcome the
+      // original `if updatedRunner.isDefined` guard produced by skipping to the `case other => other` tail.
+      case current if commandRunnerSurfaceId.contains(current.id) =>
+        updatedRunner.fold(current)(runner => current.copy(content = SurfaceContent.CommandPalette(runner)))
+      case current @ UiSurface(_, SurfaceContent.ContextualToolbar(toolbarState), _, _) =>
+        current.copy(
+          content = SurfaceContent.ContextualToolbar(
+            toolbarState.copy(displayMode = config.surfaceConfig.contextualToolbarDisplayMode)
+          )
+        )
+      case other =>
+        other
+    }
+    state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
+
+  /** Adds or removes the companion sprite's pinned panel surface to match the config: visible exactly when the
+    * companion sprite is enabled and visual flair is not `Off` (matching item 8/9's "Off = don't render" rule). Called
+    * after either setting changes, since either can flip the panel's visibility.
+    */
+  def withCompanionSpritePanel(state: AppState, config: AppConfig): AppState =
+    val shouldShow = config.companionSpriteConfig.enabled && config.visualFlairLevel != VisualFlairLevel.Off
+    val exists     = state.runtime.uiSurfaces.exists(_.id == SurfaceId.CompanionSprite)
+    if shouldShow && !exists then
+      val surface = UiSurface(
+        id = SurfaceId.CompanionSprite,
+        content = SurfaceContent.CompanionSprite,
+        presentation = SurfacePresentation.Docked
+      )
+      // Docking is the tree's job alone (issue #817) -- `AppState.dockCompanionSprite` is the one place that seeds a
+      // companion sprite's position/ratio, reused here so startup and this runtime toggle can't drift apart.
+      state.copy(
+        persisted = state.persisted.copy(layout = AppState.dockCompanionSprite(state.persisted.layout, config)),
+        runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces :+ surface)
+      )
+    else if !shouldShow && exists then
+      val prunedTree = state.persisted.layout.workspaceTree.flatMap(_.removeSurface(SurfaceId.CompanionSprite))
+      val maximized = state.persisted.layout.maximizedWorkspaceNodeId.filterNot(nodeId =>
+        state.persisted.layout.workspaceTree.flatMap(_.surfaceIdForNode(nodeId)).contains(SurfaceId.CompanionSprite)
+      )
+      state.copy(
+        persisted = state.persisted.copy(layout =
+          state.persisted.layout.copy(
+            workspaceTree = prunedTree.orElse(state.persisted.layout.workspaceTree),
+            maximizedWorkspaceNodeId = maximized
+          )
+        ),
+        runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == SurfaceId.CompanionSprite))
+      )
+    else state

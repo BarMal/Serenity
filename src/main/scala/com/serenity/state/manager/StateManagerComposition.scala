@@ -11,6 +11,7 @@ import com.serenity.keystroke.events.Event
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence}
+import com.serenity.state.effects.Lane
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -129,6 +130,11 @@ private[manager] class StateManagerComposition(
       modelCommit.updateValidated(transition)
     def scheduleDocumentAnalysis(): IO[Unit]                     = operations.scheduleDocumentAnalysis()
     def scheduleFindSearch(request: FindSearchRequest): IO[Unit] = operations.scheduleFindSearch(request)
+    def submitEffect(lane: Lane.Keyed, job: IO[Unit]): IO[Unit]  = operations.submitEffect(lane, job)
+    // Called from lane jobs, off the dispatcher, so events `onApplied` enqueues are replayed the way `executeCommand`
+    // replays them.
+    def dispatchEffectResult(result: EffectResult, onApplied: AppState => IO[Unit]): IO[Unit] =
+      operations.dispatch(operations.applyResult(result, onApplied)) >> drainPendingOperations
 
   private val surfaces =
     new StateManagerSurfaceCapability(stateRef, logger, operations, undoRecording.recordUndoBoundary)
@@ -288,8 +294,10 @@ private[manager] class StateManagerComposition(
 
   val commandExecutor: CommandExecutor = CommandExecutor(executeCommand = executeCommand)
 
+  /** Returns once the command and the lane work it started have settled; the dispatcher stays free meanwhile. */
   private def executeCommand(command: com.serenity.command.Command): IO[Unit] =
-    stateRef.get.flatMap(state => effects.interpretCommand(command, state)) >> drainPendingOperations
+    stateRef.get.flatMap(state => effects.interpretCommand(command, state)) >> drainPendingOperations >>
+      operations.awaitEffects
 
   private def drainPendingOperations: IO[Unit] =
     operations.takeOperations.flatMap {
@@ -400,7 +408,9 @@ private[manager] class StateManagerComposition(
   )
 
   val runtimeLifecycle: RuntimeLifecycle = RuntimeLifecycle(
-    awaitQuit = quitSignal.get >> operations.awaitPendingWrites,
+    // Quitting lets queued persistence finish before the runtime tears down (see `shutdownEffects`).
+    awaitQuit = quitSignal.get >> operations.shutdownEffects(),
+    awaitEffects = operations.awaitEffects,
     forceQuit = forceQuit,
     intervalSaveStream = intervalSaveStream
   )

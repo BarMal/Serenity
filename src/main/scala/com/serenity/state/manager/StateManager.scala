@@ -76,7 +76,11 @@ final case class AnimationTicker(advanceAnimationsOnTick: IO[Boolean])
 final case class RuntimeLifecycle(
     awaitQuit: IO[Unit],
     forceQuit: IO[Unit],
-    intervalSaveStream: Stream[IO, Unit]
+    intervalSaveStream: Stream[IO, Unit],
+    /** Completes once lane work accepted so far (config/preset writes, searches) and the results it hands back have
+      * settled. Event dispatch returns without waiting for that work, so this is the point to observe it.
+      */
+    awaitEffects: IO[Unit]
 )
 
 /** Supplies effects for the language-server interpreter.

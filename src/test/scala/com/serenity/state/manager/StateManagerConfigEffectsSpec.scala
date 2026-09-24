@@ -70,8 +70,14 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
         modelRef.get.flatMap(model =>
           transition(model).fold(IO.unit)(next => committed.update(_ :+ next.app) >> modelRef.set(next))
         )
-      def scheduleDocumentAnalysis(): IO[Unit]                     = analyses.update(_ + 1)
-      def scheduleFindSearch(request: FindSearchRequest): IO[Unit] = IO.unit
+      def scheduleDocumentAnalysis(): IO[Unit]                                               = analyses.update(_ + 1)
+      def scheduleFindSearch(request: FindSearchRequest): IO[Unit]                           = IO.unit
+      def submitEffect(lane: com.serenity.state.effects.Lane.Keyed, job: IO[Unit]): IO[Unit] = job
+      def dispatchEffectResult(result: EffectResult, onApplied: AppState => IO[Unit]): IO[Unit] =
+        stateRef.get.flatMap { current =>
+          val next = EffectResult.applyIfCurrent(current, result)
+          if next eq current then IO.unit else stateRef.set(next) >> onApplied(next)
+        }
 
     new Harness(
       stateRef,
@@ -82,7 +88,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
       committed,
       configPath,
       new StateManagerConfigEffects(
-        stateRef,
+        stateRef.get,
         NoOpLogger.impl[IO],
         configPath,
         new RecordingSessionPersistence(triggers, root),
