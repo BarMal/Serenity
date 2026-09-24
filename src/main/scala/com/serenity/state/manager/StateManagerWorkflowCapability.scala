@@ -62,16 +62,6 @@ final private[manager] class StateManagerWorkflowCapability(
       validateAndUpdateState
     )
 
-  private def saveBufferEffect(bufferId: BufferId): IO[Unit] =
-    filePersistence.saveExistingBuffer(bufferId).handleErrorWith {
-      case error: com.serenity.richtext.LossyRichTextOverwriteException =>
-        stateRef.get.flatMap(current => showSaveAsWorkflow(current, bufferId, error.getMessage))
-      case _: com.serenity.io.FileManagerError.ExternalConflict =>
-        stateRef.get.flatMap(current => openReloadConflictModal(current, bufferId, closeBufferLabel(current, bufferId)))
-      case error =>
-        logger.error(error)(s"[FILE] Failed to save buffer $bufferId")
-    }
-
   /** Opens the reload/overwrite/cancel prompt (#1623) for `bufferId` -- either because a save just discovered the
     * on-disk file changed since it was opened, or because a focus-in re-check found the same thing.
     */
@@ -239,10 +229,7 @@ final private[manager] class StateManagerWorkflowCapability(
         case Some(workflow) =>
           workflow.selectedChoice match
             case CloseWorkflowChoice.Cancel =>
-              dismissSurfaceAndFocusEditor(surfaceId) >>
-                stateRef.get.flatMap(current =>
-                  validateAndUpdateState(restoreActiveTab(workflow.scope, clearCloseActions(current)), current)
-                )
+              validateAndUpdateState(abandonedClose(surfaceId, workflow, state), state)
             case CloseWorkflowChoice.Discard =>
               val dismissedState = clearCloseActions(dismissModalSurface(state))
               val nextState      = closeUnlessSnapshotting(workflow.scope, dismissedState, workflow.currentBufferId)
@@ -251,13 +238,7 @@ final private[manager] class StateManagerWorkflowCapability(
             case CloseWorkflowChoice.Save =>
               state.persisted.buffers.get(workflow.currentBufferId) match
                 case Some(buffer) if buffer.document.filePath.isDefined =>
-                  saveBufferEffect(workflow.currentBufferId) >>
-                    stateRef.get.flatMap { savedState =>
-                      val dismissedState = clearCloseActions(dismissModalSurface(savedState))
-                      val nextState = closeUnlessSnapshotting(workflow.scope, dismissedState, workflow.currentBufferId)
-                      validateAndUpdateState(nextState, savedState) >>
-                        stateRef.get.flatMap(committed => continueCloseWorkflow(workflow, committed))
-                    }
+                  saveBeforeClose(surfaceId, workflow)
                 case Some(_) =>
                   requestSaveAsFileDialog(state, Some(workflow.currentBufferId))
                 case None =>
@@ -265,6 +246,40 @@ final private[manager] class StateManagerWorkflowCapability(
         case None =>
           IO.unit
     }
+
+  /** Closes the buffer only once its save has landed and left it clean (#1708). A failed or conflicting save abandons
+    * the whole close -- a quit or close-all stops at this buffer -- rather than dropping the edits it could not write.
+    */
+  private def saveBeforeClose(surfaceId: SurfaceId, workflow: CloseWorkflowState): IO[Unit] =
+    val bufferId = workflow.currentBufferId
+    filePersistence.saveExistingBuffer(bufferId).attempt.flatMap {
+      case Right(()) =>
+        stateRef.get.flatMap { savedState =>
+          if savedState.persisted.buffers.get(bufferId).exists(!_.hasUnsavedChanges) then
+            val dismissedState = clearCloseActions(dismissModalSurface(savedState))
+            val nextState      = closeUnlessSnapshotting(workflow.scope, dismissedState, bufferId)
+            validateAndUpdateState(nextState, savedState) >>
+              stateRef.get.flatMap(committed => continueCloseWorkflow(workflow, committed))
+          else validateAndUpdateState(abandonedClose(surfaceId, workflow, savedState), savedState)
+        }
+      case Left(error: com.serenity.richtext.LossyRichTextOverwriteException) =>
+        // The Save-As form opens over the prompt and resumes this close once it saves (continueCloseAfterFormSaveAs).
+        stateRef.get.flatMap(current => showSaveAsWorkflow(current, bufferId, error.getMessage))
+      case Left(_: com.serenity.io.FileManagerError.ExternalConflict) =>
+        stateRef.get.flatMap { current =>
+          val conflict = ReloadConflictState(bufferId, closeBufferLabel(current, bufferId))
+          val prompted =
+            ModalStateReducer.show(Modal.ReloadConflict(conflict), abandonedClose(surfaceId, workflow, current)).state
+          validateAndUpdateState(prompted, current)
+        }
+      case Left(error) =>
+        logger.error(error)(s"[FILE] Failed to save buffer $bufferId before closing it") >>
+          stateRef.get.flatMap(current => validateAndUpdateState(abandonedClose(surfaceId, workflow, current), current))
+    }
+
+  /** What cancelling the prompt leaves: the prompt gone, no close pending, and a tab close's original tab active. */
+  private def abandonedClose(surfaceId: SurfaceId, workflow: CloseWorkflowState, state: AppState): AppState =
+    restoreActiveTab(workflow.scope, clearCloseActions(withoutSurfaceFocusingEditor(state, surfaceId)))
 
   protected def continueCloseWorkflow(workflow: CloseWorkflowState, state: AppState): IO[Unit] =
     workflow.remainingBufferIds match
@@ -446,17 +461,18 @@ final private[manager] class StateManagerWorkflowCapability(
     }
 
   protected def dismissSurfaceAndFocusEditor(surfaceId: SurfaceId): IO[Unit] =
-    stateRef.update { state =>
-      val baseState = state.copy(runtime =
-        state.runtime.copy(
-          uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surfaceId),
-          modalStack = state.runtime.modalStack.filterNot(_.id == surfaceId)
-        )
+    stateRef.get.flatMap(state => validateAndUpdateState(withoutSurfaceFocusingEditor(state, surfaceId), state))
+
+  private def withoutSurfaceFocusingEditor(state: AppState, surfaceId: SurfaceId): AppState =
+    val baseState = state.copy(runtime =
+      state.runtime.copy(
+        uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surfaceId),
+        modalStack = state.runtime.modalStack.filterNot(_.id == surfaceId)
       )
-      state.persisted.layout.activeEditorPaneId match
-        case Some(paneId) => baseState.copy(persisted = baseState.persisted.copy(focus = Focus.EditorPane(paneId)))
-        case None         => baseState
-    }
+    )
+    state.persisted.layout.activeEditorPaneId match
+      case Some(paneId) => baseState.copy(persisted = baseState.persisted.copy(focus = Focus.EditorPane(paneId)))
+      case None         => baseState
 
   protected def fileWorkflowSurface(state: AppState, surfaceId: SurfaceId): Option[FileWorkflowState] =
     state.runtime.modalStack.find(_.id == surfaceId).collect {
