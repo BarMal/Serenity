@@ -44,9 +44,7 @@ final private[manager] class StateManagerSurfacePopupEffects(
   /** Re-list the themes on disk into both the picker's ref and `runtime.availableThemeNames` (the settings picker). */
   private[manager] def refreshThemeNames: IO[Unit] =
     themeManager.listAvailableThemes
-      .flatMap(names =>
-        themeNamesRef.set(names) *> commitCurrent(ThemeStateReducer.withAvailableThemeNames(names, _))
-      )
+      .flatMap(names => themeNamesRef.set(names) *> commitCurrent(ThemeStateReducer.withAvailableThemeNames(names, _)))
       .handleErrorWith(ex => logger.error(ex)("[THEMES] Failed to reload theme list"))
 
   private def toggleThemeEffect(state: AppState): IO[Unit] =

@@ -1,7 +1,8 @@
-package com.serenity.state.reducers
+package com.serenity.state.manager
 
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
+import com.serenity.state.reducers.ReducerResult
 import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

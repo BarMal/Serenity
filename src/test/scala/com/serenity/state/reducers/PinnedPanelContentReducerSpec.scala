@@ -15,8 +15,9 @@ class PinnedPanelContentReducerSpec extends AnyFlatSpec with Matchers:
   private val repo = Paths.get("/repo")
 
   private def directoryTrees(state: AppState): List[(DirectoryTreeData, Option[Path])] =
-    state.pinnedSurfaces.map(_.content).collect { case SurfaceContent.DirectoryTree(tree, selected) =>
-      tree -> selected
+    state.pinnedSurfaces.map(_.content).collect {
+      case SurfaceContent.DirectoryTree(tree, selected) =>
+        tree -> selected
     }
 
   private def terminals(state: AppState): List[String] =
@@ -60,7 +61,7 @@ class PinnedPanelContentReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "replace an existing explorer's tree and clear its selection" in {
-    val first = PinnedPanelContentReducer.loadDirectoryTree(Paths.get("/old"), List("a.txt"), AppState.initial).state
+    val first    = PinnedPanelContentReducer.loadDirectoryTree(Paths.get("/old"), List("a.txt"), AppState.initial).state
     val selected = PinnedPanelContentReducer.selectFileInExplorer(Paths.get("/old/a.txt"), first).state
 
     val result = PinnedPanelContentReducer.loadDirectoryTree(repo, List("b.txt"), selected)

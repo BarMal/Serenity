@@ -1,15 +1,15 @@
-package com.serenity.state.reducers
+package com.serenity.state.manager
 
 import com.serenity.keystroke.events.ResizeEvent
-import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
+import com.serenity.state.reducers.{AppEventReducer, Focused, ReducerResult, SystemEventReducer}
 import com.serenity.ui.layout.ViewportSize
 
 object ViewportStateReducer:
 
   def ensureCursorVisible(paneId: PaneId, state: AppState): ReducerResult =
     val scrolled = Focused.bufferOf(state, paneId).map { buffer =>
-      val cursor = buffer.editing.cursors.head.position
+      val cursor   = buffer.editing.cursors.head.position
       val viewport = CursorViewport.adjustForCursor(buffer, state, cursor)
       Focused.replaceBuffer(state, buffer.copy(viewport = viewport))
     }

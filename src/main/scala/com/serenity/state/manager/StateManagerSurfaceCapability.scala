@@ -41,8 +41,8 @@ final private[manager] class StateManagerSurfaceCapability(
       case _                                                           => IO.unit
     }
 
-  /** Reads state once, commits the pure result once through the validated path, then runs the shell-side follow-ups
-    * the reducer can't express as effects yet: the pipeline's animation hooks and the effects' undo boundaries.
+  /** Reads state once, commits the pure result once through the validated path, then runs the shell-side follow-ups the
+    * reducer can't express as effects yet: the pipeline's animation hooks and the effects' undo boundaries.
     */
   private def commit(reduce: AppState => ReducerResult, withAnimationHooks: Boolean): IO[Unit] =
     stateRef.get.flatMap { state =>

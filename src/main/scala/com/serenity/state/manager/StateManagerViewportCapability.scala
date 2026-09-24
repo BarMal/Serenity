@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.IO
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{ReducerResult, ViewportStateReducer}
+import com.serenity.state.reducers.ReducerResult
 import com.serenity.ui.layout.ViewportSize
 
 final private[manager] class StateManagerViewportCapability(

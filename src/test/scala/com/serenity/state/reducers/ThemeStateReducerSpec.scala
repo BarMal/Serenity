@@ -40,9 +40,8 @@ class ThemeStateReducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "clear any transition when re-applying the current theme" in {
-    val state = withTheme(Theme.dark).copy(runtime =
-      AppState.initial.runtime.copy(themeTransition = Some(ThemeTransition(Theme.light, 1, 5)))
-    )
+    val state = withTheme(Theme.dark)
+      .copy(runtime = AppState.initial.runtime.copy(themeTransition = Some(ThemeTransition(Theme.light, 1, 5))))
 
     ThemeStateReducer.applyTheme(Theme.dark, state).state.runtime.themeTransition shouldBe None
   }
