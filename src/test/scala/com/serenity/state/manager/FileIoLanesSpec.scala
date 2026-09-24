@@ -7,7 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
-import com.serenity.command.{Command, CommandCategory, CommandIntent, FileIntent}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, FileIntent, SessionIntent}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.{FileDialog, FileManager}
 import com.serenity.keystroke.events.{InsertChar, SaveFile}
@@ -274,5 +274,72 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
 
     eventually(f.state.persisted.buffers.values.flatMap(_.document.filePath).toList should contain(target))
     f.state.runtime.uiSurfaces.map(_.id) should contain allElementsOf docked
+    AppStateValidation.validationErrors(f.state) shouldBe Nil
+  }
+
+  private def restoreSession(f: Fixture): Unit =
+    f.stateManager.sessionService.saveSession.unsafeRunSync()
+    f.stateManager.commandExecutor
+      .executeCommand(
+        Command.typed(
+          "restore",
+          "Restore the session.",
+          CommandIntent.Session(SessionIntent.RestoreSession),
+          CommandCategory.File
+        )
+      )
+      .timeout(5.seconds)
+      .unsafeRunSync()
+
+  private def restoredBuffer(f: Fixture, path: Path): Buffer =
+    f.state.persisted.buffers.values.find(_.document.filePath.contains(path)).getOrElse(fail(s"$path not restored"))
+
+  private def reloadConflicts(f: Fixture): List[Modal] =
+    f.state.runtime.modalStack.map(_.modal).collect { case conflict: Modal.ReloadConflict => conflict }
+
+  "A session-restored buffer" should "refuse to overwrite a file changed on disk after the restore (#1670)" in {
+    val f    = fixture()
+    val path = file(f.directory, "notes.txt", "draft")
+    f.open(path)
+    restoreSession(f)
+    f.focus(restoredBuffer(f, path).id)
+
+    Files.writeString(path, "changed elsewhere")
+    f.type_('x')
+    f.fireSave()
+
+    eventually(reloadConflicts(f) should have size 1)
+    Files.readString(path) shouldBe "changed elsewhere"
+  }
+
+  it should "keep a dirty buffer's unsaved text and still refuse to overwrite a file changed since it was edited" in {
+    val f    = fixture()
+    val path = file(f.directory, "notes.txt", "draft")
+    f.open(path)
+    f.type_('x')
+    restoreSession(f)
+    Files.writeString(path, "changed elsewhere")
+    val restored = restoredBuffer(f, path)
+    restored.document.content.collect() shouldBe "xdraft"
+    f.focus(restored.id)
+
+    f.fireSave()
+
+    eventually(reloadConflicts(f) should have size 1)
+    Files.readString(path) shouldBe "changed elsewhere"
+  }
+
+  it should "show the disk's content for a clean buffer whose file changed since the session was saved (#1670)" in {
+    val f    = fixture()
+    val path = file(f.directory, "notes.txt", "draft")
+    f.open(path)
+    f.stateManager.sessionService.saveSession.unsafeRunSync()
+    Files.writeString(path, "rewritten\non disk")
+    restoreSession(f)
+
+    val restored = restoredBuffer(f, path)
+    restored.document.content.collect() shouldBe "rewritten\non disk"
+    restored.document.revision shouldBe diskRevision(path)
+    restored.document.isDirty shouldBe false
     AppStateValidation.validationErrors(f.state) shouldBe Nil
   }
