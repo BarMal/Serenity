@@ -1,11 +1,13 @@
 package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
+import cats.syntax.all.*
+import com.serenity.config.AppConfig
 import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
 import com.serenity.state.components.*
 import com.serenity.state.models.*
-import com.serenity.state.reducers.Focused
+import com.serenity.state.reducers.{Focused, ReducerResult, Transition}
 import com.serenity.ui.layout.*
 
 /** State the event pipeline exposes for selecting, activating, navigating, and resizing pinned/expanded panels, as a
@@ -16,18 +18,69 @@ final private[manager] case class PinnedPanelMouseHitTestingPort(
     stateRef: Ref[IO, AppState],
     applyComponentResult: (ComponentResult, AppState) => IO[AppState],
     validateAndUpdateState: (AppState, AppState) => IO[Unit],
-    updateConfig: (com.serenity.config.AppConfig => com.serenity.config.AppConfig) => IO[
-      com.serenity.config.AppConfig
-    ],
+    updateConfig: (AppConfig => AppConfig) => IO[AppConfig],
     resizePinnedPanel: (PanelTarget, Int) => IO[Unit]
 )
 
 /** Hit-tests mouse input against pinned/expanded panel rows (directory tree, outline, comments, diagnostics), navigates
   * the active editor to a selected location, and resizes panels and the text-area insets from a drag, independent of
   * every other mouse target.
+  *
+  * Row selection and navigation are pure transitions in the companion. Three steps stay IO here because no `AppEffect`
+  * expresses them: activating a double-clicked directory row (a `ComponentResult` applied through the pipeline),
+  * resizing a panel, and persisting a text-area inset change to the config.
   */
 final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHitTestingPort):
   import port.*
+
+  private def commit(transition: Transition[Boolean]): IO[Boolean] =
+    MouseTransition.commit(stateRef, applyReducerResult)(transition)
+
+  private def applyReducerResult(result: ReducerResult, fallback: AppState): IO[Unit] =
+    applyComponentResult(ComponentResult.reducerResult(result), fallback).void
+
+  def handlePinnedPanelMouseClick(click: MouseClick, state: AppState): IO[Boolean] =
+    if click.button != MouseButton.Primary then IO.pure(false)
+    else
+      commit(PinnedPanelMouseHitTesting.select(click, state, focusPanel = true)).flatTap {
+        case true if click.clickCount >= 2 => activateSelectedDirectoryRow(click)
+        case _                             => IO.unit
+      }
+
+  /** Activation resolves against the committed selection, the same row a keyboard Enter would now activate. */
+  private def activateSelectedDirectoryRow(click: MouseClick): IO[Unit] =
+    stateRef.get.flatMap { selectedState =>
+      PinnedPanelMouseHitTesting.activation(click, selectedState).traverse_ { result =>
+        applyComponentResult(result, selectedState).flatMap(validateAndUpdateState(_, selectedState))
+      }
+    }
+
+  def handlePinnedPanelMouseSelect(
+    event: MouseInputEvent,
+    state: AppState,
+    focusPanel: Boolean
+  ): IO[Boolean] =
+    commit(PinnedPanelMouseHitTesting.select(event, state, focusPanel))
+
+  def handlePinnedPanelMouseHover(event: MouseInputEvent, state: AppState): IO[Boolean] =
+    commit(PinnedPanelMouseHitTesting.hover(event, state))
+
+  def handlePinnedPanelLocationClick(click: MouseClick, state: AppState): IO[Boolean] =
+    commit(PinnedPanelMouseHitTesting.locationClick(click, state))
+
+  def handlePinnedPanelResizeDrag(drag: MouseDrag, state: AppState): IO[Boolean] =
+    PinnedPanelMouseHitTesting.panelResizeFromDrag(drag, state) match
+      case Some(LayoutEngine.PinnedPanelDragResize(position, size)) =>
+        resizePinnedPanel(PanelTarget.ByPosition(position), size).as(true)
+      case None =>
+        IO.pure(false)
+
+  def handleTextAreaResizeDrag(drag: MouseDrag, state: AppState): IO[Boolean] =
+    PinnedPanelMouseHitTesting.textAreaInsetFromDrag(drag, state) match
+      case Some(inset) => updateConfig(inset.applyTo).as(true)
+      case None        => IO.pure(false)
+
+private[manager] object PinnedPanelMouseHitTesting:
 
   final private case class PinnedDirectoryMouseHit(
       surface: UiSurface,
@@ -36,164 +89,87 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
       row: DirectoryTreeRow
   )
 
-  private enum TextAreaInsetDrag:
+  enum TextAreaInsetDrag:
     case Left(value: Double)
     case Right(value: Double)
     case Top(value: Double)
     case Bottom(value: Double)
 
-  def handlePinnedPanelMouseClick(click: MouseClick, state: AppState): IO[Boolean] =
-    if click.button != MouseButton.Primary then IO.pure(false)
-    else
-      handlePinnedPanelMouseSelect(click, state, focusPanel = true).flatMap {
-        case false =>
-          IO.pure(false)
-        case true if click.clickCount < 2 =>
-          IO.pure(true)
-        case true =>
-          stateRef.get.flatMap { selectedState =>
-            pinnedDirectoryMouseHitAt(click, selectedState) match
-              case Some(hit) =>
-                val result = PinnedPanelComponent(hit.position).processEvent(PanelInputEvent.Activate, selectedState)
-                applyComponentResult(result, selectedState)
-                  .flatMap(validateAndUpdateState(_, selectedState))
-                  .as(true)
-              case None =>
-                IO.pure(true)
-          }
-      }
+    def applyTo(config: AppConfig): AppConfig =
+      this match
+        case Left(value)   => config.withTextAreaLeftInset(value)
+        case Right(value)  => config.withTextAreaRightInset(value)
+        case Top(value)    => config.withTextAreaTopInset(value)
+        case Bottom(value) => config.withTextAreaBottomInset(value)
 
-  def handlePinnedPanelMouseSelect(
-    event: MouseInputEvent,
-    state: AppState,
-    focusPanel: Boolean
-  ): IO[Boolean] =
+  def select(event: MouseInputEvent, state: AppState, focusPanel: Boolean): Transition[Boolean] =
     pinnedDirectoryMouseHitAt(event, state) match
-      case Some(hit) =>
-        stateRef.update(selectPinnedDirectoryRow(_, hit, focusPanel)).as(true)
-      case None =>
-        IO.pure(false)
+      case Some(hit) => Transition.modify(selectPinnedDirectoryRow(_, hit, focusPanel)).as(true)
+      case None      => Transition.pure(false)
 
-  def handlePinnedPanelMouseHover(
-    event: MouseInputEvent,
-    state: AppState
-  ): IO[Boolean] =
-    handlePinnedPanelMouseSelect(event, state, focusPanel = false).flatMap {
-      case true => IO.pure(true)
-      case false =>
-        pinnedOutlineMouseHitAt(event, state) match
-          case Some((surface, symbols, location)) =>
-            stateRef.update(selectPinnedOutlineLocation(_, surface, symbols, location)).as(true)
-          case None =>
-            pinnedCommentsMouseHitAt(event, state) match
-              case Some((surface, symbols, location)) =>
-                stateRef.update(selectPinnedCommentsLocation(_, surface, symbols, location)).as(true)
-              case None =>
-                pinnedDiagnosticsMouseHitAt(event, state) match
-                  case Some((surface, issues, location)) =>
-                    stateRef.update(selectPinnedDiagnosticsLocation(_, surface, issues, location)).as(true)
-                  case None =>
-                    IO.pure(false)
-    }
+  /** Hovering highlights the row under the pointer without taking focus from the editor. */
+  def hover(event: MouseInputEvent, state: AppState): Transition[Boolean] =
+    pinnedDirectoryMouseHitAt(event, state)
+      .map(hit => selectPinnedDirectoryRow(_, hit, focusPanel = false))
+      .orElse(pinnedOutlineMouseHitAt(event, state).map { (surface, symbols, location) =>
+        replaceContent(_, surface.id, SurfaceContent.Outline(symbols, Some(location)))
+      })
+      .orElse(pinnedCommentsMouseHitAt(event, state).map { (surface, symbols, location) =>
+        replaceContent(_, surface.id, SurfaceContent.Comments(symbols, Some(location)))
+      })
+      .orElse(pinnedDiagnosticsMouseHitAt(event, state).map { (surface, issues, location) =>
+        replaceContent(_, surface.id, SurfaceContent.Diagnostics(issues, Some(location)))
+      })
+      .fold(Transition.pure(false))(highlight => Transition.modify(highlight).as(true))
 
-  def handlePinnedPanelLocationClick(click: MouseClick, state: AppState): IO[Boolean] =
-    if click.button != MouseButton.Primary then IO.pure(false)
+  /** What a double-click on a directory row does once the click itself has selected that row, resolved against the
+    * state carrying that selection. `None` for a single click or a click that no longer lands on a row.
+    */
+  def activation(click: MouseClick, selectedState: AppState): Option[ComponentResult] =
+    Option
+      .when(click.clickCount >= 2)(pinnedDirectoryMouseHitAt(click, selectedState))
+      .flatten
+      .map(hit => PinnedPanelComponent(hit.position).processEvent(PanelInputEvent.Activate, selectedState))
+
+  def locationClick(click: MouseClick, state: AppState): Transition[Boolean] =
+    if click.button != MouseButton.Primary then Transition.pure(false)
     else
       pinnedCommentsMouseHitAt(click, state) match
         case Some((_, _, location)) =>
-          stateRef.get
-            .flatMap { current =>
-              val next = CommentRendering.openLensAtCursor(navigateActiveEditorToLocation(current, location))
-              validateAndUpdateState(next, current)
-            }
+          Transition
+            .modify(current => CommentRendering.openLensAtCursor(navigateActiveEditorToLocation(current, location)))
             .as(true)
         case None =>
           pinnedLocationMouseHitAt(click, state) match
-            case Some(location) =>
-              stateRef.get
-                .flatMap(current => validateAndUpdateState(navigateActiveEditorToLocation(current, location), current))
-                .as(true)
-            case None =>
-              IO.pure(false)
+            case Some(location) => Transition.modify(navigateActiveEditorToLocation(_, location)).as(true)
+            case None           => Transition.pure(false)
 
-  def handlePinnedPanelResizeDrag(drag: MouseDrag, state: AppState): IO[Boolean] =
+  def panelResizeFromDrag(drag: MouseDrag, state: AppState): Option[LayoutEngine.PinnedPanelDragResize] =
     state.runtime.viewportSize.flatMap(viewportSize =>
       LayoutEngine.pinnedPanelResizeFromDrag(state, viewportSize, drag.col, drag.row)
-    ) match
-      case Some(LayoutEngine.PinnedPanelDragResize(position, size)) =>
-        resizePinnedPanel(PanelTarget.ByPosition(position), size).as(true)
-      case None =>
-        IO.pure(false)
-
-  def handleTextAreaResizeDrag(drag: MouseDrag, state: AppState): IO[Boolean] =
-    textAreaInsetFromDrag(drag, state) match
-      case Some(TextAreaInsetDrag.Left(value)) =>
-        updateConfig(_.withTextAreaLeftInset(value)).map(_ => true)
-      case Some(TextAreaInsetDrag.Right(value)) =>
-        updateConfig(_.withTextAreaRightInset(value)).map(_ => true)
-      case Some(TextAreaInsetDrag.Top(value)) =>
-        updateConfig(_.withTextAreaTopInset(value)).map(_ => true)
-      case Some(TextAreaInsetDrag.Bottom(value)) =>
-        updateConfig(_.withTextAreaBottomInset(value)).map(_ => true)
-      case None =>
-        IO.pure(false)
+    )
 
   private def selectPinnedDirectoryRow(
     state: AppState,
     hit: PinnedDirectoryMouseHit,
     focusPanel: Boolean
   ): AppState =
-    val updatedContent = SurfaceContent.DirectoryTree(hit.tree, Some(hit.row.path))
-    val updatedSurfaces =
-      state.runtime.uiSurfaces.replacedWhere(_.id == hit.surface.id)(_.copy(content = updatedContent))
-    val nextFocus = if focusPanel then Focus.Surface(hit.surface.id) else state.persisted.focus
-    state.copy(
-      persisted = state.persisted.copy(focus = nextFocus),
-      runtime = state.runtime.copy(uiSurfaces = updatedSurfaces)
-    )
+    val withRow   = replaceContent(state, hit.surface.id, SurfaceContent.DirectoryTree(hit.tree, Some(hit.row.path)))
+    val nextFocus = if focusPanel then Focus.Surface(hit.surface.id) else withRow.persisted.focus
+    if nextFocus == withRow.persisted.focus then withRow
+    else withRow.copy(persisted = withRow.persisted.copy(focus = nextFocus))
 
-  private def selectPinnedOutlineLocation(
-    state: AppState,
-    surface: UiSurface,
-    symbols: List[Symbol],
-    location: Location
-  ): AppState =
-    state.copy(runtime =
-      state.runtime.copy(uiSurfaces =
-        state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
-          _.copy(content = SurfaceContent.Outline(symbols, Some(location)))
+  /** Leaves `state` untouched (by reference) when the surface already shows `content`, so hovering along a row that is
+    * already highlighted does not commit anything.
+    */
+  private def replaceContent(state: AppState, surfaceId: SurfaceId, content: SurfaceContent): AppState =
+    if state.surfaceById(surfaceId).forall(_.content == content) then state
+    else
+      state.copy(runtime =
+        state.runtime.copy(uiSurfaces =
+          state.runtime.uiSurfaces.replacedWhere(_.id == surfaceId)(_.copy(content = content))
         )
       )
-    )
-
-  private def selectPinnedCommentsLocation(
-    state: AppState,
-    surface: UiSurface,
-    symbols: List[Symbol],
-    location: Location
-  ): AppState =
-    state.copy(runtime =
-      state.runtime.copy(uiSurfaces =
-        state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
-          _.copy(content = SurfaceContent.Comments(symbols, Some(location)))
-        )
-      )
-    )
-
-  private def selectPinnedDiagnosticsLocation(
-    state: AppState,
-    surface: UiSurface,
-    issues: List[Diagnostic],
-    location: Location
-  ): AppState =
-    state.copy(runtime =
-      state.runtime.copy(uiSurfaces =
-        state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
-          _.copy(content = SurfaceContent.Diagnostics(issues, Some(location)))
-        )
-      )
-    )
-
   /** Resolves hover/click against the directory tree's own `ResolvedSurfaceComposition` (issue #819, slice 4) -- the
     * same composition `PinnedPanelViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than a generic row-index
     * walk. A hit region is addressed by the filesystem path it represents (mirroring
@@ -376,7 +352,7 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
       case SurfacePresentation.Docked => state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id))
       case _                          => None
 
-  private def textAreaInsetFromDrag(drag: MouseDrag, state: AppState): Option[TextAreaInsetDrag] =
+  def textAreaInsetFromDrag(drag: MouseDrag, state: AppState): Option[TextAreaInsetDrag] =
     state.runtime.viewportSize.flatMap { viewportSize =>
       val layout   = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       val contract = EditorLayoutContract.from(state, viewportSize, layout)

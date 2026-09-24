@@ -1,6 +1,7 @@
 package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
+import cats.syntax.all.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
@@ -34,39 +35,25 @@ private[manager] object ModalMouseHitTesting:
       case Modal.SessionList(_, _, _)           => ModalType.SessionList
       case Modal.Custom(name, _)                => ModalType.Custom(name)
 
-final private[manager] class ModalMouseHitTesting(port: ModalMouseHitTestingPort):
-  import port.*
-
-  def handleModalMouseInput(event: MouseInputEvent, state: AppState): IO[Unit] =
+  /** A click on an action button of the close or reload-conflict prompt also submits it: those prompts have no
+    * separate confirm step, so picking Save/Discard/Cancel (or Reload/Overwrite/Cancel) is the decision itself.
+    */
+  def input(event: MouseInputEvent, state: AppState): Transition[Unit] =
     event match
       case click: MouseClick if click.button == MouseButton.Primary =>
-        modalHitAt(click, state) match
-          case Some((modal, hit)) =>
-            val modalType = ModalMouseHitTesting.modalType(modal)
-            val clicked = ModalEventReducer.reduce(
-              modalType,
-              ModalClick(hit.focusId.value, hit.actionId.map(_.value)),
-              state
-            )
-            applyReducerResult(clicked, state) >>
-              Option
-                .when(
-                  (modalType == ModalType.CloseWorkflow || modalType == ModalType.ReloadConflict) &&
-                    hit.actionId.nonEmpty
-                )(())
-                .fold(
-                  IO.unit
-                )(_ =>
-                  stateRef.get.flatMap { updatedState =>
-                    applyReducerResult(
-                      ModalEventReducer.reduce(modalType, ModalSubmit, updatedState),
-                      updatedState
-                    )
-                  }
-                )
-          case None => IO.unit
+        modalHitAt(click, state).fold(Transition.unit) { (modal, hit) =>
+          val clickedType = modalType(modal)
+          val submits =
+            (clickedType == ModalType.CloseWorkflow || clickedType == ModalType.ReloadConflict) &&
+              hit.actionId.nonEmpty
+          reduce(clickedType, ModalClick(hit.focusId.value, hit.actionId.map(_.value))) *>
+            (if submits then reduce(clickedType, ModalSubmit) else Transition.unit)
+        }
       case _ =>
-        IO.unit
+        Transition.unit
+
+  private def reduce(modalType: ModalType, event: ModalInputEvent): Transition[Unit] =
+    Transition.get.flatMap(current => ModalEventReducer.reduce(modalType, event, current).toTransition)
 
   def modalHitAt(click: MouseClick, state: AppState): Option[(Modal, SurfaceHitRegion)] =
     for
@@ -104,3 +91,14 @@ final private[manager] class ModalMouseHitTesting(port: ModalMouseHitTestingPort
         case SurfaceContent.ModalWorkflow(_) => Some(())
         case _                               => None
     yield surface
+
+final private[manager] class ModalMouseHitTesting(port: ModalMouseHitTestingPort):
+
+  def handleModalMouseInput(event: MouseInputEvent, state: AppState): IO[Unit] =
+    MouseTransition.commit(port.stateRef, port.applyReducerResult)(ModalMouseHitTesting.input(event, state))
+
+  def modalHitAt(click: MouseClick, state: AppState): Option[(Modal, SurfaceHitRegion)] =
+    ModalMouseHitTesting.modalHitAt(click, state)
+
+  def focusedFloatingModalWorkflow(state: AppState): Option[UiSurface] =
+    ModalMouseHitTesting.focusedFloatingModalWorkflow(state)

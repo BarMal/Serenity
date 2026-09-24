@@ -53,9 +53,8 @@ class MultiColumnMouseHitTestSpec extends AnyFlatSpec with Matchers:
     )
 
   private def targeting(state: AppState): EditorMouseTargeting =
-    val stateRef = Ref.unsafe[IO, AppState](state)
     val cacheRef = Ref.unsafe[IO, Option[MouseTargetCache]](None)
-    new EditorMouseTargeting(EditorMouseTargetingPort(stateRef, cacheRef))
+    new EditorMouseTargeting(EditorMouseTargetingPort(cacheRef))
 
   private def sceneOf(state: AppState) =
     AuthoritativeUiScene.forState(state, viewportSize)

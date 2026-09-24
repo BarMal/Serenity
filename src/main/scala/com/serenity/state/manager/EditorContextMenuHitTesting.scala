@@ -1,10 +1,12 @@
 package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
+import cats.syntax.all.*
 import com.serenity.command.CommandRegistry
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
+import com.serenity.state.reducers.{AppEffect, ReducerResult, Transition}
 import com.serenity.ui.layout.*
 
 /** State the event pipeline exposes for opening, hovering, and selecting from the editor's right-click context menu.
@@ -15,7 +17,7 @@ import com.serenity.ui.layout.*
   */
 final private[manager] case class EditorContextMenuHitTestingPort(
     stateRef: Ref[IO, AppState],
-    executeCommand: com.serenity.command.Command => IO[Unit],
+    applyReducerResult: (ReducerResult, AppState) => IO[Unit],
     resolveMouseTarget: (MouseInputEvent, AppState) => IO[Option[(PaneId, Buffer, CursorPosition)]]
 )
 
@@ -24,6 +26,20 @@ final private[manager] case class EditorContextMenuHitTestingPort(
   */
 final private[manager] class EditorContextMenuHitTesting(port: EditorContextMenuHitTestingPort):
   import port.*
+
+  private def commit[A](transition: Transition[A]): IO[A] =
+    MouseTransition.commit(stateRef, applyReducerResult)(transition)
+
+  def openEditorContextMenu(click: MouseClick, state: AppState): IO[Unit] =
+    resolveMouseTarget(click, state).flatMap(target => commit(EditorContextMenuHitTesting.open(target)))
+
+  def handleContextMenuMouseHover(event: MouseInputEvent, state: AppState): IO[Boolean] =
+    commit(EditorContextMenuHitTesting.hover(event, state))
+
+  def handleContextMenuMouseClick(click: MouseClick, state: AppState): IO[Boolean] =
+    commit(EditorContextMenuHitTesting.click(click, state))
+
+private[manager] object EditorContextMenuHitTesting:
 
   private val ContextMenuSurfaceId = SurfaceId("context-menu")
 
@@ -67,35 +83,34 @@ final private[manager] class EditorContextMenuHitTesting(port: EditorContextMenu
       "add-word-to-dictionary"
     )
 
-  def openEditorContextMenu(click: MouseClick, state: AppState): IO[Unit] =
-    resolveMouseTarget(click, state).flatMap {
+  /** Opens the menu below a resolved editor target; a secondary click on no editor target only dismisses a menu that is
+    * already open.
+    */
+  def open(target: Option[(PaneId, Buffer, CursorPosition)]): Transition[Unit] =
+    target match
       case Some((paneId, _, clickedCursor)) =>
-        editorContextMenu(Focus.EditorPane(paneId)) match
-          case Some(menu) =>
-            stateRef.update { current =>
-              val surface = UiSurface(
-                id = ContextMenuSurfaceId,
-                content = SurfaceContent.ContextMenu(menu),
-                presentation = SurfacePresentation.Floating(Some(clickedCursor), SurfacePlacement.BelowCursor)
+        editorContextMenu(Focus.EditorPane(paneId)).fold(Transition.unit) { menu =>
+          val surface = UiSurface(
+            id = ContextMenuSurfaceId,
+            content = SurfaceContent.ContextMenu(menu),
+            presentation = SurfacePresentation.Floating(Some(clickedCursor), SurfacePlacement.BelowCursor)
+          )
+          Transition.modify { current =>
+            current
+              .copy(runtime =
+                current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(isContextMenuSurface) :+ surface)
               )
-              current
-                .copy(runtime =
-                  current.runtime
-                    .copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(isContextMenuSurface) :+ surface)
-                )
-                .pushFocus(Focus.Surface(ContextMenuSurfaceId))
-            }
-          case None =>
-            IO.unit
+              .pushFocus(Focus.Surface(ContextMenuSurfaceId))
+          }
+        }
       case None =>
-        dismissContextMenuIfOpen(state)
-    }
+        dismissIfOpen
 
-  def handleContextMenuMouseHover(event: MouseInputEvent, state: AppState): IO[Boolean] =
+  def hover(event: MouseInputEvent, state: AppState): Transition[Boolean] =
     contextMenuSelectionAt(event, state) match
       case Some((surface, menu, index)) =>
-        stateRef
-          .update { current =>
+        Transition
+          .modify { current =>
             current.copy(runtime =
               current.runtime.copy(uiSurfaces =
                 current.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
@@ -106,30 +121,28 @@ final private[manager] class EditorContextMenuHitTesting(port: EditorContextMenu
           }
           .as(true)
       case None =>
-        IO.pure(false)
+        Transition.pure(false)
 
-  def handleContextMenuMouseClick(click: MouseClick, state: AppState): IO[Boolean] =
+  def click(click: MouseClick, state: AppState): Transition[Boolean] =
     contextMenuSelectionAt(click, state) match
       case Some((_, menu, index)) =>
         menu.items.lift(index) match
           case Some(item) =>
-            stateRef.update { current =>
+            Transition.modify { current =>
               val dismissed = dismissContextMenu(current)
               dismissed.copy(persisted = dismissed.persisted.copy(focus = menu.targetFocus))
-            } >>
-              executeCommand(item.command).as(true)
+            } *> Transition.emit(AppEffect.ExecuteCommand(item.command)).as(true)
           case None =>
-            IO.pure(false)
+            Transition.pure(false)
       case None if isContextMenuItemGap(click, state) =>
-        IO.pure(true)
+        Transition.pure(true)
       case None if state.contextMenuSurface.isDefined =>
-        stateRef.update(dismissContextMenu).as(true)
+        Transition.modify(dismissContextMenu).as(true)
       case None =>
-        IO.pure(false)
+        Transition.pure(false)
 
-  def dismissContextMenuIfOpen(state: AppState): IO[Unit] =
-    if state.contextMenuSurface.isDefined then stateRef.update(dismissContextMenu)
-    else IO.unit
+  val dismissIfOpen: Transition[Unit] =
+    Transition.modify(state => if state.contextMenuSurface.isDefined then dismissContextMenu(state) else state)
 
   def dismissContextMenu(state: AppState): AppState =
     state

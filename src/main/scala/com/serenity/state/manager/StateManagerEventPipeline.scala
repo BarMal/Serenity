@@ -75,9 +75,6 @@ final private[manager] class StateManagerEventPipeline(
   private def interpretCommand(command: com.serenity.command.Command, state: AppState): cats.effect.IO[Unit] =
     effects.interpretCommand(command, state) >> drainPendingOperations
 
-  private def executeCommand(command: com.serenity.command.Command): cats.effect.IO[Unit] =
-    effects.executeCommand(command) >> drainPendingOperations
-
   private val resizeEvents = new ResizeEventHandler(new ResizeEventPort:
     def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
       StateManagerEventPipeline.this.applyReducerResult(result, fallbackState)
@@ -100,7 +97,7 @@ final private[manager] class StateManagerEventPipeline(
       StateManagerEventPipeline.this.validateAndUpdateState(newState, fallbackState))
 
   private val editorMouseTargeting = new EditorMouseTargeting(
-    EditorMouseTargetingPort(stateRef = state.stateRef, mouseTargetCacheRef = state.mouseTargetCacheRef)
+    EditorMouseTargetingPort(mouseTargetCacheRef = state.mouseTargetCacheRef)
   )
 
   private val modalMouseHitTesting = new ModalMouseHitTesting(
@@ -108,19 +105,19 @@ final private[manager] class StateManagerEventPipeline(
   )
 
   private val startupPageMouseHitTesting = new StartupPageMouseHitTesting(
-    StartupPageMouseHitTestingPort(executeCommand = executeCommand)
+    StartupPageMouseHitTestingPort(stateRef = state.stateRef, applyReducerResult = applyReducerResult)
   )
 
   private val editorContextMenuHitTesting = new EditorContextMenuHitTesting(
     EditorContextMenuHitTestingPort(
       stateRef = state.stateRef,
-      executeCommand = executeCommand,
+      applyReducerResult = applyReducerResult,
       resolveMouseTarget = editorMouseTargeting.resolveMouseTarget
     )
   )
 
   private val contextualToolbarHitTesting = new ContextualToolbarHitTesting(
-    ContextualToolbarHitTestingPort(stateRef = state.stateRef, executeCommand = executeCommand)
+    ContextualToolbarHitTestingPort(stateRef = state.stateRef, applyReducerResult = applyReducerResult)
   )
 
   private val commandRunnerMouseHitTesting = new CommandRunnerMouseHitTesting(
@@ -138,15 +135,15 @@ final private[manager] class StateManagerEventPipeline(
   )
 
   private val commentLensMouseHitTesting = new CommentLensMouseHitTesting(
-    CommentLensMouseHitTestingPort(stateRef = state.stateRef)
+    CommentLensMouseHitTestingPort(stateRef = state.stateRef, applyReducerResult = applyReducerResult)
   )
 
   private val tabBarDragHitTesting = new TabBarDragHitTesting(
-    TabBarDragHitTestingPort(stateRef = state.stateRef, validateAndUpdateState = validateAndUpdateState)
+    TabBarDragHitTestingPort(stateRef = state.stateRef, applyReducerResult = applyReducerResult)
   )
 
   private val mouseHitTesting = new MouseHitTesting(
-    MouseHitTestingPort(stateRef = state.stateRef, validateAndUpdateState = validateAndUpdateState),
+    MouseHitTestingPort(stateRef = state.stateRef, applyReducerResult = applyReducerResult),
     editorMouseTargeting,
     editorContextMenuHitTesting,
     contextualToolbarHitTesting,

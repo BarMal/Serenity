@@ -1,8 +1,10 @@
 package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
+import cats.syntax.all.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
+import com.serenity.state.reducers.{AppEffect, ReducerResult, Transition}
 import com.serenity.ui.layout.*
 
 /** State the event pipeline exposes for hovering and clicking the contextual toolbar, as a capability record rather
@@ -11,71 +13,86 @@ import com.serenity.ui.layout.*
   */
 final private[manager] case class ContextualToolbarHitTestingPort(
     stateRef: Ref[IO, AppState],
-    executeCommand: com.serenity.command.Command => IO[Unit]
+    applyReducerResult: (ReducerResult, AppState) => IO[Unit]
 )
 
 /** Hit-tests hover/click against the open contextual toolbar's top-level items and open detail (dropdown or input),
   * independent of every other mouse target.
   */
 final private[manager] class ContextualToolbarHitTesting(port: ContextualToolbarHitTestingPort):
-  import port.*
 
   def handleContextualToolbarMouseHover(event: MouseInputEvent, state: AppState): IO[Boolean] =
-    IO.pure(contextualToolbarSelectionAt(event, state).isDefined)
+    IO.pure(ContextualToolbarHitTesting.claimsHover(event, state))
 
   def handleContextualToolbarMouseClick(click: MouseClick, state: AppState): IO[Boolean] =
+    MouseTransition.commit(port.stateRef, port.applyReducerResult)(ContextualToolbarHitTesting.click(click, state))
+
+private[manager] object ContextualToolbarHitTesting:
+
+  /** Hovering the toolbar changes nothing; it only keeps the pointer from reaching the targets underneath. */
+  def claimsHover(event: MouseInputEvent, state: AppState): Boolean =
+    contextualToolbarSelectionAt(event, state).isDefined
+
+  def click(click: MouseClick, state: AppState): Transition[Boolean] =
     contextualToolbarSelectionAt(click, state) match
       case Some((surface, toolbarState, ContextualToolbarHit.TopLevelItem(index))) =>
-        val items        = ContextualToolbar.itemsFor(state)
-        val focusedState = toolbarState.withFocusedIndex(index, items)
-        val focusedItem  = focusedState.normalized(items).focusedItem(items)
-        stateRef.update { current =>
-          val nextState =
-            focusedItem match
-              case Some(_: ContextualToolbarItem.Button)   => focusedState.closeDetail
-              case Some(_: ContextualToolbarItem.Dropdown) => focusedState.openFocusedDetail(items)
-              case Some(_: ContextualToolbarItem.Input)    => focusedState.openFocusedDetail(items)
-              case None                                    => focusedState
-          val updated = replaceContextualToolbar(current, surface, nextState)
-          focusedItem match
-            case Some(_: ContextualToolbarItem.Dropdown) | Some(_: ContextualToolbarItem.Input) =>
-              updated.pushFocus(Focus.Surface(surface.id))
-            case Some(_: ContextualToolbarItem.Button) =>
-              updated.copy(persisted = updated.persisted.copy(focus = editorFocus(current)))
-            case _ =>
-              updated
-        } >>
-          stateRef.get.flatMap { current =>
-            focusedItem match
-              case Some(_: ContextualToolbarItem.Button) =>
-                ContextualToolbar.focusedCommand(focusedState, current) match
-                  case Some(command) => executeCommand(command).as(true)
-                  case None          => IO.pure(false)
-              case Some(_: ContextualToolbarItem.Dropdown) | Some(_: ContextualToolbarItem.Input) =>
-                IO.pure(true)
-              case None =>
-                IO.pure(false)
-          }
+        topLevelItemClick(surface, toolbarState, index, state)
       case Some((surface, toolbarState, ContextualToolbarHit.DropdownOption(itemId, optionIndex))) =>
         val detailState =
           toolbarState.copy(detailState = Some(ContextualToolbarDetailState.Dropdown(itemId, optionIndex)))
-        stateRef.update { current =>
+        Transition.modify { current =>
           val replaced = replaceContextualToolbar(current, surface, detailState.closeDetail)
           replaced.copy(persisted = replaced.persisted.copy(focus = editorFocus(current)))
-        } >>
-          stateRef.get.flatMap { current =>
-            ContextualToolbar.detailCommand(detailState, current) match
-              case Some(command) => executeCommand(command).as(true)
-              case None          => IO.pure(false)
-          }
+        } *> executeIfDefined(ContextualToolbar.detailCommand(detailState, _))
       case Some((surface, toolbarState, ContextualToolbarHit.InputDetail(_))) =>
-        stateRef
-          .update(current =>
+        Transition
+          .modify(current =>
             replaceContextualToolbar(current, surface, toolbarState).pushFocus(Focus.Surface(surface.id))
           )
           .as(true)
       case None =>
-        IO.pure(false)
+        Transition.pure(false)
+
+  private def topLevelItemClick(
+    surface: UiSurface,
+    toolbarState: ContextualToolbarState,
+    index: Int,
+    state: AppState
+  ): Transition[Boolean] =
+    val items        = ContextualToolbar.itemsFor(state)
+    val focusedState = toolbarState.withFocusedIndex(index, items)
+    val focusedItem  = focusedState.normalized(items).focusedItem(items)
+    val focusItem = Transition.modify { current =>
+      val nextState =
+        focusedItem match
+          case Some(_: ContextualToolbarItem.Button)   => focusedState.closeDetail
+          case Some(_: ContextualToolbarItem.Dropdown) => focusedState.openFocusedDetail(items)
+          case Some(_: ContextualToolbarItem.Input)    => focusedState.openFocusedDetail(items)
+          case None                                    => focusedState
+      val updated = replaceContextualToolbar(current, surface, nextState)
+      focusedItem match
+        case Some(_: ContextualToolbarItem.Dropdown) | Some(_: ContextualToolbarItem.Input) =>
+          updated.pushFocus(Focus.Surface(surface.id))
+        case Some(_: ContextualToolbarItem.Button) =>
+          updated.copy(persisted = updated.persisted.copy(focus = editorFocus(current)))
+        case _ =>
+          updated
+    }
+    val outcome: Transition[Boolean] = focusedItem match
+      case Some(_: ContextualToolbarItem.Button) =>
+        executeIfDefined(ContextualToolbar.focusedCommand(focusedState, _))
+      case Some(_: ContextualToolbarItem.Dropdown) | Some(_: ContextualToolbarItem.Input) =>
+        Transition.pure(true)
+      case None =>
+        Transition.pure(false)
+    focusItem *> outcome
+
+  /** Resolved from the state after the toolbar update -- the same state the emitted command will run against. */
+  private def executeIfDefined(command: AppState => Option[com.serenity.command.Command]): Transition[Boolean] =
+    Transition.inspect(command).flatMap {
+      case Some(command) => Transition.emit(AppEffect.ExecuteCommand(command)).as(true)
+      case None          => Transition.pure(false)
+    }
 
   private def contextualToolbarSelectionAt(
     event: MouseInputEvent,

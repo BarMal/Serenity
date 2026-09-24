@@ -1,6 +1,7 @@
 package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
+import cats.syntax.all.*
 import com.serenity.command.{CommandRegistry, CommandRunnerSurface, CommandSurfaceItem, SettingsSurfaceState}
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.*
@@ -21,30 +22,30 @@ final private[manager] case class CommandRunnerMouseHitTestingPort(
   * `CommandRunnerEvent`, independent of every other mouse target.
   */
 final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMouseHitTestingPort):
-  import port.*
 
   def handleCommandRunnerMouseHover(event: MouseInputEvent, state: AppState): IO[Boolean] =
-    commandRunnerSelectionAt(event, state) match
-      case Some(selectEvent) =>
-        val registry = CommandRegistry.withToggleUI
-        applyReducerResult(CommandRunnerReducer.reduce(selectEvent, state, registry), state).map(_ => true)
-      case None =>
-        IO.pure(false)
+    MouseTransition.commit(port.stateRef, port.applyReducerResult)(CommandRunnerMouseHitTesting.hover(event, state))
 
   def handleCommandRunnerMouseClick(click: MouseClick, state: AppState): IO[Boolean] =
+    MouseTransition.commit(port.stateRef, port.applyReducerResult)(CommandRunnerMouseHitTesting.click(click, state))
+
+private[manager] object CommandRunnerMouseHitTesting:
+
+  def hover(event: MouseInputEvent, state: AppState): Transition[Boolean] =
+    commandRunnerSelectionAt(event, state) match
+      case Some(selectEvent) => reduce(selectEvent).as(true)
+      case None              => Transition.pure(false)
+
+  /** A click selects the row under the pointer, then submits it, exactly as Enter would after moving to it. */
+  def click(click: MouseClick, state: AppState): Transition[Boolean] =
     commandRunnerSelectionAt(click, state) match
-      case Some(selectEvent) =>
-        val registry = CommandRegistry.withToggleUI
-        val selected = CommandRunnerReducer.reduce(selectEvent, state, registry)
-        applyReducerResult(selected, state) >>
-          stateRef.get
-            .flatMap { selectedState =>
-              val submitted = CommandRunnerReducer.reduce(RunnerSubmit, selectedState, registry)
-              applyReducerResult(submitted, selectedState)
-            }
-            .map(_ => true)
-      case None =>
-        IO.pure(false)
+      case Some(selectEvent) => (reduce(selectEvent) *> reduce(RunnerSubmit)).as(true)
+      case None              => Transition.pure(false)
+
+  private def reduce(event: CommandRunnerEvent): Transition[Unit] =
+    Transition.get.flatMap(current =>
+      CommandRunnerReducer.reduce(event, current, CommandRegistry.withToggleUI).toTransition
+    )
 
   private def commandRunnerSelectionAt(event: MouseInputEvent, state: AppState): Option[CommandRunnerEvent] =
     val surfaces = state.commandRunnerSurface.toList

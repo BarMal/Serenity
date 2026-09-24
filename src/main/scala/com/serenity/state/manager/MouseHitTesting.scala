@@ -4,8 +4,8 @@ import cats.effect.{IO, Ref}
 import com.serenity.config.CommentDisplayMode
 import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
-import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
+import com.serenity.state.reducers.{ReducerResult, Transition}
 
 /** State the event pipeline exposes for applying a resolved editor click/press/drag target to buffer selection, as a
   * capability record rather than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is
@@ -13,7 +13,7 @@ import com.serenity.state.models.*
   */
 final private[manager] case class MouseHitTestingPort(
     stateRef: Ref[IO, AppState],
-    validateAndUpdateState: (AppState, AppState) => IO[Unit]
+    applyReducerResult: (ReducerResult, AppState) => IO[Unit]
 )
 
 /** Routes primary/secondary mouse click, press, drag, and move events to the editor, the context menu, the contextual
@@ -32,7 +32,9 @@ final private[manager] class MouseHitTesting(
     commentLens: CommentLensMouseHitTesting,
     tabBarDrag: TabBarDragHitTesting
 )(using balance: com.serenity.rope.Balance):
-  import port.*
+
+  private def commit[A](transition: Transition[A]): IO[A] =
+    MouseTransition.commit(port.stateRef, port.applyReducerResult)(transition)
 
   def handleMouseClick(click: MouseClick, state: AppState): IO[Unit] =
     click.button match
@@ -55,7 +57,7 @@ final private[manager] class MouseHitTesting(
                         commentLens.handleCommentLensMouseClick(click, state).flatMap {
                           case true => IO.unit
                           case false =>
-                            handleTabBarClick(click, state).flatMap {
+                            commit(TabBarMouseHitTesting.click(click, state)).flatMap {
                               case true => IO.unit
                               case false =>
                                 if MouseHitTestGeometry.isInsideFloatingSurface(click, state) then IO.unit
@@ -66,17 +68,9 @@ final private[manager] class MouseHitTesting(
                                       pinnedPanel.handlePinnedPanelLocationClick(click, state).flatMap {
                                         case true => IO.unit
                                         case false =>
-                                          editorTargeting.resolveMouseTarget(click, state).flatMap {
-                                            _.fold(contextMenu.dismissContextMenuIfOpen(state)) {
-                                              (paneId, buffer, clickedCursor) =>
-                                                stateRef.get.flatMap { current =>
-                                                  validateAndUpdateState(
-                                                    applyEditorClick(current, click, paneId, buffer, clickedCursor),
-                                                    current
-                                                  )
-                                                }
-                                            }
-                                          }
+                                          editorTargeting
+                                            .resolveMouseTarget(click, state)
+                                            .flatMap(target => commit(MouseHitTesting.editorClick(click, target)))
                                       }
                                   }
                             }
@@ -87,82 +81,6 @@ final private[manager] class MouseHitTesting(
         }
       case _ =>
         IO.unit
-
-  /** Resolves a primary click against the always-visible tab strip (issue #1077: switch by clicking a tab; issue #1080:
-    * open a new tab from the trailing `+` affordance) via `TabBarMouseHitTesting`. The new-tab affordance is checked
-    * first since it sits in the same reserved trailing region a plain `clickTarget` would otherwise resolve as a
-    * swallowed no-op (a click inside the strip but on no tab). Either way, *what* to do is resolved from `state`, this
-    * dispatch's already-current snapshot, but the change itself is applied to the freshest state at write time --
-    * mirroring `applyEditorClick`'s `current`-not-`state` write below, so a concurrent update elsewhere (e.g. a
-    * background LSP diagnostics pass) is never clobbered by a stale click target.
-    */
-  private def handleTabBarClick(click: MouseClick, state: AppState): IO[Boolean] =
-    if TabBarMouseHitTesting.newTabClickTarget(state, click.col, click.row) then
-      stateRef.get
-        .flatMap(current => validateAndUpdateState(EditorState.openNewTab(current), current))
-        .as(true)
-    else
-      TabBarMouseHitTesting.clickTarget(state, click.col, click.row) match
-        case Some(switchTo) =>
-          stateRef.get
-            .flatMap { current =>
-              val next = switchTo.fold(current)(EditorState.switchToBuffer(current, _))
-              validateAndUpdateState(next, current)
-            }
-            .as(true)
-        case None =>
-          IO.pure(false)
-
-  /** Applies a resolved editor click's cursor/selection to its buffer, dismisses any open context menu, and -- in
-    * floating display mode, for a plain click inside a highlighted comment range -- layers the read-only floating lens
-    * on top (#1222).
-    */
-  private def applyEditorClick(
-    s: AppState,
-    click: MouseClick,
-    paneId: PaneId,
-    buffer: Buffer,
-    clickedCursor: CursorPosition
-  ): AppState =
-    s.persisted.buffers.get(buffer.id) match
-      case None => contextMenu.dismissContextMenu(s)
-      case Some(current) =>
-        val selection =
-          if click.shiftDown then editorTargeting.rangeSelectionFromAnchor(current, clickedCursor)
-          else if click.clickCount >= 3 then editorTargeting.lineSelectionAtCursor(current, clickedCursor)
-          else if click.clickCount >= 2 then editorTargeting.wordSelectionAtCursor(current, clickedCursor)
-          else None
-        val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
-        val withCursor = contextMenu.dismissContextMenu(
-          s.copy(persisted =
-            s.persisted.copy(
-              buffers = s.persisted.buffers.updated(
-                buffer.id,
-                current.copy(editing = EditingState.fromCursors(List(Cursor(focusCursor, selection.map(_.anchor)))))
-              ),
-              focus = Focus.EditorPane(paneId),
-              layout = s.persisted.layout.copy(activeEditorPaneId = Some(paneId))
-            )
-          )
-        )
-        if opensFloatingCommentLens(click, s, current, clickedCursor) then
-          CommentRendering.openLensAtCursor(withCursor, CommentLensMode.ReadOnly)
-        else withCursor
-
-  /** A plain (unmodified, single) click landing inside a highlighted `DocumentComment` range opens the read-only
-    * floating lens in floating display mode (#1222) -- a double/triple click or shift-click is a word/line/range
-    * selection gesture instead, and margin display mode already shows every comment persistently, so neither opens the
-    * floating lens here.
-    */
-  private def opensFloatingCommentLens(
-    click: MouseClick,
-    state: AppState,
-    buffer: Buffer,
-    clickedCursor: CursorPosition
-  ): Boolean =
-    click.clickCount <= 1 && !click.shiftDown &&
-      state.persisted.config.surfaceConfig.commentDisplayMode == CommentDisplayMode.Floating &&
-      buffer.annotations.documentComments.exists(_.contains(clickedCursor))
 
   def handleMousePress(press: MousePress, state: AppState): IO[Unit] =
     if press.button != MouseButton.Primary then IO.unit
@@ -181,35 +99,9 @@ final private[manager] class MouseHitTesting(
                     pinnedPanel.handlePinnedPanelMouseSelect(press, state, focusPanel = true).flatMap {
                       case true => IO.unit
                       case false =>
-                        editorTargeting.resolveMouseTarget(press, state).flatMap {
-                          _.fold(IO.unit) { (paneId, buffer, pressedCursor) =>
-                            stateRef.get.flatMap { s =>
-                              val nextState = s.persisted.buffers.get(buffer.id) match
-                                case Some(current) =>
-                                  val selection =
-                                    Option
-                                      .when(press.shiftDown)(
-                                        editorTargeting.rangeSelectionFromAnchor(current, pressedCursor)
-                                      )
-                                      .flatten
-                                  val focusCursor = selection.map(_.focus).getOrElse(pressedCursor)
-                                  s.copy(persisted =
-                                    s.persisted.copy(
-                                      buffers = s.persisted.buffers.updated(
-                                        buffer.id,
-                                        current.copy(editing =
-                                          EditingState.fromCursors(List(Cursor(focusCursor, selection.map(_.anchor))))
-                                        )
-                                      ),
-                                      focus = Focus.EditorPane(paneId),
-                                      layout = s.persisted.layout.copy(activeEditorPaneId = Some(paneId))
-                                    )
-                                  )
-                                case None => s
-                              validateAndUpdateState(nextState, s)
-                            }
-                          }
-                        }
+                        editorTargeting
+                          .resolveMouseTarget(press, state)
+                          .flatMap(target => commit(MouseHitTesting.editorPress(press, target)))
                     }
                 }
           }
@@ -229,55 +121,131 @@ final private[manager] class MouseHitTesting(
                 case false =>
                   if MouseHitTestGeometry.isInsideFloatingSurface(drag, state) then IO.unit
                   else
-                    editorTargeting.resolveMouseTarget(drag, state).flatMap {
-                      _.fold(IO.unit) { (paneId, buffer, draggedCursor) =>
-                        stateRef.get.flatMap { s =>
-                          val nextState = s.persisted.buffers.get(buffer.id) match
-                            case Some(current) =>
-                              val anchor =
-                                current.primarySelection
-                                  .map(_.anchor)
-                                  .orElse(Some(current.editing.cursors.head.position))
-                                  .getOrElse(draggedCursor)
-                              val selection =
-                                Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
-                              s.copy(persisted =
-                                s.persisted.copy(
-                                  buffers = s.persisted.buffers.updated(
-                                    buffer.id,
-                                    current.copy(editing =
-                                      EditingState.fromCursors(List(Cursor(draggedCursor, selection.map(_.anchor))))
-                                    )
-                                  ),
-                                  focus = Focus.EditorPane(paneId),
-                                  layout = s.persisted.layout.copy(activeEditorPaneId = Some(paneId))
-                                )
-                              )
-                            case None => s
-                          validateAndUpdateState(nextState, s)
-                        }
-                      }
-                    }
+                    editorTargeting
+                      .resolveMouseTarget(drag, state)
+                      .flatMap(target => commit(MouseHitTesting.editorDrag(target)))
               }
           }
       }
 
   def handleMouseMove(move: MouseMove, state: AppState): IO[Unit] =
+    val clearHover = commit(EditorMouseTargeting.hover(None))
     contextMenu.handleContextMenuMouseHover(move, state).flatMap {
-      case true => editorTargeting.clearEditorHoverTarget
+      case true => clearHover
       case false =>
         contextualToolbar.handleContextualToolbarMouseHover(move, state).flatMap {
-          case true => editorTargeting.clearEditorHoverTarget
+          case true => clearHover
           case false =>
             commandRunner.handleCommandRunnerMouseHover(move, state).flatMap {
-              case true => editorTargeting.clearEditorHoverTarget
+              case true => clearHover
               case false =>
-                if MouseHitTestGeometry.isInsideFloatingSurface(move, state) then editorTargeting.clearEditorHoverTarget
+                if MouseHitTestGeometry.isInsideFloatingSurface(move, state) then clearHover
                 else
                   pinnedPanel.handlePinnedPanelMouseHover(move, state).flatMap {
-                    case true  => editorTargeting.clearEditorHoverTarget
-                    case false => editorTargeting.updateEditorHoverTarget(move, state)
+                    case true => clearHover
+                    case false =>
+                      editorTargeting
+                        .resolveMouseTarget(move, state)
+                        .flatMap(target => commit(EditorMouseTargeting.hover(target)))
                   }
             }
         }
     }
+
+private[manager] object MouseHitTesting:
+
+  /** A click on an editor target moves the cursor there (a double/triple click selects the word/line, a shift-click
+    * extends the selection) and dismisses any open context menu; a click on no editor target only dismisses the menu.
+    */
+  def editorClick(click: MouseClick, target: Option[(PaneId, Buffer, CursorPosition)]): Transition[Unit] =
+    target.fold(EditorContextMenuHitTesting.dismissIfOpen) { (paneId, buffer, clickedCursor) =>
+      Transition.modify(applyEditorClick(_, click, paneId, buffer.id, clickedCursor))
+    }
+
+  /** A press moves the cursor (a shift-press extends the selection), so a following drag selects from there. */
+  def editorPress(press: MousePress, target: Option[(PaneId, Buffer, CursorPosition)]): Transition[Unit] =
+    target.fold(Transition.unit) { (paneId, buffer, pressedCursor) =>
+      Transition.modify { state =>
+        state.persisted.buffers.get(buffer.id).fold(state) { current =>
+          val selection =
+            Option.when(press.shiftDown)(EditorMouseTargeting.rangeSelectionFromAnchor(current, pressedCursor)).flatten
+          placeCursor(state, paneId, current, selection.map(_.focus).getOrElse(pressedCursor), selection.map(_.anchor))
+        }
+      }
+    }
+
+  /** A drag extends the selection from wherever the preceding press left the cursor to the dragged-over position. */
+  def editorDrag(target: Option[(PaneId, Buffer, CursorPosition)]): Transition[Unit] =
+    target.fold(Transition.unit) { (paneId, buffer, draggedCursor) =>
+      Transition.modify { state =>
+        state.persisted.buffers.get(buffer.id).fold(state) { current =>
+          val anchor =
+            current.primarySelection
+              .map(_.anchor)
+              .orElse(Some(current.editing.cursors.head.position))
+              .getOrElse(draggedCursor)
+          val selection = Option.when(anchor != draggedCursor)(Selection(anchor, draggedCursor))
+          placeCursor(state, paneId, current, draggedCursor, selection.map(_.anchor))
+        }
+      }
+    }
+
+  /** Applies a resolved editor click's cursor/selection to its buffer, dismisses any open context menu, and -- in
+    * floating display mode, for a plain click inside a highlighted comment range -- layers the read-only floating lens
+    * on top (#1222).
+    */
+  private def applyEditorClick(
+    s: AppState,
+    click: MouseClick,
+    paneId: PaneId,
+    bufferId: BufferId,
+    clickedCursor: CursorPosition
+  ): AppState =
+    s.persisted.buffers.get(bufferId) match
+      case None => EditorContextMenuHitTesting.dismissContextMenu(s)
+      case Some(current) =>
+        val selection =
+          if click.shiftDown then EditorMouseTargeting.rangeSelectionFromAnchor(current, clickedCursor)
+          else if click.clickCount >= 3 then EditorMouseTargeting.lineSelectionAtCursor(current, clickedCursor)
+          else if click.clickCount >= 2 then EditorMouseTargeting.wordSelectionAtCursor(current, clickedCursor)
+          else None
+        val focusCursor = selection.map(_.focus).getOrElse(clickedCursor)
+        val withCursor = EditorContextMenuHitTesting.dismissContextMenu(
+          placeCursor(s, paneId, current, focusCursor, selection.map(_.anchor))
+        )
+        if opensFloatingCommentLens(click, s, current, clickedCursor) then
+          CommentRendering.openLensAtCursor(withCursor, CommentLensMode.ReadOnly)
+        else withCursor
+
+  private def placeCursor(
+    state: AppState,
+    paneId: PaneId,
+    buffer: Buffer,
+    focusCursor: CursorPosition,
+    anchor: Option[CursorPosition]
+  ): AppState =
+    state.copy(persisted =
+      state.persisted.copy(
+        buffers = state.persisted.buffers.updated(
+          buffer.id,
+          buffer.copy(editing = EditingState.fromCursors(List(Cursor(focusCursor, anchor))))
+        ),
+        focus = Focus.EditorPane(paneId),
+        layout = state.persisted.layout.copy(activeEditorPaneId = Some(paneId))
+      )
+    )
+
+  /** A plain (unmodified, single) click landing inside a highlighted `DocumentComment` range opens the read-only
+    * floating lens in floating display mode (#1222) -- a double/triple click or shift-click is a word/line/range
+    * selection gesture instead, and margin display mode already shows every comment persistently, so neither opens the
+    * floating lens here.
+    */
+  private def opensFloatingCommentLens(
+    click: MouseClick,
+    state: AppState,
+    buffer: Buffer,
+    clickedCursor: CursorPosition
+  ): Boolean =
+    click.clickCount <= 1 && !click.shiftDown &&
+      state.persisted.config.surfaceConfig.commentDisplayMode == CommentDisplayMode.Floating &&
+      buffer.annotations.documentComments.exists(_.contains(clickedCursor))

@@ -42,7 +42,7 @@ class TabBarDragHitTestingSpec extends AnyFlatSpec with Matchers:
     val stateRef = Ref.of[IO, AppState](state).unsafeRunSync()
     val port = TabBarDragHitTestingPort(
       stateRef = stateRef,
-      validateAndUpdateState = (updated, _) => stateRef.set(updated)
+      applyReducerResult = (result, _) => stateRef.set(result.state)
     )
     (new TabBarDragHitTesting(port), stateRef)
 

@@ -1,9 +1,11 @@
 package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
+import cats.syntax.all.*
 import com.serenity.keystroke.events.{MouseButton, MouseDrag, MousePress}
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.{AppState, BufferId, SurfaceContent, TabDragSession}
+import com.serenity.state.reducers.{ReducerResult, Transition}
 import com.serenity.ui.layout.LayoutEngine
 
 /** State the event pipeline exposes for dragging a tab to reorder it, as a capability record rather than a trait --
@@ -12,7 +14,7 @@ import com.serenity.ui.layout.LayoutEngine
   */
 final private[manager] case class TabBarDragHitTestingPort(
     stateRef: Ref[IO, AppState],
-    validateAndUpdateState: (AppState, AppState) => IO[Unit]
+    applyReducerResult: (ReducerResult, AppState) => IO[Unit]
 )
 
 /** Drag-to-reorder for the always-visible tab strip (issue #1079). A primary press on a tab starts a [[TabDragSession]]
@@ -25,41 +27,42 @@ final private[manager] case class TabBarDragHitTestingPort(
   * if it never moved off its starting tab.
   */
 final private[manager] class TabBarDragHitTesting(port: TabBarDragHitTestingPort):
-  import port.*
+
+  def handleTabBarPress(press: MousePress, state: AppState): IO[Boolean] =
+    MouseTransition.commit(port.stateRef, port.applyReducerResult)(TabBarDragHitTesting.press(press, state))
+
+  def handleTabBarDrag(drag: MouseDrag, state: AppState): IO[Boolean] =
+    MouseTransition.commit(port.stateRef, port.applyReducerResult)(TabBarDragHitTesting.drag(drag, state))
+
+private[manager] object TabBarDragHitTesting:
 
   /** Starts (or clears) the drag session for a fresh primary-button press -- the only reliable "the previous drag
     * gesture ended" signal available, so this always resets `tabDragSession` first, whether or not the press itself
     * landed on a tab.
     */
-  def handleTabBarPress(press: MousePress, state: AppState): IO[Boolean] =
-    if press.button != MouseButton.Primary then IO.pure(false)
+  def press(press: MousePress, state: AppState): Transition[Boolean] =
+    if press.button != MouseButton.Primary then Transition.pure(false)
     else
-      tabAt(state, press.col.toDouble, press.row.toDouble) match
-        case Some(bufferId) =>
-          stateRef.update(setSession(_, Some(TabDragSession(bufferId)))).as(true)
-        case None =>
-          stateRef.update(setSession(_, None)).as(false)
+      val pressedTab = tabAt(state, press.col.toDouble, press.row.toDouble)
+      Transition.modify(setSession(_, pressedTab.map(TabDragSession(_)))).as(pressedTab.isDefined)
 
-  def handleTabBarDrag(drag: MouseDrag, state: AppState): IO[Boolean] =
-    if drag.button != MouseButton.Primary then IO.pure(false)
+  def drag(drag: MouseDrag, state: AppState): Transition[Boolean] =
+    if drag.button != MouseButton.Primary then Transition.pure(false)
     else
       state.runtime.tabDragSession match
-        case None => IO.pure(false)
+        case None => Transition.pure(false)
         case Some(session) =>
           tabAt(state, drag.col.toDouble, drag.row.toDouble) match
             case Some(targetBufferId) if targetBufferId != session.bufferId =>
-              stateRef.get
-                .flatMap { current =>
-                  validateAndUpdateState(EditorState.reorderBuffer(current, session.bufferId, targetBufferId), current)
-                }
-                .as(true)
+              Transition.modify(EditorState.reorderBuffer(_, session.bufferId, targetBufferId)).as(true)
             case _ =>
               // Off a tab, or back over the tab already being dragged -- the gesture continues, nothing to reorder
               // yet this tick.
-              IO.pure(true)
+              Transition.pure(true)
 
   private def setSession(state: AppState, session: Option[TabDragSession]): AppState =
-    state.copy(runtime = state.runtime.copy(tabDragSession = session))
+    if state.runtime.tabDragSession == session then state
+    else state.copy(runtime = state.runtime.copy(tabDragSession = session))
 
   private def tabAt(state: AppState, col: Double, row: Double): Option[BufferId] =
     for
