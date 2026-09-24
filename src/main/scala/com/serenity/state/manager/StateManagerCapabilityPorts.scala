@@ -8,7 +8,6 @@ import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.session.SessionPersistence
 import com.serenity.state.models.*
-import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, PeekContent}
 import com.serenity.ui.presets.UiPresetStore
@@ -52,7 +51,6 @@ private[manager] trait EffectSurfacePort:
   def collapseExpandedPanel(): IO[Unit]
   def switchToPinnedPanel(target: PanelTarget): IO[Unit]
   def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit]
-  def recordUndoBoundary(entry: HistoryEntry, groupable: Boolean): IO[Unit]
 
 private[manager] trait EffectFilePort:
   def fileDialog: Option[com.serenity.io.FileDialog]

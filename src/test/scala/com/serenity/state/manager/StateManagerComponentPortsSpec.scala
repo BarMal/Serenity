@@ -4,7 +4,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.keystroke.events.ResizeEvent
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, CloseScope, SurfaceId}
+import com.serenity.state.models.{AppState, CloseScope, PaneId, SurfaceId}
 import com.serenity.state.reducers.{ReducerResult, WorkflowEffect}
 import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
@@ -14,35 +14,39 @@ class StateManagerComponentPortsSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  "ResizeEventHandler" should "apply the reduced transition before rebalancing through its narrow port" in {
+  "ResizeEventHandler" should "apply the resize and its pane rebalance as one reduced transition through its narrow port" in {
+    val focusedWithoutActivePane =
+      AppState.initial.copy(persisted =
+        AppState.initial.persisted.copy(layout = AppState.initial.persisted.layout.copy(activeEditorPaneId = None))
+      )
     val program = for
-      observed <- Ref.of[IO, List[String]](Nil)
-      handler = new ResizeEventHandler(new ResizeEventPort:
-        def applyReducerResult(result: ReducerResult, fallbackState: AppState): IO[Unit] =
-          observed.update(_ :+ s"resize:${result.state.runtime.viewportSize}")
-        def rebalancePanes(): IO[Unit] =
-          observed.update(_ :+ "rebalance"))
-      _     <- handler.apply(ResizeEvent(ViewportSize(90, 30)), AppState.initial)
+      observed <- Ref.of[IO, List[AppState]](Nil)
+      handler = new ResizeEventHandler(
+        new ResizeEventPort:
+          def applyReducerResult(result: ReducerResult, fallbackState: AppState): IO[Unit] =
+            observed.update(_ :+ result.state)
+      )
+      _     <- handler.apply(ResizeEvent(ViewportSize(90, 30)), focusedWithoutActivePane)
       calls <- observed.get
     yield calls
 
-    program.unsafeRunSync() shouldBe List("resize:Some(ViewportSize(90,30))", "rebalance")
+    program.unsafeRunSync() match
+      case List(applied) =>
+        applied.runtime.viewportSize shouldBe Some(ViewportSize(90, 30))
+        applied.persisted.layout.activeEditorPaneId shouldBe Some(PaneId(0))
+      case other => fail(s"Expected exactly one applied transition, got $other")
   }
 
-  it should "not rebalance when state application fails" in {
-    val program = for
-      rebalanced <- Ref.of[IO, Boolean](false)
-      handler = new ResizeEventHandler(new ResizeEventPort:
+  it should "propagate a failure to apply the transition" in {
+    val handler = new ResizeEventHandler(
+      new ResizeEventPort:
         def applyReducerResult(result: ReducerResult, fallbackState: AppState): IO[Unit] =
           IO.raiseError(new IllegalStateException("state failure"))
-        def rebalancePanes(): IO[Unit] = rebalanced.set(true))
-      result <- handler.apply(ResizeEvent(ViewportSize(90, 30)), AppState.initial).attempt
-      value  <- rebalanced.get
-    yield (result, value)
+    )
 
-    program.unsafeRunSync() match
-      case (Left(error), false) => error.getMessage shouldBe "state failure"
-      case other                => fail(s"Unexpected resize result: $other")
+    handler.apply(ResizeEvent(ViewportSize(90, 30)), AppState.initial).attempt.unsafeRunSync() match
+      case Left(error) => error.getMessage shouldBe "state failure"
+      case other       => fail(s"Unexpected resize result: $other")
   }
 
   "WorkflowEffectHandler" should "route only its declared workflow operation and propagate failures" in {

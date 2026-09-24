@@ -7,7 +7,6 @@ import scala.util.Random
 import cats.effect.IO
 import com.serenity.animation.CharacterKey
 import com.serenity.config.VisualFlairLevel
-import com.serenity.rope.Rope
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -39,10 +38,7 @@ final private[manager] class StateManagerEditorCapability(
   val focusManager: FocusManager = FocusManager(switchFocus = switchFocus)
 
   private def switchFocus(newFocus: Focus): IO[Unit] =
-    stateRef.get.flatMap { state =>
-      val newState = state.copy(persisted = state.persisted.copy(focus = newFocus))
-      validateAndUpdateState(newState, state)
-    }
+    stateRef.get.flatMap(state => validateAndUpdateState(EditorTransitions.focused(state, newFocus), state))
 
   def updateState(update: AppState => AppState): IO[Unit] =
     stateRef.update(update)
@@ -208,32 +204,10 @@ final private[manager] class StateManagerEditorCapability(
   )
 
   private def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
-    // Advancing `nextBufferId` can never by itself violate an invariant (it never touches `buffers`/`bufferOrder`),
-    // so it's split out as its own unchecked step -- the same shape `directLoadFileEffect` already uses. That means a
-    // drifted `nextBufferId` that collides with a live buffer id is consumed here before the structural add below is
-    // attempted, so a rejection falls back to a state that has already moved past the stale id instead of reverting
-    // straight back to the collision.
-    stateRef
-      .modify { state =>
-        val bufferId = state.runtime.nextBufferId
-        (state.copy(runtime = state.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))), bufferId)
-      }
-      .flatMap { bufferId =>
-        val buffer =
-          if content.isEmpty && filePath.isEmpty then Buffer.newEmpty(bufferId)(using balance)
-          else
-            val fresh = Buffer.fromString(bufferId, content)(using balance)
-            fresh.copy(document = fresh.document.copy(filePath = filePath))
-        stateRef.get.flatMap { state =>
-          val newState = state.copy(persisted =
-            state.persisted.copy(
-              buffers = state.persisted.buffers + (bufferId -> buffer),
-              bufferOrder = state.persisted.bufferOrder :+ bufferId
-            )
-          )
-          validateAndUpdateState(newState, state).as(bufferId)
-        }
-      }
+    stateRef.get.flatMap { state =>
+      val creation = EditorTransitions.bufferCreated(state, content, filePath)
+      validateAndUpdateState(creation.created, creation.idAdvanced).as(creation.bufferId)
+    }
 
   private def createNewEmptyBuffer(): IO[BufferId] =
     stateRef.get.flatMap { state =>
@@ -243,28 +217,11 @@ final private[manager] class StateManagerEditorCapability(
 
   private def updateBuffer(bufferId: BufferId, content: String): IO[Unit] =
     stateRef.get.flatMap { state =>
-      state.persisted.buffers.get(bufferId) match
-        case Some(buffer) =>
-          val updatedBuffer = buffer.copy(
-            document = buffer.document.copy(
-              content = Rope(content)(using balance),
-              isDirty = true,
-              isNewEmpty = false
-            )
-          )
-          val lspTarget =
-            if buffer.document.content.collect() == content then None
-            else
-              for
-                path       <- updatedBuffer.document.filePath
-                languageId <- updatedBuffer.document.language
-              yield (path.toUri.toString, languageId, content)
-          val newState = state.copy(persisted =
-            state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
-          )
-          validateAndUpdateState(newState, state) >> stateRef.get.flatMap { committed =>
-            if committed.persisted.buffers.get(bufferId).contains(updatedBuffer) then
-              lspTarget.fold(IO.unit) {
+      EditorTransitions.bufferContentReplaced(state, bufferId, content) match
+        case Some(replacement) =>
+          validateAndUpdateState(replacement.state, state) >> stateRef.get.flatMap { committed =>
+            if committed.persisted.buffers.get(bufferId).contains(replacement.buffer) then
+              replacement.documentChange.fold(IO.unit) {
                 case (uri, languageId, text) => lspQueue.enqueueDocumentChange(uri, languageId, text)
               }
             else IO.unit
@@ -274,7 +231,7 @@ final private[manager] class StateManagerEditorCapability(
 
   def createPane(bufferId: Option[BufferId] = None): IO[PaneId] =
     stateRef.get.flatMap { state =>
-      val (newState, paneId) = insertPane(
+      val (newState, paneId) = EditorTransitions.paneInserted(
         state,
         state.persisted.layout.orderedPaneIds.lastOption,
         bufferId,
@@ -285,63 +242,8 @@ final private[manager] class StateManagerEditorCapability(
 
   def switchToPane(paneId: PaneId): IO[Unit] =
     stateRef.get.flatMap { state =>
-      if state.persisted.layout.editorPanes.contains(paneId) then
-        val newState = state.copy(
-          persisted = state.persisted.copy(
-            layout = state.persisted.layout.copy(activeEditorPaneId = Some(paneId)),
-            focus = Focus.EditorPane(paneId)
-          )
-        )
-        validateAndUpdateState(newState, state)
-      else IO.unit
+      EditorTransitions.paneSwitched(state, paneId).fold(IO.unit)(validateAndUpdateState(_, state))
     }
 
   def getTabOrder(): IO[List[PaneId]] =
     stateRef.get.map(_.persisted.layout.orderedPaneIds)
-
-  private def insertPane(
-    state: AppState,
-    requestedAfter: Option[PaneId],
-    bufferId: Option[BufferId],
-    splitAxis: SplitAxis
-  ): (AppState, PaneId) =
-    val paneId = state.runtime.nextPaneId
-    val pane = bufferId match
-      case Some(id) => EditorPane.withBuffer(paneId, id)
-      case None     => EditorPane.empty(paneId)
-    val targetPaneId =
-      requestedAfter
-        .filter(state.persisted.layout.editorPanes.contains)
-        .orElse(state.persisted.layout.orderedPaneIds.lastOption)
-
-    val updatedTree =
-      targetPaneId match
-        case Some(target) =>
-          state.persisted.layout.workspaceTree.flatMap(
-            _.split(
-              target,
-              paneId,
-              splitAxis,
-              WorkspaceNodeId(s"split-${target.value}-${paneId.value}"),
-              WorkspaceNodeId(s"editor-${paneId.value}")
-            )
-          )
-        case None =>
-          Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
-
-    updatedTree match
-      case Some(tree) =>
-        val updatedState = state.copy(
-          persisted = state.persisted.copy(
-            layout = state.persisted.layout.copy(
-              editorPanes = state.persisted.layout.editorPanes.updated(paneId, pane),
-              activeEditorPaneId = Some(paneId),
-              workspaceTree = Some(tree)
-            ),
-            focus = Focus.EditorPane(paneId)
-          ),
-          runtime = state.runtime.copy(nextPaneId = PaneId(paneId.value + 1))
-        )
-        (updatedState, paneId)
-      case None =>
-        (state, paneId)

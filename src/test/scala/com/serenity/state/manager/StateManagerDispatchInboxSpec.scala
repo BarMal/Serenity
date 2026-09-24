@@ -57,8 +57,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
     for
       sharedModelRef <- Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty))
       sharedStateRef = Model.appRef(sharedModelRef)
-      cacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
-      bufferAnimations = Model.bufferAnimationsRef(sharedModelRef)
+      cacheRef   <- Ref.of[IO, Option[MouseTargetCache]](None)
       lspQueue   <- LspEffectQueue.create
       operations <- StateManagerOperationBoundary.create(sharedStateRef, quietLogger)
       statePort = new EventStatePort:
@@ -96,8 +95,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
         undoRecording
       )
       animations = new AnimationChoreography(new AnimationChoreographyPort:
-        val stateRef            = sharedStateRef
-        val bufferAnimationsRef = bufferAnimations
+        val stateRef = sharedStateRef
         export operations.validateAndUpdateState)
       editor = new StateManagerEditorCapability(
         sharedModelRef,
