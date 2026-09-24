@@ -82,7 +82,6 @@ final private[manager] class StateManagerEffectHandlers(
     logger,
     configPersistencePath,
     sessionPersistence,
-    bufferAnimationsRef,
     onFontConfigChanged,
     deviceTextScaleProvider,
     editor

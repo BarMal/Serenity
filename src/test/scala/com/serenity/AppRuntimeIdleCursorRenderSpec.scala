@@ -115,8 +115,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntimeRenderLoops.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
-        loadState = IO.pure(state),
-        loadBufferAnimations = IO.pure(Map.empty),
+        loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty)),
         pendingPaintDamage = pendingPaintDamage,
         checkResizeAndHandle = IO.unit,
         cursorVisible = cursorVisible,
@@ -147,8 +146,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntimeRenderLoops.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
-        loadState = IO.pure(state),
-        loadBufferAnimations = IO.pure(Map.empty),
+        loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty)),
         pendingPaintDamage = pendingPaintDamage,
         checkResizeAndHandle = IO.unit,
         cursorVisible = cursorVisible,
@@ -179,8 +177,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntimeRenderLoops.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
-        loadState = IO.pure(state),
-        loadBufferAnimations = IO.pure(Map.empty),
+        loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty)),
         pendingPaintDamage = pendingPaintDamage,
         checkResizeAndHandle = IO.unit,
         cursorVisible = cursorVisible,

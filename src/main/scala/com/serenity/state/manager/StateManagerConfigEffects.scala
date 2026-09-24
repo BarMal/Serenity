@@ -20,7 +20,6 @@ final private[manager] class StateManagerConfigEffects(
     logger: org.typelevel.log4cats.Logger[IO],
     configPersistencePath: Option[java.nio.file.Path],
     sessionPersistence: SessionPersistence,
-    bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]],
     onFontConfigChanged: com.serenity.ui.fonts.FontLoader.FontConfig => IO[Unit],
     deviceTextScaleProvider: IO[Double],
     editor: EffectEditorPort
@@ -117,7 +116,7 @@ final private[manager] class StateManagerConfigEffects(
     else state
 
   private val motionCancellation =
-    StateManagerMotionCancellation(stateRef, bufferAnimationsRef, editor.validateAndUpdateState)
+    StateManagerMotionCancellation(editor.updateModelValidated)
 
   private def updateCustomMotionConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     updateMotionConfig(config => update(config).withCustomMotionBaseline)

@@ -88,7 +88,9 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
       cursorVisible        <- Ref.of[IO, Boolean](true)
       breathIndex          <- Ref.of[IO, Int](0)
       stateManager = new com.serenity.state.manager.StateEngine:
-        def getCurrentState: IO[AppState]                                                 = IO.pure(state)
+        def getCurrentState: IO[AppState] = IO.pure(state)
+        def getModel: IO[com.serenity.state.manager.Model] =
+          IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty))
         def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
         def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
         def updateStateValidated(update: AppState => AppState): IO[Unit]                  = IO.unit

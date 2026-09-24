@@ -5,7 +5,6 @@ import java.nio.file.{Files, Path}
 import cats.effect.*
 import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.AnimationState
 import com.serenity.command.{Command, CommandCategory, CommandIntent, ProjectIntent, ViewIntent}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.lsp.LspEffect
@@ -31,8 +30,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
 
   "StateManagerRuntime" should "collect manager dependencies behind one runtime boundary" in {
     val program = for
-      stateRef                 <- Ref.of[IO, AppState](AppState.initial)
-      undoRef                  <- Ref.of[IO, UndoState](UndoState())
+      modelRef                 <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
       themeNamesRef            <- Ref.of[IO, List[String]](List("dark"))
       quitSignal               <- Deferred[IO, Unit]
       lspQueue                 <- LspEffectQueue.create
@@ -40,12 +38,10 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       projectTaskSemaphore     <- Semaphore[IO](1)
       mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
       documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
-      bufferAnimationsRef      <- Ref.of[IO, Map[BufferId, AnimationState]](Map.empty)
       logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
       sessionRoot <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec"))
       runtime = StateManagerRuntime.create(
-        stateRef = stateRef,
-        undoRef = undoRef,
+        modelRef = modelRef,
         themeNamesRef = themeNamesRef,
         quitSignal = quitSignal,
         logger = logger,
@@ -57,7 +53,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
         documentAnalysisFiberRef = documentAnalysisFiberRef,
-        bufferAnimationsRef = bufferAnimationsRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
         deviceTextScaleProvider = IO.pure(1.0),
         configPersistencePath = None,
@@ -67,8 +62,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         fileDialog = None
       )
     yield
-      runtime.stateRef shouldBe stateRef
-      runtime.undoRef shouldBe undoRef
+      runtime.modelRef shouldBe modelRef
       runtime.themeNamesRef shouldBe themeNamesRef
       runtime.quitSignal shouldBe quitSignal
       runtime.lspQueue shouldBe lspQueue
@@ -76,7 +70,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       runtime.projectTaskSemaphore shouldBe projectTaskSemaphore
       runtime.mouseTargetCacheRef shouldBe mouseTargetCacheRef
       runtime.documentAnalysisFiberRef shouldBe documentAnalysisFiberRef
-      runtime.bufferAnimationsRef shouldBe bufferAnimationsRef
       runtime.sessionManager.sessionExists.unsafeRunSync() shouldBe false
       runtime.fileManager should not be null
       runtime.fileDialog shouldBe None
@@ -87,8 +80,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
 
   it should "cancel active project tasks from the cancel command and force quit" in {
     val program = for
-      stateRef                 <- Ref.of[IO, AppState](AppState.initial)
-      undoRef                  <- Ref.of[IO, UndoState](UndoState())
+      modelRef                 <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
       themeNamesRef            <- Ref.of[IO, List[String]](List("dark"))
       quitSignal               <- Deferred[IO, Unit]
       lspQueue                 <- LspEffectQueue.create
@@ -96,7 +88,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       projectTaskSemaphore     <- Semaphore[IO](1)
       mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
       documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
-      bufferAnimationsRef      <- Ref.of[IO, Map[BufferId, AnimationState]](Map.empty)
       analysisCancelled        <- Deferred[IO, Unit]
       analysisStarted          <- Deferred[IO, Unit]
       pendingAnalysis <- IO
@@ -106,8 +97,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
       sessionRoot <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec"))
       runtime = StateManagerRuntime.create(
-        stateRef = stateRef,
-        undoRef = undoRef,
+        modelRef = modelRef,
         themeNamesRef = themeNamesRef,
         quitSignal = quitSignal,
         logger = logger,
@@ -119,7 +109,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
         documentAnalysisFiberRef = documentAnalysisFiberRef,
-        bufferAnimationsRef = bufferAnimationsRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
         deviceTextScaleProvider = IO.pure(1.0),
         configPersistencePath = None,
@@ -129,13 +118,12 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         fileDialog = None
       )
       operations <- StateManagerOperationBoundary.create(
-        stateRef,
+        Model.appRef(modelRef),
         documentAnalysisFiberRef,
         logger
       )
       composition = new StateManagerComposition(
-        runtime.stateRef,
-        runtime.undoRef,
+        runtime.modelRef,
         runtime.themeNamesRef,
         runtime.quitSignal,
         runtime.logger,
@@ -146,7 +134,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         runtime.projectTaskSemaphore,
         runtime.mouseTargetCacheRef,
         runtime.documentAnalysisFiberRef,
-        runtime.bufferAnimationsRef,
         runtime.onFontConfigChanged,
         runtime.deviceTextScaleProvider,
         runtime.configPersistencePath,
@@ -211,8 +198,8 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
 
   it should "cancel a running project task when its output panel is closed" in {
     val program = for
-      stateRef                 <- Ref.of[IO, AppState](AppState.initial)
-      undoRef                  <- Ref.of[IO, UndoState](UndoState())
+      modelRef <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+      stateRef = Model.appRef(modelRef)
       themeNamesRef            <- Ref.of[IO, List[String]](List("dark"))
       quitSignal               <- Deferred[IO, Unit]
       lspQueue                 <- LspEffectQueue.create
@@ -220,12 +207,10 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       projectTaskSemaphore     <- Semaphore[IO](1)
       mouseTargetCacheRef      <- Ref.of[IO, Option[MouseTargetCache]](None)
       documentAnalysisFiberRef <- Ref.of[IO, Option[Fiber[IO, Throwable, Unit]]](None)
-      bufferAnimationsRef      <- Ref.of[IO, Map[BufferId, AnimationState]](Map.empty)
       logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerRuntimeSpec"))
       sessionRoot <- IO.blocking(Files.createTempDirectory("serenity-runtime-spec"))
       runtime = StateManagerRuntime.create(
-        stateRef = stateRef,
-        undoRef = undoRef,
+        modelRef = modelRef,
         themeNamesRef = themeNamesRef,
         quitSignal = quitSignal,
         logger = logger,
@@ -237,7 +222,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         projectTaskSemaphore = projectTaskSemaphore,
         mouseTargetCacheRef = mouseTargetCacheRef,
         documentAnalysisFiberRef = documentAnalysisFiberRef,
-        bufferAnimationsRef = bufferAnimationsRef,
         onFontConfigChanged = (_: FontConfig) => IO.unit,
         deviceTextScaleProvider = IO.pure(1.0),
         configPersistencePath = None,
@@ -247,13 +231,12 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         fileDialog = None
       )
       operations <- StateManagerOperationBoundary.create(
-        stateRef,
+        Model.appRef(modelRef),
         documentAnalysisFiberRef,
         logger
       )
       composition = new StateManagerComposition(
-        runtime.stateRef,
-        runtime.undoRef,
+        runtime.modelRef,
         runtime.themeNamesRef,
         runtime.quitSignal,
         runtime.logger,
@@ -264,7 +247,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         runtime.projectTaskSemaphore,
         runtime.mouseTargetCacheRef,
         runtime.documentAnalysisFiberRef,
-        runtime.bufferAnimationsRef,
         runtime.onFontConfigChanged,
         runtime.deviceTextScaleProvider,
         runtime.configPersistencePath,

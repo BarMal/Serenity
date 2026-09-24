@@ -226,8 +226,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       fiber <- AppRuntimeRenderLoops
         .idleRenderPhase(
-          loadState = IO.pure(state),
-          loadBufferAnimations = IO.pure(Map.empty),
+          loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty)),
           fastModeSignal = fastModeSignal,
           windowFocused = windowFocused,
           pendingPaintDamage = pendingPaintDamage,
@@ -274,8 +273,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       fiber <- AppRuntimeRenderLoops
         .idleRenderPhase(
-          loadState = IO.pure(state),
-          loadBufferAnimations = IO.pure(Map.empty),
+          loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty)),
           fastModeSignal = fastModeSignal,
           windowFocused = windowFocused,
           pendingPaintDamage = pendingPaintDamage,
@@ -317,8 +315,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       fiber <- AppRuntimeRenderLoops
         .idleRenderPhase(
-          loadState = IO.pure(state),
-          loadBufferAnimations = IO.pure(Map.empty),
+          loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty)),
           fastModeSignal = fastModeSignal,
           windowFocused = windowFocused,
           pendingPaintDamage = pendingPaintDamage,

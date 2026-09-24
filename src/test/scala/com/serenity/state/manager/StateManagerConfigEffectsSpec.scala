@@ -11,6 +11,7 @@ import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
 import com.serenity.state.models.*
+import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -52,20 +53,23 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
   ): Harness =
     val root       = Files.createTempDirectory("config-effects-spec")
     val configPath = Option.when(persistConfig)(root.resolve("config.json"))
-    val stateRef   = Ref.of[IO, AppState](initialState).unsafeRunSync()
+    val modelRef   = Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty)).unsafeRunSync()
+    val stateRef   = Model.appRef(modelRef)
     val triggers   = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
     val fonts      = Ref.of[IO, List[FontLoader.FontConfig]](Nil).unsafeRunSync()
     val analyses   = Ref.of[IO, Int](0).unsafeRunSync()
     val events     = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
     val committed  = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
-    val animations =
-      Ref.of[IO, Map[BufferId, com.serenity.animation.AnimationState]](Map.empty).unsafeRunSync()
 
     val editor = new EffectEditorPort:
       def updateState(update: AppState => AppState): IO[Unit] = stateRef.update(update)
       def enqueueEvent(event: Event): IO[Unit]                = events.update(_ :+ event)
       def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
         committed.update(_ :+ newState) >> stateRef.set(newState)
+      def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
+        modelRef.get.flatMap(model =>
+          transition(model).fold(IO.unit)(next => committed.update(_ :+ next.app) >> modelRef.set(next))
+        )
       def scheduleDocumentAnalysis(): IO[Unit]                     = analyses.update(_ + 1)
       def scheduleFindSearch(request: FindSearchRequest): IO[Unit] = IO.unit
 
@@ -82,7 +86,6 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
         NoOpLogger.impl[IO],
         configPath,
         new RecordingSessionPersistence(triggers, root),
-        animations,
         fontConfig => fonts.update(_ :+ fontConfig),
         IO.pure(deviceTextScale),
         editor

@@ -4,14 +4,11 @@ import java.nio.file.Path
 
 import cats.effect.*
 import cats.effect.std.{Queue, Semaphore}
-import com.serenity.animation.AnimationState
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.{FileDialog, FileManager}
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence}
-import com.serenity.state.models.{AppState, BufferId}
-import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
@@ -107,8 +104,7 @@ private[manager] object ProjectTaskOwnership:
     }
 
 final private[manager] case class StateManagerRuntime(
-    stateRef: Ref[IO, AppState],
-    undoRef: Ref[IO, UndoState],
+    modelRef: Ref[IO, Model],
     themeNamesRef: Ref[IO, List[String]],
     quitSignal: Deferred[IO, Unit],
     logger: Logger[IO],
@@ -119,7 +115,6 @@ final private[manager] case class StateManagerRuntime(
     projectTaskSemaphore: Semaphore[IO],
     mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
     documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
-    bufferAnimationsRef: Ref[IO, Map[BufferId, AnimationState]],
     onFontConfigChanged: FontConfig => IO[Unit],
     deviceTextScaleProvider: IO[Double],
     configPersistencePath: Option[Path],
@@ -136,8 +131,7 @@ final private[manager] case class StateManagerRuntime(
 private[manager] object StateManagerRuntime:
 
   def create(
-    stateRef: Ref[IO, AppState],
-    undoRef: Ref[IO, UndoState],
+    modelRef: Ref[IO, Model],
     themeNamesRef: Ref[IO, List[String]],
     quitSignal: Deferred[IO, Unit],
     logger: Logger[IO],
@@ -149,7 +143,6 @@ private[manager] object StateManagerRuntime:
     projectTaskSemaphore: Semaphore[IO],
     mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
     documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
-    bufferAnimationsRef: Ref[IO, Map[BufferId, AnimationState]],
     onFontConfigChanged: FontConfig => IO[Unit],
     deviceTextScaleProvider: IO[Double],
     configPersistencePath: Option[Path],
@@ -164,8 +157,7 @@ private[manager] object StateManagerRuntime:
       .map(root => SessionManager.create(root, themeManager, logger, policy))
       .getOrElse(SessionManager.create(themeManager, logger, policy))
     StateManagerRuntime(
-      stateRef = stateRef,
-      undoRef = undoRef,
+      modelRef = modelRef,
       themeNamesRef = themeNamesRef,
       quitSignal = quitSignal,
       logger = logger,
@@ -176,7 +168,6 @@ private[manager] object StateManagerRuntime:
       projectTaskSemaphore = projectTaskSemaphore,
       mouseTargetCacheRef = mouseTargetCacheRef,
       documentAnalysisFiberRef = documentAnalysisFiberRef,
-      bufferAnimationsRef = bufferAnimationsRef,
       onFontConfigChanged = onFontConfigChanged,
       deviceTextScaleProvider = deviceTextScaleProvider,
       configPersistencePath = configPersistencePath,

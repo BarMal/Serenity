@@ -69,7 +69,9 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
         def setActiveTranslator(translator: Translator[Event]): IO[Unit]          = refreshes.update(_ + 1)
         def getActiveTranslator: IO[Translator[Event]]                            = IO.pure(initialTranslator)
       stateManager = new com.serenity.state.manager.StateEngine:
-        def getCurrentState: IO[AppState]                                                 = IO.pure(AppState.initial)
+        def getCurrentState: IO[AppState] = IO.pure(AppState.initial)
+        def getModel: IO[com.serenity.state.manager.Model] =
+          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState(), Map.empty))
         def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
         def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
         def updateStateValidated(update: AppState => AppState): IO[Unit]                  = IO.unit
@@ -114,7 +116,9 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
         def setActiveTranslator(translator: Translator[Event]): IO[Unit]          = IO.unit
         def getActiveTranslator: IO[Translator[Event]]                            = IO.pure(initialTranslator)
       stateManager = new com.serenity.state.manager.StateEngine:
-        def getCurrentState: IO[AppState]                                                 = IO.pure(AppState.initial)
+        def getCurrentState: IO[AppState] = IO.pure(AppState.initial)
+        def getModel: IO[com.serenity.state.manager.Model] =
+          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState(), Map.empty))
         def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
         def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
         def updateStateValidated(update: AppState => AppState): IO[Unit]                  = IO.unit
@@ -255,7 +259,9 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
         def setActiveTranslator(translator: Translator[Event]): IO[Unit]          = refreshes.update(_ + 1)
         def getActiveTranslator: IO[Translator[Event]]                            = IO.pure(initialTranslator)
       stateManager = new com.serenity.state.manager.StateEngine:
-        def getCurrentState: IO[AppState]                                                 = IO.pure(AppState.initial)
+        def getCurrentState: IO[AppState] = IO.pure(AppState.initial)
+        def getModel: IO[com.serenity.state.manager.Model] =
+          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState(), Map.empty))
         def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
         def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
         def updateStateValidated(update: AppState => AppState): IO[Unit]                  = IO.unit

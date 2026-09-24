@@ -38,6 +38,7 @@ private[manager] trait EffectEditorPort:
   def updateState(update: AppState => AppState): IO[Unit]
   def enqueueEvent(event: Event): IO[Unit]
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
+  def updateModelValidated(transition: Model => Option[Model]): IO[Unit]
   def scheduleDocumentAnalysis(): IO[Unit]
   def scheduleFindSearch(request: FindSearchRequest): IO[Unit]
 
@@ -98,11 +99,13 @@ private[manager] trait EffectModalWorkflowPort:
 
 /** State and analysis ownership required while routing editor events. */
 private[manager] trait EventStatePort:
-  def stateRef: Ref[IO, AppState]
+  def modelRef: Ref[IO, Model]
   def logger: Logger[IO]
   def documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]]
   def mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]]
-  def bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]]
+  final def stateRef: Ref[IO, AppState] = Model.appRef(modelRef)
+  final def bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]] =
+    Model.bufferAnimationsRef(modelRef)
 
 /** Effects and commands triggered by event routing, as a capability record rather than a trait -- nothing here breaks a
   * construction-order cycle (#1389), so mockability is the only reason this needs an interface at all, and a record

@@ -22,8 +22,7 @@ import org.typelevel.log4cats.Logger
 
 /** Explicit composition boundary for the StateManager capabilities. */
 private[manager] class StateManagerComposition(
-    val stateRef: Ref[IO, AppState],
-    val undoRef: Ref[IO, UndoState],
+    val modelRef: Ref[IO, Model],
     val themeNamesRef: Ref[IO, List[String]],
     val quitSignal: Deferred[IO, Unit],
     val logger: Logger[IO],
@@ -34,7 +33,6 @@ private[manager] class StateManagerComposition(
     val projectTaskSemaphore: Semaphore[IO],
     val mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
     val documentAnalysisFiberRef: Ref[IO, Option[Fiber[IO, Throwable, Unit]]],
-    val bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]],
     val onFontConfigChanged: FontConfig => IO[Unit],
     val deviceTextScaleProvider: IO[Double],
     val configPersistencePath: Option[Path],
@@ -47,6 +45,13 @@ private[manager] class StateManagerComposition(
     val sessionPersistence: SessionPersistence,
     operations: StateManagerOperationBoundary
 )(using providedBalance: Balance):
+
+  val stateRef: Ref[IO, AppState] = Model.appRef(modelRef)
+  val undoRef: Ref[IO, UndoState] = Model.undoRef(modelRef)
+  val bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]] =
+    Model.bufferAnimationsRef(modelRef)
+
+  private val modelCommit = new ModelCommit(modelRef, operations)
 
   private val runtimeStateRef                 = stateRef
   private val runtimeUndoRef                  = undoRef
@@ -96,10 +101,9 @@ private[manager] class StateManagerComposition(
   // for panel pin/unpin (#1016 PR4), and `events` already needed `UndoRecording` for Undo/Redo dispatch -- a single
   // instance shared by all three, rather than `events` building its own as it used to.
   private val undoRecording = new UndoRecording(new UndoRecordingPort:
-    val stateRef = runtimeStateRef
-    val undoRef  = runtimeUndoRef
-    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-      operations.validateAndUpdateState(newState, fallbackState))
+    val undoRef = runtimeUndoRef
+    def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
+      modelCommit.updateValidated(transition))
 
   private val effectRuntimePort: EffectRuntimePort = new EffectRuntimePort:
     val stateRef                = runtimeStateRef
@@ -123,6 +127,8 @@ private[manager] class StateManagerComposition(
     def enqueueEvent(event: Event): IO[Unit]                = operations.enqueueEvent(event)
     def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
       operations.validateAndUpdateState(newState, fallbackState)
+    def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
+      modelCommit.updateValidated(transition)
     def scheduleDocumentAnalysis(): IO[Unit]                     = operations.scheduleDocumentAnalysis()
     def scheduleFindSearch(request: FindSearchRequest): IO[Unit] = operations.scheduleFindSearch(request)
 
@@ -130,9 +136,8 @@ private[manager] class StateManagerComposition(
     new StateManagerSurfaceCapability(stateRef, logger, operations, undoRecording.recordUndoBoundary)
 
   private val editor = new StateManagerEditorCapability(
-    runtimeStateRef,
+    modelRef,
     runtimeLspQueue,
-    runtimeBufferAnimationsRef,
     animations,
     operations
   )
@@ -234,11 +239,10 @@ private[manager] class StateManagerComposition(
 
   private val eventStatePort: EventStatePort =
     new EventStatePort:
-      val stateRef                 = runtimeStateRef
+      val modelRef                 = StateManagerComposition.this.modelRef
       val logger                   = runtimeLogger
       val documentAnalysisFiberRef = runtimeDocumentAnalysisFiberRef
       val mouseTargetCacheRef      = runtimeMouseTargetCacheRef
-      val bufferAnimationsRef      = runtimeBufferAnimationsRef
 
   private val eventEffectPort: EventEffectPort = EventEffectPort(
     interpretEffect = effects.interpretEffect,

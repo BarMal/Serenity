@@ -86,24 +86,27 @@ final private[manager] class StateManagerOperationBoundary private (
     state.topModal.map(_.id).orElse(state.modalSurface.map(_.id))
 
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-    AppStateValidation.validated(normalizeCommandRunnerFocus(newState)) match
-      case Right(validState) =>
-        // #1550: every state transition passes through here, so this is the one place that can keep the floating
-        // comment lens in sync with the cursor regardless of what moved it -- a keyboard cursor move opens/closes it
-        // exactly as a mouse click already did, without each event source having to remember to call it itself.
-        val syncedState = CommentRendering.syncFloatingLensWithCursor(validState, fallbackState)
-        val modalTransitionLog =
-          (currentModalId(fallbackState), currentModalId(syncedState)) match
-            case (before, after) if before != after =>
-              logger.info(
-                s"[STATE MODAL] before=${before.getOrElse("none")} " +
-                  s"after=${after.getOrElse("none")} focus=${syncedState.persisted.focus}"
-              )
-            case _ => IO.unit
-        modalTransitionLog >> stateRef.set(syncedState) >> scheduleDocumentAnalysis()
+    StateManagerOperationBoundary.prepareCommit(newState, fallbackState) match
+      case Right(committedState) =>
+        logModalTransition(fallbackState, committedState) >> stateRef.set(committedState) >> scheduleDocumentAnalysis()
       case Left(errors) =>
-        logger.error(s"State validation failed: ${errors.mkString(", ")}") >>
-          stateRef.set(fallbackState)
+        logRejectedCommit(errors) >> stateRef.set(fallbackState)
+
+  /** The follow-up work of a commit made outside `validateAndUpdateState` from a `prepareCommit` result. */
+  private[manager] def afterCommit(fallbackState: AppState, committedState: AppState): IO[Unit] =
+    logModalTransition(fallbackState, committedState) >> scheduleDocumentAnalysis()
+
+  private[manager] def logRejectedCommit(errors: List[String]): IO[Unit] =
+    logger.error(s"State validation failed: ${errors.mkString(", ")}")
+
+  private def logModalTransition(before: AppState, after: AppState): IO[Unit] =
+    (currentModalId(before), currentModalId(after)) match
+      case (beforeId, afterId) if beforeId != afterId =>
+        logger.info(
+          s"[STATE MODAL] before=${beforeId.getOrElse("none")} " +
+            s"after=${afterId.getOrElse("none")} focus=${after.persisted.focus}"
+        )
+      case _ => IO.unit
 
   def scheduleDocumentAnalysis(): IO[Unit] =
     stateRef.get.flatMap { state =>
@@ -190,14 +193,25 @@ final private[manager] class StateManagerOperationBoundary private (
   private def requiresDocumentAnalysis(state: AppState): Boolean =
     state.persisted.config.languageToolsConfig.spellCheck.enabled || state.runtime.diagnosticsState.spellCheckCache.nonEmpty
 
+private[manager] object StateManagerOperationBoundary:
+
+  /** What a commit of `newState` over `fallbackState` would write, or why it is rejected: every commit path runs this
+    * so none of them can skip validation or the fix-ups below.
+    */
+  def prepareCommit(newState: AppState, fallbackState: AppState): Either[List[String], AppState] =
+    // #1550: every state transition passes through here, so this is the one place that can keep the floating comment
+    // lens in sync with the cursor regardless of what moved it -- a keyboard cursor move opens/closes it exactly as a
+    // mouse click already did, without each event source having to remember to call it itself.
+    AppStateValidation
+      .validated(normalizeCommandRunnerFocus(newState))
+      .map(CommentRendering.syncFloatingLensWithCursor(_, fallbackState))
+
   private def normalizeCommandRunnerFocus(state: AppState): AppState =
     if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() then
       state.preferredCommandRunnerFocus.fold(state)(focus =>
         state.copy(persisted = state.persisted.copy(focus = focus))
       )
     else state
-
-private[manager] object StateManagerOperationBoundary:
 
   def create(
     stateRef: Ref[IO, AppState],
