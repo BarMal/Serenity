@@ -2,7 +2,7 @@ package com.serenity.state.reducers
 
 import com.serenity.state.models.*
 import com.serenity.state.undo.HistoryEntry
-import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition}
+import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition, PanelTarget}
 
 object PanelStateReducer:
 
@@ -47,6 +47,11 @@ object PanelStateReducer:
       case Some(surface) => focus(surface.id, state)
       case None          => ReducerResult.noEffects(state)
 
+  def focus(target: PanelTarget, state: AppState): ReducerResult =
+    target match
+      case PanelTarget.ById(surfaceId)      => focus(surfaceId, state)
+      case PanelTarget.ByPosition(position) => focus(position, state)
+
   /** The current size of a pinned surface, or `None` if it isn't pinned -- used by `StateManagerEffectHandlers`'s
     * command/keyboard resize path (issue #1310) to compute a delta-adjusted absolute size before calling `resize`.
     * Reads back through the workspace tree's owning-split ratio (issue #817) -- the sole size record for a docked
@@ -80,6 +85,11 @@ object PanelStateReducer:
       case Some(surface) => resize(surface.id, newSize, state)
       case None          => ReducerResult.noEffects(state)
 
+  def resize(target: PanelTarget, newSize: Int, state: AppState): ReducerResult =
+    target match
+      case PanelTarget.ById(surfaceId)      => resize(surfaceId, newSize, state)
+      case PanelTarget.ByPosition(position) => resize(position, newSize, state)
+
   def unpin(surfaceId: SurfaceId, state: AppState): ReducerResult =
     state.surfaceById(surfaceId).filter(isPinned) match
       case Some(surface) =>
@@ -111,6 +121,11 @@ object PanelStateReducer:
     panelToUnpin(position, state) match
       case Some(surface) => unpin(surface.id, state)
       case None          => ReducerResult.noEffects(state)
+
+  def unpin(target: PanelTarget, state: AppState): ReducerResult =
+    target match
+      case PanelTarget.ById(surfaceId)      => unpin(surfaceId, state)
+      case PanelTarget.ByPosition(position) => unpin(position, state)
 
   def move(surfaceId: SurfaceId, position: PanelPosition, state: AppState): ReducerResult =
     state.surfaceById(surfaceId).filter(isPinned) match
@@ -163,6 +178,11 @@ object PanelStateReducer:
     newestPinnedSurfaceAt(position, state).orElse(panelSurfaceAt(position, state)) match
       case Some(surface) => expand(surface.id, state)
       case None          => ReducerResult.noEffects(state)
+
+  def expand(target: PanelTarget, state: AppState): ReducerResult =
+    target match
+      case PanelTarget.ById(surfaceId)      => expand(surfaceId, state)
+      case PanelTarget.ByPosition(position) => expand(position, state)
 
   def collapseExpandedPanel(state: AppState): ReducerResult =
     ReducerResult.noEffects(
