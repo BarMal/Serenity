@@ -3,9 +3,17 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import cats.effect.IO
-import cats.syntax.foldable.*
+import cats.syntax.all.*
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, ModalStateReducer, PanelStateReducer, PeekStateReducer, UndoEffect}
+import com.serenity.state.reducers.{
+  AppEffect,
+  ModalStateReducer,
+  PanelStateReducer,
+  PeekStateReducer,
+  PinnedPanelContentReducer,
+  ReducerResult,
+  UndoEffect
+}
 import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.*
 
@@ -33,25 +41,28 @@ final private[manager] class StateManagerSurfaceCapability(
       case _                                                           => IO.unit
     }
 
+  /** Reads state once, commits the pure result once through the validated path, then runs the shell-side follow-ups
+    * the reducer can't express as effects yet: the pipeline's animation hooks and the effects' undo boundaries.
+    */
+  private def commit(reduce: AppState => ReducerResult, withAnimationHooks: Boolean): IO[Unit] =
+    stateRef.get.flatMap { state =>
+      val result = reduce(state)
+      validateAndUpdateState(result.state, state) >>
+        applyAnimationHooks(state).whenA(withAnimationHooks) >>
+        interpretEffects(result.effects)
+    }
+
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] =
-    stateRef.get.flatMap(state => validateAndUpdateState(PeekStateReducer.show(content, at, state).state, state))
+    commit(PeekStateReducer.show(content, at, _), withAnimationHooks = false)
 
   def dismissPeek(): IO[Unit] =
-    stateRef.get.flatMap(state => validateAndUpdateState(PeekStateReducer.dismiss(state).state, state))
+    commit(PeekStateReducer.dismiss, withAnimationHooks = false)
 
   def peekToPin(position: PanelPosition): IO[Unit] =
-    stateRef.get.flatMap { state =>
-      validateAndUpdateState(PanelStateReducer.pinPeekOverlay(position, state).state, state)
-        .flatMap(_ => applyAnimationHooks(state))
-    }
+    commit(PanelStateReducer.pinPeekOverlay(position, _), withAnimationHooks = true)
 
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
-    stateRef.get.flatMap { state =>
-      val result = PanelStateReducer.pin(content, position, size, state)
-      validateAndUpdateState(result.state, state)
-        .flatMap(_ => applyAnimationHooks(state))
-        .flatMap(_ => interpretEffects(result.effects))
-    }
+    commit(PanelStateReducer.pin(content, position, size, _), withAnimationHooks = true)
 
   // A target that resolves to no panel (a `ByPosition` side holding nothing pinned, or an `ById` surface that isn't
   // a pinned panel) is a deliberate no-op: the reducer returns the unchanged state we handed it, so callers asking
@@ -63,159 +74,39 @@ final private[manager] class StateManagerSurfaceCapability(
     * panel -- and the user's own workspace-tree focus on it -- every 100ms for the task's whole lifetime (issue #1294).
     */
   def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit] =
-    val content = PanelContent.Terminal(text, text.length)
-    stateRef.get.flatMap { state =>
-      val existing = state.pinnedSurfaces.reverse.find { surface =>
-        surface.content match
-          case SurfaceContent.Terminal(_, _) => true
-          case _                             => false
-      }
-      val (updated, effects) = existing match
-        case Some(surface) =>
-          val nextSurface = surface.copy(content = SurfaceContent.Terminal(text, text.length))
-          state.copy(runtime =
-            state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.movedToEndWhere(_.id == surface.id)(nextSurface))
-          ) -> Nil
-        case _ =>
-          val result = PanelStateReducer.pin(content, position, size, state)
-          result.state -> result.effects
-      validateAndUpdateState(updated, state)
-        .flatMap(_ => applyAnimationHooks(state))
-        .flatMap(_ => interpretEffects(effects))
-    }
+    commit(PinnedPanelContentReducer.pinOrUpdateTerminal(text, position, size, _), withAnimationHooks = true)
 
   def unpinPanel(target: PanelTarget): IO[Unit] =
-    stateRef.get.flatMap { state =>
-      val result = target match
-        case PanelTarget.ById(surfaceId)      => PanelStateReducer.unpin(surfaceId, state)
-        case PanelTarget.ByPosition(position) => PanelStateReducer.unpin(position, state)
-      validateAndUpdateState(result.state, state)
-        .flatMap(_ => applyAnimationHooks(state))
-        .flatMap(_ => interpretEffects(result.effects))
-    }
+    commit(PanelStateReducer.unpin(target, _), withAnimationHooks = true)
 
   def movePinnedPanel(surfaceId: SurfaceId, position: PanelPosition): IO[Unit] =
-    stateRef.get.flatMap { state =>
-      val result = PanelStateReducer.move(surfaceId, position, state)
-      validateAndUpdateState(result.state, state)
-        .flatMap(_ => applyAnimationHooks(state))
-        .flatMap(_ => interpretEffects(result.effects))
-    }
+    commit(PanelStateReducer.move(surfaceId, position, _), withAnimationHooks = true)
 
   def expandPinnedPanel(target: PanelTarget): IO[Unit] =
-    stateRef.get.flatMap { state =>
-      val result = target match
-        case PanelTarget.ById(surfaceId)      => PanelStateReducer.expand(surfaceId, state)
-        case PanelTarget.ByPosition(position) => PanelStateReducer.expand(position, state)
-      validateAndUpdateState(result.state, state)
-        .flatMap(_ => interpretEffects(result.effects))
-    }
+    commit(PanelStateReducer.expand(target, _), withAnimationHooks = false)
 
   def collapseExpandedPanel(): IO[Unit] =
-    stateRef.get.flatMap { state =>
-      validateAndUpdateState(PanelStateReducer.collapseExpandedPanel(state).state, state)
-        .flatMap(_ => applyAnimationHooks(state))
-    }
+    commit(PanelStateReducer.collapseExpandedPanel, withAnimationHooks = true)
 
   def showModal(modal: Modal): IO[Unit] =
-    stateRef.get.flatMap(state => validateAndUpdateState(ModalStateReducer.show(modal, state).state, state))
+    commit(ModalStateReducer.show(modal, _), withAnimationHooks = false)
 
   def dismissModal(): IO[Unit] =
-    stateRef.get.flatMap(state => validateAndUpdateState(ModalStateReducer.dismiss(state).state, state))
+    commit(ModalStateReducer.dismiss, withAnimationHooks = false)
 
   def switchToPinnedPanel(target: PanelTarget): IO[Unit] =
-    stateRef.get.flatMap { state =>
-      val result = target match
-        case PanelTarget.ById(surfaceId)      => PanelStateReducer.focus(surfaceId, state)
-        case PanelTarget.ByPosition(position) => PanelStateReducer.focus(position, state)
-      validateAndUpdateState(result.state, state)
-    }
+    commit(PanelStateReducer.focus(target, _), withAnimationHooks = false)
 
   def loadDirectoryTree(rootPath: Path, files: List[String]): IO[Unit] =
-    val entries = files.map { name =>
-      val isDir = name.endsWith("/")
-      DirEntry(rootPath.resolve(name), name, isDirectory = isDir)
-    }
-    val tree    = DirectoryTreeData(rootPath, entries = Map(rootPath -> entries))
-    val content = PanelContent.DirectoryTree(tree, selectedPath = None)
-    stateRef.get.flatMap { state =>
-      val maybeExistingExplorer = state.pinnedSurfaces.reverse.find { surface =>
-        surface.content match
-          case SurfaceContent.DirectoryTree(_, _) => true
-          case _                                  => false
-      }
-      val (updated, effects) =
-        maybeExistingExplorer match
-          case Some(surface) =>
-            val nextSurface = surface.copy(content = SurfaceContent.DirectoryTree(tree, selectedPath = None))
-            state.copy(runtime =
-              state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.movedToEndWhere(_.id == surface.id)(nextSurface))
-            ) -> Nil
-          case None =>
-            val result = PanelStateReducer.pin(content, PanelPosition.Left, 30, state)
-            result.state -> result.effects
-      validateAndUpdateState(updated, state)
-        .flatMap(_ => applyAnimationHooks(state))
-        .flatMap(_ => interpretEffects(effects))
-    }
+    commit(PinnedPanelContentReducer.loadDirectoryTree(rootPath, files, _), withAnimationHooks = true)
 
   def selectFileInExplorer(targetPath: Path): IO[Unit] =
-    stateRef.get.flatMap { state =>
-      val updated = state.pinnedSurfaces.reverse
-        .find { surface =>
-          surface.content match
-            case SurfaceContent.DirectoryTree(_, _) => true
-            case _                                  => false
-        }
-        .flatMap { surface =>
-          surface.content match
-            case SurfaceContent.DirectoryTree(tree, _) =>
-              val newContent = SurfaceContent.DirectoryTree(tree, Some(targetPath))
-              val newSurface = surface.copy(content = newContent)
-              Some(
-                state.copy(runtime =
-                  state.runtime
-                    .copy(uiSurfaces = state.runtime.uiSurfaces.movedToEndWhere(_.id == surface.id)(newSurface))
-                )
-              )
-            case _ => None
-        }
-        .getOrElse(state)
-      validateAndUpdateState(updated, state)
-    }
+    commit(PinnedPanelContentReducer.selectFileInExplorer(targetPath, _), withAnimationHooks = false)
 
   def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit] =
-    stateRef.get.flatMap { state =>
-      val result = target match
-        case PanelTarget.ById(surfaceId)      => PanelStateReducer.resize(surfaceId, newSize, state)
-        case PanelTarget.ByPosition(position) => PanelStateReducer.resize(position, newSize, state)
-      validateAndUpdateState(result.state, state)
-        .flatMap(_ => interpretEffects(result.effects))
-    }
+    commit(PanelStateReducer.resize(target, newSize, _), withAnimationHooks = false)
 
   def dragFileToDirectory(src: Path, targetDir: Path): IO[Unit] =
-    val dst    = targetDir.resolve(src.getFileName)
-    val srcDir = src.getParent
-    IO.blocking(Files.move(src, dst))
-      .flatMap { _ =>
-        stateRef.update { state =>
-          state.pinnedSurfaces.foldLeft(state) { (currentState, surface) =>
-            surface.content match
-              case SurfaceContent.DirectoryTree(tree, selectedPath) if tree.entries.contains(srcDir) =>
-                val updatedSurface = surface.copy(
-                  content = SurfaceContent.DirectoryTree(
-                    tree.copy(entries = tree.entries.updated(srcDir, tree.entries(srcDir).filterNot(_.path == src))),
-                    selectedPath
-                  )
-                )
-                currentState.copy(
-                  runtime = currentState.runtime.copy(
-                    uiSurfaces = currentState.runtime.uiSurfaces.movedToEndWhere(_.id == surface.id)(updatedSurface)
-                  )
-                )
-              case _ =>
-                currentState
-          }
-        }
-      }
+    IO.blocking(Files.move(src, targetDir.resolve(src.getFileName)))
+      .flatMap(_ => commit(PinnedPanelContentReducer.forgetMovedFile(src, _), withAnimationHooks = false))
       .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to move $src to $targetDir"))
