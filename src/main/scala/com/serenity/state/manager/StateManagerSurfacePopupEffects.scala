@@ -1,10 +1,11 @@
 package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
+import cats.syntax.all.*
 import com.serenity.command.ThemeIntent
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.io.FileUtils
 import com.serenity.state.models.*
+import com.serenity.state.reducers.{PopupSurfaceReducer, ReducerResult, ThemeStateReducer}
 import com.serenity.ui.theme.config.{AppThemeManager, ThemeConfigWriter}
 
 /** Floating popup surfaces triggered by commands or effects: the theme picker/creator, theme switching, theme export,
@@ -19,7 +20,9 @@ final private[manager] class StateManagerSurfacePopupEffects(
     validateAndUpdateState: (AppState, AppState) => IO[Unit]
 ):
 
-  private def updateState(update: AppState => AppState): IO[Unit] = stateRef.update(update)
+  /** Commits against the state as it is once the theme I/O has finished, not the snapshot the command started from. */
+  private def commitCurrent(reduce: AppState => ReducerResult): IO[Unit] =
+    stateRef.get.flatMap(state => validateAndUpdateState(reduce(state).state, state))
 
   private[manager] def interpretThemeIntent(intent: ThemeIntent, state: AppState): IO[Unit] =
     intent match
@@ -42,21 +45,12 @@ final private[manager] class StateManagerSurfacePopupEffects(
   private[manager] def refreshThemeNames: IO[Unit] =
     themeManager.listAvailableThemes
       .flatMap(names =>
-        themeNamesRef.set(names) *> updateState(s => s.copy(runtime = s.runtime.copy(availableThemeNames = names)))
+        themeNamesRef.set(names) *> commitCurrent(ThemeStateReducer.withAvailableThemeNames(names, _))
       )
       .handleErrorWith(ex => logger.error(ex)("[THEMES] Failed to reload theme list"))
 
   private def toggleThemeEffect(state: AppState): IO[Unit] =
-    val targetThemeName =
-      state.persisted.theme.name match
-        case "light"                                    => "dark"
-        case "dark"                                     => "light"
-        case "default-light"                            => "default-dark"
-        case "default-dark"                             => "default-light"
-        case name if name.toLowerCase.contains("light") => "default-dark"
-        case _                                          => "default-light"
-
-    applyThemeByName(targetThemeName)
+    applyThemeByName(ThemeStateReducer.toggleTarget(state))
 
   private def reloadThemeEffect(state: AppState): IO[Unit] =
     reloadThemeByName(state.persisted.theme.name)
@@ -64,67 +58,22 @@ final private[manager] class StateManagerSurfacePopupEffects(
   private[manager] def applyThemeByName(themeName: String): IO[Unit] =
     themeManager
       .loadTheme(themeName)
-      .flatMap { newTheme =>
-        updateState { state =>
-          val transition =
-            if state.persisted.theme == newTheme then None
-            else
-              state.persisted.config.scaledUiAnimation
-                .map(config => ThemeTransition(state.persisted.theme, 0, config.steps))
-          state.copy(
-            persisted = state.persisted.copy(theme = newTheme),
-            runtime = state.runtime.copy(themeTransition = transition)
-          )
-        }
-      }
+      .flatMap(newTheme => commitCurrent(ThemeStateReducer.applyTheme(newTheme, _)))
       .handleErrorWith(ex => logger.error(ex)(s"[THEME] Failed to switch theme to $themeName"))
 
   private[manager] def reloadThemeByName(themeName: String): IO[Unit] =
     themeManager
       .loadTheme(themeName)
-      .flatMap(theme => updateState(s => s.copy(persisted = s.persisted.copy(theme = theme))))
+      .flatMap(theme => commitCurrent(ThemeStateReducer.replaceTheme(theme, _)))
       .handleErrorWith(ex => logger.error(ex)(s"[THEME] Failed to reload theme $themeName"))
 
   private[manager] def openThemePickerEffect(state: AppState): IO[Unit] =
     themeNamesRef.get.flatMap { themeNames =>
-      if themeNames.isEmpty then IO.unit
-      else
-        val currentTheme             = state.persisted.theme.name
-        val selectedIndex            = themeNames.indexOf(currentTheme).max(0)
-        val pickerState              = ThemePickerState(themeNames, selectedIndex, currentTheme)
-        val (stateWithId, surfaceId) = state.allocateSurfaceId
-        val surface = UiSurface(
-          id = surfaceId,
-          content = SurfaceContent.ThemePicker(pickerState),
-          presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
-        )
-        validateAndUpdateState(
-          stateWithId.copy(
-            persisted = stateWithId.persisted.copy(focus = Focus.Surface(surfaceId)),
-            runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ surface)
-          ),
-          state
-        )
+      PopupSurfaceReducer.openThemePicker(themeNames, state).traverse_(result => validateAndUpdateState(result.state, state))
     }
 
   private[manager] def openThemeCreatorEffect(state: AppState): IO[Unit] =
-    val creatorState             = com.serenity.ui.theme.config.ThemeCreatorState.fromTheme(state.persisted.theme)
-    val (stateWithId, surfaceId) = state.allocateSurfaceId
-    val surface = UiSurface(
-      id = surfaceId,
-      content = SurfaceContent.ThemeCreator(creatorState),
-      presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
-    )
-    validateAndUpdateState(
-      stateWithId
-        .copy(runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces.filterNot {
-          _.content match
-            case SurfaceContent.ThemeCreator(_) => true
-            case _                              => false
-        } :+ surface))
-        .pushFocus(Focus.Surface(surfaceId)),
-      state
-    )
+    validateAndUpdateState(PopupSurfaceReducer.openThemeCreator(state).state, state)
 
   private[manager] def exportCurrentThemeEffect(state: AppState): IO[Unit] =
     val config            = ThemeConfigWriter.themeToConfig(state.persisted.theme)
@@ -146,16 +95,4 @@ final private[manager] class StateManagerSurfacePopupEffects(
         IO.unit
 
   private[manager] def openFileSearchEffect(state: AppState): IO[Unit] =
-    val (stateWithId, surfaceId) = state.allocateSurfaceId
-    val surface = UiSurface(
-      id = surfaceId,
-      content = SurfaceContent.FileSearch(FileSearchState("", Nil, 0)),
-      presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
-    )
-    validateAndUpdateState(
-      stateWithId.copy(
-        persisted = stateWithId.persisted.copy(focus = Focus.Surface(surfaceId)),
-        runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ surface)
-      ),
-      state
-    )
+    validateAndUpdateState(PopupSurfaceReducer.openFileSearch(state).state, state)
