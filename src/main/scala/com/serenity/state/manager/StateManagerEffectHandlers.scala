@@ -59,7 +59,7 @@ final private[manager] class StateManagerEffectHandlers(
           panelEffects.pinExplorerPanelEffect(
             PanelPosition.Left,
             path,
-            panelEffects.defaultPanelSize(PanelKind.Explorer, PanelPosition.Left)
+            PanelTransitions.defaultPanelSize(PanelKind.Explorer, PanelPosition.Left)
           )
       )
     def submitReplace(surfaceId: SurfaceId): IO[Unit]           = submitReplaceWorkflowEffect(surfaceId)
@@ -108,7 +108,7 @@ final private[manager] class StateManagerEffectHandlers(
     logger,
     fileManager,
     markdownPreviewWindow,
-    validateAndUpdateState,
+    updateModelValidated,
     enqueueEvent,
     showPeek,
     configEffects.updateConfig,
@@ -117,8 +117,7 @@ final private[manager] class StateManagerEffectHandlers(
     () => collapseExpandedPanel(),
     switchToPinnedPanel,
     resizePinnedPanel,
-    projectLspEffects.cancelProjectTaskSilently,
-    recordUndoBoundary
+    projectLspEffects.cancelProjectTaskSilently
   )
 
   private val uiPresetEffects = new StateManagerUiPresetEffects(
@@ -253,11 +252,9 @@ final private[manager] class StateManagerEffectHandlers(
     // it (palette, mouse click, contextual toolbar, ...), living on `runtime` since `CommandRunner` itself is
     // reconstructed fresh each time the palette opens (`CommandRunner.recordCommandUsage`'s own doc).
     logger.info(s"[COMMAND] ${StateManager.describeCommandExecution(command)}") >>
-      stateRef.update(recordCommandUsage(command.name)) >> dispatch
-
-  private def recordCommandUsage(name: String)(state: AppState): AppState =
-    val nextGeneration = state.runtime.commandUsage.values.maxOption.getOrElse(0) + 1
-    state.copy(runtime = state.runtime.copy(commandUsage = state.runtime.commandUsage + (name -> nextGeneration)))
+      updateModelValidated(model =>
+        Some(model.copy(app = StateManagerEffectHandlers.withCommandUsageRecorded(model.app, command.name)))
+      ) >> dispatch
 
   private def interpretLifecycleIntent(intent: LifecycleIntent, state: AppState): IO[Unit] =
     intent match
@@ -586,3 +583,11 @@ final private[manager] class StateManagerEffectHandlers(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig
   ): IO[Unit] =
     configEffects.updateFontConfig(update)
+
+private[manager] object StateManagerEffectHandlers:
+
+  def withCommandUsageRecorded(state: AppState, commandName: String): AppState =
+    val nextGeneration = state.runtime.commandUsage.values.maxOption.getOrElse(0) + 1
+    state.copy(runtime =
+      state.runtime.copy(commandUsage = state.runtime.commandUsage + (commandName -> nextGeneration))
+    )

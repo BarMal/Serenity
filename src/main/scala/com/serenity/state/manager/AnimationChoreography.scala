@@ -10,7 +10,6 @@ import com.serenity.ui.theme.config.ColorParser.transparent
 /** State the event pipeline exposes for surface and panel animation choreography. */
 private[manager] trait AnimationChoreographyPort:
   def stateRef: Ref[IO, AppState]
-  def bufferAnimationsRef: Ref[IO, Map[BufferId, AnimationState]]
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
 
 /** Drives command-runner and pinned-panel open/close/transition animations, the buffer sweep animation used for
@@ -22,9 +21,6 @@ private[manager] trait AnimationChoreographyPort:
   */
 final private[manager] class AnimationChoreography(port: AnimationChoreographyPort):
   import port.*
-
-  def applyPaneFlowAnimation(sweep: SweepDirection): IO[Unit] =
-    stateRef.get.flatMap(state => bufferAnimationsRef.update(AnimationChoreography.withPaneFlowAnimation(state, sweep)))
 
   def applyAnimationHooks(prevState: AppState): IO[Unit] =
     if !shouldApplySurfaceAnimationHooks(prevState) then IO.unit

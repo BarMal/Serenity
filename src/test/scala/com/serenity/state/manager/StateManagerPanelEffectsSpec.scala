@@ -9,6 +9,7 @@ import com.serenity.io.FileManager
 import com.serenity.keystroke.events.{Event, ExplorerEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.state.undo.{HistoryEntry, UndoState}
 import com.serenity.ui.layout.{PanelPosition, PanelTarget, PeekContent}
 import com.serenity.ui.tui.MarkdownPreviewWindowAvailability
 import org.scalatest.flatspec.AnyFlatSpec
@@ -24,6 +25,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   final private class Harness(
+      val modelRef: Ref[IO, Model],
       val stateRef: Ref[IO, AppState],
       val committedStates: Ref[IO, List[AppState]],
       val events: Ref[IO, List[Event]],
@@ -37,13 +39,15 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     initialState: AppState = AppState.initial,
     markdownPreviewWindow: MarkdownPreviewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable
   ): Harness =
-    val stateRef  = Ref.of[IO, AppState](initialState).unsafeRunSync()
+    val modelRef  = Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty)).unsafeRunSync()
+    val stateRef  = Model.appRef(modelRef)
     val committed = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
     val events    = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
     val peeks     = Ref.of[IO, List[PeekContent]](Nil).unsafeRunSync()
     val calls     = Ref.of[IO, List[String]](Nil).unsafeRunSync()
 
     new Harness(
+      modelRef,
       stateRef,
       committed,
       events,
@@ -54,7 +58,10 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
         NoOpLogger.impl[IO],
         new FileManager(),
         markdownPreviewWindow,
-        (newState, _) => committed.update(_ :+ newState) >> stateRef.set(newState),
+        transition =>
+          modelRef.get.flatMap(model =>
+            transition(model).fold(IO.unit)(next => committed.update(_ :+ next.app) >> modelRef.set(next))
+          ),
         event => events.update(_ :+ event),
         (content, _) => peeks.update(_ :+ content),
         update =>
@@ -67,8 +74,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
         () => calls.update(_ :+ "collapse"),
         target => calls.update(_ :+ s"switch:$target"),
         (target, size) => calls.update(_ :+ s"resize:$target:$size"),
-        calls.update(_ :+ "cancel-project-task"),
-        (_, groupable) => calls.update(_ :+ s"record-undo:$groupable")
+        calls.update(_ :+ "cancel-project-task")
       )
     )
 
@@ -139,6 +145,17 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     pinned.map(surface =>
       com.serenity.state.reducers.PanelStateReducer.currentSize(surface.id, currentState)
     ) shouldBe List(Some(30))
+  }
+
+  it should "declare a pin as an undo boundary in the same commit as the pinned panel" in {
+    val fixture = harness()
+
+    fixture.panels.interpret(ViewIntent.PinDiagnosticsPanel, AppState.initial).unsafeRunSync()
+
+    fixture.committedStates.get.unsafeRunSync() should have size 1
+    fixture.modelRef.get.unsafeRunSync().undo.undoStack shouldBe Vector(
+      HistoryEntry.PanelChange.capture(AppState.initial)
+    )
   }
 
   it should "remove a pinned panel kind when its position is cleared" in {

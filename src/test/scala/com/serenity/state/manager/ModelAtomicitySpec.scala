@@ -10,13 +10,21 @@ import cats.effect.{Deferred, IO, Ref}
 import com.serenity.StateManagerTestFixtures
 import com.serenity.animation.AnimationState
 import com.serenity.animation.sprite.CompanionSpriteState
-import com.serenity.command.{Command, CommandCategory, CommandIntent, MotionIntent, SettingsIntent}
+import com.serenity.command.{
+  Command,
+  CommandCategory,
+  CommandIntent,
+  MotionIntent,
+  PanelKind,
+  SettingsIntent,
+  ViewIntent
+}
 import com.serenity.config.{AppConfig, MotionAccessibility, PreferredWindowSize}
-import com.serenity.keystroke.events.{InsertChar, Undo}
+import com.serenity.keystroke.events.{InsertChar, NextTab, Undo}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.*
-import com.serenity.state.undo.UndoState
+import com.serenity.state.undo.{HistoryEntry, UndoState}
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
@@ -218,4 +226,71 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
       yield after
 
     program.unsafeRunSync() shouldBe before
+  }
+
+  "Cycling to the next tab" should "commit the buffer switch and its pane-flow sweep in one write" in {
+    val program =
+      for
+        recorded     <- recording(animatedInitial)
+        stateManager <- stateManagerOver(recorded.modelRef)
+        _            <- focusedHelloBuffer(stateManager)
+        nextBufferId <- stateManager.bufferManager.createBuffer("World", None)
+        _            <- recorded.clear
+        _            <- stateManager.applyEvent(NextTab)
+        writes       <- recorded.recordedWrites
+        after        <- stateManager.getModel
+      yield (nextBufferId, writes, after)
+
+    val (nextBufferId, writes, after) = program.unsafeRunSync()
+
+    def showsNext(model: Model): Boolean = model.app.focusedBufferId.contains(nextBufferId)
+
+    showsNext(after) shouldBe true
+    hasAnimations(after, nextBufferId) shouldBe true
+    writes should not be empty
+    all(writes.map(model => showsNext(model) == hasAnimations(model, nextBufferId))) shouldBe true
+  }
+
+  private def viewCommand(intent: ViewIntent): Command =
+    Command.typed("panel-pin", "Pin panel", CommandIntent.View(intent), CommandCategory.View)
+
+  private def diagnosticsPinned(model: Model): Boolean =
+    model.app.runtime.uiSurfaces.exists(_.content == SurfaceContent.Diagnostics(Nil))
+
+  "Pinning a panel" should "commit the panel and its undo boundary in one write" in {
+    val program =
+      for
+        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        stateManager <- stateManagerOver(recorded.modelRef)
+        _            <- stateManager.commandExecutor.executeCommand(viewCommand(ViewIntent.PinDiagnosticsPanel))
+        writes       <- recorded.recordedWrites
+        after        <- stateManager.getModel
+      yield (writes, after)
+
+    val (writes, after) = program.unsafeRunSync()
+
+    diagnosticsPinned(after) shouldBe true
+    after.undo.undoStack shouldBe Vector(HistoryEntry.PanelChange.capture(AppState.initial))
+    all(writes.map(model => diagnosticsPinned(model) == model.undo.undoStack.nonEmpty)) shouldBe true
+  }
+
+  "Unpinning a panel" should "commit the removal and its undo boundary in one write" in {
+    val unpin = ViewIntent.SetPanelPin(PanelKind.Diagnostics, None)
+    val program =
+      for
+        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        stateManager <- stateManagerOver(recorded.modelRef)
+        _            <- stateManager.commandExecutor.executeCommand(viewCommand(ViewIntent.PinDiagnosticsPanel))
+        _            <- recorded.clear
+        _            <- stateManager.commandExecutor.executeCommand(viewCommand(unpin))
+        writes       <- recorded.recordedWrites
+        after        <- stateManager.getModel
+      yield (writes, after)
+
+    val (writes, after) = program.unsafeRunSync()
+
+    diagnosticsPinned(after) shouldBe false
+    after.undo.undoStack should have size 2
+    writes should not be empty
+    all(writes.map(model => diagnosticsPinned(model) == (model.undo.undoStack.size == 1))) shouldBe true
   }

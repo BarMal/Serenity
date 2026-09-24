@@ -13,14 +13,12 @@ import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 /** Minimal state boundary for resize routing. */
 private[manager] trait ResizeEventPort:
   def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit]
-  def rebalancePanes(): cats.effect.IO[Unit]
 
 /** Routes resize transitions without depending on command, workflow, or runtime services. */
 final private[manager] class ResizeEventHandler(port: ResizeEventPort):
 
   def apply(event: ResizeEvent, previousState: AppState): cats.effect.IO[Unit] =
-    port.applyReducerResult(SystemEventReducer.reduce(event, previousState), previousState) >>
-      port.rebalancePanes()
+    port.applyReducerResult(EventPipelineTransitions.resized(event, previousState), previousState)
 
 private[manager] object StateManagerEventPipeline:
 
@@ -77,11 +75,11 @@ final private[manager] class StateManagerEventPipeline(
   private def interpretCommand(command: com.serenity.command.Command, state: AppState): cats.effect.IO[Unit] =
     effects.interpretCommand(command, state) >> drainPendingOperations
 
-  private val resizeEvents = new ResizeEventHandler(new ResizeEventPort:
-    def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
-      StateManagerEventPipeline.this.applyReducerResult(result, fallbackState)
-    def rebalancePanes(): cats.effect.IO[Unit] =
-      stateRef.update(s => AppEventReducer.rebalancePanes(s, s.focusedBufferId)))
+  private val resizeEvents = new ResizeEventHandler(
+    new ResizeEventPort:
+      def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
+        StateManagerEventPipeline.this.applyReducerResult(result, fallbackState)
+  )
 
   private val lspDocumentSync = new LspDocumentSync(
     LspDocumentSyncPort(
@@ -93,8 +91,6 @@ final private[manager] class StateManagerEventPipeline(
 
   private val animations = new AnimationChoreography(new AnimationChoreographyPort:
     def stateRef: cats.effect.Ref[cats.effect.IO, AppState] = state.stateRef
-    def bufferAnimationsRef: cats.effect.Ref[cats.effect.IO, Map[BufferId, AnimationState]] =
-      state.bufferAnimationsRef
     def validateAndUpdateState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
       StateManagerEventPipeline.this.validateAndUpdateState(newState, fallbackState))
 
@@ -171,12 +167,13 @@ final private[manager] class StateManagerEventPipeline(
     def eventLabel                                      = s"event.${event.getClass.getSimpleName}"
     Trace.timed(eventLabel) {
       stateRef.get.flatMap { rawState =>
-        val prevState = normalizeCommandRunnerFocus(rawState)
-        val syncFocus = if prevState == rawState then cats.effect.IO.unit else stateRef.set(prevState)
+        // Not written back on its own: every handler builds on `prevState`, so the normalised focus lands in the
+        // event's own commit (and `prepareCommit` normalises every commit anyway).
+        val prevState = EventPipelineTransitions.commandRunnerFocusNormalized(rawState)
         val handleEvent: cats.effect.IO[Unit] =
           if prevState.hasBlockingModal && !allowedWhileBlockingModal(event) then cats.effect.IO.unit
           else Trace.timed(s"$eventLabel.dispatch")(dispatchEvent(event, prevState))
-        syncFocus >> handleEvent >>
+        handleEvent >>
           Trace.timed(s"$eventLabel.enqueueChangedLspDocuments")(
             lspDocumentSync.enqueueChangedLspDocuments(prevState)
           ) >>
@@ -251,22 +248,22 @@ final private[manager] class StateManagerEventPipeline(
   /** Routed by type alone: `CloseTab` and `Quit` previously had to precede the `GlobalAppEvent` branch. */
   private def dispatchGlobalAppEvent(event: GlobalAppEvent, prevState: AppState): cats.effect.IO[Unit] =
     val registry = CommandRegistry.withToggleUI
-    def reduced  = applyReducerResult(AppEventReducer.reduce(event, prevState, registry)(using balance), prevState)
+    def result   = AppEventReducer.reduce(event, prevState, registry)(using balance)
+    def reduced  = applyReducerResult(result, prevState)
+    def tabCycled(sweep: SweepDirection) =
+      commitReducerResult(result, prevState, EventPipelineTransitions.withPaneFlow(_, sweep))
     event match
       case CloseTab            => beginCloseAction(CloseScope.Current, prevState)
       case Quit                => beginCloseAction(CloseScope.Quit, prevState)
       case ToggleCommandRunner => reduced >> hydrateCommandRunnerUiPresets
-      case NextTab             => reduced >> applyPaneFlowAnimation(SweepDirection.Backward)
-      case PreviousTab         => reduced >> applyPaneFlowAnimation(SweepDirection.Forward)
+      case NextTab             => tabCycled(SweepDirection.Backward)
+      case PreviousTab         => tabCycled(SweepDirection.Forward)
       case ToggleContextualToolbar | ToggleShortcutsHelp | ToggleTabList | ToggleRecentFilesInMode | NewTab |
           FileSearch | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane | _: CloseTabById |
           MoveTabLeft | MoveTabRight =>
         reduced
       case _: CursorPeekModifierPressed | _: CursorPeekModifierReleased | CursorPeekOtherKeyPressed =>
-        // Resolving the frozen cursor anchor to a screen position needs LayoutEngine, which reducers may not touch
-        // (ArchitectureChecks.ForbiddenImports) -- done here, once, right after the reduce that may have set
-        // cursorPeekAnchor; CursorPeekAnchorResolution.resolve is a no-op unless exactly that just happened.
-        reduced >> stateRef.update(CursorPeekAnchorResolution.resolve)
+        applyReducerResult(EventPipelineTransitions.withCursorPeekAnchorResolved(result), prevState)
 
   /** Bumps `markdownPreviewEditGeneration` synchronously for any buffer this event's dispatch changed the content of,
     * provided that buffer currently has a live markdown preview -- and schedules a debounced commit of that generation
@@ -336,13 +333,20 @@ final private[manager] class StateManagerEventPipeline(
               case SurfacePresentation.Floating(_, _) =>
                 FocusHandlerRouting.forSurfaceContent(surface.content)
 
-  /** Commits the result's state together with its model-only effects (animations, undo bookkeeping) in one model write,
-    * then interprets its remaining effects in order.
-    */
   private[manager] def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
+    commitReducerResult(result, fallbackState, identity)
+
+  /** Commits the result's state together with its model-only effects (animations, undo bookkeeping) and `alongside` in
+    * one model write, then interprets its remaining effects in order.
+    */
+  private def commitReducerResult(
+    result: ReducerResult,
+    fallbackState: AppState,
+    alongside: Model => Model
+  ): cats.effect.IO[Unit] =
     for
       _ <- modelCommit.commitValidated(fallbackState)(model =>
-        ModelCommit.applyModelEffects(model.copy(app = result.state), result.effects)
+        alongside(EventPipelineTransitions.committed(model, result))
       )
       _ <- result.effects.filterNot(ModelCommit.isModelEffect).traverse_(interpretEffect)
     yield ()
@@ -368,16 +372,6 @@ final private[manager] class StateManagerEventPipeline(
             state
       case None =>
         state
-
-  private def normalizeCommandRunnerFocus(state: AppState): AppState =
-    if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() then
-      state.preferredCommandRunnerFocus match
-        case Some(focus) => state.copy(persisted = state.persisted.copy(focus = focus))
-        case None        => state
-    else state
-
-  private def applyPaneFlowAnimation(sweep: SweepDirection): cats.effect.IO[Unit] =
-    animations.applyPaneFlowAnimation(sweep)
 
   private[manager] def applyAnimationHooks(prevState: AppState): cats.effect.IO[Unit] =
     animations.applyAnimationHooks(prevState)

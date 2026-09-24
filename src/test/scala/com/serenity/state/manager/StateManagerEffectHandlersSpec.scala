@@ -299,7 +299,8 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
       .unsafeRunSync()
 
     fixture.currentState.runtime.nextBufferId shouldBe BufferId(99)
-    fixture.committedStates.get.unsafeRunSync() shouldBe List(restored)
+    // The MRU bump (#1048) is a validated commit of its own, ahead of the restored session.
+    fixture.committedStates.get.unsafeRunSync() shouldBe List(usageRecorded(AppState.initial), restored)
   }
 
   it should "do nothing restoring a session when none was saved" in {
@@ -309,13 +310,14 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
       .interpretCommand(command(CommandIntent.Session(SessionIntent.RestoreSession)), AppState.initial)
       .unsafeRunSync()
 
-    fixture.committedStates.get.unsafeRunSync() shouldBe Nil
     // issue #1048: interpretCommand records MRU usage for every command it runs regardless of outcome, so the
-    // otherwise-no-op restore still bumps `runtime.commandUsage` for `command`'s own "test-command" name.
-    fixture.currentState shouldBe AppState.initial.copy(runtime =
-      AppState.initial.runtime.copy(commandUsage = Map("test-command" -> 1))
-    )
+    // otherwise-no-op restore still commits a bump of `runtime.commandUsage` for `command`'s own "test-command" name.
+    fixture.committedStates.get.unsafeRunSync() shouldBe List(usageRecorded(AppState.initial))
+    fixture.currentState shouldBe usageRecorded(AppState.initial)
   }
+
+  private def usageRecorded(state: AppState): AppState =
+    state.copy(runtime = state.runtime.copy(commandUsage = Map("test-command" -> 1)))
 
   // ---------------------------------------------------------------------------------------------------------------
   // Direct save/load entry points

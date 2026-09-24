@@ -89,8 +89,7 @@ private[manager] class StateManagerComposition(
   // not a cycle -- `effects` has no dependency on `events` at all (#1389), so building it in dependency
   // order needs correct `val` placement, not a `lazy val` or deferred `def` port.
   private val animations = new AnimationChoreography(new AnimationChoreographyPort:
-    val stateRef            = runtimeStateRef
-    val bufferAnimationsRef = runtimeBufferAnimationsRef
+    val stateRef = runtimeStateRef
     def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
       operations.validateAndUpdateState(newState, fallbackState))
 
@@ -167,8 +166,6 @@ private[manager] class StateManagerComposition(
     def switchToPinnedPanel(target: PanelTarget): IO[Unit] = surfaces.switchToPinnedPanel(target)
     def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit] =
       surfaces.resizePinnedPanel(target, newSize)
-    def recordUndoBoundary(entry: com.serenity.state.undo.HistoryEntry, groupable: Boolean): IO[Unit] =
-      undoRecording.recordUndoBoundary(entry, groupable)
 
   private val effectFilePort: EffectFilePort = new EffectFilePort:
     val fileDialog                                             = runtimeFileDialog
