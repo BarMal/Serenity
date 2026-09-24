@@ -5,8 +5,8 @@ import java.nio.charset.StandardCharsets
 
 import scala.concurrent.duration.*
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import cats.effect.{Deferred, IO}
 import org.jline.terminal.Terminal
 import org.jline.terminal.impl.DumbTerminal
 import org.scalatest.concurrent.Eventually
@@ -27,6 +27,9 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
 
   implicit override val patienceConfig: PatienceConfig =
     PatienceConfig(timeout = Span(5, Seconds), interval = Span(5, Milliseconds))
+
+  /** A deadlock detector for a signal's effect, not a timing dependency: the handler runs as soon as it is raised. */
+  private val SignalTimeout = 5.seconds
 
   private val esc          = 0x1b.toChar.toString
   private val enterCaMode  = s"$esc[?1049h"
@@ -141,8 +144,7 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
     val harness  = dumbTerminal()
     val original = attributesSnapshot(harness.terminal)
 
-    val program = TerminalShell.forTerminal(harness.terminal).use(_ => IO.never)
-    program.start.flatMap(fiber => IO.sleep(50.millis) >> fiber.cancel).unsafeRunSync()
+    cancelInsideUse(harness.terminal)
 
     attributesSnapshot(harness.terminal) shouldBe original
     harness.written should include(exitCaMode)
@@ -153,14 +155,14 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
     val harness  = dumbTerminal()
     val original = attributesSnapshot(harness.terminal)
 
-    // raise() must run after awaitExternalQuit has registered, so race the raise onto a second fiber.
-    val racedProgram = TerminalShell.forTerminal(harness.terminal).use { shell =>
-      IO.race(
-        shell.awaitExternalQuit.timeout(1.second),
-        IO.sleep(20.millis) >> IO(harness.terminal.raise(Terminal.Signal.INT))
-      )
-    }
-    racedProgram.unsafeRunSync()
+    TerminalShell
+      .forTerminal(harness.terminal)
+      .use { shell =>
+        shell.awaitExternalQuit.start.flatMap { quit =>
+          IO(harness.terminal.raise(Terminal.Signal.INT)) >> quit.joinWithNever.timeout(SignalTimeout)
+        }
+      }
+      .unsafeRunSync()
 
     attributesSnapshot(harness.terminal) shouldBe original
     harness.written should include(exitCaMode)
@@ -196,11 +198,10 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
       .forTerminal(harness.terminal)
       .use { shell =>
         for
-          flag  <- cats.effect.Ref.of[IO, Boolean](false)
-          _     <- IO(shell.registerResizeCallback(() => flag.set(true).unsafeRunAndForget()))
-          _     <- IO(harness.terminal.raise(Terminal.Signal.WINCH))
-          _     <- IO.sleep(20.millis)
-          value <- flag.get
+          called <- Deferred[IO, Unit]
+          _      <- IO(shell.registerResizeCallback(() => called.complete(()).void.unsafeRunAndForget()))
+          _      <- IO(harness.terminal.raise(Terminal.Signal.WINCH))
+          value  <- called.get.as(true).timeoutTo(SignalTimeout, IO.pure(false))
         yield value
       }
       .unsafeRunSync()
@@ -210,6 +211,16 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
 
   private def attributesSnapshot(terminal: Terminal): String =
     terminal.getAttributes.toString
+
+  /** Cancels a fiber once it is inside `use`, so the release under test is the one cancellation triggers. */
+  private def cancelInsideUse(terminal: Terminal): Unit =
+    val program = for
+      entered <- Deferred[IO, Unit]
+      fiber   <- TerminalShell.forTerminal(terminal).use(_ => entered.complete(()) >> IO.never).start
+      _       <- entered.get
+      _       <- fiber.cancel
+    yield ()
+    program.unsafeRunSync()
 
   // ===#1109's CSI-u negotiation ladder: query kitty support, push its enhancement flags if it answered, otherwise
   // fall back to xterm's modifyOtherKeys/formatOtherKeys=1; pop/disable unconditionally on every exit path.===
@@ -375,8 +386,7 @@ class TerminalShellSpec extends AnyFlatSpec with Matchers with Eventually:
       val harness = liveTerminal()
       replyAfterModifyOtherKeysQuery(harness, bytes(confirmingReply))
 
-      val program = TerminalShell.forTerminal(harness.terminal).use(_ => IO.never)
-      program.start.flatMap(fiber => IO.sleep(50.millis) >> fiber.cancel).unsafeRunSync()
+      cancelInsideUse(harness.terminal)
 
       val written = harness.written
       written should include(modifyOtherKeysDisable)

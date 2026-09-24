@@ -13,6 +13,7 @@ import com.serenity.input.{InProcessClipboard, InputRouter, SystemClipboard}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
+import com.serenity.testkit.VirtualTime.runVirtual
 import org.jline.terminal.Size
 import org.jline.terminal.impl.DumbTerminal
 import org.jline.utils.NonBlockingReader
@@ -27,6 +28,10 @@ import org.scalatest.matchers.should.Matchers
   * #1314/#1358: earlier versions of this spec read through a real `DumbTerminal`, in several cases backed by a live
   * `PipedInputStream`/`PipedOutputStream` pair written to after the handler was already running. See
   * [[FakeTerminalReader]]'s doc comment for why that no longer happens.
+  *
+  * Input that ends in EOF never leaves the reader blocked, so those scenarios run on virtual time: the
+  * ESC-disambiguation deadline can then only pass once every fiber, the reader's included, has nothing left to do, and
+  * a starved reader can no longer lose a sequence it was already given to that deadline.
   */
 class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
 
@@ -87,8 +92,7 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
     yield (handler, clipboard)
 
   private def eventsFrom(input: Array[Byte], count: Int): List[Event] =
-    val program = handlerFor(input).flatMap((handler, _) => handler.eventStream.take(count.toLong).compile.toList)
-    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out waiting for events"))
+    runVirtual(handlerFor(input).flatMap((handler, _) => handler.eventStream.take(count.toLong).compile.toList))
 
   "typing a character" should "decode and translate identically to the equivalent Swing KeyStrokeInfo" in {
     eventsFrom(bytes("a"), 1) shouldBe List(
@@ -128,14 +132,15 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
     val input = csi("<35;1;1M") ++ csi("<35;5;5M") ++ csi("<35;10;10M")
     val events =
       // Let the whole (already in-memory) byte stream decode before we start pulling, so all three moves land on
-      // the same un-claimed movement slot and collapse to one -- exactly what a slow consumer sees in production,
-      // made deterministic here instead of racing a live consumer against the producer fiber.
-      val program = for
-        (handler, _) <- handlerFor(input)
-        _            <- IO.sleep(200.millis)
-        events       <- handler.eventStream.take(1).compile.toList
-      yield events
-      program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out waiting for events"))
+      // the same un-claimed movement slot and collapse to one -- exactly what a slow consumer sees in production.
+      // On virtual time the sleep only ends once the read loop has nothing left to do, so it is a barrier, not a guess.
+      runVirtual(
+        for
+          (handler, _) <- handlerFor(input)
+          _            <- IO.sleep(200.millis)
+          events       <- handler.eventStream.take(1).compile.toList
+        yield events
+      )
     events shouldBe List(MouseMove(col = 9, row = 9, shiftDown = false))
   }
 
@@ -148,7 +153,7 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
       pasted               <- clipboard.readText
     yield (events, pasted)
 
-    val (events, pasted) = program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out"))
+    val (events, pasted) = runVirtual(program)
     events shouldBe List(com.serenity.keystroke.events.Paste)
     pasted shouldBe Some(pasteText)
   }
@@ -165,8 +170,7 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
       strokes   <- handler.keyStrokeInfoStream.take(1).compile.toList
     yield strokes
 
-    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe
-      List(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty))
+    runVirtual(program) shouldBe List(KeyStrokeInfo(InputKey.Ctrl, None, Set.empty))
   }
 
   "a kitty-protocol Ctrl press with no release before the second press" should "not fire the double-tap" in {
@@ -181,8 +185,7 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
       strokes   <- handler.keyStrokeInfoStream.take(1).compile.toList
     yield strokes
 
-    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe
-      List(KeyStrokeInfo(InputKey.Character, Some('a'), Set.empty))
+    runVirtual(program) shouldBe List(KeyStrokeInfo(InputKey.Character, Some('a'), Set.empty))
   }
 
   "EOF on stdin" should "translate to the same graceful-shutdown Quit event Ctrl+Q produces, and complete the stream" in {
@@ -211,19 +214,19 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
   private def fakeTerminalWithReader(): (DumbTerminal, FakeTerminalReader) =
     (structuralTerminal(), new FakeTerminalReader)
 
+  /** The stream only ends once the read loop has handled everything before EOF, so by then the callback has fired. */
   private def focusCallbackResultFor(inputAfterRegistration: Array[Byte]): Option[Boolean] =
     val (terminal, reader) = fakeTerminalWithReader()
+    val reported           = new java.util.concurrent.atomic.AtomicReference[Option[Boolean]](None)
     val program = for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
       handler   <- TerminalInputHandler.create(terminal, router, clipboard, readerOverride = Some(reader))
-      flag      <- cats.effect.Ref.of[IO, Option[Boolean]](None)
-      _         <- IO(handler.registerFocusCallback(focused => flag.set(Some(focused)).unsafeRunAndForget()))
-      _         <- IO(reader.feed(inputAfterRegistration))
-      _         <- IO.sleep(100.millis)
-      value     <- flag.get
-    yield value
-    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out waiting for focus callback"))
+      _         <- IO(handler.registerFocusCallback(focused => reported.set(Some(focused))))
+      _         <- IO { reader.feed(inputAfterRegistration); reader.feedEof() }
+      _         <- handler.eventStream.compile.drain
+    yield reported.get()
+    runVirtual(program)
 
   "a terminal focus-in escape sequence (CSI I)" should "invoke the registered focus callback with true" in {
     focusCallbackResultFor(csi("I")) shouldBe Some(true)
@@ -239,11 +242,11 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
       handler   <- TerminalInputHandler.create(terminal, router, clipboard, readerOverride = Some(reader))
-      _         <- IO(reader.feed(csi("O") ++ bytes("a")))
+      _         <- IO { reader.feed(csi("O") ++ bytes("a")); reader.feedEof() }
       events    <- handler.eventStream.take(1).compile.toList
     yield events
 
-    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe List(
+    runVirtual(program) shouldBe List(
       translator.translate(KeyStrokeInfo(InputKey.Character, Some('a'), Set.empty))
     )
   }
@@ -253,6 +256,7 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
     // input, which would otherwise race `shutdown`'s cancellation against the read loop's own natural EOF-driven
     // completion. This is what a real, still-open terminal's stdin looks like between keystrokes: the read loop is
     // genuinely blocked in `reader.read()`, so only cancellation can end it.
+    val reader = new FakeTerminalReader
     val program = for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
@@ -260,9 +264,9 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
         structuralTerminal(),
         router,
         clipboard,
-        readerOverride = Some(new FakeTerminalReader)
+        readerOverride = Some(reader)
       )
-      _      <- IO.sleep(50.millis) // let the read loop actually start blocking in `reader.read()` first
+      _      <- IO.interruptible(reader.awaitWaitingRead())
       _      <- handler.shutdown
       events <- handler.eventStream.compile.toList
     yield events
@@ -281,9 +285,10 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
     *
     * The read loop's job is what this holds: a sequence the terminal has already sent decodes as one sequence -- the
     * loop assembles the present bytes rather than splitting them -- because the timed read finds `[A` before the
-    * deadline. It runs at the production default (50ms); a near-zero deadline can't decide this reliably.
-    * `FakeTerminalReader` removes the scheduling artifact a real JLine background pump thread could add on top (#1314)
-    * -- the bytes are simply in the queue the moment `feed` returns.
+    * deadline. It runs at the production default (50ms), on virtual time so that "before the deadline" means before the
+    * reader runs out of work rather than before a loaded scheduler gets round to it. `FakeTerminalReader` removes the
+    * scheduling artifact a real JLine background pump thread could add on top (#1314) -- the bytes are simply in the
+    * queue the moment `feed` returns.
     */
   "an escape sequence the terminal has already sent" should "decode as one sequence within the disambiguation deadline" in {
     val (terminal, reader) = fakeTerminalWithReader()
@@ -297,11 +302,11 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
         escDeadline = 50.millis,
         readerOverride = Some(reader)
       )
-      _      <- IO(reader.feed(csi("A")))
+      _      <- IO { reader.feed(csi("A")); reader.feedEof() }
       events <- handler.eventStream.take(1).compile.toList
     yield events
 
-    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe List(
+    runVirtual(program) shouldBe List(
       translator.translate(KeyStrokeInfo(InputKey.ArrowUp, None, Set.empty))
     )
   }
@@ -322,16 +327,26 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  /** A sequence split across two writes, as a slow pty can deliver it, is still one sequence. */
+  /** A sequence split across two writes, as a slow pty can deliver it, is still one sequence -- provided the rest
+    * arrives before the deadline, which a deadline as long as the whole test's budget makes certain. The second write
+    * waits until the reader has consumed the `ESC` and gone idle, so the sequence really does arrive in two parts.
+    */
   "an escape sequence split across two writes" should "decode as one sequence" in {
     val (terminal, reader) = fakeTerminalWithReader()
     val program = for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
-      handler   <- TerminalInputHandler.create(terminal, router, clipboard, readerOverride = Some(reader))
-      _         <- IO(reader.feed(Array(esc)))
-      _         <- IO(reader.feed(bytes("[A")))
-      events    <- handler.eventStream.take(1).compile.toList
+      handler <- TerminalInputHandler.create(
+        terminal,
+        router,
+        clipboard,
+        escDeadline = StreamTimeout,
+        readerOverride = Some(reader)
+      )
+      _      <- IO(reader.feed(Array(esc)))
+      _      <- IO.interruptible(reader.awaitWaitingRead())
+      _      <- IO(reader.feed(bytes("[A")))
+      events <- handler.eventStream.take(1).compile.toList
     yield events
 
     program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe List(
@@ -371,9 +386,9 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
 
     override def shutdown(): Unit = ()
 
-  private def eventsFromNonTtyPipe(feed: NonTtyPipeReader => Unit, count: Int): List[Event] =
+  private def nonTtyPipeEvents(feed: NonTtyPipeReader => Unit, count: Int): IO[List[Event]] =
     val reader = new NonTtyPipeReader
-    val program = for
+    for
       clipboard <- InProcessClipboard[IO]
       router    <- InputRouter.create[IO, Event](translator)
       handler <- TerminalInputHandler.create(
@@ -385,26 +400,35 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
       _      <- IO(feed(reader))
       events <- handler.eventStream.take(count.toLong).compile.toList
     yield events
-    program.unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out waiting for events"))
+
+  /** For input that ends in EOF, so the reader never blocks and the scenario can run on virtual time. */
+  private def eventsFromNonTtyPipe(feed: NonTtyPipeReader => Unit, count: Int): List[Event] =
+    runVirtual(nonTtyPipeEvents(feed, count))
+
+  private def thenEof(input: Array[Byte]): NonTtyPipeReader => Unit =
+    reader =>
+      reader.feed(input)
+      reader.feedEof()
 
   // === #-nontty: the ESC-disambiguation deadline must not ride on JLine's timed read, which misfires on a non-tty
   // MSYS pipe (git bash without winpty). All three feed the whole sequence up front, so the byte after ESC is always
   // available -- a correct decoder keeps the sequence whole; the broken timed-read path splits ESC off as a bare key. ===
 
   "a kitty-protocol Backspace (ESC [ 127 u) over a non-tty pipe" should "decode as one Backspace, not Escape plus literal characters" in {
-    eventsFromNonTtyPipe(_.feed(csi("127u")), 1) shouldBe List(
+    eventsFromNonTtyPipe(thenEof(csi("127u")), 1) shouldBe List(
       translator.translate(KeyStrokeInfo(InputKey.Backspace, None, Set.empty))
     )
   }
 
   "an arrow key (ESC [ A) over a non-tty pipe" should "decode as one ArrowUp, not Escape plus a literal [A" in {
-    eventsFromNonTtyPipe(_.feed(csi("A")), 1) shouldBe List(
+    eventsFromNonTtyPipe(thenEof(csi("A")), 1) shouldBe List(
       translator.translate(KeyStrokeInfo(InputKey.ArrowUp, None, Set.empty))
     )
   }
 
   "a genuinely-standalone ESC over a non-tty pipe" should "still resolve to Escape once the deadline passes" in {
-    eventsFromNonTtyPipe(_.feed(Array(esc)), 1) shouldBe List(
+    // No EOF here: only the deadline itself may resolve this ESC, so the scenario runs on the real clock.
+    nonTtyPipeEvents(_.feed(Array(esc)), 1).unsafeRunTimed(StreamTimeout).getOrElse(fail("timed out")) shouldBe List(
       translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty))
     )
   }

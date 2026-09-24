@@ -2,7 +2,7 @@ package com.serenity.ui.tui
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, OutputStream}
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
+import java.util.concurrent.{LinkedBlockingQueue, Semaphore, TimeUnit}
 
 import org.jline.terminal.Size
 import org.jline.terminal.impl.DumbTerminal
@@ -22,8 +22,10 @@ import org.jline.utils.NonBlockingReader
   * queue blocks (or, for a timed read, waits out the deadline).
   */
 final class FakeTerminalReader extends NonBlockingReader:
-  private val chars            = new LinkedBlockingQueue[Integer]()
-  private val EofSentinel: Int = -1
+  private val chars              = new LinkedBlockingQueue[Integer]()
+  private val EofSentinel: Int   = -1
+  private val PauseSentinel: Int = -2
+  private val waitingReads       = new Semaphore(0)
 
   /** `NonBlockingReader.read()` hands out decoded UTF-16 code units, one per call -- JLine wraps the underlying byte
     * stream in a charset decoder, it does not hand out raw bytes (`TerminalInputHandler.toUtf8Bytes` re-encodes them
@@ -34,13 +36,27 @@ final class FakeTerminalReader extends NonBlockingReader:
     new String(input, StandardCharsets.UTF_8).foreach(c => chars.put(c.toInt))
   def feedEof(): Unit = chars.put(EofSentinel)
 
+  /** A pause in the input: the read that reaches it reports `READ_EXPIRED`, exactly what the handler's own deadline
+    * concludes when nothing follows a lone `ESC`. A spec that marks the pause explicitly can leave that deadline long
+    * enough never to fire, so a scheduling stall cannot split an escape sequence that was written in one piece.
+    */
+  def feedPause(): Unit = chars.put(PauseSentinel)
+
+  /** Blocks until everything fed so far has been read and a read has found nothing left: the reader is idle. */
+  @annotation.tailrec
+  def awaitWaitingRead(): Unit =
+    waitingReads.acquire()
+    if !chars.isEmpty then awaitWaitingRead()
+
   override def read(timeout: Long, isPeek: Boolean): Int =
+    if chars.isEmpty then waitingReads.release()
     val next =
       if timeout <= 0 then chars.take().intValue()
       else Option(chars.poll(timeout, TimeUnit.MILLISECONDS)).fold(NonBlockingReader.READ_EXPIRED)(_.intValue())
     if next == EofSentinel then
       chars.put(EofSentinel) // leave EOF latched for any subsequent read
       NonBlockingReader.EOF
+    else if next == PauseSentinel then NonBlockingReader.READ_EXPIRED
     else next
 
   override def readBuffered(b: Array[Char], off: Int, len: Int, timeout: Long): Int =
