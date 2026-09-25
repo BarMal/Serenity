@@ -9,6 +9,7 @@ import com.serenity.config.{AppConfig, MarkdownViewMode, MaterialPreset, MotionP
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.SurfaceMaterials
 import com.serenity.ui.theme.Theme
@@ -158,7 +159,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
 
   private def setDocument(driver: UiScenarioDriver, content: String, language: LanguageId): Unit =
     val bufferId = driver.state.unsafeRunSync().focusedBufferId.getOrElse(fail("Expected a focused scenario buffer"))
-    driver.stateManager.bufferManager.updateBuffer(bufferId, content).unsafeRunSync()
+    driver.stateManager.updateBuffer(bufferId, content).unsafeRunSync()
     driver
       .updateState { state =>
         val buffer = state.persisted.buffers(bufferId)

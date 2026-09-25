@@ -5,6 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -29,7 +30,7 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     // Create buffer with long text
-    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -97,7 +98,7 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
     val stateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
-    val bufferId     = stateManager.bufferManager.createBuffer("test", None).unsafeRunSync()
+    val bufferId     = stateManager.createBuffer("test", None).unsafeRunSync()
     val initialState = stateManager.getCurrentState.unsafeRunSync()
     val paneId       = initialState.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()

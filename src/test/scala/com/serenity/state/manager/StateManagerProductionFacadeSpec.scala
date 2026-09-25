@@ -21,4 +21,8 @@ class StateManagerProductionFacadeSpec extends AnyFlatSpec with Matchers:
     typeChecks("(sm: StateManager) => sm.fileService.markBufferSaved") shouldBe false
     typeChecks("(sm: StateManager) => sm.fileService.checkUnsavedChanges") shouldBe false
     typeChecks("(sm: StateManager) => sm.fileService.getRecentFiles") shouldBe false
+    typeChecks("(sm: StateManager) => sm.bufferManager") shouldBe false
+    typeChecks("(sm: StateManager) => sm.createBuffer") shouldBe false
+    typeChecks("(sm: StateManager) => sm.createNewEmptyBuffer") shouldBe false
+    typeChecks("(sm: StateManager) => sm.updateBuffer") shouldBe false
   }

@@ -5,6 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -18,7 +19,7 @@ class LargeBufferEditingSpec extends AnyFlatSpec with Matchers:
 
   it should "insert correctly at the end of a very long single line" in new EditorFixture:
     val longLine = "a" * 10000
-    val bufferId = stateManager.bufferManager.createBuffer(longLine, None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer(longLine, None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -33,7 +34,7 @@ class LargeBufferEditingSpec extends AnyFlatSpec with Matchers:
 
   it should "insert correctly at the end of a buffer with many lines" in new EditorFixture:
     val manyLines = (1 to 1000).map(i => s"Line $i").mkString("\n")
-    val bufferId  = stateManager.bufferManager.createBuffer(manyLines, None).unsafeRunSync()
+    val bufferId  = stateManager.createBuffer(manyLines, None).unsafeRunSync()
     val state     = stateManager.getCurrentState.unsafeRunSync()
     val paneId    = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()

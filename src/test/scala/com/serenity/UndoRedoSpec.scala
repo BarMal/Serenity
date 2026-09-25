@@ -325,7 +325,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     private val currentPaneId = AtomicReference[PaneId](PaneId(0))
 
     def setupBuffer(content: String): BufferId =
-      val bufferId = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
+      val bufferId = stateManager.createBuffer(content, None).unsafeRunSync()
       val state    = stateManager.getCurrentState.unsafeRunSync()
       currentPaneId.set(state.persisted.layout.editorPanes.keys.head)
       stateManager.setBufferForPane(currentPaneId.get(), bufferId).unsafeRunSync()
@@ -336,7 +336,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
       bufferId
 
     def setupAnotherBuffer(content: String): BufferId =
-      val bufferId  = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
+      val bufferId  = stateManager.createBuffer(content, None).unsafeRunSync()
       val newPaneId = stateManager.paneManager.createPane(Some(bufferId)).unsafeRunSync()
       currentPaneId.set(newPaneId)
       if content.nonEmpty then

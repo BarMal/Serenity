@@ -86,12 +86,12 @@ object StateManagerTestFacade:
 
     def setBufferFilePath(bufferId: BufferId, filePath: Path): IO[Unit] =
       stateManager.updateStateValidated(
-        updateBuffer(bufferId)(buffer => buffer.copy(document = buffer.document.copy(filePath = Some(filePath))))
+        withBufferUpdate(bufferId)(buffer => buffer.copy(document = buffer.document.copy(filePath = Some(filePath))))
       )
 
     def markBufferSaved(bufferId: BufferId): IO[Unit] =
       stateManager.updateStateValidated(
-        updateBuffer(bufferId)(buffer => buffer.copy(document = buffer.document.copy(isDirty = false)))
+        withBufferUpdate(bufferId)(buffer => buffer.copy(document = buffer.document.copy(isDirty = false)))
       )
 
     def checkUnsavedChanges(bufferId: Option[BufferId]): IO[Boolean] =
@@ -110,34 +110,49 @@ object StateManagerTestFacade:
     def clearSession: IO[Unit] =
       stateManager.commandExecutor.executeCommand(sessionCommand("clear-session", SessionIntent.ClearSession))
 
-    /** A new buffer with `content` (and, optionally, `filePath`), for specs that need one at a specific starting
-      * state rather than through `FileIntent.NewFile`/file-open, which only ever produce an empty or disk-backed
-      * buffer (#1724).
+    /** A new buffer with `content` (and, optionally, `filePath`), for specs that need one at a specific starting state
+      * rather than through `FileIntent.NewFile`/file-open, which only ever produce an empty or disk-backed buffer
+      * (#1724). Goes through the plain (non-raising) `updateStateValidated`, not the facade's `updateState` above:
+      * `EditorTransitions.bufferCreated`'s own doc records that a drifted `nextBufferId` can make its result invalid,
+      * and the deleted `BufferManager.createBuffer` this replaces relied on committing being validated -- silently
+      * keeping a valid state, not raising -- as its drift safety net.
+      *
+      * Commits `idAdvanced` before `created`: advancing `nextBufferId` alone can never violate an invariant (per
+      * `EditorTransitions.bufferCreated`'s own doc), so it always commits, giving the second call's rejection fallback
+      * (which is `updateStateValidated`'s own pre-call state, per its public single-fallback contract) a valid state to
+      * land on even when `created` collides under drift and the state from before *this whole call* was itself already
+      * invalid (as a drifted test fixture's is). A single call committing `created` with `idAdvanced` as a custom
+      * fallback -- what the deleted record did directly against `ModelCommit` -- has no public equivalent, since
+      * `updateStateValidated` only ever falls back to its own pre-call state.
       */
     def createBuffer(content: String, filePath: Option[Path])(using Balance): IO[BufferId] =
       stateManager.getCurrentState.flatMap { state =>
         val creation = EditorTransitions.bufferCreated(state, content, filePath)
-        stateManager.updateState(_ => creation.created).as(creation.bufferId)
+        stateManager.updateStateValidated(_ => creation.idAdvanced).flatMap { _ =>
+          stateManager.updateStateValidated(_ => creation.created).as(creation.bufferId)
+        }
       }
 
     def createNewEmptyBuffer(using Balance): IO[BufferId] =
       stateManager.getCurrentState.flatMap { state =>
         val (newState, bufferId) = EditorState.createNewEmptyBuffer(state)
-        stateManager.updateState(_ => newState).as(bufferId)
+        stateManager.updateStateValidated(_ => newState).as(bufferId)
       }
 
     /** Replaces `bufferId`'s content wholesale, for specs that need arbitrary starting content rather than driving it
       * in through keystroke events. Unlike production edits (which flow through the event pipeline's own
-      * `LspDocumentSync`), this pure state write raises no LSP `didChange` -- nothing here asserts on one (#1724).
+      * `LspDocumentSync`), this pure state write raises no LSP `didChange` -- nothing here asserts on one (#1724). Goes
+      * through the plain `updateStateValidated` (see `createBuffer` above) so a replacement that leaves a cursor
+      * out-of-bounds is silently rejected rather than raised, matching the deleted record's own commit semantics.
       */
     def updateBuffer(bufferId: BufferId, content: String)(using Balance): IO[Unit] =
       stateManager.getCurrentState.flatMap { state =>
         EditorTransitions.bufferContentReplaced(state, bufferId, content) match
-          case Some(replacement) => stateManager.updateState(_ => replacement.state)
-          case None               => IO.unit
+          case Some(replacement) => stateManager.updateStateValidated(_ => replacement.state)
+          case None              => IO.unit
       }
 
-  private def updateBuffer(bufferId: BufferId)(change: Buffer => Buffer): AppState => AppState = state =>
+  private def withBufferUpdate(bufferId: BufferId)(change: Buffer => Buffer): AppState => AppState = state =>
     state.persisted.buffers.get(bufferId) match
       case Some(buffer) =>
         state.copy(persisted =

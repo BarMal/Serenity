@@ -28,7 +28,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
 
   "MouseClick" should "consume workspace clicks, presses, and drags while a close confirmation is active" in {
     val sm       = makeStateManager()
-    val bufferId = sm.bufferManager.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     val close = ModalDialog(
@@ -61,7 +61,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
 
   it should "route a click inside a close confirmation to its cancel action" in {
     val sm       = makeStateManager()
-    val bufferId = sm.bufferManager.createBuffer("alpha", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("alpha", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     val close = ModalDialog(
@@ -105,7 +105,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
 
   it should "route a reflowed close action inside a constrained modal frame" in {
     val sm       = makeStateManager()
-    val bufferId = sm.bufferManager.createBuffer("alpha", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("alpha", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     val viewport = ViewportSize(40, 4)
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
@@ -144,7 +144,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
 
   it should "route find and replace modal hit regions through their reducers" in {
     val findManager = makeStateManager()
-    val findBuffer  = findManager.bufferManager.createBuffer("needle\nneedle", None).unsafeRunSync()
+    val findBuffer  = findManager.createBuffer("needle\nneedle", None).unsafeRunSync()
     findManager.setBufferForPane(PaneId(0), findBuffer).unsafeRunSync()
     findManager.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     val findSurface = UiSurface(
@@ -181,7 +181,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
         case _                                                            => None) shouldBe Some(0)
 
     val replaceManager = makeStateManager()
-    val replaceBuffer  = replaceManager.bufferManager.createBuffer("needle", None).unsafeRunSync()
+    val replaceBuffer  = replaceManager.createBuffer("needle", None).unsafeRunSync()
     replaceManager.setBufferForPane(PaneId(0), replaceBuffer).unsafeRunSync()
     replaceManager.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     val replaceSurface = UiSurface(
@@ -229,7 +229,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
         case _ => None) shouldBe Some(ReplaceWorkflowScope.Selection)
 
     val fileManager = makeStateManager()
-    val fileBuffer  = fileManager.bufferManager.createBuffer("needle", None).unsafeRunSync()
+    val fileBuffer  = fileManager.createBuffer("needle", None).unsafeRunSync()
     fileManager.setBufferForPane(PaneId(0), fileBuffer).unsafeRunSync()
     fileManager.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     val fileSurface = UiSurface(
@@ -290,7 +290,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
 
   it should "open an editor context menu on secondary click without moving the cursor" in {
     val sm       = makeStateManager()
-    val bufferId = sm.bufferManager.createBuffer("hello\nworld", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("hello\nworld", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -357,7 +357,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
 
   it should "execute the clicked context menu command against the target editor pane" in {
     val sm       = makeStateManager()
-    val bufferId = sm.bufferManager.createBuffer("hello\nworld", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("hello\nworld", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
 
@@ -385,7 +385,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
 
   it should "not select a context menu item when clicking a configured item gap" in {
     val sm       = makeStateManager()
-    val bufferId = sm.bufferManager.createBuffer("hello\nworld", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("hello\nworld", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState(state =>
       state
@@ -415,7 +415,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
 
   it should "dismiss the context menu on Escape" in {
     val sm       = makeStateManager()
-    val bufferId = sm.bufferManager.createBuffer("hello\nworld", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("hello\nworld", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     sm.applyEvent(MouseClick(18, 2, button = MouseButton.Secondary)).unsafeRunSync()

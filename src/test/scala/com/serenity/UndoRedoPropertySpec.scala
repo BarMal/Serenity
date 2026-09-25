@@ -6,6 +6,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import org.scalacheck.Gen
 import org.scalatest.matchers.should.Matchers
@@ -63,7 +64,7 @@ class UndoRedoPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks wit
   ) {
     forAll(genStartingContent, genEdits) { (startingContent, edits) =>
       val stateManager = freshStateManager()
-      val bufferId     = stateManager.bufferManager.createBuffer(startingContent, None).unsafeRunSync()
+      val bufferId     = stateManager.createBuffer(startingContent, None).unsafeRunSync()
       val paneId       = stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
       stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
       if startingContent.nonEmpty then stateManager.setCursorPosition(paneId, 0, startingContent.length).unsafeRunSync()
@@ -84,7 +85,7 @@ class UndoRedoPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks wit
   property("undoing partway and redoing the same number of steps returns to the fully edited content") {
     forAll(genStartingContent, genEdits) { (startingContent, edits) =>
       val stateManager = freshStateManager()
-      val bufferId     = stateManager.bufferManager.createBuffer(startingContent, None).unsafeRunSync()
+      val bufferId     = stateManager.createBuffer(startingContent, None).unsafeRunSync()
       val paneId       = stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
       stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
       if startingContent.nonEmpty then stateManager.setCursorPosition(paneId, 0, startingContent.length).unsafeRunSync()

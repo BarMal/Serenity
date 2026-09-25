@@ -5,6 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -19,7 +20,7 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
 
   it should "maintain immutable state throughout event processing" in new FunctionalFixture:
     // Given: Initial state
-    stateManager.bufferManager.createBuffer("Initial", None).unsafeRunSync()
+    stateManager.createBuffer("Initial", None).unsafeRunSync()
     val initialState         = stateManager.getCurrentState.unsafeRunSync()
     val initialStateSnapshot = initialState.copy() // Snapshot for comparison
 
@@ -40,7 +41,7 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
 
   it should "demonstrate referential transparency in event processing" in new FunctionalFixture:
     // Given: Same initial state and events
-    val bufferId1 = stateManager.bufferManager.createBuffer("Test", None).unsafeRunSync()
+    val bufferId1 = stateManager.createBuffer("Test", None).unsafeRunSync()
     val state1    = stateManager.getCurrentState.unsafeRunSync()
     val paneId1   = state1.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId1, bufferId1).unsafeRunSync()
@@ -49,7 +50,7 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
     val stateManager2 = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
-    val bufferId2 = stateManager2.bufferManager.createBuffer("Test", None).unsafeRunSync()
+    val bufferId2 = stateManager2.createBuffer("Test", None).unsafeRunSync()
     val state2    = stateManager2.getCurrentState.unsafeRunSync()
     val paneId2   = state2.persisted.layout.editorPanes.keys.head
     stateManager2.setBufferForPane(paneId2, bufferId2).unsafeRunSync()
@@ -78,7 +79,7 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
 
   it should "handle state transitions through monadic composition" in new FunctionalFixture:
     // Given: Initial state wrapped in IO
-    val bufferId = stateManager.bufferManager.createBuffer("monad", None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("monad", None).unsafeRunSync()
     stateManager.paneManager.createPane(Some(bufferId)).unsafeRunSync()
 
     // When: Chain operations using IO monad
@@ -98,7 +99,7 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
 
   it should "demonstrate immutable data structure benefits" in new FunctionalFixture:
     // Given: Shared state between multiple "views"
-    val bufferId  = stateManager.bufferManager.createBuffer("Shared content", None).unsafeRunSync()
+    val bufferId  = stateManager.createBuffer("Shared content", None).unsafeRunSync()
     val baseState = stateManager.getCurrentState.unsafeRunSync()
 
     // When: Create multiple derived states (simulating undo/redo or multiple views)

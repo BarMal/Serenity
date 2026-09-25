@@ -6,6 +6,7 @@ import cats.syntax.traverse.*
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -26,7 +27,7 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
 
       // Given: Empty buffer ready for input
-      bufferId     <- stateManager.bufferManager.createBuffer("", None)
+      bufferId     <- stateManager.createBuffer("", None)
       initialState <- stateManager.getCurrentState
       paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -98,7 +99,7 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
 
       // Given: Buffer with some text
-      bufferId     <- stateManager.bufferManager.createBuffer("The quik brown fox", None)
+      bufferId     <- stateManager.createBuffer("The quik brown fox", None)
       initialState <- stateManager.getCurrentState
       paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -142,7 +143,7 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
 Line 2
 Line 3
 Line 4"""
-      bufferId     <- stateManager.bufferManager.createBuffer(initialText, None)
+      bufferId     <- stateManager.createBuffer(initialText, None)
       initialState <- stateManager.getCurrentState
       paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -209,7 +210,7 @@ Final line""".replace("\r\n", "\n")
       stateManager <- StateManager.apply(logger)
 
       // Given: Text with multiple words
-      bufferId     <- stateManager.bufferManager.createBuffer("Hello world this is a test", None)
+      bufferId     <- stateManager.createBuffer("Hello world this is a test", None)
       initialState <- stateManager.getCurrentState
       paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -260,7 +261,7 @@ Final line""".replace("\r\n", "\n")
       stateManager <- StateManager.apply(logger)
 
       // Given: Empty buffer
-      bufferId     <- stateManager.bufferManager.createBuffer("", None)
+      bufferId     <- stateManager.createBuffer("", None)
       initialState <- stateManager.getCurrentState
       paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -315,7 +316,7 @@ Final line""".replace("\r\n", "\n")
       stateManager <- StateManager.apply(logger)
 
       // Given: Single line of text
-      bufferId     <- stateManager.bufferManager.createBuffer("Single line", None)
+      bufferId     <- stateManager.createBuffer("Single line", None)
       initialState <- stateManager.getCurrentState
       paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -377,7 +378,7 @@ Third""".replace("\r\n", "\n")
       stateManager <- StateManager.apply(logger)
 
       // Given: Small text
-      bufferId     <- stateManager.bufferManager.createBuffer("AB\nCD", None)
+      bufferId     <- stateManager.createBuffer("AB\nCD", None)
       initialState <- stateManager.getCurrentState
       paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -430,7 +431,7 @@ Third""".replace("\r\n", "\n")
       stateManager <- StateManager.apply(logger)
 
       // Given: Multiline text
-      bufferId     <- stateManager.bufferManager.createBuffer("First\nSecond\nThird", None)
+      bufferId     <- stateManager.createBuffer("First\nSecond\nThird", None)
       initialState <- stateManager.getCurrentState
       paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -463,7 +464,7 @@ Third""".replace("\r\n", "\n")
       stateManager <- StateManager.apply(logger)
 
       // Given: Buffer with content
-      bufferId     <- stateManager.bufferManager.createBuffer("Initial state", None)
+      bufferId     <- stateManager.createBuffer("Initial state", None)
       initialState <- stateManager.getCurrentState
       paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -529,7 +530,7 @@ Line 3""".replace("\r\n", "\n")
       .unsafeRunSync()
 
     def setupBuffer(content: String): BufferId =
-      val bufferId = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
+      val bufferId = stateManager.createBuffer(content, None).unsafeRunSync()
       val state    = stateManager.getCurrentState.unsafeRunSync()
       val paneId   = state.persisted.layout.editorPanes.keys.head
 

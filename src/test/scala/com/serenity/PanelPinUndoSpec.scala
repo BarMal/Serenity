@@ -6,6 +6,7 @@ import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -97,7 +98,7 @@ class PanelPinUndoSpec extends AnyFlatSpec with Matchers:
     sm.getCurrentState.unsafeRunSync().pinnedSurfaces.map(_.content) shouldBe afterPin.pinnedSurfaces.map(_.content)
 
   it should "interleave correctly with a buffer-edit undo performed before the pin" in new PanelFixture:
-    val bufferId = sm.bufferManager.createBuffer("hello", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("hello", None).unsafeRunSync()
     val pane0    = sm.getCurrentState.unsafeRunSync().persisted.layout.activeEditorPaneId.get
     sm.setBufferForPane(pane0, bufferId).unsafeRunSync()
     sm.setCursorPosition(pane0, 0, 5).unsafeRunSync()

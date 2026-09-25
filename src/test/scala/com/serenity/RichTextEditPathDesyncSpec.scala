@@ -78,7 +78,7 @@ class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers:
 
   "a single-cursor paste" should "keep richTextDocument in sync with the pasted content" in {
     val stateManager = createStateManager()
-    val bufferId     = stateManager.bufferManager.createBuffer("alpha beta gamma", None).unsafeRunSync()
+    val bufferId     = stateManager.createBuffer("alpha beta gamma", None).unsafeRunSync()
     stateManager.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
 
     boldSelection(stateManager, bufferId, Selection(CursorPosition(0, 6), CursorPosition(0, 10)))
@@ -100,7 +100,7 @@ class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers:
 
   "Tab-to-indent" should "keep richTextDocument in sync with the indented content" in {
     val stateManager = createStateManager()
-    val bufferId     = stateManager.bufferManager.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
+    val bufferId     = stateManager.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
     stateManager.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
 
     boldSelection(stateManager, bufferId, Selection(CursorPosition(0, 0), CursorPosition(0, 5)))
@@ -124,7 +124,7 @@ class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers:
 
   "Shift+Tab-to-unindent" should "keep richTextDocument in sync with the unindented content" in {
     val stateManager = createStateManager()
-    val bufferId     = stateManager.bufferManager.createBuffer("alpha\n\tbeta\ngamma", None).unsafeRunSync()
+    val bufferId     = stateManager.createBuffer("alpha\n\tbeta\ngamma", None).unsafeRunSync()
     stateManager.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
 
     boldSelection(stateManager, bufferId, Selection(CursorPosition(0, 0), CursorPosition(0, 5)))
@@ -143,7 +143,7 @@ class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers:
 
   "a no-selection line Cut" should "keep richTextDocument in sync with the remaining content" in {
     val stateManager = createStateManager()
-    val bufferId     = stateManager.bufferManager.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
+    val bufferId     = stateManager.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
     stateManager.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
 
     boldSelection(stateManager, bufferId, Selection(CursorPosition(0, 0), CursorPosition(0, 5)))

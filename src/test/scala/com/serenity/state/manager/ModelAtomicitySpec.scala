@@ -119,7 +119,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
   /** A fresh buffer holding "Hello", focused in the first pane with the cursor at its end. */
   private def focusedHelloBuffer(stateManager: StateManager): IO[BufferId] =
     for
-      bufferId <- stateManager.bufferManager.createBuffer("Hello", None)
+      bufferId <- stateManager.createBuffer("Hello", None)
       state    <- stateManager.getCurrentState
       paneId <- IO.fromOption(state.persisted.layout.editorPanes.keys.headOption)(
         new IllegalStateException("no editor pane")
@@ -238,7 +238,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
         recorded     <- recording(animatedInitial)
         stateManager <- stateManagerOver(recorded.modelRef)
         _            <- focusedHelloBuffer(stateManager)
-        nextBufferId <- stateManager.bufferManager.createBuffer("World", None)
+        nextBufferId <- stateManager.createBuffer("World", None)
         _            <- recorded.clear
         _            <- stateManager.applyEvent(NextTab)
         writes       <- recorded.recordedWrites
@@ -331,7 +331,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
         recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
         stateManager <- stateManagerOver(recorded.modelRef)
         first        <- focusedHelloBuffer(stateManager)
-        second       <- stateManager.bufferManager.createBuffer("World", None)
+        second       <- stateManager.createBuffer("World", None)
         _            <- stateManager.commandExecutor.executeCommand(closeAll)
         prompted     <- stateManager.getModel
         _            <- stateManager.applyEvent(TabKey)

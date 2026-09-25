@@ -69,8 +69,8 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     val firstBufferId = unanimated.getCurrentState.unsafeRunSync().persisted.bufferOrder.head
-    unanimated.bufferManager.updateBuffer(firstBufferId, "First").unsafeRunSync()
-    val secondBufferId = unanimated.bufferManager.createBuffer("Second", None).unsafeRunSync()
+    unanimated.updateBuffer(firstBufferId, "First").unsafeRunSync()
+    val secondBufferId = unanimated.createBuffer("Second", None).unsafeRunSync()
     val stateManager = unanimated
       .reseededWithBufferAnimations { animations =>
         val current = animations.getOrElse(secondBufferId, com.serenity.animation.AnimationState.empty)

@@ -69,7 +69,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
 
     try
       val stateManager = createStateManager()
-      val bufferId     = stateManager.bufferManager.createBuffer("unsaved", None).unsafeRunSync()
+      val bufferId     = stateManager.createBuffer("unsaved", None).unsafeRunSync()
 
       stateManager
         .updateState { state =>

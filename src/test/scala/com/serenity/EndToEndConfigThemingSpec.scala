@@ -27,7 +27,7 @@ class EndToEndConfigThemingSpec extends AnyFlatSpec with Matchers:
     stateManager.updateState(state => state.copy(persisted = state.persisted.copy(theme = theme))).unsafeRunSync()
 
     // Perform typical editor operations
-    val bufferId = stateManager.bufferManager.createBuffer("function test() { return 'hello'; }", None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("function test() { return 'hello'; }", None).unsafeRunSync()
     val paneId   = stateManager.paneManager.createPane(Some(bufferId)).unsafeRunSync()
 
     // Verify theme is preserved
@@ -44,7 +44,7 @@ class EndToEndConfigThemingSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     // Set up application with content
-    val bufferId = stateManager.bufferManager.createBuffer("val x = 42\nval y = \"hello\"", None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("val x = 42\nval y = \"hello\"", None).unsafeRunSync()
     stateManager.paneManager.createPane(Some(bufferId)).unsafeRunSync()
 
     // Apply initial theme
