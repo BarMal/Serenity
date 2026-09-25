@@ -247,7 +247,7 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.UiPresets(intent)   => uiPresetEffects.interpret(intent)
       case CommandIntent.Settings(intent)    => configEffects.interpret(intent, state)
     // issue #1048: MRU tracking -- every executed command counts toward its recency, regardless of what triggered
-    // it (palette, mouse click, contextual toolbar, ...), living on `runtime` since `CommandRunner` itself is
+    // it (palette, mouse click, contextual toolbar, ...), living on `persisted` since `CommandRunner` itself is
     // reconstructed fresh each time the palette opens (`CommandRunner.recordCommandUsage`'s own doc).
     logger.info(s"[COMMAND] ${StateManager.describeCommandExecution(command)}") >>
       updateModelValidated(model =>
@@ -531,7 +531,7 @@ final private[manager] class StateManagerEffectHandlers(
 private[manager] object StateManagerEffectHandlers:
 
   def withCommandUsageRecorded(state: AppState, commandName: String): AppState =
-    val nextGeneration = state.runtime.commandUsage.values.maxOption.getOrElse(0) + 1
-    state.copy(runtime =
-      state.runtime.copy(commandUsage = state.runtime.commandUsage + (commandName -> nextGeneration))
+    val nextGeneration = state.persisted.commandUsage.values.maxOption.getOrElse(0) + 1
+    state.copy(persisted =
+      state.persisted.copy(commandUsage = state.persisted.commandUsage + (commandName -> nextGeneration))
     )

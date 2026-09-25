@@ -15,7 +15,10 @@ final case class Persisted(
     recentFiles: List[java.nio.file.Path] = Nil,
     // Tagged with the AppMode active when each file was opened, so the mode/tab widget can offer "recent projects
     // opened in this mode" (issue #1307) rather than reusing the mode-agnostic `recentFiles` list above.
-    recentFilesByMode: Map[AppMode, List[java.nio.file.Path]] = Map.empty
+    recentFilesByMode: Map[AppMode, List[java.nio.file.Path]] = Map.empty,
+    // The command runner's recents (issue #1048), keyed by `Command.name` and valued by an incrementing recency
+    // generation. Saved per session (#1719): commands used in one session should not lead the palette in another.
+    commandUsage: Map[String, Int] = Map.empty
 )
 
 object Persisted:

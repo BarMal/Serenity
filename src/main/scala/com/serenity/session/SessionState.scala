@@ -34,6 +34,7 @@ final case class SessionState(
     // Keyed by `AppMode.configKey` rather than the enum itself: circe's semi-automatic derivation needs an explicit
     // KeyEncoder/KeyDecoder for a non-string map key, and this reuses the string form the config file already has.
     recentFilesByMode: Map[String, List[String]] = Map.empty,
+    commandUsage: Map[String, Int] = Map.empty,
     schemaVersion: SchemaVersion = SessionState.CurrentSchemaVersion
 )
 
@@ -55,9 +56,9 @@ object SessionState:
       config = appState.persisted.config,
       themeName = appState.persisted.theme.name,
       recentFiles = appState.persisted.recentFiles.map(_.toString),
-      recentFilesByMode = appState.persisted.recentFilesByMode.map {
-        case (mode, paths) => mode.configKey -> paths.map(_.toString)
-      }
+      recentFilesByMode =
+        appState.persisted.recentFilesByMode.map { case (mode, paths) => mode.configKey -> paths.map(_.toString) },
+      commandUsage = appState.persisted.commandUsage
     )
 
   private def orderedBuffers(appState: AppState): List[Buffer] =
@@ -119,7 +120,8 @@ object SessionState:
         recentFiles = sessionState.recentFiles.map(Path.of(_)),
         recentFilesByMode = sessionState.recentFilesByMode.flatMap {
           case (key, paths) => AppMode.fromConfigKey(key).map(mode => mode -> paths.map(Path.of(_)))
-        }
+        },
+        commandUsage = sessionState.commandUsage
       ),
       runtime = Runtime(
         uiSurfaces = restoredLayout.surfaces,

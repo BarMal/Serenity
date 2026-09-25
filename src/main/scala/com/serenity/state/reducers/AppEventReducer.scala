@@ -114,8 +114,8 @@ object AppEventReducer:
     val runnerWithPanelSelections = activatedRunner.copy(
       optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state),
       // issue #1048: `CommandRunner.empty` is reconstructed fresh on every open, so MRU ranking has to be seeded
-      // back in from the one place it survives a close -- `state.runtime.commandUsage`.
-      commandUsage = state.runtime.commandUsage
+      // back in from the one place it survives a close -- `state.persisted.commandUsage`.
+      commandUsage = state.persisted.commandUsage
     )
     val (stateWithId, surfaceId) =
       state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
