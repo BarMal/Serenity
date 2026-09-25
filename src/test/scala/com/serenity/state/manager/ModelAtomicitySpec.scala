@@ -26,6 +26,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.state.reducers.ModalStateReducer
 import com.serenity.state.undo.{HistoryEntry, UndoState}
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{PanelContent, PanelPosition}
@@ -403,8 +404,13 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
   }
 
   private def replace(stateManager: StateManager, action: ReplaceWorkflowAction): IO[Unit] =
-    stateManager.modalService.showModal(
-      Modal.ReplaceWorkflow(ReplaceWorkflowState(findText = "l", replacementText = "L", selectedAction = action))
+    stateManager.updateStateValidated(state =>
+      ModalStateReducer
+        .show(
+          Modal.ReplaceWorkflow(ReplaceWorkflowState(findText = "l", replacementText = "L", selectedAction = action)),
+          state
+        )
+        .state
     ) >> stateManager.applyEvent(Enter)
 
   private def replacePrompt(model: Model): Option[ReplaceWorkflowState] =

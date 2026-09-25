@@ -17,19 +17,8 @@ final private[manager] class StateManagerViewportCapability(
   ): IO[Unit] =
     effects.updateFontConfig(update)
 
-  val scrollManager: ScrollManager = ScrollManager(
-    ensureCursorVisible = ensureCursorVisible,
-    clickMinimap = clickMinimap
-  )
-
   private def commit(reduce: AppState => ReducerResult): IO[Unit] =
     modelCommit.currentState.flatMap(state => modelCommit.commitState(reduce(state).state, state))
-
-  private def ensureCursorVisible(paneId: PaneId): IO[Unit] =
-    commit(ViewportStateReducer.ensureCursorVisible(paneId, _))
-
-  private def clickMinimap(paneId: PaneId, targetLine: Int): IO[Unit] =
-    commit(ViewportStateReducer.clickMinimap(paneId, targetLine, _))
 
   def handleViewportResize(newSize: ViewportSize): IO[Unit] =
     logger.debug(s"Handling viewport resize to ${newSize.width}x${newSize.height}") >>

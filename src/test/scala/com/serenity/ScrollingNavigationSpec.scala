@@ -9,8 +9,8 @@ import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
-import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.state.manager.{StateManager, ViewportStateReducer}
 import com.serenity.state.models.*
 import com.serenity.testkit.{EditingStateFixtures, VirtualTime}
 import com.serenity.ui.fonts.FontLoader
@@ -100,7 +100,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       _ <- sm.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 80))
 
       // When: Scroll horizontally to bring cursor into view
-      _                <- sm.scrollManager.ensureCursorVisible(paneId)
+      _                <- sm.updateState(state => ViewportStateReducer.ensureCursorVisible(paneId, state).state)
       afterScrollState <- sm.getCurrentState
     yield
       // Then: Viewport should scroll horizontally
@@ -139,7 +139,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       }
       _ <- sm.setViewport(paneId, Viewport(topLine = 0, leftColumn = 0, visibleLines = 25, visibleColumns = 4))
       _ <- sm.setCursorPosition(paneId, 0, 10)
-      _ <- sm.scrollManager.ensureCursorVisible(paneId)
+      _ <- sm.updateState(state => ViewportStateReducer.ensureCursorVisible(paneId, state).state)
       afterScrollState <- sm.getCurrentState
     yield
       val pane   = afterScrollState.persisted.layout.editorPanes(paneId)
@@ -387,7 +387,9 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
 
     // When: Click on minimap (simulate click at 50% down)
     val targetLine = 500 // Middle of file
-    stateManager.scrollManager.clickMinimap(paneId, targetLine).unsafeRunSync()
+    stateManager
+      .updateState(state => ViewportStateReducer.clickMinimap(paneId, targetLine, state).state)
+      .unsafeRunSync()
 
     // Then: Should scroll to clicked location
     val afterClickState = stateManager.getCurrentState.unsafeRunSync()

@@ -12,6 +12,7 @@ import com.serenity.keystroke.events.{Escape, InsertChar}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.*
+import com.serenity.state.reducers.ModalStateReducer
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
@@ -89,15 +90,20 @@ class FileWorkflowLanesSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
 
   private def showOpenDialog(f: Fixture): Unit =
-    f.stateManager.modalService
-      .showModal(
-        Modal.FileWorkflow(
-          FileWorkflowState(
-            mode = FileWorkflowMode.Open,
-            path = f.directory.toString + java.io.File.separator,
-            activeField = FileWorkflowField.Path
+    f.stateManager
+      .updateStateValidated(state =>
+        ModalStateReducer
+          .show(
+            Modal.FileWorkflow(
+              FileWorkflowState(
+                mode = FileWorkflowMode.Open,
+                path = f.directory.toString + java.io.File.separator,
+                activeField = FileWorkflowField.Path
+              )
+            ),
+            state
           )
-        )
+          .state
       )
       .unsafeRunSync()
 

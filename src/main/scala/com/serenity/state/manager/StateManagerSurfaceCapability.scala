@@ -36,12 +36,6 @@ final private[manager] class StateManagerSurfaceCapability(
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] =
     commit(PeekStateReducer.show(content, at, _), withAnimationHooks = false)
 
-  def dismissPeek(): IO[Unit] =
-    commit(PeekStateReducer.dismiss, withAnimationHooks = false)
-
-  def peekToPin(position: PanelPosition): IO[Unit] =
-    commit(PanelStateReducer.pinPeekOverlay(position, _), withAnimationHooks = true)
-
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
     commit(PanelStateReducer.pin(content, position, size, _), withAnimationHooks = true)
 
@@ -71,9 +65,6 @@ final private[manager] class StateManagerSurfaceCapability(
 
   def showModal(modal: Modal): IO[Unit] =
     commit(ModalStateReducer.show(modal, _), withAnimationHooks = false)
-
-  def dismissModal(): IO[Unit] =
-    commit(ModalStateReducer.dismiss, withAnimationHooks = false)
 
   def switchToPinnedPanel(target: PanelTarget): IO[Unit] =
     commit(PanelStateReducer.focus(target, _), withAnimationHooks = false)

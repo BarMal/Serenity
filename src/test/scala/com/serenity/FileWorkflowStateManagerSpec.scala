@@ -17,6 +17,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.state.reducers.ModalStateReducer
 import org.scalatest.concurrent.Eventually
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -58,16 +59,21 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
 
     try
       val stateManager = createStateManager()
-      stateManager.modalService
-        .showModal(
-          Modal.FileWorkflow(
-            FileWorkflowState(
-              mode = FileWorkflowMode.Open,
-              filename = "notes.scala",
-              path = tempRoot.resolve("p").toString,
-              activeField = FileWorkflowField.Path
+      stateManager
+        .updateState(state =>
+          ModalStateReducer
+            .show(
+              Modal.FileWorkflow(
+                FileWorkflowState(
+                  mode = FileWorkflowMode.Open,
+                  filename = "notes.scala",
+                  path = tempRoot.resolve("p").toString,
+                  activeField = FileWorkflowField.Path
+                )
+              ),
+              state
             )
-          )
+            .state
         )
         .unsafeRunSync()
 
@@ -102,15 +108,20 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
         }
         .unsafeRunSync()
 
-      stateManager.modalService
-        .showModal(
-          Modal.FileWorkflow(
-            FileWorkflowState(
-              mode = FileWorkflowMode.SaveAs,
-              filename = "notes.scala",
-              path = targetDir.toString
+      stateManager
+        .updateState(state =>
+          ModalStateReducer
+            .show(
+              Modal.FileWorkflow(
+                FileWorkflowState(
+                  mode = FileWorkflowMode.SaveAs,
+                  filename = "notes.scala",
+                  path = targetDir.toString
+                )
+              ),
+              state
             )
-          )
+            .state
         )
         .unsafeRunSync()
 
@@ -159,15 +170,20 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
         }
         .unsafeRunSync()
 
-      stateManager.modalService
-        .showModal(
-          Modal.FileWorkflow(
-            FileWorkflowState(
-              mode = FileWorkflowMode.SaveAs,
-              filename = "notes.scala",
-              path = targetDir.toString
+      stateManager
+        .updateState(state =>
+          ModalStateReducer
+            .show(
+              Modal.FileWorkflow(
+                FileWorkflowState(
+                  mode = FileWorkflowMode.SaveAs,
+                  filename = "notes.scala",
+                  path = targetDir.toString
+                )
+              ),
+              state
             )
-          )
+            .state
         )
         .unsafeRunSync()
 
@@ -230,15 +246,20 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
       val stateManager = createStateManager()
       val initialState = stateManager.getCurrentState.unsafeRunSync()
 
-      stateManager.modalService
-        .showModal(
-          Modal.FileWorkflow(
-            FileWorkflowState(
-              mode = FileWorkflowMode.Open,
-              filename = "notes.scala",
-              path = tempRoot.toString
+      stateManager
+        .updateState(state =>
+          ModalStateReducer
+            .show(
+              Modal.FileWorkflow(
+                FileWorkflowState(
+                  mode = FileWorkflowMode.Open,
+                  filename = "notes.scala",
+                  path = tempRoot.toString
+                )
+              ),
+              state
             )
-          )
+            .state
         )
         .unsafeRunSync()
 
@@ -263,15 +284,20 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
 
     try
       val stateManager = createStateManager()
-      stateManager.modalService
-        .showModal(
-          Modal.FileWorkflow(
-            FileWorkflowState(
-              mode = FileWorkflowMode.Open,
-              path = tempRoot.resolve("pro").toString,
-              activeField = FileWorkflowField.Path
+      stateManager
+        .updateState(state =>
+          ModalStateReducer
+            .show(
+              Modal.FileWorkflow(
+                FileWorkflowState(
+                  mode = FileWorkflowMode.Open,
+                  path = tempRoot.resolve("pro").toString,
+                  activeField = FileWorkflowField.Path
+                )
+              ),
+              state
             )
-          )
+            .state
         )
         .unsafeRunSync()
 
@@ -292,15 +318,20 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
 
     try
       val stateManager = createStateManager()
-      stateManager.modalService
-        .showModal(
-          Modal.FileWorkflow(
-            FileWorkflowState(
-              mode = FileWorkflowMode.Open,
-              path = tempRoot.toString,
-              activeField = FileWorkflowField.Filename
+      stateManager
+        .updateState(state =>
+          ModalStateReducer
+            .show(
+              Modal.FileWorkflow(
+                FileWorkflowState(
+                  mode = FileWorkflowMode.Open,
+                  path = tempRoot.toString,
+                  activeField = FileWorkflowField.Filename
+                )
+              ),
+              state
             )
-          )
+            .state
         )
         .unsafeRunSync()
 
@@ -323,15 +354,20 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
 
     try
       val stateManager = createStateManager()
-      stateManager.modalService
-        .showModal(
-          Modal.FileWorkflow(
-            FileWorkflowState(
-              mode = FileWorkflowMode.Open,
-              path = tempRoot.toString,
-              activeField = FileWorkflowField.Filename
+      stateManager
+        .updateState(state =>
+          ModalStateReducer
+            .show(
+              Modal.FileWorkflow(
+                FileWorkflowState(
+                  mode = FileWorkflowMode.Open,
+                  path = tempRoot.toString,
+                  activeField = FileWorkflowField.Filename
+                )
+              ),
+              state
             )
-          )
+            .state
         )
         .unsafeRunSync()
 
@@ -349,15 +385,20 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
 
   it should "avoid filesystem suggestions while editing a remote storage URI" in {
     val stateManager = createStateManager()
-    stateManager.modalService
-      .showModal(
-        Modal.FileWorkflow(
-          FileWorkflowState(
-            mode = FileWorkflowMode.Open,
-            path = "https://example.com/docs/note",
-            activeField = FileWorkflowField.Path
+    stateManager
+      .updateState(state =>
+        ModalStateReducer
+          .show(
+            Modal.FileWorkflow(
+              FileWorkflowState(
+                mode = FileWorkflowMode.Open,
+                path = "https://example.com/docs/note",
+                activeField = FileWorkflowField.Path
+              )
+            ),
+            state
           )
-        )
+          .state
       )
       .unsafeRunSync()
 
@@ -374,15 +415,20 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
 
     try
       val stateManager = createStateManager()
-      stateManager.modalService
-        .showModal(
-          Modal.FileWorkflow(
-            FileWorkflowState(
-              mode = FileWorkflowMode.Open,
-              filename = "missing.scala",
-              path = tempRoot.toString
+      stateManager
+        .updateState(state =>
+          ModalStateReducer
+            .show(
+              Modal.FileWorkflow(
+                FileWorkflowState(
+                  mode = FileWorkflowMode.Open,
+                  filename = "missing.scala",
+                  path = tempRoot.toString
+                )
+              ),
+              state
             )
-          )
+            .state
         )
         .unsafeRunSync()
 
@@ -395,14 +441,19 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
 
   it should "keep the modal open and surface a visible status when open target is remote storage" in {
     val stateManager = createStateManager()
-    stateManager.modalService
-      .showModal(
-        Modal.FileWorkflow(
-          FileWorkflowState(
-            mode = FileWorkflowMode.Open,
-            path = "https://example.com/docs/notes.md"
+    stateManager
+      .updateState(state =>
+        ModalStateReducer
+          .show(
+            Modal.FileWorkflow(
+              FileWorkflowState(
+                mode = FileWorkflowMode.Open,
+                path = "https://example.com/docs/notes.md"
+              )
+            ),
+            state
           )
-        )
+          .state
       )
       .unsafeRunSync()
 
@@ -425,15 +476,20 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
       }
       .unsafeRunSync()
-    stateManager.modalService
-      .showModal(
-        Modal.FileWorkflow(
-          FileWorkflowState(
-            mode = FileWorkflowMode.SaveAs,
-            filename = "notes.md",
-            path = "s3://serenity-docs/drafts"
+    stateManager
+      .updateState(state =>
+        ModalStateReducer
+          .show(
+            Modal.FileWorkflow(
+              FileWorkflowState(
+                mode = FileWorkflowMode.SaveAs,
+                filename = "notes.md",
+                path = "s3://serenity-docs/drafts"
+              )
+            ),
+            state
           )
-        )
+          .state
       )
       .unsafeRunSync()
 
@@ -462,15 +518,20 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
           state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
         }
         .unsafeRunSync()
-      stateManager.modalService
-        .showModal(
-          Modal.FileWorkflow(
-            FileWorkflowState(
-              mode = FileWorkflowMode.SaveAs,
-              filename = "notes.md",
-              path = blockingFile.toString
+      stateManager
+        .updateState(state =>
+          ModalStateReducer
+            .show(
+              Modal.FileWorkflow(
+                FileWorkflowState(
+                  mode = FileWorkflowMode.SaveAs,
+                  filename = "notes.md",
+                  path = blockingFile.toString
+                )
+              ),
+              state
             )
-          )
+            .state
         )
         .unsafeRunSync()
 

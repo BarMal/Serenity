@@ -27,13 +27,6 @@ final private[manager] class StateManagerEditorCapability(
 
   def getCurrentState: IO[AppState] = modelCommit.currentState
 
-  val focusManager: FocusManager = FocusManager(switchFocus = switchFocus)
-
-  private def switchFocus(newFocus: Focus): IO[Unit] =
-    modelCommit.currentState.flatMap(state =>
-      modelCommit.commitState(EditorTransitions.focused(state, newFocus), state)
-    )
-
   def updateStateValidated(update: AppState => AppState): IO[Unit] =
     operations.dispatch(modelCommit.currentState.flatMap(state => modelCommit.commitState(update(state), state)))
 

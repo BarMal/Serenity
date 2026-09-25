@@ -47,7 +47,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       case _                 => fail("Expected focus on command runner surface")
 
   it should "dismiss modal workflow when opening command palette" in new UIFixture:
-    stateManager.modalService.showModal(Modal.GotoLine("12")).unsafeRunSync()
+    stateManager.applyEvent(OpenGotoLine).unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync().modalSurface shouldBe defined
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
@@ -78,7 +78,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     state.persisted.focus shouldBe a[Focus.EditorPane]
 
   it should "dismiss a modal overlay with ESC and restore editor focus" in new UIFixture:
-    stateManager.modalService.showModal(Modal.GotoLine("")).unsafeRunSync()
+    stateManager.applyEvent(OpenGotoLine).unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync().modalSurface shouldBe defined
 
     stateManager.applyEvent(Escape).unsafeRunSync()

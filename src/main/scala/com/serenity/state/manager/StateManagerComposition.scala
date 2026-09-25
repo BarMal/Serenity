@@ -311,12 +311,6 @@ private[manager] class StateManagerComposition(
   private def runSurfaceOperation(operation: IO[Unit]): IO[Unit] =
     operation >> drainPendingOperations
 
-  val peekManager: PeekManager = PeekManager(
-    showPeek = (content, at) => runSurfaceOperation(surfaces.showPeek(content, at)),
-    dismissPeek = () => runSurfaceOperation(surfaces.dismissPeek()),
-    peekToPin = position => runSurfaceOperation(surfaces.peekToPin(position))
-  )
-
   val panelManager: PanelManager = PanelManager(
     pinPanel = (content, position, size) => runSurfaceOperation(surfaces.pinPanel(content, position, size)),
     pinOrUpdateTerminalPanel =
@@ -331,11 +325,6 @@ private[manager] class StateManagerComposition(
     resizePinnedPanel = (target, newSize) => runSurfaceOperation(surfaces.resizePinnedPanel(target, newSize)),
     dragFileToDirectory =
       (sourceFile, targetDir) => runSurfaceOperation(surfaces.dragFileToDirectory(sourceFile, targetDir))
-  )
-
-  val modalService: ModalService = ModalService(
-    showModal = modal => runSurfaceOperation(surfaces.showModal(modal)),
-    dismissModal = () => runSurfaceOperation(surfaces.dismissModal())
   )
 
   val paneManager: PaneManager = PaneManager(
