@@ -33,6 +33,11 @@ object ArchitectureChecks {
       "reducers must stay pure: take measured geometry as a parameter instead of reaching for AWT or the layout engine"
     ),
     (
+      "com/serenity/state/reducers",
+      Seq("cats.effect"),
+      "reducers are pure transitions (#1697): emit an AppEffect for the shell to run instead of an IO"
+    ),
+    (
       "com/serenity/state/models",
       Seq("java.awt.Graphics", "com.serenity.ui.renderer"),
       "state models describe data, not painting"
@@ -52,6 +57,37 @@ object ArchitectureChecks {
       Seq(".unsafeRunSync", ".unsafeRunTimed"),
       "runs an IO synchronously outside the Cats Effect runtime (#1434) -- use IOApp, a Resource/Dispatcher " +
         "boundary, or push the IO to the edge instead"
+    )
+  )
+
+  /** State ownership (#1697): only the dispatcher/ModelCommit layer holds the model `Ref`. Capabilities read state
+    * through an `IO[AppState]` and write it only through `ModelCommit`'s validated commits, so a raw `Ref` -- or a
+    * `Ref.lens` view of one -- anywhere else is a write path that can skip validation.
+    *
+    * `StateManager` allocates the model ref and `StateManagerRuntime` carries it to `StateManagerOperationBoundary`,
+    * which owns the dispatcher and builds the one `ModelCommit` over it. `StateManagerComposition`, the composition
+    * root, receives it but hands capabilities only that `ModelCommit`.
+    */
+  val StateOwnership: Seq[(scala.util.matching.Regex, Set[String], String)] = Seq(
+    (
+      """Ref(?:\.lens|\.of)?\[\s*(?:cats\.effect\.)?IO\s*,\s*(?:Model\s*,\s*)?AppState\s*\]""".r,
+      Set(
+        "main/scala/com/serenity/state/manager/ModelCommit.scala",
+        "main/scala/com/serenity/state/manager/StateManagerDispatcher.scala"
+      ),
+      "Ref[IO, AppState] outside the dispatcher/ModelCommit layer -- read an IO[AppState], write through ModelCommit"
+    ),
+    (
+      """Ref(?:\.of)?\[\s*(?:cats\.effect\.)?IO\s*,\s*Model\s*\]""".r,
+      Set(
+        "main/scala/com/serenity/state/manager/ModelCommit.scala",
+        "main/scala/com/serenity/state/manager/StateManagerDispatcher.scala",
+        "main/scala/com/serenity/state/manager/StateManagerOperationBoundary.scala",
+        "main/scala/com/serenity/state/manager/StateManagerRuntime.scala",
+        "main/scala/com/serenity/state/manager/StateManager.scala",
+        "main/scala/com/serenity/state/manager/StateManagerComposition.scala"
+      ),
+      "Ref[IO, Model] outside the dispatcher/ModelCommit layer -- take a ModelCommit instead"
     )
   )
 
@@ -126,13 +162,28 @@ object ArchitectureChecks {
         }
     }
 
+  private def stateOwnershipViolations(path: String, lines: Vector[String]): Seq[Violation] =
+    if (!path.startsWith("main/")) Nil
+    else
+      StateOwnership.flatMap { case (pattern, allowed, reason) =>
+        if (allowed.contains(path)) Nil
+        else
+          lines.zipWithIndex.collect {
+            case (line, index)
+                if !line.trim.startsWith("*") && !line.trim.startsWith("//") &&
+                  pattern.findFirstIn(line).isDefined =>
+              Violation(path, s"state ownership at line ${index + 1}: $reason", 1)
+          }
+      }
+
   def collect(base: File): Seq[Violation] =
     scalaFiles(base).flatMap { file =>
       val path = relativise(base, file)
       val lines = readLines(file)
       val fileViolation =
         if (lines.length > MaxFileLines) Seq(Violation(path, "file length", lines.length)) else Nil
-      fileViolation ++ methodViolations(path, lines) ++ importViolations(path, lines) ++ callViolations(path, lines)
+      fileViolation ++ methodViolations(path, lines) ++ importViolations(path, lines) ++ callViolations(path, lines) ++
+        stateOwnershipViolations(path, lines)
     }
 
   def readBaseline(file: File): Map[String, Int] =
