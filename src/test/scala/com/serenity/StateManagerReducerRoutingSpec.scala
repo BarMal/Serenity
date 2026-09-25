@@ -9,6 +9,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.AwaitCondition.awaitValue
 import com.serenity.ui.layout.*
@@ -323,12 +324,11 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
   }
 
   it should "ignore local events when surface focus points at no surface" in {
-    val stateManager = createStateManager()
     val missingFocus = Focus.Surface(SurfaceId("missing"))
+    // Focus on a missing surface is invalid, so it is seeded at construction rather than written.
+    val stateManager =
+      seededStateManager(state => state.copy(persisted = state.persisted.copy(focus = missingFocus))).unsafeRunSync()
 
-    stateManager
-      .updateState(state => state.copy(persisted = state.persisted.copy(focus = missingFocus)))
-      .unsafeRunSync()
     stateManager.applyEvent(PeekInputEvent.Dismiss).unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().persisted.focus shouldBe missingFocus

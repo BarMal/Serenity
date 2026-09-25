@@ -11,6 +11,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.session.SessionManager
 import com.serenity.state.components.ComponentResult
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ReducerResult
 import com.serenity.state.undo.UndoState
@@ -27,8 +28,8 @@ import org.typelevel.log4cats.noop.NoOpLogger
   * is rejected and the state before it is kept.
   *
   * Each scenario starts from a state that is already invalid -- its buffer order names a buffer that does not exist --
-  * seeded through the unchecked test-only `updateState`, so any write that lands on it produces an invalid state too. A
-  * validated write is therefore rejected, and only a write that bypasses validation changes anything.
+  * seeded into the model the state manager is built over, so any write that lands on it produces an invalid state too.
+  * A validated write is therefore rejected, and only a write that bypasses validation changes anything.
   */
 class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
 
@@ -70,12 +71,11 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.fromRuntime(runtime)
     yield stateManager
 
-  /** A state manager over `initial`, then made invalid through the unchecked seam. */
+  /** A state manager over `initial` made invalid, seeded at construction since every write is validated. */
   private def invalidStateManager(initial: AppState = AppState.initial): IO[(StateManager, Ref[IO, Model], AppState)] =
     for
-      modelRef     <- Ref.of[IO, Model](Model(initial, UndoState(), Map.empty))
+      modelRef     <- Ref.of[IO, Model](Model(withStaleBufferOrder(initial), UndoState(), Map.empty))
       stateManager <- stateManagerOver(modelRef)
-      _            <- stateManager.updateState(withStaleBufferOrder)
       seeded       <- stateManager.getCurrentState
     yield (stateManager, modelRef, seeded)
 
@@ -127,7 +127,7 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
       for
         (stateManager, _, _) <- invalidStateManager(dirty(AppState.initial))
         seeded               <- stateManager.getCurrentState
-        _                    <- stateManager.fileService.markBufferSaved(bufferId)
+        _                    <- stateManager.markBufferSaved(bufferId)
         after                <- stateManager.getCurrentState
       yield (seeded, after)
 
@@ -141,7 +141,7 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
     val program =
       for
         (stateManager, _, seeded) <- invalidStateManager()
-        _                         <- stateManager.fileService.setBufferFilePath(bufferId, Path.of("notes.md"))
+        _                         <- stateManager.setBufferFilePath(bufferId, Path.of("notes.md"))
         after                     <- stateManager.getCurrentState
       yield (seeded, after)
 

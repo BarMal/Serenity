@@ -5,7 +5,6 @@ import java.nio.file.{Files, Path}
 import scala.annotation.unused
 
 import cats.effect.*
-import com.serenity.animation.AnimationState
 import com.serenity.command.{Command, CommandRunner, CommandSurfaceItem}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.io.FileDialog
@@ -28,7 +27,6 @@ trait EventApplier:
 
 trait StateReader:
   def getCurrentState: IO[AppState]
-  def getBufferAnimations: IO[Map[BufferId, AnimationState]]
 
   /** One consistent snapshot of everything the dispatcher owns: use it wherever app state and buffer animations are
     * read together, since two separate reads can straddle a write.
@@ -36,19 +34,16 @@ trait StateReader:
   def getModel: IO[Model]
 
 trait StateUpdater:
-  def updateState(update: AppState => AppState): IO[Unit]
 
-  /** Same as `updateState`, but the result is checked by `AppStateValidation` before it commits -- an update that would
-    * leave the state invalid is rejected and the state before the call is kept instead (#1183). External callers
-    * (outside `state.manager`) should prefer this over `updateState`, which stays unchecked.
+  /** The result is checked by `AppStateValidation` before it commits -- an update that would leave the state invalid is
+    * rejected and the state before the call is kept instead (#1183).
     */
   def updateStateValidated(update: AppState => AppState): IO[Unit]
-  def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit]
 
 /** The hot-path state engine: reading, mutating, and applying events to `AppState`.
   *
-  * Deliberately a cohesive trait, NOT a capability record (#1017). `getCurrentState`/`getBufferAnimations` are read on
-  * the per-frame render path (`AppRuntime.fastRenderPhase`), which #1017's acceptance criteria carve out from record
+  * Deliberately a cohesive trait, NOT a capability record (#1017). `getCurrentState`/`getModel` are read on the
+  * per-frame render path (`AppRuntime.fastRenderPhase`), which #1017's acceptance criteria carve out from record
   * conversion exactly as they do `RenderSurface` -- a trait method at a monomorphic call site stays JIT-inlinable where
   * a record's function field would not. The three capabilities remain as sub-traits so narrow consumers can still
   * depend on exactly what they use (`RenderController` on `EventApplier`, `ClipboardEventSync` on `StateReader`/
@@ -159,16 +154,12 @@ final case class PeekManager(
     peekToPin: PanelPosition => IO[Unit]
 )
 
-/** Manages persisted editor sessions.
+/** Reads the persisted editor session.
   *
   * A capability record per #1017 -- see `ScrollManager` for the shape rationale. `StateManager` holds one of these as a
   * field instead of mixing this trait in directly.
   */
-final case class SessionService(
-    saveSession: IO[Unit],
-    loadSession: IO[Option[AppState]],
-    clearSession: IO[Unit]
-)
+final case class SessionService(loadSession: IO[Option[AppState]])
 
 /** Manages pinned panels and the file explorer.
   *
@@ -199,19 +190,14 @@ final case class ModalService(
     dismissModal: () => IO[Unit]
 )
 
-/** Manages buffer file paths and persistence.
+/** Saves buffers and watches their files for changes made outside the editor.
   *
   * A capability record per #1017 -- see `ScrollManager` below for the shape rationale. `StateManager` holds one of
-  * these as a field instead of mixing this trait in directly. Case class fields can't carry default parameter values,
-  * so `checkUnsavedChanges` takes `Option[BufferId]` rather than defaulting it to `None`.
+  * these as a field instead of mixing this trait in directly.
   */
 final case class FileService(
-    setBufferFilePath: (BufferId, Path) => IO[Unit],
     saveBuffer: BufferId => IO[Unit],
     saveBufferAs: (BufferId, Path) => IO[Unit],
-    markBufferSaved: BufferId => IO[Unit],
-    checkUnsavedChanges: Option[BufferId] => IO[Boolean],
-    getRecentFiles: IO[List[Path]],
     // #1623: re-checks the focused buffer's on-disk revision on window focus-gain, called from AppRuntime's focus
     // callback -- see StateManagerEffectHandlers.resolveExternalRevisionEffect for the reload-or-prompt logic.
     checkExternalChangesOnFocus: IO[Unit],

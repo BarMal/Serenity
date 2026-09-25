@@ -37,7 +37,8 @@ class CommandRunnerCloseAnimationPerformanceSpec extends AnyFlatSpec with Matche
               workspaceTree =
                 Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
             )
-          )
+          ),
+          runtime = state.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
         )
       }
       .unsafeRunSync()

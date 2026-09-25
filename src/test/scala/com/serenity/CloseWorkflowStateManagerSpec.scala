@@ -10,6 +10,7 @@ import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -257,8 +258,8 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       }
       .unsafeRunSync()
 
-    stateManager.fileService.checkUnsavedChanges(Some(bufferId)).unsafeRunSync() shouldBe true
-    stateManager.fileService.checkUnsavedChanges(None).unsafeRunSync() shouldBe true
+    stateManager.checkUnsavedChanges(Some(bufferId)).unsafeRunSync() shouldBe true
+    stateManager.checkUnsavedChanges(None).unsafeRunSync() shouldBe true
   }
 
   it should "cancel the close workflow without closing the dirty buffer" in {

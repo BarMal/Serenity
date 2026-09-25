@@ -6,7 +6,6 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
-import com.serenity.animation.AnimationState
 import com.serenity.app.AppRuntimeRenderLoops
 import com.serenity.config.AppConfig
 import com.serenity.config.AppConfigMotionOps.*
@@ -436,19 +435,14 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   }
 
   "AppRuntime input phase" should "depend only on state read, update, and event application capabilities" in {
-    val modelRef            = Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty)).unsafeRunSync()
-    val stateRef            = ModelViews.appRef(modelRef)
-    val applied             = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
-    val bufferAnimationsRef = ModelViews.bufferAnimationsRef(modelRef)
+    val modelRef = Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty)).unsafeRunSync()
+    val stateRef = ModelViews.appRef(modelRef)
+    val applied  = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
     val capabilities = new StateEngine:
       def getModel: IO[Model]                                          = modelRef.get
       def getCurrentState: IO[AppState]                                = stateRef.get
-      def getBufferAnimations: IO[Map[BufferId, AnimationState]]       = bufferAnimationsRef.get
-      def updateState(update: AppState => AppState): IO[Unit]          = stateRef.update(update)
       def updateStateValidated(update: AppState => AppState): IO[Unit] = stateRef.update(update)
-      def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit] =
-        bufferAnimationsRef.update(update)
-      def applyEvent(event: Event): IO[Unit] = applied.update(_ :+ event)
+      def applyEvent(event: Event): IO[Unit]                           = applied.update(_ :+ event)
     val router        = InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default)).unsafeRunSync()
     val clipboard     = SystemClipboard[IO](readText = IO.pure(Some("pasted")), writeText = _ => IO.unit)
     val cursorVisible = Ref.of[IO, Boolean](true).unsafeRunSync()

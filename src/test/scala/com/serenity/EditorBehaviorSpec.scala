@@ -7,6 +7,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.fonts.FontLoader
@@ -539,7 +540,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers with Eventually:
     val fileContent = "This is file content\nWith multiple lines\nAnd some text"
     val filePath    = java.nio.file.Path.of("/path/to/file.txt")
     val bufferId    = stateManager.bufferManager.createBuffer(fileContent, None).unsafeRunSync()
-    stateManager.fileService.setBufferFilePath(bufferId, filePath).unsafeRunSync()
+    stateManager.setBufferFilePath(bufferId, filePath).unsafeRunSync()
 
     // Then: Buffer should contain the file content, be tagged with the path, and not be dirty
     val state  = stateManager.getCurrentState.unsafeRunSync()
@@ -553,7 +554,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers with Eventually:
     val savePath = java.nio.file.Files.createTempFile("editor-behavior-save", ".txt")
     try
       val bufferId = stateManager.bufferManager.createBuffer("Original content", None).unsafeRunSync()
-      stateManager.fileService.setBufferFilePath(bufferId, savePath).unsafeRunSync()
+      stateManager.setBufferFilePath(bufferId, savePath).unsafeRunSync()
 
       val state  = stateManager.getCurrentState.unsafeRunSync()
       val paneId = state.persisted.layout.editorPanes.keys.head

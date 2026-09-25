@@ -8,6 +8,7 @@ import com.serenity.command.CommandRegistry
 import com.serenity.keystroke.events.{Enter, TabKey}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -34,14 +35,20 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
     * also the focused buffer -- the precondition under which the bypassed commit produces a duplicate `bufferOrder`
     * entry and silently overwrites the live buffer.
     */
-  private def corruptNextBufferIdToCollideWithLiveBuffer(stateManager: StateManager): Unit =
-    stateManager
-      .updateState(state => state.copy(runtime = state.runtime.copy(nextBufferId = BufferId(0))))
-      .unsafeRunSync()
+  private def withNextBufferIdCollidingWithLiveBuffer(state: AppState): AppState =
+    state.copy(runtime = state.runtime.copy(nextBufferId = BufferId(0)))
+
+  /** A state manager over `state` with `drift` applied. Every write is validated, so a drifted state can only be seeded
+    * at construction.
+    */
+  private def driftedStateManager(state: AppState)(drift: AppState => AppState): StateManager =
+    seededStateManager(_ => drift(state)).unsafeRunSync()
+
+  private def stateManagerWithDriftedNextBufferId(): StateManager =
+    driftedStateManager(createStateManager().getCurrentState.unsafeRunSync())(withNextBufferIdCollidingWithLiveBuffer)
 
   "StateManager.openFile" should "not commit a duplicate buffer-order entry when nextBufferId has drifted" in {
-    val stateManager = createStateManager()
-    corruptNextBufferIdToCollideWithLiveBuffer(stateManager)
+    val stateManager = stateManagerWithDriftedNextBufferId()
 
     val tempFile = Files.createTempFile("state-mutation-validation", ".txt")
     try
@@ -64,26 +71,28 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
 
   "The open-file workflow modal" should
     "not commit a duplicate buffer-order entry when nextBufferId has drifted" in {
-      val stateManager = createStateManager()
+      val validStateManager = createStateManager()
 
       val tempRoot   = Files.createTempDirectory("state-mutation-validation-workflow")
       val targetFile = tempRoot.resolve("notes.scala")
       Files.writeString(targetFile, "val answer = 42")
 
       try
-        val before = stateManager.getCurrentState.unsafeRunSync()
+        val before = validStateManager.getCurrentState.unsafeRunSync()
 
         // Open the modal on an untouched, valid state -- the drift is introduced only after the modal is showing,
         // mirroring the many other unchecked `Ref.update` paths elsewhere in this codebase that could plausibly
         // desync `nextBufferId` between a validated commit and this workflow's own completion.
-        stateManager.modalService
+        validStateManager.modalService
           .showModal(
             Modal.FileWorkflow(
               FileWorkflowState(mode = FileWorkflowMode.Open, filename = "notes.scala", path = tempRoot.toString)
             )
           )
           .unsafeRunSync()
-        corruptNextBufferIdToCollideWithLiveBuffer(stateManager)
+        val stateManager = driftedStateManager(validStateManager.getCurrentState.unsafeRunSync())(
+          withNextBufferIdCollidingWithLiveBuffer
+        )
         (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
         val after = stateManager.getCurrentState.unsafeRunSync()
@@ -214,16 +223,15 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
     * checked by `validateAndUpdateState`.
     */
   "Splitting the focused pane" should "leave the layout unchanged when nextPaneId has drifted to collide with it" in {
-    val stateManager = createStateManager()
-    val before       = stateManager.getCurrentState.unsafeRunSync()
-    val focusedPaneId = before.persisted.layout.activeEditorPaneId
+    val initial = createStateManager().getCurrentState.unsafeRunSync()
+    val focusedPaneId = initial.persisted.layout.activeEditorPaneId
       .getOrElse(fail("Expected an active editor pane in the initial state"))
-    val panesBefore = before.persisted.layout.editorPanes
 
     // Drift: nextPaneId collides with the pane that is about to be split.
-    stateManager
-      .updateState(state => state.copy(runtime = state.runtime.copy(nextPaneId = focusedPaneId)))
-      .unsafeRunSync()
+    val stateManager =
+      driftedStateManager(initial)(state => state.copy(runtime = state.runtime.copy(nextPaneId = focusedPaneId)))
+    val before      = stateManager.getCurrentState.unsafeRunSync()
+    val panesBefore = before.persisted.layout.editorPanes
 
     val splitCommand = CommandRegistry.default
       .findCommand("split-pane-horizontal")
@@ -245,8 +253,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
     */
   "StateManager.bufferManager.createBuffer" should
     "not commit a duplicate buffer-order entry when nextBufferId has drifted" in {
-      val stateManager = createStateManager()
-      corruptNextBufferIdToCollideWithLiveBuffer(stateManager)
+      val stateManager = stateManagerWithDriftedNextBufferId()
 
       val before = stateManager.getCurrentState.unsafeRunSync()
       stateManager.bufferManager.createBuffer("fresh content", None).unsafeRunSync()
@@ -262,8 +269,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
 
   "StateManager.bufferManager.createNewEmptyBuffer" should
     "not commit a duplicate buffer-order entry when nextBufferId has drifted" in {
-      val stateManager = createStateManager()
-      corruptNextBufferIdToCollideWithLiveBuffer(stateManager)
+      val stateManager = stateManagerWithDriftedNextBufferId()
 
       val before = stateManager.getCurrentState.unsafeRunSync()
       stateManager.bufferManager.createNewEmptyBuffer.unsafeRunSync()
@@ -336,23 +342,21 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
     */
   "StateManager.paneManager.switchToPane" should
     "not move focus onto a pane that has drifted out of the workspace tree" in {
-      val stateManager = createStateManager()
-      val secondBuffer = stateManager.bufferManager.createBuffer("second", None).unsafeRunSync()
-      val secondPane   = stateManager.paneManager.createPane(Some(secondBuffer)).unsafeRunSync()
-      stateManager.paneManager.switchToPane(PaneId(0)).unsafeRunSync()
+      val validStateManager = createStateManager()
+      val secondBuffer      = validStateManager.bufferManager.createBuffer("second", None).unsafeRunSync()
+      val secondPane        = validStateManager.paneManager.createPane(Some(secondBuffer)).unsafeRunSync()
+      validStateManager.paneManager.switchToPane(PaneId(0)).unsafeRunSync()
 
       // Drift: `secondPane` is dropped from the workspace tree but left dangling in `editorPanes`, simulating some
       // other unchecked mutation path having desynced the two (mirroring the close-all spec's buffer-order drift).
-      stateManager
-        .updateState { state =>
-          state.copy(persisted =
-            state.persisted.copy(layout =
-              state.persisted.layout
-                .copy(workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)))))
-            )
+      val stateManager = driftedStateManager(validStateManager.getCurrentState.unsafeRunSync()) { state =>
+        state.copy(persisted =
+          state.persisted.copy(layout =
+            state.persisted.layout
+              .copy(workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0)))))
           )
-        }
-        .unsafeRunSync()
+        )
+      }
       val before = stateManager.getCurrentState.unsafeRunSync()
       AppStateValidation.validationErrors(before) should not be empty
 

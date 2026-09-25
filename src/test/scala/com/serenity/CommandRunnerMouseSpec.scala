@@ -5,6 +5,7 @@ import com.serenity.command.{CommandRunner, CommandSurfaceItem}
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.InterfaceDensity
 import com.serenity.keystroke.events.*
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*

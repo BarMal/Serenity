@@ -7,6 +7,7 @@ import com.serenity.command.{Command, CommandCategory, CommandIntent, MotionInte
 import com.serenity.config.MotionAccessibility
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.LayoutRect
 import org.scalatest.flatspec.AnyFlatSpec
@@ -16,7 +17,8 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Selection grow/settle (issue #1085 phase 3): disabling motion entirely (via motion accessibility) cancels every
   * in-flight `Cursor.selectionGeometry`, the same way it cancels `Cursor.glide`/`Runtime.panelGeometry`
-  * (`StateManagerMotionCancellation.cancelActiveMotion`). Mirrors `StateManagerCursorGlideCancellationSpec`.
+  * (`MotionCancellation.Everything`, committed by `StateManagerConfigEffects`). Mirrors
+  * `StateManagerCursorGlideCancellationSpec`.
   */
 class StateManagerSelectionGeometryCancellationSpec extends AnyFlatSpec with Matchers:
 

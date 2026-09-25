@@ -16,6 +16,7 @@ import com.serenity.command.{
 import com.serenity.config.{BackgroundStyle, MaterialPreset, MotionPreset}
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.rope.Balance
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.SurfaceContent
 import com.serenity.ui.presets.UiPresetStore
 import org.scalatest.flatspec.AnyFlatSpec
@@ -125,7 +126,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
       CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetMaterialPreset(MaterialPreset.Solid)))
     )
     val changed = driver.renderFrame("changed-before-restart").unsafeRunSync()
-    driver.stateManager.sessionService.saveSession.unsafeRunSync()
+    driver.stateManager.saveSession.unsafeRunSync()
 
     val restarted = UiScenarioDriver
       .create("ui-preset-fresh-runtime", uiPresetStore = Some(store), sessionRoot = Some(sessionRoot))

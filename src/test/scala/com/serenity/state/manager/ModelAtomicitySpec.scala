@@ -24,6 +24,7 @@ import com.serenity.config.{AppConfig, MotionAccessibility, PreferredWindowSize}
 import com.serenity.keystroke.events.{Enter, InsertChar, NextTab, TabKey, ToggleCommandRunner, Undo}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.undo.{HistoryEntry, UndoState}
 import com.serenity.ui.fonts.FontLoader.FontConfig

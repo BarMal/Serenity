@@ -10,6 +10,7 @@ import com.serenity.keystroke.events.SaveFile
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import org.scalatest.concurrent.Eventually
 import org.scalatest.flatspec.AnyFlatSpec

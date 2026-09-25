@@ -5,6 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{EasingCurve, TransitionDirection, Tween}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.ColumnTransitionState
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

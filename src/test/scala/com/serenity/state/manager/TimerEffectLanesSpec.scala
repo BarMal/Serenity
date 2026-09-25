@@ -8,6 +8,7 @@ import com.serenity.StateManagerTestSupport
 import com.serenity.config.{HotkeyAction, HotkeyConfig}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{AppState, SurfaceContent}
 import com.serenity.testkit.VirtualTime.runVirtual
 import org.scalatest.flatspec.AnyFlatSpec

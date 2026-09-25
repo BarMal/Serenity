@@ -82,9 +82,6 @@ final private[manager] class StateManagerFileCapability(
     effects.saveBufferAsEffect
   )
 
-  private def setBufferFilePath(bufferId: BufferId, filePath: Path): IO[Unit] =
-    fileFacade.setBufferFilePath(bufferId, filePath)
-
   private def openFile(filePath: Path): IO[Unit] =
     fileFacade.openFile(filePath)
 
@@ -94,24 +91,11 @@ final private[manager] class StateManagerFileCapability(
   private def saveBufferAs(bufferId: BufferId, filePath: Path): IO[Unit] =
     fileFacade.saveBufferAs(bufferId, filePath)
 
-  private def markBufferSaved(bufferId: BufferId): IO[Unit] =
-    fileFacade.markBufferSaved(bufferId)
-
-  private def checkUnsavedChanges(bufferId: Option[BufferId]): IO[Boolean] =
-    fileFacade.checkUnsavedChanges(bufferId)
-
-  private def getRecentFiles: IO[List[java.nio.file.Path]] =
-    fileFacade.getRecentFiles
-
   val fileOpener: FileOpener = FileOpener(openFile = openFile)
 
   val fileService: FileService = FileService(
-    setBufferFilePath = setBufferFilePath,
     saveBuffer = saveBuffer,
     saveBufferAs = saveBufferAs,
-    markBufferSaved = markBufferSaved,
-    checkUnsavedChanges = checkUnsavedChanges,
-    getRecentFiles = getRecentFiles,
     checkExternalChangesOnFocus = resolveOnDispatcher(effects.observeFocusedExternalRevisionEffect),
     openBufferPaths = effects.openBufferPathsEffect,
     checkBufferForExternalChanges = bufferId => resolveOnDispatcher(effects.observeExternalRevisionEffect(bufferId))
