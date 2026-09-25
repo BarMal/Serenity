@@ -13,7 +13,6 @@ import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence}
 import com.serenity.state.effects.Lane
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, UndoEffect}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, PeekContent}
@@ -122,16 +121,11 @@ private[manager] class StateManagerComposition(
     def scheduleFindSearch(request: FindSearchRequest): IO[Unit] = operations.scheduleFindSearch(request)
     def submitEffect(lane: Lane.Keyed, job: IO[Unit]): IO[Unit]  = operations.submitEffect(lane, job)
     // Called from lane jobs, off the dispatcher, so events `onApplied` enqueues are replayed the way `executeCommand`
-    // replays them.
+    // replays them. `applyResult` folds a result's undo boundary into its own commit (`ModelCommit.applyModelEffects`),
+    // so only non-model effects (e.g. a project task's follow-up work) ever reach `effects.interpretEffect` here.
     def dispatchEffectResult(result: EffectResult, onApplied: AppState => IO[Unit]): IO[Unit] =
-      operations.dispatch(modelCommit.applyResult(result, onApplied, interpretResultEffect)) >> drainPendingOperations
-
-  // `effects` is built further down; this only runs once a lane result lands, long after construction.
-  private def interpretResultEffect(effect: AppEffect): IO[Unit] =
-    effect match
-      case AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable)) =>
-        undoRecording.recordUndoBoundary(entry, groupable)
-      case other => effects.interpretEffect(other)
+      operations.dispatch(modelCommit.applyResult(result, onApplied, effects.interpretEffect)) >>
+        drainPendingOperations
 
   private val surfaces =
     new StateManagerSurfaceCapability(logger, operations, modelCommit)
