@@ -65,8 +65,7 @@ object ArchitectureChecks {
     * `Ref.lens` view of one -- anywhere else is a write path that can skip validation.
     *
     * `StateManager` allocates the model ref and `StateManagerRuntime` carries it to `StateManagerOperationBoundary`,
-    * which owns the dispatcher and builds the one `ModelCommit` over it. `StateManagerComposition`, the composition
-    * root, receives it but hands capabilities only that `ModelCommit`.
+    * which owns the dispatcher and builds the one `ModelCommit` over it.
     */
   val StateOwnership: Seq[(scala.util.matching.Regex, Set[String], String)] = Seq(
     (
@@ -84,8 +83,7 @@ object ArchitectureChecks {
         "main/scala/com/serenity/state/manager/StateManagerDispatcher.scala",
         "main/scala/com/serenity/state/manager/StateManagerOperationBoundary.scala",
         "main/scala/com/serenity/state/manager/StateManagerRuntime.scala",
-        "main/scala/com/serenity/state/manager/StateManager.scala",
-        "main/scala/com/serenity/state/manager/StateManagerComposition.scala"
+        "main/scala/com/serenity/state/manager/StateManager.scala"
       ),
       "Ref[IO, Model] outside the dispatcher/ModelCommit layer -- take a ModelCommit instead"
     )

@@ -24,7 +24,6 @@ import org.typelevel.log4cats.Logger
 
 /** Explicit composition boundary for the StateManager capabilities. */
 private[manager] class StateManagerComposition(
-    val modelRef: Ref[IO, Model],
     val themeNamesRef: Ref[IO, List[String]],
     val quitSignal: Deferred[IO, Unit],
     val logger: Logger[IO],

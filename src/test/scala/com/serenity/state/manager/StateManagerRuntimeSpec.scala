@@ -62,7 +62,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
 
   private def compose(runtime: StateManagerRuntime, operations: StateManagerOperationBoundary) =
     new StateManagerComposition(
-      runtime.modelRef,
       runtime.themeNamesRef,
       runtime.quitSignal,
       runtime.logger,

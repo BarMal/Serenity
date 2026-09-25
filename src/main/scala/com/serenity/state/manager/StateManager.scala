@@ -365,7 +365,6 @@ object StateManager:
       extends StateManager:
 
     private val composition = new StateManagerComposition(
-      runtime.modelRef,
       runtime.themeNamesRef,
       runtime.quitSignal,
       runtime.logger,
