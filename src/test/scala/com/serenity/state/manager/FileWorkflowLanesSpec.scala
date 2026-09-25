@@ -57,13 +57,13 @@ class FileWorkflowLanesSpec extends AnyFlatSpec with Matchers:
     val directory = Files.createTempDirectory("file-workflow-lanes-spec")
     val program =
       for
-        gate                 <- Deferred[IO, Unit]
-        started              <- Ref.of[IO, Int](0)
-        modelRef             <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
-        themeNamesRef        <- Ref.of[IO, List[String]](Nil)
-        quitSignal           <- Deferred[IO, Unit]
-        lspQueue             <- LspEffectQueue.create
-        mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
+        gate                <- Deferred[IO, Unit]
+        started             <- Ref.of[IO, Int](0)
+        modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+        themeNamesRef       <- Ref.of[IO, List[String]](Nil)
+        quitSignal          <- Deferred[IO, Unit]
+        lspQueue            <- LspEffectQueue.create
+        mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
         runtime = StateManagerRuntime
           .create(
             modelRef = modelRef,

@@ -53,11 +53,11 @@ class CloseSaveFailureSpec extends AnyFlatSpec with Matchers:
     val directory = Files.createTempDirectory("close-save-failure-spec")
     val program =
       for
-        modelRef             <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
-        themeNamesRef        <- Ref.of[IO, List[String]](Nil)
-        quitSignal           <- Deferred[IO, Unit]
-        lspQueue             <- LspEffectQueue.create
-        mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
+        modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+        themeNamesRef       <- Ref.of[IO, List[String]](Nil)
+        quitSignal          <- Deferred[IO, Unit]
+        lspQueue            <- LspEffectQueue.create
+        mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
         runtime = StateManagerRuntime
           .create(
             modelRef = modelRef,

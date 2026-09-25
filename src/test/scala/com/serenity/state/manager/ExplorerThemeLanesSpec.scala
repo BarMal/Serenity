@@ -87,11 +87,11 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
     themeWrites: Option[Gates[String, Path]] = None
   ): IO[StateManager] =
     for
-      modelRef             <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
-      themeNamesRef        <- Ref.of[IO, List[String]](Nil)
-      quitSignal           <- Deferred[IO, Unit]
-      lspQueue             <- LspEffectQueue.create
-      mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
+      modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+      themeNamesRef       <- Ref.of[IO, List[String]](Nil)
+      quitSignal          <- Deferred[IO, Unit]
+      lspQueue            <- LspEffectQueue.create
+      mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
       runtime = StateManagerRuntime
         .create(
           modelRef = modelRef,
