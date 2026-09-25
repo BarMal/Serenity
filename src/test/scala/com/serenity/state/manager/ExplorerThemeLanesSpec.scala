@@ -12,6 +12,7 @@ import com.serenity.io.{FileEntry, FileManager}
 import com.serenity.keystroke.events.{Enter, InsertChar, SwitchTheme}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.testkit.AwaitCondition.awaitValue
@@ -127,9 +128,9 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
 
   /** An explorer rooted at [[root]] whose `src` row is selected and focused, ready for Enter to expand it. */
   private def explorerOnChild(manager: StateManager): IO[Unit] =
-    manager.panelManager.loadDirectoryTree(root, List("src/")) >>
-      manager.panelManager.selectFileInExplorer(child) >>
-      manager.panelManager.switchToPinnedPanel(PanelTarget.ByPosition(PanelPosition.Left))
+    manager.loadDirectoryTree(root, List("src/")) >>
+      manager.selectFileInExplorer(child) >>
+      manager.switchToPinnedPanel(PanelTarget.ByPosition(PanelPosition.Left))
 
   private def theme(name: String): Theme = DefaultThemes.default.copy(name = name)
 
@@ -186,7 +187,7 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
         _        <- explorerOnChild(manager)
         _        <- manager.applyEvent(Enter)
         _        <- awaitValue(listings.requested(child))(identity)
-        _        <- manager.panelManager.loadDirectoryTree(other, List("notes.txt"))
+        _        <- manager.loadDirectoryTree(other, List("notes.txt"))
         _        <- listings.settle(child, Right(List(entry(child.resolve("Main.scala"), isDirectory = false))))
         _        <- IO.sleep(1.second)
         tree     <- manager.getCurrentState.map(explorerTree)
@@ -311,9 +312,9 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
         _ <- manager.updateStateValidated(
           explorerAt(PanelPosition.Left, "left").andThen(explorerAt(PanelPosition.Right, "right"))
         )
-        _ <- manager.panelManager.switchToPinnedPanel(PanelTarget.ByPosition(PanelPosition.Left))
+        _ <- manager.switchToPinnedPanel(PanelTarget.ByPosition(PanelPosition.Left))
         _ <- manager.applyEvent(Enter)
-        _ <- manager.panelManager.switchToPinnedPanel(PanelTarget.ByPosition(PanelPosition.Right))
+        _ <- manager.switchToPinnedPanel(PanelTarget.ByPosition(PanelPosition.Right))
         _ <- manager.applyEvent(Enter)
         _ <- awaitValue(listings.pendingCount(child))(_ == 2)
         _ <- listings.settle(child, Right(List(nested)))

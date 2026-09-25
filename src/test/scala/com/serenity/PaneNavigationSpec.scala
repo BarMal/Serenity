@@ -237,7 +237,7 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
     val second = stateManager.splitPaneHorizontal(first).unsafeRunSync()
     val third  = stateManager.splitPaneVertical(second).unsafeRunSync()
 
-    stateManager.paneManager.switchToPane(first).unsafeRunSync()
+    stateManager.switchToPane(first).unsafeRunSync()
     stateManager.focusPaneInDirection(Direction.Right).unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync().persisted.focus shouldBe Focus.EditorPane(second)
 
@@ -269,7 +269,7 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
       }
       .unsafeRunSync()
 
-    stateManager.paneManager.switchToPane(first).unsafeRunSync()
+    stateManager.switchToPane(first).unsafeRunSync()
     stateManager.focusPaneInDirection(Direction.Right).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()

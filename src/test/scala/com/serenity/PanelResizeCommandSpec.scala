@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.reducers.PanelStateReducer
 import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -34,7 +35,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
 
   "ViewIntent.SetPanelSize" should "grow a pinned panel by the given delta" in {
     val stateManager = createStateManager()
-    stateManager.panelManager
+    stateManager
       .pinPanel(
         PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/tmp")), None),
         PanelPosition.Left,
@@ -51,7 +52,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
 
   it should "shrink a pinned panel by a negative delta" in {
     val stateManager = createStateManager()
-    stateManager.panelManager
+    stateManager
       .pinPanel(
         PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/tmp")), None),
         PanelPosition.Left,
@@ -68,7 +69,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
 
   it should "clamp shrinking at the minimum panel size rather than going to zero or negative" in {
     val stateManager = createStateManager()
-    stateManager.panelManager
+    stateManager
       .pinPanel(
         PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/tmp")), None),
         PanelPosition.Left,

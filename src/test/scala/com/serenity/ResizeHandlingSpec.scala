@@ -6,6 +6,7 @@ import com.serenity.config.{AppConfig, ViewportAxisSizing, ViewportSizing}
 import com.serenity.keystroke.events.ResizeEvent
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -35,7 +36,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
     val bufferId = stateManager.bufferManager.createBuffer("Initial content", None).unsafeRunSync()
-    stateManager.paneManager.createPane(Some(bufferId)).unsafeRunSync()
+    stateManager.createPane(Some(bufferId)).unsafeRunSync()
 
     // Get initial state and verify initial layout
     val initialState  = stateManager.getCurrentState.unsafeRunSync()
@@ -209,7 +210,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val longText =
       "This is a very long line of text that should wrap differently when the terminal width changes and we need to test that the rope structure handles this properly"
     val bufferId = stateManager.bufferManager.createBuffer(longText, None).unsafeRunSync()
-    stateManager.paneManager.createPane(Some(bufferId)).unsafeRunSync()
+    stateManager.createPane(Some(bufferId)).unsafeRunSync()
 
     // Start with narrow width (40 chars)
     val initialSize  = ViewportSize(40, 20)

@@ -294,7 +294,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
   it should "route focused pinned panel events through the typed local handler path" in {
     val stateManager = createStateManager()
 
-    stateManager.panelManager
+    stateManager
       .pinPanel(
         PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/repo")), None),
         PanelPosition.Left,
@@ -312,7 +312,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
       )
       .get
       .id
-    stateManager.panelManager.switchToPinnedPanel(PanelTarget.ById(pinnedSurfaceId)).unsafeRunSync()
+    stateManager.switchToPinnedPanel(PanelTarget.ById(pinnedSurfaceId)).unsafeRunSync()
 
     stateManager.applyEvent(PanelInputEvent.ReturnFocus).unsafeRunSync()
 

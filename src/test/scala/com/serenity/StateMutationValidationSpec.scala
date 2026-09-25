@@ -326,13 +326,13 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
     * check that the buffer actually exists -- directly violating the "Pane references non-existent buffer" invariant
     * `AppStateValidation` enforces, and reachable with no drifted precondition at all.
     */
-  "StateManager.paneManager.createPane" should
+  "StateManager.createPane" should
     "not commit a pane referencing a buffer that was never created" in {
       val stateManager  = createStateManager()
       val phantomBuffer = BufferId(9999)
 
       val before = stateManager.getCurrentState.unsafeRunSync()
-      stateManager.paneManager.createPane(Some(phantomBuffer)).unsafeRunSync()
+      stateManager.createPane(Some(phantomBuffer)).unsafeRunSync()
       val after = stateManager.getCurrentState.unsafeRunSync()
 
       after.isValid shouldBe true
@@ -348,12 +348,12 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
     * the tree (the same class of drift the close-all spec above already proves happens) is still accepted, committing a
     * `Focus.EditorPane` that `AppStateValidation` flags as "outside workspace tree".
     */
-  "StateManager.paneManager.switchToPane" should
+  "StateManager.switchToPane" should
     "not move focus onto a pane that has drifted out of the workspace tree" in {
       val validStateManager = createStateManager()
       val secondBuffer      = validStateManager.bufferManager.createBuffer("second", None).unsafeRunSync()
-      val secondPane        = validStateManager.paneManager.createPane(Some(secondBuffer)).unsafeRunSync()
-      validStateManager.paneManager.switchToPane(PaneId(0)).unsafeRunSync()
+      val secondPane        = validStateManager.createPane(Some(secondBuffer)).unsafeRunSync()
+      validStateManager.switchToPane(PaneId(0)).unsafeRunSync()
 
       // Drift: `secondPane` is dropped from the workspace tree but left dangling in `editorPanes`, simulating some
       // other unchecked mutation path having desynced the two (mirroring the close-all spec's buffer-order drift).
@@ -368,7 +368,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
       val before = stateManager.getCurrentState.unsafeRunSync()
       AppStateValidation.validationErrors(before) should not be empty
 
-      stateManager.paneManager.switchToPane(secondPane).unsafeRunSync()
+      stateManager.switchToPane(secondPane).unsafeRunSync()
       val after = stateManager.getCurrentState.unsafeRunSync()
 
       after.persisted.focus shouldBe before.persisted.focus
@@ -445,9 +445,9 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
   it should "move focus onto a pane that does exist" in {
     val stateManager = createStateManager()
     val secondBuffer = stateManager.bufferManager.createBuffer("second", None).unsafeRunSync()
-    val secondPane   = stateManager.paneManager.createPane(Some(secondBuffer)).unsafeRunSync()
+    val secondPane   = stateManager.createPane(Some(secondBuffer)).unsafeRunSync()
 
-    stateManager.paneManager.switchToPane(secondPane).unsafeRunSync()
+    stateManager.switchToPane(secondPane).unsafeRunSync()
 
     val after = stateManager.getCurrentState.unsafeRunSync()
     after.persisted.focus shouldBe Focus.EditorPane(secondPane)

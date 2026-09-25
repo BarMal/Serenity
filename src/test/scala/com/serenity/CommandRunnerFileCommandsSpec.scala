@@ -141,7 +141,7 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
     Files.writeString(sourcePath, "# Notes")
     val stateManager = createStateManager(fileDialog = Some(testFileDialog(openSelection = Some(sourcePath))))
     val viewportSize = ViewportSize(120, 40)
-    stateManager.paneManager.handleViewportResize(viewportSize).unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(viewportSize)).unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "open", "open")
 

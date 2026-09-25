@@ -218,10 +218,10 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers with Eventually:
     // Given: Multiple buffers and operations
     stateManager.bufferManager.createBuffer("Buffer 1", None).unsafeRunSync()
     val buffer2 = stateManager.bufferManager.createBuffer("Buffer 2", None).unsafeRunSync()
-    val pane2   = stateManager.paneManager.createPane(Some(buffer2)).unsafeRunSync()
+    val pane2   = stateManager.createPane(Some(buffer2)).unsafeRunSync()
 
     // When: Switch between panes and perform edits
-    stateManager.paneManager.switchToPane(pane2).unsafeRunSync()
+    stateManager.switchToPane(pane2).unsafeRunSync()
 
     // Edit in second buffer
     stateManager.setCursorPosition(pane2, 0, 8).unsafeRunSync()

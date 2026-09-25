@@ -231,7 +231,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    stateManager.paneManager.handleViewportResize(ViewportSize(32, 8)).unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(ViewportSize(32, 8))).unsafeRunSync()
 
     val text = List.fill(200)("word").mkString(" ")
     text.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
@@ -269,7 +269,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    stateManager.paneManager.handleViewportResize(ViewportSize(32, 8)).unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(ViewportSize(32, 8))).unsafeRunSync()
 
     val text = List.fill(80)("wrapped").mkString(" ")
     text.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
@@ -303,7 +303,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val state      = stateManager.getCurrentState.unsafeRunSync()
     val paneId     = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    stateManager.paneManager.handleViewportResize(ViewportSize(32, 8)).unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(ViewportSize(32, 8))).unsafeRunSync()
 
     stateManager.applyEvent(MoveToEndOfFile).unsafeRunSync()
 
@@ -341,7 +341,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
-    stateManager.paneManager.handleViewportResize(ViewportSize(32, 8)).unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(ViewportSize(32, 8))).unsafeRunSync()
 
     // Six wrapped paragraphs comfortably produce more total visual rows than the 8-row viewport, so once the
     // cursor lands at the very end, the viewport should be scrolled exactly to the document's end -- filling all
