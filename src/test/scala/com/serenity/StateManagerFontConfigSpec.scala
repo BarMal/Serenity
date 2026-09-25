@@ -108,7 +108,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
         )
         .unsafeRunSync()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "text-scale-auto",

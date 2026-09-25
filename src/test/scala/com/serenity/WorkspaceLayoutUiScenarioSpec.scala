@@ -157,7 +157,7 @@ class WorkspaceLayoutUiScenarioSpec extends AnyFlatSpec with Matchers:
     val pinnedFrame = driver.renderFrame("docked").unsafeRunSync()
     val dockedRect  = pinnedFrame.evidence.surfaceRects.getOrElse(pinnedSurfaceId, fail("Expected docked panel rect"))
 
-    driver.stateManager.commandExecutor
+    driver.stateManager
       .executeCommand(
         Command.typed(
           "expand-bottom-panel",
@@ -179,7 +179,7 @@ class WorkspaceLayoutUiScenarioSpec extends AnyFlatSpec with Matchers:
     expandedRect.height should be > dockedRect.height
     (expandedRect.width * expandedRect.height) should be > (dockedRect.width * dockedRect.height)
 
-    driver.stateManager.commandExecutor
+    driver.stateManager
       .executeCommand(
         Command.typed(
           "collapse-expanded-panel",

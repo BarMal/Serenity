@@ -38,7 +38,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
   "StateManager transition and appearance setting commands" should "update the editor text transition speed scale config" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "editor-text-speed-scale",
@@ -94,7 +94,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
   it should "update the command runner transition speed scale config" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "command-runner-speed-scale",
@@ -116,7 +116,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
   it should "update the UI transition speed scale config" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "ui-speed-scale",
@@ -135,7 +135,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
   it should "update the cursor transition speed scale config" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "cursor-speed-scale",
@@ -157,7 +157,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
   it should "update the editor text transition kind config" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "editor-text-transition",
@@ -187,7 +187,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "editor-text-transition",
@@ -211,7 +211,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
   it should "update the panel open transition kind config" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "panel-open-transition",
@@ -232,7 +232,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
   it should "update the panel close transition kind config" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "panel-close-transition",
@@ -253,7 +253,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
   it should "update the command runner transition kind config" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "command-runner-transition",
@@ -285,7 +285,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "command-runner-transition",
@@ -306,7 +306,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
   it should "update the command runner fade animation config" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "command-runner-fade",
@@ -334,7 +334,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "command-runner-fade",
@@ -353,7 +353,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
   it should "update the UI animation config" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "ui-animation",
@@ -375,7 +375,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
   it should "update the render FPS target config" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "render-fps",
@@ -399,7 +399,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
   it should "update the UI element gap config" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "ui-element-gap",
@@ -416,7 +416,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
   it should "update the UI corner radius config" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "ui-corner-radius",
@@ -433,7 +433,7 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
   it should "update the UI outline thickness config" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "ui-outline-thickness",

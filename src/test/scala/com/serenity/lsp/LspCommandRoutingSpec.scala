@@ -56,7 +56,7 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
         }
         .unsafeRunSync()
 
-      stateManager.commandExecutor
+      stateManager
         .executeCommand(
           Command.typed(
             "lsp-hover",
@@ -98,7 +98,7 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
         }
         .unsafeRunSync()
 
-      stateManager.commandExecutor
+      stateManager
         .executeCommand(
           Command.typed(
             "lsp-definition",
@@ -141,7 +141,7 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
         }
         .unsafeRunSync()
 
-      stateManager.commandExecutor
+      stateManager
         .executeCommand(
           Command.typed(
             "lsp-completion",

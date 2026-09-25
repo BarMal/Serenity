@@ -133,13 +133,13 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
   it should "split the active pane via the command palette's Split Pane Horizontally/Vertically commands" in new PaneFixture:
     val registry = com.serenity.command.CommandRegistry.withToggleUI
 
-    sm.commandExecutor
+    sm
       .executeCommand(registry.findCommand("split-pane-horizontal").getOrElse(fail("missing split-pane-horizontal")))
       .unsafeRunSync()
     val afterHorizontal = sm.getCurrentState.unsafeRunSync()
     afterHorizontal.persisted.layout.editorPanes.keySet should have size 2
 
-    sm.commandExecutor
+    sm
       .executeCommand(registry.findCommand("split-pane-vertical").getOrElse(fail("missing split-pane-vertical")))
       .unsafeRunSync()
     val afterVertical = sm.getCurrentState.unsafeRunSync()
@@ -174,7 +174,7 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
     sm.switchToPane(pane1).unsafeRunSync()
     val registry = com.serenity.command.CommandRegistry.withToggleUI
 
-    sm.commandExecutor
+    sm
       .executeCommand(registry.findCommand("close-pane").getOrElse(fail("missing close-pane")))
       .unsafeRunSync()
 

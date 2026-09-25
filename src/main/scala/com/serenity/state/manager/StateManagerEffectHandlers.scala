@@ -227,7 +227,8 @@ final private[manager] class StateManagerEffectHandlers(
 
   // The single command execution+observability chokepoint: every entry path (reducer/keybinding via
   // interpretCommandEffect -- which mouse menus now reach too, by emitting AppEffect.ExecuteCommand -- the command
-  // palette via ComponentResult.ExecuteCommand, and CommandExecutor) calls this, so logging the [COMMAND] line here logs each command exactly once regardless of
+  // palette via ComponentResult.ExecuteCommand, and StateManagerComposition.executeCommand, the test harness's entry
+  // point since #1724) calls this, so logging the [COMMAND] line here logs each command exactly once regardless of
   // how it was triggered -- rather than only on the effect path, which used to leave palette/mouse-driven commands
   // silent.
   private[manager] def interpretCommand(command: Command, state: AppState): IO[Unit] =

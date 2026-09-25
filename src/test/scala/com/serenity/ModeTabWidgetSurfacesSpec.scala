@@ -5,6 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.SurfaceContent
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -39,7 +40,7 @@ class ModeTabWidgetSurfacesSpec extends AnyFlatSpec with Matchers:
       CommandCategory.View
     )
 
-    stateManager.commandExecutor.executeCommand(command).unsafeRunSync()
+    stateManager.executeCommand(command).unsafeRunSync()
     val opened = stateManager.getCurrentState.unsafeRunSync()
     opened.runtime.uiSurfaces.exists {
       case surface =>
@@ -48,7 +49,7 @@ class ModeTabWidgetSurfacesSpec extends AnyFlatSpec with Matchers:
           case _                            => false
     } shouldBe true
 
-    stateManager.commandExecutor.executeCommand(command).unsafeRunSync()
+    stateManager.executeCommand(command).unsafeRunSync()
     val closed = stateManager.getCurrentState.unsafeRunSync()
     closed.runtime.uiSurfaces.exists {
       case surface =>
@@ -67,7 +68,7 @@ class ModeTabWidgetSurfacesSpec extends AnyFlatSpec with Matchers:
       CommandCategory.View
     )
 
-    stateManager.commandExecutor.executeCommand(command).unsafeRunSync()
+    stateManager.executeCommand(command).unsafeRunSync()
     val opened = stateManager.getCurrentState.unsafeRunSync()
     opened.runtime.uiSurfaces.exists {
       case surface =>
@@ -76,7 +77,7 @@ class ModeTabWidgetSurfacesSpec extends AnyFlatSpec with Matchers:
           case _                                      => false
     } shouldBe true
 
-    stateManager.commandExecutor.executeCommand(command).unsafeRunSync()
+    stateManager.executeCommand(command).unsafeRunSync()
     val closed = stateManager.getCurrentState.unsafeRunSync()
     closed.runtime.uiSurfaces.exists {
       case surface =>

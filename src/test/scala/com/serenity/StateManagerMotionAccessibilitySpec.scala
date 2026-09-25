@@ -37,7 +37,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
   "StateManager element transition setting commands" should "update the element transition speed scale config" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "element-transition-speed-scale",
@@ -66,7 +66,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "motion-accessibility",
@@ -98,7 +98,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "motion-accessibility",
@@ -121,7 +121,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "motion-accessibility-off",
@@ -131,7 +131,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "motion-accessibility-standard",
@@ -164,7 +164,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
     )
     commands.zipWithIndex.foreach {
       case (intent, index) =>
-        stateManager.commandExecutor
+        stateManager
           .executeCommand(
             Command.typed(s"companion-sprite-$index", "Set companion sprite option", intent, CommandCategory.Settings)
           )
@@ -188,7 +188,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "element-transition-speed-scale",
@@ -216,7 +216,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "element-transition-speed-scale",
@@ -246,7 +246,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
       CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAnimationSteps(9)))
     ).zipWithIndex.foreach {
       case (intent, index) =>
-        stateManager.commandExecutor
+        stateManager
           .executeCommand(
             Command.typed(s"custom-editor-timing-$index", "Set custom editor timing", intent, CommandCategory.Settings)
           )
@@ -358,7 +358,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
           )
           .unsafeRunSync()
 
-        stateManager.commandExecutor
+        stateManager
           .executeCommand(
             Command.typed(
               "motion-accessibility",
@@ -368,7 +368,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
             )
           )
           .unsafeRunSync()
-        stateManager.commandExecutor
+        stateManager
           .executeCommand(Command.typed("motion-edit", "Edit motion", edit, CommandCategory.Settings))
           .unsafeRunSync()
 
@@ -390,7 +390,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "editor-text-transition",
@@ -436,7 +436,7 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "motion-accessibility",
