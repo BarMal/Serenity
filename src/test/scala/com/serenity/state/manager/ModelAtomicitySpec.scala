@@ -1,7 +1,7 @@
 package com.serenity.state.manager
 
 import java.awt.Color
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 
 import cats.data.State
 import cats.effect.unsafe.implicits.global
@@ -22,6 +22,7 @@ import com.serenity.command.{
 }
 import com.serenity.config.{AppConfig, MotionAccessibility, PreferredWindowSize}
 import com.serenity.keystroke.events.{Enter, InsertChar, NextTab, TabKey, ToggleCommandRunner, Undo}
+import com.serenity.project.{ProjectTaskCommand, ProjectTaskKind, ProjectTaskResult}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManagerTestFacade.*
@@ -462,4 +463,43 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
           replacePrompt(model).flatMap(_.statusMessage).contains("Replaced next match")
       )
     ) shouldBe true
+  }
+
+  private val terminalTaskCommand: ProjectTaskCommand =
+    ProjectTaskCommand(ProjectTaskKind.Build, "sbt", Path.of("."), "sbt", List("compile"))
+
+  private def terminalPinned(model: Model): Boolean =
+    model.app.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.Terminal])
+
+  /** An effect result that both changes state and records undo -- e.g. a project-task result that re-pins the Terminal
+    * panel -- must not do so in two separate model writes: a crash or a rejected commit between them would otherwise
+    * leave state committed with no undo entry, or vice versa (#1697 Wave 4).
+    */
+  "A project-task result that re-pins the Terminal panel" should "commit its state and undo boundary in one write" in {
+    val running = RunningProjectTask(id = 0L, command = terminalTaskCommand, output = "")
+    val before = Model(
+      AppState.initial.copy(runtime =
+        AppState.initial.runtime.copy(projectTasks = ProjectTasks(nextId = 1L, running = Some(running)))
+      ),
+      UndoState(),
+      Map.empty
+    )
+    val program =
+      for
+        recorded   <- recording(before)
+        operations <- StateManagerOperationBoundary.create(recorded.modelRef, quietLogger)
+        _ <- operations.modelCommit.applyResult(
+          EffectResult.ProjectTaskFinished(0L, Right(ProjectTaskResult(terminalTaskCommand, 0, "done"))),
+          _ => IO.unit
+        )
+        writes <- recorded.recordedWrites
+        after  <- recorded.modelRef.get
+      yield (writes, after)
+
+    val (writes, after) = program.unsafeRunSync()
+
+    terminalPinned(after) shouldBe true
+    after.undo.undoStack should have size 1
+    writes should not be empty
+    all(writes.map(model => terminalPinned(model) == model.undo.undoStack.nonEmpty)) shouldBe true
   }

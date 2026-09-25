@@ -44,7 +44,11 @@ result comes back as an `EffectResult` applied only while still current. The ext
 observation that a save or reload has since superseded. Events enqueued while a dispatch interprets its effects are
 replayed on the dispatcher by `drainPendingOperations`; code already on the dispatcher never offers-and-waits, which
 would deadlock. The render tick advances animations only when the dispatcher is idle (`runIfIdle`); otherwise it
-skips the frame's advance and reports still-active so the next frame retries. File reads and writes
+skips the frame's advance and reports still-active so the next frame retries. The tick itself is a message like any
+other -- `ModelCommit.advanceTick` -- and its advance is validated by the same `AppStateValidation` every commit goes
+through, so a surface dropped once its exit animation finishes can never commit a dangling reference unnoticed; it is
+the one commit that skips the boundary's `afterCommit` follow-up (scheduling document analysis, logging a modal
+transition), since a tick only ever advances animation progress and so can never affect either. File reads and writes
 (`StateManagerFilePersistence`) run on a `LaneKey.File` Sequential lane per canonical path and come back as
 `EffectResult.FileSaved`/`FileLoaded`/`FileReloaded`, merged into the state current when they land: a save marks the
 buffer clean only if its content is still the content written, and ignores a buffer closed meanwhile (#1671). A plain
@@ -65,13 +69,16 @@ with an empty job, quitting cancels the task (destroying its process), and its o
 once per 100ms as `EffectResult.ProjectTaskOutput`/`ProjectTaskFinished`, applied only while that task is still the
 running one. The command runner's double-tap timer is a switch-latest `Timer` job posting
 `CommandRunnerBindingExpired`; a result's follow-up effects (`EffectResult.reduce`) are interpreted on the dispatcher
-after its commit. LSP traffic stays on `LspEffectQueue`, which is the `Lsp` lane already: one FIFO drained by
-`LspManager`'s single consumer, with results returning through `applyEvent`. The dispatch pipeline itself still
-performs I/O. No capability holds the model `Ref`: `StateManagerOperationBoundary` builds the one `ModelCommit` over
-it, capabilities read the state through an `IO[AppState]` and write it only through `ModelCommit`, and
-`ArchitectureChecks` rejects a `Ref[IO, AppState]` or `Ref[IO, Model]` outside that layer. Every state write goes through `AppStateValidation`
-(a surface change commits its undo boundary in the same model write) except the render tick's animation advance and
-the test-only `StateUpdater.updateState` seam.
+after its commit -- `ModelCommit.applyResult` folds a result's model-only effects (an undo boundary, e.g. a project
+task re-pinning the Terminal panel) into that same commit, the same pattern every other message uses, so a result's
+state and its undo entry can never land in two separate writes. LSP traffic stays on `LspEffectQueue`, which is the
+`Lsp` lane already: one FIFO drained by `LspManager`'s single consumer, with results returning through `applyEvent`.
+The dispatch pipeline itself still performs I/O. No capability holds the model `Ref`: `StateManagerOperationBoundary`
+builds the one `ModelCommit` over it, capabilities read the state through an `IO[AppState]` and write it only through
+`ModelCommit`, and `ArchitectureChecks` rejects a `Ref[IO, AppState]` or `Ref[IO, Model]` outside that layer. Every
+state write goes through `AppStateValidation`, including the render tick's animation advance (a surface change
+commits its undo boundary in the same model write) -- the one exception left is the test-only `StateUpdater.updateState`
+seam.
 
 Event processing applies a reducer result's state before interpreting its effects. Document-analysis
 replacement cancels the previous analysis fiber before starting a replacement. Failures in optional

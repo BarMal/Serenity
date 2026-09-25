@@ -70,10 +70,11 @@ final private[manager] class StateManagerEditorCapability(
     flairLevel: VisualFlairLevel,
     companionSpriteSeed: Long
   ): IO[Boolean] =
-    // An atomic update rather than a `set`: writers outside the dispatcher (`updateState`, the buffer/panel records)
-    // still exist, and this keeps the tick atomic with them. It may retry, so everything it reads is passed in.
+    // An atomic, validated update rather than a `set`: writers outside the dispatcher (`updateState`, the
+    // buffer/panel records) still exist, and this keeps the tick atomic with them. It may retry, so everything it
+    // reads is passed in.
     modelCommit
-      .updateUnvalidated(advanceModel(_, hasCompanionSprite, flairLevel, companionSpriteSeed))
+      .advanceTick(advanceModel(_, hasCompanionSprite, flairLevel, companionSpriteSeed))
       .map { next =>
         val newState = next.app
         newState.persisted.buffers.keys.exists(id => next.bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||

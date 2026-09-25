@@ -8,8 +8,9 @@ import com.serenity.state.reducers.{AppEffect, UndoEffect}
 import com.serenity.state.undo.UndoState
 
 /** The one holder of the model `Ref` (#1697): capabilities read the model through it and change it only through its
-  * writes. Every app-state write is validated by `StateManagerOperationBoundary.prepareCommit` and runs the boundary's
-  * follow-up work, except through [[updateUnvalidated]].
+  * writes. Every app-state write is validated by `StateManagerOperationBoundary.prepareCommit`; [[advanceTick]], the
+  * render tick's animation advance, is the one write that skips the boundary's `afterCommit` follow-up work (see its
+  * doc), but it is validated the same as everything else.
   *
   * Transitions run inside `Ref.modify`, which may retry them, so they must be pure.
   */
@@ -35,9 +36,13 @@ final private[manager] class ModelCommit(modelRef: Ref[IO, Model], operations: S
   def commitState(newState: AppState, fallbackState: AppState): IO[Unit] =
     commitValidated(fallbackState)(_.copy(app = newState))
 
-  /** Applies `result` if it is still current, then runs `onApplied` with the committed state and hands the effects its
-    * transition emitted to `interpretEffect`, in order. Runs on the dispatcher: a lane job reaches it through
-    * `StateManagerOperationBoundary.dispatch`.
+  /** Applies `result` if it is still current, then runs `onApplied` with the committed state and hands
+    * `interpretEffect` every effect its transition emitted, in order, except the model-only ones (buffer animations,
+    * undo bookkeeping): `ModelCommit.applyModelEffects` folds those into the model in this same write, the same pattern
+    * `EventPipelineTransitions.committed` uses for every other message, so an effect result's state and the undo
+    * boundary it declares (e.g. a project-task result re-pinning the Terminal panel) commit atomically -- a rejected
+    * result, or a crash between computing and committing, can never leave one landed without the other. Runs on the
+    * dispatcher: a lane job reaches it through `StateManagerOperationBoundary.dispatch`.
     */
   def applyResult(
     result: EffectResult,
@@ -45,15 +50,16 @@ final private[manager] class ModelCommit(modelRef: Ref[IO, Model], operations: S
     interpretEffect: AppEffect => IO[Unit] = _ => IO.unit
   ): IO[Unit] =
     modelRef.flatModify { current =>
-      val next = EffectResult.reduce(current.app, result)
-      if next.state eq current.app then (current, IO.unit)
+      val reduced = EffectResult.reduce(current.app, result)
+      if (reduced.state eq current.app) && reduced.effects.isEmpty then (current, IO.unit)
       else
-        StateManagerOperationBoundary.prepareCommit(next.state, current.app) match
+        val next = ModelCommit.applyModelEffects(current.copy(app = reduced.state), reduced.effects)
+        StateManagerOperationBoundary.prepareCommit(next.app, current.app) match
           case Right(committed) =>
             (
-              current.copy(app = committed),
+              next.copy(app = committed),
               operations.afterCommit(current.app, committed) >> onApplied(committed) >>
-                next.effects.traverse_(interpretEffect)
+                reduced.effects.filterNot(ModelCommit.isModelEffect).traverse_(interpretEffect)
             )
           case Left(errors) => (current, operations.logRejectedCommit(errors))
     }
@@ -65,13 +71,29 @@ final private[manager] class ModelCommit(modelRef: Ref[IO, Model], operations: S
   def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit] =
     modelRef.update(current => current.copy(bufferAnimations = update(current.bufferAnimations)))
 
-  /** Writes `update`'s model without validation and returns it. Only for the render tick's animation advance, which
-    * runs every frame and only moves animation progress forward.
+  /** Commits the render tick's animation advance (#1697): a message like any other, validated like any other, through
+    * the same `StateManagerOperationBoundary.prepareCommit` every write uses -- so a surface `update` drops whose exit
+    * animation finished (`AnimationChoreography`, `uiSurfaces.filterNot`) can never commit a dangling reference (e.g. a
+    * workspace-tree node still naming it) unnoticed, the way the old unvalidated write could.
+    *
+    * Deliberately skips `afterCommit`'s follow-up work -- scheduling document analysis and logging a modal transition
+    * -- unlike every other commit: `update` only ever advances animation progress (cursor glide, panel geometry,
+    * surface fades, ...), so it can never change spell-check-relevant content or open/close a modal, and running that
+    * work every frame would be pure waste for no observable effect. `update` is pure, geometry-preserving animation
+    * math, so validation itself is cheap and exists as a correctness backstop, not because a well-behaved tick is
+    * expected to fail it; a tick that would (a bug) is rejected and logged like any other invalid commit, leaving
+    * animation progress where it was so the next frame retries.
     */
-  def updateUnvalidated(update: Model => Model): IO[Model] =
-    modelRef.modify { current =>
+  def advanceTick(update: Model => Model): IO[Model] =
+    modelRef.flatModify { current =>
       val next = update(current)
-      (next, next)
+      if next.app eq current.app then (current, IO.pure(current))
+      else
+        StateManagerOperationBoundary.prepareCommit(next.app, current.app) match
+          case Right(committed) =>
+            val committedModel = next.copy(app = committed)
+            (committedModel, IO.pure(committedModel))
+          case Left(errors) => (current, operations.logRejectedCommit(errors).as(current))
     }
 
   private def commit(transition: Model => Option[(Model, AppState)]): IO[Unit] =
