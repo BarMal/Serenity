@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{AppState, SurfaceContent}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

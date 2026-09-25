@@ -143,7 +143,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
         }
         .unsafeRunSync()
 
-      stateManager.commandExecutor.executeCommand(closeAllCommand).unsafeRunSync()
+      stateManager.executeCommand(closeAllCommand).unsafeRunSync()
 
       val afterFirstPrompt = stateManager.getCurrentState.unsafeRunSync()
       afterFirstPrompt.topModal.flatMap {
@@ -244,7 +244,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
     val splitCommand = CommandRegistry.default
       .findCommand("split-pane-horizontal")
       .getOrElse(fail("\"split-pane-horizontal\" command not registered in CommandRegistry.default"))
-    stateManager.commandExecutor.executeCommand(splitCommand).unsafeRunSync()
+    stateManager.executeCommand(splitCommand).unsafeRunSync()
 
     val after = stateManager.getCurrentState.unsafeRunSync()
     after.persisted.layout.editorPanes shouldBe panesBefore

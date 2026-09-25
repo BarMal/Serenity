@@ -113,7 +113,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
       activeState.runtime.uiSurfaces
         .exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
 
-      sm.commandExecutor
+      sm
         .executeCommand(
           Command.typed(
             "disable-motion",
@@ -144,7 +144,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
     advanceToVisible(sm)
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
-    sm.commandExecutor
+    sm
       .executeCommand(
         Command.typed(
           "editor-text-speed-scale",

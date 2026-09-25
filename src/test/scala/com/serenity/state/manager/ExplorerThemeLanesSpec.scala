@@ -220,7 +220,7 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
         themes   <- Gates[String, Theme]
         manager  <- managerWith(listings, themes)
         // The executor returns only once the command's lane work has settled, so it runs alongside the listing gate.
-        opening <- manager.commandExecutor
+        opening <- manager
           .executeCommand(
             com.serenity.command.Command.typed(
               "open-root",

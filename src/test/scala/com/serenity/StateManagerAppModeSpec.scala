@@ -6,6 +6,7 @@ import com.serenity.command.*
 import com.serenity.config.{AppConfig, AppMode}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -30,7 +31,7 @@ class StateManagerAppModeSpec extends AnyFlatSpec with Matchers:
   it should "switch to prose mode via the app-mode-prose command" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "app-mode-prose",
@@ -47,7 +48,7 @@ class StateManagerAppModeSpec extends AnyFlatSpec with Matchers:
   it should "switch back to code mode via the app-mode-code command" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "app-mode-prose",
@@ -57,7 +58,7 @@ class StateManagerAppModeSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "app-mode-code",

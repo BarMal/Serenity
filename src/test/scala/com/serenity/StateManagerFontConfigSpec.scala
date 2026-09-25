@@ -9,6 +9,7 @@ import com.serenity.command.{Command, CommandCategory, CommandIntent, FontIntent
 import com.serenity.config.ConfigManagerTestSupport
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.{FontConfig, TextScaleMode}
 import com.serenity.ui.layout.ViewportSize
@@ -107,7 +108,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
         )
         .unsafeRunSync()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "text-scale-auto",

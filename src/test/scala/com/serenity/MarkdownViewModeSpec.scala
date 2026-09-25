@@ -129,7 +129,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       }
       .unsafeRunSync()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "markdown-view",
@@ -198,7 +198,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       }
       .unsafeRunSync()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "markdown-view-source",

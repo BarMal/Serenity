@@ -103,13 +103,6 @@ final case class SessionStartupInfo(
   */
 final case class FileOpener(openFile: Path => IO[Unit])
 
-/** Executes editor commands.
-  *
-  * A capability record per #1017 -- see `BufferManager` above for the shape rationale. `StateManager` holds one of
-  * these as a field instead of mixing this trait in directly.
-  */
-final case class CommandExecutor(executeCommand: Command => IO[Unit])
-
 /** Manages editor buffers.
   *
   * A capability record per #1017: a case class of functions rather than a trait, one of `StateManager`'s "record of
@@ -186,7 +179,6 @@ trait StateManager extends StateEngine:
   def sessionStartupInfo: SessionStartupInfo
   def lspEffectSource: LspEffectSource
   def runtimeLifecycle: RuntimeLifecycle
-  def commandExecutor: CommandExecutor
   def sessionService: SessionService
   def animationTicker: AnimationTicker
   def bufferManager: BufferManager
@@ -194,6 +186,13 @@ trait StateManager extends StateEngine:
   def fileOpener: FileOpener
   def fileService: FileService
   def paneManager: PaneManager
+
+  /** Runs a `Command` directly, bypassing the palette's UI wiring -- a test-harness concern (#1724), not a production
+    * capability: nothing outside `state.manager` calls this, so it stays package-private rather than a record field
+    * (`CommandExecutor`, deleted in #1724) on the public façade. `StateManagerTestFacade.executeCommand` reaches it for
+    * specs.
+    */
+  private[manager] def executeCommand(command: Command): IO[Unit]
 
 object StateManager:
 

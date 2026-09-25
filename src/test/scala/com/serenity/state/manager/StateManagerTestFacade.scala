@@ -103,11 +103,18 @@ object StateManagerTestFacade:
     def getRecentFiles: IO[List[Path]] =
       stateManager.getCurrentState.map(_.persisted.recentFiles)
 
+    /** Runs an arbitrary `Command` directly, bypassing the palette's UI wiring (#1724) -- reaches the
+      * `private[manager]` `StateManager.executeCommand` this facade shares the package with, so callers outside
+      * `state.manager` need this extension rather than the trait member itself.
+      */
+    def executeCommand(command: Command): IO[Unit] =
+      stateManager.executeCommand(command)
+
     def saveSession: IO[Unit] =
-      stateManager.commandExecutor.executeCommand(sessionCommand("save-session", SessionIntent.SaveSession))
+      stateManager.executeCommand(sessionCommand("save-session", SessionIntent.SaveSession))
 
     def clearSession: IO[Unit] =
-      stateManager.commandExecutor.executeCommand(sessionCommand("clear-session", SessionIntent.ClearSession))
+      stateManager.executeCommand(sessionCommand("clear-session", SessionIntent.ClearSession))
 
   private def updateBuffer(bufferId: BufferId)(change: Buffer => Buffer): AppState => AppState = state =>
     state.persisted.buffers.get(bufferId) match

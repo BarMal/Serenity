@@ -9,6 +9,7 @@ import com.serenity.app.AppStartup
 import com.serenity.command.CommandRegistry
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
@@ -102,7 +103,7 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       saveSessionCommand = CommandRegistry.default
         .findCommand("save-session")
         .getOrElse(fail("\"save-session\" command not registered in CommandRegistry.default"))
-      _ <- firstManager.commandExecutor.executeCommand(saveSessionCommand)
+      _ <- firstManager.executeCommand(saveSessionCommand)
 
       // ---- Open again: a brand-new StateManager over the same session root, exactly like a fresh process launch. ----
       secondManager <- StateManager.apply(
@@ -162,12 +163,12 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
         "Open the file so it is tracked as recent",
         com.serenity.command.CommandIntent.File(com.serenity.command.FileIntent.OpenRecentFile(recentFile))
       )
-      _ <- firstManager.commandExecutor.executeCommand(openRecentSeed)
+      _ <- firstManager.executeCommand(openRecentSeed)
       _ <- awaitOpened(firstManager, recentFile)
       saveSessionCommand = CommandRegistry.default
         .findCommand("save-session")
         .getOrElse(fail("\"save-session\" command not registered in CommandRegistry.default"))
-      _ <- firstManager.commandExecutor.executeCommand(saveSessionCommand)
+      _ <- firstManager.executeCommand(saveSessionCommand)
 
       // ---- Open again: a brand-new StateManager, exactly like a fresh process launch. The saved file is now
       // offered as a "recent" entry on the startup page (the same entry the user selects). ----
