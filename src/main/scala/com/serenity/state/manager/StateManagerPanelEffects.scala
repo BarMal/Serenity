@@ -112,8 +112,8 @@ final private[manager] class StateManagerPanelEffects(
       case MarkdownViewMode.Source | MarkdownViewMode.InlineLens =>
         updateConfigEffect >> commitApp(PanelTransitions.removePanelKind(PanelKind.MarkdownPreview))
 
-  // Closing the project-task output panel while its task is still running must actually stop it -- otherwise
-  // the task's own 100ms output-refresh tick (`runProjectTask`) just re-pins it right back (issue #1294).
+  // Closing the project-task output panel while its task is still running must stop it -- otherwise the task's next
+  // output batch (`ProjectTaskTransitions`) re-pins the panel (issue #1294).
   private def unpinViewPanel(state: AppState, position: PanelPosition): IO[Unit] =
     val closingRunningTaskPanel = state.pinnedSurfaces.exists { surface =>
       surface.content match

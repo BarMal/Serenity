@@ -70,9 +70,9 @@ final private[manager] class StateManagerSurfaceCapability(
   // to unpin/expand/focus/resize a panel that isn't there just see nothing happen, the same explicit policy as
   // "target doesn't apply, ignore the request" used elsewhere in this façade (e.g. `checkUnsavedChanges` and
   // `saveBufferAs` no-op when the bufferId doesn't resolve to a buffer).
-  /** Updates the existing pinned Terminal panel's content in place rather than pinning a new surface every call, so a
-    * project task's periodic output refresh (`StateManagerEffectHandlers.runProjectTask`) doesn't leave behind a fresh
-    * panel -- and the user's own workspace-tree focus on it -- every 100ms for the task's whole lifetime (issue #1294).
+  /** Updates the pinned Terminal panel in place rather than pinning a new surface per call, so successive project-task
+    * messages don't stack up panels (issue #1294); a running task's output reaches the same reducer through
+    * `ProjectTaskTransitions`.
     */
   def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit] =
     commit(PinnedPanelContentReducer.pinOrUpdateTerminal(text, position, size, _), withAnimationHooks = true)
