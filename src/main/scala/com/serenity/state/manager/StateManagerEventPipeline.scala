@@ -83,7 +83,7 @@ final private[manager] class StateManagerEventPipeline(
 
   private val lspDocumentSync = new LspDocumentSync(
     LspDocumentSyncPort(
-      stateRef = state.stateRef,
+      currentState = state.stateRef.get,
       interpretEffect = effects.interpretEffect,
       candidateLspBufferIds = StateManagerEventPipeline.candidateLspBufferIds
     )

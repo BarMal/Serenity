@@ -4,7 +4,6 @@ import java.nio.file.{Files, Path}
 
 import scala.concurrent.duration.*
 
-import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.config.PreferredWindowSize
@@ -58,15 +57,13 @@ class FileWorkflowLanesSpec extends AnyFlatSpec with Matchers:
     val directory = Files.createTempDirectory("file-workflow-lanes-spec")
     val program =
       for
-        gate                 <- Deferred[IO, Unit]
-        started              <- Ref.of[IO, Int](0)
-        modelRef             <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
-        themeNamesRef        <- Ref.of[IO, List[String]](Nil)
-        quitSignal           <- Deferred[IO, Unit]
-        lspQueue             <- LspEffectQueue.create
-        projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
-        projectTaskSemaphore <- Semaphore[IO](1)
-        mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
+        gate                <- Deferred[IO, Unit]
+        started             <- Ref.of[IO, Int](0)
+        modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+        themeNamesRef       <- Ref.of[IO, List[String]](Nil)
+        quitSignal          <- Deferred[IO, Unit]
+        lspQueue            <- LspEffectQueue.create
+        mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
         runtime = StateManagerRuntime
           .create(
             modelRef = modelRef,
@@ -77,8 +74,6 @@ class FileWorkflowLanesSpec extends AnyFlatSpec with Matchers:
             sessionRootOverride = Some(directory.resolve("session")),
             themeManager = AppThemeManager.create,
             lspQueue = lspQueue,
-            projectTaskFiberRef = projectTaskFiberRef,
-            projectTaskSemaphore = projectTaskSemaphore,
             mouseTargetCacheRef = mouseTargetCacheRef,
             onFontConfigChanged = (_: FontConfig) => IO.unit,
             deviceTextScaleProvider = IO.pure(1.0),

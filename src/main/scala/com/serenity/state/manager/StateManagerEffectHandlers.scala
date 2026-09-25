@@ -10,6 +10,7 @@ import com.serenity.command.*
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.*
+import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.ui.layout.PanelPosition
@@ -94,8 +95,10 @@ final private[manager] class StateManagerEffectHandlers(
 
   private val projectLspEffects = new StateManagerProjectLspEffects(
     lspQueue,
-    projectTaskFiberRef,
-    projectTaskSemaphore,
+    stateRef.get,
+    commitAppValidated,
+    editor,
+    runProjectTask,
     pinOrUpdateTerminalPanel,
     showPeek,
     showModal
@@ -167,16 +170,14 @@ final private[manager] class StateManagerEffectHandlers(
   private[manager] def interpretEffect(effect: AppEffect): IO[Unit] =
     behavior.interpret(effect)
 
+  // Switch-latest: a binding is only recorded while none is pending, so a newer timer's binding has already replaced
+  // the older one's, whose expiry would find nothing to do.
   private def scheduleCommandRunnerBindingExpiry(recordedAtMillis: Long): IO[Unit] =
-    (IO.sleep(DoubleTapWindow) >>
-      stateRef.get.flatMap { state =>
-        val result = CommandRunnerReducer.reduce(
-          com.serenity.keystroke.events.RunnerBindingRecordingExpired(recordedAtMillis),
-          state,
-          CommandRegistry.withToggleUI
-        )
-        validateAndUpdateState(result.state, state) >> result.effects.traverse_(interpretEffect)
-      }).start.void
+    submitEffect(
+      Lane.Keyed(LaneKey.Timer, LanePolicy.SwitchLatest),
+      IO.sleep(DoubleTapWindow) >>
+        dispatchEffectResult(EffectResult.CommandRunnerBindingExpired(recordedAtMillis), _ => IO.unit)
+    )
 
   private def interpretLifecycleEffect: IO[Unit] =
     lifecycleEffects.interpret

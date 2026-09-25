@@ -59,7 +59,14 @@ results are `EffectResult`s dropped once the dialog or picker they were computed
 unsaved-changes prompt closes the buffer only once the save has landed; a failed or conflicting save abandons the
 close, quit included (#1708). Quitting -- normal or forced, e.g. closing the window -- is one
 step, `shutdownEffects`: a `Lane.Exclusive` barrier lets every Sequential lane (file saves, config, presets) finish,
-bounded by a grace period, cancels search and analysis, then releases the lanes. The dispatch pipeline itself still
+bounded by a grace period, cancels search and analysis, then releases the lanes. A project task runs on the
+switch-latest `Project` lane: the state records the running task and refuses a second, cancelling supersedes the lane
+with an empty job, quitting cancels the task (destroying its process), and its output reaches the dispatcher at most
+once per 100ms as `EffectResult.ProjectTaskOutput`/`ProjectTaskFinished`, applied only while that task is still the
+running one. The command runner's double-tap timer is a switch-latest `Timer` job posting
+`CommandRunnerBindingExpired`; a result's follow-up effects (`EffectResult.reduce`) are interpreted on the dispatcher
+after its commit. LSP traffic stays on `LspEffectQueue`, which is the `Lsp` lane already: one FIFO drained by
+`LspManager`'s single consumer, with results returning through `applyEvent`. The dispatch pipeline itself still
 performs I/O, and the capability ports still hold the state `Ref` (other direct writers remain until later slices).
 
 Event processing applies a reducer result's state before interpreting its effects. Document-analysis

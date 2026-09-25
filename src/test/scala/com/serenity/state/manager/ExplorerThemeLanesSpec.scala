@@ -5,7 +5,6 @@ import java.nio.file.{Files, Path}
 
 import scala.concurrent.duration.*
 
-import cats.effect.std.Semaphore
 import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
 import com.serenity.config.PreferredWindowSize
@@ -88,13 +87,11 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
     themeWrites: Option[Gates[String, Path]] = None
   ): IO[StateManager] =
     for
-      modelRef             <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
-      themeNamesRef        <- Ref.of[IO, List[String]](Nil)
-      quitSignal           <- Deferred[IO, Unit]
-      lspQueue             <- LspEffectQueue.create
-      projectTaskFiberRef  <- Ref.of[IO, Option[ManagedProjectTask]](None)
-      projectTaskSemaphore <- Semaphore[IO](1)
-      mouseTargetCacheRef  <- Ref.of[IO, Option[MouseTargetCache]](None)
+      modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+      themeNamesRef       <- Ref.of[IO, List[String]](Nil)
+      quitSignal          <- Deferred[IO, Unit]
+      lspQueue            <- LspEffectQueue.create
+      mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
       runtime = StateManagerRuntime
         .create(
           modelRef = modelRef,
@@ -105,8 +102,6 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
           sessionRootOverride = Some(sessionRoot),
           themeManager = new GatedThemeManager(themes, themeWrites),
           lspQueue = lspQueue,
-          projectTaskFiberRef = projectTaskFiberRef,
-          projectTaskSemaphore = projectTaskSemaphore,
           mouseTargetCacheRef = mouseTargetCacheRef,
           onFontConfigChanged = (_: FontConfig) => IO.unit,
           deviceTextScaleProvider = IO.pure(1.0),

@@ -77,7 +77,8 @@ final case class Runtime(
     tabDragSession: Option[TabDragSession] = None,
     // The UI-preset apply whose preset is still being loaded off the dispatcher (#1697), so its result can be dropped
     // once a later apply has been requested. Cleared when that request resolves.
-    pendingUiPresetApply: Option[Long] = None
+    pendingUiPresetApply: Option[Long] = None,
+    projectTasks: ProjectTasks = ProjectTasks()
 ):
 
   /** A typed character: the quiet window for cursor-adjacent surfaces always restarts; the companion sprite panel

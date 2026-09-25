@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import scala.concurrent.duration.*
 
 import cats.effect.*
+import cats.syntax.foldable.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.SpellCheckConfig
 import com.serenity.diagnostics.Trace
@@ -10,7 +11,7 @@ import com.serenity.document.CommentRendering
 import com.serenity.spellcheck.{DictionaryLoader, SpellChecker}
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.CommandRunnerPanelSelections
+import com.serenity.state.reducers.{AppEffect, CommandRunnerPanelSelections}
 import org.typelevel.log4cats.Logger
 
 /** Operations emitted by capabilities for ordered interpretation at the event boundary. */
@@ -202,16 +203,25 @@ final private[manager] class StateManagerOperationBoundary private (
     submittedEffects.update(_ + 1) >> effectLanes.submit(lane, job).recover { case _: EffectLanes.Released => () }
 
   /** Applies `result` through the validated commit path if it is still current, then runs `onApplied` with the
-    * committed state. Runs on the dispatcher: a lane job reaches it through `dispatch`.
+    * committed state and hands the effects its transition emitted to `interpretEffect`, in order. Runs on the
+    * dispatcher: a lane job reaches it through `dispatch`.
     */
-  private[manager] def applyResult(result: EffectResult, onApplied: AppState => IO[Unit]): IO[Unit] =
+  private[manager] def applyResult(
+    result: EffectResult,
+    onApplied: AppState => IO[Unit],
+    interpretEffect: AppEffect => IO[Unit] = _ => IO.unit
+  ): IO[Unit] =
     stateRef.flatModify { current =>
-      val next = EffectResult.applyIfCurrent(current, result)
-      if next eq current then (current, IO.unit)
+      val next = EffectResult.reduce(current, result)
+      if next.state eq current then (current, IO.unit)
       else
-        StateManagerOperationBoundary.prepareCommit(next, current) match
-          case Right(committed) => (committed, afterCommit(current, committed) >> onApplied(committed))
-          case Left(errors)     => (current, logRejectedCommit(errors))
+        StateManagerOperationBoundary.prepareCommit(next.state, current) match
+          case Right(committed) =>
+            (
+              committed,
+              afterCommit(current, committed) >> onApplied(committed) >> next.effects.traverse_(interpretEffect)
+            )
+          case Left(errors) => (current, logRejectedCommit(errors))
     }
 
   private def postResult(result: EffectResult): IO[Unit] =

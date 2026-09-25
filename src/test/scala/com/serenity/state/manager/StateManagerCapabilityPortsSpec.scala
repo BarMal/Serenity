@@ -2,7 +2,6 @@ package com.serenity.state.manager
 
 import java.nio.file.{Path, Paths}
 
-import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.config.PreferredWindowSize
@@ -28,17 +27,16 @@ class StateManagerCapabilityPortsSpec extends AnyFlatSpec with Matchers:
     * never exercised by these tests.
     */
   private val port: EffectRuntimePort = new EffectRuntimePort:
-    val stateRef                = Ref.of[IO, AppState](AppState.initial).unsafeRunSync()
-    val themeNamesRef           = Ref.of[IO, List[String]](Nil).unsafeRunSync()
-    val quitSignal              = Deferred[IO, Unit].unsafeRunSync()
-    val logger                  = NoOpLogger.impl[IO]
-    val themeManager            = AppThemeManager.create
-    val lspQueue                = LspEffectQueue.create.unsafeRunSync()
-    val projectTaskFiberRef     = Ref.of[IO, Option[ManagedProjectTask]](None).unsafeRunSync()
-    val projectTaskSemaphore    = Semaphore[IO](1).unsafeRunSync()
-    val onFontConfigChanged     = (_: com.serenity.ui.fonts.FontLoader.FontConfig) => IO.unit
-    val deviceTextScaleProvider = IO.pure(1.0)
-    val configPersistencePath   = None
+    val stateRef                            = Ref.of[IO, AppState](AppState.initial).unsafeRunSync()
+    val themeNamesRef                       = Ref.of[IO, List[String]](Nil).unsafeRunSync()
+    val quitSignal                          = Deferred[IO, Unit].unsafeRunSync()
+    val logger                              = NoOpLogger.impl[IO]
+    val themeManager                        = AppThemeManager.create
+    val lspQueue                            = LspEffectQueue.create.unsafeRunSync()
+    val runProjectTask: ProjectTaskLauncher = (_, _) => IO.never
+    val onFontConfigChanged                 = (_: com.serenity.ui.fonts.FontLoader.FontConfig) => IO.unit
+    val deviceTextScaleProvider             = IO.pure(1.0)
+    val configPersistencePath               = None
     val uiPresetStore = UiPresetStore(Paths.get(System.getProperty("java.io.tmpdir"), "capability-ports-spec.json"))
     val windowSizeProvider = IO.pure(Option.empty[PreferredWindowSize])
     val bufferAnimationsRef =

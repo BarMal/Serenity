@@ -3,7 +3,6 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.*
-import cats.effect.std.Semaphore
 import cats.syntax.foldable.*
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
@@ -13,6 +12,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence}
 import com.serenity.state.effects.Lane
 import com.serenity.state.models.*
+import com.serenity.state.reducers.{AppEffect, UndoEffect}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, PeekContent}
@@ -30,8 +30,6 @@ private[manager] class StateManagerComposition(
     val policy: SessionManager.SessionPolicy,
     val themeManager: AppThemeManager,
     val lspQueue: LspEffectQueue,
-    val projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]],
-    val projectTaskSemaphore: Semaphore[IO],
     val mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
     val onFontConfigChanged: FontConfig => IO[Unit],
     val deviceTextScaleProvider: IO[Double],
@@ -40,6 +38,7 @@ private[manager] class StateManagerComposition(
     val windowSizeProvider: IO[Option[PreferredWindowSize]],
     val fileDialog: Option[com.serenity.io.FileDialog],
     val markdownPreviewWindow: com.serenity.ui.tui.MarkdownPreviewWindowAvailability,
+    val runProjectTask: ProjectTaskLauncher,
     val fileManager: FileManager,
     val sessionManager: SessionManager,
     val sessionPersistence: SessionPersistence,
@@ -60,8 +59,7 @@ private[manager] class StateManagerComposition(
   private val runtimeLogger                  = logger
   private val runtimeThemeManager            = themeManager
   private val runtimeLspQueue                = lspQueue
-  private val runtimeProjectTaskFiberRef     = projectTaskFiberRef
-  private val runtimeProjectTaskSemaphore    = projectTaskSemaphore
+  private val runtimeRunProjectTask          = runProjectTask
   private val runtimeMouseTargetCacheRef     = mouseTargetCacheRef
   private val runtimeBufferAnimationsRef     = bufferAnimationsRef
   private val runtimeOnFontConfigChanged     = onFontConfigChanged
@@ -111,8 +109,7 @@ private[manager] class StateManagerComposition(
     val logger                  = runtimeLogger
     val themeManager            = runtimeThemeManager
     val lspQueue                = runtimeLspQueue
-    val projectTaskFiberRef     = runtimeProjectTaskFiberRef
-    val projectTaskSemaphore    = runtimeProjectTaskSemaphore
+    val runProjectTask          = runtimeRunProjectTask
     val onFontConfigChanged     = runtimeOnFontConfigChanged
     val deviceTextScaleProvider = runtimeDeviceTextScaleProvider
     val configPersistencePath   = runtimeConfigPersistencePath
@@ -134,7 +131,14 @@ private[manager] class StateManagerComposition(
     // Called from lane jobs, off the dispatcher, so events `onApplied` enqueues are replayed the way `executeCommand`
     // replays them.
     def dispatchEffectResult(result: EffectResult, onApplied: AppState => IO[Unit]): IO[Unit] =
-      operations.dispatch(operations.applyResult(result, onApplied)) >> drainPendingOperations
+      operations.dispatch(operations.applyResult(result, onApplied, interpretResultEffect)) >> drainPendingOperations
+
+  // `effects` is built further down; this only runs once a lane result lands, long after construction.
+  private def interpretResultEffect(effect: AppEffect): IO[Unit] =
+    effect match
+      case AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable)) =>
+        undoRecording.recordUndoBoundary(entry, groupable)
+      case other => effects.interpretEffect(other)
 
   private val surfaces =
     new StateManagerSurfaceCapability(stateRef, logger, operations, undoRecording.recordUndoBoundary)
@@ -415,16 +419,14 @@ private[manager] class StateManagerComposition(
     intervalSaveStream = intervalSaveStream
   )
 
+  // Shutting the effects down also cancels a running project task, destroying its process.
   private def forceQuit: IO[Unit] =
-    cancelProjectTask() >> operations.shutdownEffects() >> stateRef.get.flatMap { state =>
+    operations.shutdownEffects() >> stateRef.get.flatMap { state =>
       sessionPersistence
         .onAppClose(clearCloseActions(state))
         .handleErrorWith(error => logger.error(error)("[SESSION] Failed to save session during forced quit")) >>
         quitSignal.complete(()).attempt.void
     }
-
-  private def cancelProjectTask(): IO[Unit] =
-    ProjectTaskOwnership.cancel(projectTaskFiberRef, projectTaskSemaphore).void
 
   private def intervalSaveStream: Stream[IO, Unit] =
     policy.saveInterval match

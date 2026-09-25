@@ -4,14 +4,14 @@ import java.nio.file.{Files, Path}
 
 import scala.concurrent.duration.*
 
-import cats.effect.std.Semaphore
 import cats.effect.unsafe.implicits.global
-import cats.effect.{Deferred, IO, Ref}
+import cats.effect.{IO, Ref}
 import com.serenity.command.{LspIntent, ProjectIntent}
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.project.{ProjectTaskCommand, ProjectTaskKind, ProjectTaskTerminal}
 import com.serenity.rope.{Balance, Rope}
+import com.serenity.state.effects.Lane
 import com.serenity.state.models.*
 import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.ui.layout.{PanelPosition, PeekContent}
@@ -32,47 +32,43 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
       val pinCalls: Ref[IO, List[(String, PanelPosition, Int)]],
       val peeks: Ref[IO, List[(PeekContent, CursorPosition)]],
       val modals: Ref[IO, List[Modal]],
-      val projectTaskFiberRef: Ref[IO, Option[ManagedProjectTask]],
+      val submitted: Ref[IO, List[Lane.Keyed]],
       val lspQueue: LspEffectQueue,
       val effects: StateManagerProjectLspEffects
   )
 
   private def harness(): Harness =
-    val stateRef             = Ref.of[IO, AppState](AppState.initial).unsafeRunSync()
-    val pinCalls             = Ref.of[IO, List[(String, PanelPosition, Int)]](Nil).unsafeRunSync()
-    val peeks                = Ref.of[IO, List[(PeekContent, CursorPosition)]](Nil).unsafeRunSync()
-    val modals               = Ref.of[IO, List[Modal]](Nil).unsafeRunSync()
-    val projectTaskFiberRef  = Ref.of[IO, Option[ManagedProjectTask]](None).unsafeRunSync()
-    val projectTaskSemaphore = Semaphore[IO](1).unsafeRunSync()
-    val lspQueue             = LspEffectQueue.create.unsafeRunSync()
+    val stateRef  = Ref.of[IO, AppState](AppState.initial).unsafeRunSync()
+    val pinCalls  = Ref.of[IO, List[(String, PanelPosition, Int)]](Nil).unsafeRunSync()
+    val peeks     = Ref.of[IO, List[(PeekContent, CursorPosition)]](Nil).unsafeRunSync()
+    val modals    = Ref.of[IO, List[Modal]](Nil).unsafeRunSync()
+    val submitted = Ref.of[IO, List[Lane.Keyed]](Nil).unsafeRunSync()
+    val lspQueue  = LspEffectQueue.create.unsafeRunSync()
+
+    // Records where each job would run instead of running it: no process is launched here.
+    val lanes = new EffectLanePort:
+      def submitEffect(lane: Lane.Keyed, job: IO[Unit]): IO[Unit] = submitted.update(_ :+ lane)
+      def dispatchEffectResult(result: EffectResult, onApplied: AppState => IO[Unit]): IO[Unit] =
+        stateRef.update(EffectResult.applyIfCurrent(_, result))
 
     new Harness(
       stateRef,
       pinCalls,
       peeks,
       modals,
-      projectTaskFiberRef,
+      submitted,
       lspQueue,
       new StateManagerProjectLspEffects(
         lspQueue,
-        projectTaskFiberRef,
-        projectTaskSemaphore,
+        stateRef.get,
+        stateRef.update,
+        lanes,
+        (_, _) => IO.never,
         (text, position, size) => pinCalls.update(_ :+ (text, position, size)),
         (content, cursor) => peeks.update(_ :+ (content, cursor)),
         modal => modals.update(_ :+ modal)
       )
     )
-
-  /** Polls `io` until `pred` holds, for behavior that lands via a forked fiber (project-task start) rather than
-    * synchronously within the returned `IO`.
-    */
-  private def eventually[A](io: IO[A])(pred: A => Boolean): A =
-    def loop(remaining: Int): IO[A] =
-      io.flatMap { a =>
-        if pred(a) || remaining <= 0 then IO.pure(a)
-        else IO.sleep(20.millis) >> loop(remaining - 1)
-      }
-    loop(100).unsafeRunSync()
 
   private def stateFocusedOnFile(path: Path): AppState =
     val buffer = Buffer(BufferId(0), Document(Rope.empty, filePath = Some(path)))
@@ -90,10 +86,18 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
   private def stateWithBuffer(buffer: Buffer): AppState =
     AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(BufferId(0) -> buffer)))
 
-  private def runningManagedTask(): ManagedProjectTask =
-    val finished = Deferred[IO, Unit].unsafeRunSync()
-    val fiber    = IO.never[Unit].start.unsafeRunSync()
-    ManagedProjectTask(finished, fiber)
+  private val runningTask =
+    RunningProjectTask(0L, ProjectTaskCommand(ProjectTaskKind.Build, "make", Path.of("/tmp"), "make", Nil), "")
+
+  private def withRunningTask(fixture: Harness): Unit =
+    fixture.stateRef
+      .update(state =>
+        state.copy(runtime = state.runtime.copy(projectTasks = ProjectTasks(nextId = 1L, running = Some(runningTask))))
+      )
+      .unsafeRunSync()
+
+  private def runningProjectTask(fixture: Harness): Option[RunningProjectTask] =
+    fixture.stateRef.get.unsafeRunSync().runtime.projectTasks.running
 
   "StateManagerProjectLspEffects" should "refuse to run a project task in prose mode" in {
     val fixture = harness()
@@ -107,7 +111,8 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.pinCalls.get.unsafeRunSync() shouldBe List(
       (ProjectTaskTerminal.notAvailableInProseMode(ProjectTaskKind.Build), PanelPosition.Bottom, 14)
     )
-    fixture.projectTaskFiberRef.get.unsafeRunSync() shouldBe None
+    runningProjectTask(fixture) shouldBe None
+    fixture.submitted.get.unsafeRunSync() shouldBe Nil
   }
 
   it should "report no task found when no project marker is detected from the focused buffer's directory" in {
@@ -135,6 +140,7 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
       val fixture      = harness()
       val filePath     = directory.resolve("main.c")
       val focusedState = stateFocusedOnFile(filePath)
+      fixture.stateRef.set(focusedState).unsafeRunSync()
 
       fixture.effects
         .interpretProject(ProjectIntent.RunProjectTask(ProjectTaskKind.Build), focusedState)
@@ -142,13 +148,11 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
 
       val expectedCommand =
         ProjectTaskCommand(ProjectTaskKind.Build, "make", directory.toAbsolutePath.normalize(), "make", Nil)
-      val pinned = eventually(fixture.pinCalls.get)(_.nonEmpty)
-      pinned.head shouldBe (ProjectTaskTerminal.started(expectedCommand), PanelPosition.Bottom, 14)
-
-      eventually(fixture.projectTaskFiberRef.get)(_.isDefined).isDefined shouldBe true
-
-      // Clean up the forked task/renderer fiber rather than leaving it running past the test.
-      fixture.effects.cancelProjectTaskSilently.unsafeRunSync()
+      fixture.pinCalls.get.unsafeRunSync() shouldBe List(
+        (ProjectTaskTerminal.started(expectedCommand), PanelPosition.Bottom, 14)
+      )
+      runningProjectTask(fixture) shouldBe Some(RunningProjectTask(0L, expectedCommand, ""))
+      fixture.submitted.get.unsafeRunSync() shouldBe List(StateManagerProjectLspEffects.TaskLane)
     finally
       Files.deleteIfExists(makefile)
       Files.deleteIfExists(directory)
@@ -156,8 +160,7 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
 
   it should "refuse to start a second project task while one is already running" in {
     val fixture = harness()
-    val running = runningManagedTask()
-    fixture.projectTaskFiberRef.set(Some(running)).unsafeRunSync()
+    withRunningTask(fixture)
 
     fixture.effects
       .interpretProject(ProjectIntent.RunProjectTask(ProjectTaskKind.Build), AppState.initial)
@@ -170,19 +173,19 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
         14
       )
     )
-    fixture.projectTaskFiberRef.get.unsafeRunSync() shouldBe Some(running)
-    running.fiber.cancel.unsafeRunSync()
+    runningProjectTask(fixture) shouldBe Some(runningTask)
+    fixture.submitted.get.unsafeRunSync() shouldBe Nil
   }
 
   it should "cancel a running project task and confirm the cancellation" in {
     val fixture = harness()
-    val running = runningManagedTask()
-    fixture.projectTaskFiberRef.set(Some(running)).unsafeRunSync()
+    withRunningTask(fixture)
 
     fixture.effects.interpretProject(ProjectIntent.CancelProjectTask, AppState.initial).unsafeRunSync()
 
     fixture.pinCalls.get.unsafeRunSync() shouldBe List(("Project task cancelled.", PanelPosition.Bottom, 14))
-    fixture.projectTaskFiberRef.get.unsafeRunSync() shouldBe None
+    runningProjectTask(fixture) shouldBe None
+    fixture.submitted.get.unsafeRunSync() shouldBe List(StateManagerProjectLspEffects.TaskLane)
   }
 
   it should "report no project task running when cancel is requested with nothing active" in {
@@ -195,13 +198,13 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
 
   it should "cancel a running project task silently, without pinning a confirmation" in {
     val fixture = harness()
-    val running = runningManagedTask()
-    fixture.projectTaskFiberRef.set(Some(running)).unsafeRunSync()
+    withRunningTask(fixture)
 
     fixture.effects.cancelProjectTaskSilently.unsafeRunSync()
 
     fixture.pinCalls.get.unsafeRunSync() shouldBe Nil
-    fixture.projectTaskFiberRef.get.unsafeRunSync() shouldBe None
+    runningProjectTask(fixture) shouldBe None
+    fixture.submitted.get.unsafeRunSync() shouldBe List(StateManagerProjectLspEffects.TaskLane)
   }
 
   it should "enqueue an LSP hover request for the focused buffer's cursor" in {
