@@ -436,83 +436,83 @@ object PerformanceBenchmarks:
           ),
         () => renderedFrame(commentsState, deviceScale = 2.0)
       )
-    ) ++ reducerBenchmarks(editingState, plainScrollState, richScrollState, deepViewport) ++ DamageBenchmarks
-      .benchmarks() ++ equalsBenchmarks() ++ List(
-      BenchmarkRunner.Benchmark(
-        "find_replace.large_result_set",
-        3,
-        20,
-        () => assert(visibleFindResults.size == 80 && visibleFindResults.exists(_._1 == FindResult(6_000, 10))),
-        () => findResultSet.visibleResults(maxResults = 80)
-      ),
-      BenchmarkRunner.Benchmark(
-        "find_replace.large_query_update",
-        3,
-        20,
-        () => assert(completeFindQuery.persisted.buffers(BufferId(1)).findState.exists(_.results.length == 12_000)),
-        () =>
-          ModalEventReducer.applyFindSearchResults(
-            findQueryState,
-            findQueryRequest,
-            FindSearch.results(findQueryRequest.content, findQueryRequest.query)
-          )
-      ),
-      BenchmarkRunner.Benchmark(
-        "find_replace.large_query_keystroke",
-        3,
-        20,
-        () => assert(findKeystrokeResult.effects.nonEmpty),
-        () => ModalEventReducer.reduce(ModalType.Find, InsertChar('e'), findKeystrokeState)
-      ),
-      BenchmarkRunner.Benchmark(
-        "lsp.framer.large_batch",
-        3,
-        BenchmarkIterationCounts.LspFramer,
-        () => assert(decodedLspMessages == lspMessages),
-        () => decodeLspMessages(framedLspMessages)
-      ),
-      BenchmarkRunner.Benchmark(
-        "project_task.responsiveness",
-        3,
-        20,
-        () =>
-          assert(
-            projectTask.exists(command => command.workingDirectory == projectRoot && command.executable == "sbt") &&
-              projectTaskPresentation.exists(_.contains("Running test task"))
-          ),
-        () => ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test).map(ProjectTaskTerminal.started)
-      ),
-      BenchmarkRunner.Benchmark(
-        "markdown.preview.window_mapping",
-        3,
-        20,
-        () => assert(markdownPreviewWindow.firstSourceLine >= 0 && markdownPreviewWindow.source.nonEmpty),
-        () =>
-          MarkdownDocumentPreview
-            .previewWindow(markdownLines, activeLine = Some(1_200), fallbackTopLine = 1_000, maxSourceLines = 80)
-      ),
-      BenchmarkRunner.Benchmark(
-        "markdown.preview.html_fragment",
-        2,
-        8,
-        () => assert(markdownHtmlFragment.contains("<h2>")),
-        () => MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark")
-      ),
-      BenchmarkRunner.Benchmark(
-        "render.markdown.inline_lens",
-        2,
-        BenchmarkIterationCounts.RenderMarkdown,
-        () => assert(renderedFrameHasPixels(markdownLensFrame)),
-        () => renderedFrame(markdownState, deviceScale = 1.0)
-      ),
-      BenchmarkRunner.Benchmark(
-        "animation.large_visible_tick",
-        3,
-        30,
-        () => assert(animationCells.nonEmpty && advancedAnimationState != animationState),
-        () => animationState.advanceAllAnimations()
+    ) ++ reducerBenchmarks(editingState, plainScrollState, richScrollState, deepViewport) ++
+      AnimationTickBenchmarks.benchmarks(editingState) ++ DamageBenchmarks.benchmarks() ++ equalsBenchmarks() ++ List(
+        BenchmarkRunner.Benchmark(
+          "find_replace.large_result_set",
+          3,
+          20,
+          () => assert(visibleFindResults.size == 80 && visibleFindResults.exists(_._1 == FindResult(6_000, 10))),
+          () => findResultSet.visibleResults(maxResults = 80)
+        ),
+        BenchmarkRunner.Benchmark(
+          "find_replace.large_query_update",
+          3,
+          20,
+          () => assert(completeFindQuery.persisted.buffers(BufferId(1)).findState.exists(_.results.length == 12_000)),
+          () =>
+            ModalEventReducer.applyFindSearchResults(
+              findQueryState,
+              findQueryRequest,
+              FindSearch.results(findQueryRequest.content, findQueryRequest.query)
+            )
+        ),
+        BenchmarkRunner.Benchmark(
+          "find_replace.large_query_keystroke",
+          3,
+          20,
+          () => assert(findKeystrokeResult.effects.nonEmpty),
+          () => ModalEventReducer.reduce(ModalType.Find, InsertChar('e'), findKeystrokeState)
+        ),
+        BenchmarkRunner.Benchmark(
+          "lsp.framer.large_batch",
+          3,
+          BenchmarkIterationCounts.LspFramer,
+          () => assert(decodedLspMessages == lspMessages),
+          () => decodeLspMessages(framedLspMessages)
+        ),
+        BenchmarkRunner.Benchmark(
+          "project_task.responsiveness",
+          3,
+          20,
+          () =>
+            assert(
+              projectTask.exists(command => command.workingDirectory == projectRoot && command.executable == "sbt") &&
+                projectTaskPresentation.exists(_.contains("Running test task"))
+            ),
+          () => ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test).map(ProjectTaskTerminal.started)
+        ),
+        BenchmarkRunner.Benchmark(
+          "markdown.preview.window_mapping",
+          3,
+          20,
+          () => assert(markdownPreviewWindow.firstSourceLine >= 0 && markdownPreviewWindow.source.nonEmpty),
+          () =>
+            MarkdownDocumentPreview
+              .previewWindow(markdownLines, activeLine = Some(1_200), fallbackTopLine = 1_000, maxSourceLines = 80)
+        ),
+        BenchmarkRunner.Benchmark(
+          "markdown.preview.html_fragment",
+          2,
+          8,
+          () => assert(markdownHtmlFragment.contains("<h2>")),
+          () => MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark")
+        ),
+        BenchmarkRunner.Benchmark(
+          "render.markdown.inline_lens",
+          2,
+          BenchmarkIterationCounts.RenderMarkdown,
+          () => assert(renderedFrameHasPixels(markdownLensFrame)),
+          () => renderedFrame(markdownState, deviceScale = 1.0)
+        ),
+        BenchmarkRunner.Benchmark(
+          "animation.large_visible_tick",
+          3,
+          30,
+          () => assert(animationCells.nonEmpty && advancedAnimationState != animationState),
+          () => animationState.advanceAllAnimations()
+        )
       )
-    )
 
   /** Measures `Buffer.equals`/`AppState.equals` under the three shapes of comparison the reducers actually perform: the
     * same instance (the hand-rolled `eq` fast path), a `.copy()` of it (a different instance whose fields -- including

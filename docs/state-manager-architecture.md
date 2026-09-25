@@ -44,7 +44,11 @@ result comes back as an `EffectResult` applied only while still current. The ext
 observation that a save or reload has since superseded. Events enqueued while a dispatch interprets its effects are
 replayed on the dispatcher by `drainPendingOperations`; code already on the dispatcher never offers-and-waits, which
 would deadlock. The render tick advances animations only when the dispatcher is idle (`runIfIdle`); otherwise it
-skips the frame's advance and reports still-active so the next frame retries. File reads and writes
+skips the frame's advance and reports still-active so the next frame retries. The tick itself is a message like any
+other -- `ModelCommit.advanceTick` -- and its advance is validated by the same `AppStateValidation` every commit goes
+through, so a surface dropped once its exit animation finishes can never commit a dangling reference unnoticed; it is
+the one commit that skips the boundary's `afterCommit` follow-up (scheduling document analysis, logging a modal
+transition), since a tick only ever advances animation progress and so can never affect either. File reads and writes
 (`StateManagerFilePersistence`) run on a `LaneKey.File` Sequential lane per canonical path and come back as
 `EffectResult.FileSaved`/`FileLoaded`/`FileReloaded`, merged into the state current when they land: a save marks the
 buffer clean only if its content is still the content written, and ignores a buffer closed meanwhile (#1671). A plain
