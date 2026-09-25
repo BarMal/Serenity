@@ -15,7 +15,6 @@ import com.serenity.session.SessionManager
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.renderer.RendererFrameState
 import com.serenity.ui.theme.config.AppThemeManager
@@ -123,46 +122,12 @@ final case class BufferManager(
     updateBuffer: (BufferId, String) => IO[Unit]
 )
 
-/** Manages editor panes, tabs, and splits.
-  *
-  * A capability record per #1017 -- see `BufferManager` above for the shape rationale. `StateManager` holds one of
-  * these as a field instead of mixing this trait in directly. Its methods are split across the viewport and editor
-  * capability classes, so the record is assembled in `StateManagerComposition` rather than in a single class. Case
-  * class fields can't carry default parameter values, so `createPane` takes `Option[BufferId]` rather than defaulting
-  * it to `None`.
-  */
-final case class PaneManager(
-    handleViewportResize: ViewportSize => IO[Unit],
-    createPane: Option[BufferId] => IO[PaneId],
-    switchToPane: PaneId => IO[Unit],
-    getTabOrder: () => IO[List[PaneId]]
-)
-
 /** Reads the persisted editor session.
   *
   * A capability record per #1017 -- see `BufferManager` above for the shape rationale. `StateManager` holds one of
   * these as a field instead of mixing this trait in directly.
   */
 final case class SessionService(loadSession: IO[Option[AppState]])
-
-/** Manages pinned panels and the file explorer.
-  *
-  * A capability record per #1017 -- see `BufferManager` above for the shape rationale. `StateManager` holds one of
-  * these as a field instead of mixing this trait in directly.
-  */
-final case class PanelManager(
-    pinPanel: (PanelContent, PanelPosition, Int) => IO[Unit],
-    pinOrUpdateTerminalPanel: (String, PanelPosition, Int) => IO[Unit],
-    unpinPanel: PanelTarget => IO[Unit],
-    movePinnedPanel: (SurfaceId, PanelPosition) => IO[Unit],
-    expandPinnedPanel: PanelTarget => IO[Unit],
-    collapseExpandedPanel: () => IO[Unit],
-    switchToPinnedPanel: PanelTarget => IO[Unit],
-    loadDirectoryTree: (Path, List[String]) => IO[Unit],
-    selectFileInExplorer: Path => IO[Unit],
-    resizePinnedPanel: (PanelTarget, Int) => IO[Unit],
-    dragFileToDirectory: (Path, Path) => IO[Unit]
-)
 
 /** Saves buffers and watches their files for changes made outside the editor.
   *
@@ -190,10 +155,16 @@ trait StateManager extends StateEngine:
   def sessionService: SessionService
   def animationTicker: AnimationTicker
   def bufferManager: BufferManager
-  def panelManager: PanelManager
   def fileOpener: FileOpener
   def fileService: FileService
-  def paneManager: PaneManager
+
+  /** Not part of `StateManager`'s production API: #1724 deleted the `paneManager`/`panelManager` records whose methods
+    * (`pinPanel`, `movePinnedPanel`, `loadDirectoryTree`, `createPane`, `switchToPane`, ...) have no real production
+    * caller left, so they must not become new public `StateManager` methods purely to satisfy tests. `private[manager]`
+    * keeps this reachable only from `StateManagerTestFacade` (same package), which rebuilds those methods as test-scope
+    * extensions over the underlying capabilities this exposes.
+    */
+  private[manager] def composition: StateManagerComposition
 
 object StateManager:
 
@@ -309,7 +280,7 @@ object StateManager:
   private class StateManagerImpl(runtime: StateManagerRuntime, operations: StateManagerOperationBoundary)(using Balance)
       extends StateManager:
 
-    private val composition = new StateManagerComposition(
+    private[manager] val composition = new StateManagerComposition(
       runtime.themeNamesRef,
       runtime.quitSignal,
       runtime.logger,
