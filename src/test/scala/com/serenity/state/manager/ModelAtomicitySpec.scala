@@ -21,13 +21,14 @@ import com.serenity.command.{
   ViewIntent
 }
 import com.serenity.config.{AppConfig, MotionAccessibility, PreferredWindowSize}
-import com.serenity.keystroke.events.{Enter, InsertChar, NextTab, TabKey, Undo}
+import com.serenity.keystroke.events.{Enter, InsertChar, NextTab, TabKey, ToggleCommandRunner, Undo}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.*
 import com.serenity.state.undo.{HistoryEntry, UndoState}
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.presets.UiPresetStore
+import com.serenity.ui.layout.{PanelContent, PanelPosition}
+import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -77,7 +78,10 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
       writes     <- Ref.of[IO, Vector[Model]](Vector.empty)
     yield Recorded(new RecordingRef(underlying, writes), writes)
 
-  private def stateManagerOver(modelRef: Ref[IO, Model]): IO[StateManager] =
+  private def stateManagerOver(
+    modelRef: Ref[IO, Model],
+    uiPresetStore: Option[UiPresetStore] = None
+  ): IO[StateManager] =
     for
       directory           <- IO.blocking(Files.createTempDirectory("model-atomicity-spec"))
       themeNamesRef       <- Ref.of[IO, List[String]](Nil)
@@ -97,7 +101,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
         onFontConfigChanged = (_: FontConfig) => IO.unit,
         deviceTextScaleProvider = IO.pure(1.0),
         configPersistencePath = None,
-        uiPresetStore = UiPresetStore(directory.resolve("presets.json")),
+        uiPresetStore = uiPresetStore.getOrElse(UiPresetStore(directory.resolve("presets.json"))),
         windowSizeProvider = IO.pure(None),
         onPreferredWindowSizeChanged = (_: PreferredWindowSize) => IO.unit,
         fileDialog = None
@@ -271,6 +275,24 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     all(writes.map(model => diagnosticsPinned(model) == model.undo.undoStack.nonEmpty)) shouldBe true
   }
 
+  "Pinning a panel through the panel manager" should "commit the panel and its undo boundary in one write" in {
+    val program =
+      for
+        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        stateManager <- stateManagerOver(recorded.modelRef)
+        _            <- stateManager.panelManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 30)
+        writes       <- recorded.recordedWrites
+        after        <- stateManager.getModel
+      yield (writes, after)
+
+    val (writes, after) = program.unsafeRunSync()
+
+    diagnosticsPinned(after) shouldBe true
+    after.undo.undoStack should have size 1
+    writes should not be empty
+    all(writes.map(model => diagnosticsPinned(model) == model.undo.undoStack.nonEmpty)) shouldBe true
+  }
+
   "Unpinning a panel" should "commit the removal and its undo boundary in one write" in {
     val unpin = ViewIntent.SetPanelPin(PanelKind.Diagnostics, None)
     val program =
@@ -351,6 +373,32 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     val withCreated = writes.filter(_.app.persisted.buffers.size == 2)
     withCreated should not be empty
     all(withCreated.map(_.app.focusedBufferId)) shouldBe created.headOption
+  }
+
+  private def runnerPresetPreviews(model: Model): Option[List[UiPreset.Preview]] =
+    model.app.commandRunnerSurface.map(_.content).collect {
+      case SurfaceContent.CommandPalette(runner) =>
+        runner.uiPresetPreviews
+    }
+
+  "Opening the command runner" should "commit the runner and its UI preset previews in one write" in {
+    val program =
+      for
+        directory <- IO.blocking(Files.createTempDirectory("model-atomicity-presets"))
+        store = UiPresetStore(directory.resolve("presets.json"))
+        _            <- store.create(UiPreset.capture("Existing", AppState.initial, None))
+        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        stateManager <- stateManagerOver(recorded.modelRef, Some(store))
+        _            <- stateManager.applyEvent(ToggleCommandRunner)
+        writes       <- recorded.recordedWrites
+        after        <- stateManager.getModel
+      yield (writes, after)
+
+    val (writes, after) = program.unsafeRunSync()
+
+    runnerPresetPreviews(after).map(_.map(_.name)) shouldBe Some(List("Existing"))
+    writes should not be empty
+    all(writes.flatMap(runnerPresetPreviews).map(_.nonEmpty)) shouldBe true
   }
 
   private def replace(stateManager: StateManager, action: ReplaceWorkflowAction): IO[Unit] =

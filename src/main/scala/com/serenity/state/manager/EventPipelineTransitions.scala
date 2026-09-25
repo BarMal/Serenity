@@ -2,8 +2,11 @@ package com.serenity.state.manager
 
 import com.serenity.animation.SweepDirection
 import com.serenity.keystroke.events.ResizeEvent
-import com.serenity.state.models.AppState
+import com.serenity.rope.Balance
+import com.serenity.state.models.{AppState, BufferId, Focus, PaneId, SurfaceContent, replacedWhere}
 import com.serenity.state.reducers.{AppEventReducer, ReducerResult, SystemEventReducer}
+import com.serenity.ui.layout.SplitAxis
+import com.serenity.ui.presets.UiPreset
 
 /** The event pipeline's own steps around a reducer, as pure functions, so each lands in the event's single validated
   * commit instead of a write of its own after it (#1183, #1697).
@@ -32,3 +35,44 @@ private[manager] object EventPipelineTransitions:
         state.copy(persisted = state.persisted.copy(focus = focus))
       )
     else state
+
+  def withCommandRunnerUiPresetPreviews(model: Model, previews: List[UiPreset.Preview]): Model =
+    val state = model.app
+    state.commandRunnerSurface.fold(model) { surface =>
+      surface.content match
+        case SurfaceContent.CommandPalette(runner) =>
+          val updatedSurfaces = state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
+            _.copy(content = SurfaceContent.CommandPalette(runner.withUiPresetPreviews(previews)))
+          )
+          model.copy(app = state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces)))
+        case _ => model
+    }
+
+  /** Advances each buffer's `markdownPreviewEditGeneration`, marking an edit burst the preview has not caught up with.
+    */
+  def withMarkdownPreviewEditsBumped(state: AppState, bufferIds: List[BufferId]): AppState =
+    val buffers = bufferIds.foldLeft(state.persisted.buffers)((buffers, bufferId) =>
+      buffers.updatedWith(bufferId)(
+        _.map(buffer => buffer.copy(markdownPreviewEditGeneration = buffer.markdownPreviewEditGeneration + 1))
+      )
+    )
+    state.copy(persisted = state.persisted.copy(buffers = buffers))
+
+  /** Focus after a dismissed surface: the active editor pane, or -- when none is left -- a fresh empty buffer in a new
+    * pane, all in the dismissal's own commit.
+    */
+  def dismissedToEditor(state: AppState)(using Balance): AppState =
+    state.persisted.layout.activeEditorPaneId match
+      case Some(paneId) => focused(state, paneId)
+      case None =>
+        val creation = EditorTransitions.bufferCreated(state, "", None)
+        val (withPane, paneId) = EditorTransitions.paneInserted(
+          creation.created,
+          creation.created.persisted.layout.orderedPaneIds.lastOption,
+          Some(creation.bufferId),
+          SplitAxis.Horizontal
+        )
+        focused(withPane, paneId)
+
+  private def focused(state: AppState, paneId: PaneId): AppState =
+    state.copy(persisted = state.persisted.copy(focus = Focus.EditorPane(paneId)))

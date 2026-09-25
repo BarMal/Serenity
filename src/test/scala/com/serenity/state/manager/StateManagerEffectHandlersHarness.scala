@@ -87,8 +87,7 @@ private[manager] trait StateManagerEffectHandlersHarness:
       val markdownPreviewWindow   = MarkdownPreviewWindowAvailability.Unavailable
 
     val editor = new EffectEditorPort:
-      def updateState(update: AppState => AppState): IO[Unit] = stateRefVar.update(update)
-      def enqueueEvent(event: Event): IO[Unit]                = eventsVar.update(_ :+ event)
+      def enqueueEvent(event: Event): IO[Unit] = eventsVar.update(_ :+ event)
       def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
         committedVar.update(_ :+ newState) >> stateRefVar.set(newState)
       def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =

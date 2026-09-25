@@ -253,11 +253,18 @@ final private[manager] class StateManagerEventPipeline(
     def tabCycled(sweep: SweepDirection) =
       commitReducerResult(result, prevState, EventPipelineTransitions.withPaneFlow(_, sweep))
     event match
-      case CloseTab            => beginCloseAction(CloseScope.Current, prevState)
-      case Quit                => beginCloseAction(CloseScope.Quit, prevState)
-      case ToggleCommandRunner => reduced >> hydrateCommandRunnerUiPresets
-      case NextTab             => tabCycled(SweepDirection.Backward)
-      case PreviousTab         => tabCycled(SweepDirection.Forward)
+      case CloseTab => beginCloseAction(CloseScope.Current, prevState)
+      case Quit     => beginCloseAction(CloseScope.Quit, prevState)
+      case ToggleCommandRunner =>
+        uiPresetPreviews.flatMap(previews =>
+          commitReducerResult(
+            result,
+            prevState,
+            EventPipelineTransitions.withCommandRunnerUiPresetPreviews(_, previews)
+          )
+        )
+      case NextTab     => tabCycled(SweepDirection.Backward)
+      case PreviousTab => tabCycled(SweepDirection.Forward)
       case ToggleContextualToolbar | ToggleShortcutsHelp | ToggleTabList | ToggleRecentFilesInMode | NewTab |
           FileSearch | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane | _: CloseTabById |
           MoveTabLeft | MoveTabRight =>
@@ -273,23 +280,28 @@ final private[manager] class StateManagerEventPipeline(
     */
   private[manager] def scheduleMarkdownPreviewCommits(previousState: AppState): cats.effect.IO[Unit] =
     stateRef.get.flatMap { currentState =>
-      StateManagerEventPipeline.candidateLspBufferIds(previousState, currentState).toList.traverse_ { bufferId =>
-        currentState.persisted.buffers.get(bufferId) match
-          case Some(buffer)
-              if hasLiveMarkdownPreview(currentState, bufferId) &&
-                previousState.persisted.buffers.get(bufferId).exists(_.document.content != buffer.document.content) =>
-            val nextGeneration = buffer.markdownPreviewEditGeneration + 1
-            stateRef.update { s =>
-              s.persisted.buffers.get(bufferId).fold(s) { b =>
-                s.copy(persisted =
-                  s.persisted.copy(buffers =
-                    s.persisted.buffers.updated(bufferId, b.copy(markdownPreviewEditGeneration = nextGeneration))
-                  )
-                )
-              }
-            } >> operations.scheduleMarkdownPreviewCommit(bufferId, nextGeneration)
-          case _ => cats.effect.IO.unit
-      }
+      val edited =
+        StateManagerEventPipeline.candidateLspBufferIds(previousState, currentState).toList.filter { bufferId =>
+          hasLiveMarkdownPreview(currentState, bufferId) &&
+          currentState.persisted.buffers
+            .get(bufferId)
+            .exists(buffer =>
+              previousState.persisted.buffers.get(bufferId).exists(_.document.content != buffer.document.content)
+            )
+        }
+      if edited.isEmpty then cats.effect.IO.unit
+      else
+        modelCommit.updateValidated(model =>
+          Some(model.copy(app = EventPipelineTransitions.withMarkdownPreviewEditsBumped(model.app, edited)))
+        ) >> stateRef.get.flatMap { committed =>
+          edited.traverse_ { bufferId =>
+            val bumped = committed.persisted.buffers
+              .get(bufferId)
+              .map(_.markdownPreviewEditGeneration)
+              .filterNot(currentState.persisted.buffers.get(bufferId).map(_.markdownPreviewEditGeneration).contains)
+            bumped.fold(cats.effect.IO.unit)(operations.scheduleMarkdownPreviewCommit(bufferId, _))
+          }
+        }
     }
 
   private[manager] def hasLiveMarkdownPreview(state: AppState, bufferId: BufferId): Boolean =
@@ -351,27 +363,12 @@ final private[manager] class StateManagerEventPipeline(
       _ <- result.effects.filterNot(ModelCommit.isModelEffect).traverse_(interpretEffect)
     yield ()
 
-  private def hydrateCommandRunnerUiPresets: cats.effect.IO[Unit] =
+  // Listed before the toggle commits so the runner opens with its previews in the same write.
+  private def uiPresetPreviews: cats.effect.IO[List[UiPreset.Preview]] =
     uiPresetStore
       .list()
       .map(_.map(UiPreset.Preview.fromPreset))
       .handleErrorWith(error => logger.error(error)("[PRESET] Failed to list UI presets").map(_ => Nil))
-      .flatMap(previews => stateRef.update(state => updateCommandRunnerUiPresetPreviews(state, previews)))
-
-  private def updateCommandRunnerUiPresetPreviews(state: AppState, previews: List[UiPreset.Preview]): AppState =
-    state.commandRunnerSurface match
-      case Some(surface) =>
-        surface.content match
-          case SurfaceContent.CommandPalette(runner) =>
-            val updatedRunner = runner.withUiPresetPreviews(previews)
-            val updatedSurfaces = state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
-              _.copy(content = SurfaceContent.CommandPalette(updatedRunner))
-            )
-            state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
-          case _ =>
-            state
-      case None =>
-        state
 
   private[manager] def applyAnimationHooks(prevState: AppState): cats.effect.IO[Unit] =
     animations.applyAnimationHooks(prevState)
@@ -382,32 +379,23 @@ final private[manager] class StateManagerEventPipeline(
   private[manager] def advanceSurfaceAnimations(state: AppState): AppState =
     animations.advanceSurfaceAnimations(state)
 
-  private def applyComponentResult(result: ComponentResult, state: AppState): cats.effect.IO[AppState] =
+  private[manager] def applyComponentResult(result: ComponentResult, state: AppState): cats.effect.IO[AppState] =
     result match
       case ComponentResult.NoChange            => cats.effect.IO.pure(state)
       case ComponentResult.StateChange(update) => cats.effect.IO.pure(update(state))
       case ComponentResult.ReducerUpdate(result) =>
-        applyReducerResult(result, state) >> stateRef.get
+        stateRef.get.flatMap(committed => applyReducerResult(result, committed)) >> stateRef.get
       case ComponentResult.FocusTransfer(newFocus) =>
         cats.effect.IO.pure(state.copy(persisted = state.persisted.copy(focus = newFocus)))
       case ComponentResult.Dismiss =>
-        val dismissedState = dismissCurrentFocus(state)
-        dismissedState.persisted.layout.activeEditorPaneId match
-          case Some(paneId) =>
-            cats.effect.IO.pure(
-              dismissedState.copy(persisted = dismissedState.persisted.copy(focus = Focus.EditorPane(paneId)))
-            )
-          case None =>
-            for
-              _        <- stateRef.set(dismissedState)
-              bufferId <- createBuffer("")
-              paneId   <- createPane(Some(bufferId))
-              newState <- stateRef.get.map(s => s.copy(persisted = s.persisted.copy(focus = Focus.EditorPane(paneId))))
-            yield newState
+        cats.effect.IO.pure(EventPipelineTransitions.dismissedToEditor(dismissCurrentFocus(state)))
       case ComponentResult.ExecuteCommand(command) =>
+        // The command reads the committed state, so the one built so far commits (validated) first.
         for
-          _            <- stateRef.set(state)
-          _            <- interpretCommand(command, state)
+          committed    <- stateRef.get
+          _            <- validateAndUpdateState(state, committed)
+          current      <- stateRef.get
+          _            <- interpretCommand(command, current)
           updatedState <- stateRef.get
         yield updatedState
       case ComponentResult.Composite(results) =>

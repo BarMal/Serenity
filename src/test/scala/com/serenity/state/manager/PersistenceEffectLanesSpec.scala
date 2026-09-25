@@ -49,8 +49,7 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
     private val modelCommit         = new ModelCommit(modelRef, operations)
 
     val editor: EffectEditorPort = new EffectEditorPort:
-      def updateState(update: AppState => AppState): IO[Unit] = stateRef.update(update)
-      def enqueueEvent(event: Event): IO[Unit]                = operations.enqueueEvent(event)
+      def enqueueEvent(event: Event): IO[Unit] = operations.enqueueEvent(event)
       def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
         operations.validateAndUpdateState(newState, fallbackState)
       def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =

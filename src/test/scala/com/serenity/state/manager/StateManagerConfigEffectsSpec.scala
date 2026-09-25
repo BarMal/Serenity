@@ -62,8 +62,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
     val committed  = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
 
     val editor = new EffectEditorPort:
-      def updateState(update: AppState => AppState): IO[Unit] = stateRef.update(update)
-      def enqueueEvent(event: Event): IO[Unit]                = events.update(_ :+ event)
+      def enqueueEvent(event: Event): IO[Unit] = events.update(_ :+ event)
       def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
         committed.update(_ :+ newState) >> stateRef.set(newState)
       def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =

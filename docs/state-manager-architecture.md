@@ -67,7 +67,9 @@ running one. The command runner's double-tap timer is a switch-latest `Timer` jo
 `CommandRunnerBindingExpired`; a result's follow-up effects (`EffectResult.reduce`) are interpreted on the dispatcher
 after its commit. LSP traffic stays on `LspEffectQueue`, which is the `Lsp` lane already: one FIFO drained by
 `LspManager`'s single consumer, with results returning through `applyEvent`. The dispatch pipeline itself still
-performs I/O, and the capability ports still hold the state `Ref` (other direct writers remain until later slices).
+performs I/O, and the capability ports still hold the state `Ref`. Every state write goes through `AppStateValidation`
+(a surface change commits its undo boundary in the same model write) except the render tick's animation advance and
+the test-only `StateUpdater.updateState` seam.
 
 Event processing applies a reducer result's state before interpreting its effects. Document-analysis
 replacement cancels the previous analysis fiber before starting a replacement. Failures in optional

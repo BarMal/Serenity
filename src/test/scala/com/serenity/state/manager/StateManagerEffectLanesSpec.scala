@@ -129,9 +129,14 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
   private def previewState(editGeneration: Long): AppState =
     def editedBuffer(id: BufferId) =
       Buffer.fromString(id, "# notes").copy(markdownPreviewEditGeneration = editGeneration)
-    AppState.initial.copy(persisted =
-      AppState.initial.persisted
-        .copy(buffers = Map(previewA -> editedBuffer(previewA), previewB -> editedBuffer(previewB)))
+    AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(buffers =
+        AppState.initial.persisted.buffers ++ Map(
+          previewA -> editedBuffer(previewA),
+          previewB -> editedBuffer(previewB)
+        )
+      ),
+      runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(3))
     )
 
   private def committedGenerations(state: AppState): (Long, Long) =

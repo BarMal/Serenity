@@ -299,6 +299,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       calls    <- Ref.of[IO, List[String]](Nil)
       facade = new StateManagerFileFacade(
         stateRef,
+        update => stateRef.update(update),
         opened => calls.update(_ :+ s"open:$opened"),
         saved => calls.update(_ :+ s"save:$saved"),
         (saved, savedPath) => calls.update(_ :+ s"saveAs:$saved:$savedPath")

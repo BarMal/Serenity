@@ -8,13 +8,14 @@ import com.serenity.state.models.*
 
 final private[manager] class StateManagerFileFacade(
     stateRef: Ref[IO, AppState],
+    commitValidated: (AppState => AppState) => IO[Unit],
     loadFile: Path => IO[Unit],
     save: BufferId => IO[Unit],
     saveAs: (BufferId, Path) => IO[Unit]
 ):
 
   def setBufferFilePath(bufferId: BufferId, filePath: Path): IO[Unit] =
-    stateRef.update { state =>
+    commitValidated { state =>
       state.persisted.buffers.get(bufferId) match
         case Some(buffer) =>
           state.copy(persisted =
@@ -38,7 +39,7 @@ final private[manager] class StateManagerFileFacade(
     saveAs(bufferId, filePath)
 
   def markBufferSaved(bufferId: BufferId): IO[Unit] =
-    stateRef.update { state =>
+    commitValidated { state =>
       state.persisted.buffers.get(bufferId) match
         case Some(buffer) =>
           state.copy(persisted =
@@ -62,6 +63,7 @@ final private[manager] class StateManagerFileFacade(
 
 final private[manager] class StateManagerFileCapability(
     stateRef: Ref[IO, AppState],
+    commitValidated: (AppState => AppState) => IO[Unit],
     effects: StateManagerEffectHandlers,
     dispatch: IO[Unit] => IO[Unit],
     openFileAndWait: Path => IO[Unit]
@@ -74,6 +76,7 @@ final private[manager] class StateManagerFileCapability(
 
   private lazy val fileFacade = new StateManagerFileFacade(
     stateRef,
+    commitValidated,
     openFileAndWait,
     effects.saveBufferEffect,
     effects.saveBufferAsEffect
