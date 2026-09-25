@@ -7,7 +7,9 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.ModalOpenAsProjectRoot
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.state.reducers.ModalStateReducer
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -43,15 +45,20 @@ class FileWorkflowOpenAsProjectRootStateManagerSpec extends AnyFlatSpec with Mat
 
     try
       val stateManager = createStateManager()
-      stateManager.modalService
-        .showModal(
-          Modal.FileWorkflow(
-            FileWorkflowState(
-              mode = FileWorkflowMode.Open,
-              path = tempDir.toString,
-              activeField = FileWorkflowField.Path
+      stateManager
+        .updateState(state =>
+          ModalStateReducer
+            .show(
+              Modal.FileWorkflow(
+                FileWorkflowState(
+                  mode = FileWorkflowMode.Open,
+                  path = tempDir.toString,
+                  activeField = FileWorkflowField.Path
+                )
+              ),
+              state
             )
-          )
+            .state
         )
         .unsafeRunSync()
 
@@ -81,15 +88,20 @@ class FileWorkflowOpenAsProjectRootStateManagerSpec extends AnyFlatSpec with Mat
 
     try
       val stateManager = createStateManager()
-      stateManager.modalService
-        .showModal(
-          Modal.FileWorkflow(
-            FileWorkflowState(
-              mode = FileWorkflowMode.Open,
-              path = textFile.toString,
-              activeField = FileWorkflowField.Path
+      stateManager
+        .updateState(state =>
+          ModalStateReducer
+            .show(
+              Modal.FileWorkflow(
+                FileWorkflowState(
+                  mode = FileWorkflowMode.Open,
+                  path = textFile.toString,
+                  activeField = FileWorkflowField.Path
+                )
+              ),
+              state
             )
-          )
+            .state
         )
         .unsafeRunSync()
 
@@ -104,11 +116,16 @@ class FileWorkflowOpenAsProjectRootStateManagerSpec extends AnyFlatSpec with Mat
 
   it should "do nothing for a Save As workflow, which has no project-root concept" in {
     val stateManager = createStateManager()
-    stateManager.modalService
-      .showModal(
-        Modal.FileWorkflow(
-          FileWorkflowState(mode = FileWorkflowMode.SaveAs, filename = "notes.txt", path = "/tmp")
-        )
+    stateManager
+      .updateState(state =>
+        ModalStateReducer
+          .show(
+            Modal.FileWorkflow(
+              FileWorkflowState(mode = FileWorkflowMode.SaveAs, filename = "notes.txt", path = "/tmp")
+            ),
+            state
+          )
+          .state
       )
       .unsafeRunSync()
 

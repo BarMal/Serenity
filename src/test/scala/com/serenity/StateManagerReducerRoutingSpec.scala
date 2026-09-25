@@ -11,6 +11,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.state.reducers.{ModalStateReducer, PeekStateReducer}
 import com.serenity.testkit.AwaitCondition.awaitValue
 import com.serenity.ui.layout.*
 import org.scalatest.concurrent.Eventually
@@ -124,8 +125,12 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
     val initialState = stateManager.getCurrentState.unsafeRunSync()
     val bufferId     = initialState.focusedBufferId.get
 
-    stateManager.modalService
-      .showModal(Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")))
+    stateManager
+      .updateState(state =>
+        ModalStateReducer
+          .show(Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")), state)
+          .state
+      )
       .unsafeRunSync()
     stateManager.applyEvent(ModalNavigate(Direction.Right)).unsafeRunSync()
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 40))).unsafeRunSync()
@@ -182,27 +187,30 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
   it should "route modal and peek lifecycle through the state manager without losing focus invariants" in {
     val stateManager = createStateManager()
 
-    stateManager.modalService.showModal(Modal.GotoLine("7")).unsafeRunSync()
+    stateManager.applyEvent(OpenGotoLine).unsafeRunSync()
+    stateManager.applyEvent(InsertChar('7')).unsafeRunSync()
     val modalState = stateManager.getCurrentState.unsafeRunSync()
     val modalSurface =
       modalState.runtime.uiSurfaces.find(_.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("7")))
     modalSurface shouldBe defined
     modalState.persisted.focus shouldBe Focus.Surface(modalSurface.get.id)
 
-    stateManager.modalService.dismissModal().unsafeRunSync()
+    stateManager.applyEvent(ModalDismiss).unsafeRunSync()
     val afterDismiss = stateManager.getCurrentState.unsafeRunSync()
     afterDismiss.persisted.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
     afterDismiss.runtime.uiSurfaces.exists(
       _.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("7"))
     ) shouldBe false
 
-    stateManager.peekManager.showPeek(PeekContent.QuickInfo("hint"), CursorPosition(1, 2)).unsafeRunSync()
+    stateManager
+      .updateState(state => PeekStateReducer.show(PeekContent.QuickInfo("hint"), CursorPosition(1, 2), state).state)
+      .unsafeRunSync()
     val peekState   = stateManager.getCurrentState.unsafeRunSync()
     val peekSurface = peekState.runtime.uiSurfaces.find(_.content == SurfaceContent.QuickInfo("hint"))
     peekSurface shouldBe defined
     peekState.persisted.focus shouldBe Focus.Surface(peekSurface.get.id)
 
-    stateManager.peekManager.dismissPeek().unsafeRunSync()
+    stateManager.applyEvent(PeekInputEvent.Dismiss).unsafeRunSync()
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     finalState.persisted.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
     finalState.runtime.uiSurfaces.exists(_.content == SurfaceContent.QuickInfo("hint")) shouldBe false
@@ -223,11 +231,11 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
   it should "route focused modal events through the typed local handler path" in {
     val stateManager = createStateManager()
 
-    stateManager.modalService
-      .showModal(
-        Modal.FileWorkflow(
-          com.serenity.state.models.FileWorkflowState(mode = FileWorkflowMode.Open)
-        )
+    stateManager
+      .updateState(state =>
+        ModalStateReducer
+          .show(Modal.FileWorkflow(com.serenity.state.models.FileWorkflowState(mode = FileWorkflowMode.Open)), state)
+          .state
       )
       .unsafeRunSync()
 
@@ -258,7 +266,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
           )
       }
       .unsafeRunSync()
-    stateManager.modalService.showModal(Modal.Find("", Nil, 0)).unsafeRunSync()
+    stateManager.applyEvent(OpenFind).unsafeRunSync()
 
     "need".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager
@@ -304,7 +312,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
       )
       .get
       .id
-    stateManager.focusManager.switchFocus(Focus.Surface(pinnedSurfaceId)).unsafeRunSync()
+    stateManager.panelManager.switchToPinnedPanel(PanelTarget.ById(pinnedSurfaceId)).unsafeRunSync()
 
     stateManager.applyEvent(PanelInputEvent.ReturnFocus).unsafeRunSync()
 
@@ -315,7 +323,9 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
   it should "route focused peek events through the typed local handler path" in {
     val stateManager = createStateManager()
 
-    stateManager.peekManager.showPeek(PeekContent.QuickInfo("hint"), CursorPosition(1, 2)).unsafeRunSync()
+    stateManager
+      .updateState(state => PeekStateReducer.show(PeekContent.QuickInfo("hint"), CursorPosition(1, 2), state).state)
+      .unsafeRunSync()
     stateManager.applyEvent(PeekInputEvent.Navigate(Direction.Up)).unsafeRunSync()
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()

@@ -7,9 +7,10 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.command.CommandRegistry
 import com.serenity.keystroke.events.{Enter, TabKey}
 import com.serenity.rope.Balance
-import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.state.manager.{StateManager, ViewportStateReducer}
 import com.serenity.state.models.*
+import com.serenity.state.reducers.ModalStateReducer
 import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -83,11 +84,16 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
         // Open the modal on an untouched, valid state -- the drift is introduced only after the modal is showing,
         // mirroring the many other unchecked `Ref.update` paths elsewhere in this codebase that could plausibly
         // desync `nextBufferId` between a validated commit and this workflow's own completion.
-        validStateManager.modalService
-          .showModal(
-            Modal.FileWorkflow(
-              FileWorkflowState(mode = FileWorkflowMode.Open, filename = "notes.scala", path = tempRoot.toString)
-            )
+        validStateManager
+          .updateState(state =>
+            ModalStateReducer
+              .show(
+                Modal.FileWorkflow(
+                  FileWorkflowState(mode = FileWorkflowMode.Open, filename = "notes.scala", path = tempRoot.toString)
+                ),
+                state
+              )
+              .state
           )
           .unsafeRunSync()
         val stateManager = driftedStateManager(validStateManager.getCurrentState.unsafeRunSync())(
@@ -206,7 +212,9 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
 
     // Click far below the buffer's single remaining line, as a stale minimap rendering (from before the shrink)
     // would still permit.
-    stateManager.scrollManager.clickMinimap(paneId, 500).unsafeRunSync()
+    stateManager
+      .updateState(state => ViewportStateReducer.clickMinimap(paneId, 500, state).state)
+      .unsafeRunSync()
 
     val after = stateManager.getCurrentState.unsafeRunSync()
     after.isValid shouldBe true
@@ -404,11 +412,15 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
     * `stateRef.update`, bypassing the focus-target-exists check `AppStateValidation` otherwise enforces for every other
     * commit path -- so a focus switch onto a pane or surface that doesn't exist was silently applied.
     */
-  "StateManager.focusManager.switchFocus" should "not move focus onto a pane that does not exist" in {
+  "A focus switch" should "not move focus onto a pane that does not exist" in {
     val stateManager = createStateManager()
     val before       = stateManager.getCurrentState.unsafeRunSync()
 
-    stateManager.focusManager.switchFocus(Focus.EditorPane(PaneId(9999))).unsafeRunSync()
+    stateManager
+      .updateStateValidated(state =>
+        state.copy(persisted = state.persisted.copy(focus = Focus.EditorPane(PaneId(9999))))
+      )
+      .unsafeRunSync()
 
     val after = stateManager.getCurrentState.unsafeRunSync()
     after.persisted.focus shouldBe before.persisted.focus
@@ -419,7 +431,11 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
     val before       = stateManager.getCurrentState.unsafeRunSync()
 
-    stateManager.focusManager.switchFocus(Focus.Surface(SurfaceId("nonexistent-surface"))).unsafeRunSync()
+    stateManager
+      .updateStateValidated(state =>
+        state.copy(persisted = state.persisted.copy(focus = Focus.Surface(SurfaceId("nonexistent-surface"))))
+      )
+      .unsafeRunSync()
 
     val after = stateManager.getCurrentState.unsafeRunSync()
     after.persisted.focus shouldBe before.persisted.focus
@@ -431,7 +447,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
     val secondBuffer = stateManager.bufferManager.createBuffer("second", None).unsafeRunSync()
     val secondPane   = stateManager.paneManager.createPane(Some(secondBuffer)).unsafeRunSync()
 
-    stateManager.focusManager.switchFocus(Focus.EditorPane(secondPane)).unsafeRunSync()
+    stateManager.paneManager.switchToPane(secondPane).unsafeRunSync()
 
     val after = stateManager.getCurrentState.unsafeRunSync()
     after.persisted.focus shouldBe Focus.EditorPane(secondPane)
