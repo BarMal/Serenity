@@ -54,14 +54,14 @@ trait StateEngine extends StateReader, StateUpdater, EventApplier
 
 /** Advances renderer-visible animation state.
   *
-  * A capability record per #1017 -- see `BufferManager` above for the shape rationale. `StateManager` holds one of
+  * A capability record per #1017 -- see `PaneManager` below for the shape rationale. `StateManager` holds one of
   * these as a field instead of mixing this trait in directly.
   */
 final case class AnimationTicker(advanceAnimationsOnTick: IO[Boolean])
 
 /** Owns application shutdown and periodic session persistence.
   *
-  * A capability record per #1017 -- see `BufferManager` above for the shape rationale. `StateManager` holds one of
+  * A capability record per #1017 -- see `PaneManager` below for the shape rationale. `StateManager` holds one of
   * these as a field instead of mixing this trait in directly. `awaitQuit` and `intervalSaveStream` hold their
   * descriptions directly (same as `LspEffectSource.lspEffectStream`); `forceQuit` does too, since every call site
   * invokes it immediately rather than passing the unapplied function around, so a plain `IO[Unit]` field (not
@@ -87,7 +87,7 @@ final case class LspEffectSource(lspEffectStream: Stream[IO, LspEffect])
 
 /** Reads persisted session metadata needed before startup restoration.
   *
-  * A cold capability expressed as a record of functions rather than a trait -- see #1017 and `BufferManager` above for
+  * A cold capability expressed as a record of functions rather than a trait -- see #1017 and `PaneManager` below for
   * the shape rationale. `StateManager` holds one of these as a field (a "record of records") instead of mixing this
   * trait in directly.
   */
@@ -98,35 +98,23 @@ final case class SessionStartupInfo(
 
 /** Opens a file into editor state.
   *
-  * A capability record per #1017 -- see `BufferManager` above for the shape rationale. `StateManager` holds one of
+  * A capability record per #1017 -- see `PaneManager` below for the shape rationale. `StateManager` holds one of
   * these as a field instead of mixing this trait in directly.
   */
 final case class FileOpener(openFile: Path => IO[Unit])
 
 /** Executes editor commands.
   *
-  * A capability record per #1017 -- see `BufferManager` above for the shape rationale. `StateManager` holds one of
+  * A capability record per #1017 -- see `PaneManager` below for the shape rationale. `StateManager` holds one of
   * these as a field instead of mixing this trait in directly.
   */
 final case class CommandExecutor(executeCommand: Command => IO[Unit])
 
-/** Manages editor buffers.
+/** Manages editor panes, tabs, and splits.
   *
   * A capability record per #1017: a case class of functions rather than a trait, one of `StateManager`'s "record of
   * records" slices from its original 18-trait facade -- `StateManager` holds one of these as a field instead of mixing
-  * this trait in directly. The former default on `createBuffer`'s `filePath` parameter can't survive as a case class
-  * field, so callers now pass `None` explicitly.
-  */
-final case class BufferManager(
-    createBuffer: (String, Option[Path]) => IO[BufferId],
-    createNewEmptyBuffer: IO[BufferId],
-    updateBuffer: (BufferId, String) => IO[Unit]
-)
-
-/** Manages editor panes, tabs, and splits.
-  *
-  * A capability record per #1017 -- see `BufferManager` above for the shape rationale. `StateManager` holds one of
-  * these as a field instead of mixing this trait in directly. Its methods are split across the viewport and editor
+  * this trait in directly. Its methods are split across the viewport and editor
   * capability classes, so the record is assembled in `StateManagerComposition` rather than in a single class. Case
   * class fields can't carry default parameter values, so `createPane` takes `Option[BufferId]` rather than defaulting
   * it to `None`.
@@ -140,14 +128,14 @@ final case class PaneManager(
 
 /** Reads the persisted editor session.
   *
-  * A capability record per #1017 -- see `BufferManager` above for the shape rationale. `StateManager` holds one of
+  * A capability record per #1017 -- see `PaneManager` above for the shape rationale. `StateManager` holds one of
   * these as a field instead of mixing this trait in directly.
   */
 final case class SessionService(loadSession: IO[Option[AppState]])
 
 /** Manages pinned panels and the file explorer.
   *
-  * A capability record per #1017 -- see `BufferManager` above for the shape rationale. `StateManager` holds one of
+  * A capability record per #1017 -- see `PaneManager` above for the shape rationale. `StateManager` holds one of
   * these as a field instead of mixing this trait in directly.
   */
 final case class PanelManager(
@@ -166,7 +154,7 @@ final case class PanelManager(
 
 /** Saves buffers and watches their files for changes made outside the editor.
   *
-  * A capability record per #1017 -- see `BufferManager` above for the shape rationale. `StateManager` holds one of
+  * A capability record per #1017 -- see `PaneManager` above for the shape rationale. `StateManager` holds one of
   * these as a field instead of mixing this trait in directly.
   */
 final case class FileService(
@@ -189,7 +177,6 @@ trait StateManager extends StateEngine:
   def commandExecutor: CommandExecutor
   def sessionService: SessionService
   def animationTicker: AnimationTicker
-  def bufferManager: BufferManager
   def panelManager: PanelManager
   def fileOpener: FileOpener
   def fileService: FileService

@@ -8,6 +8,7 @@ import com.serenity.command.{Command, CommandCategory, CommandIntent, SessionInt
 import com.serenity.config.PreferredWindowSize
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
+import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -108,6 +109,33 @@ object StateManagerTestFacade:
 
     def clearSession: IO[Unit] =
       stateManager.commandExecutor.executeCommand(sessionCommand("clear-session", SessionIntent.ClearSession))
+
+    /** A new buffer with `content` (and, optionally, `filePath`), for specs that need one at a specific starting
+      * state rather than through `FileIntent.NewFile`/file-open, which only ever produce an empty or disk-backed
+      * buffer (#1724).
+      */
+    def createBuffer(content: String, filePath: Option[Path])(using Balance): IO[BufferId] =
+      stateManager.getCurrentState.flatMap { state =>
+        val creation = EditorTransitions.bufferCreated(state, content, filePath)
+        stateManager.updateState(_ => creation.created).as(creation.bufferId)
+      }
+
+    def createNewEmptyBuffer(using Balance): IO[BufferId] =
+      stateManager.getCurrentState.flatMap { state =>
+        val (newState, bufferId) = EditorState.createNewEmptyBuffer(state)
+        stateManager.updateState(_ => newState).as(bufferId)
+      }
+
+    /** Replaces `bufferId`'s content wholesale, for specs that need arbitrary starting content rather than driving it
+      * in through keystroke events. Unlike production edits (which flow through the event pipeline's own
+      * `LspDocumentSync`), this pure state write raises no LSP `didChange` -- nothing here asserts on one (#1724).
+      */
+    def updateBuffer(bufferId: BufferId, content: String)(using Balance): IO[Unit] =
+      stateManager.getCurrentState.flatMap { state =>
+        EditorTransitions.bufferContentReplaced(state, bufferId, content) match
+          case Some(replacement) => stateManager.updateState(_ => replacement.state)
+          case None               => IO.unit
+      }
 
   private def updateBuffer(bufferId: BufferId)(change: Buffer => Buffer): AppState => AppState = state =>
     state.persisted.buffers.get(bufferId) match

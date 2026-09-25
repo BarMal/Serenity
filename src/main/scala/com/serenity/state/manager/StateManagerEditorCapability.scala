@@ -1,19 +1,15 @@
 package com.serenity.state.manager
 
-import java.nio.file.Path
-
 import scala.util.Random
 
 import cats.effect.IO
 import com.serenity.animation.CharacterKey
 import com.serenity.config.VisualFlairLevel
-import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
 final private[manager] class StateManagerEditorCapability(
     modelCommit: ModelCommit,
-    lspQueue: LspEffectQueue,
     animations: AnimationChoreography,
     operations: StateManagerOperationBoundary,
     // Seeds the companion sprite's pseudo-random idle-to-action rolls (see `CompanionSpriteState`'s transition
@@ -21,7 +17,7 @@ final private[manager] class StateManagerEditorCapability(
     // transition logic itself never touches unseeded randomness directly, only what this IO-boundary constructor
     // passes it. Tests construct this class with a seeded `Random` for a deterministic trace.
     companionSpriteRandom: Random = new Random()
-)(using balance: com.serenity.rope.Balance):
+):
 
   def getModel: IO[Model] = modelCommit.model
 
@@ -173,38 +169,6 @@ final private[manager] class StateManagerEditorCapability(
   private def isWithinViewport(viewport: Viewport)(key: CharacterKey): Boolean =
     key.line >= viewport.topLine && key.line < viewport.topLine + viewport.visibleLines &&
       key.column >= viewport.leftColumn && key.column < viewport.leftColumn + viewport.visibleColumns
-
-  val bufferManager: BufferManager = BufferManager(
-    createBuffer = createBuffer,
-    createNewEmptyBuffer = createNewEmptyBuffer(),
-    updateBuffer = updateBuffer
-  )
-
-  private def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
-    modelCommit.currentState.flatMap { state =>
-      val creation = EditorTransitions.bufferCreated(state, content, filePath)
-      modelCommit.commitState(creation.created, creation.idAdvanced).as(creation.bufferId)
-    }
-
-  private def createNewEmptyBuffer(): IO[BufferId] =
-    modelCommit.currentState.flatMap { state =>
-      val (newState, bufferId) = EditorState.createNewEmptyBuffer(state)(using balance)
-      modelCommit.commitState(newState, state).as(bufferId)
-    }
-
-  private def updateBuffer(bufferId: BufferId, content: String): IO[Unit] =
-    modelCommit.currentState.flatMap { state =>
-      EditorTransitions.bufferContentReplaced(state, bufferId, content) match
-        case Some(replacement) =>
-          modelCommit.commitState(replacement.state, state) >> modelCommit.currentState.flatMap { committed =>
-            if committed.persisted.buffers.get(bufferId).contains(replacement.buffer) then
-              replacement.documentChange.fold(IO.unit) {
-                case (uri, languageId, text) => lspQueue.enqueueDocumentChange(uri, languageId, text)
-              }
-            else IO.unit
-          }
-        case None => IO.unit
-    }
 
   def createPane(bufferId: Option[BufferId] = None): IO[PaneId] =
     modelCommit.currentState.flatMap { state =>

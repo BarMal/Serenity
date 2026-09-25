@@ -132,7 +132,6 @@ private[manager] class StateManagerComposition(
 
   private val editor = new StateManagerEditorCapability(
     modelCommit,
-    runtimeLspQueue,
     animations,
     operations
   )
