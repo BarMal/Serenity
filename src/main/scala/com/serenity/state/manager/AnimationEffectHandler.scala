@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import com.serenity.animation.{AnimationOwner, AnimationState}
 import com.serenity.state.models.BufferId
 import com.serenity.state.reducers.AnimationEffect
@@ -11,10 +11,12 @@ import com.serenity.state.reducers.AnimationEffect
   * (`ModelCommit.applyModelEffects`); `interpret` covers an effect that reaches the effect interpreter on its own. The
   * resulting state is read back via `StateManager.getBufferAnimations`.
   */
-final private[manager] class AnimationEffectHandler(bufferAnimationsRef: Ref[IO, Map[BufferId, AnimationState]]):
+final private[manager] class AnimationEffectHandler(
+    updateBufferAnimations: (Map[BufferId, AnimationState] => Map[BufferId, AnimationState]) => IO[Unit]
+):
 
   def interpret(effect: AnimationEffect): IO[Unit] =
-    bufferAnimationsRef.update(AnimationEffectHandler.applied(_, effect))
+    updateBufferAnimations(AnimationEffectHandler.applied(_, effect))
 
 private[manager] object AnimationEffectHandler:
 

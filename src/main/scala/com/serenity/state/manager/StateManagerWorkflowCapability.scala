@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import java.nio.file.{Files, Path}
 
-import cats.effect.{Deferred, IO, Ref}
+import cats.effect.{Deferred, IO}
 import com.serenity.io.FileManager
 import com.serenity.session.{SessionManager, SessionPersistence}
 import com.serenity.state.core.EditorState
@@ -15,7 +15,6 @@ import org.typelevel.log4cats.Logger
   * [[FileWorkflowTransitions]] and [[SessionWorkflowTransitions]]; each step here commits its result once, validated.
   */
 final private[manager] class StateManagerWorkflowCapability(
-    stateRef: Ref[IO, AppState],
     modelCommit: ModelCommit,
     quitSignal: Deferred[IO, Unit],
     logger: Logger[IO],
@@ -31,17 +30,14 @@ final private[manager] class StateManagerWorkflowCapability(
 
   private val close = new CloseWorkflowTransitions(operations.ensureCommandRunnerSurface)
 
-  private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-    operations.validateAndUpdateState(newState, fallbackState)
-
   private def commit(transition: AppState => AppState): IO[Unit] =
-    stateRef.get.flatMap(current => validateAndUpdateState(transition(current), current))
+    modelCommit.currentState.flatMap(current => modelCommit.commitState(transition(current), current))
 
   private val fileWorkflow = new StateManagerFileWorkflow(
-    stateRef,
+    modelCommit.currentState,
     logger,
     fileManager,
-    validateAndUpdateState,
+    modelCommit.commitState,
     lanes,
     filePersistence.openFile,
     filePersistence.inspectBeforeSave,
@@ -57,7 +53,7 @@ final private[manager] class StateManagerWorkflowCapability(
   private[manager] def openReloadConflictModal(state: AppState, bufferId: BufferId, bufferLabel: String): IO[Unit] =
     val modalState =
       ModalStateReducer.show(Modal.ReloadConflict(ReloadConflictState(bufferId, bufferLabel)), state).state
-    validateAndUpdateState(modalState, state)
+    modelCommit.commitState(modalState, state)
 
   private def reloadConflictSurface(state: AppState, surfaceId: SurfaceId): Option[ReloadConflictState] =
     state.runtime.modalStack.find(_.id == surfaceId).collect {
@@ -65,7 +61,7 @@ final private[manager] class StateManagerWorkflowCapability(
     }
 
   private[manager] def submitReloadConflictEffect(surfaceId: SurfaceId): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    modelCommit.currentState.flatMap { state =>
       reloadConflictSurface(state, surfaceId) match
         case Some(workflow) =>
           val dismiss = commit(_.dismissTopModal)
@@ -89,12 +85,12 @@ final private[manager] class StateManagerWorkflowCapability(
 
   private[manager] def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
     filePersistence.settlePendingSaves(close.closeTargets(scope, state)) >>
-      stateRef.get.flatMap(current => commitClose(current, close.begun(scope, current)))
+      modelCommit.currentState.flatMap(current => commitClose(current, close.begun(scope, current)))
 
   /** Commits a close step, then -- if it resolved the last buffer -- quits or shows the start page. */
   private def commitClose(fallback: AppState, transition: CloseTransition): IO[Unit] =
-    validateAndUpdateState(transition.state, fallback) >>
-      transition.completed.fold(IO.unit)(scope => stateRef.get.flatMap(finishCloseScope(scope, _)))
+    modelCommit.commitState(transition.state, fallback) >>
+      transition.completed.fold(IO.unit)(scope => modelCommit.currentState.flatMap(finishCloseScope(scope, _)))
 
   /** The terminal step once every buffer a close action targets has been resolved: Quit persists and quits;
     * ReturnToStartPage snapshots the session and swaps the editor for a freshly-built start page; the rest do nothing.
@@ -122,7 +118,7 @@ final private[manager] class StateManagerWorkflowCapability(
           recentFiles = readableRecentFiles,
           resumeIdentifier = Some(StartupPageContent.sessionResumeIdentifier(committed))
         )
-        validateAndUpdateState(startPageStateFrom(committed, page), committed)
+        modelCommit.commitState(startPageStateFrom(committed, page), committed)
       }
 
   private def startPageStateFrom(committed: AppState, page: StartupPage): AppState =
@@ -149,12 +145,12 @@ final private[manager] class StateManagerWorkflowCapability(
     )
 
   private[manager] def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    modelCommit.currentState.flatMap { state =>
       close.closePrompt(state, surfaceId) match
         case Some(workflow) =>
           workflow.selectedChoice match
             case CloseWorkflowChoice.Cancel =>
-              validateAndUpdateState(close.abandoned(surfaceId, workflow, state), state)
+              modelCommit.commitState(close.abandoned(surfaceId, workflow, state), state)
             case CloseWorkflowChoice.Discard =>
               commitClose(state, close.resolved(workflow, state))
             case CloseWorkflowChoice.Save =>
@@ -164,7 +160,7 @@ final private[manager] class StateManagerWorkflowCapability(
                 case Some(_) =>
                   requestSaveAsFileDialog(state, Some(workflow.currentBufferId))
                 case None =>
-                  validateAndUpdateState(close.clearCloseActions(close.dismissModalSurface(state)), state)
+                  modelCommit.commitState(close.clearCloseActions(close.dismissModalSurface(state)), state)
         case None =>
           IO.unit
     }
@@ -176,14 +172,14 @@ final private[manager] class StateManagerWorkflowCapability(
     val bufferId = workflow.currentBufferId
     filePersistence.saveExistingBuffer(bufferId).attempt.flatMap {
       case Right(()) =>
-        stateRef.get.flatMap { saved =>
+        modelCommit.currentState.flatMap { saved =>
           if saved.persisted.buffers.get(bufferId).exists(!_.hasUnsavedChanges) then
             commitClose(saved, close.resolved(workflow, saved))
-          else validateAndUpdateState(close.abandoned(surfaceId, workflow, saved), saved)
+          else modelCommit.commitState(close.abandoned(surfaceId, workflow, saved), saved)
         }
       case Left(error: com.serenity.richtext.LossyRichTextOverwriteException) =>
         // The Save-As form opens over the prompt and resumes this close once it saves (continueCloseAfterFormSaveAs).
-        stateRef.get.flatMap(current => showSaveAsWorkflow(current, bufferId, error.getMessage))
+        modelCommit.currentState.flatMap(current => showSaveAsWorkflow(current, bufferId, error.getMessage))
       case Left(_: com.serenity.io.FileManagerError.ExternalConflict) =>
         commit(close.conflicted(surfaceId, workflow, _))
       case Left(error) =>
@@ -224,10 +220,10 @@ final private[manager] class StateManagerWorkflowCapability(
     * or -- when no close workflow is waiting on this buffer -- just dismiss the dialog.
     */
   private def continueCloseAfterFormSaveAs(surfaceId: SurfaceId, bufferId: BufferId): IO[Unit] =
-    stateRef.get.flatMap { saved =>
+    modelCommit.currentState.flatMap { saved =>
       close.pendingOn(saved, bufferId) match
         case Some(closeWorkflow) => commitClose(saved, close.resolvedBySaveAs(closeWorkflow, saved))
-        case None                => validateAndUpdateState(WorkflowSurfaces.dismissedToEditor(saved, surfaceId), saved)
+        case None                => modelCommit.commitState(WorkflowSurfaces.dismissedToEditor(saved, surfaceId), saved)
     }
 
   private[manager] def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit] =
@@ -259,7 +255,7 @@ final private[manager] class StateManagerWorkflowCapability(
         logger.debug("[FILE] Save As requested without a focused buffer")
 
   private def continueCloseAfterNativeSaveAs(bufferId: BufferId): IO[Unit] =
-    stateRef.get.flatMap(saved =>
+    modelCommit.currentState.flatMap(saved =>
       close
         .pendingOn(saved, bufferId)
         .fold(IO.unit)(workflow => commitClose(saved, close.resolvedBySaveAs(workflow, saved)))
@@ -314,7 +310,7 @@ final private[manager] class StateManagerWorkflowCapability(
     * as a cancel, matching `ModalSessionReducer`'s own guard on `ModalSubmit`.
     */
   private[manager] def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    modelCommit.currentState.flatMap { state =>
       val dismissed = WorkflowSurfaces.dismissedToEditor(state, surfaceId)
       val write = SessionWorkflowTransitions.sessionNamePrompt(state, surfaceId) match
         case Some((SessionNamePromptMode.SaveAs, input)) if input.trim.nonEmpty =>
@@ -323,14 +319,14 @@ final private[manager] class StateManagerWorkflowCapability(
           Some(sessionManager.renameSession(sessionId, input.trim))
         case _ =>
           None
-      validateAndUpdateState(dismissed, state) >> write.fold(IO.unit)(lanes.submitEffect(SessionLane, _))
+      modelCommit.commitState(dismissed, state) >> write.fold(IO.unit)(lanes.submitEffect(SessionLane, _))
     }
 
   /** Completes an `Open`-purpose `SessionList` selection: the picked session loads on the Session lane and replaces the
     * current one, as `SessionIntent.RestoreSession` does, if the picker is still open when it arrives.
     */
   private[manager] def submitSessionListEffect(surfaceId: SurfaceId): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    modelCommit.currentState.flatMap { state =>
       SessionWorkflowTransitions
         .sessionPicker(state, surfaceId)
         .collect { case (sessions, selectedIndex, SessionListPurpose.Open) => sessions.lift(selectedIndex) }
@@ -345,7 +341,7 @@ final private[manager] class StateManagerWorkflowCapability(
               )
           )
         case None =>
-          validateAndUpdateState(WorkflowSurfaces.dismissedToEditor(state, surfaceId), state)
+          modelCommit.commitState(WorkflowSurfaces.dismissedToEditor(state, surfaceId), state)
     }
 
   private[manager] def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =

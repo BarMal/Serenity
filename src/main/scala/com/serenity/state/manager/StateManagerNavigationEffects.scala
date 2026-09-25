@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.{CommentsIntent, NavigationIntent}
 import com.serenity.state.models.*
@@ -8,9 +8,9 @@ import com.serenity.state.reducers.AppEffect
 
 /** Commits the pure [[NavigationTransitions]] result for a navigation or comment command. */
 final private[manager] class StateManagerNavigationEffects(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     logger: org.typelevel.log4cats.Logger[IO],
-    validateAndUpdateState: (AppState, AppState) => IO[Unit],
+    commitState: (AppState, AppState) => IO[Unit],
     interpretEffect: AppEffect => IO[Unit]
 ):
 
@@ -21,10 +21,10 @@ final private[manager] class StateManagerNavigationEffects(
     commit(NavigationTransitions.navigation(intent, _))
 
   private def commit(transition: AppState => NavigationOutcome): IO[Unit] =
-    stateRef.get.flatMap { current =>
+    currentState.flatMap { current =>
       transition(current) match
         case NavigationOutcome.Applied(result) =>
-          validateAndUpdateState(result.state, current) >> result.effects.traverse_(interpretEffect)
+          commitState(result.state, current) >> result.effects.traverse_(interpretEffect)
         case NavigationOutcome.Ignored(debugLog) =>
           debugLog.traverse_(logger.debug(_))
     }

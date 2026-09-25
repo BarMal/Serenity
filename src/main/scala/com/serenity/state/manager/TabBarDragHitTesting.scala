@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.keystroke.events.{MouseButton, MouseDrag, MousePress}
 import com.serenity.state.core.EditorState
@@ -13,7 +13,7 @@ import com.serenity.ui.layout.LayoutEngine
   * all, and a record fakes trivially without one (#1017).
   */
 final private[manager] case class TabBarDragHitTestingPort(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     applyReducerResult: (ReducerResult, AppState) => IO[Unit]
 )
 
@@ -29,10 +29,10 @@ final private[manager] case class TabBarDragHitTestingPort(
 final private[manager] class TabBarDragHitTesting(port: TabBarDragHitTestingPort):
 
   def handleTabBarPress(press: MousePress, state: AppState): IO[Boolean] =
-    MouseTransition.commit(port.stateRef, port.applyReducerResult)(TabBarDragHitTesting.press(press, state))
+    MouseTransition.commit(port.currentState, port.applyReducerResult)(TabBarDragHitTesting.press(press, state))
 
   def handleTabBarDrag(drag: MouseDrag, state: AppState): IO[Boolean] =
-    MouseTransition.commit(port.stateRef, port.applyReducerResult)(TabBarDragHitTesting.drag(drag, state))
+    MouseTransition.commit(port.currentState, port.applyReducerResult)(TabBarDragHitTesting.drag(drag, state))
 
 private[manager] object TabBarDragHitTesting:
 

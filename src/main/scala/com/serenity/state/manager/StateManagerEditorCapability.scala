@@ -12,7 +12,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
 final private[manager] class StateManagerEditorCapability(
-    modelRef: cats.effect.Ref[IO, Model],
+    modelCommit: ModelCommit,
     lspQueue: LspEffectQueue,
     animations: AnimationChoreography,
     operations: StateManagerOperationBoundary,
@@ -23,39 +23,36 @@ final private[manager] class StateManagerEditorCapability(
     companionSpriteRandom: Random = new Random()
 )(using balance: com.serenity.rope.Balance):
 
-  private val stateRef            = Model.appRef(modelRef)
-  private val bufferAnimationsRef = Model.bufferAnimationsRef(modelRef)
+  def getModel: IO[Model] = modelCommit.model
 
-  def getModel: IO[Model] = modelRef.get
+  def getCurrentState: IO[AppState] = modelCommit.currentState
 
-  def getCurrentState: IO[AppState] = stateRef.get
-
-  private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-    operations.validateAndUpdateState(newState, fallbackState)
-
-  def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = bufferAnimationsRef.get
+  def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] =
+    modelCommit.model.map(_.bufferAnimations)
 
   val focusManager: FocusManager = FocusManager(switchFocus = switchFocus)
 
   private def switchFocus(newFocus: Focus): IO[Unit] =
-    stateRef.get.flatMap(state => validateAndUpdateState(EditorTransitions.focused(state, newFocus), state))
+    modelCommit.currentState.flatMap(state =>
+      modelCommit.commitState(EditorTransitions.focused(state, newFocus), state)
+    )
 
   def updateState(update: AppState => AppState): IO[Unit] =
-    stateRef.update(update)
+    modelCommit.updateUnvalidated(model => model.copy(app = update(model.app))).void
 
   def updateStateValidated(update: AppState => AppState): IO[Unit] =
-    operations.dispatch(stateRef.get.flatMap(state => validateAndUpdateState(update(state), state)))
+    operations.dispatch(modelCommit.currentState.flatMap(state => modelCommit.commitState(update(state), state)))
 
   def updateBufferAnimations(
     update: Map[BufferId, com.serenity.animation.AnimationState] => Map[BufferId, com.serenity.animation.AnimationState]
   ): IO[Unit] =
-    bufferAnimationsRef.update(update)
+    modelCommit.updateBufferAnimations(update)
 
   val animationTicker: AnimationTicker = AnimationTicker(advanceAnimationsOnTick = advanceAnimationsOnTick())
 
   private def advanceAnimationsOnTick(): IO[Boolean] =
     for
-      model <- modelRef.get
+      model <- modelCommit.model
       state            = model.app
       bufferAnimations = model.bufferAnimations
       hasBufferAnimations = state.persisted.buffers.keys.exists(id =>
@@ -91,13 +88,10 @@ final private[manager] class StateManagerEditorCapability(
     flairLevel: VisualFlairLevel,
     companionSpriteSeed: Long
   ): IO[Boolean] =
-    // `modify` rather than a `set`: writers outside the dispatcher (`updateState`, the buffer/panel records) still
-    // exist, and `modify` keeps this tick atomic with them. It may retry, so everything it reads is passed in.
-    modelRef
-      .modify { current =>
-        val next = advanceModel(current, hasCompanionSprite, flairLevel, companionSpriteSeed)
-        (next, next)
-      }
+    // An atomic update rather than a `set`: writers outside the dispatcher (`updateState`, the buffer/panel records)
+    // still exist, and this keeps the tick atomic with them. It may retry, so everything it reads is passed in.
+    modelCommit
+      .updateUnvalidated(advanceModel(_, hasCompanionSprite, flairLevel, companionSpriteSeed))
       .map { next =>
         val newState = next.app
         newState.persisted.buffers.keys.exists(id => next.bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
@@ -204,22 +198,22 @@ final private[manager] class StateManagerEditorCapability(
   )
 
   private def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
-    stateRef.get.flatMap { state =>
+    modelCommit.currentState.flatMap { state =>
       val creation = EditorTransitions.bufferCreated(state, content, filePath)
-      validateAndUpdateState(creation.created, creation.idAdvanced).as(creation.bufferId)
+      modelCommit.commitState(creation.created, creation.idAdvanced).as(creation.bufferId)
     }
 
   private def createNewEmptyBuffer(): IO[BufferId] =
-    stateRef.get.flatMap { state =>
+    modelCommit.currentState.flatMap { state =>
       val (newState, bufferId) = EditorState.createNewEmptyBuffer(state)(using balance)
-      validateAndUpdateState(newState, state).as(bufferId)
+      modelCommit.commitState(newState, state).as(bufferId)
     }
 
   private def updateBuffer(bufferId: BufferId, content: String): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    modelCommit.currentState.flatMap { state =>
       EditorTransitions.bufferContentReplaced(state, bufferId, content) match
         case Some(replacement) =>
-          validateAndUpdateState(replacement.state, state) >> stateRef.get.flatMap { committed =>
+          modelCommit.commitState(replacement.state, state) >> modelCommit.currentState.flatMap { committed =>
             if committed.persisted.buffers.get(bufferId).contains(replacement.buffer) then
               replacement.documentChange.fold(IO.unit) {
                 case (uri, languageId, text) => lspQueue.enqueueDocumentChange(uri, languageId, text)
@@ -230,20 +224,20 @@ final private[manager] class StateManagerEditorCapability(
     }
 
   def createPane(bufferId: Option[BufferId] = None): IO[PaneId] =
-    stateRef.get.flatMap { state =>
+    modelCommit.currentState.flatMap { state =>
       val (newState, paneId) = EditorTransitions.paneInserted(
         state,
         state.persisted.layout.orderedPaneIds.lastOption,
         bufferId,
         SplitAxis.Horizontal
       )
-      validateAndUpdateState(newState, state).as(paneId)
+      modelCommit.commitState(newState, state).as(paneId)
     }
 
   def switchToPane(paneId: PaneId): IO[Unit] =
-    stateRef.get.flatMap { state =>
-      EditorTransitions.paneSwitched(state, paneId).fold(IO.unit)(validateAndUpdateState(_, state))
+    modelCommit.currentState.flatMap { state =>
+      EditorTransitions.paneSwitched(state, paneId).fold(IO.unit)(modelCommit.commitState(_, state))
     }
 
   def getTabOrder(): IO[List[PaneId]] =
-    stateRef.get.map(_.persisted.layout.orderedPaneIds)
+    modelCommit.currentState.map(_.persisted.layout.orderedPaneIds)

@@ -6,15 +6,11 @@ import com.serenity.state.reducers.ReducerResult
 import com.serenity.ui.layout.ViewportSize
 
 final private[manager] class StateManagerViewportCapability(
-    stateRef: cats.effect.Ref[IO, AppState],
+    modelCommit: ModelCommit,
     logger: org.typelevel.log4cats.Logger[IO],
     deviceTextScaleProvider: IO[Double],
-    events: StateManagerEventPipeline,
     effects: StateManagerEffectHandlers
 ):
-
-  private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-    events.validateAndUpdateState(newState, fallbackState)
 
   private def updateFontConfig(
     update: com.serenity.ui.fonts.FontLoader.FontConfig => com.serenity.ui.fonts.FontLoader.FontConfig
@@ -27,7 +23,7 @@ final private[manager] class StateManagerViewportCapability(
   )
 
   private def commit(reduce: AppState => ReducerResult): IO[Unit] =
-    stateRef.get.flatMap(state => validateAndUpdateState(reduce(state).state, state))
+    modelCommit.currentState.flatMap(state => modelCommit.commitState(reduce(state).state, state))
 
   private def ensureCursorVisible(paneId: PaneId): IO[Unit] =
     commit(ViewportStateReducer.ensureCursorVisible(paneId, _))
@@ -42,7 +38,7 @@ final private[manager] class StateManagerViewportCapability(
 
   private def refreshAutoTextScale: IO[Unit] =
     deviceTextScaleProvider.flatMap { deviceScale =>
-      stateRef.get.flatMap { state =>
+      modelCommit.currentState.flatMap { state =>
         val fontConfig = state.persisted.config.editorConfig.fontConfig
         if fontConfig.resolveAutoTextScale(deviceScale) == fontConfig then IO.unit
         else updateFontConfig(identity)

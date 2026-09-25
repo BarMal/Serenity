@@ -51,7 +51,7 @@ final private[manager] class StateManagerEventPipeline(
   import state.*
   import workflow.*
 
-  private val modelCommit = new ModelCommit(state.modelRef, operations)
+  private val modelCommit = operations.modelCommit
 
   private def drainPendingOperations: cats.effect.IO[Unit] =
     operations.takeOperations.flatMap {
@@ -83,65 +83,65 @@ final private[manager] class StateManagerEventPipeline(
 
   private val lspDocumentSync = new LspDocumentSync(
     LspDocumentSyncPort(
-      currentState = state.stateRef.get,
+      currentState = modelCommit.currentState,
       interpretEffect = effects.interpretEffect,
       candidateLspBufferIds = StateManagerEventPipeline.candidateLspBufferIds
     )
   )
 
   private val animations = new AnimationChoreography(new AnimationChoreographyPort:
-    def stateRef: cats.effect.Ref[cats.effect.IO, AppState] = state.stateRef
-    def validateAndUpdateState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
-      StateManagerEventPipeline.this.validateAndUpdateState(newState, fallbackState))
+    def currentState: cats.effect.IO[AppState] = modelCommit.currentState
+    def commitState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
+      modelCommit.commitState(newState, fallbackState))
 
   private val editorMouseTargeting = new EditorMouseTargeting(
     EditorMouseTargetingPort(mouseTargetCacheRef = state.mouseTargetCacheRef)
   )
 
   private val modalMouseHitTesting = new ModalMouseHitTesting(
-    ModalMouseHitTestingPort(stateRef = state.stateRef, applyReducerResult = applyReducerResult)
+    ModalMouseHitTestingPort(currentState = modelCommit.currentState, applyReducerResult = applyReducerResult)
   )
 
   private val startupPageMouseHitTesting = new StartupPageMouseHitTesting(
-    StartupPageMouseHitTestingPort(stateRef = state.stateRef, applyReducerResult = applyReducerResult)
+    StartupPageMouseHitTestingPort(currentState = modelCommit.currentState, applyReducerResult = applyReducerResult)
   )
 
   private val editorContextMenuHitTesting = new EditorContextMenuHitTesting(
     EditorContextMenuHitTestingPort(
-      stateRef = state.stateRef,
+      currentState = modelCommit.currentState,
       applyReducerResult = applyReducerResult,
       resolveMouseTarget = editorMouseTargeting.resolveMouseTarget
     )
   )
 
   private val contextualToolbarHitTesting = new ContextualToolbarHitTesting(
-    ContextualToolbarHitTestingPort(stateRef = state.stateRef, applyReducerResult = applyReducerResult)
+    ContextualToolbarHitTestingPort(currentState = modelCommit.currentState, applyReducerResult = applyReducerResult)
   )
 
   private val commandRunnerMouseHitTesting = new CommandRunnerMouseHitTesting(
-    CommandRunnerMouseHitTestingPort(stateRef = state.stateRef, applyReducerResult = applyReducerResult)
+    CommandRunnerMouseHitTestingPort(currentState = modelCommit.currentState, applyReducerResult = applyReducerResult)
   )
 
   private val pinnedPanelMouseHitTesting = new PinnedPanelMouseHitTesting(
     PinnedPanelMouseHitTestingPort(
-      stateRef = state.stateRef,
+      currentState = modelCommit.currentState,
       applyComponentResult = applyComponentResult,
-      validateAndUpdateState = validateAndUpdateState,
+      commitState = modelCommit.commitState,
       updateConfig = updateConfig,
       resizePinnedPanel = resizePinnedPanel
     )
   )
 
   private val commentLensMouseHitTesting = new CommentLensMouseHitTesting(
-    CommentLensMouseHitTestingPort(stateRef = state.stateRef, applyReducerResult = applyReducerResult)
+    CommentLensMouseHitTestingPort(currentState = modelCommit.currentState, applyReducerResult = applyReducerResult)
   )
 
   private val tabBarDragHitTesting = new TabBarDragHitTesting(
-    TabBarDragHitTestingPort(stateRef = state.stateRef, applyReducerResult = applyReducerResult)
+    TabBarDragHitTestingPort(currentState = modelCommit.currentState, applyReducerResult = applyReducerResult)
   )
 
   private val mouseHitTesting = new MouseHitTesting(
-    MouseHitTestingPort(stateRef = state.stateRef, applyReducerResult = applyReducerResult),
+    MouseHitTestingPort(currentState = modelCommit.currentState, applyReducerResult = applyReducerResult),
     editorMouseTargeting,
     editorContextMenuHitTesting,
     contextualToolbarHitTesting,
@@ -166,7 +166,7 @@ final private[manager] class StateManagerEventPipeline(
     given org.typelevel.log4cats.Logger[cats.effect.IO] = logger
     def eventLabel                                      = s"event.${event.getClass.getSimpleName}"
     Trace.timed(eventLabel) {
-      stateRef.get.flatMap { rawState =>
+      modelCommit.currentState.flatMap { rawState =>
         // Not written back on its own: every handler builds on `prevState`, so the normalised focus lands in the
         // event's own commit (and `prepareCommit` normalises every commit anyway).
         val prevState = EventPipelineTransitions.commandRunnerFocusNormalized(rawState)
@@ -224,7 +224,7 @@ final private[manager] class StateManagerEventPipeline(
                 // dispatchToFocusedHandler/EditorPaneComponent, which is the only place that otherwise applies this
                 // pass -- without it, MoveUp/MoveDown/ExtendSelectionUp/ExtendSelectionDown move the cursor but never
                 // scroll the viewport to follow it.
-                validateAndUpdateState(CursorViewport.ensureVisibleCursors(prevState, reducedState), prevState)
+                modelCommit.commitState(CursorViewport.ensureVisibleCursors(prevState, reducedState), prevState)
               case None => dispatchToFocusedHandler(vertical, prevState)
           case _ => dispatchToFocusedHandler(vertical, prevState)
 
@@ -243,7 +243,7 @@ final private[manager] class StateManagerEventPipeline(
       getLocalHandlerForFocus(prevState.persisted.focus, prevState).processEvent(event, prevState)
 
     logCommandRunnerEvent >>
-      applyComponentResult(result, prevState).flatMap(newState => validateAndUpdateState(newState, prevState))
+      applyComponentResult(result, prevState).flatMap(newState => modelCommit.commitState(newState, prevState))
 
   /** Routed by type alone: `CloseTab` and `Quit` previously had to precede the `GlobalAppEvent` branch. */
   private def dispatchGlobalAppEvent(event: GlobalAppEvent, prevState: AppState): cats.effect.IO[Unit] =
@@ -279,7 +279,7 @@ final private[manager] class StateManagerEventPipeline(
     * flying-saucer layout pass on every keystroke. See `MarkdownDocumentPreview.renderOrReuseCommitted`.
     */
   private[manager] def scheduleMarkdownPreviewCommits(previousState: AppState): cats.effect.IO[Unit] =
-    stateRef.get.flatMap { currentState =>
+    modelCommit.currentState.flatMap { currentState =>
       val edited =
         StateManagerEventPipeline.candidateLspBufferIds(previousState, currentState).toList.filter { bufferId =>
           hasLiveMarkdownPreview(currentState, bufferId) &&
@@ -293,7 +293,7 @@ final private[manager] class StateManagerEventPipeline(
       else
         modelCommit.updateValidated(model =>
           Some(model.copy(app = EventPipelineTransitions.withMarkdownPreviewEditsBumped(model.app, edited)))
-        ) >> stateRef.get.flatMap { committed =>
+        ) >> modelCommit.currentState.flatMap { committed =>
           edited.traverse_ { bufferId =>
             val bumped = committed.persisted.buffers
               .get(bufferId)
@@ -314,9 +314,6 @@ final private[manager] class StateManagerEventPipeline(
           .get(bufferId)
           .exists(_.document.language.contains(com.serenity.lsp.config.LanguageId.Markdown))
     )
-
-  private[manager] def validateAndUpdateState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
-    operations.validateAndUpdateState(newState, fallbackState)
 
   private[manager] def scheduleDocumentAnalysis(): cats.effect.IO[Unit] =
     operations.scheduleDocumentAnalysis()
@@ -384,7 +381,7 @@ final private[manager] class StateManagerEventPipeline(
       case ComponentResult.NoChange            => cats.effect.IO.pure(state)
       case ComponentResult.StateChange(update) => cats.effect.IO.pure(update(state))
       case ComponentResult.ReducerUpdate(result) =>
-        stateRef.get.flatMap(committed => applyReducerResult(result, committed)) >> stateRef.get
+        modelCommit.currentState.flatMap(committed => applyReducerResult(result, committed)) >> modelCommit.currentState
       case ComponentResult.FocusTransfer(newFocus) =>
         cats.effect.IO.pure(state.copy(persisted = state.persisted.copy(focus = newFocus)))
       case ComponentResult.Dismiss =>
@@ -392,11 +389,11 @@ final private[manager] class StateManagerEventPipeline(
       case ComponentResult.ExecuteCommand(command) =>
         // The command reads the committed state, so the one built so far commits (validated) first.
         for
-          committed    <- stateRef.get
-          _            <- validateAndUpdateState(state, committed)
-          current      <- stateRef.get
+          committed    <- modelCommit.currentState
+          _            <- modelCommit.commitState(state, committed)
+          current      <- modelCommit.currentState
           _            <- interpretCommand(command, current)
-          updatedState <- stateRef.get
+          updatedState <- modelCommit.currentState
         yield updatedState
       case ComponentResult.Composite(results) =>
         results.foldLeftM(state)((s, r) => applyComponentResult(r, s))

@@ -88,7 +88,7 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
       continued,
       loaded,
       new StateManagerFileWorkflow(
-        stateRef,
+        stateRef.get,
         NoOpLogger.impl[IO],
         new FileManager(),
         (newState, _) => stateRef.set(newState),

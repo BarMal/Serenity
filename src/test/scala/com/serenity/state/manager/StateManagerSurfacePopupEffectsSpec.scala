@@ -63,16 +63,16 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
     themeManager: AppThemeManager,
     fileDialog: Option[FileDialog] = None
   ): StateManagerSurfacePopupEffects =
-    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+    def commitState(newState: AppState, fallbackState: AppState): IO[Unit] =
       committed.update(_ :+ newState) >> stateRef.set(newState)
 
     lazy val popups: StateManagerSurfacePopupEffects = new StateManagerSurfacePopupEffects(
-      stateRef,
+      stateRef.get,
       NoOpLogger.impl[IO],
       themeManager,
       themeNamesRef,
       fileDialog,
-      validateAndUpdateState,
+      commitState,
       lanes,
       {
         case AppEffect.Theme(effect)                           => popups.interpretThemeEffect(effect)

@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.animation.AnimationState
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
@@ -16,7 +17,7 @@ import com.serenity.ui.theme.config.AppThemeManager
 import org.typelevel.log4cats.Logger
 
 private[manager] trait EffectRuntimePort:
-  def stateRef: Ref[IO, AppState]
+  def currentState: IO[AppState]
   def themeNamesRef: Ref[IO, List[String]]
   def quitSignal: Deferred[IO, Unit]
   def logger: Logger[IO]
@@ -28,7 +29,6 @@ private[manager] trait EffectRuntimePort:
   def configPersistencePath: Option[Path]
   def uiPresetStore: UiPresetStore
   def windowSizeProvider: IO[Option[PreferredWindowSize]]
-  def bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]]
   def markdownPreviewWindow: com.serenity.ui.tui.MarkdownPreviewWindowAvailability
   def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)
@@ -52,8 +52,9 @@ private[manager] object PersistenceLanes:
 
 private[manager] trait EffectEditorPort extends EffectLanePort:
   def enqueueEvent(event: Event): IO[Unit]
-  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
+  def commitState(newState: AppState, fallbackState: AppState): IO[Unit]
   def updateModelValidated(transition: Model => Option[Model]): IO[Unit]
+  def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit]
   def scheduleDocumentAnalysis(): IO[Unit]
   def scheduleFindSearch(request: FindSearchRequest): IO[Unit]
 
@@ -115,14 +116,10 @@ private[manager] trait EffectModalWorkflowPort:
   def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit]
   def submitSessionListEffect(surfaceId: SurfaceId): IO[Unit]
 
-/** State ownership required while routing editor events. */
+/** What event routing needs besides the model, which it reaches through `StateManagerOperationBoundary.modelCommit`. */
 private[manager] trait EventStatePort:
-  def modelRef: Ref[IO, Model]
   def logger: Logger[IO]
   def mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]]
-  final def stateRef: Ref[IO, AppState] = Model.appRef(modelRef)
-  final def bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]] =
-    Model.bufferAnimationsRef(modelRef)
 
 /** Effects and commands triggered by event routing, as a capability record rather than a trait -- nothing here breaks a
   * construction-order cycle (#1389), so mockability is the only reason this needs an interface at all, and a record

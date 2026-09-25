@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import java.nio.file.{Files, Path}
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import com.serenity.io.{FileManager, FileUtils, StorageLocation}
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
@@ -22,10 +22,10 @@ import org.typelevel.log4cats.Logger
   * save (resume the close workflow, or simply dismiss the dialog).
   */
 final private[manager] class StateManagerFileWorkflow(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     logger: Logger[IO],
     fileManager: FileManager,
-    validateAndUpdateState: (AppState, AppState) => IO[Unit],
+    commitState: (AppState, AppState) => IO[Unit],
     lanes: EffectLanePort,
     openFile: Path => IO[Unit],
     missingDirectoriesBeforeSave: (Path, IO[List[String]]) => IO[List[String]],
@@ -35,7 +35,7 @@ final private[manager] class StateManagerFileWorkflow(
   import FileWorkflowTransitions.{fileDialog, withFileDialog, withStatus}
 
   private def commit(transition: AppState => AppState): IO[Unit] =
-    stateRef.get.flatMap(current => validateAndUpdateState(transition(current), current))
+    currentState.flatMap(current => commitState(transition(current), current))
 
   private[manager] def openFileWorkflowModal(
     mode: FileWorkflowMode,
@@ -74,21 +74,21 @@ final private[manager] class StateManagerFileWorkflow(
         statusMessage = statusMessage,
         bufferHasRichFormatting = bufferHasRichFormatting
       )
-      stateRef.get.flatMap { current =>
+      currentState.flatMap { current =>
         val shown = ModalStateReducer.show(Modal.FileWorkflow(workflow), current).state
         logger.info(
           s"[FILE-WORKFLOW OPENED] mode=$mode filename=${workflow.filename} path=${workflow.path} " +
             s"surfaceId=${shown.topModal.map(_.id).getOrElse("none")} focus=${shown.persisted.focus}"
-        ) >> validateAndUpdateState(shown, current) >>
+        ) >> commitState(shown, current) >>
           // Populate the open dialog's directory listing immediately so it never appears as an empty, hung modal (#1289).
           IO.whenA(mode == FileWorkflowMode.Open)(
-            stateRef.get.flatMap(_.topModal.fold(IO.unit)(dialog => refreshFileWorkflowEffect(dialog.id)))
+            currentState.flatMap(_.topModal.fold(IO.unit)(dialog => refreshFileWorkflowEffect(dialog.id)))
           )
       }
     }
 
   private[manager] def refreshFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
-    stateRef.get.flatMap(fileDialog(_, surfaceId).fold(IO.unit)(requestListing(surfaceId, _)))
+    currentState.flatMap(fileDialog(_, surfaceId).fold(IO.unit)(requestListing(surfaceId, _)))
 
   /** A newer listing of the same directory supersedes an older one; one of another directory is dropped on arrival if
     * the dialog has moved on by then.
@@ -107,7 +107,7 @@ final private[manager] class StateManagerFileWorkflow(
       }
 
   private[manager] def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    currentState.flatMap { state =>
       fileDialog(state, surfaceId) match
         case Some(openWorkflow: OpenFileWorkflowState) =>
           completeOpenWorkflow(surfaceId, openWorkflow)
@@ -244,7 +244,7 @@ final private[manager] class StateManagerFileWorkflow(
     * path.
     */
   private[manager] def openAsProjectRoot(surfaceId: SurfaceId, openProjectRoot: Path => IO[Unit]): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    currentState.flatMap { state =>
       fileDialog(state, surfaceId) match
         case Some(openWorkflow: OpenFileWorkflowState) =>
           remoteWorkflowTarget(openWorkflow) match
@@ -272,7 +272,7 @@ final private[manager] class StateManagerFileWorkflow(
     * confirmed double-submit path -- immediately, without a second submit (issue #1253).
     */
   private[manager] def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    currentState.flatMap { state =>
       fileDialog(state, surfaceId) match
         case Some(saveAsWorkflow: SaveAsFileWorkflowState) if saveAsWorkflow.missingPathSegments.nonEmpty =>
           saveAsWorkflow.updated(confirmCreateDirectories = true) match

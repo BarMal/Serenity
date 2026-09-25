@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import cats.effect.*
 import cats.syntax.foldable.*
+import com.serenity.animation.AnimationState
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
@@ -45,15 +46,8 @@ private[manager] class StateManagerComposition(
     operations: StateManagerOperationBoundary
 )(using providedBalance: Balance):
 
-  val stateRef: Ref[IO, AppState] = Model.appRef(modelRef)
-  val undoRef: Ref[IO, UndoState] = Model.undoRef(modelRef)
-  val bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]] =
-    Model.bufferAnimationsRef(modelRef)
+  private val modelCommit = operations.modelCommit
 
-  private val modelCommit = new ModelCommit(modelRef, operations)
-
-  private val runtimeStateRef                = stateRef
-  private val runtimeUndoRef                 = undoRef
   private val runtimeThemeNamesRef           = themeNamesRef
   private val runtimeQuitSignal              = quitSignal
   private val runtimeLogger                  = logger
@@ -61,7 +55,6 @@ private[manager] class StateManagerComposition(
   private val runtimeLspQueue                = lspQueue
   private val runtimeRunProjectTask          = runProjectTask
   private val runtimeMouseTargetCacheRef     = mouseTargetCacheRef
-  private val runtimeBufferAnimationsRef     = bufferAnimationsRef
   private val runtimeOnFontConfigChanged     = onFontConfigChanged
   private val runtimeDeviceTextScaleProvider = deviceTextScaleProvider
   private val runtimeConfigPersistencePath   = configPersistencePath
@@ -74,7 +67,8 @@ private[manager] class StateManagerComposition(
 
   private val filePersistence =
     new StateManagerFilePersistence(
-      runtimeStateRef,
+      modelCommit.currentState,
+      modelCommit.commitState,
       runtimeFileManager,
       runtimeSessionPersistence,
       runtimeLogger,
@@ -82,55 +76,56 @@ private[manager] class StateManagerComposition(
       operations.fileLanes
     )
 
-  // Stateless facade over stateRef/bufferAnimationsRef, reused by `editor` (`events` builds its own
-  // separate instance from the same refs in `StateManagerEventPipeline`). `editor` used to reach it
+  // Stateless facade over the model, reused by `editor` (`events` builds its own
+  // separate instance over the same `ModelCommit` in `StateManagerEventPipeline`). `editor` used to reach it
   // through `events` instead (the only forward edge in the effects -> workflow -> editor -> events ->
   // effects cycle this used to close); extracting it here removed that edge. What's left below is a DAG,
   // not a cycle -- `effects` has no dependency on `events` at all (#1389), so building it in dependency
   // order needs correct `val` placement, not a `lazy val` or deferred `def` port.
   private val animations = new AnimationChoreography(new AnimationChoreographyPort:
-    val stateRef = runtimeStateRef
-    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-      operations.validateAndUpdateState(newState, fallbackState))
+    def currentState: IO[AppState] = modelCommit.currentState
+    def commitState(newState: AppState, fallbackState: AppState): IO[Unit] =
+      modelCommit.commitState(newState, fallbackState))
 
   // Built here, before `effects` and `events`, same reasoning as `animations` above: `StateManagerPanelEffects`
   // (owned by `effects`) and `StateManagerSurfaceCapability` (`surfaces`, below) both need to record undo boundaries
   // for panel pin/unpin (#1016 PR4), and `events` already needed `UndoRecording` for Undo/Redo dispatch -- a single
   // instance shared by all three, rather than `events` building its own as it used to.
   private val undoRecording = new UndoRecording(new UndoRecordingPort:
-    val undoRef = runtimeUndoRef
+    def updateUndo(update: UndoState => UndoState): IO[Unit] = modelCommit.updateUndo(update)
     def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
       modelCommit.updateValidated(transition))
 
   private val effectRuntimePort: EffectRuntimePort = new EffectRuntimePort:
-    val stateRef                = runtimeStateRef
-    val themeNamesRef           = runtimeThemeNamesRef
-    val quitSignal              = runtimeQuitSignal
-    val logger                  = runtimeLogger
-    val themeManager            = runtimeThemeManager
-    val lspQueue                = runtimeLspQueue
-    val runProjectTask          = runtimeRunProjectTask
-    val onFontConfigChanged     = runtimeOnFontConfigChanged
-    val deviceTextScaleProvider = runtimeDeviceTextScaleProvider
-    val configPersistencePath   = runtimeConfigPersistencePath
-    val uiPresetStore           = runtimeUiPresetStore
-    val windowSizeProvider      = runtimeWindowSizeProvider
-    val bufferAnimationsRef     = runtimeBufferAnimationsRef
-    val markdownPreviewWindow   = runtimeMarkdownPreviewWindow
+    def currentState: IO[AppState] = modelCommit.currentState
+    val themeNamesRef              = runtimeThemeNamesRef
+    val quitSignal                 = runtimeQuitSignal
+    val logger                     = runtimeLogger
+    val themeManager               = runtimeThemeManager
+    val lspQueue                   = runtimeLspQueue
+    val runProjectTask             = runtimeRunProjectTask
+    val onFontConfigChanged        = runtimeOnFontConfigChanged
+    val deviceTextScaleProvider    = runtimeDeviceTextScaleProvider
+    val configPersistencePath      = runtimeConfigPersistencePath
+    val uiPresetStore              = runtimeUiPresetStore
+    val windowSizeProvider         = runtimeWindowSizeProvider
+    val markdownPreviewWindow      = runtimeMarkdownPreviewWindow
 
   private val effectEditorPort: EffectEditorPort = new EffectEditorPort:
     def enqueueEvent(event: Event): IO[Unit] = operations.enqueueEvent(event)
-    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-      operations.validateAndUpdateState(newState, fallbackState)
+    def commitState(newState: AppState, fallbackState: AppState): IO[Unit] =
+      modelCommit.commitState(newState, fallbackState)
     def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
       modelCommit.updateValidated(transition)
+    def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit] =
+      modelCommit.updateBufferAnimations(update)
     def scheduleDocumentAnalysis(): IO[Unit]                     = operations.scheduleDocumentAnalysis()
     def scheduleFindSearch(request: FindSearchRequest): IO[Unit] = operations.scheduleFindSearch(request)
     def submitEffect(lane: Lane.Keyed, job: IO[Unit]): IO[Unit]  = operations.submitEffect(lane, job)
     // Called from lane jobs, off the dispatcher, so events `onApplied` enqueues are replayed the way `executeCommand`
     // replays them.
     def dispatchEffectResult(result: EffectResult, onApplied: AppState => IO[Unit]): IO[Unit] =
-      operations.dispatch(operations.applyResult(result, onApplied, interpretResultEffect)) >> drainPendingOperations
+      operations.dispatch(modelCommit.applyResult(result, onApplied, interpretResultEffect)) >> drainPendingOperations
 
   // `effects` is built further down; this only runs once a lane result lands, long after construction.
   private def interpretResultEffect(effect: AppEffect): IO[Unit] =
@@ -140,17 +135,16 @@ private[manager] class StateManagerComposition(
       case other => effects.interpretEffect(other)
 
   private val surfaces =
-    new StateManagerSurfaceCapability(stateRef, logger, operations, modelCommit)
+    new StateManagerSurfaceCapability(logger, operations, modelCommit)
 
   private val editor = new StateManagerEditorCapability(
-    modelRef,
+    modelCommit,
     runtimeLspQueue,
     animations,
     operations
   )
 
   private val workflow = new StateManagerWorkflowCapability(
-    runtimeStateRef,
     modelCommit,
     runtimeQuitSignal,
     runtimeLogger,
@@ -191,7 +185,7 @@ private[manager] class StateManagerComposition(
   private val effectSessionPort: EffectSessionPort = new EffectSessionPort:
     val sessionPersistence = runtimeSessionPersistence
     def saveSession(): IO[Unit] =
-      runtimeStateRef.get.flatMap { state =>
+      modelCommit.currentState.flatMap { state =>
         sessionManager.saveSession(state, persistUnsavedBuffers = true) >>
           runtimeLogger.info("[SESSION] Session saved")
       }.void
@@ -248,7 +242,6 @@ private[manager] class StateManagerComposition(
 
   private val eventStatePort: EventStatePort =
     new EventStatePort:
-      val modelRef            = StateManagerComposition.this.modelRef
       val logger              = runtimeLogger
       val mouseTargetCacheRef = runtimeMouseTargetCacheRef
 
@@ -275,10 +268,10 @@ private[manager] class StateManagerComposition(
     )
 
   private val viewport =
-    new StateManagerViewportCapability(stateRef, logger, deviceTextScaleProvider, events, effects)
+    new StateManagerViewportCapability(modelCommit, logger, deviceTextScaleProvider, effects)
 
   private val files = new StateManagerFileCapability(
-    stateRef,
+    modelCommit.currentState,
     editor.updateStateValidated,
     effects,
     events.dispatch,
@@ -303,7 +296,7 @@ private[manager] class StateManagerComposition(
 
   /** Returns once the command and the lane work it started have settled; the dispatcher stays free meanwhile. */
   private def executeCommand(command: com.serenity.command.Command): IO[Unit] =
-    stateRef.get.flatMap(state => effects.interpretCommand(command, state)) >> drainPendingOperations >>
+    modelCommit.currentState.flatMap(state => effects.interpretCommand(command, state)) >> drainPendingOperations >>
       operations.awaitEffects
 
   private def drainPendingOperations: IO[Unit] =
@@ -352,9 +345,6 @@ private[manager] class StateManagerComposition(
     switchToPane = editor.switchToPane,
     getTabOrder = () => editor.getTabOrder()
   )
-
-  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-    events.validateAndUpdateState(newState, fallbackState)
 
   def scheduleDocumentAnalysis(): IO[Unit]                  = events.scheduleDocumentAnalysis()
   def ensureCommandRunnerSurface(state: AppState): AppState = operations.ensureCommandRunnerSurface(state)
@@ -424,7 +414,7 @@ private[manager] class StateManagerComposition(
 
   // Shutting the effects down also cancels a running project task, destroying its process.
   private def forceQuit: IO[Unit] =
-    operations.shutdownEffects() >> stateRef.get.flatMap { state =>
+    operations.shutdownEffects() >> modelCommit.currentState.flatMap { state =>
       sessionPersistence
         .onAppClose(clearCloseActions(state))
         .handleErrorWith(error => logger.error(error)("[SESSION] Failed to save session during forced quit")) >>
@@ -439,7 +429,7 @@ private[manager] class StateManagerComposition(
           .fixedRate[IO](interval)
           .interruptWhen(Stream.eval(quitSignal.get).as(true))
           .evalMap(_ =>
-            stateRef.get.flatMap(
+            modelCommit.currentState.flatMap(
               sessionPersistence.maybeSaveSession(_, com.serenity.session.SessionSaveTrigger.Interval)
             )
           )

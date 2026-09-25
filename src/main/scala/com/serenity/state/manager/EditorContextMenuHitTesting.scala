@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.CommandRegistry
 import com.serenity.config.AppConfigMotionOps.*
@@ -16,7 +16,7 @@ import com.serenity.ui.layout.*
   * fakes trivially without one (#1017).
   */
 final private[manager] case class EditorContextMenuHitTestingPort(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     applyReducerResult: (ReducerResult, AppState) => IO[Unit],
     resolveMouseTarget: (MouseInputEvent, AppState) => IO[Option[(PaneId, Buffer, CursorPosition)]]
 )
@@ -28,7 +28,7 @@ final private[manager] class EditorContextMenuHitTesting(port: EditorContextMenu
   import port.*
 
   private def commit[A](transition: Transition[A]): IO[A] =
-    MouseTransition.commit(stateRef, applyReducerResult)(transition)
+    MouseTransition.commit(currentState, applyReducerResult)(transition)
 
   def openEditorContextMenu(click: MouseClick, state: AppState): IO[Unit] =
     resolveMouseTarget(click, state).flatMap(target => commit(EditorContextMenuHitTesting.open(target)))

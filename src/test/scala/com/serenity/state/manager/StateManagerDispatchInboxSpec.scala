@@ -55,17 +55,16 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
   private def snapshotCommittingPipeline(initialState: AppState, gate: DispatchGate): IO[PipelineHarness] =
     for
       sharedModelRef <- Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty))
-      sharedStateRef = Model.appRef(sharedModelRef)
+      sharedStateRef = ModelViews.appRef(sharedModelRef)
       cacheRef   <- Ref.of[IO, Option[MouseTargetCache]](None)
       lspQueue   <- LspEffectQueue.create
-      operations <- StateManagerOperationBoundary.create(sharedStateRef, quietLogger)
+      operations <- StateManagerOperationBoundary.create(sharedModelRef, quietLogger)
       statePort = new EventStatePort:
-        val modelRef            = sharedModelRef
         val logger              = quietLogger
         val mouseTargetCacheRef = cacheRef
       snapshotCommittingEffect = (_: AppEffect) =>
         sharedStateRef.get.flatMap { snapshot =>
-          gate.entered.complete(()) >> gate.release.get >> operations.validateAndUpdateState(snapshot, snapshot)
+          gate.entered.complete(()) >> gate.release.get >> operations.modelCommit.commitState(snapshot, snapshot)
         }
       effectPort = EventEffectPort(
         interpretEffect = snapshotCommittingEffect,
@@ -73,9 +72,9 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       )
       workflowPort = new EventWorkflowPort:
         def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] = IO.unit
-      modelCommit = new ModelCommit(sharedModelRef, operations)
+      modelCommit = operations.modelCommit
       undoRecording = new UndoRecording(new UndoRecordingPort:
-        val undoRef = Model.undoRef(sharedModelRef)
+        def updateUndo(update: UndoState => UndoState): IO[Unit] = ModelViews.undoRef(sharedModelRef).update(update)
         export modelCommit.updateValidated as updateModelValidated)
       pipeline = new StateManagerEventPipeline(
         statePort,
@@ -92,10 +91,10 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
         undoRecording
       )
       animations = new AnimationChoreography(new AnimationChoreographyPort:
-        val stateRef = sharedStateRef
-        export operations.validateAndUpdateState)
+        def currentState: IO[AppState] = sharedStateRef.get
+        export operations.modelCommit.commitState)
       editor = new StateManagerEditorCapability(
-        sharedModelRef,
+        operations.modelCommit,
         lspQueue,
         animations,
         operations,

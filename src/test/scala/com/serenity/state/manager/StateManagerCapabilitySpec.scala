@@ -35,10 +35,10 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     runEffect: AppEffect => IO[Unit]
   ): StateManagerEventPipeline =
     val currentLogger   = org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
-    val currentStateRef = Model.appRef(currentModelRef)
+    val currentStateRef = ModelViews.appRef(currentModelRef)
     val currentCacheRef = Ref.of[IO, Option[MouseTargetCache]](None).unsafeRunSync()
     val statePort = new EventStatePort:
-      val modelRef            = currentModelRef; val logger = currentLogger
+      val logger              = currentLogger
       val mouseTargetCacheRef = currentCacheRef
     val effectPort = EventEffectPort(
       interpretEffect = runEffect,
@@ -47,9 +47,9 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val workflowPort = new EventWorkflowPort:
       def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] = IO.unit
     val undoRecording = new UndoRecording(new UndoRecordingPort:
-      val undoRef = Model.undoRef(currentModelRef)
+      def updateUndo(update: UndoState => UndoState): IO[Unit] = ModelViews.undoRef(currentModelRef).update(update)
       def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
-        new ModelCommit(currentModelRef, operations).updateValidated(transition))
+        operations.modelCommit.updateValidated(transition))
     new StateManagerEventPipeline(
       statePort,
       effectPort,
@@ -83,7 +83,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val stateRef = Ref.of[IO, AppState](AppState.initial).unsafeRunSync()
     val calls    = Ref.of[IO, List[String]](Nil).unsafeRunSync()
     val facade = new StateManagerFileFacade(
-      stateRef,
+      stateRef.get,
       update => stateRef.update(update),
       path => calls.update(_ :+ s"open:$path"),
       bufferId => calls.update(_ :+ s"save:$bufferId"),
@@ -196,10 +196,10 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve effect-triggered event order at the operation boundary" in {
-    val stateRef = Ref.of[IO, AppState](AppState.initial).unsafeRunSync()
+    val modelRef = ModelViews.modelOf(AppState.initial).unsafeRunSync()
     val operations = StateManagerOperationBoundary
       .create(
-        stateRef,
+        modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
       )
       .unsafeRunSync()
@@ -221,7 +221,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     )
     val modelRef = Ref.of[IO, Model](Model(state, UndoState(), Map.empty)).unsafeRunSync()
     val operations = StateManagerOperationBoundary
-      .create(Model.appRef(modelRef), org.typelevel.log4cats.noop.NoOpLogger.impl[IO])
+      .create(modelRef, org.typelevel.log4cats.noop.NoOpLogger.impl[IO])
       .unsafeRunSync()
     val pipeline = composedPipeline(modelRef, operations, _ => IO.unit)
 
@@ -244,12 +244,12 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
         )
       )
     val program = for
-      stateRef           <- Ref.of[IO, AppState](spellCheckEnabledState)
+      modelRef           <- ModelViews.modelOf(spellCheckEnabledState)
       scheduleStarted    <- cats.effect.Deferred[IO, Unit]
       continueScheduling <- cats.effect.Deferred[IO, Unit]
       shutdownRequested  <- cats.effect.Deferred[IO, Unit]
       operations <- StateManagerOperationBoundary.create(
-        stateRef,
+        modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
         beforeDocumentAnalysisStart = scheduleStarted.complete(()).void >> continueScheduling.get,
         beforeEffectsShutdown = shutdownRequested.complete(()).void
@@ -263,7 +263,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       _          <- shutdown.joinWithNever
       _          <- operations.scheduleDocumentAnalysis()
       _          <- IO.sleep(1.second)
-      after      <- stateRef.get
+      after      <- ModelViews.appRef(modelRef).get
     yield after.runtime.diagnosticsState.diagnostics shouldBe empty
 
     runVirtual(program)
@@ -271,10 +271,10 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
 
   it should "skip document analysis scheduling when spell checking is disabled" in {
     val program = for
-      stateRef <- Ref.of[IO, AppState](AppState.initial)
+      modelRef <- ModelViews.modelOf(AppState.initial)
       starts   <- Ref.of[IO, Int](0)
       operations <- StateManagerOperationBoundary.create(
-        stateRef,
+        modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
         beforeDocumentAnalysisStart = starts.update(_ + 1)
       )
@@ -322,19 +322,19 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     )
 
     val program = for
-      stateRef <- Ref.of[IO, AppState](initialState)
+      modelRef <- ModelViews.modelOf(initialState)
       starts   <- Ref.of[IO, Int](0)
       operations <- StateManagerOperationBoundary.create(
-        stateRef,
+        modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
         beforeDocumentAnalysisStart = starts.update(_ + 1)
       )
-      _                        <- operations.validateAndUpdateState(initialState, initialState)
-      _                        <- operations.validateAndUpdateState(movedCursorState, initialState)
+      _                        <- operations.modelCommit.commitState(initialState, initialState)
+      _                        <- operations.modelCommit.commitState(movedCursorState, initialState)
       afterCursorMove          <- starts.get
-      _                        <- operations.validateAndUpdateState(editedState, movedCursorState)
+      _                        <- operations.modelCommit.commitState(editedState, movedCursorState)
       afterEdit                <- starts.get
-      _                        <- operations.validateAndUpdateState(configuredState, editedState)
+      _                        <- operations.modelCommit.commitState(configuredState, editedState)
       afterConfigurationChange <- starts.get
       _                        <- operations.shutdownEffects()
     yield
@@ -351,21 +351,21 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val program = for
       modelRef <- Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty))
       operations <- StateManagerOperationBoundary.create(
-        Model.appRef(modelRef),
+        modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
       )
       observed <- Ref.of[IO, List[Int]](Nil)
       pipeline = composedPipeline(
         modelRef,
         operations,
-        _ => Model.appRef(modelRef).get.flatMap(state => observed.update(_ :+ state.runtime.nextBufferId.value))
+        _ => ModelViews.appRef(modelRef).get.flatMap(state => observed.update(_ :+ state.runtime.nextBufferId.value))
       )
       _ <- pipeline.applyReducerResult(
         ReducerResult.withEffect(committedState, AppEffect.CompleteQuit),
         initialState
       )
       observedStates <- observed.get
-      state          <- Model.appRef(modelRef).get
+      state          <- ModelViews.appRef(modelRef).get
     yield
       observedStates shouldBe List(42)
       state.runtime.nextBufferId shouldBe BufferId(42)
@@ -378,7 +378,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val program = for
       modelRef <- Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty))
       operations <- StateManagerOperationBoundary.create(
-        Model.appRef(modelRef),
+        modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
       )
       pipeline = composedPipeline(
@@ -390,7 +390,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
         ReducerResult.withEffect(initialState, AppEffect.CompleteQuit),
         initialState
       )
-      state <- Model.appRef(modelRef).get
+      state <- ModelViews.appRef(modelRef).get
     yield state.commandRunnerSurface.flatMap {
       _.content match
         case SurfaceContent.CommandPalette(runner) => Some(runner.searchTerm)
@@ -437,9 +437,9 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
 
   "AppRuntime input phase" should "depend only on state read, update, and event application capabilities" in {
     val modelRef            = Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty)).unsafeRunSync()
-    val stateRef            = Model.appRef(modelRef)
+    val stateRef            = ModelViews.appRef(modelRef)
     val applied             = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
-    val bufferAnimationsRef = Model.bufferAnimationsRef(modelRef)
+    val bufferAnimationsRef = ModelViews.bufferAnimationsRef(modelRef)
     val capabilities = new StateEngine:
       def getModel: IO[Model]                                          = modelRef.get
       def getCurrentState: IO[AppState]                                = stateRef.get
@@ -477,9 +477,10 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val bufferId     = BufferId(1)
     val initialState = withPreviewBuffer(bufferId, editGeneration = 1L)
     val program = for
-      stateRef <- Ref.of[IO, AppState](initialState)
+      modelRef <- ModelViews.modelOf(initialState)
+      stateRef = ModelViews.appRef(modelRef)
       operations <- StateManagerOperationBoundary.create(
-        stateRef,
+        modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
       )
       _          <- operations.scheduleMarkdownPreviewCommit(bufferId, 1L)
@@ -494,9 +495,10 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val bufferId     = BufferId(1)
     val initialState = withPreviewBuffer(bufferId, editGeneration = 2L)
     val program = for
-      stateRef <- Ref.of[IO, AppState](initialState)
+      modelRef <- ModelViews.modelOf(initialState)
+      stateRef = ModelViews.appRef(modelRef)
       operations <- StateManagerOperationBoundary.create(
-        stateRef,
+        modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
       )
       _          <- operations.scheduleMarkdownPreviewCommit(bufferId, 1L)
@@ -523,7 +525,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     )
     val modelRef = Ref.of[IO, Model](Model(state, UndoState(), Map.empty)).unsafeRunSync()
     val operations = StateManagerOperationBoundary
-      .create(Model.appRef(modelRef), org.typelevel.log4cats.noop.NoOpLogger.impl[IO])
+      .create(modelRef, org.typelevel.log4cats.noop.NoOpLogger.impl[IO])
       .unsafeRunSync()
     val pipeline = composedPipeline(modelRef, operations, _ => IO.unit)
 
@@ -566,12 +568,12 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val program = for
       modelRef <- Ref.of[IO, Model](Model(currentState, UndoState(), Map.empty))
       operations <- StateManagerOperationBoundary.create(
-        Model.appRef(modelRef),
+        modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
       )
       pipeline = composedPipeline(modelRef, operations, _ => IO.unit)
       _          <- pipeline.scheduleMarkdownPreviewCommits(prevState)
-      afterState <- Model.appRef(modelRef).get
+      afterState <- ModelViews.appRef(modelRef).get
     yield afterState.persisted.buffers(bufferId).markdownPreviewEditGeneration
 
     program.unsafeRunSync() shouldBe 1L
@@ -596,12 +598,12 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val program = for
       modelRef <- Ref.of[IO, Model](Model(currentState, UndoState(), Map.empty))
       operations <- StateManagerOperationBoundary.create(
-        Model.appRef(modelRef),
+        modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
       )
       pipeline = composedPipeline(modelRef, operations, _ => IO.unit)
       _          <- pipeline.scheduleMarkdownPreviewCommits(prevState)
-      afterState <- Model.appRef(modelRef).get
+      afterState <- ModelViews.appRef(modelRef).get
     yield afterState.persisted.buffers(bufferId).markdownPreviewEditGeneration
 
     program.unsafeRunSync() shouldBe 0L
@@ -628,12 +630,12 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val program = for
       modelRef <- Ref.of[IO, Model](Model(prevState, UndoState(), Map.empty))
       operations <- StateManagerOperationBoundary.create(
-        Model.appRef(modelRef),
+        modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
       )
       pipeline = composedPipeline(modelRef, operations, _ => IO.unit)
       _          <- pipeline.scheduleMarkdownPreviewCommits(prevState)
-      afterState <- Model.appRef(modelRef).get
+      afterState <- ModelViews.appRef(modelRef).get
     yield afterState.persisted.buffers(bufferId).markdownPreviewEditGeneration
 
     program.unsafeRunSync() shouldBe 0L

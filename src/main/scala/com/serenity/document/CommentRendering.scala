@@ -45,9 +45,9 @@ object CommentRendering:
         state
 
   /** Keeps the floating comment lens (#1222) in sync with the cursor for every state transition dispatched through
-    * `validateAndUpdateState` (#1550), so a keyboard cursor move opens/closes it exactly the way a mouse click already
-    * did: moving into a `DocumentComment`'s range opens the same read-only lens `MouseHitTesting`'s click handler
-    * opens, and moving out of it -- by any further interaction, not only a click -- closes it. Scoped to
+    * `StateManagerOperationBoundary.prepareCommit` (#1550), so a keyboard cursor move opens/closes it exactly the way a
+    * mouse click already did: moving into a `DocumentComment`'s range opens the same read-only lens `MouseHitTesting`'s
+    * click handler opens, and moving out of it -- by any further interaction, not only a click -- closes it. Scoped to
     * `Focus.EditorPane` so it never touches a lens the user is actively interacting with
     * (`Focus.Surface(comment-lens)`, entered by `openLensAtCursor`/`CommentLensMouseHitTesting` the moment the lens
     * opens), and only opens for a plain (collapsed-cursor) move -- a double/triple-click word/line selection or a

@@ -16,7 +16,6 @@ import com.serenity.state.reducers.{
 import com.serenity.ui.layout.*
 
 final private[manager] class StateManagerSurfaceCapability(
-    stateRef: cats.effect.Ref[IO, AppState],
     logger: org.typelevel.log4cats.Logger[IO],
     operations: StateManagerOperationBoundary,
     modelCommit: ModelCommit
@@ -29,7 +28,7 @@ final private[manager] class StateManagerSurfaceCapability(
     * write -- a rejected state records no undo entry -- then queues the pipeline's animation hooks.
     */
   private def commit(reduce: AppState => ReducerResult, withAnimationHooks: Boolean): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    modelCommit.currentState.flatMap { state =>
       modelCommit.updateValidated(model => Some(EventPipelineTransitions.committed(model, reduce(model.app)))) >>
         applyAnimationHooks(state).whenA(withAnimationHooks)
     }
@@ -93,6 +92,6 @@ final private[manager] class StateManagerSurfaceCapability(
     operations.submitEffect(
       Lane.Keyed(LaneKey.File(src.toAbsolutePath.normalize), LanePolicy.Sequential),
       IO.blocking(Files.move(src, targetDir.resolve(src.getFileName)))
-        .flatMap(_ => operations.dispatch(operations.applyResult(EffectResult.ExplorerFileMoved(src), _ => IO.unit)))
+        .flatMap(_ => operations.dispatch(modelCommit.applyResult(EffectResult.ExplorerFileMoved(src), _ => IO.unit)))
         .handleErrorWith(ex => logger.error(ex)(s"[FILE] Failed to move $src to $targetDir"))
     )

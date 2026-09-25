@@ -40,7 +40,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     markdownPreviewWindow: MarkdownPreviewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable
   ): Harness =
     val modelRef  = Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty)).unsafeRunSync()
-    val stateRef  = Model.appRef(modelRef)
+    val stateRef  = ModelViews.appRef(modelRef)
     val committed = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
     val events    = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
     val peeks     = Ref.of[IO, List[PeekContent]](Nil).unsafeRunSync()
@@ -54,7 +54,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
       peeks,
       calls,
       new StateManagerPanelEffects(
-        stateRef,
+        stateRef.get,
         NoOpLogger.impl[IO],
         new FileManager(),
         EffectLanePortFixtures.immediate(stateRef),

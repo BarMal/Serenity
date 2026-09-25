@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.{CommandRegistry, CommandRunnerSurface, CommandSurfaceItem, SettingsSurfaceState}
 import com.serenity.config.AppConfigMotionOps.*
@@ -14,7 +14,7 @@ import com.serenity.ui.layout.*
   * reason this needs an interface at all, and a record fakes trivially without one (#1017).
   */
 final private[manager] case class CommandRunnerMouseHitTestingPort(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     applyReducerResult: (ReducerResult, AppState) => IO[Unit]
 )
 
@@ -24,10 +24,10 @@ final private[manager] case class CommandRunnerMouseHitTestingPort(
 final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMouseHitTestingPort):
 
   def handleCommandRunnerMouseHover(event: MouseInputEvent, state: AppState): IO[Boolean] =
-    MouseTransition.commit(port.stateRef, port.applyReducerResult)(CommandRunnerMouseHitTesting.hover(event, state))
+    MouseTransition.commit(port.currentState, port.applyReducerResult)(CommandRunnerMouseHitTesting.hover(event, state))
 
   def handleCommandRunnerMouseClick(click: MouseClick, state: AppState): IO[Boolean] =
-    MouseTransition.commit(port.stateRef, port.applyReducerResult)(CommandRunnerMouseHitTesting.click(click, state))
+    MouseTransition.commit(port.currentState, port.applyReducerResult)(CommandRunnerMouseHitTesting.click(click, state))
 
 private[manager] object CommandRunnerMouseHitTesting:
 

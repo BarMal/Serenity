@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
@@ -11,7 +11,7 @@ import com.serenity.state.reducers.{AppEffect, ReducerResult, Transition}
   * reason this needs an interface at all, and a record fakes trivially without one (#1017).
   */
 final private[manager] case class StartupPageMouseHitTestingPort(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     applyReducerResult: (ReducerResult, AppState) => IO[Unit]
 )
 
@@ -21,7 +21,7 @@ final private[manager] case class StartupPageMouseHitTestingPort(
 final private[manager] class StartupPageMouseHitTesting(port: StartupPageMouseHitTestingPort):
 
   def handleStartupPageMouseClick(click: MouseClick, state: AppState): IO[Boolean] =
-    MouseTransition.commit(port.stateRef, port.applyReducerResult)(StartupPageMouseHitTesting.click(click, state))
+    MouseTransition.commit(port.currentState, port.applyReducerResult)(StartupPageMouseHitTesting.click(click, state))
 
 private[manager] object StartupPageMouseHitTesting:
 

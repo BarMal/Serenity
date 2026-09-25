@@ -33,9 +33,9 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
     logger: Logger[IO] = quietLogger
   ): IO[(Ref[IO, AppState], StateManagerOperationBoundary)] =
     for
-      stateRef   <- Ref.of[IO, AppState](state)
-      operations <- StateManagerOperationBoundary.create(stateRef, logger, beforeDocumentAnalysisStart)
-    yield (stateRef, operations)
+      modelRef   <- ModelViews.modelOf(state)
+      operations <- StateManagerOperationBoundary.create(modelRef, logger, beforeDocumentAnalysisStart)
+    yield (ModelViews.appRef(modelRef), operations)
 
   private def withEditorContent(state: AppState, content: String): AppState =
     val buffer = state.persisted.buffers(editorBufferId)
@@ -231,9 +231,9 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
     val program =
       for
         (stateRef, operations) <- boundaryOver(firstEdit)
-        _                      <- operations.validateAndUpdateState(firstEdit, firstEdit)
+        _                      <- operations.modelCommit.commitState(firstEdit, firstEdit)
         _                      <- IO.sleep(50.millis)
-        _                      <- operations.validateAndUpdateState(secondEdit, firstEdit)
+        _                      <- operations.modelCommit.commitState(secondEdit, firstEdit)
         _                      <- IO.sleep(110.millis)
         whenFirstWouldApply    <- stateRef.get.map(spellingDiagnosticStarts)
         _                      <- IO.sleep(1.second)
@@ -250,7 +250,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
         starts                 <- Ref.of[IO, Int](0)
         (stateRef, operations) <- boundaryOver(edited, beforeDocumentAnalysisStart = starts.update(_ + 1))
         _                      <- operations.shutdownEffects()
-        _                      <- operations.validateAndUpdateState(edited, edited)
+        _                      <- operations.modelCommit.commitState(edited, edited)
         _                      <- IO.sleep(1.second)
         started                <- starts.get
         diagnostics            <- stateRef.get.map(spellingDiagnosticStarts)

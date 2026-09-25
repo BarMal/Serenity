@@ -57,7 +57,7 @@ private[manager] trait StateManagerEffectHandlersHarness:
     loadSessionResult: IO[Option[AppState]] = IO.pure(None)
   ): Harness =
     val modelRefVar            = Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty)).unsafeRunSync()
-    val stateRefVar            = Model.appRef(modelRefVar)
+    val stateRefVar            = ModelViews.appRef(modelRefVar)
     val committedVar           = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
     val eventsVar              = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
     val callsVar               = Ref.of[IO, List[String]](Nil).unsafeRunSync()
@@ -65,12 +65,12 @@ private[manager] trait StateManagerEffectHandlersHarness:
     val sessionRoot            = Files.createTempDirectory("effect-handlers-spec")
     val sessionTriggersVar     = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
     val themeNamesRefVar       = Ref.of[IO, List[String]](Nil).unsafeRunSync()
-    val bufferAnimationsRefVar = Model.bufferAnimationsRef(modelRefVar)
+    val bufferAnimationsRefVar = ModelViews.bufferAnimationsRef(modelRefVar)
     val quitSignalVar          = Deferred[IO, Unit].unsafeRunSync()
     val lspQueueVar            = LspEffectQueue.create.unsafeRunSync()
 
     val runtime = new EffectRuntimePort:
-      val stateRef                            = stateRefVar
+      val currentState                        = stateRefVar.get
       val themeNamesRef                       = themeNamesRefVar
       val quitSignal                          = quitSignalVar
       val logger                              = NoOpLogger.impl[IO]
@@ -83,17 +83,22 @@ private[manager] trait StateManagerEffectHandlersHarness:
       val configPersistencePath   = None
       val uiPresetStore           = UiPresetStore(sessionRoot.resolve("ui-presets.json"))
       val windowSizeProvider      = IO.pure(None)
-      val bufferAnimationsRef     = bufferAnimationsRefVar
       val markdownPreviewWindow   = MarkdownPreviewWindowAvailability.Unavailable
 
     val editor = new EffectEditorPort:
       def enqueueEvent(event: Event): IO[Unit] = eventsVar.update(_ :+ event)
-      def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+      def commitState(newState: AppState, fallbackState: AppState): IO[Unit] =
         committedVar.update(_ :+ newState) >> stateRefVar.set(newState)
       def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
         modelRefVar.get.flatMap(model =>
           transition(model).fold(IO.unit)(next => committedVar.update(_ :+ next.app) >> modelRefVar.set(next))
         )
+      def updateBufferAnimations(
+        update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
+          BufferId,
+          com.serenity.animation.AnimationState
+        ]
+      ): IO[Unit] = bufferAnimationsRefVar.update(update)
       def scheduleDocumentAnalysis(): IO[Unit] = IO.unit
       def scheduleFindSearch(request: FindSearchRequest): IO[Unit] =
         callsVar.update(_ :+ s"scheduleFindSearch:$request")
@@ -127,10 +132,9 @@ private[manager] trait StateManagerEffectHandlersHarness:
       def submitToLane(lane: Lane.Scheduled, job: IO[Unit]): IO[Unit] = job
       def post(update: IO[Unit]): IO[Unit]                            = update
       def dispatchUpdate(update: IO[Unit]): IO[Unit]                  = update
-      def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-        editor.validateAndUpdateState(newState, fallbackState)
     val filePersistence = new StateManagerFilePersistence(
-      stateRefVar,
+      stateRefVar.get,
+      editor.commitState,
       new FileManager(),
       sessionPersistenceVar,
       NoOpLogger.impl[IO],

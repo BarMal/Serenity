@@ -165,11 +165,12 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
   "A settled markdown-preview commit" should "keep the previous state when the result is invalid" in {
     val program =
       for
-        stateRef <- Ref.of[IO, AppState](
+        modelRef <- ModelViews.modelOf(
           withStaleBufferOrder(withGenerations(edit = 1, committed = 0)(AppState.initial))
         )
+        stateRef = ModelViews.appRef(modelRef)
         seeded     <- stateRef.get
-        operations <- StateManagerOperationBoundary.create(stateRef, quietLogger)
+        operations <- StateManagerOperationBoundary.create(modelRef, quietLogger)
         _          <- operations.scheduleMarkdownPreviewCommit(bufferId, 1)
         _          <- operations.awaitEffects
         after      <- stateRef.get
@@ -188,19 +189,18 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
       pipeline: StateManagerEventPipeline,
       statesSeenByCommands: Ref[IO, List[AppState]]
   ):
-    val stateRef: Ref[IO, AppState] = Model.appRef(modelRef)
+    val stateRef: Ref[IO, AppState] = ModelViews.appRef(modelRef)
 
   private def pipelineOver(initial: AppState): IO[PipelineRig] =
     for
       model      <- Ref.of[IO, Model](Model(initial, UndoState(), Map.empty))
       seen       <- Ref.of[IO, List[AppState]](Nil)
       cacheRef   <- Ref.of[IO, Option[MouseTargetCache]](None)
-      operations <- StateManagerOperationBoundary.create(Model.appRef(model), quietLogger)
+      operations <- StateManagerOperationBoundary.create(model, quietLogger)
       directory  <- IO.blocking(Files.createTempDirectory("validated-writes-pipeline"))
     yield
-      val stateRef = Model.appRef(model)
+      val stateRef = ModelViews.appRef(model)
       val statePort = new EventStatePort:
-        val modelRef            = model
         val logger              = quietLogger
         val mouseTargetCacheRef = cacheRef
       val effectPort = EventEffectPort(
@@ -210,9 +210,9 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
       val workflowPort = new EventWorkflowPort:
         def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] = IO.unit
       val undoRecording = new UndoRecording(new UndoRecordingPort:
-        val undoRef = Model.undoRef(model)
+        def updateUndo(update: UndoState => UndoState): IO[Unit] = ModelViews.undoRef(model).update(update)
         def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
-          new ModelCommit(model, operations).updateValidated(transition))
+          operations.modelCommit.updateValidated(transition))
       val pipeline = new StateManagerEventPipeline(
         statePort,
         effectPort,

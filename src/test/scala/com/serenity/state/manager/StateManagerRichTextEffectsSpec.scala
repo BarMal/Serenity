@@ -47,7 +47,7 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
       runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
     )
     val stateRef = Ref.of[IO, AppState](state).unsafeRunSync()
-    new Harness(stateRef, new StateManagerRichTextEffects(stateRef, validatingCommit(stateRef), noEffectsExpected))
+    new Harness(stateRef, new StateManagerRichTextEffects(stateRef.get, validatingCommit(stateRef), noEffectsExpected))
 
   private def bufferWithSelection(text: String, selection: Selection): Buffer =
     Buffer
@@ -114,7 +114,7 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
         .copy(layout = AppState.initial.persisted.layout.copy(editorPanes = Map.empty, activeEditorPaneId = None))
     )
     val stateRef = Ref.of[IO, AppState](noActivePane).unsafeRunSync()
-    val richText = new StateManagerRichTextEffects(stateRef, validatingCommit(stateRef), noEffectsExpected)
+    val richText = new StateManagerRichTextEffects(stateRef.get, validatingCommit(stateRef), noEffectsExpected)
 
     richText.interpret(RichTextIntent.ToggleRichTextMark(InlineMark.Bold)).unsafeRunSync()
 
