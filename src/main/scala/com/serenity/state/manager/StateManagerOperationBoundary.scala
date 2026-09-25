@@ -225,7 +225,7 @@ final private[manager] class StateManagerOperationBoundary private (
     }
 
   private def postResult(result: EffectResult): IO[Unit] =
-    dispatcher.post(stateRef.update(EffectResult.applyIfCurrent(_, result)))
+    dispatcher.post(applyResult(result, _ => IO.unit))
 
   private def documentAnalysisJob: IO[Unit] =
     given Logger[IO] = logger

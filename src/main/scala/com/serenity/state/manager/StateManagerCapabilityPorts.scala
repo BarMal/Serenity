@@ -51,7 +51,6 @@ private[manager] object PersistenceLanes:
   val Presets: Lane.Keyed = Lane.Keyed(LaneKey.Presets, LanePolicy.Sequential)
 
 private[manager] trait EffectEditorPort extends EffectLanePort:
-  def updateState(update: AppState => AppState): IO[Unit]
   def enqueueEvent(event: Event): IO[Unit]
   def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
   def updateModelValidated(transition: Model => Option[Model]): IO[Unit]
@@ -137,5 +136,3 @@ final private[manager] case class EventEffectPort(
 /** Workflow operations requested by event routing. */
 private[manager] trait EventWorkflowPort:
   def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]
-  def createBuffer(content: String, filePath: Option[Path] = None): IO[BufferId]
-  def createPane(bufferId: Option[BufferId] = None): IO[PaneId]

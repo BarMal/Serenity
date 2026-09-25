@@ -7,50 +7,31 @@ import cats.syntax.all.*
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{
-  AppEffect,
   ModalStateReducer,
   PanelStateReducer,
   PeekStateReducer,
   PinnedPanelContentReducer,
-  ReducerResult,
-  UndoEffect
+  ReducerResult
 }
-import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.*
 
 final private[manager] class StateManagerSurfaceCapability(
     stateRef: cats.effect.Ref[IO, AppState],
     logger: org.typelevel.log4cats.Logger[IO],
     operations: StateManagerOperationBoundary,
-    recordUndoBoundary: (HistoryEntry, Boolean) => IO[Unit]
+    modelCommit: ModelCommit
 ):
-
-  private def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-    operations.validateAndUpdateState(newState, fallbackState)
 
   private def applyAnimationHooks(previousState: AppState): IO[Unit] =
     operations.enqueueAnimationHooks(previousState)
 
-  /** Applies whatever a [[PanelStateReducer]] result declared -- #1016 PR4: these calls used to take only `.state` and
-    * drop `.effects`, so a reducer that's already the right shape to declare undo had nothing that interpreted it.
-    * `PanelStateReducer` only ever emits `Undo`, but this stays a generic fold rather than special-cased to that one
-    * effect, so a future effect added there doesn't silently get dropped again.
-    */
-  private def interpretEffects(effects: List[AppEffect]): IO[Unit] =
-    effects.traverse_ {
-      case AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable)) => recordUndoBoundary(entry, groupable)
-      case _                                                           => IO.unit
-    }
-
-  /** Reads state once, commits the pure result once through the validated path, then runs the shell-side follow-ups the
-    * reducer can't express as effects yet: the pipeline's animation hooks and the effects' undo boundaries.
+  /** Commits the reducer's state together with the undo boundary (and any animation) it declares in one validated model
+    * write -- a rejected state records no undo entry -- then queues the pipeline's animation hooks.
     */
   private def commit(reduce: AppState => ReducerResult, withAnimationHooks: Boolean): IO[Unit] =
     stateRef.get.flatMap { state =>
-      val result = reduce(state)
-      validateAndUpdateState(result.state, state) >>
-        applyAnimationHooks(state).whenA(withAnimationHooks) >>
-        interpretEffects(result.effects)
+      modelCommit.updateValidated(model => Some(EventPipelineTransitions.committed(model, reduce(model.app)))) >>
+        applyAnimationHooks(state).whenA(withAnimationHooks)
     }
 
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] =

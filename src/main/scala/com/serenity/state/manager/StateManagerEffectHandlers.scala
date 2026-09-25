@@ -329,19 +329,14 @@ final private[manager] class StateManagerEffectHandlers(
   private def interpretEditIntent(intent: EditIntent): IO[Unit] =
     intent match
       case EditIntent.FindInCurrentFile =>
-        updateState(current => ModalStateReducer.show(findModalForState(current), current).state)
+        showModalValidated(findModalForState)
       case EditIntent.FindAllInCurrentFile =>
-        updateState(current => ModalStateReducer.show(findModalForState(current), current).state)
+        showModalValidated(findModalForState)
       case EditIntent.ReplaceInCurrentFile =>
-        updateState(current => ModalStateReducer.show(Modal.ReplaceWorkflow(ReplaceWorkflowState()), current).state)
+        showModalValidated(_ => Modal.ReplaceWorkflow(ReplaceWorkflowState()))
       case EditIntent.ReplaceAllInCurrentFile =>
-        updateState(current =>
-          ModalStateReducer
-            .show(
-              Modal.ReplaceWorkflow(ReplaceWorkflowState(selectedAction = ReplaceWorkflowAction.ReplaceAll)),
-              current
-            )
-            .state
+        showModalValidated(_ =>
+          Modal.ReplaceWorkflow(ReplaceWorkflowState(selectedAction = ReplaceWorkflowAction.ReplaceAll))
         )
       case EditIntent.Copy =>
         enqueueEvent(com.serenity.keystroke.events.Copy)
@@ -357,6 +352,10 @@ final private[manager] class StateManagerEffectHandlers(
         enqueueEvent(com.serenity.keystroke.events.Redo)
       case EditIntent.FormatCurrentFile =>
         logger.debug("[CMD] Format command requested")
+
+  // Read inside the validated model write rather than from a snapshot: a command can run off the dispatcher.
+  private def showModalValidated(modalFor: AppState => Modal): IO[Unit] =
+    updateModelValidated(model => Some(model.copy(app = ModalStateReducer.show(modalFor(model.app), model.app).state)))
 
   private def interpretSessionIntent(intent: SessionIntent, state: AppState): IO[Unit] =
     intent match

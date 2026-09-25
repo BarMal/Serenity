@@ -48,9 +48,7 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
         interpretCommand = (_, _) => IO.unit
       )
       workflowPort = new EventWorkflowPort:
-        def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]      = IO.unit
-        def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] = IO.pure(BufferId(0))
-        def createPane(bufferId: Option[BufferId]): IO[PaneId]                  = IO.pure(PaneId(0))
+        def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] = IO.unit
       modelCommit = new ModelCommit(sharedModelRef, operations)
       undoRecording = new UndoRecording(new UndoRecordingPort:
         val undoRef = Model.undoRef(sharedModelRef)

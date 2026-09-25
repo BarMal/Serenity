@@ -119,8 +119,7 @@ private[manager] class StateManagerComposition(
     val markdownPreviewWindow   = runtimeMarkdownPreviewWindow
 
   private val effectEditorPort: EffectEditorPort = new EffectEditorPort:
-    def updateState(update: AppState => AppState): IO[Unit] = runtimeStateRef.update(update)
-    def enqueueEvent(event: Event): IO[Unit]                = operations.enqueueEvent(event)
+    def enqueueEvent(event: Event): IO[Unit] = operations.enqueueEvent(event)
     def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
       operations.validateAndUpdateState(newState, fallbackState)
     def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
@@ -141,7 +140,7 @@ private[manager] class StateManagerComposition(
       case other => effects.interpretEffect(other)
 
   private val surfaces =
-    new StateManagerSurfaceCapability(stateRef, logger, operations, undoRecording.recordUndoBoundary)
+    new StateManagerSurfaceCapability(stateRef, logger, operations, modelCommit)
 
   private val editor = new StateManagerEditorCapability(
     modelRef,
@@ -262,9 +261,6 @@ private[manager] class StateManagerComposition(
     new EventWorkflowPort:
       def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
         workflow.beginCloseAction(scope, state)
-      def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] =
-        editor.bufferManager.createBuffer(content, filePath)
-      def createPane(bufferId: Option[BufferId]): IO[PaneId] = editor.createPane(bufferId)
 
   private val events =
     new StateManagerEventPipeline(
@@ -280,7 +276,14 @@ private[manager] class StateManagerComposition(
 
   private val viewport =
     new StateManagerViewportCapability(stateRef, logger, deviceTextScaleProvider, events, effects)
-  private val files = new StateManagerFileCapability(stateRef, effects, events.dispatch, filePersistence.openFile)
+
+  private val files = new StateManagerFileCapability(
+    stateRef,
+    editor.updateStateValidated,
+    effects,
+    events.dispatch,
+    filePersistence.openFile
+  )
 
   // PaneManager's methods are excluded from the facade export and re-assembled into the `paneManager` record below,
   // since #1017 replaces the mixed-in trait with a field. They stay public on the capability classes so this

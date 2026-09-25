@@ -45,9 +45,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       interpretCommand = (_, _) => IO.unit
     )
     val workflowPort = new EventWorkflowPort:
-      def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit]      = IO.unit
-      def createBuffer(content: String, filePath: Option[Path]): IO[BufferId] = IO.pure(BufferId(0))
-      def createPane(bufferId: Option[BufferId]): IO[PaneId]                  = IO.pure(PaneId(0))
+      def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] = IO.unit
     val undoRecording = new UndoRecording(new UndoRecordingPort:
       val undoRef = Model.undoRef(currentModelRef)
       def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
@@ -86,6 +84,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val calls    = Ref.of[IO, List[String]](Nil).unsafeRunSync()
     val facade = new StateManagerFileFacade(
       stateRef,
+      update => stateRef.update(update),
       path => calls.update(_ :+ s"open:$path"),
       bufferId => calls.update(_ :+ s"save:$bufferId"),
       (bufferId, path) => calls.update(_ :+ s"save-as:$bufferId:$path")
@@ -467,13 +466,16 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     applied.get.unsafeRunSync().shouldBe(List(Paste))
   }
 
-  "StateManagerOperationBoundary" should "commit a markdown preview render generation after the debounce settles" in {
-    val bufferId = BufferId(1)
-    val initialState = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(buffers =
-        Map(bufferId -> Buffer.fromString(bufferId, "# hello").copy(markdownPreviewEditGeneration = 1L))
-      )
+  private def withPreviewBuffer(bufferId: BufferId, editGeneration: Long): AppState =
+    val preview = Buffer.fromString(bufferId, "# hello").copy(markdownPreviewEditGeneration = editGeneration)
+    AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(buffers = AppState.initial.persisted.buffers + (bufferId -> preview)),
+      runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
     )
+
+  "StateManagerOperationBoundary" should "commit a markdown preview render generation after the debounce settles" in {
+    val bufferId     = BufferId(1)
+    val initialState = withPreviewBuffer(bufferId, editGeneration = 1L)
     val program = for
       stateRef <- Ref.of[IO, AppState](initialState)
       operations <- StateManagerOperationBoundary.create(
@@ -489,12 +491,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "cancel a pending markdown preview commit when superseded by a newer edit" in {
-    val bufferId = BufferId(1)
-    val initialState = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(buffers =
-        Map(bufferId -> Buffer.fromString(bufferId, "# hello").copy(markdownPreviewEditGeneration = 2L))
-      )
-    )
+    val bufferId     = BufferId(1)
+    val initialState = withPreviewBuffer(bufferId, editGeneration = 2L)
     val program = for
       stateRef <- Ref.of[IO, AppState](initialState)
       operations <- StateManagerOperationBoundary.create(
@@ -546,8 +544,8 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     )
 
   it should "bump markdownPreviewEditGeneration when an edit changes a buffer with a live inline markdown preview" in {
-    val bufferId       = BufferId(1)
-    val paneId         = PaneId(1)
+    val bufferId       = BufferId(0)
+    val paneId         = PaneId(0)
     val beforeUnstyled = Buffer.fromString(bufferId, "# Before")
     val before =
       beforeUnstyled.copy(document =
