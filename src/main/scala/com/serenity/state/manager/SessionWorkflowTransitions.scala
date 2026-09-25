@@ -21,7 +21,8 @@ private[manager] object SessionWorkflowTransitions:
         uiSurfaces = List.empty,
         viewportSize = currentState.runtime.viewportSize,
         isTuiMode = currentState.runtime.isTuiMode,
-        keyboardFidelityTier = currentState.runtime.keyboardFidelityTier
+        keyboardFidelityTier = currentState.runtime.keyboardFidelityTier,
+        projectTasks = ProjectTaskTransitions.acrossRestore(currentState)
       )
     )
     currentState.runtime.viewportSize

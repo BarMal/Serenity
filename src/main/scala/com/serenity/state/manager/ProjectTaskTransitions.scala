@@ -25,6 +25,12 @@ private[manager] object ProjectTaskTransitions:
     if state.runtime.projectTasks.running.isEmpty then state
     else withTasks(state, state.runtime.projectTasks.copy(running = None))
 
+  /** What a session restore keeps: no running task, but the id counter -- ids version task results, so they must never
+    * repeat within the process, and a task from before the restore may still post output.
+    */
+  def acrossRestore(current: AppState): ProjectTasks =
+    ProjectTasks(nextId = current.runtime.projectTasks.nextId)
+
   def outputArrived(state: AppState, id: Long, chunk: String): ReducerResult =
     current(state, id).fold(ReducerResult.noEffects(state)) { task =>
       val updated = task.copy(output = ProjectTaskRunner.appendOutputTail(task.output, chunk))

@@ -2,6 +2,8 @@ package com.serenity.state.manager
 
 import java.nio.file.{Files, Path}
 
+import scala.concurrent.duration.*
+
 import cats.effect.*
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
@@ -123,6 +125,16 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
 
   private val runBuild = projectCommand(ProjectIntent.RunProjectTask(ProjectTaskKind.Build))
 
+  private def sessionOver(current: AppState): AppState =
+    val fresh  = AppState.initial
+    val buffer = fresh.persisted.buffers(BufferId(0))
+    val path   = current.persisted.buffers.get(BufferId(0)).flatMap(_.document.filePath)
+    fresh.copy(persisted =
+      fresh.persisted.copy(buffers =
+        fresh.persisted.buffers.updated(BufferId(0), buffer.copy(document = buffer.document.copy(filePath = path)))
+      )
+    )
+
   "StateManagerRuntime" should "collect manager dependencies behind one runtime boundary" in {
     val program = for
       modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
@@ -241,6 +253,41 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       )
 
     afterOlderFinish.runtime.projectTasks.running.map(_.id) shouldBe Some(1L)
+  }
+
+  it should "never reuse a task id across a session restore, so an older task's late output cannot reach a newer one" in {
+    val program = for
+      taskA                     <- endlessTask
+      taskB                     <- endlessTask
+      (composition, operations) <- projectComposition(List(taskA, taskB))
+      _                         <- composition.interpretCommand(runBuild, AppState.initial)
+      _                         <- taskA.started.get
+      idA <- composition.stateRef.get.flatMap(state =>
+        IO.fromOption(state.runtime.projectTasks.running.map(_.id))(new IllegalStateException("task A did not start"))
+      )
+      beforeRestore <- composition.stateRef.get
+      // A loaded session is a fresh state -- its runtime never persisted -- over the same project.
+      loadedSession = sessionOver(beforeRestore)
+      _ <- composition.validateAndUpdateState(
+        composition.restoreSessionIntoCurrentViewport(loadedSession, beforeRestore),
+        beforeRestore
+      )
+      restored <- composition.stateRef.get
+      _ <- IO.raiseWhen(restored.runtime.projectTasks.running.isDefined)(
+        new IllegalStateException("the session restore was not committed")
+      )
+      _ <- composition.interpretCommand(runBuild, AppState.initial)
+      _ <- taskB.started.get.timeout(5.seconds)
+      _ <- operations.dispatch(operations.applyResult(EffectResult.ProjectTaskOutput(idA, "late from A"), _ => IO.unit))
+      afterLate <- composition.stateRef.get
+      _         <- composition.interpretCommand(projectCommand(ProjectIntent.CancelProjectTask), AppState.initial)
+    yield
+      afterLate.runtime.projectTasks.running.map(_.id) should not be Some(idA)
+      afterLate.runtime.projectTasks.running.map(_.output) shouldBe Some("")
+      afterLate.pinnedSurfaces.map(_.content).collect { case SurfaceContent.Terminal(text, _) => text }.mkString should
+        not include "late from A"
+
+    program.unsafeRunSync()
   }
 
   "StateManagerFileFacade" should "be testable with injected file operations only" in {
