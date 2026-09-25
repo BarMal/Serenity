@@ -134,9 +134,9 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
       .unsafeRunSync()
 
     // issue #1048: interpretCommand records MRU usage for every command it runs regardless of outcome, so the
-    // otherwise-no-op file load still bumps `runtime.commandUsage` for `command`'s own "test-command" name.
-    fixture.currentState shouldBe AppState.initial.copy(runtime =
-      AppState.initial.runtime.copy(commandUsage = Map("test-command" -> 1))
+    // otherwise-no-op file load still bumps `persisted.commandUsage` for `command`'s own "test-command" name.
+    fixture.currentState shouldBe AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(commandUsage = Map("test-command" -> 1))
     )
   }
 
@@ -311,13 +311,13 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
       .unsafeRunSync()
 
     // issue #1048: interpretCommand records MRU usage for every command it runs regardless of outcome, so the
-    // otherwise-no-op restore still commits a bump of `runtime.commandUsage` for `command`'s own "test-command" name.
+    // otherwise-no-op restore still commits a bump of `persisted.commandUsage` for `command`'s own "test-command" name.
     fixture.committedStates.get.unsafeRunSync() shouldBe List(usageRecorded(AppState.initial))
     fixture.currentState shouldBe usageRecorded(AppState.initial)
   }
 
   private def usageRecorded(state: AppState): AppState =
-    state.copy(runtime = state.runtime.copy(commandUsage = Map("test-command" -> 1)))
+    state.copy(persisted = state.persisted.copy(commandUsage = Map("test-command" -> 1)))
 
   // ---------------------------------------------------------------------------------------------------------------
   // Direct save/load entry points

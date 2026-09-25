@@ -15,12 +15,12 @@ class CommandUsageTransitionSpec extends AnyFlatSpec with Matchers:
     val twice = StateManagerEffectHandlers.withCommandUsageRecorded(once, "open")
     val again = StateManagerEffectHandlers.withCommandUsageRecorded(twice, "save")
 
-    again.runtime.commandUsage shouldBe Map("save" -> 3, "open" -> 2)
+    again.persisted.commandUsage shouldBe Map("save" -> 3, "open" -> 2)
     AppStateValidation.validationErrors(again) shouldBe Nil
   }
 
   it should "change nothing but the usage record" in {
     val recorded = StateManagerEffectHandlers.withCommandUsageRecorded(AppState.initial, "save")
 
-    recorded.copy(runtime = recorded.runtime.copy(commandUsage = Map.empty)) shouldBe AppState.initial
+    recorded.copy(persisted = recorded.persisted.copy(commandUsage = Map.empty)) shouldBe AppState.initial
   }

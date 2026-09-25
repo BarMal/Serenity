@@ -95,7 +95,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     // issue #1048: every executed command records MRU usage regardless of outcome, so the resize command's own
-    // no-op still bumps `runtime.commandUsage` even though the panel state itself is unchanged.
-    val expected = before.copy(runtime = before.runtime.copy(commandUsage = Map("resize-focused-panel" -> 1)))
+    // no-op still bumps `persisted.commandUsage` even though the panel state itself is unchanged.
+    val expected = before.copy(persisted = before.persisted.copy(commandUsage = Map("resize-focused-panel" -> 1)))
     stateManager.getCurrentState.unsafeRunSync() shouldBe expected
   }

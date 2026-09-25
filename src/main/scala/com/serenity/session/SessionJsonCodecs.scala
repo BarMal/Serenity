@@ -144,6 +144,7 @@ given Decoder[SessionState] = Decoder.instance { cursor =>
     themeName         <- cursor.get[String]("themeName")
     recentFiles       <- cursor.getOrElse[List[String]]("recentFiles")(Nil)
     recentFilesByMode <- cursor.getOrElse[Map[String, List[String]]]("recentFilesByMode")(Map.empty)
+    commandUsage      <- cursor.getOrElse[Map[String, Int]]("commandUsage")(Map.empty)
   yield SessionState(
     buffers = buffers,
     layout = layout,
@@ -153,6 +154,7 @@ given Decoder[SessionState] = Decoder.instance { cursor =>
     themeName = themeName,
     recentFiles = recentFiles,
     recentFilesByMode = recentFilesByMode,
+    commandUsage = commandUsage,
     schemaVersion = schemaVersion
   )
 }

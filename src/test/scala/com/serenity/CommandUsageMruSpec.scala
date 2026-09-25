@@ -9,7 +9,7 @@ import org.scalatest.matchers.should.Matchers
 
 /** issue #1048: MRU tracking survives the palette closing and reopening within the same session, since `CommandRunner`
   * itself is reconstructed fresh on every open (`AppEventReducer.openCommandRunner`) -- the generation counter has to
-  * live on `AppState.runtime` instead, and get seeded back into the freshly-activated runner.
+  * live on `AppState.persisted` instead, and get seeded back into the freshly-activated runner.
   */
 class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
@@ -22,7 +22,7 @@ class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTes
         case _                                     => None)
       .getOrElse(fail("expected the command palette to be open"))
 
-  "executing a command" should "record its use on AppState.runtime, surviving the palette closing" in {
+  "executing a command" should "record its use on AppState.persisted, surviving the palette closing" in {
     val sm = createStateManager("CommandUsageMru")
 
     val command = Command.typed(
@@ -33,7 +33,7 @@ class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTes
     )
     sm.executeCommand(command).unsafeRunSync()
 
-    sm.getCurrentState.unsafeRunSync().runtime.commandUsage should contain key command.name
+    sm.getCurrentState.unsafeRunSync().persisted.commandUsage should contain key command.name
   }
 
   it should "seed the freshly-activated palette's own commandUsage on the next open" in {
@@ -71,7 +71,7 @@ class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTes
     sm.applyEvent(Enter).unsafeRunSync()
 
   private def mostRecentCommand(state: AppState): Option[String] =
-    state.runtime.commandUsage.maxByOption(_._2).map(_._1)
+    state.persisted.commandUsage.maxByOption(_._2).map(_._1)
 
   "running a surface-opening command from the palette" should "leave the theme chooser open and most recent" in {
     val sm = createStateManager("CommandUsageMruThemeChooser")

@@ -37,7 +37,7 @@ class SessionCommandUsageSpec extends AnyFlatSpec with Matchers:
       stateManager.getCurrentState).unsafeRunSync()
 
   private def mostRecentCommand(state: AppState): Option[String] =
-    state.runtime.commandUsage.maxByOption(_._2).map(_._1)
+    state.persisted.commandUsage.maxByOption(_._2).map(_._1)
 
   private def openModal(state: AppState): Option[Modal] =
     state.runtime.uiSurfaces.map(_.content).collectFirst { case SurfaceContent.ModalWorkflow(modal) => modal }
