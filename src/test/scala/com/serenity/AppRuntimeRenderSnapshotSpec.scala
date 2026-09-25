@@ -49,12 +49,8 @@ class AppRuntimeRenderSnapshotSpec extends AnyFlatSpec with Matchers:
       private def next: IO[Model]                                      = version.updateAndGet(_ + 1).map(modelAt)
       def getModel: IO[Model]                                          = next
       def getCurrentState: IO[AppState]                                = next.map(_.app)
-      def getBufferAnimations: IO[Map[BufferId, AnimationState]]       = next.map(_.bufferAnimations)
-      def updateState(update: AppState => AppState): IO[Unit]          = IO.unit
       def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
-      def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit] =
-        IO.unit
-      def applyEvent(event: Event): IO[Unit] = IO.unit
+      def applyEvent(event: Event): IO[Unit]                           = IO.unit
 
   "The fast render phase" should "paint app state and buffer animations from the same model snapshot" in {
     val program =

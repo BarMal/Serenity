@@ -14,6 +14,7 @@ import com.serenity.input.{FocusedInputTranslator, InProcessClipboard, InputRout
 import com.serenity.keystroke.events.{Event, MousePress}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.manager.{DamageProducer, StateManager}
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.ui.layout.ViewportSize

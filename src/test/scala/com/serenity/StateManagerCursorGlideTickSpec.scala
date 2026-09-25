@@ -5,6 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{EasingCurve, Tween}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.PixelPoint
 import org.scalatest.flatspec.AnyFlatSpec
@@ -33,8 +34,15 @@ class StateManagerCursorGlideTickSpec extends AnyFlatSpec with Matchers:
       val glide  = Tween(start = PixelPoint(0, 0), end = PixelPoint(20, 0), curve = EasingCurve.Linear, steps = steps)
       val cursor = Cursor(CursorPosition(0, 0), glide = Some(glide))
       val buffer =
-        Buffer.fromString(bufferId, "hello world").copy(editing = EditingState.fromCursors(cursor :: cursors))
-      state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
+        Buffer
+          .fromString(bufferId, "hello world\nsecond line")
+          .copy(editing = EditingState.fromCursors(cursor :: cursors))
+      // Advances `nextBufferId` past the seeded buffer, as a real allocation would; the second line gives a
+      // multi-cursor fixture's second cursor somewhere valid to sit.
+      state.copy(
+        persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)),
+        runtime = state.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
+      )
     }.unsafeRunSync()
 
   "advanceAnimationsOnTick" should "return true while a cursor glide is still in flight" in {

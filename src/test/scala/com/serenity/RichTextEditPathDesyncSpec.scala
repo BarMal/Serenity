@@ -6,6 +6,7 @@ import com.serenity.command.CommandRegistry
 import com.serenity.keystroke.events.{Cut, Paste, ReverseTabKey, TabKey}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{CursorPosition, PaneId, Selection}
 import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec

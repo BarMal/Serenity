@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.TextAreaInsets
 import com.serenity.keystroke.events.{MouseDrag, ResizeEvent}
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

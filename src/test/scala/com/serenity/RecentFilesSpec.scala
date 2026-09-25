@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import cats.effect.unsafe.implicits.global
 import com.serenity.session.SessionState
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.AppState
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -23,13 +24,13 @@ class RecentFilesSpec extends AnyFlatSpec with Matchers with StateManagerTestSup
   behavior of "Recent files"
 
   it should "return an empty list initially" in new RecentFilesFixture:
-    sm.fileService.getRecentFiles.unsafeRunSync() shouldBe Nil
+    sm.getRecentFiles.unsafeRunSync() shouldBe Nil
 
   it should "track a file path after saveBufferAs" in new RecentFilesFixture:
     val path = tmpFile("hello.scala")
     try
       sm.fileService.saveBufferAs(initialBufferId, path).unsafeRunSync()
-      sm.fileService.getRecentFiles.unsafeRunSync() shouldBe List(path)
+      sm.getRecentFiles.unsafeRunSync() shouldBe List(path)
     finally
       Files.deleteIfExists(path)
       Files.deleteIfExists(tmpDir)
@@ -40,7 +41,7 @@ class RecentFilesSpec extends AnyFlatSpec with Matchers with StateManagerTestSup
     try
       sm.fileService.saveBufferAs(initialBufferId, pathA).unsafeRunSync()
       sm.fileService.saveBufferAs(initialBufferId, pathB).unsafeRunSync()
-      sm.fileService.getRecentFiles.unsafeRunSync() shouldBe List(pathB, pathA)
+      sm.getRecentFiles.unsafeRunSync() shouldBe List(pathB, pathA)
     finally
       Files.deleteIfExists(pathA)
       Files.deleteIfExists(pathB)
@@ -53,7 +54,7 @@ class RecentFilesSpec extends AnyFlatSpec with Matchers with StateManagerTestSup
       sm.fileService.saveBufferAs(initialBufferId, pathA).unsafeRunSync()
       sm.fileService.saveBufferAs(initialBufferId, pathB).unsafeRunSync()
       sm.fileService.saveBufferAs(initialBufferId, pathA).unsafeRunSync()
-      sm.fileService.getRecentFiles.unsafeRunSync() shouldBe List(pathA, pathB)
+      sm.getRecentFiles.unsafeRunSync() shouldBe List(pathA, pathB)
     finally
       Files.deleteIfExists(pathA)
       Files.deleteIfExists(pathB)

@@ -7,6 +7,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
 import com.serenity.lsp.config.LanguageId
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.tui.{MarkdownPreviewWindow, MarkdownPreviewWindowAvailability}

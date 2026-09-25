@@ -66,7 +66,7 @@ final private[manager] class ModelCommit(modelRef: Ref[IO, Model], operations: S
     modelRef.update(current => current.copy(bufferAnimations = update(current.bufferAnimations)))
 
   /** Writes `update`'s model without validation and returns it. Only for the render tick's animation advance, which
-    * runs every frame and only moves animation progress forward, and for the test-seeding `StateUpdater.updateState`.
+    * runs every frame and only moves animation progress forward.
     */
   def updateUnvalidated(update: Model => Model): IO[Model] =
     modelRef.modify { current =>

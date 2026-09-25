@@ -19,6 +19,7 @@ import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.NextTab
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -57,8 +58,8 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "retain editor text animations while starting a pane UI transition" in {
-    val stateManager = createStateManager()
-    stateManager
+    val unanimated = createStateManager()
+    unanimated
       .updateState(state =>
         state.copy(
           persisted = state.persisted.copy(config = state.persisted.config.withMotionPreset(MotionPreset.Smooth)),
@@ -67,11 +68,11 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    val firstBufferId = stateManager.getCurrentState.unsafeRunSync().persisted.bufferOrder.head
-    stateManager.bufferManager.updateBuffer(firstBufferId, "First").unsafeRunSync()
-    val secondBufferId = stateManager.bufferManager.createBuffer("Second", None).unsafeRunSync()
-    stateManager
-      .updateBufferAnimations { animations =>
+    val firstBufferId = unanimated.getCurrentState.unsafeRunSync().persisted.bufferOrder.head
+    unanimated.bufferManager.updateBuffer(firstBufferId, "First").unsafeRunSync()
+    val secondBufferId = unanimated.bufferManager.createBuffer("Second", None).unsafeRunSync()
+    val stateManager = unanimated
+      .reseededWithBufferAnimations { animations =>
         val current = animations.getOrElse(secondBufferId, com.serenity.animation.AnimationState.empty)
         animations.updated(
           secondBufferId,

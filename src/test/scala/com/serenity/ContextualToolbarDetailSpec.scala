@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.richtext.*
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.*

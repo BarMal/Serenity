@@ -5,8 +5,9 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{EasingCurve, Tween}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.ui.layout.LayoutRect
+import com.serenity.ui.layout.{LayoutRect, PanelContent, PanelPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -114,17 +115,18 @@ class StateManagerPanelGeometryTickSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not remove a real docked panel's own surface once its opening geometry completes" in {
-    val sm        = makeStateManager()
-    val surfaceId = SurfaceId("real-panel")
+    val sm = makeStateManager()
+    // Pinned through the panel manager so the docked surface sits in the workspace tree, as a real panel does.
+    sm.panelManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 20).unsafeRunSync()
+    val surfaceId = sm.getCurrentState
+      .unsafeRunSync()
+      .runtime
+      .uiSurfaces
+      .collectFirst { case UiSurface(id, SurfaceContent.Outline(_, _), SurfacePresentation.Docked, _) => id }
+      .getOrElse(fail("Expected the pinned outline panel's docked surface"))
     sm.updateState { state =>
-      val panel = UiSurface(
-        id = surfaceId,
-        content = SurfaceContent.Outline(Nil),
-        presentation = SurfacePresentation.Docked
-      )
       state.copy(runtime =
         state.runtime.copy(
-          uiSurfaces = state.runtime.uiSurfaces :+ panel,
           panelGeometry = Map(
             surfaceId -> PanelGeometryState(
               Tween(

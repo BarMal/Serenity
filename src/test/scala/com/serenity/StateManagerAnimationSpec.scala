@@ -9,6 +9,7 @@ import com.serenity.config.{AppConfig, MotionPreset, VisualFlairLevel}
 import com.serenity.keystroke.events.NextTab
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -51,9 +52,9 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
       Color.WHITE,
       5
     )
-    sm.updateBufferAnimations(_.updated(bufferId, animations)).unsafeRunSync()
+    val animated = sm.reseededWithBufferAnimations(_.updated(bufferId, animations)).unsafeRunSync()
 
-    val result = sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
+    val result = animated.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
     result shouldBe true
   }
 
@@ -78,9 +79,9 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
       Color.WHITE,
       1
     )
-    sm.updateBufferAnimations(_.updated(bufferId, animations)).unsafeRunSync()
+    val animated = sm.reseededWithBufferAnimations(_.updated(bufferId, animations)).unsafeRunSync()
 
-    val result = sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
+    val result = animated.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
     result shouldBe false
   }
 
@@ -97,28 +98,30 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     val inactiveBufferId = sm.bufferManager.createBuffer("inactive", None).unsafeRunSync()
     val activeBufferId   = sm.bufferManager.createBuffer("active", None).unsafeRunSync()
 
-    sm.updateBufferAnimations { _ =>
-      Map(
-        activeBufferId -> com.serenity.animation.AnimationState.empty.addCharacterAnimation(
-          'a',
-          0,
-          0,
-          Color.BLACK,
-          Color.WHITE,
-          5
+    val animated = sm
+      .reseededWithBufferAnimations { _ =>
+        Map(
+          activeBufferId -> com.serenity.animation.AnimationState.empty.addCharacterAnimation(
+            'a',
+            0,
+            0,
+            Color.BLACK,
+            Color.WHITE,
+            5
+          )
         )
-      )
-    }.unsafeRunSync()
+      }
+      .unsafeRunSync()
 
-    val before           = sm.getCurrentState.unsafeRunSync()
+    val before           = animated.getCurrentState.unsafeRunSync()
     val inactiveBefore   = before.persisted.buffers(inactiveBufferId)
-    val animationsBefore = sm.getBufferAnimations.unsafeRunSync()
+    val animationsBefore = animated.getBufferAnimations.unsafeRunSync()
 
-    sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
+    animated.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
 
-    val after           = sm.getCurrentState.unsafeRunSync()
+    val after           = animated.getCurrentState.unsafeRunSync()
     val inactiveAfter   = after.persisted.buffers(inactiveBufferId)
-    val animationsAfter = sm.getBufferAnimations.unsafeRunSync()
+    val animationsAfter = animated.getBufferAnimations.unsafeRunSync()
 
     inactiveAfter should be theSameInstanceAs inactiveBefore
     // The inactive buffer's entry in the side table must stay absent while another

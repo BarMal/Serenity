@@ -7,6 +7,7 @@ import com.serenity.config.MotionPreset
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

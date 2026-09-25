@@ -10,6 +10,7 @@ import com.serenity.command.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{BufferId, CursorPosition, EditingState}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -20,6 +21,9 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
 
   given Balance           = Balance.default
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+  /** Long enough for the request fixtures' cursors to sit inside it, which a validated write requires. */
+  private val requestFixtureContent = List.fill(4)("val subtotal = 1").mkString("\n")
 
   private def createStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("LspCommandRoutingSpec"))
@@ -41,7 +45,11 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
         .updateState { state =>
           val original = state.persisted.buffers(BufferId(0))
           val buffer = original.copy(
-            document = original.document.copy(filePath = Some(file), language = Some(LanguageId.Scala)),
+            document = original.document.copy(
+              content = com.serenity.rope.Rope(requestFixtureContent),
+              filePath = Some(file),
+              language = Some(LanguageId.Scala)
+            ),
             editing = EditingState(List(CursorPosition(3, 7)))
           )
           state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (BufferId(0) -> buffer)))
@@ -122,7 +130,11 @@ class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
         .updateState { state =>
           val original = state.persisted.buffers(BufferId(0))
           val buffer = original.copy(
-            document = original.document.copy(filePath = Some(file), language = Some(LanguageId.Scala)),
+            document = original.document.copy(
+              content = com.serenity.rope.Rope(requestFixtureContent),
+              filePath = Some(file),
+              language = Some(LanguageId.Scala)
+            ),
             editing = EditingState(List(CursorPosition(2, 5)))
           )
           state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (BufferId(0) -> buffer)))

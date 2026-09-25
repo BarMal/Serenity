@@ -13,6 +13,7 @@ import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.*
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.AwaitCondition.awaitValue
 import com.serenity.ui.theme.Theme

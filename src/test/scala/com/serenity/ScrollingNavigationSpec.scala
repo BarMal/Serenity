@@ -10,6 +10,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.{EditingStateFixtures, VirtualTime}
 import com.serenity.ui.fonts.FontLoader

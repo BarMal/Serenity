@@ -9,6 +9,7 @@ import com.serenity.config.AppMode
 import com.serenity.project.ProjectTaskKind
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{BufferId, SurfaceContent}
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec

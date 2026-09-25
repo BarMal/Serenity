@@ -8,6 +8,7 @@ import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Rope
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{PinnedPanelViewModel, RendererEntryPoints}

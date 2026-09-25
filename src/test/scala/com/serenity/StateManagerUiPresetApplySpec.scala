@@ -10,6 +10,7 @@ import com.serenity.config.*
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPresetStore

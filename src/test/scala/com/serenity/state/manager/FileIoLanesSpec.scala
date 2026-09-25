@@ -13,6 +13,7 @@ import com.serenity.keystroke.events.{InsertChar, SaveFile}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.core.EditorState
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -336,7 +337,7 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
   }
 
   private def restoreSession(f: Fixture): Unit =
-    f.stateManager.sessionService.saveSession.unsafeRunSync()
+    f.stateManager.saveSession.unsafeRunSync()
     f.stateManager.commandExecutor
       .executeCommand(
         Command.typed(
@@ -391,7 +392,7 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
     val f    = fixture()
     val path = file(f.directory, "notes.txt", "draft")
     f.open(path)
-    f.stateManager.sessionService.saveSession.unsafeRunSync()
+    f.stateManager.saveSession.unsafeRunSync()
     Files.writeString(path, "rewritten\non disk")
     restoreSession(f)
 

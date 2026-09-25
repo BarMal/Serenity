@@ -6,6 +6,7 @@ import com.serenity.command.*
 import com.serenity.config.{StatusLinePlacement, ToolbarDisplayMode}
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.SurfaceContent
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

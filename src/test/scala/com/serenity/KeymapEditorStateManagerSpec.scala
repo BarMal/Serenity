@@ -7,6 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.{CommandRunnerKeyAction, HotkeyAction, HotkeyConfig, KeymapGroup}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.SurfaceContent
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

@@ -7,6 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
 import com.serenity.config.AppConfig
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{Focus, SurfaceContent}
 import com.serenity.testkit.CacheCapacityIsolatedTest
 import com.serenity.ui.fonts.FontLoader
@@ -227,7 +228,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     val program = for
       firstManager <- StateManager.apply(logger, sessionRootOverride = Some(sessionRoot))
       _ <- firstManager.updateState(state => state.copy(persisted = state.persisted.copy(theme = Theme.light)))
-      _ <- firstManager.sessionService.saveSession
+      _ <- firstManager.saveSession
       secondManager <- StateManager.apply(
         logger,
         sessionRootOverride = Some(sessionRoot)

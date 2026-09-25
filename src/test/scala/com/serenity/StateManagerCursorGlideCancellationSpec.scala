@@ -7,6 +7,7 @@ import com.serenity.command.{Command, CommandCategory, CommandIntent, MotionInte
 import com.serenity.config.MotionAccessibility
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.PixelPoint
 import org.scalatest.flatspec.AnyFlatSpec

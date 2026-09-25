@@ -27,9 +27,6 @@ final private[manager] class StateManagerEditorCapability(
 
   def getCurrentState: IO[AppState] = modelCommit.currentState
 
-  def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] =
-    modelCommit.model.map(_.bufferAnimations)
-
   val focusManager: FocusManager = FocusManager(switchFocus = switchFocus)
 
   private def switchFocus(newFocus: Focus): IO[Unit] =
@@ -37,16 +34,8 @@ final private[manager] class StateManagerEditorCapability(
       modelCommit.commitState(EditorTransitions.focused(state, newFocus), state)
     )
 
-  def updateState(update: AppState => AppState): IO[Unit] =
-    modelCommit.updateUnvalidated(model => model.copy(app = update(model.app))).void
-
   def updateStateValidated(update: AppState => AppState): IO[Unit] =
     operations.dispatch(modelCommit.currentState.flatMap(state => modelCommit.commitState(update(state), state)))
-
-  def updateBufferAnimations(
-    update: Map[BufferId, com.serenity.animation.AnimationState] => Map[BufferId, com.serenity.animation.AnimationState]
-  ): IO[Unit] =
-    modelCommit.updateBufferAnimations(update)
 
   val animationTicker: AnimationTicker = AnimationTicker(advanceAnimationsOnTick = advanceAnimationsOnTick())
 

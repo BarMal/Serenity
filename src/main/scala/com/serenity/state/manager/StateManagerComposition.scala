@@ -383,17 +383,7 @@ private[manager] class StateManagerComposition(
   def restoreStartupSession(): IO[Unit]                       = workflow.restoreStartupSession()
   def activeEditorBufferId(state: AppState): Option[BufferId] = workflow.activeEditorBufferId(state)
 
-  val sessionService: SessionService = SessionService(
-    saveSession = saveSession,
-    loadSession = loadSession,
-    clearSession = sessionManager.clearSession()
-  )
-
-  private def saveSession: IO[Unit] =
-    getCurrentState.flatMap { state =>
-      sessionManager.saveSession(state, persistUnsavedBuffers = true) >>
-        logger.info("[SESSION] Session saved")
-    }.void
+  val sessionService: SessionService = SessionService(loadSession = loadSession)
 
   private def loadSession: IO[Option[AppState]] =
     sessionManager.loadSession()

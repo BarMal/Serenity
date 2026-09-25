@@ -8,6 +8,7 @@ import com.serenity.input.{ClipboardEventSync, SystemClipboard}
 import com.serenity.keystroke.events.{Copy, Paste}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
