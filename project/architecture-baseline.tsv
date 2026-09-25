@@ -16,6 +16,10 @@
 # LspManagerReferenceRenameSupport.scala, rather than left inline; what's left in LspManager.scala is the same
 # per-RequestKind wiring every other kind already has here (RequestKind case, handleEffect dispatch case,
 # noServerEvent case), which isn't reasonably splittable without breaking that existing pattern.
+# paydown: StateManagerCapabilitySpec.scala grew by 1 line (636 -> 637) resolving this PR's merge conflict with
+# #1729's commandExecutor deletion -- both PRs edited the same capability-composition assertion, and the merged
+# version names every capability retired by #1724 (paneManager/panelManager and commandExecutor) in one comment
+# rather than two overlapping ones.
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	100
 main/scala/com/serenity/lsp/LspManager.scala	file length	673
 main/scala/com/serenity/rope/Rope.scala	file length	631
@@ -32,5 +36,5 @@ test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	713
 test/scala/com/serenity/SpellCheckerDictionaryIoSpec.scala	file length	614
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	750
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	320
-test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	636
+test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	637
 test/scala/com/serenity/ui/tui/TerminalEmulator.scala	method interpret	84
