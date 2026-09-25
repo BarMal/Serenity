@@ -148,7 +148,7 @@ private[manager] class StateManagerComposition(
 
   private val workflow = new StateManagerWorkflowCapability(
     runtimeStateRef,
-    runtimeUndoRef,
+    modelCommit,
     runtimeQuitSignal,
     runtimeLogger,
     runtimeFileDialog,
@@ -156,7 +156,7 @@ private[manager] class StateManagerComposition(
     runtimeSessionPersistence,
     sessionManager,
     operations,
-    editor,
+    effectEditorPort,
     filePersistence
   )
 
@@ -226,9 +226,9 @@ private[manager] class StateManagerComposition(
     def createStartupSession(): IO[Unit]                        = workflow.createStartupSession()
     def restoreStartupSession(): IO[Unit]                       = workflow.restoreStartupSession()
     def activeEditorBufferId(state: AppState): Option[BufferId] = workflow.activeEditorBufferId(state)
-    def openSaveSessionAsPrompt(state: AppState): IO[Unit]      = workflow.openSaveSessionAsPrompt(state)
+    def openSaveSessionAsPrompt(state: AppState): IO[Unit]      = workflow.openSaveSessionAsPrompt()
     def openSessionPicker(state: AppState, purpose: SessionListPurpose): IO[Unit] =
-      workflow.openSessionPicker(state, purpose)
+      workflow.openSessionPicker(purpose)
     def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit] =
       workflow.submitSessionNamePromptEffect(surfaceId)
     def submitSessionListEffect(surfaceId: SurfaceId): IO[Unit] =

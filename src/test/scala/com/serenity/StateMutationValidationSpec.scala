@@ -84,7 +84,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
           )
           .unsafeRunSync()
         corruptNextBufferIdToCollideWithLiveBuffer(stateManager)
-        stateManager.applyEvent(Enter).unsafeRunSync()
+        (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
         val after = stateManager.getCurrentState.unsafeRunSync()
 

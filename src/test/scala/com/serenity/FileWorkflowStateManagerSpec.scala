@@ -4,7 +4,7 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{Enter, InsertChar, ModalCreateDirectory, SaveAsFile, SaveFile, TabKey}
+import com.serenity.keystroke.events.{Enter, Event, InsertChar, ModalCreateDirectory, SaveAsFile, SaveFile, TabKey}
 import com.serenity.richtext.{
   InlineMark,
   RichTextDocument,
@@ -34,6 +34,10 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
   private def createStateManager(): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("FileWorkflowStateManagerSpec"))
     StateManager.apply(logger).unsafeRunSync()
+
+  /** Applies `event` and waits for the directory listings, target checks and file loads it started. */
+  private def settled(stateManager: StateManager, event: Event): Unit =
+    (stateManager.applyEvent(event) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
   private def currentWorkflow(stateManager: StateManager): FileWorkflowState =
     stateManager.getCurrentState
@@ -66,7 +70,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
         )
         .unsafeRunSync()
 
-      stateManager.applyEvent(InsertChar('r')).unsafeRunSync()
+      settled(stateManager, InsertChar('r'))
 
       val workflow = currentWorkflow(stateManager)
       workflow shouldBe a[OpenFileWorkflowState]
@@ -109,20 +113,20 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
         )
         .unsafeRunSync()
 
-      stateManager.applyEvent(TabKey).unsafeRunSync()
+      settled(stateManager, TabKey)
 
       val refreshed = currentWorkflow(stateManager)
       refreshed shouldBe a[SaveAsFileWorkflowState]
       refreshed.missingPathSegments shouldBe List("new", "nested")
       refreshed.confirmCreateDirectories shouldBe false
 
-      stateManager.applyEvent(Enter).unsafeRunSync()
+      settled(stateManager, Enter)
 
       val awaitingConfirmation = currentWorkflow(stateManager)
       awaitingConfirmation.confirmCreateDirectories shouldBe true
       Files.exists(targetFile) shouldBe false
 
-      stateManager.applyEvent(Enter).unsafeRunSync()
+      settled(stateManager, Enter)
 
       val updatedState = stateManager.getCurrentState.unsafeRunSync()
       updatedState.topModal shouldBe None
@@ -166,13 +170,13 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
         )
         .unsafeRunSync()
 
-      stateManager.applyEvent(TabKey).unsafeRunSync()
+      settled(stateManager, TabKey)
 
       val refreshed = currentWorkflow(stateManager)
       refreshed.missingPathSegments shouldBe List("new", "nested")
 
       // A single ModalCreateDirectory -- not a second submit -- both creates the directories and completes the save.
-      stateManager.applyEvent(ModalCreateDirectory).unsafeRunSync()
+      settled(stateManager, ModalCreateDirectory)
 
       val updatedState = stateManager.getCurrentState.unsafeRunSync()
       updatedState.topModal shouldBe None
@@ -204,7 +208,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
       }
       .unsafeRunSync()
 
-    stateManager.applyEvent(SaveAsFile).unsafeRunSync()
+    settled(stateManager, SaveAsFile)
 
     val workflow = currentWorkflow(stateManager)
     workflow shouldBe a[SaveAsFileWorkflowState]
@@ -237,7 +241,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
         )
         .unsafeRunSync()
 
-      stateManager.applyEvent(Enter).unsafeRunSync()
+      settled(stateManager, Enter)
 
       val updatedState = stateManager.getCurrentState.unsafeRunSync()
       updatedState.topModal shouldBe None
@@ -270,8 +274,8 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
         )
         .unsafeRunSync()
 
-      stateManager.applyEvent(InsertChar('j')).unsafeRunSync()
-      stateManager.applyEvent(TabKey).unsafeRunSync()
+      settled(stateManager, InsertChar('j'))
+      settled(stateManager, TabKey)
 
       val workflow = currentWorkflow(stateManager)
       workflow.path shouldBe projectDir.toString + java.io.File.separator
@@ -299,8 +303,8 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
         )
         .unsafeRunSync()
 
-      stateManager.applyEvent(InsertChar('n')).unsafeRunSync()
-      stateManager.applyEvent(TabKey).unsafeRunSync()
+      settled(stateManager, InsertChar('n'))
+      settled(stateManager, TabKey)
 
       val workflow = currentWorkflow(stateManager)
       workflow.filename shouldBe "notes.scala"
@@ -330,7 +334,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
         )
         .unsafeRunSync()
 
-      stateManager.applyEvent(InsertChar('n')).unsafeRunSync()
+      settled(stateManager, InsertChar('n'))
 
       val workflow = currentWorkflow(stateManager)
       workflow.filename shouldBe "n"
@@ -356,7 +360,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
       )
       .unsafeRunSync()
 
-    stateManager.applyEvent(InsertChar('s')).unsafeRunSync()
+    settled(stateManager, InsertChar('s'))
 
     val workflow = currentWorkflow(stateManager)
     workflow.path shouldBe "https://example.com/docs/notes"
@@ -381,7 +385,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
         )
         .unsafeRunSync()
 
-      stateManager.applyEvent(Enter).unsafeRunSync()
+      settled(stateManager, Enter)
 
       val workflow = currentWorkflow(stateManager)
       workflow.statusMessage shouldBe Some(s"File not found: ${tempRoot.resolve("missing.scala")}")
@@ -401,7 +405,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
       )
       .unsafeRunSync()
 
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    settled(stateManager, Enter)
 
     val workflow = currentWorkflow(stateManager)
     workflow.statusMessage shouldBe Some("Remote storage is not supported yet: https://example.com/docs/notes.md")
@@ -432,7 +436,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
       )
       .unsafeRunSync()
 
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    settled(stateManager, Enter)
 
     val workflow = currentWorkflow(stateManager)
     workflow.statusMessage shouldBe Some("Remote storage is not supported yet: s3://serenity-docs/drafts/notes.md")
@@ -469,7 +473,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
         )
         .unsafeRunSync()
 
-      stateManager.applyEvent(Enter).unsafeRunSync()
+      settled(stateManager, Enter)
 
       val workflow = currentWorkflow(stateManager)
       workflow.statusMessage shouldBe defined
@@ -503,7 +507,7 @@ class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventu
         }
         .unsafeRunSync()
 
-      stateManager.applyEvent(SaveFile).unsafeRunSync()
+      settled(stateManager, SaveFile)
 
       val workflow = eventually(currentWorkflow(stateManager))
       workflow shouldBe a[SaveAsFileWorkflowState]

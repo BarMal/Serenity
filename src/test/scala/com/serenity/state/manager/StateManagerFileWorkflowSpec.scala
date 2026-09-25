@@ -6,6 +6,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.io.FileManager
 import com.serenity.rope.Balance
+import com.serenity.state.effects.Lane
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -49,7 +50,7 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
       val stateRef: Ref[IO, AppState],
       val saved: Ref[IO, List[(BufferId, Path)]],
       val continued: Ref[IO, List[(SurfaceId, BufferId)]],
-      val committed: Ref[IO, List[AppState]],
+      val loaded: Ref[IO, List[Path]],
       val fileWorkflow: StateManagerFileWorkflow
   ):
 
@@ -62,41 +63,38 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
         .collect { case ModalDialog(_, Modal.FileWorkflow(workflow), _) => workflow }
         .getOrElse(fail("Expected the file workflow dialog to still be present"))
 
+    def dialogOpen: Boolean = stateRef.get.unsafeRunSync().runtime.modalStack.exists(_.id == surfaceId)
+
+  /** Runs each lane job at once and applies its result as the dispatcher would, so a submit settles before it returns.
+    */
+  final private class InlineLanes(stateRef: Ref[IO, AppState]) extends EffectLanePort:
+    def submitEffect(lane: Lane.Keyed, job: IO[Unit]): IO[Unit] = job
+
+    def dispatchEffectResult(result: EffectResult, onApplied: AppState => IO[Unit]): IO[Unit] =
+      stateRef.get.flatMap { current =>
+        val next = EffectResult.applyIfCurrent(current, result)
+        if next eq current then IO.unit else stateRef.set(next) >> onApplied(next)
+      }
+
   private def harness(workflow: FileWorkflowState, saveResult: IO[Unit] = IO.unit, focusedPane: Boolean = true) =
     val stateRef  = Ref.of[IO, AppState](stateWith(workflow, focusedPane)).unsafeRunSync()
     val saved     = Ref.of[IO, List[(BufferId, Path)]](Nil).unsafeRunSync()
     val continued = Ref.of[IO, List[(SurfaceId, BufferId)]](Nil).unsafeRunSync()
-    val committed = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
-
-    def updateSurface(id: SurfaceId, updated: FileWorkflowState): IO[Unit] =
-      stateRef.update { state =>
-        state.copy(runtime = state.runtime.copy(modalStack = state.runtime.modalStack.map {
-          case dialog if dialog.id == id => dialog.copy(modal = Modal.FileWorkflow(updated))
-          case other                     => other
-        }))
-      }
-
-    def workflowSurface(state: AppState, id: SurfaceId): Option[FileWorkflowState] =
-      state.runtime.modalStack.find(_.id == id).collect {
-        case ModalDialog(_, Modal.FileWorkflow(current), _) => current
-      }
+    val loaded    = Ref.of[IO, List[Path]](Nil).unsafeRunSync()
 
     new Harness(
       stateRef,
       saved,
       continued,
-      committed,
+      loaded,
       new StateManagerFileWorkflow(
         stateRef,
         NoOpLogger.impl[IO],
         new FileManager(),
-        (newState, _) => committed.update(_ :+ newState) >> stateRef.set(newState),
-        updateSurface,
-        workflowSurface,
-        state =>
-          state.persisted.layout.activeEditorPaneId
-            .flatMap(state.persisted.layout.editorPanes.get)
-            .flatMap(_.bufferId),
+        (newState, _) => stateRef.set(newState),
+        new InlineLanes(stateRef),
+        path => loaded.update(_ :+ path),
+        (_, check) => check,
         (id, path) => saved.update(_ :+ (id, path)) >> saveResult,
         (id, buffer) => continued.update(_ :+ (id, buffer))
       )
@@ -196,7 +194,7 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
     finally Files.deleteIfExists(directory)
   }
 
-  it should "commit a loaded buffer when an Open workflow targets a readable file" in {
+  it should "close the dialog and load the file when an Open workflow targets a readable file" in {
     val directory = Files.createTempDirectory("file-workflow-open")
     val target    = Files.writeString(directory.resolve("notes.txt"), "opened content")
     try
@@ -204,10 +202,8 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
 
       fixture.fileWorkflow.submitFileWorkflowEffect(surfaceId).unsafeRunSync()
 
-      val committedStates = fixture.committed.get.unsafeRunSync()
-      committedStates.size shouldBe 1
-      committedStates.head.persisted.buffers.values.flatMap(_.document.filePath).toList should contain(target)
-      committedStates.head.persisted.recentFiles should contain(target)
+      fixture.loaded.get.unsafeRunSync() shouldBe List(target)
+      fixture.dialogOpen shouldBe false
       fixture.saved.get.unsafeRunSync() shouldBe Nil
       fixture.continued.get.unsafeRunSync() shouldBe Nil
     finally
@@ -222,7 +218,7 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
 
       fixture.fileWorkflow.submitFileWorkflowEffect(surfaceId).unsafeRunSync()
 
-      fixture.committed.get.unsafeRunSync() shouldBe Nil
+      fixture.loaded.get.unsafeRunSync() shouldBe Nil
       fixture.currentWorkflow.statusMessage shouldBe Some(
         s"File not found: ${directory.resolve("absent.txt").normalize()}"
       )
@@ -237,7 +233,7 @@ class StateManagerFileWorkflowSpec extends AnyFlatSpec with Matchers:
 
       fixture.fileWorkflow.submitFileWorkflowEffect(surfaceId).unsafeRunSync()
 
-      fixture.committed.get.unsafeRunSync() shouldBe Nil
+      fixture.loaded.get.unsafeRunSync() shouldBe Nil
       fixture.currentWorkflow.path shouldBe child.normalize().toString + java.io.File.separator
       fixture.currentWorkflow.statusMessage shouldBe None
     finally

@@ -55,7 +55,7 @@ class FileWorkflowOpenAsProjectRootStateManagerSpec extends AnyFlatSpec with Mat
         )
         .unsafeRunSync()
 
-      stateManager.applyEvent(ModalOpenAsProjectRoot).unsafeRunSync()
+      (stateManager.applyEvent(ModalOpenAsProjectRoot) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
       val finalState = stateManager.getCurrentState.unsafeRunSync()
       finalState.topModal shouldBe None
@@ -93,7 +93,7 @@ class FileWorkflowOpenAsProjectRootStateManagerSpec extends AnyFlatSpec with Mat
         )
         .unsafeRunSync()
 
-      stateManager.applyEvent(ModalOpenAsProjectRoot).unsafeRunSync()
+      (stateManager.applyEvent(ModalOpenAsProjectRoot) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
       val workflow = currentWorkflow(stateManager).getOrElse(fail("expected the open dialog to still be showing"))
       workflow.statusMessage shouldBe Some(s"Not a directory: $textFile")
@@ -113,7 +113,7 @@ class FileWorkflowOpenAsProjectRootStateManagerSpec extends AnyFlatSpec with Mat
       .unsafeRunSync()
 
     val before = stateManager.getCurrentState.unsafeRunSync()
-    stateManager.applyEvent(ModalOpenAsProjectRoot).unsafeRunSync()
+    (stateManager.applyEvent(ModalOpenAsProjectRoot) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
     val after = stateManager.getCurrentState.unsafeRunSync()
 
     after shouldBe before

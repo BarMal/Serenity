@@ -60,7 +60,7 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
         case _                                     => None
     } shouldBe Some(expectedCommandName)
 
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
   private def typeText(stateManager: StateManager, text: String): Unit =
     text.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
@@ -120,7 +120,7 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
 
     executeCommandThroughRunner(stateManager, "save-session-as", "save-session-as")
     typeText(stateManager, "Feature Branch")
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
     readSessionIndex(sessionRoot) should include("Feature Branch")
     hasOpenModalWorkflow(stateManager.getCurrentState.unsafeRunSync()) shouldBe false
@@ -134,19 +134,19 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
     stateManager.bufferManager.updateBuffer(bufferId, "first content").unsafeRunSync()
     executeCommandThroughRunner(stateManager, "save-session-as", "save-session-as")
     typeText(stateManager, "First")
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
     stateManager.bufferManager.updateBuffer(bufferId, "second content").unsafeRunSync()
     executeCommandThroughRunner(stateManager, "save-session-as", "save-session-as")
     typeText(stateManager, "Second")
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
     stateManager.bufferManager.updateBuffer(bufferId, "unsaved current content").unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "open-session", "open-session")
     // "First" was saved (and so listed) before "Second"; move the selection down once to reach it.
     stateManager.applyEvent(MoveDown).unsafeRunSync()
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
     val restoredState = stateManager.getCurrentState.unsafeRunSync()
     restoredState.persisted.buffers(bufferId).document.content.collect() shouldBe "second content"
@@ -162,14 +162,14 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
     stateManager.bufferManager.updateBuffer(bufferId, "rename target content").unsafeRunSync()
     executeCommandThroughRunner(stateManager, "save-session-as", "save-session-as")
     typeText(stateManager, originalName)
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "rename-session", "rename-session")
     // Selects the (only) listed session, handing off to the name prompt pre-filled with its current name.
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
     originalName.indices.foreach(_ => stateManager.applyEvent(DeleteBackward).unsafeRunSync())
     typeText(stateManager, "New Name")
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
     val indexContent = readSessionIndex(sessionRoot)
     indexContent should include("New Name")

@@ -167,6 +167,26 @@ class TabCloseClickSpec extends AnyFlatSpec with Matchers:
     Files.readString(root.resolve("second.txt")) shouldBe "second"
   }
 
+  it should "keep it, dirty, and return to the original tab when its save fails (#1708)" in withTempRoot { root =>
+    val sm = makeStateManager()
+    // A regular file where the tab's parent directory should be: the save cannot create the file under it.
+    val blocker = Files.writeString(root.resolve("blocker"), "")
+    val first   = sm.bufferManager.createBuffer("first", Some(root.resolve("first.txt"))).unsafeRunSync()
+    val second  = sm.bufferManager.createBuffer("second", Some(blocker.resolve("second.txt"))).unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), first).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
+    markDirty(sm, second)
+    clickClose(sm, second)
+
+    clickPromptChoice(sm, "close-save")
+
+    val after = sm.getCurrentState.unsafeRunSync()
+    after.topModal shouldBe None
+    after.persisted.buffers should contain key second
+    after.persisted.buffers(second).document.isDirty shouldBe true
+    activeBufferId(after) shouldBe Some(first)
+  }
+
   "Clicking the active tab's close affordance" should "close it the same way keyboard CloseTab does" in withTempRoot {
     root =>
       val sm              = makeStateManager()

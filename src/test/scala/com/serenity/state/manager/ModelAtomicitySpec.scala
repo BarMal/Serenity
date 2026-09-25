@@ -14,13 +14,15 @@ import com.serenity.command.{
   Command,
   CommandCategory,
   CommandIntent,
+  FileIntent,
   MotionIntent,
   PanelKind,
+  SessionIntent,
   SettingsIntent,
   ViewIntent
 }
 import com.serenity.config.{AppConfig, MotionAccessibility, PreferredWindowSize}
-import com.serenity.keystroke.events.{InsertChar, NextTab, Undo}
+import com.serenity.keystroke.events.{Enter, InsertChar, NextTab, TabKey, Undo}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.*
@@ -293,4 +295,121 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     after.undo.undoStack should have size 2
     writes should not be empty
     all(writes.map(model => diagnosticsPinned(model) == (model.undo.undoStack.size == 1))) shouldBe true
+  }
+
+  private def closePromptFor(model: Model): Option[BufferId] =
+    model.app.runtime.modalStack.map(_.modal).collectFirst {
+      case Modal.CloseWorkflow(workflow) =>
+        workflow.currentBufferId
+    }
+
+  "Discarding one buffer of a close-all" should "close it and prompt for the next in one write" in {
+    val closeAll =
+      Command.typed("close-all", "Close all", CommandIntent.File(FileIntent.CloseAll), CommandCategory.File)
+    val program =
+      for
+        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        stateManager <- stateManagerOver(recorded.modelRef)
+        first        <- focusedHelloBuffer(stateManager)
+        second       <- stateManager.bufferManager.createBuffer("World", None)
+        _            <- stateManager.commandExecutor.executeCommand(closeAll)
+        prompted     <- stateManager.getModel
+        _            <- stateManager.applyEvent(TabKey)
+        _            <- recorded.clear
+        _            <- stateManager.applyEvent(Enter)
+        writes       <- recorded.recordedWrites
+        after        <- stateManager.getModel
+      yield (first, second, prompted, writes, after)
+
+    val (first, second, prompted, writes, after) = program.unsafeRunSync()
+
+    closePromptFor(prompted) shouldBe Some(first)
+    closePromptFor(after) shouldBe Some(second)
+    after.app.persisted.buffers should not contain key(first)
+    writes should not be empty
+    all(
+      writes.map(model => model.app.persisted.buffers.contains(first) || closePromptFor(model).contains(second))
+    ) shouldBe true
+  }
+
+  "Restoring a startup session when none was saved" should "commit its fresh buffer and pane in one write" in {
+    val restore = Command.typed(
+      "startup-restore",
+      "Restore session",
+      CommandIntent.Session(SessionIntent.StartupRestoreSession),
+      CommandCategory.File
+    )
+    val program =
+      for
+        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        stateManager <- stateManagerOver(recorded.modelRef)
+        _            <- stateManager.commandExecutor.executeCommand(restore)
+        writes       <- recorded.recordedWrites
+        after        <- stateManager.getModel
+      yield (writes, after)
+
+    val (writes, after) = program.unsafeRunSync()
+
+    val created = after.app.persisted.buffers.keySet - BufferId(0)
+    created should have size 1
+    after.app.focusedBufferId shouldBe created.headOption
+    val withCreated = writes.filter(_.app.persisted.buffers.size == 2)
+    withCreated should not be empty
+    all(withCreated.map(_.app.focusedBufferId)) shouldBe created.headOption
+  }
+
+  private def replace(stateManager: StateManager, action: ReplaceWorkflowAction): IO[Unit] =
+    stateManager.modalService.showModal(
+      Modal.ReplaceWorkflow(ReplaceWorkflowState(findText = "l", replacementText = "L", selectedAction = action))
+    ) >> stateManager.applyEvent(Enter)
+
+  private def replacePrompt(model: Model): Option[ReplaceWorkflowState] =
+    model.app.runtime.uiSurfaces.map(_.content).collectFirst {
+      case SurfaceContent.ModalWorkflow(Modal.ReplaceWorkflow(workflow)) => workflow
+    }
+
+  "Replace all" should "commit the replaced text and its undo entry in one write" in {
+    val program =
+      for
+        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        stateManager <- stateManagerOver(recorded.modelRef)
+        bufferId     <- focusedHelloBuffer(stateManager)
+        _            <- recorded.clear
+        _            <- replace(stateManager, ReplaceWorkflowAction.ReplaceAll)
+        writes       <- recorded.recordedWrites
+        after        <- stateManager.getModel
+      yield (bufferId, writes, after)
+
+    val (bufferId, writes, after) = program.unsafeRunSync()
+
+    content(after, bufferId) shouldBe Some("HeLLo")
+    after.undo.undoStack should have size 1
+    writes should not be empty
+    all(writes.map(model => content(model, bufferId).contains("HeLLo") == model.undo.undoStack.nonEmpty)) shouldBe true
+  }
+
+  "Replace next" should "commit the replaced text, its undo entry and the prompt's status in one write" in {
+    val program =
+      for
+        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        stateManager <- stateManagerOver(recorded.modelRef)
+        bufferId     <- focusedHelloBuffer(stateManager)
+        _            <- recorded.clear
+        _            <- replace(stateManager, ReplaceWorkflowAction.ReplaceNext)
+        writes       <- recorded.recordedWrites
+        after        <- stateManager.getModel
+      yield (bufferId, writes, after)
+
+    val (bufferId, writes, after) = program.unsafeRunSync()
+
+    content(after, bufferId) shouldBe Some("HeLlo")
+    replacePrompt(after).flatMap(_.statusMessage) shouldBe Some("Replaced next match")
+    writes should not be empty
+    all(writes.map(model => content(model, bufferId).contains("HeLlo") == model.undo.undoStack.nonEmpty)) shouldBe true
+    all(
+      writes.map(model =>
+        content(model, bufferId).contains("HeLlo") ==
+          replacePrompt(model).flatMap(_.statusMessage).contains("Replaced next match")
+      )
+    ) shouldBe true
   }
