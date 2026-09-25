@@ -220,8 +220,8 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     val program =
       for
         recorded   <- recording(before)
-        operations <- StateManagerOperationBoundary.create(Model.appRef(recorded.modelRef), quietLogger)
-        commit = new ModelCommit(recorded.modelRef, operations)
+        operations <- StateManagerOperationBoundary.create(recorded.modelRef, quietLogger)
+        commit = operations.modelCommit
         _     <- commit.updateValidated(_ => Some(Model(invalid, UndoState(maxUndoDepth = 3), Map.empty)))
         after <- recorded.modelRef.get
       yield after

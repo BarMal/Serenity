@@ -36,8 +36,8 @@ class ProjectTaskLanesSpec extends AnyFlatSpec with Matchers:
       lspQueue: LspEffectQueue,
       scripts: Ref[IO, List[(String => IO[Unit]) => IO[Int]]]
   ):
-    val stateRef: Ref[IO, AppState] = Model.appRef(modelRef)
-    private val modelCommit         = new ModelCommit(modelRef, operations)
+    val stateRef: Ref[IO, AppState] = ModelViews.appRef(modelRef)
+    private val modelCommit         = operations.modelCommit
 
     private def commit(transition: AppState => AppState): IO[Unit] =
       modelCommit.updateValidated(model => Some(model.copy(app = transition(model.app))))
@@ -48,7 +48,7 @@ class ProjectTaskLanesSpec extends AnyFlatSpec with Matchers:
         (result match
           case EffectResult.ProjectTaskOutput(_, chunk) => outputBatches.update(_ :+ chunk)
           case _                                        => IO.unit
-        ) >> operations.dispatch(operations.applyResult(result, onApplied))
+        ) >> operations.dispatch(operations.modelCommit.applyResult(result, onApplied))
 
     private val launch: ProjectTaskLauncher = (command, onOutput) =>
       launches.update(_ + 1) >> scripts
@@ -87,7 +87,7 @@ class ProjectTaskLanesSpec extends AnyFlatSpec with Matchers:
     def typeOnDispatcher(char: Char): IO[Unit] =
       operations.dispatch(
         stateRef.get.flatMap(state =>
-          operations.validateAndUpdateState(EditorEventReducer.reduce(InsertChar(char), PaneId(0), state).state, state)
+          operations.modelCommit.commitState(EditorEventReducer.reduce(InsertChar(char), PaneId(0), state).state, state)
         )
       )
 
@@ -98,7 +98,7 @@ class ProjectTaskLanesSpec extends AnyFlatSpec with Matchers:
       _         <- IO.blocking(Files.writeString(directory.resolve("Makefile"), "all:\n\ttrue\n"))
       state = focusedOn(directory.resolve("main.c"))
       modelRef   <- Ref.of[IO, Model](Model(state, UndoState(), Map.empty))
-      operations <- StateManagerOperationBoundary.create(Model.appRef(modelRef), NoOpLogger.impl[IO])
+      operations <- StateManagerOperationBoundary.create(modelRef, NoOpLogger.impl[IO])
       batches    <- Ref.of[IO, List[String]](Nil)
       launches   <- Ref.of[IO, Int](0)
       lspQueue   <- LspEffectQueue.create
@@ -187,14 +187,16 @@ class ProjectTaskLanesSpec extends AnyFlatSpec with Matchers:
         _              <- rig.cancel
         _              <- oldCancelled.get
         _ <- oldId.traverse_(id =>
-          rig.operations.dispatch(rig.operations.applyResult(EffectResult.ProjectTaskOutput(id, "late"), _ => IO.unit))
+          rig.operations.dispatch(
+            rig.operations.modelCommit.applyResult(EffectResult.ProjectTaskOutput(id, "late"), _ => IO.unit)
+          )
         )
         afterCancel <- rig.terminalText
         _           <- rig.run
         _           <- IO.sleep(150.millis)
         _ <- oldId.traverse_(id =>
           rig.operations.dispatch(
-            rig.operations
+            rig.operations.modelCommit
               .applyResult(EffectResult.ProjectTaskFinished(id, Right(ProjectTaskResult(command, 1, ""))), _ => IO.unit)
           )
         )

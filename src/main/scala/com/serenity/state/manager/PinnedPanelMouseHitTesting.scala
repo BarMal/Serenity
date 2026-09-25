@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.config.AppConfig
 import com.serenity.document.CommentRendering
@@ -15,9 +15,9 @@ import com.serenity.ui.layout.*
   * the only reason this needs an interface at all, and a record fakes trivially without one (#1017).
   */
 final private[manager] case class PinnedPanelMouseHitTestingPort(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     applyComponentResult: (ComponentResult, AppState) => IO[AppState],
-    validateAndUpdateState: (AppState, AppState) => IO[Unit],
+    commitState: (AppState, AppState) => IO[Unit],
     updateConfig: (AppConfig => AppConfig) => IO[AppConfig],
     resizePinnedPanel: (PanelTarget, Int) => IO[Unit]
 )
@@ -34,7 +34,7 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
   import port.*
 
   private def commit(transition: Transition[Boolean]): IO[Boolean] =
-    MouseTransition.commit(stateRef, applyReducerResult)(transition)
+    MouseTransition.commit(currentState, applyReducerResult)(transition)
 
   private def applyReducerResult(result: ReducerResult, fallback: AppState): IO[Unit] =
     applyComponentResult(ComponentResult.reducerResult(result), fallback).void
@@ -49,9 +49,9 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
 
   /** Activation resolves against the committed selection, the same row a keyboard Enter would now activate. */
   private def activateSelectedDirectoryRow(click: MouseClick): IO[Unit] =
-    stateRef.get.flatMap { selectedState =>
+    currentState.flatMap { selectedState =>
       PinnedPanelMouseHitTesting.activation(click, selectedState).traverse_ { result =>
-        applyComponentResult(result, selectedState).flatMap(validateAndUpdateState(_, selectedState))
+        applyComponentResult(result, selectedState).flatMap(commitState(_, selectedState))
       }
     }
 

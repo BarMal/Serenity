@@ -2,12 +2,12 @@ package com.serenity.state.manager
 
 import java.nio.file.Path
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import cats.syntax.foldable.*
 import com.serenity.state.models.*
 
 final private[manager] class StateManagerFileFacade(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     commitValidated: (AppState => AppState) => IO[Unit],
     loadFile: Path => IO[Unit],
     save: BufferId => IO[Unit],
@@ -52,17 +52,17 @@ final private[manager] class StateManagerFileFacade(
     }
 
   def checkUnsavedChanges(bufferId: Option[BufferId]): IO[Boolean] =
-    stateRef.get.map { state =>
+    currentState.map { state =>
       bufferId match
         case Some(id) => state.persisted.buffers.get(id).exists(_.hasUnsavedChanges)
         case None     => state.persisted.buffers.values.exists(_.hasUnsavedChanges)
     }
 
   def getRecentFiles: IO[List[Path]] =
-    stateRef.get.map(_.persisted.recentFiles)
+    currentState.map(_.persisted.recentFiles)
 
 final private[manager] class StateManagerFileCapability(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     commitValidated: (AppState => AppState) => IO[Unit],
     effects: StateManagerEffectHandlers,
     dispatch: IO[Unit] => IO[Unit],
@@ -75,7 +75,7 @@ final private[manager] class StateManagerFileCapability(
     observation.flatMap(_.traverse_(observed => dispatch(effects.resolveExternalRevisionEffect(observed))))
 
   private lazy val fileFacade = new StateManagerFileFacade(
-    stateRef,
+    currentState,
     commitValidated,
     openFileAndWait,
     effects.saveBufferEffect,

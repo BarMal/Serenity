@@ -1,15 +1,23 @@
 package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
-import com.serenity.state.models.AppState
+import cats.syntax.foldable.*
+import com.serenity.animation.AnimationState
+import com.serenity.state.models.{AppState, BufferId}
 import com.serenity.state.reducers.{AppEffect, UndoEffect}
+import com.serenity.state.undo.UndoState
 
-/** Validated writes that change more than one part of the [[Model]] in a single `Ref` write (#1697), held to the same
-  * validation and follow-up work as `StateManagerOperationBoundary.validateAndUpdateState`.
+/** The one holder of the model `Ref` (#1697): capabilities read the model through it and change it only through its
+  * writes. Every app-state write is validated by `StateManagerOperationBoundary.prepareCommit` and runs the boundary's
+  * follow-up work, except through [[updateUnvalidated]].
   *
   * Transitions run inside `Ref.modify`, which may retry them, so they must be pure.
   */
 final private[manager] class ModelCommit(modelRef: Ref[IO, Model], operations: StateManagerOperationBoundary):
+
+  def model: IO[Model] = modelRef.get
+
+  def currentState: IO[AppState] = modelRef.get.map(_.app)
 
   /** Commits the model `transition` returns (`None` leaves the model untouched). A rejected app state rejects the whole
     * transition: no part of the model changes.
@@ -18,10 +26,53 @@ final private[manager] class ModelCommit(modelRef: Ref[IO, Model], operations: S
     commit(current => transition(current).map(next => (next, current.app)))
 
   /** Commits the model `transition` returns. A rejected app state restores `fallbackState` and leaves the other parts
-    * of the model as they were -- the same fallback `validateAndUpdateState` restores.
+    * of the model as they were.
     */
   def commitValidated(fallbackState: AppState)(transition: Model => Model): IO[Unit] =
     commit(current => Some((transition(current), fallbackState)))
+
+  /** Commits `newState` as the app state, or restores `fallbackState` if it is rejected. */
+  def commitState(newState: AppState, fallbackState: AppState): IO[Unit] =
+    commitValidated(fallbackState)(_.copy(app = newState))
+
+  /** Applies `result` if it is still current, then runs `onApplied` with the committed state and hands the effects its
+    * transition emitted to `interpretEffect`, in order. Runs on the dispatcher: a lane job reaches it through
+    * `StateManagerOperationBoundary.dispatch`.
+    */
+  def applyResult(
+    result: EffectResult,
+    onApplied: AppState => IO[Unit],
+    interpretEffect: AppEffect => IO[Unit] = _ => IO.unit
+  ): IO[Unit] =
+    modelRef.flatModify { current =>
+      val next = EffectResult.reduce(current.app, result)
+      if next.state eq current.app then (current, IO.unit)
+      else
+        StateManagerOperationBoundary.prepareCommit(next.state, current.app) match
+          case Right(committed) =>
+            (
+              current.copy(app = committed),
+              operations.afterCommit(current.app, committed) >> onApplied(committed) >>
+                next.effects.traverse_(interpretEffect)
+            )
+          case Left(errors) => (current, operations.logRejectedCommit(errors))
+    }
+
+  // Undo history and buffer animations are not app state: `AppStateValidation` has nothing to check in them.
+  def updateUndo(update: UndoState => UndoState): IO[Unit] =
+    modelRef.update(current => current.copy(undo = update(current.undo)))
+
+  def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit] =
+    modelRef.update(current => current.copy(bufferAnimations = update(current.bufferAnimations)))
+
+  /** Writes `update`'s model without validation and returns it. Only for the render tick's animation advance, which
+    * runs every frame and only moves animation progress forward, and for the test-seeding `StateUpdater.updateState`.
+    */
+  def updateUnvalidated(update: Model => Model): IO[Model] =
+    modelRef.modify { current =>
+      val next = update(current)
+      (next, next)
+    }
 
   private def commit(transition: Model => Option[(Model, AppState)]): IO[Unit] =
     modelRef.flatModify { current =>

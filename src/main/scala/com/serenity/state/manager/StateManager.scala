@@ -322,7 +322,7 @@ object StateManager:
     */
   private[manager] def fromRuntime(runtime: StateManagerRuntime)(using Balance): IO[StateManager] =
     StateManagerOperationBoundary
-      .create(Model.appRef(runtime.modelRef), runtime.logger)
+      .create(runtime.modelRef, runtime.logger)
       .map(operations => new StateManagerImpl(runtime, operations))
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =
@@ -365,7 +365,6 @@ object StateManager:
       extends StateManager:
 
     private val composition = new StateManagerComposition(
-      runtime.modelRef,
       runtime.themeNamesRef,
       runtime.quitSignal,
       runtime.logger,

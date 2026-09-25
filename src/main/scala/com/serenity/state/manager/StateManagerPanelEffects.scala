@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import java.nio.file.Path
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import com.serenity.command.{PanelKind, ViewIntent}
 import com.serenity.config.{AppConfig, MarkdownViewMode}
 import com.serenity.io.{FileEntry, FileManager, FileUtils}
@@ -18,7 +18,7 @@ import com.serenity.ui.tui.MarkdownPreviewWindowAvailability
   * [[PanelTransitions]]; each commits as a single validated model write.
   */
 final private[manager] class StateManagerPanelEffects(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     logger: org.typelevel.log4cats.Logger[IO],
     fileManager: FileManager,
     lanes: EffectLanePort,
@@ -140,7 +140,7 @@ final private[manager] class StateManagerPanelEffects(
     * same policy `resizePinnedPanel`'s own target resolution already applies.
     */
   private def setPanelSize(surfaceId: SurfaceId, delta: Int): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    currentState.flatMap { state =>
       PanelStateReducer.currentSize(surfaceId, state) match
         case Some(currentSize) =>
           resizePinnedPanel(PanelTarget.ById(surfaceId), math.max(MinimumPanelSize, currentSize + delta))
@@ -152,7 +152,7 @@ final private[manager] class StateManagerPanelEffects(
     * same-edge reordering, which adjusts an already-pinned panel rather than pinning or unpinning one.
     */
   private def pinPanelKind(kind: PanelKind, position: PanelPosition, refreshSelections: Boolean): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    currentState.flatMap { state =>
       val refreshed =
         if refreshSelections then commitApp(PanelTransitions.withCommandRunnerPanelSelections) else IO.unit
       PanelTransitions.pinPlan(kind, position, state) match

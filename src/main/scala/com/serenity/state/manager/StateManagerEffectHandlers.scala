@@ -43,7 +43,7 @@ final private[manager] class StateManagerEffectHandlers(
 
   private val workflowEffects = new WorkflowEffectHandler(new WorkflowEffectPort:
     def requestOpenFile: IO[Unit] = requestOpenFileDialog
-    def requestSaveAs: IO[Unit]   = stateRef.get.flatMap(state => requestSaveAsFileDialog(state, state.focusedBufferId))
+    def requestSaveAs: IO[Unit]   = currentState.flatMap(state => requestSaveAsFileDialog(state, state.focusedBufferId))
     def refresh(surfaceId: SurfaceId): IO[Unit]           = refreshFileWorkflowEffect(surfaceId)
     def refreshFind(request: FindSearchRequest): IO[Unit] = scheduleFindSearch(request)
     def submitFile(surfaceId: SurfaceId): IO[Unit]        = submitFileWorkflowEffect(surfaceId)
@@ -61,7 +61,7 @@ final private[manager] class StateManagerEffectHandlers(
           )
       )
     def submitReplace(surfaceId: SurfaceId): IO[Unit]           = submitReplaceWorkflowEffect(surfaceId)
-    def beginClose(scope: CloseScope): IO[Unit]                 = stateRef.get.flatMap(beginCloseAction(scope, _))
+    def beginClose(scope: CloseScope): IO[Unit]                 = currentState.flatMap(beginCloseAction(scope, _))
     def submitClose(surfaceId: SurfaceId): IO[Unit]             = submitCloseWorkflowEffect(surfaceId)
     def submitReloadConflict(surfaceId: SurfaceId): IO[Unit]    = submitReloadConflictEffect(surfaceId)
     def createDirectories(surfaceId: SurfaceId): IO[Unit]       = createFileWorkflowDirectoriesEffect(surfaceId)
@@ -73,10 +73,10 @@ final private[manager] class StateManagerEffectHandlers(
       def completeQuit: IO[Unit] = quitSignal.complete(()).attempt.void
   )
 
-  private val animationEffects = new AnimationEffectHandler(bufferAnimationsRef)
+  private val animationEffects = new AnimationEffectHandler(updateBufferAnimations)
 
   private val configEffects = new StateManagerConfigEffects(
-    stateRef.get,
+    currentState,
     logger,
     configPersistencePath,
     sessionPersistence,
@@ -89,13 +89,13 @@ final private[manager] class StateManagerEffectHandlers(
     updateModelValidated(model => Some(model.copy(app = transition(model.app))))
 
   private val keybindingEffects =
-    new StateManagerKeybindingEffects(stateRef.get, commitAppValidated, configEffects.updateConfig)
+    new StateManagerKeybindingEffects(currentState, commitAppValidated, configEffects.updateConfig)
 
-  private val richTextEffects = new StateManagerRichTextEffects(stateRef, validateAndUpdateState, interpretEffect)
+  private val richTextEffects = new StateManagerRichTextEffects(currentState, commitState, interpretEffect)
 
   private val projectLspEffects = new StateManagerProjectLspEffects(
     lspQueue,
-    stateRef.get,
+    currentState,
     commitAppValidated,
     editor,
     runProjectTask,
@@ -105,10 +105,10 @@ final private[manager] class StateManagerEffectHandlers(
   )
 
   private val navigationEffects =
-    new StateManagerNavigationEffects(stateRef, logger, validateAndUpdateState, interpretEffect)
+    new StateManagerNavigationEffects(currentState, logger, commitState, interpretEffect)
 
   private val panelEffects = new StateManagerPanelEffects(
-    stateRef,
+    currentState,
     logger,
     fileManager,
     editor,
@@ -126,7 +126,7 @@ final private[manager] class StateManagerEffectHandlers(
   )
 
   private val uiPresetEffects = new StateManagerUiPresetEffects(
-    stateRef.get,
+    currentState,
     logger,
     uiPresetStore,
     windowSizeProvider,
@@ -142,12 +142,12 @@ final private[manager] class StateManagerEffectHandlers(
   )
 
   private val surfacePopupEffects = new StateManagerSurfacePopupEffects(
-    stateRef,
+    currentState,
     logger,
     themeManager,
     themeNamesRef,
     fileDialog,
-    validateAndUpdateState,
+    commitState,
     editor,
     interpretEffect
   )
@@ -183,7 +183,7 @@ final private[manager] class StateManagerEffectHandlers(
     lifecycleEffects.interpret
 
   private def interpretCommandEffect(command: Command): IO[Unit] =
-    stateRef.get.flatMap(state => interpretCommand(command, state))
+    currentState.flatMap(state => interpretCommand(command, state))
 
   private def interpretThemeEffect(effect: ThemeEffect): IO[Unit] =
     surfacePopupEffects.interpretThemeEffect(effect)
@@ -191,11 +191,11 @@ final private[manager] class StateManagerEffectHandlers(
   private def interpretSurfaceEffect(effect: SurfaceEffect): IO[Unit] =
     effect match
       case SurfaceEffect.OpenThemePicker =>
-        stateRef.get.flatMap(surfacePopupEffects.openThemePickerEffect)
+        currentState.flatMap(surfacePopupEffects.openThemePickerEffect)
       case SurfaceEffect.OpenThemeCreator =>
-        stateRef.get.flatMap(surfacePopupEffects.openThemeCreatorEffect)
+        currentState.flatMap(surfacePopupEffects.openThemeCreatorEffect)
       case SurfaceEffect.OpenFileSearch =>
-        stateRef.get.flatMap(surfacePopupEffects.openFileSearchEffect)
+        currentState.flatMap(surfacePopupEffects.openFileSearchEffect)
 
   private def interpretFileEffect(effect: FileEffect): IO[Unit] =
     effect match
@@ -280,8 +280,8 @@ final private[manager] class StateManagerEffectHandlers(
         beginCloseAction(CloseScope.Current, state)
       case FileIntent.NewFile =>
         val registry = CommandRegistry.withToggleUI
-        stateRef.get.flatMap(current =>
-          validateAndUpdateState(
+        currentState.flatMap(current =>
+          commitState(
             AppEventReducer.reduce(com.serenity.keystroke.events.NewTab, current, registry)(using balance).state,
             current
           )
@@ -293,8 +293,8 @@ final private[manager] class StateManagerEffectHandlers(
     (state.focusedBufferId, state.focusedBufferId.flatMap(state.persisted.buffers.get)) match
       case (Some(bufferId), Some(buffer)) =>
         val updateLanguage =
-          stateRef.get.flatMap(current =>
-            validateAndUpdateState(
+          currentState.flatMap(current =>
+            commitState(
               current.copy(persisted =
                 current.persisted.copy(buffers =
                   current.persisted.buffers.updatedWith(bufferId)(
@@ -363,7 +363,7 @@ final private[manager] class StateManagerEffectHandlers(
         saveSession()
       case SessionIntent.RestoreSession =>
         loadSession().flatMap {
-          case Some(restored) => validateAndUpdateState(restoreSessionIntoCurrentViewport(restored, state), state)
+          case Some(restored) => commitState(restoreSessionIntoCurrentViewport(restored, state), state)
           case None           => logger.debug("[SESSION] Restore requested without a saved session")
         }
       case SessionIntent.ClearSession =>
@@ -387,14 +387,14 @@ final private[manager] class StateManagerEffectHandlers(
     * the decision is `resolveExternalRevisionEffect`'s.
     */
   private[manager] def observeFocusedExternalRevisionEffect: IO[Option[ExternalRevisionObservation]] =
-    stateRef.get.flatMap(_.focusedBufferId.flatTraverse(observeExternalRevisionEffect))
+    currentState.flatMap(_.focusedBufferId.flatTraverse(observeExternalRevisionEffect))
 
   /** Reads one buffer's on-disk revision (#1623) when it differs from the revision the buffer holds -- the blocking
     * half of the check both the focus-gain callback and `AppRuntime.externalChangeWatchLoop` drive, run off the
     * dispatcher.
     */
   private[manager] def observeExternalRevisionEffect(bufferId: BufferId): IO[Option[ExternalRevisionObservation]] =
-    stateRef.get.flatMap { state =>
+    currentState.flatMap { state =>
       state.persisted.buffers.get(bufferId).flatMap(buffer => buffer.document.filePath.map(buffer -> _)) match
         case Some((buffer, path)) =>
           fileManager.currentRevision(path).map {
@@ -414,7 +414,7 @@ final private[manager] class StateManagerEffectHandlers(
     isSaving(observation.path).ifM(IO.unit, decideExternalRevision(observation))
 
   private def decideExternalRevision(observation: ExternalRevisionObservation): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    currentState.flatMap { state =>
       state.persisted.buffers
         .get(observation.bufferId)
         .filter(buffer =>
@@ -434,7 +434,7 @@ final private[manager] class StateManagerEffectHandlers(
     * background watch loop re-derives this each poll cycle so it tracks buffers opening and closing over time.
     */
   private[manager] def openBufferPathsEffect: IO[Map[Path, BufferId]] =
-    stateRef.get.map(state =>
+    currentState.map(state =>
       state.persisted.buffers.values.flatMap(buffer => buffer.document.filePath.map(_ -> buffer.id)).toMap
     )
 
@@ -454,7 +454,7 @@ final private[manager] class StateManagerEffectHandlers(
     loadFile(path)
 
   private[manager] def saveBufferEffect(bufferId: BufferId): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    currentState.flatMap { state =>
       state.persisted.buffers.get(bufferId) match
         case Some(buffer) if buffer.document.filePath.isDefined =>
           submitSave(bufferId, saveFailed(bufferId))
@@ -469,13 +469,13 @@ final private[manager] class StateManagerEffectHandlers(
   private def saveFailed(bufferId: BufferId)(error: Throwable): IO[Unit] =
     error match
       case lossy: com.serenity.richtext.LossyRichTextOverwriteException =>
-        stateRef.get.flatMap(current => workflow.showSaveAsWorkflow(current, bufferId, lossy.getMessage))
+        currentState.flatMap(current => workflow.showSaveAsWorkflow(current, bufferId, lossy.getMessage))
       case _: com.serenity.io.FileManagerError.ExternalConflict =>
         // Label from state re-read after the failure, not the pre-save `buffer` snapshot above -- keeps this
         // consistent with StateManagerWorkflowCapability's own ExternalConflict handler, which does the same
         // (code review finding on PR #1664: the two copies previously sourced the label from different points
         // in time, which could show different labels for the same conflict if the buffer changed in between).
-        stateRef.get.flatMap(current =>
+        currentState.flatMap(current =>
           workflow.openReloadConflictModal(current, bufferId, bufferLabelFor(current, bufferId))
         )
       case other =>
@@ -487,10 +487,10 @@ final private[manager] class StateManagerEffectHandlers(
         openFromDialog(dialog)
       case None =>
         // No native dialog to show at all -- fall back to the in-app form, same as the save-as path.
-        stateRef.get.flatMap(state => openFileWorkflowModal(FileWorkflowMode.Open, state))
+        currentState.flatMap(state => openFileWorkflowModal(FileWorkflowMode.Open, state))
 
   private[manager] def saveBufferAsEffect(bufferId: BufferId, path: Path): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    currentState.flatMap { state =>
       state.persisted.buffers.get(bufferId) match
         case Some(_) =>
           saveBufferAs(bufferId, path)

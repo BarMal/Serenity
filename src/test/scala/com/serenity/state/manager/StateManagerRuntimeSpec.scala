@@ -62,7 +62,6 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
 
   private def compose(runtime: StateManagerRuntime, operations: StateManagerOperationBoundary) =
     new StateManagerComposition(
-      runtime.modelRef,
       runtime.themeNamesRef,
       runtime.quitSignal,
       runtime.logger,
@@ -117,7 +116,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
               (task.started.complete(()) >> IO.never[ProjectTaskResult]).onCancel(task.destroyed.complete(()).void)
             )
           )
-      operations <- StateManagerOperationBoundary.create(Model.appRef(modelRef), runtime.logger)
+      operations <- StateManagerOperationBoundary.create(modelRef, runtime.logger)
     yield (compose(runtime.copy(runProjectTask = launcher), operations), operations)
 
   private def projectCommand(intent: ProjectIntent): Command =
@@ -187,7 +186,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       _                         <- commandTask.started.get
       _ <- composition.interpretCommand(projectCommand(ProjectIntent.CancelProjectTask), AppState.initial)
       _ <- commandTask.destroyed.get
-      projectTaskAfterCommand <- composition.stateRef.get.map(_.runtime.projectTasks.running)
+      projectTaskAfterCommand <- composition.getCurrentState.map(_.runtime.projectTasks.running)
       _                       <- composition.interpretCommand(runBuild, AppState.initial)
       _                       <- shutdownTask.started.get
       _ <- operations.effectLanes.submit(
@@ -212,7 +211,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       (composition, _) <- projectComposition(List(task))
       _                <- composition.interpretCommand(runBuild, AppState.initial)
       _                <- task.started.get
-      stateWithPanel   <- composition.stateRef.get
+      stateWithPanel   <- composition.getCurrentState
       _ <- composition.interpretCommand(
         Command.typed(
           "unpin-bottom-panel",
@@ -223,7 +222,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         stateWithPanel
       )
       _               <- task.destroyed.get
-      stateAfterUnpin <- composition.stateRef.get
+      stateAfterUnpin <- composition.getCurrentState
     yield
       stateAfterUnpin.runtime.projectTasks.running shouldBe None
       stateAfterUnpin.pinnedSurfaces.exists { surface =>
@@ -262,24 +261,26 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       (composition, operations) <- projectComposition(List(taskA, taskB))
       _                         <- composition.interpretCommand(runBuild, AppState.initial)
       _                         <- taskA.started.get
-      idA <- composition.stateRef.get.flatMap(state =>
+      idA <- composition.getCurrentState.flatMap(state =>
         IO.fromOption(state.runtime.projectTasks.running.map(_.id))(new IllegalStateException("task A did not start"))
       )
-      beforeRestore <- composition.stateRef.get
+      beforeRestore <- composition.getCurrentState
       // A loaded session is a fresh state -- its runtime never persisted -- over the same project.
       loadedSession = sessionOver(beforeRestore)
-      _ <- composition.validateAndUpdateState(
+      _ <- operations.modelCommit.commitState(
         composition.restoreSessionIntoCurrentViewport(loadedSession, beforeRestore),
         beforeRestore
       )
-      restored <- composition.stateRef.get
+      restored <- composition.getCurrentState
       _ <- IO.raiseWhen(restored.runtime.projectTasks.running.isDefined)(
         new IllegalStateException("the session restore was not committed")
       )
       _ <- composition.interpretCommand(runBuild, AppState.initial)
       _ <- taskB.started.get.timeout(5.seconds)
-      _ <- operations.dispatch(operations.applyResult(EffectResult.ProjectTaskOutput(idA, "late from A"), _ => IO.unit))
-      afterLate <- composition.stateRef.get
+      _ <- operations.dispatch(
+        operations.modelCommit.applyResult(EffectResult.ProjectTaskOutput(idA, "late from A"), _ => IO.unit)
+      )
+      afterLate <- composition.getCurrentState
       _         <- composition.interpretCommand(projectCommand(ProjectIntent.CancelProjectTask), AppState.initial)
     yield
       afterLate.runtime.projectTasks.running.map(_.id) should not be Some(idA)
@@ -298,7 +299,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       stateRef <- Ref.of[IO, AppState](AppState.initial)
       calls    <- Ref.of[IO, List[String]](Nil)
       facade = new StateManagerFileFacade(
-        stateRef,
+        stateRef.get,
         update => stateRef.update(update),
         opened => calls.update(_ :+ s"open:$opened"),
         saved => calls.update(_ :+ s"save:$saved"),

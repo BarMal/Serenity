@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
@@ -12,7 +12,7 @@ import com.serenity.ui.layout.*
   * reason this needs an interface at all, and a record fakes trivially without one (#1017).
   */
 final private[manager] case class ModalMouseHitTestingPort(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     applyReducerResult: (ReducerResult, AppState) => IO[Unit]
 )
 
@@ -95,7 +95,7 @@ private[manager] object ModalMouseHitTesting:
 final private[manager] class ModalMouseHitTesting(port: ModalMouseHitTestingPort):
 
   def handleModalMouseInput(event: MouseInputEvent, state: AppState): IO[Unit] =
-    MouseTransition.commit(port.stateRef, port.applyReducerResult)(ModalMouseHitTesting.input(event, state))
+    MouseTransition.commit(port.currentState, port.applyReducerResult)(ModalMouseHitTesting.input(event, state))
 
   def modalHitAt(click: MouseClick, state: AppState): Option[(Modal, SurfaceHitRegion)] =
     ModalMouseHitTesting.modalHitAt(click, state)

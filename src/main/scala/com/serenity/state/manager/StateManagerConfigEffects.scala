@@ -370,7 +370,7 @@ final private[manager] class StateManagerConfigEffects(
       case GeneralSettingsIntent.OpenSettings =>
         currentState.flatMap { current =>
           val newState = CommandRunnerReducer.openSettings(current, CommandRegistry.withToggleUI)(using balance)
-          editor.validateAndUpdateState(newState, current)
+          editor.commitState(newState, current)
         }
       case GeneralSettingsIntent.SaveConfig =>
         persistConfigFile(state.persisted.config)

@@ -45,21 +45,27 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
 
   /** A real operation boundary (dispatcher + lanes) over a model, with the editor port every effect family uses. */
   final private class Rig(val modelRef: Ref[IO, Model], val operations: StateManagerOperationBoundary):
-    val stateRef: Ref[IO, AppState] = Model.appRef(modelRef)
-    private val modelCommit         = new ModelCommit(modelRef, operations)
+    val stateRef: Ref[IO, AppState] = ModelViews.appRef(modelRef)
+    private val modelCommit         = operations.modelCommit
 
     val editor: EffectEditorPort = new EffectEditorPort:
       def enqueueEvent(event: Event): IO[Unit] = operations.enqueueEvent(event)
-      def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-        operations.validateAndUpdateState(newState, fallbackState)
+      def commitState(newState: AppState, fallbackState: AppState): IO[Unit] =
+        modelCommit.commitState(newState, fallbackState)
       def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
         modelCommit.updateValidated(transition)
+      def updateBufferAnimations(
+        update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
+          BufferId,
+          com.serenity.animation.AnimationState
+        ]
+      ): IO[Unit] = modelCommit.updateBufferAnimations(update)
       def scheduleDocumentAnalysis(): IO[Unit]                     = IO.unit
       def scheduleFindSearch(request: FindSearchRequest): IO[Unit] = IO.unit
       def submitEffect(lane: Lane.Keyed, job: IO[Unit]): IO[Unit] =
         operations.submitEffect(lane, job)
       def dispatchEffectResult(result: EffectResult, onApplied: AppState => IO[Unit]): IO[Unit] =
-        operations.dispatch(operations.applyResult(result, onApplied))
+        operations.dispatch(operations.modelCommit.applyResult(result, onApplied))
 
     def commit(transition: AppState => AppState): IO[Unit] =
       editor.updateModelValidated(model => Some(model.copy(app = transition(model.app))))
@@ -68,14 +74,14 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
     def typeOnDispatcher(char: Char): IO[Unit] =
       operations.dispatch(
         stateRef.get.flatMap(state =>
-          operations.validateAndUpdateState(EditorEventReducer.reduce(InsertChar(char), PaneId(0), state).state, state)
+          operations.modelCommit.commitState(EditorEventReducer.reduce(InsertChar(char), PaneId(0), state).state, state)
         )
       )
 
   private def rig(initial: AppState = AppState.initial): IO[Rig] =
     for
       modelRef   <- Ref.of[IO, Model](Model(initial, UndoState(), Map.empty))
-      operations <- StateManagerOperationBoundary.create(Model.appRef(modelRef), quietLogger)
+      operations <- StateManagerOperationBoundary.create(modelRef, quietLogger)
     yield Rig(modelRef, operations)
 
   private def configEffects(

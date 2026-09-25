@@ -36,11 +36,10 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
   ): IO[StateManagerEventPipeline] =
     for
       cacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)
-      sharedStateRef = Model.appRef(sharedModelRef)
+      sharedStateRef = ModelViews.appRef(sharedModelRef)
       pipelineLogger = org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
-      operations <- StateManagerOperationBoundary.create(sharedStateRef, pipelineLogger)
+      operations <- StateManagerOperationBoundary.create(sharedModelRef, pipelineLogger)
       statePort = new EventStatePort:
-        val modelRef            = sharedModelRef
         val logger              = pipelineLogger
         val mouseTargetCacheRef = cacheRef
       effectPort = EventEffectPort(
@@ -49,9 +48,9 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
       )
       workflowPort = new EventWorkflowPort:
         def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] = IO.unit
-      modelCommit = new ModelCommit(sharedModelRef, operations)
+      modelCommit = operations.modelCommit
       undoRecording = new UndoRecording(new UndoRecordingPort:
-        val undoRef = Model.undoRef(sharedModelRef)
+        def updateUndo(update: UndoState => UndoState): IO[Unit] = ModelViews.undoRef(sharedModelRef).update(update)
         export modelCommit.updateValidated as updateModelValidated)
     yield new StateManagerEventPipeline(
       statePort,
@@ -74,7 +73,7 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
     val program =
       for
         modelRef <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
-        stateRef = Model.appRef(modelRef)
+        stateRef = ModelViews.appRef(modelRef)
         pipeline <- newPipeline(modelRef)
         before   <- stateRef.get
         _        <- List.fill(concurrency)(pipeline.applyEvent(NewTab)).parSequence_
@@ -96,7 +95,7 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
     val program =
       for
         modelRef <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
-        stateRef = Model.appRef(modelRef)
+        stateRef = ModelViews.appRef(modelRef)
         pipeline <- newPipeline(modelRef, onEffect = (operations, _) => operations.enqueueEvent(NewTab))
         before   <- stateRef.get
         _        <- pipeline.applyEvent(FileSearch)

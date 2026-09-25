@@ -21,12 +21,12 @@ import com.serenity.ui.theme.config.{AppThemeManager, ThemeConfig, ThemeConfigWr
   * and the file-search overlay.
   */
 final private[manager] class StateManagerSurfacePopupEffects(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     logger: org.typelevel.log4cats.Logger[IO],
     themeManager: AppThemeManager,
     themeNamesRef: Ref[IO, List[String]],
     fileDialog: Option[com.serenity.io.FileDialog],
-    validateAndUpdateState: (AppState, AppState) => IO[Unit],
+    commitState: (AppState, AppState) => IO[Unit],
     lanes: EffectLanePort,
     interpretEffect: AppEffect => IO[Unit]
 ):
@@ -39,7 +39,7 @@ final private[manager] class StateManagerSurfacePopupEffects(
 
   /** Commits against the live state, not the snapshot the command started from. */
   private def commitCurrent(reduce: AppState => ReducerResult): IO[Unit] =
-    stateRef.get.flatMap(state => validateAndUpdateState(reduce(state).state, state))
+    currentState.flatMap(state => commitState(reduce(state).state, state))
 
   // The chooser and creator go through `SurfaceEffect`, which reads the live state: `state` predates the command-usage
   // record `interpretCommand` commits just before, and committing from it would drop that record (#1714).
@@ -71,7 +71,7 @@ final private[manager] class StateManagerSurfacePopupEffects(
       case ThemeEffect.RefreshThemeNames =>
         lanes.submitEffect(ThemeFileLane, listThemeNames)
       case ThemeEffect.ExportCurrentTheme =>
-        stateRef.get.flatMap(exportCurrentThemeEffect)
+        currentState.flatMap(exportCurrentThemeEffect)
 
   /** Records `themeName` as the latest request before loading it, so a slower load of an earlier request is dropped. */
   private def requestTheme(themeName: String, loaded: Theme => EffectResult, failure: => String): IO[Unit] =
@@ -103,11 +103,11 @@ final private[manager] class StateManagerSurfacePopupEffects(
     themeNamesRef.get.flatMap { themeNames =>
       PopupSurfaceReducer
         .openThemePicker(themeNames, state)
-        .traverse_(result => validateAndUpdateState(result.state, state))
+        .traverse_(result => commitState(result.state, state))
     }
 
   private[manager] def openThemeCreatorEffect(state: AppState): IO[Unit] =
-    validateAndUpdateState(PopupSurfaceReducer.openThemeCreator(state).state, state)
+    commitState(PopupSurfaceReducer.openThemeCreator(state).state, state)
 
   private def exportCurrentThemeEffect(state: AppState): IO[Unit] =
     val config            = ThemeConfigWriter.themeToConfig(state.persisted.theme)
@@ -132,4 +132,4 @@ final private[manager] class StateManagerSurfacePopupEffects(
         IO.unit
 
   private[manager] def openFileSearchEffect(state: AppState): IO[Unit] =
-    validateAndUpdateState(PopupSurfaceReducer.openFileSearch(state).state, state)
+    commitState(PopupSurfaceReducer.openFileSearch(state).state, state)

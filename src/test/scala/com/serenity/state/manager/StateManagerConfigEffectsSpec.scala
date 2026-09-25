@@ -54,7 +54,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
     val root       = Files.createTempDirectory("config-effects-spec")
     val configPath = Option.when(persistConfig)(root.resolve("config.json"))
     val modelRef   = Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty)).unsafeRunSync()
-    val stateRef   = Model.appRef(modelRef)
+    val stateRef   = ModelViews.appRef(modelRef)
     val triggers   = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
     val fonts      = Ref.of[IO, List[FontLoader.FontConfig]](Nil).unsafeRunSync()
     val analyses   = Ref.of[IO, Int](0).unsafeRunSync()
@@ -63,12 +63,18 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
 
     val editor = new EffectEditorPort:
       def enqueueEvent(event: Event): IO[Unit] = events.update(_ :+ event)
-      def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
+      def commitState(newState: AppState, fallbackState: AppState): IO[Unit] =
         committed.update(_ :+ newState) >> stateRef.set(newState)
       def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
         modelRef.get.flatMap(model =>
           transition(model).fold(IO.unit)(next => committed.update(_ :+ next.app) >> modelRef.set(next))
         )
+      def updateBufferAnimations(
+        update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
+          BufferId,
+          com.serenity.animation.AnimationState
+        ]
+      ): IO[Unit] = ModelViews.bufferAnimationsRef(modelRef).update(update)
       def scheduleDocumentAnalysis(): IO[Unit]                                               = analyses.update(_ + 1)
       def scheduleFindSearch(request: FindSearchRequest): IO[Unit]                           = IO.unit
       def submitEffect(lane: com.serenity.state.effects.Lane.Keyed, job: IO[Unit]): IO[Unit] = job

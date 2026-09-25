@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import com.serenity.config.CommentDisplayMode
 import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
@@ -12,7 +12,7 @@ import com.serenity.state.reducers.{ReducerResult, Transition}
   * the only reason this needs an interface at all, and a record fakes trivially without one (#1017).
   */
 final private[manager] case class MouseHitTestingPort(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     applyReducerResult: (ReducerResult, AppState) => IO[Unit]
 )
 
@@ -34,7 +34,7 @@ final private[manager] class MouseHitTesting(
 )(using balance: com.serenity.rope.Balance):
 
   private def commit[A](transition: Transition[A]): IO[A] =
-    MouseTransition.commit(port.stateRef, port.applyReducerResult)(transition)
+    MouseTransition.commit(port.currentState, port.applyReducerResult)(transition)
 
   def handleMouseClick(click: MouseClick, state: AppState): IO[Unit] =
     click.button match

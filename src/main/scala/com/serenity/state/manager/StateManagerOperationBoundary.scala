@@ -3,7 +3,6 @@ package com.serenity.state.manager
 import scala.concurrent.duration.*
 
 import cats.effect.*
-import cats.syntax.foldable.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.SpellCheckConfig
 import com.serenity.diagnostics.Trace
@@ -11,7 +10,7 @@ import com.serenity.document.CommentRendering
 import com.serenity.spellcheck.{DictionaryLoader, SpellChecker}
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, CommandRunnerPanelSelections}
+import com.serenity.state.reducers.CommandRunnerPanelSelections
 import org.typelevel.log4cats.Logger
 
 /** Operations emitted by capabilities for ordered interpretation at the event boundary. */
@@ -22,7 +21,7 @@ private[manager] enum StateManagerOperation:
 /** One-directional hand-off for operations emitted while interpreting effects. */
 final private[manager] class StateManagerOperationBoundary private (
     pendingOperations: Ref[IO, List[StateManagerOperation]],
-    stateRef: Ref[IO, AppState],
+    modelRef: Ref[IO, Model],
     documentAnalysisInputsRef: Ref[IO, Option[Map[String, SpellCheckFingerprint]]],
     logger: Logger[IO],
     val effectLanes: EffectLanes,
@@ -41,6 +40,9 @@ final private[manager] class StateManagerOperationBoundary private (
   private val FindSearchLane: Lane.Keyed       = Lane.Keyed(LaneKey.Search, LanePolicy.SwitchLatest)
   private val DocumentAnalysisLane: Lane.Keyed = Lane.Keyed(LaneKey.Analysis, LanePolicy.SwitchLatest)
   private val ShutdownGracePeriod              = 5.seconds
+
+  // Built here, over the dispatcher's own model ref, because every commit it makes runs this boundary's follow-up work.
+  val modelCommit: ModelCommit = new ModelCommit(modelRef, this)
 
   def enqueueEvent(event: com.serenity.keystroke.events.Event): IO[Unit] =
     pendingOperations.update(_ :+ StateManagerOperation.Event(event))
@@ -89,14 +91,7 @@ final private[manager] class StateManagerOperationBoundary private (
   private def currentModalId(state: AppState): Option[SurfaceId] =
     state.topModal.map(_.id).orElse(state.modalSurface.map(_.id))
 
-  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-    StateManagerOperationBoundary.prepareCommit(newState, fallbackState) match
-      case Right(committedState) =>
-        logModalTransition(fallbackState, committedState) >> stateRef.set(committedState) >> scheduleDocumentAnalysis()
-      case Left(errors) =>
-        logRejectedCommit(errors) >> stateRef.set(fallbackState)
-
-  /** The follow-up work of a commit made outside `validateAndUpdateState` from a `prepareCommit` result. */
+  /** The follow-up work of every `ModelCommit` app-state commit. */
   private[manager] def afterCommit(fallbackState: AppState, committedState: AppState): IO[Unit] =
     logModalTransition(fallbackState, committedState) >> scheduleDocumentAnalysis()
 
@@ -113,7 +108,7 @@ final private[manager] class StateManagerOperationBoundary private (
       case _ => IO.unit
 
   def scheduleDocumentAnalysis(): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    modelCommit.currentState.flatMap { state =>
       val spellCheckConfig = state.persisted.config.languageToolsConfig.spellCheck
       IO.blocking(
         SpellChecker.analysisFingerprints(state, SpellCheckConfig.discoverDictionaryFingerprints(spellCheckConfig))
@@ -171,8 +166,6 @@ final private[manager] class StateManagerOperationBoundary private (
       submittedEffects.update(_ + 1) >> effectLanes.submit(lane, job)
     def post(update: IO[Unit]): IO[Unit]           = dispatcher.post(update)
     def dispatchUpdate(update: IO[Unit]): IO[Unit] = dispatcher.submit(update)
-    def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit] =
-      StateManagerOperationBoundary.this.validateAndUpdateState(newState, fallbackState)
 
   def scheduleFindSearch(request: FindSearchRequest): IO[Unit] =
     submit(
@@ -202,36 +195,14 @@ final private[manager] class StateManagerOperationBoundary private (
   private def submit(lane: Lane.Scheduled, job: IO[Unit]): IO[Unit] =
     submittedEffects.update(_ + 1) >> effectLanes.submit(lane, job).recover { case _: EffectLanes.Released => () }
 
-  /** Applies `result` through the validated commit path if it is still current, then runs `onApplied` with the
-    * committed state and hands the effects its transition emitted to `interpretEffect`, in order. Runs on the
-    * dispatcher: a lane job reaches it through `dispatch`.
-    */
-  private[manager] def applyResult(
-    result: EffectResult,
-    onApplied: AppState => IO[Unit],
-    interpretEffect: AppEffect => IO[Unit] = _ => IO.unit
-  ): IO[Unit] =
-    stateRef.flatModify { current =>
-      val next = EffectResult.reduce(current, result)
-      if next.state eq current then (current, IO.unit)
-      else
-        StateManagerOperationBoundary.prepareCommit(next.state, current) match
-          case Right(committed) =>
-            (
-              committed,
-              afterCommit(current, committed) >> onApplied(committed) >> next.effects.traverse_(interpretEffect)
-            )
-          case Left(errors) => (current, logRejectedCommit(errors))
-    }
-
   private def postResult(result: EffectResult): IO[Unit] =
-    dispatcher.post(applyResult(result, _ => IO.unit))
+    dispatcher.post(modelCommit.applyResult(result, _ => IO.unit))
 
   private def documentAnalysisJob: IO[Unit] =
     given Logger[IO] = logger
     (IO.sleep(DocumentAnalysisDebounce) >>
       Trace.timed("analysis.documentAnalysisJob") {
-        stateRef.get.flatMap { snapshot =>
+        modelCommit.currentState.flatMap { snapshot =>
           val spellCheckConfig = snapshot.persisted.config.languageToolsConfig.spellCheck
           IO.blocking(DictionaryLoader.loadSnapshot(spellCheckConfig)).flatMap { dictionary =>
             val expected = SpellChecker.analysisFingerprints(snapshot, dictionary.fingerprints)
@@ -270,7 +241,7 @@ private[manager] object StateManagerOperationBoundary:
     * are allocated here and released by [[StateManagerOperationBoundary.shutdownEffects]] on the quit path.
     */
   def create(
-    stateRef: Ref[IO, AppState],
+    modelRef: Ref[IO, Model],
     logger: Logger[IO],
     beforeDocumentAnalysisStart: IO[Unit] = IO.unit,
     beforeEffectsShutdown: IO[Unit] = IO.unit
@@ -288,7 +259,7 @@ private[manager] object StateManagerOperationBoundary:
       fileWriteLedger <- FileWriteLedger.create
     yield new StateManagerOperationBoundary(
       pendingOperations,
-      stateRef,
+      modelRef,
       documentAnalysisInputsRef,
       logger,
       effectLanes,

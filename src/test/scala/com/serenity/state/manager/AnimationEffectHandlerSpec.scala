@@ -21,7 +21,7 @@ class AnimationEffectHandlerSpec extends AnyFlatSpec with Matchers:
     initial: Map[BufferId, AnimationState]
   ): (AnimationEffectHandler, Ref[IO, Map[BufferId, AnimationState]]) =
     val ref = Ref.of[IO, Map[BufferId, AnimationState]](initial).unsafeRunSync()
-    (new AnimationEffectHandler(ref), ref)
+    (new AnimationEffectHandler(ref.update), ref)
 
   "AnimationEffectHandler" should "merge a delta into a buffer with no prior animations" in {
     val (handler, ref) = handlerWith(Map.empty)

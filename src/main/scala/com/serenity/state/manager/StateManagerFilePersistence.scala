@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import java.nio.file.Path
 
-import cats.effect.{Deferred, IO, Ref}
+import cats.effect.{Deferred, IO}
 import cats.syntax.all.*
 import com.serenity.io.{FileDialog, FileManager, FileUtils}
 import com.serenity.lsp.LspEffect
@@ -24,8 +24,6 @@ private[manager] trait FileEffectLanes:
   /** Runs `update` on the dispatcher and waits for it; never call it from the dispatcher. */
   def dispatchUpdate(update: IO[Unit]): IO[Unit]
 
-  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
-
 /** Owns file reads and writes for buffers (#1671, #1672). The disk I/O runs on a `LaneKey.File` Sequential lane, one
   * per canonical path, and its result is merged into the state current when it lands -- never into the snapshot the
   * request was made from.
@@ -36,7 +34,8 @@ private[manager] trait FileEffectLanes:
   * waiting on a lane job from the dispatcher is safe because file jobs only ever post back.
   */
 final private[manager] class StateManagerFilePersistence(
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
+    commitState: (AppState, AppState) => IO[Unit],
     fileManager: FileManager,
     sessionPersistence: SessionPersistence,
     logger: Logger[IO],
@@ -112,7 +111,7 @@ final private[manager] class StateManagerFilePersistence(
     * the silent path a clean buffer takes when an external-change check finds the file changed.
     */
   def reloadBuffer(bufferId: BufferId): IO[Unit] =
-    stateRef.get.flatMap { state =>
+    currentState.flatMap { state =>
       state.persisted.buffers.get(bufferId).flatMap(buffer => buffer.document.filePath.map(buffer -> _)) match
         case None => IO.unit
         case Some((buffer, path)) =>
@@ -145,7 +144,7 @@ final private[manager] class StateManagerFilePersistence(
     )
 
   private def request(bufferId: BufferId, kind: SaveKind, saveAsPath: Option[Path]): IO[Option[FileSave]] =
-    stateRef.get.flatMap { state =>
+    currentState.flatMap { state =>
       state.persisted.buffers
         .get(bufferId)
         .flatMap(buffer => saveAsPath.orElse(buffer.document.filePath).map(buffer -> _)) match
@@ -209,7 +208,7 @@ final private[manager] class StateManagerFilePersistence(
 
   private def announceOpenedToLsp(path: Path, loaded: Buffer): IO[Unit] =
     loaded.document.language.fold(IO.unit) { languageId =>
-      stateRef.get.flatMap { state =>
+      currentState.flatMap { state =>
         val opened = state.persisted.buffers.values.exists(_.document.filePath.contains(path))
         if opened && state.editingContext.hasCodeTooling then
           lspQueue.enqueue(LspEffect.FileOpened(path.toUri.toString, languageId, loaded.document.content.collect()))
@@ -218,7 +217,7 @@ final private[manager] class StateManagerFilePersistence(
     }
 
   private def commit(result: EffectResult): IO[Unit] =
-    stateRef.get.flatMap(state => lanes.validateAndUpdateState(EffectResult.applyIfCurrent(state, result), state))
+    currentState.flatMap(state => commitState(EffectResult.applyIfCurrent(state, result), state))
 
   private def awaitLane[A](lane: Lane.Scheduled, job: IO[A]): IO[A] =
     Deferred[IO, Either[Throwable, A]].flatMap { outcome =>
@@ -246,7 +245,7 @@ final private[manager] class StateManagerFilePersistence(
         case (uri, languageId) =>
           lspQueue.enqueue(LspEffect.FileClosed(uri, languageId))
       } >>
-        stateRef.get.flatMap { state =>
+        currentState.flatMap { state =>
           if !state.editingContext.hasCodeTooling then IO.unit
           else
             next.fold(IO.unit) {
@@ -256,7 +255,7 @@ final private[manager] class StateManagerFilePersistence(
         }
 
   private def persistAfterSave: IO[Unit] =
-    stateRef.get
+    currentState
       .flatMap(sessionPersistence.onBufferChange)
       .handleErrorWith(error => logger.error(error)("[SESSION] Auto-save after file save failed"))
 

@@ -49,7 +49,9 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
       lspQueue.stream.take(1).compile.last.timeout(within).handleError(_ => None).unsafeRunSync()
 
   private def harness(initialState: AppState): Harness =
-    val stateRefVar        = Ref.of[IO, AppState](initialState).unsafeRunSync()
+    val modelRefVar        = ModelViews.modelOf(initialState).unsafeRunSync()
+    val stateRefVar        = ModelViews.appRef(modelRefVar)
+    val operations         = StateManagerOperationBoundary.create(modelRefVar, NoOpLogger.impl[IO]).unsafeRunSync()
     val sessionRoot        = Files.createTempDirectory("file-persistence-spec")
     val triggersVar        = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
     val lspQueueVar        = LspEffectQueue.create.unsafeRunSync()
@@ -60,12 +62,13 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
       triggersVar,
       lspQueueVar,
       new StateManagerFilePersistence(
-        stateRefVar,
+        stateRefVar.get,
+        operations.modelCommit.commitState,
         new FileManager(),
         sessionPersistence,
         NoOpLogger.impl[IO],
         lspQueueVar,
-        StateManagerOperationBoundary.create(stateRefVar, NoOpLogger.impl[IO]).unsafeRunSync().fileLanes
+        operations.fileLanes
       )
     )
 

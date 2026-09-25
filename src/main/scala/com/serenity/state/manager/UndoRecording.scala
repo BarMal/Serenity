@@ -1,12 +1,12 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import com.serenity.state.models.*
 import com.serenity.state.undo.{HistoryEntry, UndoState}
 
 /** State the event pipeline exposes for recording and replaying undo/redo history. */
 private[manager] trait UndoRecordingPort:
-  def undoRef: Ref[IO, UndoState]
+  def updateUndo(update: UndoState => UndoState): IO[Unit]
   def updateModelValidated(transition: Model => Option[Model]): IO[Unit]
 
 /** Records undoable changes and replays undo/redo history, independent of event dispatch and focus routing.
@@ -21,7 +21,7 @@ final private[manager] class UndoRecording(port: UndoRecordingPort):
   import port.*
 
   def recordUndoBoundary(entry: HistoryEntry, groupable: Boolean): IO[Unit] =
-    undoRef.update(UndoRecording.recorded(_, entry, groupable))
+    updateUndo(UndoRecording.recorded(_, entry, groupable))
 
   def applyUndo(@annotation.unused prevState: AppState): IO[Unit] =
     updateModelValidated(UndoRecording.undone)

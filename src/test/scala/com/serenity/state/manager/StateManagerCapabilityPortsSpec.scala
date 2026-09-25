@@ -27,7 +27,7 @@ class StateManagerCapabilityPortsSpec extends AnyFlatSpec with Matchers:
     * never exercised by these tests.
     */
   private val port: EffectRuntimePort = new EffectRuntimePort:
-    val stateRef                            = Ref.of[IO, AppState](AppState.initial).unsafeRunSync()
+    val currentState                        = IO.pure(AppState.initial)
     val themeNamesRef                       = Ref.of[IO, List[String]](Nil).unsafeRunSync()
     val quitSignal                          = Deferred[IO, Unit].unsafeRunSync()
     val logger                              = NoOpLogger.impl[IO]
@@ -38,9 +38,7 @@ class StateManagerCapabilityPortsSpec extends AnyFlatSpec with Matchers:
     val deviceTextScaleProvider             = IO.pure(1.0)
     val configPersistencePath               = None
     val uiPresetStore = UiPresetStore(Paths.get(System.getProperty("java.io.tmpdir"), "capability-ports-spec.json"))
-    val windowSizeProvider = IO.pure(Option.empty[PreferredWindowSize])
-    val bufferAnimationsRef =
-      Ref.of[IO, Map[BufferId, com.serenity.animation.AnimationState]](Map.empty).unsafeRunSync()
+    val windowSizeProvider    = IO.pure(Option.empty[PreferredWindowSize])
     val markdownPreviewWindow = com.serenity.ui.tui.MarkdownPreviewWindowAvailability.Unavailable
 
   private def path(name: String): Path = Paths.get(name)

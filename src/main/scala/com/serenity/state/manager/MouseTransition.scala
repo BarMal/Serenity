@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import com.serenity.state.models.AppState
 import com.serenity.state.reducers.{ReducerResult, Transition}
 
@@ -19,10 +19,10 @@ private[manager] object MouseTransition:
     * and document-analysis scheduling every commit runs.
     */
   def commit[A](
-    stateRef: Ref[IO, AppState],
+    currentState: IO[AppState],
     applyReducerResult: (ReducerResult, AppState) => IO[Unit]
   )(transition: Transition[A]): IO[A] =
-    stateRef.get.flatMap { current =>
+    currentState.flatMap { current =>
       val (result, value) = run(current)(transition)
       val unchanged       = (result.state eq current) && result.effects.isEmpty
       (if unchanged then IO.unit else applyReducerResult(result, current)).as(value)

@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import cats.effect.{IO, Ref}
+import cats.effect.IO
 import com.serenity.animation.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.state.models.*
@@ -9,8 +9,8 @@ import com.serenity.ui.theme.config.ColorParser.transparent
 
 /** State the event pipeline exposes for surface and panel animation choreography. */
 private[manager] trait AnimationChoreographyPort:
-  def stateRef: Ref[IO, AppState]
-  def validateAndUpdateState(newState: AppState, fallbackState: AppState): IO[Unit]
+  def currentState: IO[AppState]
+  def commitState(newState: AppState, fallbackState: AppState): IO[Unit]
 
 /** Drives command-runner and pinned-panel open/close/transition animations, the buffer sweep animation used for
   * tab-cycling, and advances all in-flight surface animations by one tick. This orchestrates the existing
@@ -25,10 +25,10 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
   def applyAnimationHooks(prevState: AppState): IO[Unit] =
     if !shouldApplySurfaceAnimationHooks(prevState) then IO.unit
     else
-      stateRef.get.flatMap(currentState =>
+      currentState.flatMap(current =>
         AnimationChoreography
-          .animateSurfaceTransitions(prevState, currentState)
-          .fold(IO.unit)(validateAndUpdateState(_, currentState))
+          .animateSurfaceTransitions(prevState, current)
+          .fold(IO.unit)(commitState(_, current))
       )
 
   def shouldApplySurfaceAnimationHooks(state: AppState): Boolean =
