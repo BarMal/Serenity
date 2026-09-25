@@ -7,6 +7,7 @@ import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent
 import com.serenity.config.MarkdownViewMode
 import com.serenity.keystroke.events.{MoveDown, ScrollDown}
 import com.serenity.rope.Balance
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{SplitAxis, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -19,7 +20,7 @@ class MarkdownLensUiScenarioSpec extends AnyFlatSpec with Matchers:
     val driver  = UiScenarioDriver.create("markdown-lens").unsafeRunSync()
     val fixture = Paths.get(getClass.getResource("/ui-scenarios/markdown-lens.md").toURI)
     driver.stateManager.fileOpener.openFile(fixture).unsafeRunSync()
-    driver.stateManager.commandExecutor
+    driver.stateManager
       .executeCommand(
         Command.typed(
           "inline-lens",
@@ -128,7 +129,7 @@ class MarkdownLensUiScenarioSpec extends AnyFlatSpec with Matchers:
     val driver  = UiScenarioDriver.create(name).unsafeRunSync()
     val fixture = Paths.get(getClass.getResource("/ui-scenarios/markdown-lens.md").toURI)
     driver.stateManager.fileOpener.openFile(fixture).unsafeRunSync()
-    driver.stateManager.commandExecutor
+    driver.stateManager
       .executeCommand(
         Command.typed(
           "inline-lens",

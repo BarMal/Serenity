@@ -7,6 +7,7 @@ import com.serenity.command.{Command, CommandCategory, CommandIntent, Decoration
 import com.serenity.config.{AppConfig, VisualFlairLevel}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{SurfaceContent, SurfaceId, SurfacePresentation}
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
@@ -28,7 +29,7 @@ class StateManagerCompanionSpriteSettingsSpec extends AnyFlatSpec with Matchers:
     StateManager(logger, initialConfig = initialConfig).unsafeRunSync()
 
   private def execute(stateManager: StateManager, intent: DecorationIntent): Unit =
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "companion-sprite-settings-spec",

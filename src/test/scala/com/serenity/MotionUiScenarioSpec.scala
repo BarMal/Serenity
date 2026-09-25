@@ -6,6 +6,7 @@ import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, MotionPreset}
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.rope.Balance
+import com.serenity.state.manager.StateManagerTestFacade.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -55,6 +56,6 @@ class MotionUiScenarioSpec extends AnyFlatSpec with Matchers:
   }
 
   private def execute(driver: UiScenarioDriver, intent: CommandIntent): Unit =
-    driver.stateManager.commandExecutor
+    driver.stateManager
       .executeCommand(Command.typed("scenario-motion", "Scenario motion", intent, CommandCategory.Settings))
       .unsafeRunSync()

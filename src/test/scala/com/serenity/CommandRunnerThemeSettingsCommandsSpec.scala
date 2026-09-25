@@ -168,7 +168,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.getCurrentState.unsafeRunSync().runtime.diagnosticsState.diagnostics shouldBe empty
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "spellcheck-enabled",

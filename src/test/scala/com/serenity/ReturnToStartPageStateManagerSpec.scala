@@ -76,7 +76,7 @@ class ReturnToStartPageStateManagerSpec extends AnyFlatSpec with Matchers:
   it should "show the start page immediately when no buffer has unsaved changes" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor.executeCommand(returnCommand).unsafeRunSync()
+    stateManager.executeCommand(returnCommand).unsafeRunSync()
 
     val updated = stateManager.getCurrentState.unsafeRunSync()
     updated.topModal shouldBe None
@@ -88,7 +88,7 @@ class ReturnToStartPageStateManagerSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
     markBufferDirty(stateManager, BufferId(0), "draft")
 
-    stateManager.commandExecutor.executeCommand(returnCommand).unsafeRunSync()
+    stateManager.executeCommand(returnCommand).unsafeRunSync()
 
     currentCloseWorkflow(stateManager).scope shouldBe CloseScope.ReturnToStartPage
   }
@@ -97,7 +97,7 @@ class ReturnToStartPageStateManagerSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
     markBufferDirty(stateManager, BufferId(0), "draft")
 
-    stateManager.commandExecutor.executeCommand(returnCommand).unsafeRunSync()
+    stateManager.executeCommand(returnCommand).unsafeRunSync()
     // Save -> Close Anyway -> Cancel, then submit.
     stateManager.applyEvent(TabKey).unsafeRunSync()
     stateManager.applyEvent(TabKey).unsafeRunSync()
@@ -113,7 +113,7 @@ class ReturnToStartPageStateManagerSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
     markBufferDirty(stateManager, BufferId(0), "draft")
 
-    stateManager.commandExecutor.executeCommand(returnCommand).unsafeRunSync()
+    stateManager.executeCommand(returnCommand).unsafeRunSync()
     // Save -> Close Anyway, then submit the Close Anyway choice.
     stateManager.applyEvent(TabKey).unsafeRunSync()
     stateManager.applyEvent(Enter).unsafeRunSync()
@@ -123,7 +123,7 @@ class ReturnToStartPageStateManagerSpec extends AnyFlatSpec with Matchers:
 
     val resumeCommand =
       startPageOf(afterDiscard).resume.map(_.command).getOrElse(fail("expected a resume hint"))
-    stateManager.commandExecutor.executeCommand(resumeCommand).unsafeRunSync()
+    stateManager.executeCommand(resumeCommand).unsafeRunSync()
 
     val restored = stateManager.getCurrentState.unsafeRunSync()
     restored.startPageSurface shouldBe None

@@ -5,6 +5,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.command.*
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.SurfaceContent
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -67,7 +68,7 @@ class CommandExecutionTracingSpec extends AnyFlatSpec with Matchers:
   "Command execution tracing" should "log a [COMMAND] line naming command and intent for the mouse/effect path" in {
     val (stateManager, recorded) = stateManagerRecording()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "toggle-line-numbers",

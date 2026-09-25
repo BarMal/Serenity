@@ -9,6 +9,7 @@ import com.serenity.config.{AppConfig, MarkdownViewMode, MaterialPreset, MotionP
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.SurfaceMaterials
 import com.serenity.ui.theme.Theme
@@ -108,7 +109,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
       )
 
       val settingsDriver = UiScenarioDriver.create(s"semantic-$themeName-settings", environment).unsafeRunSync()
-      settingsDriver.stateManager.commandExecutor
+      settingsDriver.stateManager
         .executeCommand(
           Command.typed(
             "scenario-settings",

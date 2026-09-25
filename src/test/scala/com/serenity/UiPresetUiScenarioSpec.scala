@@ -35,7 +35,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    driver.stateManager.commandExecutor
+    driver.stateManager
       .executeCommand(
         Command.typed(
           "save-scenario-preset",
@@ -166,7 +166,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
   }
 
   private def execute(driver: UiScenarioDriver, intent: CommandIntent): Unit =
-    driver.stateManager.commandExecutor
+    driver.stateManager
       .executeCommand(Command.typed("scenario-preset", "Scenario preset", intent, CommandCategory.Settings))
       .unsafeRunSync()
 

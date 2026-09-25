@@ -199,7 +199,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
       for
         recorded     <- recording(Model(typing, UndoState(), animations))
         stateManager <- stateManagerOver(recorded.modelRef)
-        _            <- stateManager.commandExecutor.executeCommand(disableMotion)
+        _            <- stateManager.executeCommand(disableMotion)
         writes       <- recorded.recordedWrites
         after        <- stateManager.getModel
       yield (writes, after)
@@ -266,7 +266,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
       for
         recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
         stateManager <- stateManagerOver(recorded.modelRef)
-        _            <- stateManager.commandExecutor.executeCommand(viewCommand(ViewIntent.PinDiagnosticsPanel))
+        _            <- stateManager.executeCommand(viewCommand(ViewIntent.PinDiagnosticsPanel))
         writes       <- recorded.recordedWrites
         after        <- stateManager.getModel
       yield (writes, after)
@@ -302,9 +302,9 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
       for
         recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
         stateManager <- stateManagerOver(recorded.modelRef)
-        _            <- stateManager.commandExecutor.executeCommand(viewCommand(ViewIntent.PinDiagnosticsPanel))
+        _            <- stateManager.executeCommand(viewCommand(ViewIntent.PinDiagnosticsPanel))
         _            <- recorded.clear
-        _            <- stateManager.commandExecutor.executeCommand(viewCommand(unpin))
+        _            <- stateManager.executeCommand(viewCommand(unpin))
         writes       <- recorded.recordedWrites
         after        <- stateManager.getModel
       yield (writes, after)
@@ -332,7 +332,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
         stateManager <- stateManagerOver(recorded.modelRef)
         first        <- focusedHelloBuffer(stateManager)
         second       <- stateManager.bufferManager.createBuffer("World", None)
-        _            <- stateManager.commandExecutor.executeCommand(closeAll)
+        _            <- stateManager.executeCommand(closeAll)
         prompted     <- stateManager.getModel
         _            <- stateManager.applyEvent(TabKey)
         _            <- recorded.clear
@@ -363,7 +363,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
       for
         recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
         stateManager <- stateManagerOver(recorded.modelRef)
-        _            <- stateManager.commandExecutor.executeCommand(restore)
+        _            <- stateManager.executeCommand(restore)
         writes       <- recorded.recordedWrites
         after        <- stateManager.getModel
       yield (writes, after)

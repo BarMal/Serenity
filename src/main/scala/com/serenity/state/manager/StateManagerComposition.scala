@@ -285,10 +285,8 @@ private[manager] class StateManagerComposition(
     lspQueue.stream
       .interruptWhen(Stream.eval(quitSignal.get).as(true))
 
-  val commandExecutor: CommandExecutor = CommandExecutor(executeCommand = executeCommand)
-
   /** Returns once the command and the lane work it started have settled; the dispatcher stays free meanwhile. */
-  private def executeCommand(command: com.serenity.command.Command): IO[Unit] =
+  private[manager] def executeCommand(command: com.serenity.command.Command): IO[Unit] =
     modelCommit.currentState.flatMap(state => effects.interpretCommand(command, state)) >> drainPendingOperations >>
       operations.awaitEffects
 
