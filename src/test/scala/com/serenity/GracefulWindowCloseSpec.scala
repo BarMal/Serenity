@@ -8,6 +8,7 @@ import cats.syntax.parallel.*
 import com.serenity.keystroke.events.Quit
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -28,7 +29,7 @@ class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
   "Window close" should "trigger the quit path and signal awaitQuit" in {
     val sm = makeStateManager()
     sm.bufferManager.createBuffer("", None).unsafeRunSync()
-    sm.paneManager.createPane(None).unsafeRunSync()
+    sm.createPane(None).unsafeRunSync()
 
     val program = for
       awaiting <- Deferred[IO, Unit]
@@ -45,7 +46,7 @@ class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
   it should "go through the close workflow when there are dirty buffers" in {
     val sm       = makeStateManager()
     val bufferId = sm.bufferManager.createBuffer("hello", None).unsafeRunSync()
-    sm.paneManager.createPane(None).unsafeRunSync()
+    sm.createPane(None).unsafeRunSync()
     sm.bufferManager.updateBuffer(bufferId, "modified").unsafeRunSync()
 
     sm.applyEvent(Quit).unsafeRunSync()
@@ -59,7 +60,7 @@ class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
   it should "allow an external close to terminate immediately even with dirty buffers" in {
     val sm       = makeStateManager()
     val bufferId = sm.bufferManager.createBuffer("hello", None).unsafeRunSync()
-    sm.paneManager.createPane(None).unsafeRunSync()
+    sm.createPane(None).unsafeRunSync()
     sm.bufferManager.updateBuffer(bufferId, "modified").unsafeRunSync()
 
     val program = for

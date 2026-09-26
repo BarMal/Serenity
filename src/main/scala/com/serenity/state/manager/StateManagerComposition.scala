@@ -127,10 +127,14 @@ private[manager] class StateManagerComposition(
       operations.dispatch(modelCommit.applyResult(result, onApplied, effects.interpretEffect)) >>
         drainPendingOperations
 
-  private val surfaces =
+  // private[manager], not private: #1724 deleted the `panelManager`/`paneManager` records these backed, and none of
+  // their methods (pinPanel, movePinnedPanel, loadDirectoryTree, createPane, switchToPane, ... -- see
+  // `StateManagerTestFacade`) have a real production caller left, so they must not become new public `StateManager`
+  // API purely for tests. `StateManagerTestFacade` (same package) reaches them via `StateManager.composition` instead.
+  private[manager] val surfaces =
     new StateManagerSurfaceCapability(logger, operations, modelCommit)
 
-  private val editor = new StateManagerEditorCapability(
+  private[manager] val editor = new StateManagerEditorCapability(
     modelCommit,
     runtimeLspQueue,
     animations,
@@ -260,7 +264,7 @@ private[manager] class StateManagerComposition(
       undoRecording
     )
 
-  private val viewport =
+  private[manager] val viewport =
     new StateManagerViewportCapability(modelCommit, logger, deviceTextScaleProvider, effects)
 
   private val files = new StateManagerFileCapability(
@@ -271,9 +275,9 @@ private[manager] class StateManagerComposition(
     filePersistence.openFile
   )
 
-  // PaneManager's methods are excluded from the facade export and re-assembled into the `paneManager` record below,
-  // since #1017 replaces the mixed-in trait with a field. They stay public on the capability classes so this
-  // composition (and the workflow capability) can still call them directly.
+  // PaneManager's/PanelManager's methods are excluded from the facade export (#1017/#1724): they have no real
+  // production caller left, so `StateManagerTestFacade` (same package) reaches them through `StateManager.composition`
+  // instead of them becoming new public `StateManager` API purely for tests.
   export editor.{createPane as _, switchToPane as _, getTabOrder as _, *}
   export events.applyEvent
   export files.*
@@ -300,31 +304,8 @@ private[manager] class StateManagerComposition(
         } >> drainPendingOperations
     }
 
-  private def runSurfaceOperation(operation: IO[Unit]): IO[Unit] =
+  private[manager] def runSurfaceOperation(operation: IO[Unit]): IO[Unit] =
     operation >> drainPendingOperations
-
-  val panelManager: PanelManager = PanelManager(
-    pinPanel = (content, position, size) => runSurfaceOperation(surfaces.pinPanel(content, position, size)),
-    pinOrUpdateTerminalPanel =
-      (text, position, size) => runSurfaceOperation(surfaces.pinOrUpdateTerminalPanel(text, position, size)),
-    unpinPanel = target => runSurfaceOperation(surfaces.unpinPanel(target)),
-    movePinnedPanel = (surfaceId, position) => runSurfaceOperation(surfaces.movePinnedPanel(surfaceId, position)),
-    expandPinnedPanel = target => runSurfaceOperation(surfaces.expandPinnedPanel(target)),
-    collapseExpandedPanel = () => runSurfaceOperation(surfaces.collapseExpandedPanel()),
-    switchToPinnedPanel = target => runSurfaceOperation(surfaces.switchToPinnedPanel(target)),
-    loadDirectoryTree = (path, files) => runSurfaceOperation(surfaces.loadDirectoryTree(path, files)),
-    selectFileInExplorer = filePath => runSurfaceOperation(surfaces.selectFileInExplorer(filePath)),
-    resizePinnedPanel = (target, newSize) => runSurfaceOperation(surfaces.resizePinnedPanel(target, newSize)),
-    dragFileToDirectory =
-      (sourceFile, targetDir) => runSurfaceOperation(surfaces.dragFileToDirectory(sourceFile, targetDir))
-  )
-
-  val paneManager: PaneManager = PaneManager(
-    handleViewportResize = viewport.handleViewportResize,
-    createPane = bufferId => editor.createPane(bufferId),
-    switchToPane = editor.switchToPane,
-    getTabOrder = () => editor.getTabOrder()
-  )
 
   def scheduleDocumentAnalysis(): IO[Unit]                  = events.scheduleDocumentAnalysis()
   def ensureCommandRunnerSurface(state: AppState): AppState = operations.ensureCommandRunnerSurface(state)

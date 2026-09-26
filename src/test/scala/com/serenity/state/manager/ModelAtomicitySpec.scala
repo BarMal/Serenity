@@ -283,7 +283,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
       for
         recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
         stateManager <- stateManagerOver(recorded.modelRef)
-        _            <- stateManager.panelManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 30)
+        _            <- stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 30)
         writes       <- recorded.recordedWrites
         after        <- stateManager.getModel
       yield (writes, after)

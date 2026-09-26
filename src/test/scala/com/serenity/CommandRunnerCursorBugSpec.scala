@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.{InsertChar, ToggleCommandRunner}
+import com.serenity.keystroke.events.{InsertChar, ResizeEvent, ToggleCommandRunner}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
@@ -33,7 +33,7 @@ class CommandRunnerCursorBugSpec extends AnyFlatSpec with Matchers:
       _ <- stateManager.applyEvent(InsertChar('o'))
 
       // Set terminal size for testing
-      _ <- stateManager.paneManager.handleViewportResize(ViewportSize(80, 24))
+      _ <- stateManager.applyEvent(ResizeEvent(ViewportSize(80, 24)))
 
       // Activate command runner
       _ <- stateManager.applyEvent(ToggleCommandRunner)
@@ -71,7 +71,7 @@ class CommandRunnerCursorBugSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
 
       // Set terminal size for consistent testing
-      _ <- stateManager.paneManager.handleViewportResize(ViewportSize(80, 24))
+      _ <- stateManager.applyEvent(ResizeEvent(ViewportSize(80, 24)))
 
       // Create a buffer with multiple lines and position cursor in the middle
       _ <- stateManager.applyEvent(InsertChar('L'))

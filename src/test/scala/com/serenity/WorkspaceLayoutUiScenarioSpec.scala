@@ -146,7 +146,7 @@ class WorkspaceLayoutUiScenarioSpec extends AnyFlatSpec with Matchers:
   it should "maximise a docked panel to fill the workspace, then restore it to its docked size" in {
     val driver = UiScenarioDriver.create("panel-maximize-restore").unsafeRunSync()
 
-    driver.stateManager.panelManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 8).unsafeRunSync()
+    driver.stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 8).unsafeRunSync()
     val pinnedSurfaceId = driver.state
       .unsafeRunSync()
       .pinnedSurfaces

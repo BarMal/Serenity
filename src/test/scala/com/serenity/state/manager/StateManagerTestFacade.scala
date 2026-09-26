@@ -11,6 +11,7 @@ import com.serenity.session.SessionManager
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, ViewportSize}
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
 import org.typelevel.log4cats.noop.NoOpLogger
@@ -115,6 +116,69 @@ object StateManagerTestFacade:
 
     def clearSession: IO[Unit] =
       stateManager.executeCommand(sessionCommand("clear-session", SessionIntent.ClearSession))
+
+    // #1724 deleted `paneManager`/`panelManager` (#1017 capability records): production drives every one of their
+    // behaviors it still has a real caller for through `applyEvent`/`commandExecutor` instead (see the many
+    // `ViewIntent`/`GlobalAppEvent` rewrites across the test suite). These specific methods never had a real
+    // production caller beyond the deleted records themselves, so rather than inventing new `StateManager` API for
+    // them, they are rebuilt here directly over the same capabilities (`StateManager.composition`, `private[manager]`
+    // and reachable only from this package) the deleted records delegated to.
+
+    def createPane(bufferId: Option[BufferId] = None): IO[PaneId] =
+      stateManager.composition.editor.createPane(bufferId)
+
+    def switchToPane(paneId: PaneId): IO[Unit] =
+      stateManager.composition.editor.switchToPane(paneId)
+
+    def getTabOrder(): IO[List[PaneId]] =
+      stateManager.composition.editor.getTabOrder()
+
+    def handleViewportResize(newSize: ViewportSize): IO[Unit] =
+      stateManager.composition.viewport.handleViewportResize(newSize)
+
+    def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
+      val composition = stateManager.composition
+      composition.runSurfaceOperation(composition.surfaces.pinPanel(content, position, size))
+
+    def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit] =
+      val composition = stateManager.composition
+      composition.runSurfaceOperation(composition.surfaces.pinOrUpdateTerminalPanel(text, position, size))
+
+    def unpinPanel(target: PanelTarget): IO[Unit] =
+      val composition = stateManager.composition
+      composition.runSurfaceOperation(composition.surfaces.unpinPanel(target))
+
+    def movePinnedPanel(surfaceId: SurfaceId, position: PanelPosition): IO[Unit] =
+      val composition = stateManager.composition
+      composition.runSurfaceOperation(composition.surfaces.movePinnedPanel(surfaceId, position))
+
+    def expandPinnedPanel(target: PanelTarget): IO[Unit] =
+      val composition = stateManager.composition
+      composition.runSurfaceOperation(composition.surfaces.expandPinnedPanel(target))
+
+    def collapseExpandedPanel(): IO[Unit] =
+      val composition = stateManager.composition
+      composition.runSurfaceOperation(composition.surfaces.collapseExpandedPanel())
+
+    def switchToPinnedPanel(target: PanelTarget): IO[Unit] =
+      val composition = stateManager.composition
+      composition.runSurfaceOperation(composition.surfaces.switchToPinnedPanel(target))
+
+    def loadDirectoryTree(path: Path, fileNames: List[String]): IO[Unit] =
+      val composition = stateManager.composition
+      composition.runSurfaceOperation(composition.surfaces.loadDirectoryTree(path, fileNames))
+
+    def selectFileInExplorer(filePath: Path): IO[Unit] =
+      val composition = stateManager.composition
+      composition.runSurfaceOperation(composition.surfaces.selectFileInExplorer(filePath))
+
+    def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit] =
+      val composition = stateManager.composition
+      composition.runSurfaceOperation(composition.surfaces.resizePinnedPanel(target, newSize))
+
+    def dragFileToDirectory(sourceFile: Path, targetDir: Path): IO[Unit] =
+      val composition = stateManager.composition
+      composition.runSurfaceOperation(composition.surfaces.dragFileToDirectory(sourceFile, targetDir))
 
   private def updateBuffer(bufferId: BufferId)(change: Buffer => Buffer): AppState => AppState = state =>
     state.persisted.buffers.get(bufferId) match

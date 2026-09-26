@@ -137,7 +137,7 @@ class StateManagerFontConfigSpec extends AnyFlatSpec with Matchers with StateMan
       )
 
     deviceScale.set(2.0)
-    stateManager.paneManager.handleViewportResize(ViewportSize(120, 40)).unsafeRunSync()
+    stateManager.handleViewportResize(ViewportSize(120, 40)).unsafeRunSync()
 
     stateManager.getCurrentState
       .unsafeRunSync()
