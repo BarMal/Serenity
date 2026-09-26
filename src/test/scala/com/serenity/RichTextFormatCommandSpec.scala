@@ -82,7 +82,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
       )
     val command = CommandRegistry.withToggleUI.findCommand("bold").getOrElse(fail("missing bold"))
 
-    stateManager.commandExecutor.executeCommand(command).unsafeRunSync()
+    stateManager.executeCommand(command).unsafeRunSync()
 
     val buffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     buffer.document.isDirty shouldBe true
@@ -100,7 +100,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
       )
     val command = CommandRegistry.withToggleUI.findCommand("bold").getOrElse(fail("missing bold"))
 
-    stateManager.commandExecutor.executeCommand(command).unsafeRunSync()
+    stateManager.executeCommand(command).unsafeRunSync()
     stateManager.applyEvent(InsertChar('X')).unsafeRunSync()
 
     val buffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
@@ -128,7 +128,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     val command = CommandRegistry.withToggleUI.findCommand("italic").getOrElse(fail("missing italic"))
 
-    stateManager.commandExecutor.executeCommand(command).unsafeRunSync()
+    stateManager.executeCommand(command).unsafeRunSync()
     stateManager.applyEvent(InsertChar('X')).unsafeRunSync()
 
     val buffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
@@ -147,8 +147,8 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
       )
     val command = CommandRegistry.withToggleUI.findCommand("bold").getOrElse(fail("missing bold"))
 
-    stateManager.commandExecutor.executeCommand(command).unsafeRunSync()
-    stateManager.commandExecutor.executeCommand(command).unsafeRunSync()
+    stateManager.executeCommand(command).unsafeRunSync()
+    stateManager.executeCommand(command).unsafeRunSync()
 
     val buffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     buffer.richText.richTextDocument.map(_.plainText) shouldBe Some("alpha beta")
@@ -177,7 +177,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     val command = CommandRegistry.withToggleUI.findCommand("heading-1").getOrElse(fail("missing heading-1"))
 
-    stateManager.commandExecutor.executeCommand(command).unsafeRunSync()
+    stateManager.executeCommand(command).unsafeRunSync()
 
     val buffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     buffer.document.isDirty shouldBe true
@@ -194,7 +194,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
       )
     val command = CommandRegistry.withToggleUI.findCommand("align-center").getOrElse(fail("missing align-center"))
 
-    stateManager.commandExecutor.executeCommand(command).unsafeRunSync()
+    stateManager.executeCommand(command).unsafeRunSync()
 
     val buffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     buffer.document.isDirty shouldBe true
@@ -210,7 +210,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
         Selection(com.serenity.state.models.CursorPosition(0, 6), com.serenity.state.models.CursorPosition(0, 10))
       )
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         com.serenity.command.Command.typed(
           "rich-text-font-family",
@@ -219,7 +219,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         com.serenity.command.Command.typed(
           "rich-text-font-size",
@@ -228,7 +228,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         com.serenity.command.Command.typed(
           "rich-text-color",
@@ -261,7 +261,7 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
       )
     val italicCommand = CommandRegistry.withToggleUI.findCommand("italic").getOrElse(fail("missing italic"))
 
-    stateManager.commandExecutor.executeCommand(italicCommand).unsafeRunSync()
+    stateManager.executeCommand(italicCommand).unsafeRunSync()
     stateManager
       .updateState { state =>
         state.copy(persisted =
@@ -310,10 +310,10 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
       }
       .unsafeRunSync()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(CommandRegistry.withToggleUI.findCommand("heading-1").getOrElse(fail("missing heading-1")))
       .unsafeRunSync()
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(CommandRegistry.withToggleUI.findCommand("pin-outline").getOrElse(fail("missing pin-outline")))
       .unsafeRunSync()
 

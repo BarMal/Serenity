@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.keystroke.events.NewTab
+import com.serenity.keystroke.events.{NewTab, ResizeEvent}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
@@ -42,7 +42,7 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
     // When: Terminal is resized to narrow
     val narrowTerminal = ViewportSize(80, 24)
-    stateManager.paneManager.handleViewportResize(narrowTerminal).unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(narrowTerminal)).unsafeRunSync()
 
     val narrowState = stateManager.getCurrentState.unsafeRunSync()
 
@@ -68,7 +68,7 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
     // When: Terminal is resized
     val narrowTerminal = ViewportSize(100, 24)
-    stateManager.paneManager.handleViewportResize(narrowTerminal).unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(narrowTerminal)).unsafeRunSync()
 
     val afterResize = stateManager.getCurrentState.unsafeRunSync()
 
@@ -91,7 +91,7 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
     // When: Terminal is resized to wide
     val wideTerminal = ViewportSize(400, 24)
-    stateManager.paneManager.handleViewportResize(wideTerminal).unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(wideTerminal)).unsafeRunSync()
 
     val wideState = stateManager.getCurrentState.unsafeRunSync()
 
@@ -124,7 +124,7 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
       ViewportSize(400, 24)  // Very wide
     )
 
-    sizes.foreach(size => stateManager.paneManager.handleViewportResize(size).unsafeRunSync())
+    sizes.foreach(size => stateManager.applyEvent(ResizeEvent(size)).unsafeRunSync())
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
 
@@ -156,7 +156,7 @@ class TerminalResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
     testWidths.foreach { width =>
       val viewportSize = ViewportSize(width, 24)
-      stateManager.paneManager.handleViewportResize(viewportSize).unsafeRunSync()
+      stateManager.applyEvent(ResizeEvent(viewportSize)).unsafeRunSync()
 
       val state       = stateManager.getCurrentState.unsafeRunSync()
       val layout      = com.serenity.ui.layout.LayoutEngine.calculateLayout(state, viewportSize)

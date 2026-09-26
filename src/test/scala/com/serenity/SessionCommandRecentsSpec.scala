@@ -7,6 +7,7 @@ import com.serenity.app.AppStartup
 import com.serenity.command.{Command, CommandIntent, EditIntent}
 import com.serenity.keystroke.events.{Enter, InsertChar, TabKey, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec

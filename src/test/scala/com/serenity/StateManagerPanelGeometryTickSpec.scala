@@ -117,7 +117,7 @@ class StateManagerPanelGeometryTickSpec extends AnyFlatSpec with Matchers:
   it should "not remove a real docked panel's own surface once its opening geometry completes" in {
     val sm = makeStateManager()
     // Pinned through the panel manager so the docked surface sits in the workspace tree, as a real panel does.
-    sm.panelManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 20).unsafeRunSync()
+    sm.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 20).unsafeRunSync()
     val surfaceId = sm.getCurrentState
       .unsafeRunSync()
       .runtime

@@ -10,6 +10,7 @@ import cats.effect.IO
 import cats.syntax.apply.*
 import com.serenity.animation.AnimationState
 import com.serenity.config.ConfigManagerTestSupport
+import com.serenity.keystroke.events.ResizeEvent
 import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -499,7 +500,7 @@ object UiScenarioDriver:
         initialConfig = configuredInitialConfig,
         uiPresetStore = uiPresetStore.getOrElse(UiPresetStore.default)
       )
-      _ <- manager.paneManager.handleViewportResize(environment.viewport)
+      _ <- manager.applyEvent(ResizeEvent(environment.viewport))
       _ <- manager.updateState(state =>
         state.copy(persisted = state.persisted.copy(theme = themeFor(environment.themeName)))
       )

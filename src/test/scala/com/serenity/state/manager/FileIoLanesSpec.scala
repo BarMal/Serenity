@@ -320,11 +320,11 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
     val target    = file(directory, "picked.txt", "picked")
     val dialog    = FileDialog(chooseOpenFile = _ => IO.pure(Some(target)), chooseSaveFile = (_, _) => IO.pure(None))
     val f         = fixture(fileDialog = Some(dialog))
-    f.stateManager.panelManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 20).unsafeRunSync()
+    f.stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 20).unsafeRunSync()
     val docked = f.state.runtime.uiSurfaces.map(_.id)
     docked should not be empty
 
-    f.stateManager.commandExecutor
+    f.stateManager
       .executeCommand(
         Command.typed("open", "Open a file.", CommandIntent.File(FileIntent.OpenFile), CommandCategory.File)
       )
@@ -338,7 +338,7 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
 
   private def restoreSession(f: Fixture): Unit =
     f.stateManager.saveSession.unsafeRunSync()
-    f.stateManager.commandExecutor
+    f.stateManager
       .executeCommand(
         Command.typed(
           "restore",

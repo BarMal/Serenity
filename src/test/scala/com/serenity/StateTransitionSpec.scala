@@ -29,10 +29,10 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       // Given: Multiple panes
       buffer1 <- stateManager.createBuffer("First buffer", None)
       buffer2 <- stateManager.createBuffer("Second buffer", None)
-      pane2   <- stateManager.paneManager.createPane(Some(buffer2))
+      pane2   <- stateManager.createPane(Some(buffer2))
 
       // When: Switch focus between panes
-      _ <- stateManager.paneManager.switchToPane(pane2)
+      _ <- stateManager.switchToPane(pane2)
 
       // Then: Focus should be on second pane
       state1 <- stateManager.getCurrentState
@@ -41,7 +41,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
       // When: Switch back to first pane
       firstPaneId = state1.persisted.layout.editorPanes.keys.find(_ != pane2).get
-      _ <- stateManager.paneManager.switchToPane(firstPaneId)
+      _ <- stateManager.switchToPane(firstPaneId)
 
       // Then: Focus should return to first pane
       state2 <- stateManager.getCurrentState
@@ -150,7 +150,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     stateManager.createBuffer("Buffer 1", None).unsafeRunSync()
     val buffer2 = stateManager.createBuffer("Buffer 2", None).unsafeRunSync()
     val pane1   = stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
-    val pane2   = stateManager.paneManager.createPane(Some(buffer2)).unsafeRunSync()
+    val pane2   = stateManager.createPane(Some(buffer2)).unsafeRunSync()
 
     val modal = Modal.Custom("search-panel", "*.scala")
     val peekContent = PeekContent.DirectoryListing(
@@ -162,14 +162,14 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     )
 
     // When: Rapid state transitions
-    stateManager.paneManager.switchToPane(pane2).unsafeRunSync()
+    stateManager.switchToPane(pane2).unsafeRunSync()
     stateManager.updateStateValidated(state => ModalStateReducer.show(modal, state).state).unsafeRunSync()
     stateManager.updateStateValidated(state => ModalStateReducer.dismiss(state).state).unsafeRunSync()
     stateManager
       .updateStateValidated(state => PeekStateReducer.show(peekContent, CursorPosition(0, 0), state).state)
       .unsafeRunSync()
     stateManager.updateStateValidated(state => PeekStateReducer.dismiss(state).state).unsafeRunSync()
-    stateManager.paneManager.switchToPane(pane1).unsafeRunSync()
+    stateManager.switchToPane(pane1).unsafeRunSync()
 
     // Then: Final state should be valid
     val finalState = stateManager.getCurrentState.unsafeRunSync()
@@ -214,7 +214,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     stateManager.createBuffer("Buffer 1", None).unsafeRunSync()
     val buffer2 = stateManager.createBuffer("Buffer 2", None).unsafeRunSync()
     val pane1   = stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
-    val pane2   = stateManager.paneManager.createPane(Some(buffer2)).unsafeRunSync()
+    val pane2   = stateManager.createPane(Some(buffer2)).unsafeRunSync()
 
     val stateWithTwoPanes = stateManager.getCurrentState.unsafeRunSync()
     stateWithTwoPanes.persisted.layout.editorPanes should have size 2
@@ -239,7 +239,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     stateManager.createBuffer("Buffer 1", None).unsafeRunSync()
     val buffer2 = stateManager.createBuffer("Buffer 2", None).unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
-    val pane2 = stateManager.paneManager.createPane(Some(buffer2)).unsafeRunSync()
+    val pane2 = stateManager.createPane(Some(buffer2)).unsafeRunSync()
 
     // Verify valid state
     val complexState = stateManager.getCurrentState.unsafeRunSync()
@@ -247,7 +247,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     AppStateValidation.validationErrors(complexState) shouldBe empty
 
     // When: Test that state remains valid during operations
-    stateManager.paneManager.switchToPane(pane2).unsafeRunSync()
+    stateManager.switchToPane(pane2).unsafeRunSync()
     val afterSwitchState = stateManager.getCurrentState.unsafeRunSync()
     afterSwitchState.isValid shouldBe true
 
@@ -263,7 +263,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
     // When: Attempt invalid operations (these should be handled gracefully)
     // Switch to non-existent pane (should be ignored)
-    stateManager.paneManager.switchToPane(PaneId(999)).unsafeRunSync()
+    stateManager.switchToPane(PaneId(999)).unsafeRunSync()
     val afterInvalidSwitch = stateManager.getCurrentState.unsafeRunSync()
     afterInvalidSwitch.isValid shouldBe true
 

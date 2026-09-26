@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.reducers.PanelStateReducer
 import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -34,7 +35,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
 
   "ViewIntent.SetPanelSize" should "grow a pinned panel by the given delta" in {
     val stateManager = createStateManager()
-    stateManager.panelManager
+    stateManager
       .pinPanel(
         PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/tmp")), None),
         PanelPosition.Left,
@@ -43,7 +44,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     val panelId = stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.head.id
 
-    stateManager.commandExecutor.executeCommand(resizeCommand(panelId, 6)).unsafeRunSync()
+    stateManager.executeCommand(resizeCommand(panelId, 6)).unsafeRunSync()
 
     val resized = PanelStateReducer.currentSize(panelId, stateManager.getCurrentState.unsafeRunSync())
     resized shouldBe Some(30)
@@ -51,7 +52,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
 
   it should "shrink a pinned panel by a negative delta" in {
     val stateManager = createStateManager()
-    stateManager.panelManager
+    stateManager
       .pinPanel(
         PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/tmp")), None),
         PanelPosition.Left,
@@ -60,7 +61,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     val panelId = stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.head.id
 
-    stateManager.commandExecutor.executeCommand(resizeCommand(panelId, -6)).unsafeRunSync()
+    stateManager.executeCommand(resizeCommand(panelId, -6)).unsafeRunSync()
 
     val resized = PanelStateReducer.currentSize(panelId, stateManager.getCurrentState.unsafeRunSync())
     resized shouldBe Some(18)
@@ -68,7 +69,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
 
   it should "clamp shrinking at the minimum panel size rather than going to zero or negative" in {
     val stateManager = createStateManager()
-    stateManager.panelManager
+    stateManager
       .pinPanel(
         PanelContent.DirectoryTree(DirectoryTreeData(java.nio.file.Paths.get("/tmp")), None),
         PanelPosition.Left,
@@ -77,7 +78,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     val panelId = stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.head.id
 
-    stateManager.commandExecutor.executeCommand(resizeCommand(panelId, -100)).unsafeRunSync()
+    stateManager.executeCommand(resizeCommand(panelId, -100)).unsafeRunSync()
 
     // `StateManagerPanelEffects.setPanelSize`'s own floor (`MinimumPanelSize = 4`) would allow 4, but the workspace
     // tree's ratio floor (`WorkspaceTree.MinimumSplitRatio = 0.05`, issue #817) is reached first against the assumed
@@ -90,7 +91,7 @@ class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager()
     val before       = stateManager.getCurrentState.unsafeRunSync()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(resizeCommand(com.serenity.state.models.SurfaceId("missing"), 6))
       .unsafeRunSync()
 

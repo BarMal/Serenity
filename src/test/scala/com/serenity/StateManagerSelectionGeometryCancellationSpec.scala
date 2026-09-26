@@ -50,7 +50,7 @@ class StateManagerSelectionGeometryCancellationSpec extends AnyFlatSpec with Mat
     val sm = makeStateManager()
     seedGeometry(sm)
 
-    sm.commandExecutor
+    sm
       .executeCommand(
         Command.typed(
           "disable-motion",

@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
 import com.serenity.rope.Balance
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -145,7 +146,7 @@ class WorkspaceLayoutUiScenarioSpec extends AnyFlatSpec with Matchers:
   it should "maximise a docked panel to fill the workspace, then restore it to its docked size" in {
     val driver = UiScenarioDriver.create("panel-maximize-restore").unsafeRunSync()
 
-    driver.stateManager.panelManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 8).unsafeRunSync()
+    driver.stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 8).unsafeRunSync()
     val pinnedSurfaceId = driver.state
       .unsafeRunSync()
       .pinnedSurfaces
@@ -156,7 +157,7 @@ class WorkspaceLayoutUiScenarioSpec extends AnyFlatSpec with Matchers:
     val pinnedFrame = driver.renderFrame("docked").unsafeRunSync()
     val dockedRect  = pinnedFrame.evidence.surfaceRects.getOrElse(pinnedSurfaceId, fail("Expected docked panel rect"))
 
-    driver.stateManager.commandExecutor
+    driver.stateManager
       .executeCommand(
         Command.typed(
           "expand-bottom-panel",
@@ -178,7 +179,7 @@ class WorkspaceLayoutUiScenarioSpec extends AnyFlatSpec with Matchers:
     expandedRect.height should be > dockedRect.height
     (expandedRect.width * expandedRect.height) should be > (dockedRect.width * dockedRect.height)
 
-    driver.stateManager.commandExecutor
+    driver.stateManager
       .executeCommand(
         Command.typed(
           "collapse-expanded-panel",

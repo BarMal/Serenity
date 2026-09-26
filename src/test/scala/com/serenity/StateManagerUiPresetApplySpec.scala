@@ -7,6 +7,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.*
 import com.serenity.config.*
+import com.serenity.keystroke.events.ResizeEvent
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManager
@@ -48,7 +49,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
     val size  = PreferredWindowSize(1500, 950)
     val sm    = managerWithStore(store, IO.pure(Some(size)))
 
-    sm.panelManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 12).unsafeRunSync()
+    sm.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 12).unsafeRunSync()
     sm.updateState(state =>
       state.copy(
         persisted = state.persisted.copy(
@@ -103,7 +104,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
       )
     )
     store.upsert(preset).unsafeRunSync()
-    sm.paneManager.handleViewportResize(ViewportSize(90, 28)).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(90, 28))).unsafeRunSync()
 
     sm.executeCommand(
       Command.typed(

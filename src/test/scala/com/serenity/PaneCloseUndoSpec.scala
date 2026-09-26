@@ -28,8 +28,8 @@ class PaneCloseUndoSpec extends AnyFlatSpec with Matchers:
   behavior of "Undoing a pane close"
 
   it should "restore the closed pane, its buffer assignment, and the tree topology" in new PaneFixture:
-    val pane1 = sm.paneManager.createPane(None).unsafeRunSync()
-    sm.paneManager.switchToPane(pane1).unsafeRunSync()
+    val pane1 = sm.createPane(None).unsafeRunSync()
+    sm.switchToPane(pane1).unsafeRunSync()
     val beforeClose = sm.getCurrentState.unsafeRunSync()
 
     sm.applyEvent(ClosePane).unsafeRunSync()
@@ -43,8 +43,8 @@ class PaneCloseUndoSpec extends AnyFlatSpec with Matchers:
     restored.persisted.focus shouldBe beforeClose.persisted.focus
 
   it should "redo back to the closed state" in new PaneFixture:
-    val pane1 = sm.paneManager.createPane(None).unsafeRunSync()
-    sm.paneManager.switchToPane(pane1).unsafeRunSync()
+    val pane1 = sm.createPane(None).unsafeRunSync()
+    sm.switchToPane(pane1).unsafeRunSync()
 
     sm.applyEvent(ClosePane).unsafeRunSync()
     val afterClose = sm.getCurrentState.unsafeRunSync()
@@ -63,8 +63,8 @@ class PaneCloseUndoSpec extends AnyFlatSpec with Matchers:
     sm.setCursorPosition(pane0, 0, 5).unsafeRunSync()
     sm.applyEvent(InsertChar('!')).unsafeRunSync()
 
-    val pane1 = sm.paneManager.createPane(None).unsafeRunSync()
-    sm.paneManager.switchToPane(pane1).unsafeRunSync()
+    val pane1 = sm.createPane(None).unsafeRunSync()
+    sm.switchToPane(pane1).unsafeRunSync()
     sm.applyEvent(ClosePane).unsafeRunSync()
     sm.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keySet shouldBe Set(pane0)
 

@@ -337,13 +337,13 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
 
     def setupAnotherBuffer(content: String): BufferId =
       val bufferId  = stateManager.createBuffer(content, None).unsafeRunSync()
-      val newPaneId = stateManager.paneManager.createPane(Some(bufferId)).unsafeRunSync()
+      val newPaneId = stateManager.createPane(Some(bufferId)).unsafeRunSync()
       currentPaneId.set(newPaneId)
       if content.nonEmpty then
         stateManager
           .setCursorPosition(newPaneId, 0, content.length)
           .unsafeRunSync()
-      stateManager.paneManager.switchToPane(newPaneId).unsafeRunSync()
+      stateManager.switchToPane(newPaneId).unsafeRunSync()
       bufferId
 
     def getPaneId: PaneId = currentPaneId.get()

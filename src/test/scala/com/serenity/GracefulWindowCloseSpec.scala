@@ -29,8 +29,7 @@ class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
   "Window close" should "trigger the quit path and signal awaitQuit" in {
     val sm = makeStateManager()
     sm.createBuffer("", None).unsafeRunSync()
-    sm.paneManager.createPane(None).unsafeRunSync()
-
+    sm.createPane(None).unsafeRunSync()
     val program = for
       awaiting <- Deferred[IO, Unit]
       _ <- (
@@ -46,9 +45,8 @@ class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
   it should "go through the close workflow when there are dirty buffers" in {
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hello", None).unsafeRunSync()
-    sm.paneManager.createPane(None).unsafeRunSync()
+    sm.createPane(None).unsafeRunSync()
     sm.updateBuffer(bufferId, "modified").unsafeRunSync()
-
     sm.applyEvent(Quit).unsafeRunSync()
 
     val state = sm.getCurrentState.unsafeRunSync()
@@ -60,9 +58,8 @@ class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
   it should "allow an external close to terminate immediately even with dirty buffers" in {
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hello", None).unsafeRunSync()
-    sm.paneManager.createPane(None).unsafeRunSync()
+    sm.createPane(None).unsafeRunSync()
     sm.updateBuffer(bufferId, "modified").unsafeRunSync()
-
     val program = for
       awaiting <- Deferred[IO, Unit]
       _ <- (

@@ -109,7 +109,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
       )
 
       val settingsDriver = UiScenarioDriver.create(s"semantic-$themeName-settings", environment).unsafeRunSync()
-      settingsDriver.stateManager.commandExecutor
+      settingsDriver.stateManager
         .executeCommand(
           Command.typed(
             "scenario-settings",

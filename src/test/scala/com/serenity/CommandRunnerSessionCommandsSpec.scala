@@ -100,7 +100,7 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "save-session", "save-session")
     stateManager.sessionStartupInfo.sessionExists.unsafeRunSync() shouldBe true
 
-    stateManager.paneManager.handleViewportResize(viewportSize).unsafeRunSync()
+    stateManager.applyEvent(ResizeEvent(viewportSize)).unsafeRunSync()
     stateManager.updateBuffer(bufferId, "changed session").unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "restore-session", "restore-session")

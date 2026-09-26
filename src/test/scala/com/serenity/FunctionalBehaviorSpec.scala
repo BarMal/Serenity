@@ -80,7 +80,7 @@ class FunctionalBehaviorSpec extends AnyFlatSpec with Matchers:
   it should "handle state transitions through monadic composition" in new FunctionalFixture:
     // Given: Initial state wrapped in IO
     val bufferId = stateManager.createBuffer("monad", None).unsafeRunSync()
-    stateManager.paneManager.createPane(Some(bufferId)).unsafeRunSync()
+    stateManager.createPane(Some(bufferId)).unsafeRunSync()
 
     // When: Chain operations using IO monad
     val monadicChain = for

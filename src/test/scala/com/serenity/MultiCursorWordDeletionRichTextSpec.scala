@@ -57,7 +57,7 @@ class MultiCursorWordDeletionRichTextSpec extends AnyFlatSpec with Matchers:
       }
       .unsafeRunSync()
     val boldCommand = CommandRegistry.withToggleUI.findCommand("bold").getOrElse(fail("missing bold"))
-    stateManager.commandExecutor.executeCommand(boldCommand).unsafeRunSync()
+    stateManager.executeCommand(boldCommand).unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).richText.richTextDocument shouldBe defined
 

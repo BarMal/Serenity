@@ -74,7 +74,7 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
         }
         .unsafeRunSync()
 
-      stateManager.commandExecutor
+      stateManager
         .executeCommand(
           Command.typed(
             "project-build",
@@ -99,7 +99,7 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
   it should "not run a project task while the app is in prose mode" in {
     val stateManager = createStateManager()
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "app-mode-prose",
@@ -110,7 +110,7 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "project-run",
@@ -130,8 +130,8 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
   it should "update the project terminal panel in place rather than pinning a new surface each refresh" in {
     val stateManager = createStateManager()
 
-    stateManager.panelManager.pinOrUpdateTerminalPanel("first output", PanelPosition.Bottom, 14).unsafeRunSync()
-    stateManager.panelManager.pinOrUpdateTerminalPanel("second output", PanelPosition.Bottom, 14).unsafeRunSync()
+    stateManager.pinOrUpdateTerminalPanel("first output", PanelPosition.Bottom, 14).unsafeRunSync()
+    stateManager.pinOrUpdateTerminalPanel("second output", PanelPosition.Bottom, 14).unsafeRunSync()
 
     val terminalSurfaces = stateManager.getCurrentState
       .unsafeRunSync()

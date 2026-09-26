@@ -74,7 +74,7 @@ class MarkdownPreviewWindowStateSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager(MarkdownPreviewWindowAvailability.Unavailable)
     stateManager.updateState(_ => markdownBufferState(isTuiMode = true)).unsafeRunSync()
 
-    stateManager.commandExecutor.executeCommand(openMarkdownPreview).unsafeRunSync()
+    stateManager.executeCommand(openMarkdownPreview).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.runtime.markdownPreviewWindowBuffer shouldBe None
@@ -89,7 +89,7 @@ class MarkdownPreviewWindowStateSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager(MarkdownPreviewWindowAvailability.Available(window))
     stateManager.updateState(_ => markdownBufferState(isTuiMode = true)).unsafeRunSync()
 
-    stateManager.commandExecutor.executeCommand(openMarkdownPreview).unsafeRunSync()
+    stateManager.executeCommand(openMarkdownPreview).unsafeRunSync()
 
     window.showCount.get() shouldBe 1
     stateManager.getCurrentState.unsafeRunSync().runtime.markdownPreviewWindowBuffer shouldBe Some(bufferId)
@@ -100,8 +100,8 @@ class MarkdownPreviewWindowStateSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager(MarkdownPreviewWindowAvailability.Available(window))
     stateManager.updateState(_ => markdownBufferState(isTuiMode = true)).unsafeRunSync()
 
-    stateManager.commandExecutor.executeCommand(openMarkdownPreview).unsafeRunSync()
-    stateManager.commandExecutor.executeCommand(openMarkdownPreview).unsafeRunSync()
+    stateManager.executeCommand(openMarkdownPreview).unsafeRunSync()
+    stateManager.executeCommand(openMarkdownPreview).unsafeRunSync()
 
     window.showCount.get() shouldBe 1
     window.hideCount.get() shouldBe 1
@@ -115,7 +115,7 @@ class MarkdownPreviewWindowStateSpec extends AnyFlatSpec with Matchers:
       .updateState(state => state.copy(runtime = state.runtime.copy(isTuiMode = true)))
       .unsafeRunSync()
 
-    stateManager.commandExecutor.executeCommand(openMarkdownPreview).unsafeRunSync()
+    stateManager.executeCommand(openMarkdownPreview).unsafeRunSync()
 
     window.showCount.get() shouldBe 0
     stateManager.getCurrentState.unsafeRunSync().runtime.markdownPreviewWindowBuffer shouldBe None
@@ -125,7 +125,7 @@ class MarkdownPreviewWindowStateSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager(MarkdownPreviewWindowAvailability.Unavailable)
     stateManager.updateState(_ => markdownBufferState(isTuiMode = false)).unsafeRunSync()
 
-    stateManager.commandExecutor.executeCommand(openMarkdownPreview).unsafeRunSync()
+    stateManager.executeCommand(openMarkdownPreview).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.runtime.markdownPreviewWindowBuffer shouldBe None

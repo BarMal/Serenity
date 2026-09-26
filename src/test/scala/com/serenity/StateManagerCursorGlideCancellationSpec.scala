@@ -48,7 +48,7 @@ class StateManagerCursorGlideCancellationSpec extends AnyFlatSpec with Matchers:
     val sm = makeStateManager()
     seedGlide(sm)
 
-    sm.commandExecutor
+    sm
       .executeCommand(
         Command.typed(
           "disable-motion",
@@ -68,7 +68,7 @@ class StateManagerCursorGlideCancellationSpec extends AnyFlatSpec with Matchers:
     val sm = makeStateManager()
     seedGlide(sm)
 
-    sm.commandExecutor
+    sm
       .executeCommand(
         Command.typed(
           "disable-cursor-motion",

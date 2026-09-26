@@ -6,6 +6,7 @@ import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent
 import com.serenity.config.DefaultDocumentMode
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.PaneId
 import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -33,7 +34,7 @@ class StateManagerDefaultDocumentModeSpec extends AnyFlatSpec with Matchers:
   "StateManager default document mode commands" should "update the default document mode config" in {
     val stateManager = createStateManager()
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "default-document-mode-markdown",

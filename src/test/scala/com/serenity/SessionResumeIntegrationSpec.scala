@@ -12,6 +12,7 @@ import com.serenity.command.CommandRegistry
 import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
@@ -73,7 +74,7 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
       saveSessionCommand = CommandRegistry.default
         .findCommand("save-session")
         .getOrElse(fail("\"save-session\" command not registered in CommandRegistry.default"))
-      _ <- firstManager.commandExecutor.executeCommand(saveSessionCommand)
+      _ <- firstManager.executeCommand(saveSessionCommand)
 
       // ---- Close Serenity: nothing further happens on firstManager, simulating quit. ----
 
@@ -135,7 +136,7 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
       saveSessionCommand = CommandRegistry.default
         .findCommand("save-session")
         .getOrElse(fail("\"save-session\" command not registered"))
-      _ <- firstManager.commandExecutor.executeCommand(saveSessionCommand)
+      _ <- firstManager.executeCommand(saveSessionCommand)
 
       // ---- Second launch: TUI mode with ModifyOtherKeys tier -- both are "never persisted" and must survive restore. ----
       secondManager <- StateManager.apply(

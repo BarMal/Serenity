@@ -37,8 +37,8 @@ class SimplifiedEditorSpec extends AnyFlatSpec with Matchers:
 
     // When: Create additional panes
     val buffer = stateManager.createBuffer("Test content", None).unsafeRunSync()
-    val pane2  = stateManager.paneManager.createPane(Some(buffer)).unsafeRunSync()
-    val pane3  = stateManager.paneManager.createPane(None).unsafeRunSync()
+    val pane2  = stateManager.createPane(Some(buffer)).unsafeRunSync()
+    val pane3  = stateManager.createPane(None).unsafeRunSync()
 
     // Then: Should have multiple panes
     val finalState = stateManager.getCurrentState.unsafeRunSync()
@@ -50,10 +50,10 @@ class SimplifiedEditorSpec extends AnyFlatSpec with Matchers:
     // Given: Create some content
     val buffer1 = stateManager.createBuffer("Buffer 1", None).unsafeRunSync()
     val buffer2 = stateManager.createBuffer("Buffer 2", None).unsafeRunSync()
-    val pane2   = stateManager.paneManager.createPane(Some(buffer2)).unsafeRunSync()
+    val pane2   = stateManager.createPane(Some(buffer2)).unsafeRunSync()
 
     // When: Perform various operations
-    stateManager.paneManager.switchToPane(pane2).unsafeRunSync()
+    stateManager.switchToPane(pane2).unsafeRunSync()
     stateManager.updateBuffer(buffer1, "Updated content").unsafeRunSync()
 
     // Then: State should remain valid
@@ -65,7 +65,7 @@ class SimplifiedEditorSpec extends AnyFlatSpec with Matchers:
   it should "handle buffer cleanup correctly" in new EditorFixture:
     // Given: Buffer associated with pane
     val buffer = stateManager.createBuffer("Test", None).unsafeRunSync()
-    val pane   = stateManager.paneManager.createPane(Some(buffer)).unsafeRunSync()
+    val pane   = stateManager.createPane(Some(buffer)).unsafeRunSync()
 
     val beforeState = stateManager.getCurrentState.unsafeRunSync()
     beforeState.persisted.buffers should contain key buffer
@@ -82,7 +82,7 @@ class SimplifiedEditorSpec extends AnyFlatSpec with Matchers:
   it should "handle pane cleanup correctly" in new EditorFixture:
     // Given: Multiple panes
     val buffer = stateManager.createBuffer("Test", None).unsafeRunSync()
-    val pane2  = stateManager.paneManager.createPane(Some(buffer)).unsafeRunSync()
+    val pane2  = stateManager.createPane(Some(buffer)).unsafeRunSync()
 
     val beforeState = stateManager.getCurrentState.unsafeRunSync()
     beforeState.persisted.layout.editorPanes should have size 2
@@ -100,17 +100,17 @@ class SimplifiedEditorSpec extends AnyFlatSpec with Matchers:
     // Given: Multiple panes
     stateManager.createBuffer("Buffer 1", None).unsafeRunSync()
     val buffer2 = stateManager.createBuffer("Buffer 2", None).unsafeRunSync()
-    val pane2   = stateManager.paneManager.createPane(Some(buffer2)).unsafeRunSync()
+    val pane2   = stateManager.createPane(Some(buffer2)).unsafeRunSync()
 
     val initialState = stateManager.getCurrentState.unsafeRunSync()
     val pane1        = initialState.persisted.layout.editorPanes.keys.find(_ != pane2).get
 
     // When: Switch focus between panes
-    stateManager.paneManager.switchToPane(pane2).unsafeRunSync()
+    stateManager.switchToPane(pane2).unsafeRunSync()
     val afterSwitch1 = stateManager.getCurrentState.unsafeRunSync()
     afterSwitch1.persisted.focus shouldBe Focus.EditorPane(pane2)
 
-    stateManager.paneManager.switchToPane(pane1).unsafeRunSync()
+    stateManager.switchToPane(pane1).unsafeRunSync()
     val afterSwitch2 = stateManager.getCurrentState.unsafeRunSync()
     afterSwitch2.persisted.focus shouldBe Focus.EditorPane(pane1)
 

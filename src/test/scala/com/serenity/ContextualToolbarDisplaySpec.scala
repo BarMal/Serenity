@@ -52,7 +52,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
 
     toolbarStateFrom(stateManager.getCurrentState.unsafeRunSync()).displayMode shouldBe ToolbarDisplayMode.TextOnly
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "contextual-toolbar-icon-only",
@@ -126,7 +126,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
     val codeModeItems = ContextualToolbar.itemsFor(stateManager.getCurrentState.unsafeRunSync())
     codeModeItems shouldBe ContextualToolbar.codeItems
 
-    stateManager.commandExecutor
+    stateManager
       .executeCommand(
         Command.typed(
           "app-mode-prose",

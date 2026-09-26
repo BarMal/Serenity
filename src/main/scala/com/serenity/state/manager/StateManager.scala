@@ -15,7 +15,6 @@ import com.serenity.session.SessionManager
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.renderer.RendererFrameState
 import com.serenity.ui.theme.config.AppThemeManager
@@ -54,14 +53,14 @@ trait StateEngine extends StateReader, StateUpdater, EventApplier
 
 /** Advances renderer-visible animation state.
   *
-  * A capability record per #1017 -- see `PaneManager` below for the shape rationale. `StateManager` holds one of these
+  * A capability record per #1017 -- see `FileService` below for the shape rationale. `StateManager` holds one of these
   * as a field instead of mixing this trait in directly.
   */
 final case class AnimationTicker(advanceAnimationsOnTick: IO[Boolean])
 
 /** Owns application shutdown and periodic session persistence.
   *
-  * A capability record per #1017 -- see `PaneManager` below for the shape rationale. `StateManager` holds one of these
+  * A capability record per #1017 -- see `FileService` below for the shape rationale. `StateManager` holds one of these
   * as a field instead of mixing this trait in directly. `awaitQuit` and `intervalSaveStream` hold their descriptions
   * directly (same as `LspEffectSource.lspEffectStream`); `forceQuit` does too, since every call site invokes it
   * immediately rather than passing the unapplied function around, so a plain `IO[Unit]` field (not `() => IO[Unit]`)
@@ -86,7 +85,7 @@ final case class LspEffectSource(lspEffectStream: Stream[IO, LspEffect])
 
 /** Reads persisted session metadata needed before startup restoration.
   *
-  * A cold capability expressed as a record of functions rather than a trait -- see #1017 and `PaneManager` below for
+  * A cold capability expressed as a record of functions rather than a trait -- see #1017 and `FileService` below for
   * the shape rationale. `StateManager` holds one of these as a field (a "record of records") instead of mixing this
   * trait in directly.
   */
@@ -97,63 +96,23 @@ final case class SessionStartupInfo(
 
 /** Opens a file into editor state.
   *
-  * A capability record per #1017 -- see `PaneManager` below for the shape rationale. `StateManager` holds one of these
+  * A capability record per #1017 -- see `FileService` below for the shape rationale. `StateManager` holds one of these
   * as a field instead of mixing this trait in directly.
   */
 final case class FileOpener(openFile: Path => IO[Unit])
 
-/** Executes editor commands.
-  *
-  * A capability record per #1017 -- see `PaneManager` below for the shape rationale. `StateManager` holds one of these
-  * as a field instead of mixing this trait in directly.
-  */
-final case class CommandExecutor(executeCommand: Command => IO[Unit])
-
-/** Manages editor panes, tabs, and splits.
-  *
-  * A capability record per #1017: a case class of functions rather than a trait, one of `StateManager`'s "record of
-  * records" slices from its original 18-trait facade -- `StateManager` holds one of these as a field instead of mixing
-  * this trait in directly. Its methods are split across the viewport and editor capability classes, so the record is
-  * assembled in `StateManagerComposition` rather than in a single class. Case class fields can't carry default
-  * parameter values, so `createPane` takes `Option[BufferId]` rather than defaulting it to `None`.
-  */
-final case class PaneManager(
-    handleViewportResize: ViewportSize => IO[Unit],
-    createPane: Option[BufferId] => IO[PaneId],
-    switchToPane: PaneId => IO[Unit],
-    getTabOrder: () => IO[List[PaneId]]
-)
-
 /** Reads the persisted editor session.
   *
-  * A capability record per #1017 -- see `PaneManager` above for the shape rationale. `StateManager` holds one of these
+  * A capability record per #1017 -- see `FileService` below for the shape rationale. `StateManager` holds one of these
   * as a field instead of mixing this trait in directly.
   */
 final case class SessionService(loadSession: IO[Option[AppState]])
 
-/** Manages pinned panels and the file explorer.
-  *
-  * A capability record per #1017 -- see `PaneManager` above for the shape rationale. `StateManager` holds one of these
-  * as a field instead of mixing this trait in directly.
-  */
-final case class PanelManager(
-    pinPanel: (PanelContent, PanelPosition, Int) => IO[Unit],
-    pinOrUpdateTerminalPanel: (String, PanelPosition, Int) => IO[Unit],
-    unpinPanel: PanelTarget => IO[Unit],
-    movePinnedPanel: (SurfaceId, PanelPosition) => IO[Unit],
-    expandPinnedPanel: PanelTarget => IO[Unit],
-    collapseExpandedPanel: () => IO[Unit],
-    switchToPinnedPanel: PanelTarget => IO[Unit],
-    loadDirectoryTree: (Path, List[String]) => IO[Unit],
-    selectFileInExplorer: Path => IO[Unit],
-    resizePinnedPanel: (PanelTarget, Int) => IO[Unit],
-    dragFileToDirectory: (Path, Path) => IO[Unit]
-)
-
 /** Saves buffers and watches their files for changes made outside the editor.
   *
-  * A capability record per #1017 -- see `PaneManager` above for the shape rationale. `StateManager` holds one of these
-  * as a field instead of mixing this trait in directly.
+  * A capability record per #1017: a case class of functions rather than a trait, one of `StateManager`'s "record of
+  * records" slices from its original 18-trait facade -- `StateManager` holds one of these as a field instead of
+  * mixing this trait in directly.
   */
 final case class FileService(
     saveBuffer: BufferId => IO[Unit],
@@ -172,13 +131,25 @@ trait StateManager extends StateEngine:
   def sessionStartupInfo: SessionStartupInfo
   def lspEffectSource: LspEffectSource
   def runtimeLifecycle: RuntimeLifecycle
-  def commandExecutor: CommandExecutor
   def sessionService: SessionService
   def animationTicker: AnimationTicker
-  def panelManager: PanelManager
   def fileOpener: FileOpener
   def fileService: FileService
-  def paneManager: PaneManager
+
+  /** Not part of `StateManager`'s production API: #1724 deleted the `paneManager`/`panelManager` records whose methods
+    * (`pinPanel`, `movePinnedPanel`, `loadDirectoryTree`, `createPane`, `switchToPane`, ...) have no real production
+    * caller left, so they must not become new public `StateManager` methods purely to satisfy tests. `private[manager]`
+    * keeps this reachable only from `StateManagerTestFacade` (same package), which rebuilds those methods as test-scope
+    * extensions over the underlying capabilities this exposes.
+    */
+  private[manager] def composition: StateManagerComposition
+
+  /** Runs a `Command` directly, bypassing the palette's UI wiring -- a test-harness concern (#1724), not a production
+    * capability: nothing outside `state.manager` calls this, so it stays package-private rather than a record field
+    * (`CommandExecutor`, deleted in #1724) on the public façade. `StateManagerTestFacade.executeCommand` reaches it for
+    * specs.
+    */
+  private[manager] def executeCommand(command: Command): IO[Unit]
 
 object StateManager:
 
@@ -294,7 +265,7 @@ object StateManager:
   private class StateManagerImpl(runtime: StateManagerRuntime, operations: StateManagerOperationBoundary)(using Balance)
       extends StateManager:
 
-    private val composition = new StateManagerComposition(
+    private[manager] val composition = new StateManagerComposition(
       runtime.themeNamesRef,
       runtime.quitSignal,
       runtime.logger,

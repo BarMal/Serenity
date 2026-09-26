@@ -83,8 +83,8 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
     val program =
       for
         (stateManager, _, seeded) <- invalidStateManager()
-        _     <- stateManager.panelManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 30)
-        after <- stateManager.getModel
+        _                         <- stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 30)
+        after                     <- stateManager.getModel
       yield (seeded, after)
 
     val (seeded, after) = program.unsafeRunSync()
@@ -106,7 +106,7 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
     val program = intents.traverse { intent =>
       for
         (stateManager, _, seeded) <- invalidStateManager()
-        _                         <- stateManager.commandExecutor.executeCommand(edit(intent))
+        _                         <- stateManager.executeCommand(edit(intent))
         after                     <- stateManager.getCurrentState
       yield (seeded, after)
     }
