@@ -111,8 +111,8 @@ final case class SessionService(loadSession: IO[Option[AppState]])
 /** Saves buffers and watches their files for changes made outside the editor.
   *
   * A capability record per #1017: a case class of functions rather than a trait, one of `StateManager`'s "record of
-  * records" slices from its original 18-trait facade -- `StateManager` holds one of these as a field instead of
-  * mixing this trait in directly.
+  * records" slices from its original 18-trait facade -- `StateManager` holds one of these as a field instead of mixing
+  * this trait in directly.
   */
 final case class FileService(
     saveBuffer: BufferId => IO[Unit],
