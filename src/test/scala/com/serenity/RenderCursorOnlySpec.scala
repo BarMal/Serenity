@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RendererEntryPoints
@@ -36,7 +37,7 @@ class RenderCursorOnlySpec extends AnyFlatSpec with Matchers:
     val sm      = makeStateManager()
     val surface = new MockRenderSurface(80, 24)
 
-    val bufferId = sm.bufferManager.createNewEmptyBuffer.unsafeRunSync()
+    val bufferId = sm.createNewEmptyBuffer.unsafeRunSync()
     val state    = sm.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     sm.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -54,7 +55,7 @@ class RenderCursorOnlySpec extends AnyFlatSpec with Matchers:
     val sm      = makeStateManager()
     val surface = new MockRenderSurface(80, 24)
 
-    val bufferId = sm.bufferManager.createBuffer("Hello, World!", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("Hello, World!", None).unsafeRunSync()
     val state    = sm.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     sm.setBufferForPane(paneId, bufferId).unsafeRunSync()

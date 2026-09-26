@@ -8,6 +8,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.{InterfaceDensity, StatusLineColors, StatusLinePlacement, StatusSegment}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -126,7 +127,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
 
       // Given: Buffer with content and cursor at specific position
-      bufferId     <- stateManager.bufferManager.createBuffer("Line 1\nLine 2\nLine 3", None)
+      bufferId     <- stateManager.createBuffer("Line 1\nLine 2\nLine 3", None)
       initialState <- stateManager.getCurrentState
       paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -153,7 +154,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
 
       // Given: Buffer with file path
-      bufferId     <- stateManager.bufferManager.createBuffer("File content", None)
+      bufferId     <- stateManager.createBuffer("File content", None)
       initialState <- stateManager.getCurrentState
       paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -187,7 +188,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
 
       // Given: State with line numbers enabled and some buffer content
-      bufferId <- stateManager.bufferManager.createBuffer("Line 1\nLine 2\nLine 3", None) // Small buffer for testing
+      bufferId     <- stateManager.createBuffer("Line 1\nLine 2\nLine 3", None) // Small buffer for testing
       initialState <- stateManager.getCurrentState
       stateWithLineNumbers = initialState.copy(
         persisted = initialState.persisted.copy(
@@ -236,7 +237,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
 
       // Given: Buffer with many lines
       lines = (1 to 50).map(i => s"Line $i").mkString("\n")
-      bufferId     <- stateManager.bufferManager.createBuffer(lines, None)
+      bufferId     <- stateManager.createBuffer(lines, None)
       initialState <- stateManager.getCurrentState
       paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -413,7 +414,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.apply(logger)
 
       // Given: Buffer with header and gutter enabled
-      bufferId     <- stateManager.bufferManager.createBuffer("Some content", None)
+      bufferId     <- stateManager.createBuffer("Some content", None)
       initialState <- stateManager.getCurrentState
       paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)

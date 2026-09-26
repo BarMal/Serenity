@@ -95,7 +95,6 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
         export operations.modelCommit.commitState)
       editor = new StateManagerEditorCapability(
         operations.modelCommit,
-        lspQueue,
         animations,
         operations,
         new Random(0L)

@@ -16,6 +16,9 @@
 # LspManagerReferenceRenameSupport.scala, rather than left inline; what's left in LspManager.scala is the same
 # per-RequestKind wiring every other kind already has here (RequestKind case, handleEffect dispatch case,
 # noServerEvent case), which isn't reasonably splittable without breaking that existing pattern.
+# paydown: GutterAndLineNumbersSpec.scala grew by another 1 line (636 -> 637) for the same reason as the #1692 entry
+# above -- its bufferManager.createBuffer call sites move onto StateManagerTestFacade's createBuffer extension
+# (#1724), needing the facade's import alongside the existing StateManager one.
 # paydown: StateManagerCapabilitySpec.scala grew by 1 line (636 -> 637) resolving this PR's merge conflict with
 # #1729's commandExecutor deletion -- both PRs edited the same capability-composition assertion, and the merged
 # version names every capability retired by #1724 (paneManager/panelManager and commandExecutor) in one comment
@@ -26,7 +29,7 @@ main/scala/com/serenity/rope/Rope.scala	file length	631
 main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	616
 main/scala/com/serenity/ui/renderer/Java2DPostProcessingEffects.scala	method applyGlow	90
 test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	639
-test/scala/com/serenity/GutterAndLineNumbersSpec.scala	file length	636
+test/scala/com/serenity/GutterAndLineNumbersSpec.scala	file length	637
 test/scala/com/serenity/LayoutEngineSpec.scala	file length	669
 test/scala/com/serenity/LineWrappingSpec.scala	file length	751
 test/scala/com/serenity/MarkdownDocumentPreviewSpec.scala	file length	745

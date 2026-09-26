@@ -22,15 +22,15 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
   it should "open multiple files in different tabs" in new MultiFileFixture:
     // Given: Create multiple buffers to simulate different "tabs"
     val buffer1 =
-      stateManager.bufferManager
+      stateManager
         .createBuffer("Content of file 1", Some(java.nio.file.Paths.get("file1.txt")))
         .unsafeRunSync()
     val buffer2 =
-      stateManager.bufferManager
+      stateManager
         .createBuffer("Content of file 2", Some(java.nio.file.Paths.get("file2.txt")))
         .unsafeRunSync()
     val buffer3 =
-      stateManager.bufferManager
+      stateManager
         .createBuffer("Content of file 3", Some(java.nio.file.Paths.get("file3.txt")))
         .unsafeRunSync()
 
@@ -53,8 +53,8 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
 
   it should "switch between tabs correctly" in new MultiFileFixture:
     // Given: Create multiple buffers and get the default pane
-    val buffer1 = stateManager.bufferManager.createBuffer("First buffer content", None).unsafeRunSync()
-    val buffer2 = stateManager.bufferManager.createBuffer("Second buffer content", None).unsafeRunSync()
+    val buffer1 = stateManager.createBuffer("First buffer content", None).unsafeRunSync()
+    val buffer2 = stateManager.createBuffer("Second buffer content", None).unsafeRunSync()
     val state   = stateManager.getCurrentState.unsafeRunSync()
     val paneId  = state.persisted.layout.editorPanes.keys.head
 
@@ -79,9 +79,9 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
 
   it should "close tabs without affecting other tabs" in new MultiFileFixture:
     // Given: Create multiple buffers
-    val buffer1      = stateManager.bufferManager.createBuffer("First buffer", None).unsafeRunSync()
-    val buffer2      = stateManager.bufferManager.createBuffer("Second buffer", None).unsafeRunSync()
-    val buffer3      = stateManager.bufferManager.createBuffer("Third buffer", None).unsafeRunSync()
+    val buffer1      = stateManager.createBuffer("First buffer", None).unsafeRunSync()
+    val buffer2      = stateManager.createBuffer("Second buffer", None).unsafeRunSync()
+    val buffer3      = stateManager.createBuffer("Third buffer", None).unsafeRunSync()
     val initialState = stateManager.getCurrentState.unsafeRunSync()
 
     // Verify all buffers exist
@@ -107,7 +107,7 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
 
     // Create buffer with file path and content, then modify it
     val bufferId =
-      stateManager.bufferManager
+      stateManager
         .createBuffer("Original content", Some(java.nio.file.Paths.get("/tmp/test.txt")))
         .unsafeRunSync()
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -135,19 +135,19 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
   it should "maintain tab order when adding and removing tabs" in new MultiFileFixture:
     // Given: Create multiple buffers in sequence
     val buffer1 =
-      stateManager.bufferManager
+      stateManager
         .createBuffer("First tab content", Some(java.nio.file.Paths.get("file1.txt")))
         .unsafeRunSync()
     val buffer2 =
-      stateManager.bufferManager
+      stateManager
         .createBuffer("Second tab content", Some(java.nio.file.Paths.get("file2.txt")))
         .unsafeRunSync()
     val buffer3 =
-      stateManager.bufferManager
+      stateManager
         .createBuffer("Third tab content", Some(java.nio.file.Paths.get("file3.txt")))
         .unsafeRunSync()
     val buffer4 =
-      stateManager.bufferManager
+      stateManager
         .createBuffer("Fourth tab content", Some(java.nio.file.Paths.get("file4.txt")))
         .unsafeRunSync()
 
@@ -217,7 +217,7 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
 
   it should "handle splitting panes for same file" in new MultiFileFixture:
     // Given: A buffer with content
-    val bufferId       = stateManager.bufferManager.createBuffer("Shared content between panes", None).unsafeRunSync()
+    val bufferId       = stateManager.createBuffer("Shared content between panes", None).unsafeRunSync()
     val state          = stateManager.getCurrentState.unsafeRunSync()
     val originalPaneId = state.persisted.layout.editorPanes.keys.head
 
@@ -295,13 +295,13 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
 
   it should "preserve tab state across sessions (simulated)" in new MultiFileFixture:
     // Given: Create buffers with file paths (simulating open files)
-    stateManager.bufferManager
+    stateManager
       .createBuffer("File 1 content", Some(java.nio.file.Paths.get("/tmp/file1.txt")))
       .unsafeRunSync()
-    stateManager.bufferManager
+    stateManager
       .createBuffer("File 2 content", Some(java.nio.file.Paths.get("/tmp/file2.txt")))
       .unsafeRunSync()
-    stateManager.bufferManager.createBuffer("Untitled buffer", None).unsafeRunSync()
+    stateManager.createBuffer("Untitled buffer", None).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
 

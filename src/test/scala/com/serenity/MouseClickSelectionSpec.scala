@@ -80,7 +80,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
 
   "MouseClick" should "create a selection while dragging inside an editor pane" in {
     val sm       = makeStateManager()
-    val bufferId = sm.bufferManager.createBuffer("alpha\nbravo\ncharlie", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("alpha\nbravo\ncharlie", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -111,7 +111,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
 
   it should "start a new drag selection from the latest press instead of reusing an old anchor" in {
     val sm       = makeStateManager()
-    val bufferId = sm.bufferManager.createBuffer("alpha\nbravo\ncharlie", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("alpha\nbravo\ncharlie", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -144,7 +144,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
 
   it should "select the clicked word on double click" in {
     val sm       = makeStateManager()
-    val bufferId = sm.bufferManager.createBuffer("alpha beta gamma", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("alpha beta gamma", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -174,7 +174,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
 
   it should "select the clicked word on double click without materialising the whole buffer" in {
     val sm       = makeStateManager()
-    val bufferId = sm.bufferManager.createBuffer("alpha beta gamma", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("alpha beta gamma", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -209,7 +209,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
 
   it should "select the clicked line on triple click" in {
     val sm       = makeStateManager()
-    val bufferId = sm.bufferManager.createBuffer("alpha\nbeta gamma\ncharlie", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("alpha\nbeta gamma\ncharlie", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -239,7 +239,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
 
   it should "extend the current selection from the existing anchor on shift-click" in {
     val sm       = makeStateManager()
-    val bufferId = sm.bufferManager.createBuffer("alpha\nbeta gamma\ncharlie", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("alpha\nbeta gamma\ncharlie", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -272,7 +272,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
 
   it should "preserve the original anchor while extending with shift-drag" in {
     val sm       = makeStateManager()
-    val bufferId = sm.bufferManager.createBuffer("alpha\nbeta gamma\ncharlie", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("alpha\nbeta gamma\ncharlie", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -306,7 +306,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
 
   it should "collapse multi-cursor state to the clicked cursor" in {
     val sm       = makeStateManager()
-    val bufferId = sm.bufferManager.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       state.copy(
@@ -343,7 +343,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
 
   it should "collapse multi-selection state to a single drag selection" in {
     val sm       = makeStateManager()
-    val bufferId = sm.bufferManager.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
     val first    = Selection(CursorPosition(0, 0), CursorPosition(0, 2))
     val second   = Selection(CursorPosition(2, 0), CursorPosition(2, 2))
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()

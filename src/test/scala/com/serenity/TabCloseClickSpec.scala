@@ -34,8 +34,8 @@ class TabCloseClickSpec extends AnyFlatSpec with Matchers:
 
   /** Two file-backed, unmodified tabs under `root`, with `first` shown in the active pane. */
   private def withTwoTabs(sm: StateManager, root: Path): (BufferId, BufferId) =
-    val first  = sm.bufferManager.createBuffer("first", Some(root.resolve("first.txt"))).unsafeRunSync()
-    val second = sm.bufferManager.createBuffer("second", Some(root.resolve("second.txt"))).unsafeRunSync()
+    val first  = sm.createBuffer("first", Some(root.resolve("first.txt"))).unsafeRunSync()
+    val second = sm.createBuffer("second", Some(root.resolve("second.txt"))).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), first).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
     (first, second)
@@ -172,8 +172,8 @@ class TabCloseClickSpec extends AnyFlatSpec with Matchers:
     val sm = makeStateManager()
     // A regular file where the tab's parent directory should be: the save cannot create the file under it.
     val blocker = Files.writeString(root.resolve("blocker"), "")
-    val first   = sm.bufferManager.createBuffer("first", Some(root.resolve("first.txt"))).unsafeRunSync()
-    val second  = sm.bufferManager.createBuffer("second", Some(blocker.resolve("second.txt"))).unsafeRunSync()
+    val first   = sm.createBuffer("first", Some(root.resolve("first.txt"))).unsafeRunSync()
+    val second  = sm.createBuffer("second", Some(blocker.resolve("second.txt"))).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), first).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
     markDirty(sm, second)

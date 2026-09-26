@@ -34,7 +34,7 @@ class CommentCursorLensSpec extends AnyFlatSpec with Matchers:
 
   /** Cursor starts at column 6 (just past "hello"), one step outside the comment's inclusive `[0, 5]` range. */
   private def withCommentedBuffer(sm: StateManager): BufferId =
-    val bufferId = sm.bufferManager.createBuffer("hello world", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("hello world", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       val buffer = state.persisted.buffers(bufferId)

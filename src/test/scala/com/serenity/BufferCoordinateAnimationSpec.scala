@@ -32,7 +32,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
     val program = for
       sm <- IO.pure(makeStateManager())
       _  <- sm.updateState(state => state.copy(persisted = state.persisted.copy(config = AppConfig.withTestAnimations)))
-      bufferId         <- sm.bufferManager.createBuffer("Hello", None)
+      bufferId         <- sm.createBuffer("Hello", None)
       state            <- sm.getCurrentState
       paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
@@ -52,7 +52,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
     val program = for
       sm <- IO.pure(makeStateManager())
       _  <- sm.updateState(state => state.copy(persisted = state.persisted.copy(config = AppConfig.withTestAnimations)))
-      bufferId              <- sm.bufferManager.createNewEmptyBuffer
+      bufferId              <- sm.createNewEmptyBuffer
       state                 <- sm.getCurrentState
       paneId                <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                     <- sm.setBufferForPane(paneId, bufferId)
@@ -74,7 +74,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
     val program = for
       sm <- IO.pure(makeStateManager())
       _  <- sm.updateState(state => state.copy(persisted = state.persisted.copy(config = AppConfig.withTestAnimations)))
-      bufferId         <- sm.bufferManager.createBuffer("line one\nline two", None)
+      bufferId         <- sm.createBuffer("line one\nline two", None)
       state            <- sm.getCurrentState
       paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
@@ -102,7 +102,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
           )
         )
       )
-      bufferId         <- sm.bufferManager.createBuffer("Hello", None)
+      bufferId         <- sm.createBuffer("Hello", None)
       state            <- sm.getCurrentState
       paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
@@ -137,7 +137,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
           )
         )
       )
-      bufferId         <- sm.bufferManager.createBuffer("Hello", None)
+      bufferId         <- sm.createBuffer("Hello", None)
       state            <- sm.getCurrentState
       paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
@@ -167,7 +167,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
           runtime = state.runtime.copy(clipboard = Some("ab"))
         )
       )
-      bufferId         <- sm.bufferManager.createBuffer("Hello", None)
+      bufferId         <- sm.createBuffer("Hello", None)
       state            <- sm.getCurrentState
       paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
@@ -197,7 +197,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
           runtime = state.runtime.copy(clipboard = Some("abc"))
         )
       )
-      bufferId         <- sm.bufferManager.createBuffer("Hello", None)
+      bufferId         <- sm.createBuffer("Hello", None)
       state            <- sm.getCurrentState
       paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
@@ -227,7 +227,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
           runtime = state.runtime.copy(clipboard = Some("abc\ndef"))
         )
       )
-      bufferId         <- sm.bufferManager.createBuffer("prefix\nsuffix", None)
+      bufferId         <- sm.createBuffer("prefix\nsuffix", None)
       state            <- sm.getCurrentState
       paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
@@ -265,7 +265,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
           runtime = state.runtime.copy(clipboard = Some("ab"))
         )
       )
-      bufferId         <- sm.bufferManager.createBuffer("Hello", None)
+      bufferId         <- sm.createBuffer("Hello", None)
       state            <- sm.getCurrentState
       paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
@@ -299,7 +299,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
           runtime = state.runtime.copy(clipboard = Some(largeText))
         )
       )
-      bufferId         <- sm.bufferManager.createBuffer("", None)
+      bufferId         <- sm.createBuffer("", None)
       state            <- sm.getCurrentState
       paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
@@ -321,7 +321,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
     val program = for
       sm <- IO.pure(makeStateManager())
       _  <- sm.updateState(state => state.copy(persisted = state.persisted.copy(config = AppConfig.withTestAnimations)))
-      bufferId         <- sm.bufferManager.createBuffer("line one\nline two", None)
+      bufferId         <- sm.createBuffer("line one\nline two", None)
       state            <- sm.getCurrentState
       paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)
@@ -349,7 +349,7 @@ class BufferCoordinateAnimationSpec extends AnyFlatSpec with Matchers:
     val program = for
       sm <- IO.pure(makeStateManager())
       _  <- sm.updateState(state => state.copy(persisted = state.persisted.copy(config = AppConfig.withTestAnimations)))
-      bufferId         <- sm.bufferManager.createBuffer("Hello", None)
+      bufferId         <- sm.createBuffer("Hello", None)
       state            <- sm.getCurrentState
       paneId           <- IO.pure(state.persisted.layout.editorPanes.keys.head)
       _                <- sm.setBufferForPane(paneId, bufferId)

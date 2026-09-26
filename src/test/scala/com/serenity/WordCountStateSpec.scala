@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
@@ -23,13 +24,13 @@ class WordCountStateSpec extends AnyFlatSpec with Matchers:
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
 
-      bufferId     <- stateManager.bufferManager.createBuffer("one two three", None)
+      bufferId     <- stateManager.createBuffer("one two three", None)
       initialState <- stateManager.getCurrentState
       paneId = initialState.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
 
       beforeEdit <- stateManager.getCurrentState
-      _          <- stateManager.bufferManager.updateBuffer(bufferId, "one two three four five")
+      _          <- stateManager.updateBuffer(bufferId, "one two three four five")
       afterEdit  <- stateManager.getCurrentState
     yield (beforeEdit, afterEdit)
 

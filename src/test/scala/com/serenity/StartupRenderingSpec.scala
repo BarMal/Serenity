@@ -10,6 +10,7 @@ import com.serenity.app.AppStartup
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.RendererEntryPoints
@@ -469,7 +470,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
-      bufferId     <- stateManager.bufferManager.createBuffer("Welcome to Serenity!", None)
+      bufferId     <- stateManager.createBuffer("Welcome to Serenity!", None)
       state        <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
       _          <- stateManager.setBufferForPane(paneId, bufferId)
@@ -489,7 +490,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
-      bufferId     <- stateManager.bufferManager.createBuffer("Hello", None)
+      bufferId     <- stateManager.createBuffer("Hello", None)
       state        <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
       _          <- stateManager.setBufferForPane(paneId, bufferId)
@@ -512,7 +513,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
-      bufferId     <- stateManager.bufferManager.createBuffer("", None)
+      bufferId     <- stateManager.createBuffer("", None)
       state        <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -535,7 +536,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
-      bufferId     <- stateManager.bufferManager.createBuffer("", None)
+      bufferId     <- stateManager.createBuffer("", None)
       state        <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -561,7 +562,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
-      bufferId     <- stateManager.bufferManager.createBuffer("", None)
+      bufferId     <- stateManager.createBuffer("", None)
       state        <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)

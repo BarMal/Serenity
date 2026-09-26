@@ -95,8 +95,8 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
 
   it should "not copy inactive buffers while advancing another buffer animation" in {
     val sm               = makeStateManager()
-    val inactiveBufferId = sm.bufferManager.createBuffer("inactive", None).unsafeRunSync()
-    val activeBufferId   = sm.bufferManager.createBuffer("active", None).unsafeRunSync()
+    val inactiveBufferId = sm.createBuffer("inactive", None).unsafeRunSync()
+    val activeBufferId   = sm.createBuffer("active", None).unsafeRunSync()
 
     val animated = sm
       .reseededWithBufferAnimations { _ =>
@@ -185,8 +185,8 @@ class StateManagerAnimationSpec extends AnyFlatSpec with Matchers:
     }.unsafeRunSync()
 
     val firstBufferId = sm.getCurrentState.unsafeRunSync().persisted.bufferOrder.head
-    sm.bufferManager.updateBuffer(firstBufferId, "First").unsafeRunSync()
-    val secondBufferId = sm.bufferManager.createBuffer("Second", None).unsafeRunSync()
+    sm.updateBuffer(firstBufferId, "First").unsafeRunSync()
+    val secondBufferId = sm.createBuffer("Second", None).unsafeRunSync()
 
     sm.applyEvent(NextTab).unsafeRunSync()
 

@@ -37,7 +37,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
       stateManager <- StateManager.apply(logger)
 
-      bufferId <- stateManager.bufferManager.createBuffer("", None)
+      bufferId <- stateManager.createBuffer("", None)
       state    <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
@@ -78,7 +78,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -132,7 +132,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -174,7 +174,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -223,7 +223,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -266,7 +266,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.bufferManager.createBuffer("test content", None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("test content", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -317,7 +317,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -372,7 +372,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
     val paneId   = stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
 
@@ -383,7 +383,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     // budget. A cursor this far into it used to fall outside the geometry the reducer navigates by, dropping Up/Down
     // to a naive char-grid step instead of the wrapped row the reader actually sees.
     val paragraph = "w" * (panelWidth * 60)
-    stateManager.bufferManager.updateBuffer(bufferId, paragraph).unsafeRunSync()
+    stateManager.updateBuffer(bufferId, paragraph).unsafeRunSync()
     val startColumn = panelWidth * 30
     stateManager
       .updateState { s =>
@@ -440,7 +440,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -517,7 +517,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -558,7 +558,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -633,7 +633,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
@@ -693,7 +693,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
 
-    val bufferId = stateManager.bufferManager.createBuffer("", None).unsafeRunSync()
+    val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val paneId   = state.persisted.layout.editorPanes.keys.head
     stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()

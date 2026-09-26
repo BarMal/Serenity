@@ -58,7 +58,7 @@ class PaneCloseUndoSpec extends AnyFlatSpec with Matchers:
     redone.persisted.layout shouldBe afterClose.persisted.layout
 
   it should "interleave correctly with a buffer-edit undo performed before the close" in new PaneFixture:
-    val bufferId = sm.bufferManager.createBuffer("hello", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("hello", None).unsafeRunSync()
     sm.setBufferForPane(pane0, bufferId).unsafeRunSync()
     sm.setCursorPosition(pane0, 0, 5).unsafeRunSync()
     sm.applyEvent(InsertChar('!')).unsafeRunSync()
@@ -78,7 +78,7 @@ class PaneCloseUndoSpec extends AnyFlatSpec with Matchers:
     sm.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.content.collect() shouldBe "hello"
 
   it should "undo detaching the last pane's buffer, when there is only one pane to close" in new PaneFixture:
-    val bufferId = sm.bufferManager.createBuffer("solo", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("solo", None).unsafeRunSync()
     sm.setBufferForPane(pane0, bufferId).unsafeRunSync()
 
     sm.applyEvent(ClosePane).unsafeRunSync()

@@ -100,7 +100,7 @@ class PanelPinUndoSpec extends AnyFlatSpec with Matchers:
     sm.getCurrentState.unsafeRunSync().pinnedSurfaces.map(_.content) shouldBe afterPin.pinnedSurfaces.map(_.content)
 
   it should "interleave correctly with a buffer-edit undo performed before the pin" in new PanelFixture:
-    val bufferId = sm.bufferManager.createBuffer("hello", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("hello", None).unsafeRunSync()
     val pane0    = sm.getCurrentState.unsafeRunSync().persisted.layout.activeEditorPaneId.get
     sm.setBufferForPane(pane0, bufferId).unsafeRunSync()
     sm.setCursorPosition(pane0, 0, 5).unsafeRunSync()

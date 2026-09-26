@@ -130,7 +130,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
   "A close-all workflow" should
     "not commit a pane referencing a buffer removed from under a still-queued close step" in {
       val stateManager   = createStateManager()
-      val secondBufferId = stateManager.bufferManager.createBuffer("second", None).unsafeRunSync()
+      val secondBufferId = stateManager.createBuffer("second", None).unsafeRunSync()
       val closeAllCommand = CommandRegistry.default
         .findCommand("close-all")
         .getOrElse(fail("\"close-all\" command not registered in CommandRegistry.default"))
@@ -251,20 +251,26 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
     after.persisted.layout.workspaceTree shouldBe before.persisted.layout.workspaceTree
   }
 
-  /** Audit of #1183/#1499: `createBuffer`, `createNewEmptyBuffer`, `updateBuffer`, `createPane` and `switchToPane`
-    * (`StateManagerEditorCapability.scala`) still commit via bare `stateRef.modify`/`stateRef.update`, bypassing
-    * `validateAndUpdateState` entirely -- unlike the close-workflow family and the viewport/panel call sites above,
-    * which #1183/#1499 already routed through it. `StateManagerEventPipeline`'s dismiss-last-pane branch
-    * (`createBuffer("")` then `createPane(Some(bufferId))`) calls straight through this unchecked path, so it's
-    * reachable from the same "some earlier unchecked mutation left the state mid-drift" scenarios the specs above
-    * already exercise.
+  /** Audit of #1183/#1499: `createPane` and `switchToPane` (`StateManagerEditorCapability.scala`) still commit via bare
+    * `stateRef.modify`/`stateRef.update`, bypassing `validateAndUpdateState` entirely -- unlike the close-workflow
+    * family and the viewport/panel call sites above, which #1183/#1499 already routed through it.
+    * `StateManagerEventPipeline`'s dismiss-last-pane branch (`EditorTransitions.bufferCreated("")` then
+    * `createPane(Some(bufferId))`) calls straight through this unchecked path, so it's reachable from the same "some
+    * earlier unchecked mutation left the state mid-drift" scenarios the specs above already exercise.
+    *
+    * `createBuffer`/`createNewEmptyBuffer`/`updateBuffer` below are `StateManagerTestFacade` methods (#1724) built on
+    * the validated `updateStateValidated` seam (not the facade's own raising `updateState`, since a drifted
+    * `nextBufferId` produces exactly the invalid states these specs feed it), so they no longer bypass validation
+    * themselves -- these specs now pin `EditorTransitions.bufferCreated`'s own drift-safe id-advancement (a duplicate
+    * `bufferOrder` entry fails validation and is silently rejected, keeping the pre-call state, rather than a
+    * validation-bypassing commit path landing corrupted state).
     */
-  "StateManager.bufferManager.createBuffer" should
+  "StateManager.createBuffer" should
     "not commit a duplicate buffer-order entry when nextBufferId has drifted" in {
       val stateManager = stateManagerWithDriftedNextBufferId()
 
       val before = stateManager.getCurrentState.unsafeRunSync()
-      stateManager.bufferManager.createBuffer("fresh content", None).unsafeRunSync()
+      stateManager.createBuffer("fresh content", None).unsafeRunSync()
       val after = stateManager.getCurrentState.unsafeRunSync()
 
       after.isValid shouldBe true
@@ -275,12 +281,12 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
         .filePath
     }
 
-  "StateManager.bufferManager.createNewEmptyBuffer" should
+  "StateManager.createNewEmptyBuffer" should
     "not commit a duplicate buffer-order entry when nextBufferId has drifted" in {
       val stateManager = stateManagerWithDriftedNextBufferId()
 
       val before = stateManager.getCurrentState.unsafeRunSync()
-      stateManager.bufferManager.createNewEmptyBuffer.unsafeRunSync()
+      stateManager.createNewEmptyBuffer.unsafeRunSync()
       val after = stateManager.getCurrentState.unsafeRunSync()
 
       after.isValid shouldBe true
@@ -295,10 +301,10 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
     * line count, so a cursor left on a now-removed line survives the edit as an out-of-bounds position -- the exact
     * invariant `AppStateValidation.documentPositionErrors` exists to catch.
     */
-  "StateManager.bufferManager.updateBuffer" should
+  "StateManager.updateBuffer" should
     "not commit a cursor left out-of-bounds by content that shrank under it" in {
       val stateManager = createStateManager()
-      val bufferId     = stateManager.bufferManager.createBuffer("line one\nline two", None).unsafeRunSync()
+      val bufferId     = stateManager.createBuffer("line one\nline two", None).unsafeRunSync()
       stateManager
         .updateState { state =>
           val buffer = state.persisted.buffers(bufferId)
@@ -314,7 +320,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
         .unsafeRunSync()
       val before = stateManager.getCurrentState.unsafeRunSync()
 
-      stateManager.bufferManager.updateBuffer(bufferId, "only one line").unsafeRunSync()
+      stateManager.updateBuffer(bufferId, "only one line").unsafeRunSync()
       val after = stateManager.getCurrentState.unsafeRunSync()
 
       after.isValid shouldBe true
@@ -351,7 +357,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
   "StateManager.switchToPane" should
     "not move focus onto a pane that has drifted out of the workspace tree" in {
       val validStateManager = createStateManager()
-      val secondBuffer      = validStateManager.bufferManager.createBuffer("second", None).unsafeRunSync()
+      val secondBuffer      = validStateManager.createBuffer("second", None).unsafeRunSync()
       val secondPane        = validStateManager.createPane(Some(secondBuffer)).unsafeRunSync()
       validStateManager.switchToPane(PaneId(0)).unsafeRunSync()
 
@@ -444,7 +450,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
 
   it should "move focus onto a pane that does exist" in {
     val stateManager = createStateManager()
-    val secondBuffer = stateManager.bufferManager.createBuffer("second", None).unsafeRunSync()
+    val secondBuffer = stateManager.createBuffer("second", None).unsafeRunSync()
     val secondPane   = stateManager.createPane(Some(secondBuffer)).unsafeRunSync()
 
     stateManager.switchToPane(secondPane).unsafeRunSync()

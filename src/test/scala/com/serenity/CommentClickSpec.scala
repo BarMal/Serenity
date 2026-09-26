@@ -35,7 +35,7 @@ class CommentClickSpec extends AnyFlatSpec with Matchers:
   // the cursor for every state transition (not only a click), so a buffer set up with its cursor already inside the
   // comment would open the lens as a side effect of this fixture's own `ResizeEvent`, before a test's click runs.
   private def withCommentedBuffer(sm: StateManager): BufferId =
-    val bufferId = sm.bufferManager.createBuffer("hello world", None).unsafeRunSync()
+    val bufferId = sm.createBuffer("hello world", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
       val buffer = state.persisted.buffers(bufferId)

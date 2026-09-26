@@ -21,6 +21,10 @@ class StateManagerProductionFacadeSpec extends AnyFlatSpec with Matchers:
     typeChecks("(sm: StateManager) => sm.fileService.markBufferSaved") shouldBe false
     typeChecks("(sm: StateManager) => sm.fileService.checkUnsavedChanges") shouldBe false
     typeChecks("(sm: StateManager) => sm.fileService.getRecentFiles") shouldBe false
+    typeChecks("(sm: StateManager) => sm.bufferManager") shouldBe false
+    typeChecks("(sm: StateManager) => sm.createBuffer") shouldBe false
+    typeChecks("(sm: StateManager) => sm.createNewEmptyBuffer") shouldBe false
+    typeChecks("(sm: StateManager) => sm.updateBuffer") shouldBe false
     // #1724: `commandExecutor` is gone outright, not merely reachable-only-via-the-facade -- running an arbitrary
     // `Command` needs the composition's `interpretCommand` wiring, so its replacement (`StateManagerTestFacade`'s
     // `executeCommand`) reaches a `private[manager]` trait member instead of reimplementing the effect here.

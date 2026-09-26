@@ -9,6 +9,7 @@ import com.serenity.app.AppStartup
 import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
@@ -93,14 +94,14 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
     val bufferId     = BufferId(0)
     val viewportSize = ViewportSize(120, 40)
 
-    stateManager.bufferManager.updateBuffer(bufferId, "saved session").unsafeRunSync()
+    stateManager.updateBuffer(bufferId, "saved session").unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId).document.isNewEmpty shouldBe false
 
     executeCommandThroughRunner(stateManager, "save-session", "save-session")
     stateManager.sessionStartupInfo.sessionExists.unsafeRunSync() shouldBe true
 
     stateManager.applyEvent(ResizeEvent(viewportSize)).unsafeRunSync()
-    stateManager.bufferManager.updateBuffer(bufferId, "changed session").unsafeRunSync()
+    stateManager.updateBuffer(bufferId, "changed session").unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "restore-session", "restore-session")
     val restoredState = stateManager.getCurrentState.unsafeRunSync()
@@ -116,7 +117,7 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager(Some(sessionRoot))
     val bufferId     = BufferId(0)
 
-    stateManager.bufferManager.updateBuffer(bufferId, "feature work").unsafeRunSync()
+    stateManager.updateBuffer(bufferId, "feature work").unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "save-session-as", "save-session-as")
     typeText(stateManager, "Feature Branch")
@@ -131,17 +132,17 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
     val stateManager = createStateManager(Some(sessionRoot))
     val bufferId     = BufferId(0)
 
-    stateManager.bufferManager.updateBuffer(bufferId, "first content").unsafeRunSync()
+    stateManager.updateBuffer(bufferId, "first content").unsafeRunSync()
     executeCommandThroughRunner(stateManager, "save-session-as", "save-session-as")
     typeText(stateManager, "First")
     (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
-    stateManager.bufferManager.updateBuffer(bufferId, "second content").unsafeRunSync()
+    stateManager.updateBuffer(bufferId, "second content").unsafeRunSync()
     executeCommandThroughRunner(stateManager, "save-session-as", "save-session-as")
     typeText(stateManager, "Second")
     (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
-    stateManager.bufferManager.updateBuffer(bufferId, "unsaved current content").unsafeRunSync()
+    stateManager.updateBuffer(bufferId, "unsaved current content").unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "open-session", "open-session")
     // "First" was saved (and so listed) before "Second"; move the selection down once to reach it.
@@ -159,7 +160,7 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
     val bufferId     = BufferId(0)
     val originalName = "Old"
 
-    stateManager.bufferManager.updateBuffer(bufferId, "rename target content").unsafeRunSync()
+    stateManager.updateBuffer(bufferId, "rename target content").unsafeRunSync()
     executeCommandThroughRunner(stateManager, "save-session-as", "save-session-as")
     typeText(stateManager, originalName)
     (stateManager.applyEvent(Enter) >> stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
@@ -185,7 +186,7 @@ class CommandRunnerSessionCommandsSpec extends AnyFlatSpec with Matchers:
     val startupViewport = ViewportSize(120, 40)
     val savedViewport   = ViewportSize(80, 24)
 
-    savedManager.bufferManager.updateBuffer(bufferId, "startup session").unsafeRunSync()
+    savedManager.updateBuffer(bufferId, "startup session").unsafeRunSync()
     executeCommandThroughRunner(savedManager, "save-session", "save-session")
     AppStartup
       .initializeState(restored, restored.sessionStartupInfo, Theme.default, startupViewport)

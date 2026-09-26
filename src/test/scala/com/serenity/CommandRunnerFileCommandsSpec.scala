@@ -216,7 +216,7 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
     val targetPath   = Files.createTempDirectory("serenity-unsaved-save").resolve("draft.txt")
     val stateManager = createStateManager(fileDialog = Some(testFileDialog(saveSelection = Some(targetPath))))
 
-    stateManager.bufferManager.updateBuffer(BufferId(0), "draft body").unsafeRunSync()
+    stateManager.updateBuffer(BufferId(0), "draft body").unsafeRunSync()
 
     executeCommandThroughRunner(stateManager, "save", "save")
 
@@ -290,7 +290,7 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "open an unsaved-changes workflow for the close-all command when any affected buffer is dirty" in {
     val stateManager  = createStateManager()
-    val dirtyBufferId = stateManager.bufferManager.createBuffer("dirty buffer", None).unsafeRunSync()
+    val dirtyBufferId = stateManager.createBuffer("dirty buffer", None).unsafeRunSync()
 
     stateManager
       .updateState { state =>
@@ -318,7 +318,7 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "open an unsaved-changes workflow for the close-others command when any other buffer is dirty" in {
     val stateManager  = createStateManager()
-    val dirtyBufferId = stateManager.bufferManager.createBuffer("dirty buffer", None).unsafeRunSync()
+    val dirtyBufferId = stateManager.createBuffer("dirty buffer", None).unsafeRunSync()
 
     stateManager
       .updateState { state =>

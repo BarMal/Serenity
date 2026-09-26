@@ -7,6 +7,7 @@ import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -205,7 +206,7 @@ class InputCharacterTestSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
 
     def setupBuffer(content: String): BufferId =
-      val bufferId = stateManager.bufferManager.createBuffer(content, None).unsafeRunSync()
+      val bufferId = stateManager.createBuffer(content, None).unsafeRunSync()
       val state    = stateManager.getCurrentState.unsafeRunSync()
       val paneId   = state.persisted.layout.editorPanes.keys.head
       stateManager.setBufferForPane(paneId, bufferId).unsafeRunSync()
