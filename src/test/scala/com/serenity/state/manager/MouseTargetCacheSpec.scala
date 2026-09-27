@@ -4,6 +4,7 @@ import java.awt.Font
 
 import com.serenity.command.{Command, CommandPaletteState, CommandRegistry, CommandRunner, CommandRunnerSurface}
 import com.serenity.config.{AppConfig, InterfaceDensity, TextAreaInsets}
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -156,7 +157,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     // hit-testing built this snapshot from AWT font-pixel metrics regardless of TUI mode, disagreeing with what the
     // terminal itself actually wrapped and drew.
     val state = stateWith(Buffer.fromString(bufferId, "i" * 200))
-      .copy(runtime = AppState.initial.runtime.copy(isTuiMode = true))
+      .copy(runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui()))
     val size        = ViewportSize(80, 24)
     val cache       = MouseTargetCache.fromState(state, size)
     val snapshot    = cache.scene.textSnapshot(paneId).getOrElse(fail("expected prepared text snapshot"))

@@ -1,6 +1,7 @@
 package com.serenity.command
 
 import com.serenity.config.{AppMode, StatusSegment}
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.UiPreset
 
@@ -13,16 +14,17 @@ import com.serenity.ui.presets.UiPreset
   */
 object CommandRunnerSettingsGroups:
 
-  /** `isTuiMode` hides no controls -- every setting still applies its intent identically in TUI mode, so hiding one
-    * would make it impossible to prepare a config while running headless. Instead the groups epic #1103 called out as
-    * inert in cell space (post-processing effects, typography) get their hint annotated to say so.
+  /** `capabilities` hides no controls -- every setting still applies its intent identically regardless of frontend, so
+    * hiding one would make it impossible to prepare a config while running headless. Instead the groups epic #1103
+    * called out as inert in cell space (post-processing effects, typography) get their hint annotated to say so, per
+    * [[FrontendCapabilities.postProcessing]]/[[FrontendCapabilities.typography]].
     */
   def build(
     optionSelections: Map[String, Int],
     inputItems: List[CommandSurfaceItem.InputItem],
     uiPresetPreviews: List[UiPreset.Preview],
     editingPresetName: Option[String],
-    isTuiMode: Boolean = false,
+    capabilities: FrontendCapabilities = FrontendCapabilities.gui,
     // Defaults to whatever's actually installed on the running machine; tests that search this tree pass a
     // deterministic catalog instead so the result doesn't depend on the host's installed fonts (issue: Windows
     // Desktop Publish release-blocker -- a Windows-only font whose family name happened to contain a search term
@@ -95,7 +97,7 @@ object CommandRunnerSettingsGroups:
     // issue #1057: the one-shot navigation commands that used to sit here are ordinary palette commands. The one item
     // that stays is authoring a document comment's text, a real input rather than an action.
     val commentsGroup = group("settings-navigation", "Comments", "Author a document comment", input("document-comment"))
-    val fontHint      = inertInTuiHint("Family, size, ligatures", isTuiMode)
+    val fontHint      = inertInTuiHint("Family, size, ligatures", inert = !capabilities.typography)
     val proseFontGroup = group(
       "settings-prose-font",
       "Prose Font",
@@ -145,7 +147,10 @@ object CommandRunnerSettingsGroups:
       List(
         CommandRunnerSettingsAppearanceItems.backgroundStyleOptionItem(optionSelections),
         CommandRunnerSettingsAppearanceItems.materialPresetOptionItem(optionSelections),
-        annotateInertInTui(CommandRunnerSettingsAppearanceItems.postProcessingOptionItem(optionSelections), isTuiMode),
+        annotateInertInTui(
+          CommandRunnerSettingsAppearanceItems.postProcessingOptionItem(optionSelections),
+          inert = !capabilities.postProcessing
+        ),
         CommandRunnerSettingsAppearanceItems.uiShadowsOptionItem(optionSelections)
       )
     )
@@ -274,7 +279,7 @@ object CommandRunnerSettingsGroups:
     val typographyGroup = group(
       "settings-typography",
       "Typography",
-      inertInTuiHint("Typefaces for prose, code, and interface", isTuiMode),
+      inertInTuiHint("Typefaces for prose, code, and interface", inert = !capabilities.typography),
       List(
         Option.when(showProseSettings)(proseFontGroup),
         Option.when(showCodeSettings)(codeFontGroup),
@@ -305,11 +310,11 @@ object CommandRunnerSettingsGroups:
     * and elides from the right (`TextOverlayRenderer.fitCellText`): appended to a hint as long as Post-processing's,
     * the annotation was cut off before it could ever be read, at any terminal width.
     */
-  private def inertInTuiHint(hint: String, isTuiMode: Boolean): String =
-    if isTuiMode then s"Inert in TUI mode -- $hint" else hint
+  private def inertInTuiHint(hint: String, inert: Boolean): String =
+    if inert then s"Inert in TUI mode -- $hint" else hint
 
   private def annotateInertInTui(
     item: CommandSurfaceItem.OptionItem,
-    isTuiMode: Boolean
+    inert: Boolean
   ): CommandSurfaceItem.OptionItem =
-    item.copy(hint = Some(inertInTuiHint(item.hint.getOrElse(item.label), isTuiMode)))
+    item.copy(hint = Some(inertInTuiHint(item.hint.getOrElse(item.label), inert)))

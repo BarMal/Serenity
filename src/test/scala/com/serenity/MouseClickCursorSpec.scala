@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.TextAreaInsets
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
@@ -300,7 +301,8 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     val bufferId = sm.createBuffer("placeholder", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
-    sm.updateState(state => state.copy(runtime = state.runtime.copy(isTuiMode = true))).unsafeRunSync()
+    sm.updateState(state => state.copy(runtime = state.runtime.copy(capabilities = FrontendCapabilities.tui())))
+      .unsafeRunSync()
 
     val state       = sm.getCurrentState.unsafeRunSync()
     val layout      = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))

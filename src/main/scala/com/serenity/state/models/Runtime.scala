@@ -2,7 +2,7 @@ package com.serenity.state.models
 
 import com.serenity.animation.sprite.CompanionSpriteState
 import com.serenity.config.{AppConfig, MotionFamily}
-import com.serenity.keystroke.KeyboardFidelityTier
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.ui.layout.ViewportSize
 
 /** State that is never persisted -- reset to defaults (or recomputed) on every session restore. */
@@ -36,19 +36,17 @@ final case class Runtime(
     // from the same `SystemEventReducer` LSP handling and read back together by `AppState.annotationIndex`/
     // `semanticTokensAvailability`.
     languageService: LanguageServiceState = LanguageServiceState(),
-    // Never persisted -- set once at startup from the launch mode (see AppRuntime.run/AppStartup.initializeState) so
-    // settings-surface rendering can hide or annotate controls that are inert in cell space (post-processing effects,
-    // typography) without threading AppConfig itself into the command runner.
-    isTuiMode: Boolean = false,
+    // Never persisted -- set once at startup from the selected `Frontend` (see AppRuntime.run/AppStartup.initializeState,
+    // issue #1669) so settings-surface rendering can hide or annotate controls that are inert in cell space
+    // (post-processing effects, typography), geometry can be measured on the right grid, and
+    // `CommandRunnerReducer.assignRecordedBinding` can warn when a just-recorded bare-modifier chord can't fire at the
+    // negotiated keyboard tier (issue #1194) -- all without threading a `Frontend` instance itself, or `AppConfig`,
+    // into the pure core.
+    capabilities: FrontendCapabilities = FrontendCapabilities.gui,
     // The buffer whose Markdown preview is showing in the TUI's spawned Swing window (issue #1113), or `None` when
     // that window is closed. Unused in GUI mode, where the in-app pinned panel (`PanelKind.MarkdownPreview`) is the
     // preview surface instead.
     markdownPreviewWindowBuffer: Option[BufferId] = None,
-    // Never persisted -- set once at startup, mirroring `isTuiMode` above: `Full` in GUI mode (no protocol negotiation
-    // happens there) and from `TerminalShell.keyboardProtocolTier` in TUI mode (see `TuiRuntime.run`). Consumed by
-    // `CommandRunnerReducer.assignRecordedBinding` to warn when a just-recorded bare-modifier chord can't fire at the
-    // negotiated tier (issue #1194).
-    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full,
     // Pointer/gesture state (issue #1693): the editor position under the mouse, the in-progress tab-drag gesture, and
     // the experimental cursor-peek prototype's timing/anchor fields are grouped into their own sub-record since
     // `TabDragSession`'s doc comment already named all five as "every other transient mouse-interaction state" before

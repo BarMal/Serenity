@@ -92,30 +92,30 @@ final case class AppState(
   def isValid: Boolean                   = AppStateValidation.validationErrors(this).isEmpty
 
   /** `InterfaceConfig.elementGap`, resolved for this state's surface. `AppConfig` alone can't make this call --
-    * `runtime.isTuiMode` lives only here -- and it must not: the config is shared and persisted across both surfaces,
-    * so baking either one's default into it would be wrong. Unset (`None`) defaults to a GUI cell of breathing room
-    * (flush-to-edge content there reads as unfinished), scaled by [[SpacingScale.densityMultiplier]] the same way every
-    * pixel-resolved piece of UI chrome already varies with `interfaceDensity` (issue #1542 re-scope) -- `ceil`ed rather
-    * than rounded so `Compact`/`Comfortable` keep the existing one-cell floor instead of a gap that visually merges
-    * into its neighbour, while `Spacious` visibly grows past it. TUI's existing density is left alone (a cell there is
-    * a whole column out of a typical 80). An explicit value is honoured on both surfaces, unscaled -- a user who set a
-    * cell count meant exactly that count, not that count re-interpreted per density.
+    * `runtime.capabilities` lives only here -- and it must not: the config is shared and persisted across both
+    * surfaces, so baking either one's default into it would be wrong. Unset (`None`) defaults to a GUI cell of
+    * breathing room (flush-to-edge content there reads as unfinished), scaled by [[SpacingScale.densityMultiplier]] the
+    * same way every pixel-resolved piece of UI chrome already varies with `interfaceDensity` (issue #1542 re-scope) --
+    * `ceil`ed rather than rounded so `Compact`/`Comfortable` keep the existing one-cell floor instead of a gap that
+    * visually merges into its neighbour, while `Spacious` visibly grows past it. TUI's existing density is left alone
+    * (a cell there is a whole column out of a typical 80). An explicit value is honoured on both surfaces, unscaled --
+    * a user who set a cell count meant exactly that count, not that count re-interpreted per density.
     */
   def effectiveUiElementGap: Double =
     persisted.config.uiElementGap.getOrElse(
-      if runtime.isTuiMode then 0.0 else effectiveUiElementGapDefaultCells
+      if runtime.capabilities.isCellGrid then 0.0 else effectiveUiElementGapDefaultCells
     )
 
   /** [[LineNumberLayout.marginLeft]], resolved the same way as [[effectiveUiElementGap]]. */
   def effectiveLineNumberMarginLeft: Int =
     persisted.config.surfaceConfig.lineNumberLayout.marginLeft.getOrElse(
-      if runtime.isTuiMode then 0 else effectiveUiElementGapDefaultCells.toInt
+      if runtime.capabilities.isCellGrid then 0 else effectiveUiElementGapDefaultCells.toInt
     )
 
   /** [[LineNumberLayout.padding]], resolved the same way as [[effectiveUiElementGap]]. */
   def effectiveLineNumberPadding: Int =
     persisted.config.surfaceConfig.lineNumberLayout.padding.getOrElse(
-      if runtime.isTuiMode then 0 else effectiveUiElementGapDefaultCells.toInt
+      if runtime.capabilities.isCellGrid then 0 else effectiveUiElementGapDefaultCells.toInt
     )
 
   /** The GUI's density-scaled default cell count shared by [[effectiveUiElementGap]], [[effectiveLineNumberMarginLeft]]
@@ -138,7 +138,7 @@ final case class AppState(
   def effectiveCommandRunnerCursorGapRows: Double =
     persisted.config.surfaceConfig.commandRunnerCursorGapRows.getOrElse(
       persisted.config.uiElementGap.filter(_ > 0.0).getOrElse {
-        if runtime.isTuiMode then 0.0
+        if runtime.capabilities.isCellGrid then 0.0
         else InterfaceDensityMetrics.forDensity(persisted.config.interfaceDensity).overlayGapRows.toDouble
       }
     )

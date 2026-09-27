@@ -139,8 +139,7 @@ final private[manager] class StateManagerWorkflowCapability(
         ),
         viewportSize = committed.runtime.viewportSize,
         nextSurfaceId = SurfaceIdSupply(1),
-        isTuiMode = committed.runtime.isTuiMode,
-        keyboardFidelityTier = committed.runtime.keyboardFidelityTier
+        capabilities = committed.runtime.capabilities
       )
     )
 

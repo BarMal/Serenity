@@ -3,6 +3,7 @@ package com.serenity.command
 import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.frontend.FrontendCapabilities
 
 /** Builds the flat list of command-runner settings input items from the current config.
   *
@@ -53,7 +54,7 @@ object CommandRunnerSettingsInputItems:
       companionSpriteConfig: CompanionSpriteConfig
   )
 
-  private def derivedValues(config: AppConfig, isTuiMode: Boolean): DerivedValues =
+  private def derivedValues(config: AppConfig, capabilities: FrontendCapabilities): DerivedValues =
     val editorConfig        = config.editorConfig
     val surfaceConfig       = config.surfaceConfig
     val interfaceConfig     = config.interfaceConfig
@@ -79,19 +80,24 @@ object CommandRunnerSettingsInputItems:
       // Unset resolves to the same surface-specific number `AppState.effectiveUiElementGap` and its
       // `effectiveLineNumberMarginLeft`/`effectiveLineNumberPadding` siblings would show -- a GUI cell of breathing
       // room, or the TUI's existing zero -- rather than the literal string "auto" (issue #1621 carve-out).
-      elementGapValue = interfaceConfig.elementGap.fold(formatDecimal(if isTuiMode then 0.0 else 1.0))(formatDecimal),
+      elementGapValue =
+        interfaceConfig.elementGap.fold(formatDecimal(if capabilities.isCellGrid then 0.0 else 1.0))(formatDecimal),
       cornerRadiusValue = interfaceConfig.cornerRadiusPx.toString,
       outlineThicknessValue = interfaceConfig.outlineThicknessPx.toString,
       lineNumberMarginLeftValue =
-        surfaceConfig.lineNumberLayout.marginLeft.fold(if isTuiMode then "0" else "1")(_.toString),
+        surfaceConfig.lineNumberLayout.marginLeft.fold(if capabilities.isCellGrid then "0" else "1")(_.toString),
       lineNumberMarginRightValue = surfaceConfig.lineNumberLayout.marginRight.toString,
-      lineNumberPaddingValue = surfaceConfig.lineNumberLayout.padding.fold(if isTuiMode then "0" else "1")(_.toString),
+      lineNumberPaddingValue =
+        surfaceConfig.lineNumberLayout.padding.fold(if capabilities.isCellGrid then "0" else "1")(_.toString),
       spellCheck = languageToolsConfig.spellCheck.normalized,
       companionSpriteConfig = config.companionSpriteConfig
     )
 
-  def build(config: AppConfig, isTuiMode: Boolean = false): List[CommandSurfaceItem.InputItem] =
-    val v = derivedValues(config, isTuiMode)
+  def build(
+    config: AppConfig,
+    capabilities: FrontendCapabilities = FrontendCapabilities.gui
+  ): List[CommandSurfaceItem.InputItem] =
+    val v = derivedValues(config, capabilities)
 
     val commentItems = List(
       CommandSurfaceItem.InputItem(

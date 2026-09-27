@@ -9,6 +9,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.CursorMode
+import com.serenity.frontend.GuiFrontend
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId, Damage}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -127,7 +128,8 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
           _: Damage,
           _: Map[BufferId, com.serenity.animation.AnimationState]
         ) => renderCalls.update(_ + 1),
-        requestFastRender = IO.unit
+        requestFastRender = IO.unit,
+        cursorIdleInterval = GuiFrontend.cursorIdleInterval
       )
       calls <- renderCalls.get
     yield calls shouldBe 0
@@ -158,7 +160,8 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
           _: Damage,
           _: Map[BufferId, com.serenity.animation.AnimationState]
         ) => IO.unit,
-        requestFastRender = IO.unit
+        requestFastRender = IO.unit,
+        cursorIdleInterval = GuiFrontend.cursorIdleInterval
       )
       remaining <- pendingPaintDamage.get
     yield remaining shouldBe damage
@@ -189,7 +192,8 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
           _: Damage,
           _: Map[BufferId, com.serenity.animation.AnimationState]
         ) => rendered.update(_ :+ (visible -> cursor)),
-        requestFastRender = IO.unit
+        requestFastRender = IO.unit,
+        cursorIdleInterval = GuiFrontend.cursorIdleInterval
       )
       frames <- rendered.get
     yield frames shouldBe Vector(false -> None)

@@ -439,7 +439,7 @@ private[serenity] object AuthoritativeUiScene:
       viewportSize,
       FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code),
       FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose),
-      cellMetrics = Option.when(state.runtime.isTuiMode)(CellMetrics.cellUnit)
+      cellMetrics = Option.when(state.runtime.capabilities.isCellGrid)(CellMetrics.cellUnit)
     )
 
 final private[manager] case class MouseTargetCache(

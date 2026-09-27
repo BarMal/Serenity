@@ -77,7 +77,7 @@ object RendererPaneContent:
                 state.persisted.config,
                 context,
                 placement.snapshot,
-                state.runtime.isTuiMode
+                state.runtime.capabilities.pixelMotion
               )
             }.toList
           else
@@ -91,7 +91,7 @@ object RendererPaneContent:
                   state.persisted.config,
                   context,
                   snapshot,
-                  state.runtime.isTuiMode
+                  state.runtime.capabilities.pixelMotion
                 )
               )
               .getOrElse(Nil)
@@ -194,7 +194,7 @@ object RendererPaneContent:
             state.persisted.config,
             cursorContext,
             placement.snapshot,
-            state.runtime.isTuiMode
+            state.runtime.capabilities.pixelMotion
           )
         }
       case (Some(buf), Some(snap)) =>
@@ -216,7 +216,7 @@ object RendererPaneContent:
             state.persisted.config,
             cursorContext,
             snap,
-            state.runtime.isTuiMode
+            state.runtime.capabilities.pixelMotion
           )
       case _ => ()
 

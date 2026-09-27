@@ -4,7 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.IO
 import com.serenity.config.AppConfig
-import com.serenity.keystroke.KeyboardFidelityTier
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.state.manager.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.ViewportSize
@@ -31,8 +31,7 @@ object AppStartup:
     theme: Theme,
     initialViewportSize: ViewportSize,
     appConfig: AppConfig = AppConfig.default,
-    isTuiMode: Boolean = false,
-    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full,
+    capabilities: FrontendCapabilities = FrontendCapabilities.gui,
     configNotice: Option[String] = None
   ): IO[AppState] =
     for
@@ -62,8 +61,7 @@ object AppStartup:
           ),
           viewportSize = Some(initialViewportSize),
           nextSurfaceId = SurfaceIdSupply(1),
-          isTuiMode = isTuiMode,
-          keyboardFidelityTier = keyboardFidelityTier
+          capabilities = capabilities
         )
       )
 
@@ -84,8 +82,7 @@ object AppStartup:
     initialViewportSize: ViewportSize,
     appConfig: AppConfig = AppConfig.default,
     openPath: Option[Path] = None,
-    isTuiMode: Boolean = false,
-    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full,
+    capabilities: FrontendCapabilities = FrontendCapabilities.gui,
     configNotice: Option[String] = None
   ): IO[AppState] =
     openPath match
@@ -102,8 +99,7 @@ object AppStartup:
               runtime = base.runtime.copy(
                 uiSurfaces = Nil,
                 viewportSize = Some(initialViewportSize),
-                isTuiMode = isTuiMode,
-                keyboardFidelityTier = keyboardFidelityTier
+                capabilities = capabilities
               )
             )
           }
@@ -133,8 +129,7 @@ object AppStartup:
             theme,
             initialViewportSize,
             appConfig,
-            isTuiMode,
-            keyboardFidelityTier,
+            capabilities,
             configNotice
           )
           _     <- stateManager.updateStateValidated(_ => startState)

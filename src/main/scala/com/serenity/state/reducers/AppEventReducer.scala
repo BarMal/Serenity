@@ -107,8 +107,7 @@ object AppEventReducer:
     val activatedRunner = CommandRunner.empty.activate(
       registry,
       state.persisted.config,
-      state.runtime.isTuiMode,
-      state.runtime.keyboardFidelityTier,
+      state.runtime.capabilities,
       state.commandRunnerContext
     )
     val runnerWithPanelSelections = activatedRunner.copy(
@@ -167,8 +166,7 @@ object AppEventReducer:
     val activatedRunner = CommandRunner.empty.activate(
       registry,
       state.persisted.config,
-      state.runtime.isTuiMode,
-      state.runtime.keyboardFidelityTier,
+      state.runtime.capabilities,
       state.commandRunnerContext
     )
     val peekSurface = UiSurface(

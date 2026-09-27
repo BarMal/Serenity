@@ -3,6 +3,7 @@ package com.serenity
 import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.PanelPosition
@@ -490,4 +491,44 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
         SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckWords(List("serenity", "caf\u00e9")))
       )
     )
+  }
+
+  // Issue #1669: `typography`/`postProcessing` are independent `FrontendCapabilities` flags -- a mixed combination
+  // neither `FrontendCapabilities.gui` nor `.tui` produces must still annotate exactly the inert control the flag
+  // that is actually off names, not both (which a stale single `isTuiMode` boolean could not have distinguished).
+  private def typographyHint(capabilities: FrontendCapabilities): Option[String] =
+    groupByIdRecursive(
+      CommandRunnerSettingsGroups.build(Map.empty, Nil, Nil, None, capabilities),
+      "settings-typography"
+    ).hint
+
+  private def postProcessingHint(capabilities: FrontendCapabilities): Option[String] =
+    groupByIdRecursive(
+      CommandRunnerSettingsGroups.build(Map.empty, Nil, Nil, None, capabilities),
+      "settings-surface-appearance"
+    ).children
+      .collectFirst { case item: CommandSurfaceItem.OptionItem if item.id == "post-processing" => item }
+      .getOrElse(fail("missing post-processing option"))
+      .hint
+
+  "CommandRunnerSettingsGroups.build" should "annotate the Typography group as inert only when typography is off" in {
+    typographyHint(FrontendCapabilities.gui) shouldBe Some("Typefaces for prose, code, and interface")
+    typographyHint(FrontendCapabilities.gui.copy(typography = false)) shouldBe
+      Some("Inert in TUI mode -- Typefaces for prose, code, and interface")
+  }
+
+  it should "annotate post-processing as inert only when postProcessing is off, independent of typography" in {
+    // typography on, postProcessing off -- a combination neither .gui nor .tui produces on its own.
+    val mixed = FrontendCapabilities.gui.copy(postProcessing = false)
+
+    typographyHint(mixed) shouldBe Some("Typefaces for prose, code, and interface")
+    postProcessingHint(mixed).getOrElse("") should include("Inert in TUI mode")
+    postProcessingHint(FrontendCapabilities.gui).getOrElse("") should not include "Inert in TUI mode"
+  }
+
+  it should "annotate both hints on a TUI frontend, where every capability flag is off" in {
+    val tui = FrontendCapabilities.tui()
+
+    typographyHint(tui) shouldBe Some("Inert in TUI mode -- Typefaces for prose, code, and interface")
+    postProcessingHint(tui).getOrElse("") should include("Inert in TUI mode")
   }

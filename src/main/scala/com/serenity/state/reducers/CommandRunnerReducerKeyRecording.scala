@@ -172,8 +172,7 @@ private[reducers] object CommandRunnerReducerKeyRecording:
     binding: String
   ): Option[String] =
     Option.when(
-      runner.isTuiMode &&
-        runner.keyboardFidelityTier == KeyboardFidelityTier.ModifyOtherKeys &&
+      runner.capabilities.keyboardFidelityTier == KeyboardFidelityTier.ModifyOtherKeys &&
         trigger.isBareModifierChord
     )(
       s"\"$binding\" recorded, but won't fire -- this terminal can't send a bare-modifier key event " +

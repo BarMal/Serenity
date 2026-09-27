@@ -46,15 +46,16 @@ object CursorViewport:
     * search jump), matched positionally the same way `RendererCursorGlyphs` already indexes cursors for painting, not
     * only when the primary cursor moves (unlike the viewport placement above, which only re-centres on the primary
     * cursor). Gated by the `Cursor` motion family (`AppConfig.scaledCursorGlideAnimation` already folds in
-    * accessibility and the `Reduced` preset) and by `state.runtime.isTuiMode`: TUI's caret snaps instantly, since a
-    * terminal cursor can't glide sub-cell (`RendererCursorOverlay.presentHardwareCursor`'s existing GUI/TUI split).
+    * accessibility and the `Reduced` preset) and by `state.runtime.capabilities.pixelMotion`: TUI's caret snaps
+    * instantly, since a terminal cursor can't glide sub-cell (`RendererCursorOverlay.presentHardwareCursor`'s existing
+    * GUI/TUI split).
     *
     * Retargets an in-flight glide (`Tween.retarget`) rather than reseeding at progress zero when a cursor moves again
     * before its previous glide finishes -- the same jump-cut fix `seedColumnTransition` already applies to the
     * column-sweep tween.
     */
   private def seedCursorGlide(bufferId: BufferId, beforeBuffer: Buffer, state: AppState): AppState =
-    if state.runtime.isTuiMode then state
+    if !state.runtime.capabilities.pixelMotion then state
     else
       state.persisted.config.scaledCursorGlideAnimation match
         case None => state
@@ -98,9 +99,9 @@ object CursorViewport:
     * `bufferId` whose selection changed between `beforeBuffer` and the buffer now in `state` -- any change (extend,
     * shrink, create, clear), matched positionally the same way `seedCursorGlide` above does. Gated by the
     * `SelectionGeometry` motion family (`AppConfig.scaledSelectionGeometryAnimation` already folds in accessibility and
-    * the `Reduced` preset). Unlike `seedCursorGlide`, this runs regardless of `state.runtime.isTuiMode` --
-    * `SelectionGeometryState`'s column-granular model serves both the GUI's measured painting and TUI's cell painting
-    * (see its own doc comment), so there is nothing GUI-only about it here.
+    * the `Reduced` preset). Unlike `seedCursorGlide`, this runs regardless of `state.runtime.capabilities.pixelMotion`
+    * -- `SelectionGeometryState`'s column-granular model serves both the GUI's measured painting and TUI's cell
+    * painting (see its own doc comment), so there is nothing GUI-only about it here.
     *
     * Retargets an in-flight geometry (`SelectionGeometryState.diff`'s own `Tween.retarget` handling) rather than
     * reseeding at progress zero when a selection changes again before its previous animation finishes -- the same
@@ -197,7 +198,7 @@ object CursorViewport:
   ): Viewport =
     val wordWrapEnabled            = currentState.persisted.config.surfaceConfig.wordWrapEnabled
     val typewriterScrollingEnabled = currentState.persisted.config.surfaceConfig.typewriterScrollingEnabled
-    val isTui                      = currentState.runtime.isTuiMode
+    val isTui                      = currentState.runtime.capabilities.isCellGrid
     val viewport                   = buffer.viewport
     val fontConfig                 = currentState.persisted.config.editorConfig.fontConfig
     val font                       = previewFontForBuffer(buffer, fontConfig)
@@ -340,7 +341,7 @@ object CursorViewport:
     currentState: AppState,
     cursor: CursorPosition
   ): Viewport =
-    val isTui               = currentState.runtime.isTuiMode
+    val isTui               = currentState.runtime.capabilities.isCellGrid
     val viewport            = buffer.viewport
     val fontConfig          = currentState.persisted.config.editorConfig.fontConfig
     val font                = previewFontForBuffer(buffer, fontConfig)

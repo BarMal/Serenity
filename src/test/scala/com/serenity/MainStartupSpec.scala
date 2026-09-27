@@ -52,7 +52,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     finalState.persisted.layout.editorPanes.shouldBe(Map.empty)
     finalState.startPageSurface.shouldBe(defined)
     finalState.persisted.focus.shouldBe(Focus.Surface(finalState.startPageSurface.get.id))
-    finalState.runtime.isTuiMode.shouldBe(false)
+    finalState.runtime.capabilities.isCellGrid.shouldBe(false)
   }
 
   it should "configure RendererFrameState's cache capacity from the loaded config at startup (#1433)" taggedAs
@@ -70,14 +70,14 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       finally RendererFrameState.configureCacheCapacity(previousCapacity)
     }
 
-  it should "default isTuiMode to false and thread it through when requested (issue #1112)" in {
+  it should "default capabilities to GUI and thread it through when requested (issue #1112/#1669)" in {
     given com.serenity.rope.Balance = com.serenity.rope.Balance.default
     given LoggerFactory[IO]         = Slf4jFactory.create[IO]
 
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Main"))
     val initialViewportSize = ViewportSize(120, 40)
 
-    def stateFor(isTuiMode: Boolean): IO[com.serenity.state.models.AppState] =
+    def stateFor(capabilities: com.serenity.frontend.FrontendCapabilities): IO[com.serenity.state.models.AppState] =
       for
         themeManager <- IO.pure(AppThemeManager.create)
         defaultTheme <- themeManager.initializeWithTheme()
@@ -87,15 +87,23 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
           stateManager.sessionStartupInfo,
           defaultTheme,
           initialViewportSize,
-          isTuiMode = isTuiMode
+          capabilities = capabilities
         )
       yield finalState
 
-    stateFor(isTuiMode = false).unsafeRunSync().runtime.isTuiMode shouldBe false
-    stateFor(isTuiMode = true).unsafeRunSync().runtime.isTuiMode shouldBe true
+    stateFor(com.serenity.frontend.FrontendCapabilities.gui)
+      .unsafeRunSync()
+      .runtime
+      .capabilities
+      .isCellGrid shouldBe false
+    stateFor(com.serenity.frontend.FrontendCapabilities.tui())
+      .unsafeRunSync()
+      .runtime
+      .capabilities
+      .isCellGrid shouldBe true
   }
 
-  it should "thread isTuiMode into the start page state the same way as an opened-file state" in {
+  it should "thread capabilities into the start page state the same way as an opened-file state" in {
     given com.serenity.rope.Balance = com.serenity.rope.Balance.default
     given LoggerFactory[IO]         = Slf4jFactory.create[IO]
 
@@ -114,11 +122,11 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
         defaultTheme,
         initialViewportSize,
         openPath = Some(file),
-        isTuiMode = true
+        capabilities = com.serenity.frontend.FrontendCapabilities.tui()
       )
     yield openedState
 
-    result.unsafeRunSync().runtime.isTuiMode shouldBe true
+    result.unsafeRunSync().runtime.capabilities.isCellGrid shouldBe true
   }
 
   it should "render the expected startup choices on the dedicated start page" in {

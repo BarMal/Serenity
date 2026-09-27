@@ -10,9 +10,9 @@ import cats.effect.std.Dispatcher
 import cats.syntax.foldable.*
 import cats.syntax.parallel.*
 import cats.syntax.semigroup.*
-import com.serenity.config.{AppConfig, CursorMode, RenderFpsTarget}
+import com.serenity.config.{AppConfig, RenderFpsTarget}
+import com.serenity.frontend.Frontend
 import com.serenity.input.*
-import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
@@ -29,8 +29,7 @@ object AppRuntime:
   private[serenity] type RenderFn =
     (AppState, Boolean, Option[Color], Damage, Map[BufferId, com.serenity.animation.AnimationState]) => IO[Unit]
 
-  private val NanosPerSecond: Long                      = 1_000_000_000L
-  private val DefaultCursorIdleInterval: FiniteDuration = 500.millis
+  private val NanosPerSecond: Long = 1_000_000_000L
 
   private[serenity] def fastFrameInterval(target: RenderFpsTarget): FiniteDuration =
     FiniteDuration(NanosPerSecond / target.framesPerSecond.toLong, NANOSECONDS)
@@ -40,28 +39,6 @@ object AppRuntime:
     isInitialFrame: Boolean = false
   ): FiniteDuration =
     if isInitialFrame then Duration.Zero else frameInterval
-
-  /** The idle phase's per-tick cadence, or `None` when it has nothing to tick for and should sleep indefinitely instead
-    * (see [[awaitFocusedIdleTick]]).
-    *
-    * `isTuiMode` adds a second, TUI-specific reason to return `None` on top of the existing motion-disabled one
-    * (#1170): in TUI blink mode the caret is delegated to the terminal's own cursor
-    * (`RendererCursorOverlay.presentHardwareCursor`), which owns blink timing entirely, so the app has no idle work
-    * left to do. Breathe mode is the documented exception -- it animates color/opacity over time, which a terminal
-    * cursor style can't represent -- so it keeps the normal cadence.
-    */
-  private[serenity] def cursorIdleInterval(config: AppConfig, isTuiMode: Boolean = false): Option[FiniteDuration] =
-    if isTuiMode && config.cursorMode == CursorMode.Blink then None
-    else
-      val cursorMotion =
-        config.surfaceConfig.effectiveMotionConfiguration.family(com.serenity.config.MotionFamily.Cursor)
-      val scale = AppConfig.clampElementTransitionSpeedScale(cursorMotion.speedScale)
-      Option.when(cursorMotion.enabled && scale > 0.0)(
-        FiniteDuration(
-          math.max(1L, math.round(DefaultCursorIdleInterval.toNanos.toDouble * scale)),
-          NANOSECONDS
-        )
-      )
 
   private[serenity] def resetCursorActivity(cursorVisible: Ref[IO, Boolean], breathIndex: Ref[IO, Int]): IO[Unit] =
     cursorVisible.set(true) >> breathIndex.set(0)
@@ -87,18 +64,20 @@ object AppRuntime:
   /** The idle loop's per-tick wait: the normal cursor idle cadence while the window is focused, or an indefinite,
     * wakeup-free wait otherwise -- the mechanism that actually stops idle wakeups, rather than merely skipping the
     * render they'd otherwise trigger. Two things can make focused waiting indefinite instead of cadenced:
-    * [[cursorIdleInterval]] returning `None` (motion disabled, or #1170's TUI-blink caret delegation), racing here
-    * against [[Stream.interruptWhen]]'s `fastModeSignal` in [[idleRenderPhase]] so a real input event still wakes it
-    * immediately -- and losing focus entirely, which waits on `windowFocused` turning true again instead.
+    * `cursorIdleInterval` returning `None` (motion disabled, or #1170's TUI-blink caret delegation --
+    * [[com.serenity.frontend.Frontend.cursorIdleInterval]]), racing here against [[Stream.interruptWhen]]'s
+    * `fastModeSignal` in [[idleRenderPhase]] so a real input event still wakes it immediately -- and losing focus
+    * entirely, which waits on `windowFocused` turning true again instead.
     */
   private[serenity] def awaitFocusedIdleTick(
     loadState: IO[AppState],
-    windowFocused: SignallingRef[IO, Boolean]
+    windowFocused: SignallingRef[IO, Boolean],
+    cursorIdleInterval: AppConfig => Option[FiniteDuration]
   ): IO[Unit] =
     windowFocused.get.flatMap {
       case true =>
         loadState.flatMap { state =>
-          cursorIdleInterval(state.persisted.config, state.runtime.isTuiMode) match
+          cursorIdleInterval(state.persisted.config) match
             case Some(interval) => IO.sleep(interval)
             case None           => IO.never
         }
@@ -149,8 +128,7 @@ object AppRuntime:
     registerMarkdownPreviewCloseCallback: (() => Unit) => Unit = _ => (),
     openPath: Option[Path] = None,
     systemClipboard: SystemClipboard[IO] = SystemClipboard.awt[IO],
-    isTuiMode: Boolean = false,
-    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full,
+    frontend: Frontend = com.serenity.frontend.GuiFrontend,
     configNotice: Option[String] = None
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
     Dispatcher.parallel[IO].use { resizeCallbackDispatcher =>
@@ -168,8 +146,7 @@ object AppRuntime:
           initialViewportSize,
           appConfig,
           openPath,
-          isTuiMode,
-          keyboardFidelityTier,
+          frontend.capabilities,
           configNotice
         )
         inputRouter    <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
@@ -239,7 +216,8 @@ object AppRuntime:
                   cursorVisible = cursorVisible,
                   breathIndex = breathIndex,
                   renderCursorOnly = renderCursorOnly,
-                  requestFastRender = requestFastRender
+                  requestFastRender = requestFastRender,
+                  cursorIdleInterval = frontend.cursorIdleInterval
                 )
 
                 val fastPhase = AppRuntimeRenderLoops.fastRenderPhase(

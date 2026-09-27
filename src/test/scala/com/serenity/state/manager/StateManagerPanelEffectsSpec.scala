@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.{PanelKind, ViewIntent}
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
@@ -217,8 +218,9 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report an unavailable markdown preview window instead of silently doing nothing in the TUI" in {
-    val tuiState = AppState.initial.copy(runtime = AppState.initial.runtime.copy(isTuiMode = true))
-    val fixture  = harness(tuiState)
+    val tuiState =
+      AppState.initial.copy(runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui()))
+    val fixture = harness(tuiState)
 
     fixture.panels.interpret(ViewIntent.OpenMarkdownPreview, tuiState).unsafeRunSync()
 

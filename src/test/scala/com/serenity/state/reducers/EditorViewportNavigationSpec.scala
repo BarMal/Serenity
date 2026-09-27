@@ -1,6 +1,7 @@
 package com.serenity.state.reducers
 
 import com.serenity.config.AppConfig
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
@@ -125,7 +126,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
       // Pin TUI mode so ensureVisibleCursors uses viewport.visibleLines directly rather than converting it through
       // AWT-measured font metrics (CursorViewport.adjustForCursor's GUI-mode branch), whose real, OS-resolved line
       // heights for the default logical "SansSerif" font are not deterministic across platforms.
-      runtime = AppState.initial.runtime.copy(isTuiMode = true)
+      runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui())
     )
 
     val reducedState = EditorEventReducer.reduce(PageUp, paneId, initialState).state
@@ -155,7 +156,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
             )
         )
       ),
-      runtime = AppState.initial.runtime.copy(isTuiMode = true)
+      runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui())
     )
 
     // The cursor is already on the last line, so PageDown moves nothing -- and a viewport the reducer computed for
@@ -188,7 +189,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
             )
         )
       ),
-      runtime = AppState.initial.runtime.copy(isTuiMode = true)
+      runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui())
     )
 
     val reducedState = EditorEventReducer.reduce(MoveToStartOfFile, paneId, initialState).state
@@ -218,7 +219,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
             )
         )
       ),
-      runtime = AppState.initial.runtime.copy(isTuiMode = true)
+      runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui())
     )
 
     val reducedState = EditorEventReducer.reduce(MoveToEndOfFile, paneId, initialState).state
@@ -248,7 +249,7 @@ class EditorViewportNavigationSpec extends AnyFlatSpec with Matchers:
             )
         )
       ),
-      runtime = AppState.initial.runtime.copy(isTuiMode = true)
+      runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui())
     )
 
     val reducedState = EditorEventReducer.reduce(PageDown, paneId, initialState).state

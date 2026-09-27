@@ -35,10 +35,11 @@ private[serenity] object AppRuntimeRenderLoops:
     cursorVisible: Ref[IO, Boolean],
     breathIndex: Ref[IO, Int],
     renderCursorOnly: AppRuntime.RenderFn,
-    requestFastRender: IO[Unit]
+    requestFastRender: IO[Unit],
+    cursorIdleInterval: AppConfig => Option[FiniteDuration]
   )(using Logger[IO]): Stream[IO, Unit] =
     Stream
-      .repeatEval(AppRuntime.awaitFocusedIdleTick(loadModel.map(_.app), windowFocused))
+      .repeatEval(AppRuntime.awaitFocusedIdleTick(loadModel.map(_.app), windowFocused, cursorIdleInterval))
       .interruptWhen(fastModeSignal.discrete)
       .evalMap(_ =>
         runIdleRenderStep(
@@ -49,7 +50,8 @@ private[serenity] object AppRuntimeRenderLoops:
           cursorVisible,
           breathIndex,
           renderCursorOnly,
-          requestFastRender
+          requestFastRender,
+          cursorIdleInterval
         )
       )
 
@@ -255,7 +257,8 @@ private[serenity] object AppRuntimeRenderLoops:
     cursorVisible: Ref[IO, Boolean],
     breathIndex: Ref[IO, Int],
     renderCursorOnly: AppRuntime.RenderFn,
-    requestFastRender: IO[Unit]
+    requestFastRender: IO[Unit],
+    cursorIdleInterval: AppConfig => Option[FiniteDuration]
   )(using logger: Logger[IO]): IO[Unit] =
     for
       _ <- withRuntimeDiagnostics("render loop", "idle.resize", currentStateForDiagnostics)(
@@ -265,7 +268,7 @@ private[serenity] object AppRuntimeRenderLoops:
         loadModel
       )
       state = model.app
-      _ <- AppRuntime.cursorIdleInterval(state.persisted.config, state.runtime.isTuiMode) match
+      _ <- cursorIdleInterval(state.persisted.config) match
         case Some(_) =>
           for
             (visible, cursor) <- withRuntimeDiagnostics(

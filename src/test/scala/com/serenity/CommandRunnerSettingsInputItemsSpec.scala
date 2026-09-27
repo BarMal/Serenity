@@ -13,6 +13,7 @@ import com.serenity.command.{
 }
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.frontend.FrontendCapabilities
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -123,12 +124,12 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
   }
 
   // issue #1621 carve-out: unset UI element gap / line-number margin / line-number padding used to show "auto" in
-  // these rows regardless of surface, because `build` only had `AppConfig` in scope. `isTuiMode` (already carried on
-  // `CommandRunner`, mirroring how `activate` receives it separately from `state.runtime.isTuiMode`) resolves the
-  // same GUI-cell-vs-TUI-zero default `AppState.effectiveUiElementGap`/`effectiveLineNumberMarginLeft`/
+  // these rows regardless of surface, because `build` only had `AppConfig` in scope. `capabilities` (already carried
+  // on `CommandRunner`, mirroring how `activate` receives it separately from `state.runtime.capabilities`) resolves
+  // the same GUI-cell-vs-TUI-zero default `AppState.effectiveUiElementGap`/`effectiveLineNumberMarginLeft`/
   // `effectiveLineNumberPadding` use, so the row shows the number that would actually apply.
   "an unset UI element gap and line-number margin/padding" should "show the GUI default on the GUI surface" in {
-    val items = CommandRunnerSettingsInputItems.build(AppConfig.default, isTuiMode = false)
+    val items = CommandRunnerSettingsInputItems.build(AppConfig.default, FrontendCapabilities.gui)
 
     inputById(items, "ui-element-gap").currentValue shouldBe "1"
     inputById(items, "line-number-margin-left").currentValue shouldBe "1"
@@ -136,7 +137,7 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "show the TUI default (zero) on the TUI surface" in {
-    val items = CommandRunnerSettingsInputItems.build(AppConfig.default, isTuiMode = true)
+    val items = CommandRunnerSettingsInputItems.build(AppConfig.default, FrontendCapabilities.tui())
 
     inputById(items, "ui-element-gap").currentValue shouldBe "0"
     inputById(items, "line-number-margin-left").currentValue shouldBe "0"
@@ -148,16 +149,22 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
       .withInterfaceConfig(InterfaceConfig(elementGap = Some(3)))
       .withLineNumberLayout(LineNumberLayout(marginLeft = Some(2), padding = Some(4)))
 
-    inputById(CommandRunnerSettingsInputItems.build(config, isTuiMode = false), "ui-element-gap").currentValue shouldBe
-      "3"
-    inputById(CommandRunnerSettingsInputItems.build(config, isTuiMode = true), "ui-element-gap").currentValue shouldBe
+    inputById(
+      CommandRunnerSettingsInputItems.build(config, FrontendCapabilities.gui),
+      "ui-element-gap"
+    ).currentValue shouldBe
       "3"
     inputById(
-      CommandRunnerSettingsInputItems.build(config, isTuiMode = false),
+      CommandRunnerSettingsInputItems.build(config, FrontendCapabilities.tui()),
+      "ui-element-gap"
+    ).currentValue shouldBe
+      "3"
+    inputById(
+      CommandRunnerSettingsInputItems.build(config, FrontendCapabilities.gui),
       "line-number-margin-left"
     ).currentValue shouldBe "2"
     inputById(
-      CommandRunnerSettingsInputItems.build(config, isTuiMode = true),
+      CommandRunnerSettingsInputItems.build(config, FrontendCapabilities.tui()),
       "line-number-padding"
     ).currentValue shouldBe "4"
   }

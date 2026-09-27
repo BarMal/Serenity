@@ -235,7 +235,7 @@ private[serenity] object StateManagerTestFixtures:
     val activatedRunner = CommandRunner.empty.activate(
       registry,
       state.persisted.config,
-      state.runtime.isTuiMode,
+      state.runtime.capabilities,
       context = state.commandRunnerContext
     )
     val runner = activatedRunner.copy(

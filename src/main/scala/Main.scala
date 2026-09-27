@@ -7,6 +7,7 @@ import com.serenity.BuildInfo
 import com.serenity.app.*
 import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning}
 import com.serenity.diagnostics.{Trace, TuiConsoleLogFilter}
+import com.serenity.frontend.{Frontend, GuiFrontend}
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
@@ -41,12 +42,14 @@ object Main extends IOApp:
       case Right(options) => launch(options)
 
   private def launch(launchOptionsForLogging: LaunchOptions): IO[ExitCode] =
-    // #1215: must run before the `given logger` below, which triggers logback's one-time console-appender setup on
-    // its first call -- `TuiConsoleLogFilter` reads this property per log event, but it still has to be set before
-    // the very first event a TUI launch could otherwise leak onto the terminal surface it is about to take over.
-    System.setProperty(
-      TuiConsoleLogFilter.EnabledProperty,
-      LaunchOptions.resolveTuiMode(launchOptionsForLogging).toString
+    // #1215/#1669: must run before the `given logger` below, which triggers logback's one-time console-appender setup
+    // on its first call -- `TuiConsoleLogFilter` checks this per log event, but it still has to be configured before
+    // the very first event a TUI launch could otherwise leak onto the terminal surface it is about to take over. The
+    // real `GuiFrontend`/`TuiFrontend` instance doesn't exist yet this early (constructing one means acquiring the
+    // Swing window or terminal resource, below) -- `Frontend.guiLogRouting`/`tuiLogRouting` are exactly what those
+    // instances' own `logRouting` would answer, without needing one built.
+    TuiConsoleLogFilter.configure(
+      if LaunchOptions.resolveTuiMode(launchOptionsForLogging) then Frontend.tuiLogRouting else Frontend.guiLogRouting
     )
 
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
@@ -201,7 +204,8 @@ object Main extends IOApp:
               awaitExternalQuit = swingWin.awaitClose,
               registerResizeCallback = cb => swingWin.setOnResize(cb),
               registerFocusCallback = cb => swingWin.setOnFocusChange(cb),
-              openPath = launchOptions.openPath
+              openPath = launchOptions.openPath,
+              frontend = GuiFrontend
             )
           }
         }

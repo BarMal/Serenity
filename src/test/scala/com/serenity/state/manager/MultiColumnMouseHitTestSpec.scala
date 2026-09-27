@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.config.AppConfig
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.keystroke.events.MouseClick
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -49,7 +50,7 @@ class MultiColumnMouseHitTestSpec extends AnyFlatSpec with Matchers:
         focus = Focus.EditorPane(paneId),
         config = config
       ),
-      runtime = base.runtime.copy(isTuiMode = true, viewportSize = Some(viewportSize))
+      runtime = base.runtime.copy(capabilities = FrontendCapabilities.tui(), viewportSize = Some(viewportSize))
     )
 
   private def targeting(state: AppState): EditorMouseTargeting =

@@ -31,25 +31,25 @@ class RendererCursorGlideSpec extends AnyFlatSpec with Matchers:
   "glidePixelPosition" should "return the tweened position for a GUI cursor with an in-flight glide" in {
     val cursor = Cursor(CursorPosition(0, 0), glide = Some(inFlightGlide))
 
-    RendererCursorGlyphs.glidePixelPosition(cursor, isTuiMode = false) shouldBe Some(PixelPoint(0, 0))
+    RendererCursorGlyphs.glidePixelPosition(cursor, pixelMotion = true) shouldBe Some(PixelPoint(0, 0))
   }
 
   it should "return None for a cursor with no glide" in {
     val cursor = Cursor(CursorPosition(0, 0))
 
-    RendererCursorGlyphs.glidePixelPosition(cursor, isTuiMode = false) shouldBe None
+    RendererCursorGlyphs.glidePixelPosition(cursor, pixelMotion = true) shouldBe None
   }
 
   it should "return None once the glide has completed" in {
     val cursor = Cursor(CursorPosition(0, 0), glide = Some(inFlightGlide.copy(currentFrame = 4)))
 
-    RendererCursorGlyphs.glidePixelPosition(cursor, isTuiMode = false) shouldBe None
+    RendererCursorGlyphs.glidePixelPosition(cursor, pixelMotion = true) shouldBe None
   }
 
   it should "return None in TUI mode even with an in-flight glide -- the caret always snaps instantly there" in {
     val cursor = Cursor(CursorPosition(0, 0), glide = Some(inFlightGlide))
 
-    RendererCursorGlyphs.glidePixelPosition(cursor, isTuiMode = true) shouldBe None
+    RendererCursorGlyphs.glidePixelPosition(cursor, pixelMotion = false) shouldBe None
   }
 
   "renderCursors" should "paint the caret at its glide's tweened offset from the pane origin while in flight" in {
@@ -70,13 +70,13 @@ class RendererCursorGlideSpec extends AnyFlatSpec with Matchers:
       AppConfig.default,
       context,
       snapshot,
-      isTuiMode = false
+      pixelMotion = true
     )
 
     painted.headOption.map(_.xPx) shouldBe Some(cellMetrics.toPixelX(rect.x) + inFlightGlide.currentValue.xPx)
   }
 
-  it should "paint the caret at its logical position when isTuiMode is true, ignoring any glide" in {
+  it should "paint the caret at its logical position when pixelMotion is false, ignoring any glide" in {
     val buffer = Buffer
       .fromString(BufferId(1), "hello world")
       .copy(
@@ -94,7 +94,7 @@ class RendererCursorGlideSpec extends AnyFlatSpec with Matchers:
       AppConfig.default,
       context,
       snapshot,
-      isTuiMode = true
+      pixelMotion = false
     )
 
     painted.headOption.map(_.xPx) shouldBe Some(cellMetrics.toPixelX(rect.x))

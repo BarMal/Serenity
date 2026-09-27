@@ -1,6 +1,7 @@
 package com.serenity.state.manager
 
 import com.serenity.config.AppConfig
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
@@ -41,7 +42,7 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
         focus = Focus.EditorPane(paneId)
       )
     )
-    base.copy(runtime = base.runtime.copy(isTuiMode = true))
+    base.copy(runtime = base.runtime.copy(capabilities = FrontendCapabilities.tui()))
 
   "CursorViewport.adjustForCursor, in TUI mode with word wrap" should
     "centre the cursor's visual row, carrying the partial wrapped-row offset into the top line" in {
@@ -164,7 +165,7 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
         )
       )
       buffer.typographyRole shouldBe TypographyRole.Prose
-      state.runtime.isTuiMode shouldBe false
+      state.runtime.capabilities.isCellGrid shouldBe false
 
       val adjusted = CursorViewport.adjustForCursor(buffer, state, cursorPos)
 
@@ -306,7 +307,7 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
     val base = tuiStateWith(buffer)
     val state = base
       .copy(persisted = base.persisted.copy(config = config))
-      .copy(runtime = base.runtime.copy(isTuiMode = false, viewportSize = Some(viewportSize)))
+      .copy(runtime = base.runtime.copy(capabilities = FrontendCapabilities.gui, viewportSize = Some(viewportSize)))
 
     // The expected page-first-column boundary, computed the same way the implementation derives N from the pane's
     // content width, so the test stays honest about "which page" without hard-coding a column count the layout owns.

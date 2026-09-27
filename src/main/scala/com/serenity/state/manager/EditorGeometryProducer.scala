@@ -62,7 +62,7 @@ object EditorGeometryProducer:
 
   private def forBuffer(state: AppState, buffer: Buffer, rowsAbove: Int): EditorGeometry =
     val font    = FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, buffer.typographyRole)
-    val isTui   = state.runtime.isTuiMode
+    val isTui   = state.runtime.capabilities.isCellGrid
     val metrics = if isTui then CellMetrics.cellUnit else CellMetrics.fromFont(font)
     val panelWidthColumns = effectivePanelWidth(state)
     // TUI mode's terminal cell is 1px wide by definition, not `font`'s measured pixel width -- `font` is never

@@ -355,8 +355,8 @@ object TuiSession:
         viewport,
         terminalConfig,
         openPath,
-        isTuiMode = true,
-        keyboardFidelityTier = TuiRuntime.keyboardFidelityTier(shell.keyboardProtocolTier)
+        capabilities =
+          com.serenity.frontend.FrontendCapabilities.tui(TuiRuntime.keyboardFidelityTier(shell.keyboardProtocolTier))
       )
       _              <- router.setActiveTranslator(FocusedInputTranslator.forState(initialState))
       sentinels      <- Queue.unbounded[IO, Unit]

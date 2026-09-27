@@ -113,6 +113,6 @@ class TuiStartupSpec extends TuiSpec:
 
   "a session opened in TUI mode" should "carry the TUI flag the settings surface annotates from" in
     runTui() {
-      verifyState("tui flag")(current => current.runtime.isTuiMode shouldBe true)
+      verifyState("tui flag")(current => current.runtime.capabilities.isCellGrid shouldBe true)
     }
 end TuiStartupSpec

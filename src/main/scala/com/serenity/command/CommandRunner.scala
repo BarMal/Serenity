@@ -1,7 +1,7 @@
 package com.serenity.command
 
 import com.serenity.config.*
-import com.serenity.keystroke.KeyboardFidelityTier
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.{PresetChange, UiPreset}
 
@@ -28,11 +28,11 @@ final case class CommandRunner(
     uiPresetPreviews: List[UiPreset.Preview] = Nil,
     editingPresetName: Option[String] = None,
     commandBindings: Map[String, String] = Map.empty,
-    isTuiMode: Boolean = false,
-    // Never carried by `config` (see `AppState.Runtime.keyboardFidelityTier`'s doc) -- callers pass it separately from
-    // `state.runtime.keyboardFidelityTier`, mirroring `isTuiMode` above, so `CommandRunnerReducer.assignRecordedBinding`
-    // can warn when a just-recorded binding can't actually fire at the currently negotiated tier (issue #1194).
-    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full,
+    // Never carried by `config` (see `AppState.Runtime.capabilities`'s doc) -- callers pass it separately from
+    // `state.runtime.capabilities`, so settings rendering can hide/annotate controls that are inert in cell space and
+    // `CommandRunnerReducer.assignRecordedBinding` can warn when a just-recorded binding can't actually fire at the
+    // currently negotiated keyboard tier (issue #1194).
+    capabilities: FrontendCapabilities = FrontendCapabilities.gui,
     // Defaults to real installed fonts (`FontLoader.FontFamilyCatalog.system`); tests that search the settings tree
     // override this with a deterministic catalog so results don't depend on what's installed on the machine running
     // them -- see `FontLoader.FontFamilyCatalog`'s doc.
@@ -189,7 +189,7 @@ final case class CommandRunner(
       inputItems = inputItems,
       uiPresetPreviews = uiPresetPreviews,
       editingPresetName = editingPresetName,
-      isTuiMode = isTuiMode,
+      capabilities = capabilities,
       fontFamilies = fontFamilies,
       statusSegments = statusSegments,
       context = context
