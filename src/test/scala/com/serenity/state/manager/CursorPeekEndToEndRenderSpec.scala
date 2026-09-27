@@ -48,7 +48,7 @@ class CursorPeekEndToEndRenderSpec extends AnyFlatSpec with Matchers:
     val pressed  = AppEventReducer.reduce(CursorPeekModifierPressed(Modifier.Meta, 0L), initial, registry).state
     val resolved = CursorPeekAnchorResolution.resolve(pressed)
 
-    resolved.runtime.cursorPeekResolvedAnchor shouldBe defined
+    resolved.runtime.pointerGesture.cursorPeekResolvedAnchor shouldBe defined
     val peekSurface = resolved.runtime.uiSurfaces.find(_.id == SurfaceId.CursorPeek)
     peekSurface shouldBe defined
 

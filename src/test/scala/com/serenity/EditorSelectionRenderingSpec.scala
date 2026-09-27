@@ -222,7 +222,9 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
           .withoutStatusLine
       ),
       runtime = AppState.initial.runtime.copy(
-        hoveredEditorTarget = Some(HoveredEditorTarget(paneId, bufferId, CursorPosition(1, 0)))
+        pointerGesture = AppState.initial.runtime.pointerGesture.copy(
+          hoveredEditorTarget = Some(HoveredEditorTarget(paneId, bufferId, CursorPosition(1, 0)))
+        )
       )
     )
 

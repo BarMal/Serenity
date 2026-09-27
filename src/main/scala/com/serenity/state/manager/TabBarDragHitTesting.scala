@@ -18,8 +18,8 @@ final private[manager] case class TabBarDragHitTestingPort(
 )
 
 /** Drag-to-reorder for the always-visible tab strip (issue #1079). A primary press on a tab starts a [[TabDragSession]]
-  * (`Runtime.tabDragSession`); each subsequent `MouseDrag` tick that lands on another tab reorders `bufferOrder` live
-  * via `EditorState.reorderBuffer`, the same live-apply-per-tick pattern
+  * (`Runtime.pointerGesture.tabDragSession`); each subsequent `MouseDrag` tick that lands on another tab reorders
+  * `bufferOrder` live via `EditorState.reorderBuffer`, the same live-apply-per-tick pattern
   * `PinnedPanelMouseHitTesting.handlePinnedPanelResizeDrag`/`handleTextAreaResizeDrag` already use for resize, in place
   * of a deferred "apply on release" this app's input model has no event for (`MouseEvent.scala` has no mouse-release
   * event -- see [[TabDragSession]]'s own doc comment). A drag that never lands back on a different tab before the
@@ -49,7 +49,7 @@ private[manager] object TabBarDragHitTesting:
   def drag(drag: MouseDrag, state: AppState): Transition[Boolean] =
     if drag.button != MouseButton.Primary then Transition.pure(false)
     else
-      state.runtime.tabDragSession match
+      state.runtime.pointerGesture.tabDragSession match
         case None => Transition.pure(false)
         case Some(session) =>
           tabAt(state, drag.col.toDouble, drag.row.toDouble) match
@@ -61,8 +61,11 @@ private[manager] object TabBarDragHitTesting:
               Transition.pure(true)
 
   private def setSession(state: AppState, session: Option[TabDragSession]): AppState =
-    if state.runtime.tabDragSession == session then state
-    else state.copy(runtime = state.runtime.copy(tabDragSession = session))
+    if state.runtime.pointerGesture.tabDragSession == session then state
+    else
+      state.copy(runtime =
+        state.runtime.copy(pointerGesture = state.runtime.pointerGesture.copy(tabDragSession = session))
+      )
 
   private def tabAt(state: AppState, col: Double, row: Double): Option[BufferId] =
     for

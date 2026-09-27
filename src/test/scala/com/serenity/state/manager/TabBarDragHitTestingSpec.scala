@@ -57,7 +57,7 @@ class TabBarDragHitTestingSpec extends AnyFlatSpec with Matchers:
       val started = dragHitTesting.handleTabBarPress(MousePress(col = 14, row = 0), state).unsafeRunSync()
 
       started shouldBe true
-      stateRef.get.unsafeRunSync().runtime.tabDragSession shouldBe Some(TabDragSession(BufferId(8)))
+      stateRef.get.unsafeRunSync().runtime.pointerGesture.tabDragSession shouldBe Some(TabDragSession(BufferId(8)))
     }
 
   "handleTabBarDrag" should
@@ -67,7 +67,7 @@ class TabBarDragHitTestingSpec extends AnyFlatSpec with Matchers:
 
       dragHitTesting.handleTabBarPress(MousePress(col = 2, row = 0), started).unsafeRunSync()
       val afterPress = stateRef.get.unsafeRunSync()
-      afterPress.runtime.tabDragSession shouldBe Some(TabDragSession(BufferId(6)))
+      afterPress.runtime.pointerGesture.tabDragSession shouldBe Some(TabDragSession(BufferId(6)))
 
       dragHitTesting.handleTabBarDrag(MouseDrag(col = 14, row = 0), afterPress).unsafeRunSync()
 

@@ -64,14 +64,14 @@ class EventPipelineTransitionsSpec extends AnyFlatSpec with Matchers:
     val peeking = state.copy(runtime =
       state.runtime.copy(
         viewportSize = Some(ViewportSize(100, 30)),
-        cursorPeekAnchor = Some(CursorPosition(0, 2))
+        pointerGesture = state.runtime.pointerGesture.copy(cursorPeekAnchor = Some(CursorPosition(0, 2)))
       )
     )
     val effect = AppEffect.Surface(SurfaceEffect.OpenFileSearch)
 
     val result = EventPipelineTransitions.withCursorPeekAnchorResolved(ReducerResult(valid(peeking), List(effect)))
 
-    valid(result.state).runtime.cursorPeekResolvedAnchor shouldBe defined
+    valid(result.state).runtime.pointerGesture.cursorPeekResolvedAnchor shouldBe defined
     result.effects shouldBe List(effect)
   }
 
