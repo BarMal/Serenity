@@ -7,7 +7,7 @@ import com.serenity.BuildInfo
 import com.serenity.app.*
 import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning}
 import com.serenity.diagnostics.{Trace, TuiConsoleLogFilter}
-import com.serenity.frontend.{Frontend, GuiFrontend}
+import com.serenity.frontend.{Frontend, FrontendRuntime, GuiFrontend}
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
 import com.serenity.rope.Balance
@@ -160,9 +160,8 @@ object Main extends IOApp:
                   .evalOn(paintEc)
               }
 
-            initialScaleSync >> AppRuntime.run(
-              initialViewportSize = swingWin.viewportSize,
-              makeInputHandler = router =>
+            val frontendRuntime = FrontendRuntime(
+              inputHandler = router =>
                 IO.pure(
                   new SwingInputHandler[IO, com.serenity.keystroke.events.Event](
                     swingWin.canvas,
@@ -172,7 +171,6 @@ object Main extends IOApp:
                     actualAppConfig.inputConfig.wheelScrollLines
                   )
                 ),
-              checkResize = IO(swingWin.doResizeIfNecessary()),
               renderFull = (state, vis, cc, damage, bufferAnimations, caches) =>
                 syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >>
                   IO(
@@ -182,7 +180,13 @@ object Main extends IOApp:
                 syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >>
                   IO(
                     paintCursorFrame(state, vis, cc, swingWin, displayState.snapshot, damage, bufferAnimations, caches)
-                  ).evalOn(paintEc),
+                  ).evalOn(paintEc)
+            )
+
+            initialScaleSync >> AppRuntime.run(
+              initialViewportSize = swingWin.viewportSize,
+              checkResize = IO(swingWin.doResizeIfNecessary()),
+              runtime = frontendRuntime,
               appConfig = actualAppConfig,
               configNotice = configNotice,
               makeStateManager = Some(logger =>

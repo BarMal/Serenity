@@ -95,13 +95,3 @@ object MarkdownPreviewWindow:
     runOnEdt(acquired._1.dispose())
 
 end MarkdownPreviewWindow
-
-/** Whether the TUI process can offer the Swing preview window at all -- decided once at startup from
-  * `LaunchOptions.isDisplayReachable` (issue #1113: an SSH session with no X11/Wayland forwarding must report
-  * unavailability rather than either silently no-op'ing or risking a `HeadlessException`).
-  */
-sealed trait MarkdownPreviewWindowAvailability
-
-object MarkdownPreviewWindowAvailability:
-  case object Unavailable                                   extends MarkdownPreviewWindowAvailability
-  final case class Available(window: MarkdownPreviewWindow) extends MarkdownPreviewWindowAvailability

@@ -23,15 +23,12 @@
 # #1729's commandExecutor deletion -- both PRs edited the same capability-composition assertion, and the merged
 # version names every capability retired by #1724 (paneManager/panelManager and commandExecutor) in one comment
 # rather than two overlapping ones.
-# paydown: issue #1669 adds a state-layer/command-layer ForbiddenImports rule barring `com.serenity.ui.tui`/
-# `com.serenity.ui.terminal` references outside those frontend implementation packages. The 8 new entries below are
+# paydown: issue #1669's remaining follow-up (this PR) moves `MarkdownPreviewWindowAvailability` out of
+# `com.serenity.ui.tui` into `com.serenity.frontend` and onto `Frontend.markdownPreviewWindow`, exactly the fix this
+# file's own comment (removed here) said was the way to close the 8 entries #1739 grandfathered for
 # `StateManager`/`StateManagerComposition`/`StateManagerCapabilityPorts`/`StateManagerRuntime`/
-# `StateManagerPanelEffects` all threading `MarkdownPreviewWindowAvailability` (a TUI-only type -- the spawned Swing
-# preview window toggle, issue #1113) through as an ordinary constructor parameter/field. That coupling predates this
-# issue and is not something #1669 asks to fix -- grandfathered here as existing debt the new rule catches only
-# looking forward, not retroactively. Moving `MarkdownPreviewWindowAvailability` to a frontend-neutral package (or
-# behind `Frontend.openMarkdownPreview`, as this issue's original sketch proposed) is real follow-up work, flagged in
-# this PR's own description rather than attempted as a drive-by here.
+# `StateManagerPanelEffects` threading that TUI-only type in directly. All 8 are gone: those files now hold a
+# frontend-neutral type, so the `com/serenity/state` ForbiddenImports rule no longer fires on them at all.
 # paydown: issue #1677 (steps 1-2, #1732/78fb6fa8c/61dc64278) threaded an explicit `RenderCaches` bundle (and
 # instance-scoped `MarkdownPreviewCache`/`DictionaryCache`) through the whole render, mouse-hit-testing, and
 # markdown-preview call graphs, replacing several JVM-wide singleton caches. That threading is an added parameter (or
@@ -65,14 +62,6 @@ main/scala/com/serenity/io/SwingFileDialog.scala	forbidden mutable state at line
 main/scala/com/serenity/lsp/LspManager.scala	file length	673
 main/scala/com/serenity/rope/Rope.scala	file length	631
 main/scala/com/serenity/spellcheck/HunspellFreeCompoundMatcher.scala	forbidden mutable state at line 106: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
-main/scala/com/serenity/state/manager/StateManager.scala	forbidden reference at line 191: the state layer must stay frontend-agnostic (issue #1669): read Runtime.capabilities instead of reaching into a concrete frontend's own implementation package	1
-main/scala/com/serenity/state/manager/StateManager.scala	forbidden reference at line 192: the state layer must stay frontend-agnostic (issue #1669): read Runtime.capabilities instead of reaching into a concrete frontend's own implementation package	1
-main/scala/com/serenity/state/manager/StateManagerCapabilityPorts.scala	forbidden reference at line 32: the state layer must stay frontend-agnostic (issue #1669): read Runtime.capabilities instead of reaching into a concrete frontend's own implementation package	1
-main/scala/com/serenity/state/manager/StateManagerComposition.scala	forbidden reference at line 39: the state layer must stay frontend-agnostic (issue #1669): read Runtime.capabilities instead of reaching into a concrete frontend's own implementation package	1
-main/scala/com/serenity/state/manager/StateManagerPanelEffects.scala	forbidden reference at line 14: the state layer must stay frontend-agnostic (issue #1669): read Runtime.capabilities instead of reaching into a concrete frontend's own implementation package	1
-main/scala/com/serenity/state/manager/StateManagerRuntime.scala	forbidden reference at line 118: the state layer must stay frontend-agnostic (issue #1669): read Runtime.capabilities instead of reaching into a concrete frontend's own implementation package	1
-main/scala/com/serenity/state/manager/StateManagerRuntime.scala	forbidden reference at line 145: the state layer must stay frontend-agnostic (issue #1669): read Runtime.capabilities instead of reaching into a concrete frontend's own implementation package	1
-main/scala/com/serenity/state/manager/StateManagerRuntime.scala	forbidden reference at line 146: the state layer must stay frontend-agnostic (issue #1669): read Runtime.capabilities instead of reaching into a concrete frontend's own implementation package	1
 main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	630
 main/scala/com/serenity/ui/renderer/Java2DPostProcessingEffects.scala	method applyGlow	90
 main/scala/com/serenity/ui/renderer/RendererCursorOverlay.scala	forbidden mutable state at line 326: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1

@@ -8,7 +8,7 @@ import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import com.serenity.app.AppRuntime
 import com.serenity.config.AppConfig
-import com.serenity.frontend.TuiFrontend
+import com.serenity.frontend.{FrontendRuntime, MarkdownPreviewWindowAvailability, TuiFrontend}
 import com.serenity.input.{
   ClipboardStrategy,
   ExternalClipboardTool,
@@ -79,10 +79,12 @@ object TuiRuntime:
           inputHandlerHolder <- IO(new AtomicReference[Option[TerminalInputHandler]](None))
           accessibilitySync  <- AccessibilitySync.empty
           accessibilityBridge = new TuiAccessibilityBridge(writeToTerminal(terminalShell))
-          frontend            = TuiFrontend(keyboardFidelityTier(terminalShell.keyboardProtocolTier))
-          _ <- AppRuntime.run(
-            initialViewportSize = initialViewportSize,
-            makeInputHandler = router =>
+          frontend = TuiFrontend(
+            keyboardFidelityTier(terminalShell.keyboardProtocolTier),
+            markdownPreviewWindow = previewWindowAvailability
+          )
+          frontendRuntime = FrontendRuntime(
+            inputHandler = router =>
               TerminalInputMetrics.create(logger).flatMap { metrics =>
                 TerminalInputHandler
                   .create(
@@ -109,7 +111,6 @@ object TuiRuntime:
                     handler
                   }
               },
-            checkResize = terminalShell.checkResize,
             renderFull = renderFullFn(
               surfaceHolder,
               terminalShell,
@@ -123,11 +124,21 @@ object TuiRuntime:
               previewWindowAvailability,
               accessibilitySync,
               accessibilityBridge
-            ),
+            )
+          )
+          _ <- AppRuntime.run(
+            initialViewportSize = initialViewportSize,
+            checkResize = terminalShell.checkResize,
+            runtime = frontendRuntime,
             appConfig = terminalConfig,
             registerFocusCallback = cb => inputHandlerHolder.get().foreach(_.registerFocusCallback(cb)),
             makeStateManager = Some(
-              makeStateManager(terminalConfig, sessionRootOverride, configPersistencePath, previewWindowAvailability)
+              makeStateManager(
+                terminalConfig,
+                sessionRootOverride,
+                configPersistencePath,
+                frontend.markdownPreviewWindow
+              )
             ),
             awaitExternalQuit = terminalShell.awaitExternalQuit,
             registerResizeCallback = cb => terminalShell.registerResizeCallback(cb),

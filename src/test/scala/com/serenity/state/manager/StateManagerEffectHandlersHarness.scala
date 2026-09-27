@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.command.*
+import com.serenity.frontend.MarkdownPreviewWindowAvailability
 import com.serenity.io.{FileDialog, FileManager}
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
@@ -15,7 +16,6 @@ import com.serenity.state.undo.UndoState
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, PeekContent}
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
-import com.serenity.ui.tui.MarkdownPreviewWindowAvailability
 import org.typelevel.log4cats.noop.NoOpLogger
 
 /** Shared harness for [[StateManagerEffectHandlers]] specs: wires a `StateManagerEffectHandlers` whose capability ports

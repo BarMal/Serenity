@@ -115,7 +115,7 @@ final private[manager] case class StateManagerRuntime(
     windowSizeProvider: IO[Option[PreferredWindowSize]],
     onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit],
     fileDialog: Option[FileDialog],
-    markdownPreviewWindow: com.serenity.ui.tui.MarkdownPreviewWindowAvailability,
+    markdownPreviewWindow: com.serenity.frontend.MarkdownPreviewWindowAvailability,
     runProjectTask: ProjectTaskLauncher,
     fileManager: FileManager,
     sessionManager: SessionManager,
@@ -142,8 +142,8 @@ private[manager] object StateManagerRuntime:
     windowSizeProvider: IO[Option[PreferredWindowSize]],
     onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit],
     fileDialog: Option[FileDialog],
-    markdownPreviewWindow: com.serenity.ui.tui.MarkdownPreviewWindowAvailability =
-      com.serenity.ui.tui.MarkdownPreviewWindowAvailability.Unavailable,
+    markdownPreviewWindow: com.serenity.frontend.MarkdownPreviewWindowAvailability =
+      com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable,
     renderCaches: RenderCaches = RenderCaches.create()
   )(using Balance): StateManagerRuntime =
     val sessionManager = sessionRootOverride

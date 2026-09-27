@@ -8,6 +8,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.*
+import com.serenity.frontend.FrontendRuntime
 import com.serenity.input.{InputHandler, InputRouter, SystemClipboard}
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.*
@@ -166,24 +167,26 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       fiber <- AppRuntime
         .run(
           initialViewportSize = ViewportSize(120, 40),
-          makeInputHandler = _ => IO.pure(inputHandler),
           checkResize = IO.pure(None),
-          renderFull = (
-            _: AppState,
-            _: Boolean,
-            _: Option[Color],
-            _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState],
-            _: com.serenity.state.manager.RenderCaches
-          ) => initialRenderStarted.complete(()).flatMap(_ => allowInitialRender.get),
-          renderCursorOnly = (
-            _: AppState,
-            _: Boolean,
-            _: Option[Color],
-            _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState],
-            _: com.serenity.state.manager.RenderCaches
-          ) => IO.unit,
+          runtime = FrontendRuntime(
+            inputHandler = _ => IO.pure(inputHandler),
+            renderFull = (
+              _: AppState,
+              _: Boolean,
+              _: Option[Color],
+              _: Damage,
+              _: Map[BufferId, com.serenity.animation.AnimationState],
+              _: com.serenity.state.manager.RenderCaches
+            ) => initialRenderStarted.complete(()).flatMap(_ => allowInitialRender.get),
+            renderCursorOnly = (
+              _: AppState,
+              _: Boolean,
+              _: Option[Color],
+              _: Damage,
+              _: Map[BufferId, com.serenity.animation.AnimationState],
+              _: com.serenity.state.manager.RenderCaches
+            ) => IO.unit
+          ),
           appConfig = AppConfig.default,
           makeStateManager = Some(_ => IO.pure(stateManager)),
           awaitExternalQuit = closeRequested.get,
@@ -220,24 +223,26 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       result <- AppRuntime
         .run(
           initialViewportSize = ViewportSize(120, 40),
-          makeInputHandler = _ => IO.pure(inputHandler),
           checkResize = IO.pure(None),
-          renderFull = (
-            _: AppState,
-            _: Boolean,
-            _: Option[Color],
-            _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState],
-            _: com.serenity.state.manager.RenderCaches
-          ) => inputStarted.get >> IO.raiseError(RuntimeException("initial render failed")),
-          renderCursorOnly = (
-            _: AppState,
-            _: Boolean,
-            _: Option[Color],
-            _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState],
-            _: com.serenity.state.manager.RenderCaches
-          ) => IO.unit,
+          runtime = FrontendRuntime(
+            inputHandler = _ => IO.pure(inputHandler),
+            renderFull = (
+              _: AppState,
+              _: Boolean,
+              _: Option[Color],
+              _: Damage,
+              _: Map[BufferId, com.serenity.animation.AnimationState],
+              _: com.serenity.state.manager.RenderCaches
+            ) => inputStarted.get >> IO.raiseError(RuntimeException("initial render failed")),
+            renderCursorOnly = (
+              _: AppState,
+              _: Boolean,
+              _: Option[Color],
+              _: Damage,
+              _: Map[BufferId, com.serenity.animation.AnimationState],
+              _: com.serenity.state.manager.RenderCaches
+            ) => IO.unit
+          ),
           appConfig = AppConfig.default,
           makeStateManager = Some(_ => IO.pure(stateManager)),
           registerResizeCallback = _ => ()

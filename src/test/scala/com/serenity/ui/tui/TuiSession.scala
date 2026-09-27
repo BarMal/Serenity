@@ -10,6 +10,7 @@ import cats.effect.std.Queue
 import cats.effect.{FiberIO, IO, Ref, Resource}
 import cats.syntax.all.*
 import com.serenity.app.{AppRuntimeRenderLoops, AppStartup}
+import com.serenity.frontend.MarkdownPreviewWindowAvailability
 import com.serenity.input.{FocusedInputTranslator, InProcessClipboard, InputRouter, Osc52Clipboard, SystemClipboard}
 import com.serenity.keystroke.events.{Event, MousePress}
 import com.serenity.keystroke.translators.TextEntryTranslator

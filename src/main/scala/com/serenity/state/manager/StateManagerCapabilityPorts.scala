@@ -29,7 +29,7 @@ private[manager] trait EffectRuntimePort:
   def configPersistencePath: Option[Path]
   def uiPresetStore: UiPresetStore
   def windowSizeProvider: IO[Option[PreferredWindowSize]]
-  def markdownPreviewWindow: com.serenity.ui.tui.MarkdownPreviewWindowAvailability
+  def markdownPreviewWindow: com.serenity.frontend.MarkdownPreviewWindowAvailability
   def renderCaches: RenderCaches
   def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)

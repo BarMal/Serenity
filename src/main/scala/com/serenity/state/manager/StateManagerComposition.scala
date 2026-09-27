@@ -36,7 +36,7 @@ private[manager] class StateManagerComposition(
     val uiPresetStore: UiPresetStore,
     val windowSizeProvider: IO[Option[PreferredWindowSize]],
     val fileDialog: Option[com.serenity.io.FileDialog],
-    val markdownPreviewWindow: com.serenity.ui.tui.MarkdownPreviewWindowAvailability,
+    val markdownPreviewWindow: com.serenity.frontend.MarkdownPreviewWindowAvailability,
     val runProjectTask: ProjectTaskLauncher,
     val fileManager: FileManager,
     val sessionManager: SessionManager,
