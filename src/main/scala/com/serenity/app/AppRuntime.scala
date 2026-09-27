@@ -323,8 +323,8 @@ object AppRuntime:
     * opening/closing since the last cycle) plus `dictionaryWatchDirectories` (#1691's spell-check dictionary
     * directories, re-derived the same way from the current config), polls for real filesystem events, and reacts to
     * whichever kind of watched path a poll window actually saw change: a buffer's file gets the same reload-or-prompt
-    * check the focus-in path runs, and any change under a dictionary directory calls `refreshDictionaryFingerprints`
-    * to invalidate `StateManagerOperationBoundary`'s cached fingerprints -- neither is gated on the window regaining
+    * check the focus-in path runs, and any change under a dictionary directory calls `refreshDictionaryFingerprints` to
+    * invalidate `StateManagerOperationBoundary`'s cached fingerprints -- neither is gated on the window regaining
     * focus.
     *
     * `WatchService.poll` is a genuine blocking OS call, so it only runs when there is at least one directory to watch
@@ -347,7 +347,7 @@ object AppRuntime:
       for
         paths                 <- openBufferPaths
         dictionaryDirectories <- dictionaryWatchDirectories
-        bufferDirectories = paths.keys.flatMap(path => Option(path.getParent)).toSet
+        bufferDirectories  = paths.keys.flatMap(path => Option(path.getParent)).toSet
         watchedDirectories = bufferDirectories ++ dictionaryDirectories
         _ <- watcher.sync(watchedDirectories)
         _ <-

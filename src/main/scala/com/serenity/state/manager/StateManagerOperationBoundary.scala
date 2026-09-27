@@ -111,10 +111,9 @@ final private[manager] class StateManagerOperationBoundary private (
 
   /** #1691: `discoverDictionaryFingerprints` is a real filesystem stat per candidate dictionary path, so this only
     * calls it when there is anything to check (`requiresDocumentAnalysis`) and reuses `dictionaryFingerprintsRef`'s
-    * cached value for as long as the spell-check config it was discovered from stays the same -- a state commit
-    * (this method's caller, via `afterCommit`) fires on every keystroke, but the dictionaries themselves essentially
-    * never change mid-session. `refreshDictionaryFingerprints` is the intentional cache-busting signal for when they
-    * do.
+    * cached value for as long as the spell-check config it was discovered from stays the same -- a state commit (this
+    * method's caller, via `afterCommit`) fires on every keystroke, but the dictionaries themselves essentially never
+    * change mid-session. `refreshDictionaryFingerprints` is the intentional cache-busting signal for when they do.
     */
   def scheduleDocumentAnalysis(): IO[Unit] =
     modelCommit.currentState.flatMap { state =>
@@ -138,14 +137,14 @@ final private[manager] class StateManagerOperationBoundary private (
   /** The dictionary fingerprints for `config`, from `dictionaryFingerprintsRef` when they were last discovered from
     * this same (normalized) config, otherwise freshly discovered and cached. Keying the cache on the config itself
     * means a spell-check config change (new `dictionaryPaths`, languages, or enabling it at all) always gets a fresh
-    * discovery -- only an on-disk dictionary edit under an unchanged config can leave this stale, which is exactly
-    * what `refreshDictionaryFingerprints` exists to correct.
+    * discovery -- only an on-disk dictionary edit under an unchanged config can leave this stale, which is exactly what
+    * `refreshDictionaryFingerprints` exists to correct.
     */
   private def cachedDictionaryFingerprints(config: SpellCheckConfig): IO[List[SpellCheckDictionaryFingerprint]] =
     val normalized = config.normalized
     dictionaryFingerprintsRef.get.flatMap {
       case Some((cachedConfig, fingerprints)) if cachedConfig == normalized => IO.pure(fingerprints)
-      case _                                                                => discoverAndCacheDictionaryFingerprints(normalized)
+      case _ => discoverAndCacheDictionaryFingerprints(normalized)
     }
 
   private def discoverAndCacheDictionaryFingerprints(
@@ -302,8 +301,8 @@ private[manager] object StateManagerOperationBoundary:
     // Injectable seam for tests (mirrors `SpellCheckConfig.discoverDictionarySourcePaths`'s own
     // `osDictionaryDirectories` parameter) so a spec can count or fake filesystem stats without touching a real
     // dictionary directory -- see `StateManagerDictionaryFingerprintCacheSpec`.
-    discoverDictionaryFingerprints: SpellCheckConfig => IO[List[SpellCheckDictionaryFingerprint]] =
-      config => IO.blocking(SpellCheckConfig.discoverDictionaryFingerprints(config))
+    discoverDictionaryFingerprints: SpellCheckConfig => IO[List[SpellCheckDictionaryFingerprint]] = config =>
+      IO.blocking(SpellCheckConfig.discoverDictionaryFingerprints(config))
   ): IO[StateManagerOperationBoundary] =
     for
       pendingOperations         <- Ref.of[IO, List[StateManagerOperation]](Nil)

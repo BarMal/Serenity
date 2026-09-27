@@ -58,8 +58,8 @@ class StateManagerDictionaryFingerprintCacheSpec extends AnyFlatSpec with Matche
     "not re-discover dictionary fingerprints across repeated validated commits with an unchanged spell-check config" in {
       val state = spellCheckEnabledState()
       val program = for
-        modelRef   <- ModelViews.modelOf(state)
-        calls      <- Ref.of[IO, Int](0)
+        modelRef <- ModelViews.modelOf(state)
+        calls    <- Ref.of[IO, Int](0)
         operations <- StateManagerOperationBoundary.create(
           modelRef,
           org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
@@ -89,8 +89,8 @@ class StateManagerDictionaryFingerprintCacheSpec extends AnyFlatSpec with Matche
       )
     )
     val program = for
-      modelRef   <- ModelViews.modelOf(initialState)
-      calls      <- Ref.of[IO, Int](0)
+      modelRef <- ModelViews.modelOf(initialState)
+      calls    <- Ref.of[IO, Int](0)
       operations <- StateManagerOperationBoundary.create(
         modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
@@ -146,10 +146,10 @@ class StateManagerDictionaryFingerprintCacheSpec extends AnyFlatSpec with Matche
         startsAfterWarmup shouldBe 1
         callsAfterWarmup shouldBe 1
         startsAfterRepeat shouldBe 1 // no re-analysis from a plain repeated commit
-        callsAfterRepeat shouldBe 1 // ...and no additional stat call either
+        callsAfterRepeat shouldBe 1  // ...and no additional stat call either
         startsBeforeFocus shouldBe 1 // the stale cache masks the on-disk change until refreshed
-        callsAfterFocus shouldBe 2 // refreshDictionaryFingerprints is the one deliberate extra stat
-        startsAfterFocus shouldBe 2 // and now re-analysis fires, proving the change is still detected (issue #1691's
+        callsAfterFocus shouldBe 2   // refreshDictionaryFingerprints is the one deliberate extra stat
+        startsAfterFocus shouldBe 2  // and now re-analysis fires, proving the change is still detected (issue #1691's
         // second acceptance criterion)
 
       program.unsafeRunSync()

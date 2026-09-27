@@ -176,9 +176,8 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
 
   // #1691: the directories AppRuntime's FileChangeWatcher-backed loop registers a real-time watch on, so an on-disk
   // dictionary edit invalidates StateManagerOperationBoundary's fingerprint cache without waiting for focus-gain.
-  "SpellCheckConfig.dictionaryWatchDirectories" should "be empty when spell-check is disabled" in {
+  "SpellCheckConfig.dictionaryWatchDirectories" should "be empty when spell-check is disabled" in
     SpellCheckConfig.dictionaryWatchDirectories(SpellCheckConfig(enabled = false)).shouldBe(Set.empty)
-  }
 
   it should "offer both a configured directory entry and its parent as watch candidates" in {
     val configuredDirectory = Files.createTempDirectory("serenity-watch-dictionary-dir")
