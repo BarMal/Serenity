@@ -15,9 +15,14 @@ final case class AppState(
   // buffers actually placed in a pane are indexed eagerly, below, at construction -- the render path
   // (`RendererPaneSetup.prepareEditorPaneRenderPlan`) revisits exactly those buffers every frame until the next edit
   // produces a new `AppState` (and so a freshly recomputed map), which is the same amortization the old cache gave a
-  // paned buffer after its first touch. `annotationIndex`/`markdownFenceIndex`/`semanticTokensAvailability` still
-  // answer for any buffer, paned or not -- one outside a pane is simply computed on demand, uncached, since nothing
-  // re-renders it every frame to make caching worth its keep.
+  // paned buffer after its first touch. `annotationIndex`/`semanticTokensAvailability` still answer for any buffer,
+  // paned or not -- one outside a pane is simply computed on demand, uncached, since nothing re-renders it every frame
+  // to make caching worth its keep.
+  //
+  // `markdownFenceIndex` is NOT precomputed here, unlike the other two: nothing in the render path calls it per frame
+  // (`RendererPaneSetup` never reads it), so there is no amortized cost to recoup -- only a whole-buffer `getLine` scan
+  // (`MarkdownBlockLens.fenceRangeIndex`) that every paned buffer would otherwise pay at construction regardless of
+  // language, on every edit. It is computed on demand, exactly like a non-paned buffer's index.
   //
   // Plain immutable fields, not `AtomicReference` (#1677): a mutable field -- even one instance-scoped and never
   // observed to leak across instances -- still turns `AppState` into a value nothing can safely treat as pure data:
@@ -30,9 +35,6 @@ final case class AppState(
 
   private val annotationIndexByPanedBuffer: Map[BufferId, AnnotationLineIndex] =
     panedBufferIds.flatMap(id => persisted.buffers.get(id).map(buffer => id -> computeAnnotationIndex(buffer))).toMap
-
-  private val markdownFenceIndexByPanedBuffer: Map[BufferId, MarkdownBlockLens.FenceRangeIndex] =
-    panedBufferIds.flatMap(id => persisted.buffers.get(id).map(buffer => id -> computeMarkdownFenceIndex(buffer))).toMap
 
   private val semanticTokensAvailabilityByPanedBuffer: Map[BufferId, SemanticTokensAvailability] =
     panedBufferIds
@@ -75,13 +77,11 @@ final case class AppState(
         if runtime.semanticTokensState.unavailableUris.contains(uri) then SemanticTokensAvailability.Unavailable
         else SemanticTokensAvailability.Pending
 
-  /** `bufferId`'s markdown fence-range index -- precomputed if `bufferId` is placed in a pane
-    * (`markdownFenceIndexByPanedBuffer`), computed fresh on demand otherwise.
+  /** `bufferId`'s markdown fence-range index, computed fresh on demand -- see the class-level comment on why this one,
+    * unlike [[annotationIndex]] and [[semanticTokensAvailability]], is never precomputed for a paned buffer.
     */
   def markdownFenceIndex(bufferId: BufferId): Option[MarkdownBlockLens.FenceRangeIndex] =
-    persisted.buffers.get(bufferId).map { buffer =>
-      markdownFenceIndexByPanedBuffer.getOrElse(bufferId, computeMarkdownFenceIndex(buffer))
-    }
+    persisted.buffers.get(bufferId).map(computeMarkdownFenceIndex)
 
   private def computeMarkdownFenceIndex(buffer: Buffer): MarkdownBlockLens.FenceRangeIndex =
     MarkdownBlockLens.fenceRangeIndex(buffer.document.content.lineCount, buffer.document.content.getLine)
