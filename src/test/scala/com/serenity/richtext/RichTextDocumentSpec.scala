@@ -309,3 +309,96 @@ class RichTextDocumentSpec extends AnyFlatSpec with Matchers:
       RichTextParagraph(List(RichTextRun("newld", bold)), ParagraphAlignment.Center, ParagraphRole.Heading(2))
     )
   }
+
+  it should "represent an empty document constructed from Nil" in {
+    val document = RichTextDocument(Nil)
+
+    document.paragraphs shouldBe Nil
+    document.plainText shouldBe ""
+    document.plainTextLength shouldBe 0
+    document.paragraphAt(0) shouldBe None
+    document.hasFormatting shouldBe false
+  }
+
+  it should "apply a mark at the boundary of the first paragraph without touching later ones" in {
+    val document = RichTextDocument(
+      List(
+        RichTextParagraph.plain("alpha"),
+        RichTextParagraph.plain("beta"),
+        RichTextParagraph.plain("gamma")
+      )
+    )
+
+    val marked = document.applyMark(
+      RichTextRange(RichTextPosition(0, 0), RichTextPosition(0, 5)),
+      InlineMark.Bold
+    )
+
+    marked.paragraphs.head.runs shouldBe List(RichTextRun("alpha", RichTextStyle(marks = Set(InlineMark.Bold))))
+    marked.paragraphs(1) shouldBe RichTextParagraph.plain("beta")
+    marked.paragraphs(2) shouldBe RichTextParagraph.plain("gamma")
+  }
+
+  it should "apply a mark at the boundary of the last paragraph without touching earlier ones" in {
+    val document = RichTextDocument(
+      List(
+        RichTextParagraph.plain("alpha"),
+        RichTextParagraph.plain("beta"),
+        RichTextParagraph.plain("gamma")
+      )
+    )
+
+    val lastIndex = document.paragraphs.length - 1
+    val marked = document.applyMark(
+      RichTextRange(RichTextPosition(lastIndex, 0), RichTextPosition(lastIndex, 5)),
+      InlineMark.Italic
+    )
+
+    marked.paragraphs.head shouldBe RichTextParagraph.plain("alpha")
+    marked.paragraphs(1) shouldBe RichTextParagraph.plain("beta")
+    marked.paragraphs(2).runs shouldBe List(RichTextRun("gamma", RichTextStyle(marks = Set(InlineMark.Italic))))
+  }
+
+  it should "accumulate correctly across a chain of sequential edits" in {
+    val initial = RichTextDocument.oneParagraph("alpha beta gamma")
+
+    val afterBold = initial.applyMark(
+      RichTextRange(RichTextPosition(0, 0), RichTextPosition(0, 5)),
+      InlineMark.Bold
+    )
+    val afterInsert = afterBold.replaceRange(RichTextRange(RichTextPosition(0, 5), RichTextPosition(0, 5)), "!")
+    val afterSplit  = afterInsert.replaceRange(RichTextRange(RichTextPosition(0, 6), RichTextPosition(0, 6)), "\n")
+    val afterRole   = afterSplit.setParagraphRole(
+      RichTextRange(RichTextPosition(1, 0), RichTextPosition(1, 0)),
+      ParagraphRole.Heading(1)
+    )
+
+    afterRole.plainText shouldBe "alpha!\n beta gamma"
+    afterRole.paragraphs.head.runs shouldBe List(
+      RichTextRun("alpha!", RichTextStyle(marks = Set(InlineMark.Bold)))
+    )
+    afterRole.paragraphs(1).role shouldBe ParagraphRole.Heading(1)
+    afterRole.paragraphs(1).plainText shouldBe " beta gamma"
+  }
+
+  it should "be equal across different construction paths that yield the same flattened content" in {
+    val direct = RichTextDocument(
+      List(
+        RichTextParagraph.plain("alpha"),
+        RichTextParagraph.plain("beta"),
+        RichTextParagraph.plain("gamma")
+      )
+    )
+
+    // Reach the same three paragraphs via split/link (replaceSlice) instead of a fresh fromParagraphs build,
+    // so the underlying ParagraphTree shape differs even though the flattened content is identical.
+    val viaEdit = RichTextDocument(List(RichTextParagraph.plain("alpha"), RichTextParagraph.plain("gamma")))
+      .replaceRange(
+        RichTextRange(RichTextPosition(1, 0), RichTextPosition(1, 0)),
+        "beta\n"
+      )
+
+    viaEdit.paragraphs shouldBe direct.paragraphs
+    viaEdit shouldBe direct
+    viaEdit.hashCode() shouldBe direct.hashCode()
+  }
