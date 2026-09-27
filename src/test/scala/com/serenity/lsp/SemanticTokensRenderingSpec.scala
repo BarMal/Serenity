@@ -1,6 +1,7 @@
 package com.serenity.lsp
 
 import com.serenity.keystroke.events.LspEvent
+import com.serenity.lsp.client.DocumentUri
 import com.serenity.lsp.model.SemanticToken
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, SemanticTokensAvailability}
@@ -31,23 +32,26 @@ class SemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
     val result =
       SystemEventReducer.reduce(LspEvent.LspSemanticTokensReceived(defaultBufferUri, tokens), AppState.initial)
 
-    result.state.runtime.semanticTokensState.byUri should contain key defaultBufferUri
-    result.state.runtime.semanticTokensState.byUri(defaultBufferUri) shouldBe tokens
+    result.state.runtime.languageService.semanticTokensState.byUri should contain key DocumentUri(defaultBufferUri)
+    result.state.runtime.languageService.semanticTokensState.byUri(DocumentUri(defaultBufferUri)) shouldBe tokens
     result.effects shouldBe empty
   }
 
   it should "replace semantic tokens for the same URI rather than accumulate them" in {
     val initial = AppState.initial
     val state = initial.copy(runtime =
-      initial.runtime.copy(semanticTokensState =
-        initial.runtime.semanticTokensState.copy(byUri = Map(defaultBufferUri -> List(token(0, 0, 3, "keyword"))))
+      initial.runtime.copy(languageService =
+        initial.runtime.languageService.copy(semanticTokensState =
+          initial.runtime.languageService.semanticTokensState
+            .copy(byUri = Map(DocumentUri(defaultBufferUri) -> List(token(0, 0, 3, "keyword"))))
+        )
       )
     )
 
     val newTokens = List(token(0, 0, 3, "string"))
     val result    = SystemEventReducer.reduce(LspEvent.LspSemanticTokensReceived(defaultBufferUri, newTokens), state)
 
-    result.state.runtime.semanticTokensState.byUri(defaultBufferUri) shouldBe newTokens
+    result.state.runtime.languageService.semanticTokensState.byUri(DocumentUri(defaultBufferUri)) shouldBe newTokens
   }
 
   "AppState.semanticTokensAvailability" should "be Pending for a document that has never received semantic tokens" in {
@@ -97,7 +101,9 @@ class SemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
     val tokens = List(token(0, 0, 3, "keyword"))
     val result = SystemEventReducer.reduce(LspEvent.LspSemanticTokensReceived(defaultBufferUri, tokens), unavailable)
 
-    result.state.runtime.semanticTokensState.unavailableUris shouldNot contain(defaultBufferUri)
+    result.state.runtime.languageService.semanticTokensState.unavailableUris shouldNot contain(
+      DocumentUri(defaultBufferUri)
+    )
     result.state
       .semanticTokensAvailability(defaultBufferId)
       .getOrElse(fail("expected an index for a buffer that exists")) shouldBe SemanticTokensAvailability.Available(
@@ -113,7 +119,9 @@ class SemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
 
     val result = SystemEventReducer.reduce(LspEvent.LspSemanticTokensUnavailable(defaultBufferUri), received)
 
-    result.state.runtime.semanticTokensState.byUri shouldNot contain key defaultBufferUri
-    result.state.runtime.semanticTokensState.unavailableUris should contain(defaultBufferUri)
+    result.state.runtime.languageService.semanticTokensState.byUri shouldNot contain key DocumentUri(defaultBufferUri)
+    result.state.runtime.languageService.semanticTokensState.unavailableUris should contain(
+      DocumentUri(defaultBufferUri)
+    )
     result.effects shouldBe empty
   }

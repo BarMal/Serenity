@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import cats.syntax.all.*
+import com.serenity.command.CommandId
 import com.serenity.config.*
 import com.serenity.state.models.*
 import com.serenity.ui.theme.Theme
@@ -56,9 +57,12 @@ object SessionState:
       config = appState.persisted.config,
       themeName = appState.persisted.theme.name,
       recentFiles = appState.persisted.recentFiles.map(_.toString),
-      recentFilesByMode =
-        appState.persisted.recentFilesByMode.map { case (mode, paths) => mode.configKey -> paths.map(_.toString) },
-      commandUsage = appState.persisted.commandUsage
+      recentFilesByMode = appState.persisted.recentFilesByMode.map {
+        case (mode, paths) => mode.configKey -> paths.map(_.toString)
+      },
+      // `commandUsage` is keyed by `CommandId` in `Persisted` (issue #1693); the session file itself stays plain
+      // `String`-keyed JSON, the same convention `recentFilesByMode` above uses for `AppMode`.
+      commandUsage = appState.persisted.commandUsage.map { case (id, generation) => id.value -> generation }
     )
 
   private def orderedBuffers(appState: AppState): List[Buffer] =
@@ -121,7 +125,7 @@ object SessionState:
         recentFilesByMode = sessionState.recentFilesByMode.flatMap {
           case (key, paths) => AppMode.fromConfigKey(key).map(mode => mode -> paths.map(Path.of(_)))
         },
-        commandUsage = sessionState.commandUsage
+        commandUsage = sessionState.commandUsage.map { case (name, generation) => CommandId(name) -> generation }
       ),
       runtime = Runtime(
         uiSurfaces = restoredLayout.surfaces,

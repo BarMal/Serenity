@@ -174,7 +174,9 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
         buffers = Map(bufferId -> buffer)
       ),
       runtime = AppState.initial.runtime.copy(
-        diagnosticsState = AppState.initial.runtime.diagnosticsState.copy(diagnostics = Map(uri -> diagnostics))
+        languageService = AppState.initial.runtime.languageService.copy(diagnosticsState =
+          AppState.initial.runtime.languageService.diagnosticsState.copy(diagnostics = Map(uri -> diagnostics))
+        )
       )
     )
     val fixture = harness(state)
@@ -217,7 +219,9 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
         buffers = Map(bufferId -> buffer)
       ),
       runtime = AppState.initial.runtime.copy(
-        diagnosticsState = AppState.initial.runtime.diagnosticsState.copy(diagnostics = Map(uri -> staleDiagnostic))
+        languageService = AppState.initial.runtime.languageService.copy(diagnosticsState =
+          AppState.initial.runtime.languageService.diagnosticsState.copy(diagnostics = Map(uri -> staleDiagnostic))
+        )
       )
     )
     val fixture = harness(state)

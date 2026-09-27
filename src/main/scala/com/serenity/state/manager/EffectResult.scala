@@ -5,6 +5,7 @@ import java.nio.file.Path
 import com.serenity.command.CommandRegistry
 import com.serenity.config.SpellCheckDictionaryFingerprint
 import com.serenity.keystroke.events.RunnerBindingRecordingExpired
+import com.serenity.lsp.client.DocumentUri
 import com.serenity.project.ProjectTaskResult
 import com.serenity.rope.Rope
 import com.serenity.session.SessionMetadata
@@ -41,7 +42,7 @@ private[manager] enum EffectResult:
 
   case DocumentAnalysisCompleted(
       analyzed: AppState,
-      expected: Map[String, SpellCheckFingerprint],
+      expected: Map[DocumentUri, SpellCheckFingerprint],
       dictionaryFingerprints: List[SpellCheckDictionaryFingerprint]
   )
 

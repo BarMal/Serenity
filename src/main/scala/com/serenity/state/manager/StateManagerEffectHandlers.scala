@@ -533,5 +533,5 @@ private[manager] object StateManagerEffectHandlers:
   def withCommandUsageRecorded(state: AppState, commandName: String): AppState =
     val nextGeneration = state.persisted.commandUsage.values.maxOption.getOrElse(0) + 1
     state.copy(persisted =
-      state.persisted.copy(commandUsage = state.persisted.commandUsage + (commandName -> nextGeneration))
+      state.persisted.copy(commandUsage = state.persisted.commandUsage + (CommandId(commandName) -> nextGeneration))
     )

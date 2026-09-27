@@ -45,8 +45,9 @@ final case class CommandRunner(
     // incrementing "recency generation" (higher = used more recently), bumped by `recordCommandUsage` whenever a
     // command executes from the palette. A generation counter rather than wall-clock time: recency-*ordering* is all
     // ranking needs, and it keeps this pure and IO-free. In-session only (not persisted across restarts) -- issue
-    // #1049's empty-query "recents" view is expected to read this same map, not a separate one.
-    commandUsage: Map[String, Int] = Map.empty
+    // #1049's empty-query "recents" view is expected to read this same map, not a separate one. Keyed by `CommandId`
+    // (issue #1693), the same `Command.name`-derived identifier `Persisted.commandUsage` uses.
+    commandUsage: Map[CommandId, Int] = Map.empty
 ) extends CommandRunnerSubmenuEditing
     with CommandRunnerLifecycle
     with CommandRunnerSettingsSearch:
@@ -115,7 +116,7 @@ final case class CommandRunner(
           val (settingsEntry, commands) = commandItems.partition(item => CommandRelevance.isSettingsEntry(item.command))
           settingsEntry ++ commands
             .filter(item => CommandRelevance.isRelevant(item.command, context.editingContext))
-            .sortBy(item => -commandUsage.getOrElse(item.command.name, 0))
+            .sortBy(item => -commandUsage.getOrElse(CommandId(item.command.name), 0))
         else
           val (strongCommandMatches, remainingCommandMatches) =
             commandItems.partition(item => CommandRunnerSearch.isStrongCommandMatch(item.command, state.searchTerm))
@@ -148,7 +149,10 @@ final case class CommandRunner(
       // issue #1048: `searchCommands` already ranks by fuzzy relevance; re-sorting (stably) by recency on top of
       // that lets a recently-used command float above an equally (or less) relevant one without ever displacing a
       // clearly stronger match, since a `sortBy` is stable across ties in `-commandUsage`.
-      else registry.searchCommands(term, maxResults = 50).sortBy(command => -commandUsage.getOrElse(command.name, 0))
+      else
+        registry
+          .searchCommands(term, maxResults = 50)
+          .sortBy(command => -commandUsage.getOrElse(CommandId(command.name), 0))
     val updatedState = CommandPaletteState(term, 0, filtered)
     val updatedSurface = surface match
       case CommandRunnerSurface.Palette(_)     => CommandRunnerSurface.Palette(updatedState)
@@ -177,7 +181,7 @@ final case class CommandRunner(
     */
   def recordCommandUsage(name: String): CommandRunner =
     val nextGeneration = commandUsage.values.maxOption.getOrElse(0) + 1
-    copy(commandUsage = commandUsage + (name -> nextGeneration))
+    copy(commandUsage = commandUsage + (CommandId(name) -> nextGeneration))
 
   lazy val settingsGroups: List[CommandSurfaceItem.GroupItem] =
     CommandRunnerSettingsGroups.build(

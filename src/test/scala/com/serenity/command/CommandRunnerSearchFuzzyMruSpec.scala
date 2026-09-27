@@ -102,7 +102,7 @@ class CommandRunnerSearchFuzzyMruSpec extends AnyFlatSpec with Matchers:
   "CommandRunner.recordCommandUsage" should "give the most recently recorded command the highest generation" in {
     val runner = CommandRunner.empty.recordCommandUsage("a").recordCommandUsage("b").recordCommandUsage("a")
 
-    runner.commandUsage("a") should be > runner.commandUsage("b")
+    runner.commandUsage(CommandId("a")) should be > runner.commandUsage(CommandId("b"))
   }
 
   it should "re-rank equally-relevant search results so a recently used command floats up" in {

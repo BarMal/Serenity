@@ -1,18 +1,19 @@
 package com.serenity.state.models
 
+import com.serenity.lsp.client.DocumentUri
 import com.serenity.lsp.model.SemanticToken
 
 /** The most recent `textDocument/semanticTokens/full` result per document, keyed the same way as
-  * [[DiagnosticsState.diagnostics]] (a document's real file URI, since only buffers with an active LSP binding ever
-  * receive one), plus which documents have been confirmed to have none coming (no server for this language at all, or a
-  * connected server that never declared the capability). A URI absent from both `byUri` and `unavailableUris` is a
-  * document whose request is still in flight (or hasn't been sent yet) -- distinct from `unavailableUris`, which is a
-  * confirmed negative answer. [[AppState.semanticTokensAvailability]] is where that three-way distinction is read back
-  * out as [[SemanticTokensAvailability]].
+  * [[DiagnosticsState.diagnostics]] (a document's real file [[DocumentUri]], since only buffers with an active LSP
+  * binding ever receive one), plus which documents have been confirmed to have none coming (no server for this language
+  * at all, or a connected server that never declared the capability). A URI absent from both `byUri` and
+  * `unavailableUris` is a document whose request is still in flight (or hasn't been sent yet) -- distinct from
+  * `unavailableUris`, which is a confirmed negative answer. [[AppState.semanticTokensAvailability]] is where that
+  * three-way distinction is read back out as [[SemanticTokensAvailability]].
   */
 final case class SemanticTokensState(
-    byUri: Map[String, List[SemanticToken]] = Map.empty,
-    unavailableUris: Set[String] = Set.empty
+    byUri: Map[DocumentUri, List[SemanticToken]] = Map.empty,
+    unavailableUris: Set[DocumentUri] = Set.empty
 )
 
 /** A document's semantic-tokens status, as read back out of [[SemanticTokensState]] via

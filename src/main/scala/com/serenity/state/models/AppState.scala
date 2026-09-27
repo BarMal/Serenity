@@ -51,7 +51,8 @@ final case class AppState(
 
   private def computeAnnotationIndex(buffer: Buffer): AnnotationLineIndex =
     val diagnostics =
-      runtime.diagnosticsState.diagnostics.getOrElse(com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer), Nil)
+      runtime.languageService.diagnosticsState.diagnostics
+        .getOrElse(com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer), Nil)
     AnnotationLineIndex(
       buffer.annotations.documentComments.toVector,
       diagnostics.groupMap(_.range.start.line)(identity)
@@ -60,9 +61,9 @@ final case class AppState(
   /** `bufferId`'s semantic-tokens status -- precomputed if `bufferId` is placed in a pane
     * (`semanticTokensAvailabilityByPanedBuffer`), computed fresh on demand otherwise. See
     * [[SemanticTokensAvailability]] for what each case means and how the renderer treats it: `Pending` (no entry in
-    * `runtime.semanticTokensState` at all yet) is deliberately distinct from `Unavailable` (confirmed via
-    * `unavailableUris`) -- a request still in flight must not render the same muted style as a confirmed absence (issue
-    * #859/#1177 rendering-slice review finding).
+    * `runtime.languageService.semanticTokensState` at all yet) is deliberately distinct from `Unavailable` (confirmed
+    * via `unavailableUris`) -- a request still in flight must not render the same muted style as a confirmed absence
+    * (issue #859/#1177 rendering-slice review finding).
     */
   def semanticTokensAvailability(bufferId: BufferId): Option[SemanticTokensAvailability] =
     persisted.buffers.get(bufferId).map { buffer =>
@@ -71,10 +72,11 @@ final case class AppState(
 
   private def computeSemanticTokensAvailability(buffer: Buffer): SemanticTokensAvailability =
     val uri = com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer)
-    runtime.semanticTokensState.byUri.get(uri) match
+    runtime.languageService.semanticTokensState.byUri.get(uri) match
       case Some(tokens) => SemanticTokensAvailability.Available(tokens.groupBy(_.line))
       case None =>
-        if runtime.semanticTokensState.unavailableUris.contains(uri) then SemanticTokensAvailability.Unavailable
+        if runtime.languageService.semanticTokensState.unavailableUris.contains(uri) then
+          SemanticTokensAvailability.Unavailable
         else SemanticTokensAvailability.Pending
 
   /** `bufferId`'s markdown fence-range index, computed fresh on demand -- see the class-level comment on why this one,
@@ -397,8 +399,8 @@ final case class AppState(
       case _                               => false
 
   def allocateSurfaceId: (AppState, SurfaceId) =
-    val surfaceId = SurfaceId(s"surface-${runtime.nextSurfaceId}")
-    (copy(runtime = runtime.copy(nextSurfaceId = runtime.nextSurfaceId + 1)), surfaceId)
+    val (nextSupply, surfaceId) = runtime.nextSurfaceId.next
+    (copy(runtime = runtime.copy(nextSurfaceId = nextSupply)), surfaceId)
 
   def pushFocus(newFocus: Focus): AppState =
     val deduplicated = runtime.focusHistory.filterNot(_ == persisted.focus)
@@ -473,7 +475,7 @@ object AppState:
         uiSurfaces = companionSpriteSurfaces(config),
         nextBufferId = BufferId(1),
         nextPaneId = PaneId(1),
-        nextSurfaceId = 0
+        nextSurfaceId = SurfaceIdSupply.initial
       )
     )
 
