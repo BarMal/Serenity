@@ -171,9 +171,9 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
     frameState.drainScreenDamage(Some(output)) shouldBe Damage.Everything
   }
 
-  /** [[frameState.cacheCapacity]] is process-wide mutable state (issue #1433): a test that reconfigures it must restore
-    * the previous value afterward, or a later test relying on the default (in this file or any other sharing the same
-    * JVM) would silently see a different bound than it assumed.
+  /** [[frameState.cacheCapacity]] is this spec's own instance-scoped state (issue #1677): a test that reconfigures it
+    * must still restore the previous value afterward, or a later test in this same `frameState` instance relying on the
+    * default would silently see a different bound than it assumed.
     */
   private def withCacheCapacity[A](capacity: Int)(test: => A): A =
     val previous = frameState.currentCacheCapacity

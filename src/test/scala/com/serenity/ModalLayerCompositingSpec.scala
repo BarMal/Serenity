@@ -48,6 +48,10 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
   "RendererEntryPoints.render" should "not repaint the modal layer's own buffer when only editor content changed" in {
     val surface = new CountingLayerBufferSurface(80, 24)
     val before  = stateWith("alpha\nbeta\ngamma", modalDialog)
+    // Shared across both render calls below (issue #1677): a real `StateManager` reuses one `RenderCaches` across
+    // every frame it renders, and it's exactly that reuse -- not a JVM-wide singleton -- these modal-layer-buffer
+    // reuse assertions depend on.
+    val caches = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       before,
@@ -56,7 +60,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       Damage.Everything,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     surface.newLayerSurfaceCalls.get() shouldBe 1
 
@@ -86,7 +90,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       DamageProducer.forTransition(before, after),
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     surface.newLayerSurfaceCalls.get() shouldBe 1
@@ -97,6 +101,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
   it should "repaint the modal layer's buffer when only the modal's own content changes" in {
     val surface = new CountingLayerBufferSurface(80, 24)
     val before  = stateWith("alpha\nbeta\ngamma", modalDialog)
+    val caches  = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       before,
@@ -105,7 +110,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       Damage.Everything,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     surface.newLayerSurfaceCalls.get() shouldBe 1
 
@@ -123,7 +128,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       transitionDamage,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     surface.newLayerSurfaceCalls.get() shouldBe 2
@@ -140,6 +145,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     )
     val before          = stateWith("alpha\nbeta\ngamma", parent)
     val beforeWithStack = before.copy(runtime = before.runtime.copy(modalStack = List(parent, child)))
+    val caches          = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       beforeWithStack,
@@ -148,7 +154,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       Damage.Everything,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     surface.newLayerSurfaceCalls.get() shouldBe 1
 
@@ -167,7 +173,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       transitionDamage,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     surface.newLayerSurfaceCalls.get() shouldBe 2
@@ -176,6 +182,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
   it should "reuse the cached modal buffer's pixels: composited output matches a fresh repaint" in {
     val surface = new CountingLayerBufferSurface(80, 24)
     val state   = stateWith("alpha\nbeta\ngamma", modalDialog)
+    val caches  = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       state,
@@ -184,7 +191,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       Damage.Everything,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     val firstDrawImageCalls = surface.drawImageCalls.size
     firstDrawImageCalls should be > 0
@@ -196,7 +203,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       DamageProducer.forTransition(state, state),
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     surface.newLayerSurfaceCalls.get() shouldBe 1

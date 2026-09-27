@@ -323,12 +323,17 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
 
   it should "update the split preview image when the source cursor moves outside the current preview window" in {
     val source = (1 to 200).map(i => s"# Heading $i").mkString("\n")
+    // Shared across both renders below (issue #1677): a real `StateManager` reuses one `RenderCaches`, including its
+    // `markdownPreviewCache`, across every frame it renders.
+    val caches = com.serenity.state.manager.RenderCaches.create()
 
     val firstImage = renderSplitPreviewImage(
-      markdownPreviewPanelState(source, CursorPosition(0, 0))
+      markdownPreviewPanelState(source, CursorPosition(0, 0)),
+      caches
     )
     val laterImage = renderSplitPreviewImage(
-      markdownPreviewPanelState(source, CursorPosition(180, 0))
+      markdownPreviewPanelState(source, CursorPosition(180, 0)),
+      caches
     )
 
     laterImage should not be theSameInstanceAs(firstImage)
@@ -362,9 +367,14 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       committedGeneration = 1L
     )
 
-    val firstImage   = renderSplitPreviewImage(settledFirst)
-    val burstImage   = renderSplitPreviewImage(midBurst)
-    val settledImage = renderSplitPreviewImage(settledAgain)
+    // Shared across all three renders below (issue #1677): the mid-burst reuse this test checks for lives in
+    // `RenderCaches.markdownPreviewCache`, which a real `StateManager` keeps across every frame it renders -- a fresh
+    // `RenderCaches.create()` per render would leave it permanently cold and this assertion vacuously true.
+    val caches = com.serenity.state.manager.RenderCaches.create()
+
+    val firstImage   = renderSplitPreviewImage(settledFirst, caches)
+    val burstImage   = renderSplitPreviewImage(midBurst, caches)
+    val settledImage = renderSplitPreviewImage(settledAgain, caches)
 
     burstImage should be theSameInstanceAs firstImage
     settledImage should not be theSameInstanceAs(firstImage)
@@ -537,7 +547,10 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       40
     )
 
-  private def renderSplitPreviewImage(state: AppState): java.awt.image.BufferedImage =
+  private def renderSplitPreviewImage(
+    state: AppState,
+    caches: com.serenity.state.manager.RenderCaches
+  ): java.awt.image.BufferedImage =
     val surface = new MockRenderSurface(120, 32)
     val font    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
 
@@ -550,7 +563,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       textFont = font,
       cellMetrics = CellMetrics.fromFont(font),
       cursorColor = None,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     surface.drawImageCalls.headOption.map(_.image).getOrElse(fail("Expected rendered markdown preview image"))

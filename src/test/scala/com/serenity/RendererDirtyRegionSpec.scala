@@ -77,13 +77,17 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
   it should "draw no pane rows again when nothing changed" in {
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
     val state   = stateWith(lines)
+    // Shared across both render calls below (issue #1677): a real `StateManager` reuses one `RenderCaches` across
+    // every frame it renders, and the previous-frame memory these dirty-region assertions depend on
+    // (`RenderCaches.frameState`) lives on that one instance, not a JVM-wide singleton.
+    val caches = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       state,
       cursorVisible = false,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     surface.clear()
     RendererEntryPoints.render(
@@ -93,7 +97,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       DamageProducer.forTransition(state, state),
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     lines.foreach(line => drew(surface, line) shouldBe false)
@@ -109,20 +113,24 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     val second = new MockRenderSurface(80, 24, persistentContent = true)
     val state  = stateWith(lines)
     val other  = stateWith(Vector("one", "two", "three", "four"))
+    // One shared owner paints both surfaces, exactly as one `StateManager` can render more than one window: frame
+    // state is keyed per surface (`persistentContentKey`) within this single `RenderCaches`, so this is the real
+    // test of that per-surface isolation -- not a workaround for it.
+    val caches = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       state,
       cursorVisible = false,
       first,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     RendererEntryPoints.render(
       other,
       cursorVisible = false,
       second,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     first.clear()
     RendererEntryPoints.render(
@@ -132,7 +140,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       DamageProducer.forTransition(state, state),
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     // Nothing changed on this surface since its own last frame, whatever the other one painted in between.
@@ -190,12 +198,13 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
         )
       )
 
+    val caches = com.serenity.state.manager.RenderCaches.create()
     RendererEntryPoints.render(
       before,
       cursorVisible = false,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     surface.clear()
     RendererEntryPoints.render(
@@ -205,7 +214,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       DamageProducer.forTransition(before, after),
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     drew(surface, "zetaX") shouldBe true
@@ -226,13 +235,14 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
+    val caches = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       before,
       cursorVisible = true,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     surface.clear()
     RendererEntryPoints.render(
@@ -242,7 +252,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       DamageProducer.forTransition(before, after),
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     drew(surface, "alpha") shouldBe true
@@ -269,12 +279,13 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
+    val caches = com.serenity.state.manager.RenderCaches.create()
     RendererEntryPoints.render(
       before,
       cursorVisible = false,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     surface.clear()
     RendererEntryPoints.render(
@@ -284,7 +295,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       DamageProducer.forTransition(before, after),
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     drew(surface, "zeta") shouldBe true
@@ -346,16 +357,27 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
   "The repaint region" should "cover the whole canvas for the first frame" in {
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
 
-    repaintRegionFor(surface, stateWith(lines), Damage.Nothing) shouldBe None
+    repaintRegionFor(
+      surface,
+      stateWith(lines),
+      Damage.Nothing,
+      com.serenity.state.manager.RenderCaches.create()
+    ) shouldBe None
   }
 
   it should "be empty when the frame is identical to the one on screen" in {
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
     val state   = stateWith(lines)
+    val caches  = com.serenity.state.manager.RenderCaches.create()
 
-    val _ = repaintRegionFor(surface, state, Damage.Everything)
+    val _ = repaintRegionFor(surface, state, Damage.Everything, caches)
 
-    repaintRegionFor(surface, state, DamageProducer.forTransition(state, state)) shouldBe Some(PixelRect(0, 0, 0, 0))
+    repaintRegionFor(
+      surface,
+      state,
+      DamageProducer.forTransition(state, state),
+      caches
+    ) shouldBe Some(PixelRect(0, 0, 0, 0))
   }
 
   it should "cover only the edited row when one line changes" in {
@@ -388,8 +410,9 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val _      = repaintRegionFor(surface, state, Damage.Everything)
-    val region = repaintRegionFor(surface, edited, DamageProducer.forTransition(state, edited))
+    val caches = com.serenity.state.manager.RenderCaches.create()
+    val _      = repaintRegionFor(surface, state, Damage.Everything, caches)
+    val region = repaintRegionFor(surface, edited, DamageProducer.forTransition(state, edited), caches)
 
     region.map(_.heightPx).getOrElse(0) should be > 0
     region.map(_.heightPx).getOrElse(0) should be < viewport.height * 16
@@ -409,11 +432,12 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val _ = repaintRegionFor(surface, before, Damage.Everything)
+    val caches = com.serenity.state.manager.RenderCaches.create()
+    val _      = repaintRegionFor(surface, before, Damage.Everything, caches)
 
     // The gutter shows the cursor's line/column, so a cursor move also reports Chrome damage -- which
     // Damage.isBufferRowsOnly excludes, correctly falling back to an unbounded (whole-canvas) repaint.
-    repaintRegionFor(surface, after, DamageProducer.forTransition(before, after)) shouldBe None
+    repaintRegionFor(surface, after, DamageProducer.forTransition(before, after), caches) shouldBe None
   }
 
   "Dirty-line rendering" should "redraw the pane rows a floating panel vacates when it moves, without any buffer change" in {
@@ -441,6 +465,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     // config are all identical), so the transition damage is scoped narrowly to that one surface.
     val damage = DamageProducer.forTransition(before, after)
     damage shouldBe Damage.Surface(surfaceId)
+    val caches = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       before,
@@ -449,7 +474,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       Damage.Everything,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     surface.clear()
     RendererEntryPoints.render(
@@ -459,7 +484,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       damage,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     // The panel repainted its own new rect (around row 7) but not the rows it used to sit over (around row 3) -- a
@@ -567,7 +592,12 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       drew(surface, "TAILLINE") shouldBe true
     }
 
-  private def repaintRegionFor(surface: MockRenderSurface, state: AppState, damage: Damage): Option[PixelRect] =
+  private def repaintRegionFor(
+    surface: MockRenderSurface,
+    state: AppState,
+    damage: Damage,
+    caches: com.serenity.state.manager.RenderCaches
+  ): Option[PixelRect] =
     val font = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
     RendererEntryPoints.renderWithRepaintRegion(
       state,
@@ -580,5 +610,6 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       com.serenity.ui.layout.CellMetrics.fromFont(font),
       com.serenity.ui.layout.CellMetrics.fromFont(font),
       None,
-      damage
+      damage,
+      caches
     )

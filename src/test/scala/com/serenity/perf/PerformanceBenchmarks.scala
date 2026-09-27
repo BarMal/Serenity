@@ -205,6 +205,12 @@ object PerformanceBenchmarks:
     // reuse across repeated calls -- matching this benchmark's own intent of measuring repeated/cached lookups, not a
     // fresh, always-cold cache each iteration.
     val markdownPreviewCache = MarkdownPreviewCache()
+    // Shared across every render benchmark below (issue #1677): a real `StateManager` builds one `RenderCaches` at
+    // construction and reuses it across every frame it ever renders (`StateManagerComposition.scala`'s
+    // `renderCaches` field), so a fresh `RenderCaches.create()` per render call here would leave every cache
+    // permanently cold -- a 100% miss rate on every iteration, not the warm/steady-state cost these benchmarks
+    // measure.
+    val renderCaches = com.serenity.state.manager.RenderCaches.create()
     val longMeasuredLine = TextLayoutSnapshot.visualLineForText(
       "Wi" * 8_000,
       bufferLine = 0,
@@ -317,7 +323,7 @@ object PerformanceBenchmarks:
     }
     val framedLspMessages = lspMessages.flatMap(LspFramer.encode).toArray
     val projectTask       = ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test)
-    prepareCursorBaseFrame(plainScrollState, cursorWindow)
+    prepareCursorBaseFrame(plainScrollState, cursorWindow, renderCaches)
     val animationCells = multilineState.persisted.buffers
       .get(BufferId(1))
       .map(buffer =>
@@ -332,9 +338,9 @@ object PerformanceBenchmarks:
     val animationState = AnimationState(
       FlowAnimationBuilder.build(animationCells, FlowDirection.ByColumn, SweepDirection.Forward, 12)
     )
-    val fullFrame               = renderedFrame(richState, deviceScale = 1.0)
-    val diagnosticsAndComments  = renderedFrame(diagnosticsState, deviceScale = 1.0)
-    val hidpiFrame              = renderedFrame(commentsState, deviceScale = 2.0)
+    val fullFrame               = renderedFrame(richState, deviceScale = 1.0, renderCaches)
+    val diagnosticsAndComments  = renderedFrame(diagnosticsState, deviceScale = 1.0, renderCaches)
+    val hidpiFrame              = renderedFrame(commentsState, deviceScale = 2.0, renderCaches)
     val visibleFindResults      = findResultSet.visibleResults(maxResults = 80)
     val decodedLspMessages      = decodeLspMessages(framedLspMessages)
     val projectTaskPresentation = projectTask.map(ProjectTaskTerminal.started)
@@ -348,7 +354,7 @@ object PerformanceBenchmarks:
       )
     val markdownHtmlFragment =
       MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark", markdownPreviewCache)
-    val markdownLensFrame      = renderedFrame(markdownState, deviceScale = 1.0)
+    val markdownLensFrame      = renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
     val longMeasuredLineFrame  = renderedLongMeasuredLine(longMeasuredLine)
     val advancedAnimationState = animationState.advanceAllAnimations()
 
@@ -387,7 +393,7 @@ object PerformanceBenchmarks:
         2,
         8,
         () => assert(renderedFrameHasPixels(fullFrame)),
-        () => renderedFrame(richState, deviceScale = 1.0)
+        () => renderedFrame(richState, deviceScale = 1.0, renderCaches)
       ),
       BenchmarkRunner.Benchmark(
         "render.long_measured_line.java2d",
@@ -402,9 +408,9 @@ object PerformanceBenchmarks:
         "render.cursor_only.scene_reuse.java2d_overlay",
         2,
         8,
-        () => assert(renderedCursorOverlay(plainScrollState, cursorWindow)),
+        () => assert(renderedCursorOverlay(plainScrollState, cursorWindow, renderCaches)),
         () =>
-          val _ = renderedCursorOverlay(plainScrollState, cursorWindow)
+          val _ = renderedCursorOverlay(plainScrollState, cursorWindow, renderCaches)
           ()
       ),
       BenchmarkRunner.Benchmark(
@@ -412,7 +418,7 @@ object PerformanceBenchmarks:
         2,
         8,
         () => assert(renderedFrameHasPixels(diagnosticsAndComments)),
-        () => renderedFrame(diagnosticsState, deviceScale = 1.0)
+        () => renderedFrame(diagnosticsState, deviceScale = 1.0, renderCaches)
       ),
       BenchmarkRunner.Benchmark(
         "render.hidpi_frame.java2d",
@@ -424,7 +430,7 @@ object PerformanceBenchmarks:
               hidpiFrame.getHeight == frameHeightPx * 2 &&
               renderedFrameHasPixels(hidpiFrame)
           ),
-        () => renderedFrame(commentsState, deviceScale = 2.0)
+        () => renderedFrame(commentsState, deviceScale = 2.0, renderCaches)
       )
     ) ++ reducerBenchmarks(editingState, plainScrollState, richScrollState, deepViewport) ++
       AnimationTickBenchmarks.benchmarks(editingState) ++ DamageBenchmarks.benchmarks() ++ equalsBenchmarks() ++ List(
@@ -499,7 +505,7 @@ object PerformanceBenchmarks:
           2,
           BenchmarkIterationCounts.RenderMarkdown,
           () => assert(renderedFrameHasPixels(markdownLensFrame)),
-          () => renderedFrame(markdownState, deviceScale = 1.0)
+          () => renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
         ),
         BenchmarkRunner.Benchmark(
           "animation.large_visible_tick",
@@ -648,7 +654,11 @@ object PerformanceBenchmarks:
       )
     )
 
-  private def renderedFrame(state: AppState, deviceScale: Double): BufferedImage =
+  private def renderedFrame(
+    state: AppState,
+    deviceScale: Double,
+    caches: com.serenity.state.manager.RenderCaches
+  ): BufferedImage =
     val image = reusableFramePools(deviceScale).acquire(
       math.ceil(frameWidthPx * deviceScale).toInt,
       math.ceil(frameHeightPx * deviceScale).toInt,
@@ -673,7 +683,7 @@ object PerformanceBenchmarks:
       textFont,
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     reusableFramePools(deviceScale).publish(image)
     image
@@ -706,7 +716,11 @@ object PerformanceBenchmarks:
     )
     image
 
-  private def prepareCursorBaseFrame(state: AppState, window: SwingWindow): Unit =
+  private def prepareCursorBaseFrame(
+    state: AppState,
+    window: SwingWindow,
+    caches: com.serenity.state.manager.RenderCaches
+  ): Unit =
     RendererEntryPoints.render(
       state,
       cursorVisible = false,
@@ -717,10 +731,14 @@ object PerformanceBenchmarks:
       uiMetrics,
       cursorColor = None,
       repaintOnFlush = false,
-      caches = com.serenity.state.manager.RenderCaches.create()
+      caches = caches
     )
 
-  private def renderedCursorOverlay(state: AppState, window: SwingWindow): Boolean =
+  private def renderedCursorOverlay(
+    state: AppState,
+    window: SwingWindow,
+    caches: com.serenity.state.manager.RenderCaches
+  ): Boolean =
     RendererCursorOverlay.renderCursorOnly(
       state,
       cursorVisible = true,
@@ -730,7 +748,7 @@ object PerformanceBenchmarks:
       uiFont,
       uiMetrics,
       None,
-      caches = com.serenity.state.manager.RenderCaches.create()
+      caches = caches
     )
 
   private def reducedTopLine(result: com.serenity.state.reducers.ReducerResult): Option[Int] =

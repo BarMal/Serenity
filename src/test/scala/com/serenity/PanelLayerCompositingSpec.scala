@@ -95,6 +95,10 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
   "RendererEntryPoints.render" should "not repaint a pinned panel's own buffer when only editor content changed and blur is off" in {
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = true)
+    // Shared across both render calls below (issue #1677): a real `StateManager` reuses one `RenderCaches` across
+    // every frame it renders, and it's exactly that reuse -- not a JVM-wide singleton -- these panel-layer-buffer
+    // reuse assertions depend on.
+    val caches = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       before,
@@ -103,7 +107,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       Damage.Everything,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
@@ -115,7 +119,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       DamageProducer.forTransition(before, after),
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
@@ -124,6 +128,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
   it should "repaint a pinned panel's buffer when only its own content changes and blur is off" in {
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = true)
+    val caches  = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       before,
@@ -132,7 +137,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       Damage.Everything,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
@@ -148,7 +153,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       transitionDamage,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 2
@@ -157,6 +162,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
   it should "repaint a pinned panel with active blur whenever anything elsewhere in the frame changed" in {
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = false)
+    val caches  = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       before,
@@ -165,7 +171,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       Damage.Everything,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
@@ -180,7 +186,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       transitionDamage,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     // Blur samples the live frame, so an unrelated content change still forces this panel to repaint.
@@ -190,6 +196,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
   it should "reuse a blurred pinned panel's cached buffer on a truly clean re-render" in {
     val surface = new CountingLayerBufferSurface(120, 40)
     val state   = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = false)
+    val caches  = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       state,
@@ -198,7 +205,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       Damage.Everything,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     val firstDrawImageCalls = surface.drawImageCalls.size
     firstDrawImageCalls should be > 0
@@ -210,7 +217,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       DamageProducer.forTransition(state, state),
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
@@ -228,6 +235,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       22
     )
     val before = DockedPanelFixtures.expand(docked, expandedId)
+    val caches = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       before,
@@ -236,7 +244,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       Damage.Everything,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
@@ -248,7 +256,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       DamageProducer.forTransition(before, after),
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
@@ -262,6 +270,9 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     // deterministically, without depending on real thread scheduling.
     val surfaceA = new CountingLayerBufferSurface(120, 40)
     val before   = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = true)
+    // surfaceA's own owner: shared across its two render calls below, the same as every other reuse assertion in
+    // this file.
+    val cachesA = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       before,
@@ -270,12 +281,13 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       Damage.Everything,
-      com.serenity.state.manager.RenderCaches.create()
+      cachesA
     )
     surfaceA.newSeededLayerSurfaceCalls.get() shouldBe 1
 
     // Stand in for a concurrently running render path -- another suite, another window -- painting a panel with the
-    // *same* SurfaceId but a different frame shape.
+    // *same* SurfaceId but a different frame shape. A genuinely independent render path has its own owning
+    // `StateManager` and therefore its own `RenderCaches`, not `cachesA`.
     val surfaceB     = new CountingLayerBufferSurface(200, 60)
     val wideViewport = ViewportSize(200, 60)
     RendererEntryPoints.render(
@@ -296,7 +308,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       DamageProducer.forTransition(before, after),
-      com.serenity.state.manager.RenderCaches.create()
+      cachesA
     )
 
     surfaceA.newSeededLayerSurfaceCalls.get() shouldBe 1
@@ -305,6 +317,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
   it should "not repaint a floating panel's own buffer when only editor content changed and blur is off" in {
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWith("alpha\nbeta\ngamma", List(floatingPanel), blurOff = true)
+    val caches  = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       before,
@@ -313,7 +326,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       Damage.Everything,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
@@ -325,7 +338,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       DamageProducer.forTransition(before, after),
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
@@ -334,6 +347,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
   it should "repaint a floating panel's buffer when only its own content changes and blur is off" in {
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWith("alpha\nbeta\ngamma", List(floatingPanel), blurOff = true)
+    val caches  = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       before,
@@ -342,7 +356,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       Damage.Everything,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
@@ -358,7 +372,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       transitionDamage,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 2

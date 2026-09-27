@@ -182,7 +182,12 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
   it should "give rendering the scene prepared by mouse targeting first" in {
     val state = stateWith(Buffer.fromString(bufferId, "alpha beta"))
     val size  = ViewportSize(80, 24)
-    val scene = MouseTargetCache.fromState(state, size, authoritativeScene).scene
+    // Sharing this owner's caches between the render call and both assertions below is the point of the test
+    // (#1677): a throwaway `RenderCaches.create()` passed only to `render` would leave its `authoritativeScene`
+    // disconnected from the one this test checks against, so the assertion would hold regardless of whether
+    // rendering actually reused mouse targeting's prepared scene.
+    val caches = com.serenity.state.manager.RenderCaches.create()
+    val scene  = MouseTargetCache.fromState(state, size, caches.authoritativeScene).scene
     val codeFont =
       com.serenity.ui.fonts.FontLoader
         .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code)
@@ -200,10 +205,10 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       textFont,
       CellMetrics.fromFont(codeFont),
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      caches
     )
 
-    MouseTargetCache.fromState(state, size, authoritativeScene).scene should be theSameInstanceAs scene
+    MouseTargetCache.fromState(state, size, caches.authoritativeScene).scene should be theSameInstanceAs scene
   }
 
   it should "share a scene when rendering uses an effective theme copy" in {
