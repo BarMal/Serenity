@@ -159,14 +159,16 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "report no content row slots for a panel composed via a bespoke *SurfaceComposition" in {
-    // `DirectoryTreeSurfaceComposition` paints its own real rows through `RowCompositionSupport`, never through the
-    // generic `RowsSurfaceComposition` adapter -- `contentRowSlots` must not reverse-engineer slots from those paint
-    // boxes the way it would for an adapter-built composition (issue #1683 regression).
+  it should "derive real content row slots for a panel composed via a RowCompositionSupport-based *SurfaceComposition" in {
+    // `DirectoryTreeSurfaceComposition` is bespoke (never the generic `RowsSurfaceComposition` adapter), but it paints
+    // its rows through `RowCompositionSupport` at the exact same `SurfaceFrameLayout.contentRowSlotsFor` position
+    // `EditorLayoutContract`'s own, independent row-slot geometry derives -- so, unlike a menu/toolbar-shaped bespoke
+    // composition (`CommandRunnerSurfaceComposition`, ...), its `contentRowSlots` must recover the real, per-row
+    // slots, not report none (issue #1683).
     val view = PinnedPanelViewModel.resolve(panel, LayoutRect(0, 0, 60, 10))
 
     view.rows should not be empty
-    view.contentRowSlots shouldBe empty
+    view.contentRowSlots.map(_.kind) shouldBe view.rows.indices.map(SurfaceContentRowKind.Item.apply).toList
   }
 
   it should "preserve resolved header and footer rows separately from item rows" in {

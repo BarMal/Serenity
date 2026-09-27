@@ -180,7 +180,10 @@ object TextOverlayRenderer:
           font = font,
           cellMetrics = cellMetrics,
           textInsetPx = textInsetPx,
-          pixelY = Some(cellMetrics.toPixelY(y)),
+          // `rect.y` may carry a fractional row offset (a sub-row `itemGapRows` gap) that `y` above already rounded
+          // away -- pixel positioning must come from the box's own exact offset, not from that rounded cell row, or a
+          // fractional gap renders as no gap at all.
+          pixelY = Some(math.round(rect.y * cellMetrics.lineHeight).toInt),
           pixelHeight = Some(math.max(1, math.round(rect.height).toInt) * cellMetrics.lineHeight)
         )
       }

@@ -82,11 +82,15 @@ final case class ResolvedSurfaceComposition(
     paintBoxes: List[SurfacePaintBox],
     hitRegions: List[SurfaceHitRegion],
     focusOrder: List[SurfaceFocusId],
-    // Set only by `RowsSurfaceComposition.forResolved` (issue #1683). `RowsSurfaceComposition.contentRowSlots`
-    // recovers row slots by assuming every non-chrome paint box is a plain `Item`, which holds only for that generic
-    // adapter's own tagging -- a bespoke composition (e.g. `CommandRunnerSurfaceComposition`, `OutlineSurfaceComposition`)
-    // paints real rows through its own paint-box shape, and reverse-engineering slots from those would misreport
-    // content that was never meant to be read back that way.
+    // Set by `RowsSurfaceComposition.forResolved` and by `RowCompositionSupport.planWithRowHits` (issue #1683).
+    // `RowsSurfaceComposition.contentRowSlots` recovers row slots by assuming every non-chrome paint box is a plain
+    // `Item` at the exact `SurfaceFrameLayout.contentRowSlotsFor` position -- true for both of those (the generic
+    // adapter and the flat per-row panel compositions built on `RowCompositionSupport`: `OutlineSurfaceComposition`,
+    // `DiagnosticsSurfaceComposition`, `DirectoryTreeSurfaceComposition`, `CommentsSurfaceComposition`), but not for a
+    // menu/toolbar-shaped bespoke composition (`CommandRunnerSurfaceComposition`, `ContextMenuSurfaceComposition`,
+    // `ContextualToolbarSurfaceComposition`, `CommentLensSurfaceComposition`, `ModalSurfaceComposition`,
+    // `TabBarSurfaceComposition`), which paints real rows through its own, differently-shaped paint-box layout, and
+    // reverse-engineering slots from those would misreport content that was never meant to be read back that way.
     builtByRowsAdapter: Boolean = false
 ):
 

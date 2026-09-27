@@ -57,8 +57,18 @@ object RowsSurfaceComposition:
       itemTargetRows,
       resolved.keyHintRow.nonEmpty
     )
+    // `slots`' own `y: Int` floors a fractional `itemGapRows` to a whole cell row -- fine for the row-slot lookups
+    // `contentRowSlots` and mouse hit-testing need, but painting needs the true fractional offset (mirroring the
+    // pre-migration `FloatingSurfaceGeometry.fromCells` item-rect math), or a sub-row gap renders as no gap at all.
+    val itemRowHeight   = math.max(1, itemTargetRows) + math.max(0.0, itemGapRows)
+    val itemRowsStartAt = if resolved.header.nonEmpty then 1 else 0
     val boxes = slots.flatMap { slot =>
-      rowFor(slot.kind, resolved).map(row => rowBox(slot.kind, row, rowRect(bounds, slot.y - contentRect.y)))
+      rowFor(slot.kind, resolved).map { row =>
+        val rowOffset = slot.kind match
+          case SurfaceContentRowKind.Item(index) => itemRowsStartAt + index * itemRowHeight
+          case _                                 => (slot.y - contentRect.y).toDouble
+        rowBox(slot.kind, row, rowRect(bounds, rowOffset))
+      }
     }
     ResolvedSurfaceComposition(
       bounds = bounds,
@@ -107,10 +117,10 @@ object RowsSurfaceComposition:
       case OverlayRowLayout.PriorityColumns => SurfacePaintLayout.Columns
 
   /** Recovers the `SurfaceContentRowSlot`s a composition's paint boxes were placed at -- the inverse of the
-    * header/item/key-hint/footer tagging `forResolved` applies, for callers (contract/geometry cross-checks) that still
-    * want that shape rather than reaching into paint-box internals.
+    * header/item/key-hint/footer tagging `forResolved` (and `RowCompositionSupport.planWithRowHits`) applies, for
+    * callers (contract/geometry cross-checks) that still want that shape rather than reaching into paint-box internals.
     *
-    * Only meaningful for a composition this adapter itself built (`composition.builtByRowsAdapter`): a bespoke
+    * Only meaningful for a composition tagged `composition.builtByRowsAdapter`: a menu/toolbar-shaped bespoke
     * composition's paint boxes were never tagged by this rule, so inverting them the same way would misreport their
     * content as plain item rows. Such a composition reports no row slots here.
     */
@@ -132,7 +142,7 @@ object RowsSurfaceComposition:
         }
         ._2
 
-  private def rowRect(bounds: LogicalPixelRect, row: Int): LogicalPixelRect =
+  private def rowRect(bounds: LogicalPixelRect, row: Double): LogicalPixelRect =
     LogicalPixelRect(
       bounds.x,
       bounds.y + row,

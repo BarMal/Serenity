@@ -39,5 +39,11 @@ private[layout] trait RowCompositionSupport:
       intrinsicSize = SurfaceIntrinsicSize(bounds.width, bounds.height),
       paintBoxes = clipped,
       hitRegions = hits,
-      focusOrder = hits.map(_.focusId)
+      focusOrder = hits.map(_.focusId),
+      // Every box here is a plain item row at the exact `SurfaceFrameLayout.contentRowSlotsFor` position
+      // `EditorLayoutContract.pinnedGeometry`/`floatingGeometry` independently derive from the same row count (see
+      // this trait's own doc comment) -- unlike a menu/toolbar-shaped bespoke composition (`CommandRunnerSurfaceComposition`,
+      // `ContextMenuSurfaceComposition`, ...), so `RowsSurfaceComposition.contentRowSlots` can recover real slots from
+      // it the same way it does for its own generic adapter (issue #1683).
+      builtByRowsAdapter = true
     )
