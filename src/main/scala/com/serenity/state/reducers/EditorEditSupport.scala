@@ -481,8 +481,10 @@ private[reducers] object EditorEditSupport:
     content: Rope,
     edits: List[MultiCursorEdit],
     state: AppState,
-    maxAnimatedCells: Int = com.serenity.state.manager.VisibleBufferAnimationCells.DefaultMaxAnimatedCells
+    maxAnimatedCells: Int = CellAnimation.DefaultMaxAnimatedCells
   ): Map[CharacterKey, CellAnimation] =
+    val animationFor =
+      CellAnimation.curriedFor(state.persisted.theme.backgroundColor, state.persisted.theme.foregroundColor)
     edits.foldLeft(Map.empty[CharacterKey, CellAnimation]) { (cells, edit) =>
       val remainingBudget = maxAnimatedCells - cells.size
       if remainingBudget <= 0 then cells
@@ -492,8 +494,7 @@ private[reducers] object EditorEditSupport:
           content,
           finalStartOffset,
           edit.insertedText.take(remainingBudget),
-          state.persisted.theme.backgroundColor,
-          state.persisted.theme.foregroundColor
+          animationFor
         )
     }
 
@@ -501,8 +502,7 @@ private[reducers] object EditorEditSupport:
     content: Rope,
     startOffset: Int,
     insertedText: String,
-    startColor: java.awt.Color,
-    endColor: java.awt.Color
+    animationFor: Char => CellAnimation
   ): Map[CharacterKey, CellAnimation] =
     insertedText
       .foldLeft((Map.empty[CharacterKey, CellAnimation], startOffset)) {
@@ -511,7 +511,7 @@ private[reducers] object EditorEditSupport:
         case ((cells, offset), char) =>
           val (line, column) = content.offsetToLineColumn(offset)
           (
-            cells + (CharacterKey(column, line) -> CellAnimation(char, startColor, endColor)),
+            cells + (CharacterKey(column, line) -> animationFor(char)),
             offset + 1
           )
       }

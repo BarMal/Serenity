@@ -21,4 +21,8 @@ object VerticalNavSupport:
           .getOrElse(EditorGeometry(NavigationGeometry(Vector.empty), charWidthPx = 8, panelWidthColumns = 80))
         EditorEventReducer.reduceVerticalNavigation(vertical, paneId, state, geometry)
       case textEvent: TextEntryEvent =>
-        EditorEventReducer.reduce(textEvent, paneId, state)
+        // Mirrors `EditorPaneComponent.processEventForPane`'s own geometry computation, so tests that dispatch a
+        // text event through this helper see exactly the production behavior rather than always falling back to
+        // `reduce`'s geometry-free default (#1676).
+        val geometry = EditorGeometryProducer.forEvent(textEvent, state, paneId)
+        EditorEventReducer.reduce(textEvent, paneId, state, geometry)
