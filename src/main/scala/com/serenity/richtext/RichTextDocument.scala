@@ -209,15 +209,15 @@ object RichTextParagraph:
 
 /** Rich text document model for document-format adapters and future rich editing surfaces.
   *
-  * Backed by a [[ParagraphTree]] rather than storing `paragraphs` directly (#1663): paragraph lookup and range
-  * edits go through the tree's `O(log n)` navigation, and only the paragraphs a given edit actually touches are
-  * reallocated -- the rest of the tree is shared by reference with the previous document. [[paragraphs]] itself
-  * stays available as a `List[RichTextParagraph]` for callers (codecs, tests, rendering) that want the flat
-  * sequence; flattening it is `O(n)` and happens at most once per document, memoized in the `lazy val`.
+  * Backed by a [[ParagraphTree]] rather than storing `paragraphs` directly (#1663): paragraph lookup and range edits go
+  * through the tree's `O(log n)` navigation, and only the paragraphs a given edit actually touches are reallocated --
+  * the rest of the tree is shared by reference with the previous document. [[paragraphs]] itself stays available as a
+  * `List[RichTextParagraph]` for callers (codecs, tests, rendering) that want the flat sequence; flattening it is
+  * `O(n)` and happens at most once per document, memoized in the `lazy val`.
   *
-  * Equality and hashing are defined over [[paragraphs]] (the flattened content), not the tree's internal shape --
-  * two documents holding the same paragraphs in the same order are equal regardless of which tree shape their
-  * respective edit histories produced.
+  * Equality and hashing are defined over [[paragraphs]] (the flattened content), not the tree's internal shape -- two
+  * documents holding the same paragraphs in the same order are equal regardless of which tree shape their respective
+  * edit histories produced.
   */
 final class RichTextDocument private (private val tree: ParagraphTree):
   lazy val paragraphs: List[RichTextParagraph] = tree.toParagraphs
@@ -309,15 +309,15 @@ final class RichTextDocument private (private val tree: ParagraphTree):
   def matchesPlainText(text: String): Boolean =
     plainText == text
 
-  /** Fast shape check for hot render paths: both sides are `O(1)` root-level tree aggregates. Exact content
-    * validation stays at load/save/edit boundaries via [[matchesPlainText]].
+  /** Fast shape check for hot render paths: both sides are `O(1)` root-level tree aggregates. Exact content validation
+    * stays at load/save/edit boundaries via [[matchesPlainText]].
     */
   def matchesPlainTextShape(lineCount: Int, textLength: Int): Boolean =
     tree.paragraphCount == lineCount && plainTextLength == textLength
 
-  /** Applies `transform` to every paragraph in `[range.start.paragraphIndex, range.end.paragraphIndex]`
-    * (unclamped -- an out-of-bounds end paragraph index leaves every later paragraph's own length as its end
-    * offset), giving `transform` each paragraph's local start/end offset for its slice of the range.
+  /** Applies `transform` to every paragraph in `[range.start.paragraphIndex, range.end.paragraphIndex]` (unclamped --
+    * an out-of-bounds end paragraph index leaves every later paragraph's own length as its end offset), giving
+    * `transform` each paragraph's local start/end offset for its slice of the range.
     */
   private def updateRange(
     range: RichTextRange

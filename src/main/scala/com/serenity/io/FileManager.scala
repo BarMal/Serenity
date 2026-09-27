@@ -172,7 +172,8 @@ class FileManager(using balance: Balance):
       ),
       // `content` above is `Rope(normalized.plainText)`, so `normalized` is in sync with it by construction, at the
       // fresh `Document`'s default `contentVersion` of `0L` (#1663).
-      richText = com.serenity.state.models.RichTextState()
+      richText = com.serenity.state.models
+        .RichTextState()
         .withSyncedDocument(Some(normalized), contentVersion = 0L)
         .copy(richTextFidelity = fidelity)
     )
