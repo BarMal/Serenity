@@ -106,7 +106,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     val surfaceId    = updatedState.pinnedSurfaces.find(_.content == SurfaceContent.Outline(Nil)).get.id
     // +1 for the single fixed border/frame cell, which is separate from the capped content cells.
-    updatedState.runtime.surfaceAnimations(surfaceId).animationState.animations.size should be <=
+    updatedState.runtime.motion.surfaceAnimations(surfaceId).animationState.animations.size should be <=
       com.serenity.state.manager.VisibleBufferAnimationCells.DefaultMaxAnimatedCells + 1
   }
 

@@ -192,7 +192,7 @@ final case class AppState(
   def commandRunnerContext: com.serenity.command.CommandRunnerContext =
     com.serenity.command.CommandRunnerContext(
       bufferLanguage = activeBuffer.flatMap(_.document.language),
-      themeNames = runtime.availableThemeNames,
+      themeNames = runtime.themeDiscovery.availableThemeNames,
       currentThemeName = Some(persisted.theme.name),
       editingContext = Some(editingContext)
     )

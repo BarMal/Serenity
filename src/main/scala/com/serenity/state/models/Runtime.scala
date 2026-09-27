@@ -2,9 +2,8 @@ package com.serenity.state.models
 
 import com.serenity.animation.sprite.CompanionSpriteState
 import com.serenity.config.{AppConfig, MotionFamily}
-import com.serenity.input.CursorPeekState
 import com.serenity.keystroke.KeyboardFidelityTier
-import com.serenity.ui.layout.{ScreenPosition, ViewportSize}
+import com.serenity.ui.layout.ViewportSize
 
 /** State that is never persisted -- reset to defaults (or recomputed) on every session restore. */
 final case class Runtime(
@@ -17,27 +16,21 @@ final case class Runtime(
     nextBufferId: BufferId = BufferId(0),
     nextPaneId: PaneId = PaneId(0),
     nextSurfaceId: SurfaceIdSupply = SurfaceIdSupply.initial,
-    themeTransition: Option[ThemeTransition] = None,
-    surfaceAnimations: Map[SurfaceId, SurfaceAnimationState] = Map.empty,
-    // Column-based document layout (issue #1338, Phase 1 animation): the in-flight column-to-column transition for
-    // each buffer whose active column just moved, if `MotionFamily.ColumnTransitions` is enabled. See
-    // `ColumnTransitionState`'s doc comment for who seeds and advances it.
-    columnTransitions: Map[BufferId, ColumnTransitionState] = Map.empty,
-    // Panel scale-in/out (issue #1085 phase 1): the in-flight grow/shrink geometry for a pinned/docked panel opening
-    // or closing, if `MotionFamily.PanelGeometry` is enabled -- keyed by the real panel's `SurfaceId` while opening, or
-    // the transient close ghost's `SurfaceId` while closing. Independent of `surfaceAnimations`' colour fade, which is
-    // gated by the separate `PinnedPanels` family; see `PinnedPanelAnimations` for who seeds this and
-    // `AnimationChoreography.advancePanelGeometry` for who advances it and reclaims a completed close ghost.
-    panelGeometry: Map[SurfaceId, PanelGeometryState] = Map.empty,
+    // Surface/panel/column motion state (issue #1693): the per-surface fade animation, the per-buffer column-to-column
+    // transition, and the per-surface panel scale-in/out geometry are grouped into their own sub-record since all
+    // three are written from the same handful of reducers/effects and read back together by
+    // `DamageProducer.fullRenderDamage`/`StateManagerEditorCapability`'s tick-active check/advance. See
+    // `MotionState`'s own doc comment.
+    motion: MotionState = MotionState(),
     clipboard: Option[String] = None,
     focusHistory: List[Focus] = List.empty,
     navigation: NavigationHistory = NavigationHistory(),
-    hoveredEditorTarget: Option[HoveredEditorTarget] = None,
     typingActivity: TypingActivity = TypingActivity.idle,
-    // The theme names the theme manager found on disk, listed at startup and after a reload or save; never persisted.
-    availableThemeNames: List[String] = Nil,
-    // The theme most recently asked for: a theme load that finishes after a newer request is dropped, not applied.
-    requestedThemeName: Option[String] = None,
+    // Theme discovery/loading/transition state (issue #1693): grouped into its own sub-record since the available
+    // theme names, the most recently requested theme, and the in-flight transition are all written together from
+    // `ThemeStateReducer`/`StateManagerSurfacePopupEffects`'s theme-listing effect and read back together by the
+    // render/tick paths. See `ThemeDiscoveryState`'s own doc comment.
+    themeDiscovery: ThemeDiscoveryState = ThemeDiscoveryState(),
     companionSprite: CompanionSpriteState = CompanionSpriteState.default,
     // LSP diagnostics and semantic tokens (issue #1693): grouped into their own sub-record since both are written
     // from the same `SystemEventReducer` LSP handling and read back together by `AppState.annotationIndex`/
@@ -56,21 +49,11 @@ final case class Runtime(
     // `CommandRunnerReducer.assignRecordedBinding` to warn when a just-recorded bare-modifier chord can't fire at the
     // negotiated tier (issue #1194).
     keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full,
-    // Experimental cursor-peek prototype (off by default via `commandRunnerCursorPeekEnabled`), never persisted.
-    // `cursorPeekSession` is `CursorPeekDetector`'s hold-vs-double-tap timing state, threaded through
-    // `AppEventReducer`'s handling of `CursorPeekModifierPressed`/`Released`/`OtherKeyPressed` between separate
-    // dispatches; `cursorPeekAnchor` is the cursor position frozen at the moment a peek begins (`None` once no peek
-    // is showing) -- captured here as plain data because reducers may not reach into `LayoutEngine`
-    // (`ArchitectureChecks.ForbiddenImports`). `cursorPeekResolvedAnchor` is that position resolved to an actual
-    // on-screen position exactly once, by `CursorPeekAnchorResolution` (state.manager, which may use `LayoutEngine`)
-    // after a peek begins -- cached and never re-derived for the rest of the peek session, so a reformat underneath
-    // it cannot move the peek. Both clear together whenever `cursorPeekAnchor` does.
-    cursorPeekSession: CursorPeekState = CursorPeekState.empty,
-    cursorPeekAnchor: Option[CursorPosition] = None,
-    cursorPeekResolvedAnchor: Option[ScreenPosition] = None,
-    // The in-progress tab-bar drag-to-reorder gesture (issue #1079), if a primary press picked up a tab -- see
-    // `TabDragSession`'s own doc comment for why this is reset by press rather than by a release this app never sees.
-    tabDragSession: Option[TabDragSession] = None,
+    // Pointer/gesture state (issue #1693): the editor position under the mouse, the in-progress tab-drag gesture, and
+    // the experimental cursor-peek prototype's timing/anchor fields are grouped into their own sub-record since
+    // `TabDragSession`'s doc comment already named all five as "every other transient mouse-interaction state" before
+    // this grouping existed. See `PointerGestureState`'s own doc comment.
+    pointerGesture: PointerGestureState = PointerGestureState(),
     // The UI-preset apply whose preset is still being loaded off the dispatcher (#1697), so its result can be dropped
     // once a later apply has been requested. Cleared when that request resolves.
     pendingUiPresetApply: Option[Long] = None,

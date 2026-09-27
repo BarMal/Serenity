@@ -16,7 +16,7 @@ import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Selection grow/settle (issue #1085 phase 3): disabling motion entirely (via motion accessibility) cancels every
-  * in-flight `Cursor.selectionGeometry`, the same way it cancels `Cursor.glide`/`Runtime.panelGeometry`
+  * in-flight `Cursor.selectionGeometry`, the same way it cancels `Cursor.glide`/`Runtime.motion.panelGeometry`
   * (`MotionCancellation.Everything`, committed by `StateManagerConfigEffects`). Mirrors
   * `StateManagerCursorGlideCancellationSpec`.
   */

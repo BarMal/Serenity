@@ -29,17 +29,23 @@ class AppRuntimeRenderSnapshotSpec extends AnyFlatSpec with Matchers:
   given Logger[IO] = NoOpLogger.impl[IO]
 
   private val animating: AppState = AppState.initial.copy(runtime =
-    AppState.initial.runtime.copy(surfaceAnimations = Map(SurfaceId("render-snapshot") -> SurfaceAnimationState()))
+    AppState.initial.runtime.copy(motion =
+      AppState.initial.runtime.motion
+        .copy(surfaceAnimations = Map(SurfaceId("render-snapshot") -> SurfaceAnimationState()))
+    )
   )
 
   private def modelAt(version: Int): Model =
     Model(
-      animating.copy(runtime = animating.runtime.copy(availableThemeNames = List(version.toString))),
+      animating.copy(runtime =
+        animating.runtime
+          .copy(themeDiscovery = animating.runtime.themeDiscovery.copy(availableThemeNames = List(version.toString)))
+      ),
       UndoState(),
       Map(BufferId(version) -> AnimationState.empty)
     )
 
-  private def versionOf(state: AppState): List[String] = state.runtime.availableThemeNames
+  private def versionOf(state: AppState): List[String] = state.runtime.themeDiscovery.availableThemeNames
 
   private def versionOf(animations: Map[BufferId, AnimationState]): List[String] =
     animations.keys.map(_.value.toString).toList

@@ -10,9 +10,9 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Column-based document layout (issue #1338, Phase 1 animation): `CursorViewport.ensureVisibleCursors` seeds
-  * `Runtime.columnTransitions` whenever `adjustForCursorColumnMode` actually moves which column is showing -- whatever
-  * moved the cursor there, not only `ColumnLeft`/`ColumnRight` -- gated by the `ColumnTransitions` motion family
-  * (including accessibility).
+  * `Runtime.motion.columnTransitions` whenever `adjustForCursorColumnMode` actually moves which column is showing --
+  * whatever moved the cursor there, not only `ColumnLeft`/`ColumnRight` -- gated by the `ColumnTransitions` motion
+  * family (including accessibility).
   */
 class CursorViewportColumnTransitionSpec extends AnyFlatSpec with Matchers:
 
@@ -65,7 +65,7 @@ class CursorViewportColumnTransitionSpec extends AnyFlatSpec with Matchers:
 
       val result = CursorViewport.ensureVisibleCursors(before, after)
 
-      val transition = result.runtime.columnTransitions
+      val transition = result.runtime.motion.columnTransitions
         .getOrElse(bufferId, fail("expected a seeded column transition"))
       transition.progress shouldBe 0.0
       transition.previousTopLine shouldBe 0
@@ -82,7 +82,7 @@ class CursorViewportColumnTransitionSpec extends AnyFlatSpec with Matchers:
 
     val result = CursorViewport.ensureVisibleCursors(before, after)
 
-    val transition = result.runtime.columnTransitions
+    val transition = result.runtime.motion.columnTransitions
       .getOrElse(bufferId, fail("expected a seeded column transition"))
     transition.direction shouldBe TransitionDirection.LeftToRight
   }
@@ -95,7 +95,7 @@ class CursorViewportColumnTransitionSpec extends AnyFlatSpec with Matchers:
 
     val result = CursorViewport.ensureVisibleCursors(before, after)
 
-    result.runtime.columnTransitions shouldBe empty
+    result.runtime.motion.columnTransitions shouldBe empty
   }
 
   it should "not seed a transition when the ColumnTransitions family is disabled by motion accessibility" in {
@@ -107,7 +107,7 @@ class CursorViewportColumnTransitionSpec extends AnyFlatSpec with Matchers:
 
     val result = CursorViewport.ensureVisibleCursors(before, after)
 
-    result.runtime.columnTransitions shouldBe empty
+    result.runtime.motion.columnTransitions shouldBe empty
     // The viewport itself must still move to the new column even with no animation to show for it.
     result.persisted.buffers(bufferId).viewport.topLine shouldBe 16
   }
@@ -122,14 +122,17 @@ class CursorViewportColumnTransitionSpec extends AnyFlatSpec with Matchers:
     )
     val firstResult = CursorViewport.ensureVisibleCursors(before, afterFirstMove)
     val firstTransition =
-      firstResult.runtime.columnTransitions.getOrElse(bufferId, fail("expected a seeded column transition"))
+      firstResult.runtime.motion.columnTransitions.getOrElse(bufferId, fail("expected a seeded column transition"))
 
     // Advance the sweep partway, mirroring `StateManagerEditorCapability.advanceAnimationsOnTick`.
     val midFlight = firstTransition.advance.advance
     midFlight.progress should be > 0.0
     midFlight.isComplete shouldBe false
     val midFlightState = firstResult.copy(runtime =
-      firstResult.runtime.copy(columnTransitions = firstResult.runtime.columnTransitions.updated(bufferId, midFlight))
+      firstResult.runtime.copy(motion =
+        firstResult.runtime.motion
+          .copy(columnTransitions = firstResult.runtime.motion.columnTransitions.updated(bufferId, midFlight))
+      )
     )
 
     // The cursor crosses into a further column before the first sweep finishes.
@@ -139,7 +142,7 @@ class CursorViewportColumnTransitionSpec extends AnyFlatSpec with Matchers:
     val secondResult = CursorViewport.ensureVisibleCursors(midFlightState, afterSecondMove)
 
     val retargeted =
-      secondResult.runtime.columnTransitions.getOrElse(bufferId, fail("expected a retargeted column transition"))
+      secondResult.runtime.motion.columnTransitions.getOrElse(bufferId, fail("expected a retargeted column transition"))
     // No jump-cut: progress continues from where the in-flight sweep already was, not from zero.
     retargeted.progress shouldBe midFlight.progress
     retargeted.direction shouldBe firstTransition.direction
@@ -156,5 +159,5 @@ class CursorViewportColumnTransitionSpec extends AnyFlatSpec with Matchers:
 
     val result = CursorViewport.ensureVisibleCursors(before, after)
 
-    result.runtime.columnTransitions shouldBe empty
+    result.runtime.motion.columnTransitions shouldBe empty
   }

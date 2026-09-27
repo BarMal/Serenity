@@ -88,8 +88,6 @@ class StateManagerCursorGlideTickSpec extends AnyFlatSpec with Matchers:
     sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
 
     val after = sm.getCurrentState.unsafeRunSync()
-    after.runtime.themeTransition shouldBe before.runtime.themeTransition
-    after.runtime.surfaceAnimations shouldBe before.runtime.surfaceAnimations
-    after.runtime.columnTransitions shouldBe before.runtime.columnTransitions
-    after.runtime.panelGeometry shouldBe before.runtime.panelGeometry
+    after.runtime.themeDiscovery.transition shouldBe before.runtime.themeDiscovery.transition
+    after.runtime.motion shouldBe before.runtime.motion
   }

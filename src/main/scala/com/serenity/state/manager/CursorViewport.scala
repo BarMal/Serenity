@@ -141,7 +141,7 @@ object CursorViewport:
                 state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
               )
 
-  /** Column-based document layout (issue #1338, Phase 1 animation): seeds `Runtime.columnTransitions` whenever
+  /** Column-based document layout (issue #1338, Phase 1 animation): seeds `Runtime.motion.columnTransitions` whenever
     * [[adjustForCursorColumnMode]] actually moved which column is showing -- whatever moved the cursor there, not only
     * `ColumnLeft`/`ColumnRight`, since this effect boundary has no narrower notion of "why" the cursor moved than any
     * other placement it applies. Gated by the `ColumnTransitions` motion family
@@ -168,7 +168,7 @@ object CursorViewport:
       state.persisted.config.scaledColumnTransitionAnimation match
         case None => state
         case Some(animation) =>
-          val inFlight = state.runtime.columnTransitions.get(bufferId).filterNot(_.isComplete)
+          val inFlight = state.runtime.motion.columnTransitions.get(bufferId).filterNot(_.isComplete)
           val transition = inFlight match
             case Some(existing) => existing.retarget
             case None =>
@@ -184,7 +184,10 @@ object CursorViewport:
                 previousTopVisualLine = previousViewport.topVisualLine
               )
           state.copy(runtime =
-            state.runtime.copy(columnTransitions = state.runtime.columnTransitions.updated(bufferId, transition))
+            state.runtime.copy(motion =
+              state.runtime.motion
+                .copy(columnTransitions = state.runtime.motion.columnTransitions.updated(bufferId, transition))
+            )
           )
 
   def adjustForCursor(

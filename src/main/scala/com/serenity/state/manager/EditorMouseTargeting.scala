@@ -82,8 +82,11 @@ private[manager] object EditorMouseTargeting:
   def hover(target: Option[(PaneId, Buffer, CursorPosition)]): Transition[Unit] =
     val hovered = target.map((paneId, buffer, cursor) => HoveredEditorTarget(paneId, buffer.id, cursor))
     Transition.modify(state =>
-      if state.runtime.hoveredEditorTarget == hovered then state
-      else state.copy(runtime = state.runtime.copy(hoveredEditorTarget = hovered))
+      if state.runtime.pointerGesture.hoveredEditorTarget == hovered then state
+      else
+        state.copy(runtime =
+          state.runtime.copy(pointerGesture = state.runtime.pointerGesture.copy(hoveredEditorTarget = hovered))
+        )
     )
 
   private def cursorAt(

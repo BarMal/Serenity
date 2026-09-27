@@ -42,10 +42,10 @@ object FloatingSurfaceLayout:
         calculateLiveFloatingSurfaceRect(surface, buffer, contentRect, state, topYOverride, forcedHeight)
 
   /** The cursor-peek prototype's own rect resolution -- deliberately never calls [[floatingAnchor]] or
-    * `CursorLayout.calculateScreenPositionInContent`: `state.runtime.cursorPeekResolvedAnchor` was already resolved
-    * once, at render time, by `CursorPeekAnchorResolution` (state.manager), and is reused verbatim here on every
-    * subsequent paint rather than re-derived, so a reformat underneath an open peek cannot move it. Sizing
-    * (`calculateFloatingSurfaceWidth`/`calculateFloatingSurfaceHeight`) is still shared with the live path for a
+    * `CursorLayout.calculateScreenPositionInContent`: `state.runtime.pointerGesture.cursorPeekResolvedAnchor` was
+    * already resolved once, at render time, by `CursorPeekAnchorResolution` (state.manager), and is reused verbatim
+    * here on every subsequent paint rather than re-derived, so a reformat underneath an open peek cannot move it.
+    * Sizing (`calculateFloatingSurfaceWidth`/`calculateFloatingSurfaceHeight`) is still shared with the live path for a
     * consistent look.
     */
   private def calculateFrozenCursorPeekRect(
@@ -54,7 +54,7 @@ object FloatingSurfaceLayout:
     state: AppState
   ): Option[LayoutRect] =
     for
-      anchorScreenPosition <- state.runtime.cursorPeekResolvedAnchor
+      anchorScreenPosition <- state.runtime.pointerGesture.cursorPeekResolvedAnchor
       placement <- surface.presentation match
         case SurfacePresentation.Floating(_, p) => Some(p)
         case _                                  => None

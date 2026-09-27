@@ -36,10 +36,10 @@ final private[manager] class StateManagerEditorCapability(
       hasBufferAnimations = state.persisted.buffers.keys.exists(id =>
         bufferAnimations.get(id).exists(_.hasActiveAnimations)
       )
-      hasThemeTransition   = state.runtime.themeTransition.isDefined
-      hasSurfaceAnimations = state.runtime.surfaceAnimations.nonEmpty
-      hasColumnTransitions = state.runtime.columnTransitions.nonEmpty
-      hasPanelGeometry     = state.runtime.panelGeometry.nonEmpty
+      hasThemeTransition   = state.runtime.themeDiscovery.transition.isDefined
+      hasSurfaceAnimations = state.runtime.motion.surfaceAnimations.nonEmpty
+      hasColumnTransitions = state.runtime.motion.columnTransitions.nonEmpty
+      hasPanelGeometry     = state.runtime.motion.panelGeometry.nonEmpty
       hasCursorGlide       = state.persisted.buffers.values.exists(hasInFlightGlide)
       hasSelectionGeometry = state.persisted.buffers.values.exists(hasInFlightSelectionGeometry)
       hasTypingActivity    = state.runtime.typingActivity.isActive
@@ -74,10 +74,10 @@ final private[manager] class StateManagerEditorCapability(
       .map { next =>
         val newState = next.app
         newState.persisted.buffers.keys.exists(id => next.bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
-        newState.runtime.themeTransition.isDefined ||
-        newState.runtime.surfaceAnimations.nonEmpty ||
-        newState.runtime.columnTransitions.nonEmpty ||
-        newState.runtime.panelGeometry.nonEmpty ||
+        newState.runtime.themeDiscovery.transition.isDefined ||
+        newState.runtime.motion.surfaceAnimations.nonEmpty ||
+        newState.runtime.motion.columnTransitions.nonEmpty ||
+        newState.runtime.motion.panelGeometry.nonEmpty ||
         newState.persisted.buffers.values.exists(hasInFlightGlide) ||
         newState.persisted.buffers.values.exists(hasInFlightSelectionGeometry) ||
         newState.runtime.typingActivity.isActive ||
@@ -91,14 +91,14 @@ final private[manager] class StateManagerEditorCapability(
     companionSpriteSeed: Long
   ): Model =
     val state             = current.app
-    val updatedTransition = state.runtime.themeTransition.map(_.advance).filterNot(_.isComplete)
+    val updatedTransition = state.runtime.themeDiscovery.transition.map(_.advance).filterNot(_.isComplete)
     val advancedCompanionSprite =
       if hasCompanionSprite then
         state.runtime.companionSprite
           .tick(new Random(companionSpriteSeed), reducedRate = flairLevel == VisualFlairLevel.Reduced)
       else state.runtime.companionSprite
     val updatedColumnTransitions =
-      state.runtime.columnTransitions.view.mapValues(_.advance).toMap.filterNot(_._2.isComplete)
+      state.runtime.motion.columnTransitions.view.mapValues(_.advance).toMap.filterNot(_._2.isComplete)
     val stateWithAdvancedBuffers = state.copy(
       persisted = state.persisted.copy(
         buffers = state.persisted.buffers.view
@@ -106,10 +106,10 @@ final private[manager] class StateManagerEditorCapability(
           .toMap
       ),
       runtime = state.runtime.copy(
-        themeTransition = updatedTransition,
+        themeDiscovery = state.runtime.themeDiscovery.copy(transition = updatedTransition),
         typingActivity = state.runtime.typingActivity.advance,
         companionSprite = advancedCompanionSprite,
-        columnTransitions = updatedColumnTransitions
+        motion = state.runtime.motion.copy(columnTransitions = updatedColumnTransitions)
       )
     )
     val newState = animations.advancePanelGeometry(animations.advanceSurfaceAnimations(stateWithAdvancedBuffers))
@@ -135,9 +135,9 @@ final private[manager] class StateManagerEditorCapability(
     buffer.editing.cursors.exists(_.selectionGeometry.exists(!_.isComplete))
 
   /** Advances every cursor's `glide` by one tick, dropping it once complete -- the per-cursor equivalent of
-    * `Runtime.columnTransitions`'/`Runtime.panelGeometry`'s tick-driven advance, except this state lives on `Cursor`
-    * inside `Buffer.editing.cursors` (`#1577`) rather than a top-level `Runtime` map, so it advances by rebuilding each
-    * buffer's cursor list instead of updating a `Runtime` field.
+    * `Runtime.motion.columnTransitions`'/`Runtime.motion.panelGeometry`'s tick-driven advance, except this state lives
+    * on `Cursor` inside `Buffer.editing.cursors` (`#1577`) rather than a top-level `Runtime` map, so it advances by
+    * rebuilding each buffer's cursor list instead of updating a `Runtime` field.
     */
   private def advanceCursorGlides(buffer: Buffer): Buffer =
     val advancedCursors = buffer.editing.cursors.map { cursor =>

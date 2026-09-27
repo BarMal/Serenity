@@ -92,17 +92,21 @@ class TabBarMouseTransitionSpec extends AnyFlatSpec with Matchers:
 
     claimed shouldBe true
     result.effects shouldBe Nil
-    result.state.runtime.tabDragSession shouldBe Some(TabDragSession(BufferId(1)))
+    result.state.runtime.pointerGesture.tabDragSession shouldBe Some(TabDragSession(BufferId(1)))
   }
 
   it should "end any previous session on a press off the strip, without claiming it" in {
     val dragging =
-      twoBufferState.copy(runtime = twoBufferState.runtime.copy(tabDragSession = Some(TabDragSession(BufferId(1)))))
+      twoBufferState.copy(runtime =
+        twoBufferState.runtime.copy(pointerGesture =
+          twoBufferState.runtime.pointerGesture.copy(tabDragSession = Some(TabDragSession(BufferId(1))))
+        )
+      )
 
     val (result, claimed) = run(dragging)(TabBarDragHitTesting.press(MousePress(3, 3), dragging))
 
     claimed shouldBe false
-    result.state.runtime.tabDragSession shouldBe None
+    result.state.runtime.pointerGesture.tabDragSession shouldBe None
   }
 
   it should "leave the state untouched when there was no session to end" in {
@@ -113,7 +117,11 @@ class TabBarMouseTransitionSpec extends AnyFlatSpec with Matchers:
 
   "TabBarDragHitTesting.drag" should "reorder the dragged tab onto the tab under the pointer" in {
     val dragging =
-      twoBufferState.copy(runtime = twoBufferState.runtime.copy(tabDragSession = Some(TabDragSession(BufferId(0)))))
+      twoBufferState.copy(runtime =
+        twoBufferState.runtime.copy(pointerGesture =
+          twoBufferState.runtime.pointerGesture.copy(tabDragSession = Some(TabDragSession(BufferId(0))))
+        )
+      )
 
     val (result, claimed) = run(dragging)(TabBarDragHitTesting.drag(MouseDrag(13, 0), dragging))
 

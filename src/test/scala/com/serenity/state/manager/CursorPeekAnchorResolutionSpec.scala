@@ -28,7 +28,8 @@ class CursorPeekAnchorResolutionSpec extends AnyFlatSpec with Matchers:
       ),
       runtime = AppState.initial.runtime.copy(
         viewportSize = Some(ViewportSize(100, 30)),
-        cursorPeekAnchor = Some(CursorPosition(cursorLine, cursorColumn))
+        pointerGesture = AppState.initial.runtime.pointerGesture
+          .copy(cursorPeekAnchor = Some(CursorPosition(cursorLine, cursorColumn)))
       )
     )
 
@@ -44,13 +45,14 @@ class CursorPeekAnchorResolutionSpec extends AnyFlatSpec with Matchers:
 
     val resolved = CursorPeekAnchorResolution.resolve(state)
 
-    resolved.runtime.cursorPeekResolvedAnchor shouldBe defined
+    resolved.runtime.pointerGesture.cursorPeekResolvedAnchor shouldBe defined
   }
 
   it should "never re-derive an already-resolved anchor, even if the underlying document changes" in {
-    val state               = stateWithBuffer("alpha\nbeta\ngamma", cursorLine = 1, cursorColumn = 2)
-    val resolved            = CursorPeekAnchorResolution.resolve(state)
-    val firstResolvedAnchor = resolved.runtime.cursorPeekResolvedAnchor.getOrElse(fail("expected a resolved anchor"))
+    val state    = stateWithBuffer("alpha\nbeta\ngamma", cursorLine = 1, cursorColumn = 2)
+    val resolved = CursorPeekAnchorResolution.resolve(state)
+    val firstResolvedAnchor =
+      resolved.runtime.pointerGesture.cursorPeekResolvedAnchor.getOrElse(fail("expected a resolved anchor"))
 
     // Simulate a reformat: the buffer content underneath changes, but cursorPeekAnchor (the frozen logical
     // position) and cursorPeekResolvedAnchor (the frozen screen position) are left as they were.
@@ -62,7 +64,7 @@ class CursorPeekAnchorResolutionSpec extends AnyFlatSpec with Matchers:
 
     val reResolved = CursorPeekAnchorResolution.resolve(reformatted)
 
-    reResolved.runtime.cursorPeekResolvedAnchor shouldBe Some(firstResolvedAnchor)
+    reResolved.runtime.pointerGesture.cursorPeekResolvedAnchor shouldBe Some(firstResolvedAnchor)
   }
 
   it should "not resolve when the viewport size is not yet known" in {
@@ -70,7 +72,7 @@ class CursorPeekAnchorResolutionSpec extends AnyFlatSpec with Matchers:
       runtime = stateWithBuffer("alpha\nbeta", 0, 0).runtime.copy(viewportSize = None)
     )
 
-    CursorPeekAnchorResolution.resolve(state).runtime.cursorPeekResolvedAnchor shouldBe None
+    CursorPeekAnchorResolution.resolve(state).runtime.pointerGesture.cursorPeekResolvedAnchor shouldBe None
   }
 
   it should "not resolve when there is no active editor pane" in {
@@ -78,5 +80,5 @@ class CursorPeekAnchorResolutionSpec extends AnyFlatSpec with Matchers:
     val withoutPane =
       state.copy(persisted = state.persisted.copy(layout = state.persisted.layout.copy(activeEditorPaneId = None)))
 
-    CursorPeekAnchorResolution.resolve(withoutPane).runtime.cursorPeekResolvedAnchor shouldBe None
+    CursorPeekAnchorResolution.resolve(withoutPane).runtime.pointerGesture.cursorPeekResolvedAnchor shouldBe None
   }

@@ -137,11 +137,11 @@ final class TuiSession private (
 
   /** Let the interface finish moving, then paint until the frame stops changing.
     *
-    * Two things settle here. Surfaces animate in and out (`AppState.runtime.surfaceAnimations`), so a dismissed command
-    * palette is still drawn for as many frames as its exit animation lasts -- exactly as in a real session, where the
-    * render loop advances one animation tick per painted frame. And a frame painted with `Damage.Everything` -- the
-    * first of a session, and the first after a resize -- is followed by one further frame that rewrites blank cells
-    * whose foreground colour differed invisibly.
+    * Two things settle here. Surfaces animate in and out (`AppState.runtime.motion.surfaceAnimations`), so a dismissed
+    * command palette is still drawn for as many frames as its exit animation lasts -- exactly as in a real session,
+    * where the render loop advances one animation tick per painted frame. And a frame painted with `Damage.Everything`
+    * -- the first of a session, and the first after a resize -- is followed by one further frame that rewrites blank
+    * cells whose foreground colour differed invisibly.
     *
     * Scenarios that assert on what is finally on screen, or on emitted bytes, want this rather than a single frame.
     */

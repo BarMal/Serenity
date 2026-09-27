@@ -270,8 +270,8 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
 
     val after = fixture.stateRef.get.unsafeRunSync()
     after.runtime.uiSurfaces.map(_.id) should not contain ghostId
-    after.runtime.themeTransition shouldBe None
-    after.runtime.surfaceAnimations shouldBe Map.empty
+    after.runtime.themeDiscovery.transition shouldBe None
+    after.runtime.motion.surfaceAnimations shouldBe Map.empty
     after.runtime.companionSprite.isTypingActive shouldBe false
   }
 

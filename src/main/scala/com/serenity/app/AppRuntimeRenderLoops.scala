@@ -333,6 +333,6 @@ private[serenity] object AppRuntimeRenderLoops:
     bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
   ): Boolean =
     state.persisted.buffers.keys.exists(id => bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
-      state.runtime.themeTransition.isDefined ||
-      state.runtime.surfaceAnimations.nonEmpty ||
-      state.runtime.columnTransitions.nonEmpty
+      state.runtime.themeDiscovery.transition.isDefined ||
+      state.runtime.motion.surfaceAnimations.nonEmpty ||
+      state.runtime.motion.columnTransitions.nonEmpty

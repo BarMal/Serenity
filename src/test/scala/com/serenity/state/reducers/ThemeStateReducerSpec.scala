@@ -33,31 +33,34 @@ class ThemeStateReducerSpec extends AnyFlatSpec with Matchers:
     val result = ThemeStateReducer.applyTheme(Theme.light, state)
 
     result.state.persisted.theme shouldBe Theme.light
-    result.state.runtime.themeTransition shouldBe
+    result.state.runtime.themeDiscovery.transition shouldBe
       state.persisted.config.scaledUiAnimation.map(config => ThemeTransition(Theme.dark, 0, config.steps))
     result.effects shouldBe Nil
     valid(result) shouldBe true
   }
 
   it should "clear any transition when re-applying the current theme" in {
-    val state = withTheme(Theme.dark)
-      .copy(runtime = AppState.initial.runtime.copy(themeTransition = Some(ThemeTransition(Theme.light, 1, 5))))
+    val state = withTheme(Theme.dark).copy(runtime =
+      AppState.initial.runtime.copy(themeDiscovery =
+        AppState.initial.runtime.themeDiscovery.copy(transition = Some(ThemeTransition(Theme.light, 1, 5)))
+      )
+    )
 
-    ThemeStateReducer.applyTheme(Theme.dark, state).state.runtime.themeTransition shouldBe None
+    ThemeStateReducer.applyTheme(Theme.dark, state).state.runtime.themeDiscovery.transition shouldBe None
   }
 
   "ThemeStateReducer.replaceTheme" should "swap the theme without starting a transition" in {
     val result = ThemeStateReducer.replaceTheme(Theme.light, withTheme(Theme.dark))
 
     result.state.persisted.theme shouldBe Theme.light
-    result.state.runtime.themeTransition shouldBe AppState.initial.runtime.themeTransition
+    result.state.runtime.themeDiscovery.transition shouldBe AppState.initial.runtime.themeDiscovery.transition
     valid(result) shouldBe true
   }
 
   "ThemeStateReducer.withAvailableThemeNames" should "record the listed theme names" in {
     val result = ThemeStateReducer.withAvailableThemeNames(List("dark", "light"), AppState.initial)
 
-    result.state.runtime.availableThemeNames shouldBe List("dark", "light")
+    result.state.runtime.themeDiscovery.availableThemeNames shouldBe List("dark", "light")
     valid(result) shouldBe true
   }
 

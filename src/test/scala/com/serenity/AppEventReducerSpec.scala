@@ -336,7 +336,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val result = AppEventReducer.reduce(CursorPeekModifierPressed(Modifier.Meta, 0L), state, registry)
 
-    result.state.runtime.cursorPeekAnchor shouldBe state.activeCursorPosition
+    result.state.runtime.pointerGesture.cursorPeekAnchor shouldBe state.activeCursorPosition
     result.state.commandRunnerSurface shouldBe None
     val peekSurface = result.state.runtime.uiSurfaces.find(_.id == SurfaceId.CursorPeek)
     peekSurface shouldBe defined
@@ -357,8 +357,8 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     val pressed  = AppEventReducer.reduce(CursorPeekModifierPressed(Modifier.Meta, 0L), state, registry).state
     val released = AppEventReducer.reduce(CursorPeekModifierReleased(Modifier.Meta, 5L), pressed, registry).state
 
-    released.runtime.cursorPeekAnchor shouldBe None
-    released.runtime.cursorPeekResolvedAnchor shouldBe None
+    released.runtime.pointerGesture.cursorPeekAnchor shouldBe None
+    released.runtime.pointerGesture.cursorPeekResolvedAnchor shouldBe None
     released.runtime.uiSurfaces.find(_.id == SurfaceId.CursorPeek) shouldBe None
     released.commandRunnerSurface shouldBe None
   }
@@ -372,7 +372,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
 
     opened.commandRunnerSurface shouldBe defined
     opened.persisted.focus shouldBe Focus.Surface(opened.commandRunnerSurface.get.id)
-    opened.runtime.cursorPeekAnchor shouldBe None
+    opened.runtime.pointerGesture.cursorPeekAnchor shouldBe None
     opened.runtime.uiSurfaces.find(_.id == SurfaceId.CursorPeek) shouldBe None
   }
 
@@ -381,7 +381,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val result = AppEventReducer.reduce(CursorPeekModifierPressed(Modifier.Ctrl, 0L), state, registry)
 
-    result.state.runtime.cursorPeekAnchor shouldBe None
+    result.state.runtime.pointerGesture.cursorPeekAnchor shouldBe None
     result.state.commandRunnerSurface shouldBe None
   }
 
@@ -391,7 +391,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     val pressed   = AppEventReducer.reduce(CursorPeekModifierPressed(Modifier.Meta, 0L), state, registry).state
     val cancelled = AppEventReducer.reduce(CursorPeekOtherKeyPressed, pressed, registry).state
 
-    cancelled.runtime.cursorPeekAnchor shouldBe None
+    cancelled.runtime.pointerGesture.cursorPeekAnchor shouldBe None
     cancelled.commandRunnerSurface shouldBe None
   }
 

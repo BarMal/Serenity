@@ -61,7 +61,7 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
 
     val hovered = run(state)(EditorMouseTargeting.hover(Some((PaneId(0), buffer(state), CursorPosition(0, 2)))))._1
 
-    hovered.state.runtime.hoveredEditorTarget shouldBe
+    hovered.state.runtime.pointerGesture.hoveredEditorTarget shouldBe
       Some(HoveredEditorTarget(PaneId(0), BufferId(0), CursorPosition(0, 2)))
     hovered.effects shouldBe Nil
   }
@@ -73,7 +73,7 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
 
     run(hovered)(EditorMouseTargeting.hover(target))._1.state shouldBe theSameInstanceAs(hovered)
     run(state)(EditorMouseTargeting.hover(None))._1.state shouldBe theSameInstanceAs(state)
-    run(hovered)(EditorMouseTargeting.hover(None))._1.state.runtime.hoveredEditorTarget shouldBe None
+    run(hovered)(EditorMouseTargeting.hover(None))._1.state.runtime.pointerGesture.hoveredEditorTarget shouldBe None
   }
 
   "MouseHitTesting.editorClick" should "move the cursor to the clicked position and focus the pane" in {

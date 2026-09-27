@@ -361,7 +361,10 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
 
   "A theme load result" should "be dropped once a newer theme has been requested" in {
     val requestedBeta =
-      AppState.initial.copy(runtime = AppState.initial.runtime.copy(requestedThemeName = Some("beta")))
+      AppState.initial.copy(runtime =
+        AppState.initial.runtime
+          .copy(themeDiscovery = AppState.initial.runtime.themeDiscovery.copy(requestedThemeName = Some("beta")))
+      )
 
     EffectResult.applyIfCurrent(requestedBeta, EffectResult.ThemeLoaded("alpha", theme("alpha"))) shouldBe requestedBeta
     EffectResult

@@ -193,7 +193,10 @@ object StateManager:
       initialState = AppState.initial(initialConfig)
       modelRef <- Ref.of[IO, Model](
         Model(
-          app = initialState.copy(runtime = initialState.runtime.copy(availableThemeNames = themeNames)),
+          app = initialState.copy(runtime =
+            initialState.runtime
+              .copy(themeDiscovery = initialState.runtime.themeDiscovery.copy(availableThemeNames = themeNames))
+          ),
           undo = UndoState(maxUndoDepth = policy.maxUndoDepth),
           bufferAnimations = Map.empty
         )

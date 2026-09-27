@@ -17,7 +17,7 @@ import com.serenity.ui.layout.*
 object RendererEntryPoints:
 
   def withEffectiveTheme(state: AppState): AppState =
-    state.runtime.themeTransition match
+    state.runtime.themeDiscovery.transition match
       case None => state
       case Some(t) =>
         state.copy(persisted =

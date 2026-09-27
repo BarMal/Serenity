@@ -158,7 +158,7 @@ object OverlayViewModel:
     verticalOffsetRows: Double
   ): Option[TextOverlayView] =
     val animState =
-      state.runtime.surfaceAnimations.get(surface.id).map(_.animationState).getOrElse(AnimationState.empty)
+      state.runtime.motion.surfaceAnimations.get(surface.id).map(_.animationState).getOrElse(AnimationState.empty)
     surface.content match
       case com.serenity.state.models.SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
         contentView(originalContent, state, cachedRect).map { content =>
@@ -211,7 +211,7 @@ object OverlayViewModel:
   private def buildModalView(dialog: ModalDialog, state: AppState, rect: LayoutRect): Option[TextOverlayView] =
     val content = SurfaceContent.ModalWorkflow(dialog.modal)
     val animState =
-      state.runtime.surfaceAnimations.get(dialog.id).map(_.animationState).getOrElse(AnimationState.empty)
+      state.runtime.motion.surfaceAnimations.get(dialog.id).map(_.animationState).getOrElse(AnimationState.empty)
     contentView(content, state, rect).map { resolved =>
       TextOverlayView(
         rect = rect,
@@ -237,7 +237,7 @@ object OverlayViewModel:
     placement: SurfacePlacement
   ): Option[com.serenity.state.models.UiSurface] =
     val matchingSurfaces = state.runtime.uiSurfaces.filter { surface =>
-      val phase = state.runtime.surfaceAnimations.get(surface.id).map(_.phase).getOrElse(SurfacePhase.Visible)
+      val phase = state.runtime.motion.surfaceAnimations.get(surface.id).map(_.phase).getOrElse(SurfacePhase.Visible)
       phase != SurfacePhase.BufferFadingOut &&
       (surface match
         case com.serenity.state.models.UiSurface(_, _, SurfacePresentation.Floating(_, currentPlacement), _) =>

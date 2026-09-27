@@ -284,10 +284,8 @@ object DamageProducer:
     * buffer, on top of the `Damage.Surface` narrowing this producer reports here.
     */
   private def fullRenderDamage(before: AppState, after: AppState): Damage =
-    if before.runtime.themeTransition != after.runtime.themeTransition ||
-        before.runtime.surfaceAnimations != after.runtime.surfaceAnimations ||
-        before.runtime.columnTransitions != after.runtime.columnTransitions ||
-        before.runtime.panelGeometry != after.runtime.panelGeometry ||
+    if before.runtime.themeDiscovery.transition != after.runtime.themeDiscovery.transition ||
+        before.runtime.motion != after.runtime.motion ||
         before.persisted.focus != after.persisted.focus
     then Damage.Everything
     else

@@ -172,7 +172,7 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     // not 3: same 2-cell-wider gutter as the click test above (unset line-number margin/padding's GUI default).
     sm.applyEvent(MouseMove(6, 3)).unsafeRunSync()
 
-    sm.getCurrentState.unsafeRunSync().runtime.hoveredEditorTarget shouldBe Some(
+    sm.getCurrentState.unsafeRunSync().runtime.pointerGesture.hoveredEditorTarget shouldBe Some(
       HoveredEditorTarget(PaneId(0), bufferId, CursorPosition(1, 1))
     )
   }
@@ -186,7 +186,7 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseMove(6, 2)).unsafeRunSync()
     sm.applyEvent(MouseMove(0, 23)).unsafeRunSync()
 
-    sm.getCurrentState.unsafeRunSync().runtime.hoveredEditorTarget shouldBe None
+    sm.getCurrentState.unsafeRunSync().runtime.pointerGesture.hoveredEditorTarget shouldBe None
   }
 
   it should "ignore clicks in the pane header row" in {
