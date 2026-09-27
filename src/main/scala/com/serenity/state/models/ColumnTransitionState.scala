@@ -8,7 +8,8 @@ import com.serenity.animation.{EasingCurve, TransitionDirection, Tween}
   *
   * Seeded by `CursorViewport.ensureVisibleCursors` whenever `ColumnLeft`/`ColumnRight` changes which column is showing,
   * and advanced once per render tick by `StateManagerEditorCapability.advanceAnimationsOnTick` -- mirroring
-  * `Runtime.themeTransition`'s tick-driven advance -- until `isComplete`, at which point it is dropped from the map.
+  * `Runtime.themeDiscovery.transition`'s tick-driven advance -- until `isComplete`, at which point it is dropped from
+  * the map.
   *
   * `previousTopLine`/`previousTopVisualLine` are the OLD column's own viewport anchor (before the move), captured so
   * the renderer can rebuild that column's `TextLayoutSnapshot` for as long as it is still fading/sweeping out --

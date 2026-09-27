@@ -96,7 +96,8 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
     val stateA = AppState.initial
     val stateB = stateA.copy(
       runtime = stateA.runtime.copy(
-        themeTransition = Some(ThemeTransition(stateA.persisted.theme, currentStep = 1, totalSteps = 5)),
+        themeDiscovery = stateA.runtime.themeDiscovery
+          .copy(transition = Some(ThemeTransition(stateA.persisted.theme, currentStep = 1, totalSteps = 5))),
         surfaceAnimations = Map(SurfaceId("runner") -> SurfaceAnimationState())
       )
     )

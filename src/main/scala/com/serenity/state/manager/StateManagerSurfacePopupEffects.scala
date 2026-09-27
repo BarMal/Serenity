@@ -91,7 +91,9 @@ final private[manager] class StateManagerSurfacePopupEffects(
       .flatMap(_ => listThemeNames)
       .handleErrorWith(ex => logger.error(ex)(s"[THEMES] Failed to save user theme '${config.name}'"))
 
-  /** Re-list the themes on disk into both the picker's ref and `runtime.availableThemeNames` (the settings picker). */
+  /** Re-list the themes on disk into both the picker's ref and `runtime.themeDiscovery.availableThemeNames` (the
+    * settings picker).
+    */
   private def listThemeNames: IO[Unit] =
     themeManager.listAvailableThemes
       .flatMap(names =>

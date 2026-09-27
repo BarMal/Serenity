@@ -24,7 +24,7 @@ object ThemeStateReducer:
     ReducerResult.noEffects(
       state.copy(
         persisted = state.persisted.copy(theme = theme),
-        runtime = state.runtime.copy(themeTransition = transition)
+        runtime = state.runtime.copy(themeDiscovery = state.runtime.themeDiscovery.copy(transition = transition))
       )
     )
 
@@ -32,10 +32,18 @@ object ThemeStateReducer:
     ReducerResult.noEffects(state.copy(persisted = state.persisted.copy(theme = theme)))
 
   def withAvailableThemeNames(names: List[String], state: AppState): ReducerResult =
-    ReducerResult.noEffects(state.copy(runtime = state.runtime.copy(availableThemeNames = names)))
+    ReducerResult.noEffects(
+      state.copy(runtime =
+        state.runtime.copy(themeDiscovery = state.runtime.themeDiscovery.copy(availableThemeNames = names))
+      )
+    )
 
   def withRequestedTheme(themeName: String, state: AppState): ReducerResult =
-    ReducerResult.noEffects(state.copy(runtime = state.runtime.copy(requestedThemeName = Some(themeName))))
+    ReducerResult.noEffects(
+      state.copy(runtime =
+        state.runtime.copy(themeDiscovery = state.runtime.themeDiscovery.copy(requestedThemeName = Some(themeName)))
+      )
+    )
 
   /** [[applyTheme]] for a load that finished off the dispatcher -- dropped if a newer theme was requested meanwhile. */
   def applyRequestedTheme(requestedName: String, theme: Theme, state: AppState): AppState =
@@ -46,4 +54,4 @@ object ThemeStateReducer:
     if isLatestRequest(requestedName, state) then replaceTheme(theme, state).state else state
 
   private def isLatestRequest(requestedName: String, state: AppState): Boolean =
-    state.runtime.requestedThemeName.contains(requestedName)
+    state.runtime.themeDiscovery.requestedThemeName.contains(requestedName)

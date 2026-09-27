@@ -17,7 +17,6 @@ final case class Runtime(
     nextBufferId: BufferId = BufferId(0),
     nextPaneId: PaneId = PaneId(0),
     nextSurfaceId: SurfaceIdSupply = SurfaceIdSupply.initial,
-    themeTransition: Option[ThemeTransition] = None,
     surfaceAnimations: Map[SurfaceId, SurfaceAnimationState] = Map.empty,
     // Column-based document layout (issue #1338, Phase 1 animation): the in-flight column-to-column transition for
     // each buffer whose active column just moved, if `MotionFamily.ColumnTransitions` is enabled. See
@@ -34,10 +33,11 @@ final case class Runtime(
     navigation: NavigationHistory = NavigationHistory(),
     hoveredEditorTarget: Option[HoveredEditorTarget] = None,
     typingActivity: TypingActivity = TypingActivity.idle,
-    // The theme names the theme manager found on disk, listed at startup and after a reload or save; never persisted.
-    availableThemeNames: List[String] = Nil,
-    // The theme most recently asked for: a theme load that finishes after a newer request is dropped, not applied.
-    requestedThemeName: Option[String] = None,
+    // Theme discovery/loading/transition state (issue #1693): grouped into its own sub-record since the available
+    // theme names, the most recently requested theme, and the in-flight transition are all written together from
+    // `ThemeStateReducer`/`StateManagerSurfacePopupEffects`'s theme-listing effect and read back together by the
+    // render/tick paths. See `ThemeDiscoveryState`'s own doc comment.
+    themeDiscovery: ThemeDiscoveryState = ThemeDiscoveryState(),
     companionSprite: CompanionSpriteState = CompanionSpriteState.default,
     // LSP diagnostics and semantic tokens (issue #1693): grouped into their own sub-record since both are written
     // from the same `SystemEventReducer` LSP handling and read back together by `AppState.annotationIndex`/

@@ -275,8 +275,9 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
   it should "report Everything when a theme transition advances, since it cross-fades every visible glyph" in {
     val before = stateWithContent("alpha")
     val after = before.copy(runtime =
-      before.runtime.copy(themeTransition =
-        Some(ThemeTransition(before.persisted.theme, currentStep = 1, totalSteps = 10))
+      before.runtime.copy(themeDiscovery =
+        before.runtime.themeDiscovery
+          .copy(transition = Some(ThemeTransition(before.persisted.theme, currentStep = 1, totalSteps = 10)))
       )
     )
 

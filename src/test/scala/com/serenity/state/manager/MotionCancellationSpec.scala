@@ -86,7 +86,8 @@ class MotionCancellationSpec extends AnyFlatSpec with Matchers:
       persisted = base.persisted.copy(buffers = base.persisted.buffers.updated(bufferId, buffer)),
       runtime = base.runtime.copy(
         uiSurfaces = base.runtime.uiSurfaces ++ surfaces,
-        themeTransition = Some(ThemeTransition(base.persisted.theme, 0, 2)),
+        themeDiscovery =
+          base.runtime.themeDiscovery.copy(transition = Some(ThemeTransition(base.persisted.theme, 0, 2))),
         surfaceAnimations =
           Map(paletteId -> fadeFor(SurfacePhase.Visible), paletteGhost -> fadeFor(SurfacePhase.Exiting)),
         columnTransitions = Map(
@@ -136,7 +137,7 @@ class MotionCancellationSpec extends AnyFlatSpec with Matchers:
   "cancelling everything" should "clear every family's in-flight state and still validate" in {
     val cancelled = MotionCancellation.Everything.cancelState(inFlight)
 
-    cancelled.runtime.themeTransition shouldBe None
+    cancelled.runtime.themeDiscovery.transition shouldBe None
     cancelled.runtime.surfaceAnimations shouldBe empty
     cancelled.runtime.columnTransitions shouldBe empty
     cancelled.runtime.panelGeometry shouldBe empty
@@ -190,7 +191,7 @@ class MotionCancellationSpec extends AnyFlatSpec with Matchers:
     val cancellation = MotionCancellation.Families(List(MotionFamily.UiTransitions))
     val cancelled    = cancellation.cancelState(inFlight)
 
-    cancelled.runtime.themeTransition shouldBe None
+    cancelled.runtime.themeDiscovery.transition shouldBe None
     ownersOf(cancellation.cancelBufferAnimations(bufferAnimations)) shouldBe Set(AnimationOwner.EditorText)
     AppStateValidation.validated(cancelled).isRight shouldBe true
   }

@@ -55,7 +55,7 @@ private[manager] object MotionCancellation:
         state.persisted.buffers.view.mapValues(clearCursorGlides andThen clearSelectionGeometries).toMap
       ),
       runtime = state.runtime.copy(
-        themeTransition = None,
+        themeDiscovery = state.runtime.themeDiscovery.copy(transition = None),
         uiSurfaces = state.runtime.uiSurfaces.filterNot(isGhostOverlay),
         surfaceAnimations = Map.empty,
         companionSprite = state.runtime.companionSprite.resetTyping,
@@ -71,7 +71,10 @@ private[manager] object MotionCancellation:
       case MotionFamily.PinnedPanels    => cancelSurfaceMotion(isDockedSurface, state)
       case MotionFamily.UiTransitions =>
         state.copy(runtime =
-          state.runtime.copy(themeTransition = None, companionSprite = state.runtime.companionSprite.resetTyping)
+          state.runtime.copy(
+            themeDiscovery = state.runtime.themeDiscovery.copy(transition = None),
+            companionSprite = state.runtime.companionSprite.resetTyping
+          )
         )
       case MotionFamily.Cursor =>
         // Caret-glide (issue #1085 phase 2): clears every buffer's in-flight `Cursor.glide` -- the one piece of

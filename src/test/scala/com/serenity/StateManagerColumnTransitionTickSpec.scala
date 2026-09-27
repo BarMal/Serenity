@@ -13,8 +13,8 @@ import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Column-based document layout (issue #1338, Phase 1 animation): `animationTicker.advanceAnimationsOnTick` advances
-  * `Runtime.columnTransitions` once per tick, mirroring `Runtime.themeTransition`'s tick-driven advance, and drops a
-  * transition once it completes.
+  * `Runtime.columnTransitions` once per tick, mirroring `Runtime.themeDiscovery.transition`'s tick-driven advance, and
+  * drops a transition once it completes.
   */
 class StateManagerColumnTransitionTickSpec extends AnyFlatSpec with Matchers:
 
@@ -84,6 +84,6 @@ class StateManagerColumnTransitionTickSpec extends AnyFlatSpec with Matchers:
     sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
 
     val after = sm.getCurrentState.unsafeRunSync()
-    after.runtime.themeTransition shouldBe before.runtime.themeTransition
+    after.runtime.themeDiscovery.transition shouldBe before.runtime.themeDiscovery.transition
     after.runtime.surfaceAnimations shouldBe before.runtime.surfaceAnimations
   }

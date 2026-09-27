@@ -36,7 +36,7 @@ final private[manager] class StateManagerEditorCapability(
       hasBufferAnimations = state.persisted.buffers.keys.exists(id =>
         bufferAnimations.get(id).exists(_.hasActiveAnimations)
       )
-      hasThemeTransition   = state.runtime.themeTransition.isDefined
+      hasThemeTransition   = state.runtime.themeDiscovery.transition.isDefined
       hasSurfaceAnimations = state.runtime.surfaceAnimations.nonEmpty
       hasColumnTransitions = state.runtime.columnTransitions.nonEmpty
       hasPanelGeometry     = state.runtime.panelGeometry.nonEmpty
@@ -74,7 +74,7 @@ final private[manager] class StateManagerEditorCapability(
       .map { next =>
         val newState = next.app
         newState.persisted.buffers.keys.exists(id => next.bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
-        newState.runtime.themeTransition.isDefined ||
+        newState.runtime.themeDiscovery.transition.isDefined ||
         newState.runtime.surfaceAnimations.nonEmpty ||
         newState.runtime.columnTransitions.nonEmpty ||
         newState.runtime.panelGeometry.nonEmpty ||
@@ -91,7 +91,7 @@ final private[manager] class StateManagerEditorCapability(
     companionSpriteSeed: Long
   ): Model =
     val state             = current.app
-    val updatedTransition = state.runtime.themeTransition.map(_.advance).filterNot(_.isComplete)
+    val updatedTransition = state.runtime.themeDiscovery.transition.map(_.advance).filterNot(_.isComplete)
     val advancedCompanionSprite =
       if hasCompanionSprite then
         state.runtime.companionSprite
@@ -106,7 +106,7 @@ final private[manager] class StateManagerEditorCapability(
           .toMap
       ),
       runtime = state.runtime.copy(
-        themeTransition = updatedTransition,
+        themeDiscovery = state.runtime.themeDiscovery.copy(transition = updatedTransition),
         typingActivity = state.runtime.typingActivity.advance,
         companionSprite = advancedCompanionSprite,
         columnTransitions = updatedColumnTransitions

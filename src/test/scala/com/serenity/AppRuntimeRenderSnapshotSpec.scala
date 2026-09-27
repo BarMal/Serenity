@@ -34,12 +34,15 @@ class AppRuntimeRenderSnapshotSpec extends AnyFlatSpec with Matchers:
 
   private def modelAt(version: Int): Model =
     Model(
-      animating.copy(runtime = animating.runtime.copy(availableThemeNames = List(version.toString))),
+      animating.copy(runtime =
+        animating.runtime
+          .copy(themeDiscovery = animating.runtime.themeDiscovery.copy(availableThemeNames = List(version.toString)))
+      ),
       UndoState(),
       Map(BufferId(version) -> AnimationState.empty)
     )
 
-  private def versionOf(state: AppState): List[String] = state.runtime.availableThemeNames
+  private def versionOf(state: AppState): List[String] = state.runtime.themeDiscovery.availableThemeNames
 
   private def versionOf(animations: Map[BufferId, AnimationState]): List[String] =
     animations.keys.map(_.value.toString).toList

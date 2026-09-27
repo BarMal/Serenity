@@ -99,7 +99,11 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
         .unsafeRunSync()
       sm.applyEvent(InsertChar('a')).unsafeRunSync()
       sm.updateState(state =>
-        state.copy(runtime = state.runtime.copy(themeTransition = Some(ThemeTransition(state.persisted.theme, 0, 2))))
+        state.copy(runtime =
+          state.runtime.copy(themeDiscovery =
+            state.runtime.themeDiscovery.copy(transition = Some(ThemeTransition(state.persisted.theme, 0, 2)))
+          )
+        )
       ).unsafeRunSync()
       sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
       advanceToVisible(sm)
@@ -108,7 +112,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
       val activeState            = sm.getCurrentState.unsafeRunSync()
       val activeBufferAnimations = sm.getBufferAnimations.unsafeRunSync()
       activeBufferAnimations.values.exists(_.hasActiveAnimations) shouldBe true
-      activeState.runtime.themeTransition shouldBe defined
+      activeState.runtime.themeDiscovery.transition shouldBe defined
       activeState.runtime.surfaceAnimations should not be empty
       activeState.runtime.uiSurfaces
         .exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
@@ -126,7 +130,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
       val state = sm.getCurrentState.unsafeRunSync()
       sm.getBufferAnimations.unsafeRunSync().values.foreach(_.animations shouldBe Map.empty)
-      state.runtime.themeTransition shouldBe None
+      state.runtime.themeDiscovery.transition shouldBe None
       state.runtime.surfaceAnimations shouldBe Map.empty
       state.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
       sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync() shouldBe false
@@ -138,7 +142,11 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     sm.applyEvent(InsertChar('a')).unsafeRunSync()
     sm.updateState(state =>
-      state.copy(runtime = state.runtime.copy(themeTransition = Some(ThemeTransition(state.persisted.theme, 0, 2))))
+      state.copy(runtime =
+        state.runtime.copy(themeDiscovery =
+          state.runtime.themeDiscovery.copy(transition = Some(ThemeTransition(state.persisted.theme, 0, 2)))
+        )
+      )
     ).unsafeRunSync()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     advanceToVisible(sm)
@@ -157,7 +165,7 @@ class CommandRunnerAnimationSpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
     sm.getBufferAnimations.unsafeRunSync().values.foreach(_.animations shouldBe Map.empty)
-    state.runtime.themeTransition shouldBe defined
+    state.runtime.themeDiscovery.transition shouldBe defined
     state.runtime.surfaceAnimations should not be empty
     state.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe true
   }

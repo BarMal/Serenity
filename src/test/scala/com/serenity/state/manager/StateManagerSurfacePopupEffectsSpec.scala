@@ -227,9 +227,9 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
           for
             _           <- popups.interpretThemeEffect(ThemeEffect.SaveThemeConfig(config))
             _           <- IO.sleep(1.second)
-            beforeWrite <- stateRef.get.map(_.runtime.availableThemeNames)
+            beforeWrite <- stateRef.get.map(_.runtime.themeDiscovery.availableThemeNames)
             _           <- written.complete(())
-            afterWrite  <- awaitValue(stateRef.get.map(_.runtime.availableThemeNames))(_ == savedNames)
+            afterWrite  <- awaitValue(stateRef.get.map(_.runtime.themeDiscovery.availableThemeNames))(_ == savedNames)
             pickerNames <- themeNamesRef.get
           yield (beforeWrite, afterWrite, pickerNames)
         }

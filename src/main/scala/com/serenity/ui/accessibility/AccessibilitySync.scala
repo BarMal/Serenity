@@ -58,7 +58,7 @@ object AccessibilitySync:
       ),
       runtime = state.runtime.copy(
         companionSprite = CompanionSpriteState.default,
-        themeTransition = None,
+        themeDiscovery = state.runtime.themeDiscovery.copy(transition = None),
         surfaceAnimations = Map.empty
       )
     )
