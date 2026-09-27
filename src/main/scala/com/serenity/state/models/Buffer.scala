@@ -70,8 +70,18 @@ final case class Document(
     // Captured from `DocumentStorageProvider` on every successful open and save (#1623), so a later save or
     // focus-in re-check can tell whether the on-disk file changed underneath this buffer since it was last
     // read, rather than only detecting a stale write after silently overwriting external changes.
-    revision: Option[DocumentRevision] = None
-)
+    revision: Option[DocumentRevision] = None,
+    // Bumped on every `content` change (`withContent`, #1663). Paired with `RichTextState.richTextSyncedVersion`
+    // so `Buffer.richTextInSync` can tell in O(1) whether a stored `richTextDocument` still describes this
+    // `content`, instead of re-deriving and comparing the whole plain text on every check.
+    contentVersion: Long = 0L
+):
+  /** The only sanctioned way to change `content`: keeps `contentVersion` monotonically increasing so a
+    * `richTextDocument` stamped against the old version is correctly seen as stale by `Buffer.richTextInSync`, without
+    * re-comparing any text.
+    */
+  def withContent(newContent: Rope): Document =
+    copy(content = newContent, contentVersion = contentVersion + 1, isDirty = true, isNewEmpty = false)
 
 /** A buffer's cursor/selection state: one entry per live cursor, each carrying its own position, in-flight selection
   * anchor and preferred vertical-navigation column/pixel-x (`#1577`). Before `#1577` this was five separate parallel
@@ -110,8 +120,21 @@ final case class Annotations(
 final case class RichTextState(
     richTextDocument: Option[RichTextDocument] = None,
     richTextFidelity: Option[RichTextFidelity] = None,
-    insertionRichTextStyle: Option[RichTextStyle] = None
-)
+    insertionRichTextStyle: Option[RichTextStyle] = None,
+    // The `Document.contentVersion` `richTextDocument` is known to match, or `None` if it either isn't set or
+    // wasn't stamped as verified against the buffer's current content (#1663). `None` is always the safe default:
+    // every reader that once re-derived and string-compared the whole plain text now instead treats an unstamped
+    // document as stale and rebuilds it, exactly as it would have on a genuine mismatch.
+    richTextSyncedVersion: Option[Long] = None
+):
+  /** Attaches `document` (or clears it, via `None`) as the paragraph-shaped view of a buffer whose content is at
+    * `contentVersion`, stamping the sync version alongside it so `Buffer.richTextInSync` can trust the pairing without
+    * re-checking any text. This is the one place that sets `richTextDocument` and `richTextSyncedVersion` together, so
+    * every call site attaching a document (freshly built, or carried forward already verified) goes through the same
+    * pairing instead of risking a `richTextDocument` stamped with a stale or missing version.
+    */
+  def withSyncedDocument(document: Option[RichTextDocument], contentVersion: Long): RichTextState =
+    copy(richTextDocument = document, richTextSyncedVersion = document.map(_ => contentVersion))
 
 final case class Buffer(
     id: BufferId,
@@ -192,7 +215,12 @@ final case class Buffer(
   /** The buffer state after an edit lands: swaps in the new content, marks the document dirty, and replaces the cursor
     * list with bare positions, clearing every cursor's selection and preferred-column/x state. `documentComments` and
     * `richTextDocument` default to their current, unadjusted values -- pass the caller's remapped ones when the edit
-    * needs to carry them forward.
+    * needs to carry them forward. Every real caller does pass an explicit `richTextDocument` (`None` when there is
+    * none, or the result of re-deriving it against the new `content`); the default exists for a caller with no rich
+    * text to carry, so it stamps whatever `richTextDocument` it ends up with as synced to the *new* content version --
+    * a caller relying on the default while genuinely changing content on a buffer that has a `richTextDocument` would
+    * wrongly mark that unrelated-to-this-edit document as still matching, exactly the drift `#1663` moved away from
+    * checking by full-text comparison. Only safe when the default is left untouched by every caller, as it is.
     *
     * Centralises the five near-identical post-edit `copy` blocks in `EditorEventReducer` (`#1072`), which had already
     * drifted: the merged-deletion path silently kept a stale `richTextDocument` (and stale `multiCursorVerticalStates`)
@@ -204,12 +232,21 @@ final case class Buffer(
     documentComments: List[DocumentComment] = annotations.documentComments,
     richTextDocument: Option[RichTextDocument] = richText.richTextDocument
   ): Buffer =
+    val updatedDocument = document.withContent(content)
     copy(
-      document = document.copy(content = content, isDirty = true, isNewEmpty = false),
+      document = updatedDocument,
       editing = EditingState(cursors),
       annotations = annotations.copy(documentComments = documentComments),
-      richText = richText.copy(richTextDocument = richTextDocument)
+      richText = richText.withSyncedDocument(richTextDocument, updatedDocument.contentVersion)
     )
+
+  /** `O(1)`: whether `richText.richTextDocument` is known to describe `document.content` exactly, replacing a
+    * `matchesPlainText` re-comparison of the whole plain text on every check (`#1663`). Relies on every writer of
+    * `richTextDocument` going through [[RichTextState.withSyncedDocument]] (directly, or via [[withEditedContent]]) so
+    * the stamped version and `document.contentVersion` only ever agree when the pairing is actually still valid.
+    */
+  def richTextInSync: Boolean =
+    richText.richTextDocument.isDefined && richText.richTextSyncedVersion.contains(document.contentVersion)
 
 object Buffer:
   def empty(id: BufferId)(using com.serenity.rope.Balance): Buffer =

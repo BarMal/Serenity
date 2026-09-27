@@ -47,16 +47,15 @@ class SurfaceContentResolverContextualToolbarSpec extends AnyFlatSpec with Match
         )
       )
     ).normalized
-    val paneId = PaneId(0)
+    val paneId       = PaneId(0)
+    val sourceBuffer = Buffer.fromString(bufferId, "alpha beta")
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(
-          bufferId -> Buffer
-            .fromString(bufferId, "alpha beta")
-            .copy(
-              editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus)),
-              richText = RichTextState(richTextDocument = Some(richDocument))
-            )
+          bufferId -> sourceBuffer.copy(
+            editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus)),
+            richText = RichTextState().withSyncedDocument(Some(richDocument), sourceBuffer.document.contentVersion)
+          )
         ),
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
@@ -129,16 +128,15 @@ class SurfaceContentResolverContextualToolbarSpec extends AnyFlatSpec with Match
         )
       )
     ).normalized
-    val paneId = PaneId(0)
+    val paneId       = PaneId(0)
+    val sourceBuffer = Buffer.fromString(bufferId, "alpha beta")
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(
-          bufferId -> Buffer
-            .fromString(bufferId, "alpha beta")
-            .copy(
-              editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus)),
-              richText = RichTextState(richTextDocument = Some(richDocument))
-            )
+          bufferId -> sourceBuffer.copy(
+            editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus)),
+            richText = RichTextState().withSyncedDocument(Some(richDocument), sourceBuffer.document.contentVersion)
+          )
         ),
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),

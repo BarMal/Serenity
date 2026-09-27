@@ -40,13 +40,13 @@ trait ContextualToolbarTestSupport extends Matchers with StateManagerTestSupport
           .setParagraphRole(range, ParagraphRole.Body)
           .setParagraphAlignment(range, ParagraphAlignment.Left)
           .normalized
-        val nextBuffer = state.persisted
-          .buffers(bufferId)
-          .copy(
-            document = state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta")),
-            editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus)),
-            richText = state.persisted.buffers(bufferId).richText.copy(richTextDocument = Some(document))
-          )
+        val existingBuffer = state.persisted.buffers(bufferId)
+        val nextDocument   = existingBuffer.document.copy(content = com.serenity.rope.Rope("alpha beta"))
+        val nextBuffer = existingBuffer.copy(
+          document = nextDocument,
+          editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus)),
+          richText = existingBuffer.richText.withSyncedDocument(Some(document), nextDocument.contentVersion)
+        )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
       }
       .unsafeRunSync()

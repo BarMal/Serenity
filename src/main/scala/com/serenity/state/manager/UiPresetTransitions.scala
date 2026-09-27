@@ -149,17 +149,20 @@ private[manager] object UiPresetTransitions:
             case DefaultDocumentMode.PlainText =>
               buffer.copy(
                 document = buffer.document.copy(language = None),
-                richText = buffer.richText.copy(richTextDocument = None)
+                richText = buffer.richText.withSyncedDocument(None, buffer.document.contentVersion)
               )
             case DefaultDocumentMode.Markdown =>
               buffer.copy(
                 document = buffer.document.copy(language = Some(LanguageId.Markdown)),
-                richText = buffer.richText.copy(richTextDocument = None)
+                richText = buffer.richText.withSyncedDocument(None, buffer.document.contentVersion)
               )
             case DefaultDocumentMode.RichText =>
               buffer.copy(
                 document = buffer.document.copy(language = None),
-                richText = buffer.richText.copy(richTextDocument = Some(RichTextDocument.fromPlainText("")))
+                richText = buffer.richText.withSyncedDocument(
+                  Some(RichTextDocument.fromPlainText("")),
+                  buffer.document.contentVersion
+                )
               )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> updatedBuffer)))
       case _ =>

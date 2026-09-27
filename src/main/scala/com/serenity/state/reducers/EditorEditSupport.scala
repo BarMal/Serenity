@@ -313,6 +313,11 @@ private[reducers] object EditorEditSupport:
             List(replacementEdit)
           )
         ),
+        // `document` above and `richTextDocument` below both leave `contentVersion`/`richTextSyncedVersion` at
+        // whatever `buffer` already had, rather than updating either: as long as the two only ever move together
+        // (never one without the other), `Buffer.richTextInSync` stays correct without needing either to actually
+        // change on every edit (#1663) -- see `richTextDocumentAfterEdit`, which only ever returns `Some` when
+        // `buffer.richTextInSync` already held.
         richText = buffer.richText.copy(
           richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText)
         )
@@ -377,37 +382,35 @@ private[reducers] object EditorEditSupport:
     endOffset: Int,
     insertedText: String
   ): Option[RichTextDocument] =
-    buffer.richText.richTextDocument.flatMap { document =>
-      Option.when(document.matchesPlainText(buffer.document.content.collect())) {
-        val updatedDocument = document
-          .replaceRange(
-            RichTextRange(
-              richTextPositionForOffset(buffer.document.content, startOffset),
-              richTextPositionForOffset(buffer.document.content, endOffset)
-            ),
-            insertedText
-          )
-          .normalized
-        buffer.richText.insertionRichTextStyle
-          .filter(_ => insertedText.nonEmpty)
-          .map { style =>
-            val updatedContent =
-              insertOrUnchanged(
-                deleteOrUnchanged(buffer.document.content, startOffset, endOffset),
-                startOffset,
-                insertedText
+    buffer.richText.richTextDocument.filter(_ => buffer.richTextInSync).map { document =>
+      val updatedDocument = document
+        .replaceRange(
+          RichTextRange(
+            richTextPositionForOffset(buffer.document.content, startOffset),
+            richTextPositionForOffset(buffer.document.content, endOffset)
+          ),
+          insertedText
+        )
+        .normalized
+      buffer.richText.insertionRichTextStyle
+        .filter(_ => insertedText.nonEmpty)
+        .map { style =>
+          val updatedContent =
+            insertOrUnchanged(
+              deleteOrUnchanged(buffer.document.content, startOffset, endOffset),
+              startOffset,
+              insertedText
+            )
+          updatedDocument
+            .updateInlineStyle(
+              RichTextRange(
+                richTextPositionForOffset(updatedContent, startOffset),
+                richTextPositionForOffset(updatedContent, startOffset + insertedText.length)
               )
-            updatedDocument
-              .updateInlineStyle(
-                RichTextRange(
-                  richTextPositionForOffset(updatedContent, startOffset),
-                  richTextPositionForOffset(updatedContent, startOffset + insertedText.length)
-                )
-              )(_ => style)
-              .normalized
-          }
-          .getOrElse(updatedDocument)
-      }
+            )(_ => style)
+            .normalized
+        }
+        .getOrElse(updatedDocument)
     }
 
   def richTextPositionForOffset(content: Rope, offset: Int): RichTextPosition =

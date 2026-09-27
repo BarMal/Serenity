@@ -170,10 +170,12 @@ class FileManager(using balance: Balance):
         filePath = Some(path),
         revision = revision
       ),
-      richText = com.serenity.state.models.RichTextState(
-        richTextDocument = Some(normalized),
-        richTextFidelity = fidelity
-      )
+      // `content` above is `Rope(normalized.plainText)`, so `normalized` is in sync with it by construction, at the
+      // fresh `Document`'s default `contentVersion` of `0L` (#1663).
+      richText = com.serenity.state.models
+        .RichTextState()
+        .withSyncedDocument(Some(normalized), contentVersion = 0L)
+        .copy(richTextFidelity = fidelity)
     )
 
   private def savedBuffer(
@@ -189,10 +191,12 @@ class FileManager(using balance: Balance):
         language = languageFromPath(path),
         revision = revision
       ),
-      richText = buffer.richText.copy(
-        richTextDocument = richTextDocument.map(_.normalized),
-        richTextFidelity = None
-      )
+      // `richTextDocument` (when present) is `richTextDocumentForSave(buffer)`'s result, already proven to match
+      // `buffer.document.content` -- which this save doesn't change -- so it's synced at `buffer`'s current version
+      // (#1663).
+      richText = buffer.richText
+        .withSyncedDocument(richTextDocument.map(_.normalized), buffer.document.contentVersion)
+        .copy(richTextFidelity = None)
     )
 
   /** The buffer's captured revision is only a valid conflict check against `path` when `path` is the same file the
