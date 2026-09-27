@@ -39,7 +39,7 @@ class StateManagerCapabilityPortsSpec extends AnyFlatSpec with Matchers:
     val configPersistencePath               = None
     val uiPresetStore = UiPresetStore(Paths.get(System.getProperty("java.io.tmpdir"), "capability-ports-spec.json"))
     val windowSizeProvider    = IO.pure(Option.empty[PreferredWindowSize])
-    val markdownPreviewWindow = com.serenity.ui.tui.MarkdownPreviewWindowAvailability.Unavailable
+    val markdownPreviewWindow = com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable
 
   private def path(name: String): Path = Paths.get(name)
 

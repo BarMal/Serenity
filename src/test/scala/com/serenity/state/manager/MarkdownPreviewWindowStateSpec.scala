@@ -6,12 +6,12 @@ import java.util.concurrent.atomic.AtomicInteger
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
-import com.serenity.frontend.FrontendCapabilities
+import com.serenity.frontend.{FrontendCapabilities, MarkdownPreviewWindowAvailability}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.tui.{MarkdownPreviewWindow, MarkdownPreviewWindowAvailability}
+import com.serenity.ui.tui.MarkdownPreviewWindow
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory

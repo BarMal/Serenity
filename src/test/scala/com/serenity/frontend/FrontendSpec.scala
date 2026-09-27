@@ -2,6 +2,7 @@ package com.serenity.frontend
 
 import scala.concurrent.duration.*
 
+import cats.effect.IO
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, CursorMode}
 import com.serenity.keystroke.KeyboardFidelityTier
@@ -53,4 +54,27 @@ class FrontendSpec extends AnyFlatSpec with Matchers:
   "Frontend.guiLogRouting/tuiLogRouting" should "match what a constructed instance's own logRouting answers" in {
     Frontend.guiLogRouting shouldBe GuiFrontend.logRouting
     Frontend.tuiLogRouting shouldBe TuiFrontend(KeyboardFidelityTier.Full).logRouting
+  }
+
+  "GuiFrontend" should "never report a spawned Markdown preview window -- the GUI uses the in-app split panel instead" in {
+    GuiFrontend.markdownPreviewWindow shouldBe MarkdownPreviewWindowAvailability.Unavailable
+  }
+
+  "TuiFrontend" should "default to no Markdown preview window when none is given" in {
+    TuiFrontend(KeyboardFidelityTier.Full).markdownPreviewWindow shouldBe MarkdownPreviewWindowAvailability.Unavailable
+  }
+
+  it should "carry whatever Markdown preview window availability TuiRuntime resolved at startup" in {
+    val fakeWindow = new com.serenity.ui.tui.MarkdownPreviewWindow:
+      def show(): IO[Unit]                                           = IO.unit
+      def hide(): IO[Unit]                                           = IO.unit
+      def updateImage(image: java.awt.image.BufferedImage): IO[Unit] = IO.unit
+      def currentSize: IO[(Int, Int)]                                = IO.pure((0, 0))
+      def setOnUserClose(callback: () => Unit): Unit                 = ()
+    val availability = MarkdownPreviewWindowAvailability.Available(fakeWindow)
+
+    TuiFrontend(
+      KeyboardFidelityTier.Full,
+      markdownPreviewWindow = availability
+    ).markdownPreviewWindow shouldBe availability
   }

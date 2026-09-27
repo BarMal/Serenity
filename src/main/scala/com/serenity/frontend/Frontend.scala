@@ -14,16 +14,21 @@ final case class LogRouting(suppressConsole: Boolean)
 
 /** Selected exactly once, in `Main`, and injected into the effectful shell (issue #1669) -- nothing downstream asks "am
   * I TUI?" again. `GuiFrontend`/`TuiFrontend` hold the shell/effect-boundary behaviour that used to be scattered
-  * scattered "is this TUI?" branches (cursor-blink scheduling below, log routing); the pure core never sees either,
-  * only the immutable [[FrontendCapabilities]] value each publishes into `Runtime.capabilities` at startup.
+  * scattered "is this TUI?" branches (cursor-blink scheduling below, log routing, the Markdown preview window); the
+  * pure core never sees either, only the immutable [[FrontendCapabilities]] value each publishes into
+  * `Runtime.capabilities` at startup.
   *
-  * `Frontend` deliberately does not also own `renderSurface`/`inputHandler`/`openMarkdownPreview` as trait methods the
-  * way this issue's original sketch proposed: `AppRuntime.run`'s Swing and terminal call sites (`Main.runGui`,
-  * `TuiRuntime.run`) already construct those -- a real `SwingWindow`/`TerminalShell` resource, their own resize/focus
-  * callback wiring, their own input handler construction -- in ways different enough (a window vs. a terminal session)
-  * that collapsing them into one generic trait method `AppRuntime.run` calls polymorphically would be a separate,
-  * materially larger rewrite of the runtime's own IO plumbing, not a mechanical extraction. That consolidation is left
-  * as explicit follow-up scope (see this issue's PR discussion) rather than attempted partially here.
+  * `Frontend` itself stays a cheap, stateless descriptor -- every member here is a plain value or a pure function of
+  * `AppConfig`, which is exactly why `GuiFrontend` is a singleton `case object` rather than a class, and is read that
+  * way (`GuiFrontend.capabilities`, `GuiFrontend.cursorIdleInterval(config)`, ...) throughout the test suite
+  * (`FrontendSpec`, `AppRuntimeCursorCadenceSpec`, `AppRuntimeFocusIdleSpec`, `AppRuntimeIdleCursorRenderSpec`) without
+  * ever constructing a real session. `renderSurface`/`inputHandler` from this issue's original sketch are *not* members
+  * here for that reason: a real render/input session needs a live `SwingWindow`/`TerminalShell` resource that only
+  * exists once `Main.runGui`/`TuiRuntime.run` acquire it, and forcing that liveness onto this type would break the
+  * singleton/stateless shape every one of those call sites relies on. That pair is instead [[FrontendRuntime]] -- see
+  * its own doc for why it is a sibling type rather than two more members here. `openMarkdownPreview` *is* a member here
+  * ([[markdownPreviewWindow]]) -- its availability is exactly as cheap and session-independent as `capabilities` is,
+  * carrying only what TUI's startup already resolved rather than a live handle.
   */
 sealed trait Frontend:
   def capabilities: FrontendCapabilities
@@ -33,6 +38,15 @@ sealed trait Frontend:
     * idle work to do and the loop should wait indefinitely for a real input event instead.
     */
   def cursorIdleInterval(config: AppConfig): Option[FiniteDuration]
+
+  /** Whether this frontend can spawn a Markdown preview window (issue #1113), replacing the
+    * `MarkdownPreviewWindowAvailability` that used to reach `StateManager`/`StateManagerPanelEffects` as a bare
+    * constructor parameter threaded in from `com.serenity.ui.tui` directly -- a `state.manager` reference
+    * `ArchitectureChecks`' #1669 rule now catches for any *new* such reference, with the five pre-existing ones
+    * grandfathered in `architecture-baseline.tsv` until this. Held here instead: `state.manager` reads it off the
+    * `Frontend` it already takes, rather than importing a concrete frontend's own implementation package.
+    */
+  def markdownPreviewWindow: MarkdownPreviewWindowAvailability
 
 object Frontend:
   private[frontend] val DefaultCursorIdleInterval: FiniteDuration = 500.millis
@@ -66,8 +80,9 @@ object Frontend:
   * blink timing to, unlike a real terminal (see [[TuiFrontend]]).
   */
 case object GuiFrontend extends Frontend:
-  val capabilities: FrontendCapabilities = FrontendCapabilities.gui
-  val logRouting: LogRouting             = Frontend.guiLogRouting
+  val capabilities: FrontendCapabilities                       = FrontendCapabilities.gui
+  val logRouting: LogRouting                                   = Frontend.guiLogRouting
+  val markdownPreviewWindow: MarkdownPreviewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable
 
   def cursorIdleInterval(config: AppConfig): Option[FiniteDuration] =
     Frontend.motionDrivenIdleInterval(config)
@@ -78,7 +93,10 @@ case object GuiFrontend extends Frontend:
   * `keyboardFidelityTier` is the one thing that varies per session -- resolved once from `TerminalShell`'s negotiated
   * protocol tier before this is constructed (see `TuiRuntime.run`/`TuiRuntime.keyboardFidelityTier`).
   */
-final case class TuiFrontend(keyboardFidelityTier: KeyboardFidelityTier) extends Frontend:
+final case class TuiFrontend(
+    keyboardFidelityTier: KeyboardFidelityTier,
+    markdownPreviewWindow: MarkdownPreviewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable
+) extends Frontend:
   val capabilities: FrontendCapabilities = FrontendCapabilities.tui(keyboardFidelityTier)
   val logRouting: LogRouting             = Frontend.tuiLogRouting
 

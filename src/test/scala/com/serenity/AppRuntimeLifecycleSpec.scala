@@ -9,6 +9,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.*
+import com.serenity.frontend.FrontendRuntime
 import com.serenity.input.InputHandler
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.*
@@ -79,22 +80,24 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
 
     val program = AppRuntime.run(
       initialViewportSize = ViewportSize(120, 40),
-      makeInputHandler = _ => IO.pure(new SilentInputHandler),
       checkResize = IO.pure(None),
-      renderFull = (
-        _: AppState,
-        _: Boolean,
-        _: Option[Color],
-        _: Damage,
-        _: Map[BufferId, com.serenity.animation.AnimationState]
-      ) => IO.unit,
-      renderCursorOnly = (
-        _: AppState,
-        _: Boolean,
-        _: Option[Color],
-        _: Damage,
-        _: Map[BufferId, com.serenity.animation.AnimationState]
-      ) => IO.unit,
+      runtime = FrontendRuntime(
+        inputHandler = _ => IO.pure(new SilentInputHandler),
+        renderFull = (
+          _: AppState,
+          _: Boolean,
+          _: Option[Color],
+          _: Damage,
+          _: Map[BufferId, com.serenity.animation.AnimationState]
+        ) => IO.unit,
+        renderCursorOnly = (
+          _: AppState,
+          _: Boolean,
+          _: Option[Color],
+          _: Damage,
+          _: Map[BufferId, com.serenity.animation.AnimationState]
+        ) => IO.unit
+      ),
       appConfig = AppConfig.default,
       awaitExternalQuit = IO.unit,
       registerResizeCallback = _ => ()
@@ -116,22 +119,24 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
 
     val program = AppRuntime.run(
       initialViewportSize = ViewportSize(120, 40),
-      makeInputHandler = _ => IO.pure(new TrackingInputHandler),
       checkResize = IO.pure(None),
-      renderFull = (
-        _: AppState,
-        _: Boolean,
-        _: Option[Color],
-        _: Damage,
-        _: Map[BufferId, com.serenity.animation.AnimationState]
-      ) => IO.unit,
-      renderCursorOnly = (
-        _: AppState,
-        _: Boolean,
-        _: Option[Color],
-        _: Damage,
-        _: Map[BufferId, com.serenity.animation.AnimationState]
-      ) => IO.unit,
+      runtime = FrontendRuntime(
+        inputHandler = _ => IO.pure(new TrackingInputHandler),
+        renderFull = (
+          _: AppState,
+          _: Boolean,
+          _: Option[Color],
+          _: Damage,
+          _: Map[BufferId, com.serenity.animation.AnimationState]
+        ) => IO.unit,
+        renderCursorOnly = (
+          _: AppState,
+          _: Boolean,
+          _: Option[Color],
+          _: Damage,
+          _: Map[BufferId, com.serenity.animation.AnimationState]
+        ) => IO.unit
+      ),
       appConfig = AppConfig.default,
       awaitExternalQuit = IO.unit,
       registerResizeCallback = _ => ()
@@ -147,22 +152,24 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
 
     val program = AppRuntime.run(
       initialViewportSize = ViewportSize(120, 40),
-      makeInputHandler = _ => IO.pure(new SilentInputHandler),
       checkResize = IO.pure(None),
-      renderFull = (
-        _: AppState,
-        _: Boolean,
-        _: Option[Color],
-        _: Damage,
-        _: Map[BufferId, com.serenity.animation.AnimationState]
-      ) => IO.unit,
-      renderCursorOnly = (
-        _: AppState,
-        _: Boolean,
-        _: Option[Color],
-        _: Damage,
-        _: Map[BufferId, com.serenity.animation.AnimationState]
-      ) => IO.unit,
+      runtime = FrontendRuntime(
+        inputHandler = _ => IO.pure(new SilentInputHandler),
+        renderFull = (
+          _: AppState,
+          _: Boolean,
+          _: Option[Color],
+          _: Damage,
+          _: Map[BufferId, com.serenity.animation.AnimationState]
+        ) => IO.unit,
+        renderCursorOnly = (
+          _: AppState,
+          _: Boolean,
+          _: Option[Color],
+          _: Damage,
+          _: Map[BufferId, com.serenity.animation.AnimationState]
+        ) => IO.unit
+      ),
       appConfig = AppConfig.default,
       makeStateManager = Some(logger =>
         IO.blocking(java.nio.file.Files.createTempFile("serenity-session-root", ".tmp")).flatMap { fileRoot =>
@@ -188,22 +195,24 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
 
     val program = AppRuntime.run(
       initialViewportSize = ViewportSize(120, 40),
-      makeInputHandler = _ => IO.pure(new SilentInputHandler),
       checkResize = IO.raiseError(new RuntimeException("resize check failed")),
-      renderFull = (
-        _: AppState,
-        _: Boolean,
-        _: Option[Color],
-        _: Damage,
-        _: Map[BufferId, com.serenity.animation.AnimationState]
-      ) => IO.unit,
-      renderCursorOnly = (
-        _: AppState,
-        _: Boolean,
-        _: Option[Color],
-        _: Damage,
-        _: Map[BufferId, com.serenity.animation.AnimationState]
-      ) => IO.unit,
+      runtime = FrontendRuntime(
+        inputHandler = _ => IO.pure(new SilentInputHandler),
+        renderFull = (
+          _: AppState,
+          _: Boolean,
+          _: Option[Color],
+          _: Damage,
+          _: Map[BufferId, com.serenity.animation.AnimationState]
+        ) => IO.unit,
+        renderCursorOnly = (
+          _: AppState,
+          _: Boolean,
+          _: Option[Color],
+          _: Damage,
+          _: Map[BufferId, com.serenity.animation.AnimationState]
+        ) => IO.unit
+      ),
       appConfig = AppConfig.default,
       makeStateManager = Some(logger =>
         StateManager.apply(

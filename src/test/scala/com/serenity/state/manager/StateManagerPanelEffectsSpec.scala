@@ -5,14 +5,13 @@ import java.nio.file.{Files, Path}
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.{PanelKind, ViewIntent}
-import com.serenity.frontend.FrontendCapabilities
+import com.serenity.frontend.{FrontendCapabilities, MarkdownPreviewWindowAvailability}
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.undo.{HistoryEntry, UndoState}
 import com.serenity.ui.layout.{PanelPosition, PanelTarget, PeekContent}
-import com.serenity.ui.tui.MarkdownPreviewWindowAvailability
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.noop.NoOpLogger
