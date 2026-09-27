@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import com.serenity.animation.AnimationState
 import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.document.DocumentNavigation
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import org.slf4j.LoggerFactory
@@ -290,14 +291,16 @@ object OverlayViewModel:
       else
         content match
           // Painted entirely via `ContextMenuSurfaceComposition`/`CommandRunnerSurfaceComposition`/
-          // `ContextualToolbarSurfaceComposition`/`CommentLensSurfaceComposition` (issue #819, slices 2-3) --
-          // `TextOverlayRenderer` ignores `rows` whenever `composition` is set below, which it always is for these,
-          // so resolving real rows here would be dead computation on this specific call site. Scoped to just this
-          // call site, not `SurfaceContentResolver.resolve`'s own dispatch: `EditorLayoutContract`
-          // (`floatingGeometry`) calls that dispatcher independently and genuinely still needs the real, item-count
-          // accurate rows/header/footer it produces -- see its own doc comment.
-          case SurfaceContent.ContextMenu(_) | SurfaceContent.CommandPalette(_) | SurfaceContent.ContextualToolbar(_) |
-              SurfaceContent.CommentLens(_) =>
+          // `ContextualToolbarSurfaceComposition`/`CommentLensSurfaceComposition`/`OutlineSurfaceComposition`/
+          // `DiagnosticsSurfaceComposition`/`DirectoryTreeSurfaceComposition`/`CommentsSurfaceComposition` (issue
+          // #819, slices 2-5; issue #1683) -- `TextOverlayRenderer` ignores `rows` whenever `composition` is set
+          // below, which it always is for these, so resolving real rows here would be dead computation on this
+          // specific call site. Scoped to just this call site, not `SurfaceContentResolver.resolve`'s own dispatch:
+          // `EditorLayoutContract` (`floatingGeometry`) calls that dispatcher independently and genuinely still needs
+          // the real, item-count accurate rows/header/footer it produces -- see its own doc comment.
+          case SurfaceContent.ContextMenu(_) | SurfaceContent.CommandPalette(_) | SurfaceContent.CommandRunnerPeek(_) |
+              SurfaceContent.ContextualToolbar(_) | SurfaceContent.CommentLens(_) | SurfaceContent.Outline(_, _) |
+              SurfaceContent.Diagnostics(_, _) | SurfaceContent.DirectoryTree(_, _) | SurfaceContent.Comments(_, _) =>
             ResolvedSurfaceContent()
           case _ =>
             SurfaceContentResolver.resolve(
@@ -323,9 +326,14 @@ object OverlayViewModel:
       case SurfaceContent.ModalWorkflow(_)     => true
       case SurfaceContent.ContextMenu(_)       => true
       case SurfaceContent.CommandPalette(_)    => true
+      case SurfaceContent.CommandRunnerPeek(_) => true
       case SurfaceContent.TabBar(_, _)         => true
       case SurfaceContent.ContextualToolbar(_) => true
       case SurfaceContent.CommentLens(_)       => true
+      case SurfaceContent.Outline(_, _)        => true
+      case SurfaceContent.Diagnostics(_, _)    => true
+      case SurfaceContent.DirectoryTree(_, _)  => true
+      case SurfaceContent.Comments(_, _)       => true
       case _                                   => false
 
   private def collapsedContentView(content: com.serenity.state.models.SurfaceContent): ResolvedSurfaceContent =
@@ -381,13 +389,48 @@ object OverlayViewModel:
             showKeyHintsFor(content, state)
           )
         )
+      case SurfaceContent.CommandRunnerPeek(runner) =>
+        // Same composition machinery as `CommandPalette` (see `SurfaceContent.CommandRunnerPeek`'s own doc comment on
+        // why this is a distinct case rather than the same one reused).
+        Some(
+          CommandRunnerSurfaceComposition.forRunner(
+            runner,
+            rect,
+            itemGapRowsFor(content, state),
+            SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity),
+            showKeyHintsFor(content, state)
+          )
+        )
       case SurfaceContent.TabBar(entries, activeBufferId) =>
         Some(TabBarSurfaceComposition.forTabBar(entries, activeBufferId, rect))
       case SurfaceContent.ContextualToolbar(toolbarState) =>
         Some(ContextualToolbarSurfaceComposition.forToolbar(toolbarState, state, rect))
       case SurfaceContent.CommentLens(lens) =>
         Some(CommentLensSurfaceComposition.forLens(lens, rect))
+      case SurfaceContent.DirectoryTree(tree, selectedPath) =>
+        Some(DirectoryTreeSurfaceComposition.forTree(tree, selectedPath, rect))
+      case SurfaceContent.Outline(symbols, activeLocation) =>
+        Some(OutlineSurfaceComposition.forOutline(symbols, activeSymbolLocation(symbols, activeLocation, state), rect))
+      case SurfaceContent.Comments(symbols, activeLocation) =>
+        Some(
+          CommentsSurfaceComposition.forComments(symbols, activeSymbolLocation(symbols, activeLocation, state), rect)
+        )
+      case SurfaceContent.Diagnostics(issues, activeLocation) =>
+        Some(DiagnosticsSurfaceComposition.forDiagnostics(issues, activeLocation, rect))
       case _ => None
+
+  /** Mirrors `PinnedPanelViewModel`'s own private helper of the same name: `Outline`/`Comments` content carries its own
+    * `activeLocation`, but falls back to whatever symbol the live cursor position is currently inside, so a floating
+    * peek highlights the same row a docked panel would.
+    */
+  private def activeSymbolLocation(
+    symbols: List[Symbol],
+    fallback: Option[Location],
+    state: AppState
+  ): Option[Location] =
+    fallback.orElse(
+      state.activeCursorPosition.flatMap(cursor => DocumentNavigation.currentSymbol(symbols, cursor)).map(_.location)
+    )
 
   private def alphaMultiplierFor(surface: com.serenity.state.models.UiSurface, state: AppState): Float =
     val focusMultiplier =
