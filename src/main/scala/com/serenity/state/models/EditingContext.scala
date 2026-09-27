@@ -21,8 +21,8 @@ enum Shell:
   case Tui
 
 /** Everything mode-aware in the interface reads from here rather than consulting `config.appMode`, the active buffer's
-  * language and `runtime.isTuiMode` separately: one derivation per frame, so the toolbar, the status line, the settings
-  * filter and the palette cannot each answer "what is the user doing right now" differently.
+  * language and `runtime.capabilities` separately: one derivation per frame, so the toolbar, the status line, the
+  * settings filter and the palette cannot each answer "what is the user doing right now" differently.
   *
   * `mode` is the workspace's declared intent (code or prose), `buffer` is what the focused document actually is. The
   * two can legitimately disagree -- a Scala file open in a prose workspace -- and each consumer decides which it cares
@@ -54,7 +54,7 @@ object EditingContext:
     EditingContext(
       mode = state.persisted.config.appMode,
       buffer = state.activeBuffer.map(bufferKind),
-      shell = if state.runtime.isTuiMode then Shell.Tui else Shell.Gui,
+      shell = if state.runtime.capabilities.isCellGrid then Shell.Tui else Shell.Gui,
       focus = state.persisted.focus
     )
 

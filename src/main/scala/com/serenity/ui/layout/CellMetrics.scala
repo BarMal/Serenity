@@ -31,7 +31,8 @@ object CellMetrics:
     * `TerminalRenderSurface`) always measures/positions text this way -- never from a real font's pixel metrics, since
     * a terminal cell has no font to measure. Any geometry consumer that must agree with what a terminal actually
     * wrapped and drew (mouse hit-testing, vertical/Home/End cursor movement) needs this exact unit when
-    * `state.runtime.isTuiMode` holds, instead of `CellMetrics.fromFont` on some AWT font TUI mode never renders with.
+    * `state.runtime.capabilities.isCellGrid` holds, instead of `CellMetrics.fromFont` on some AWT font TUI mode never
+    * renders with.
     */
   val cellUnit: CellMetrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0, displayWidthAware = true)
 

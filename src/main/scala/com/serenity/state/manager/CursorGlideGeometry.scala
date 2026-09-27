@@ -25,7 +25,7 @@ import com.serenity.ui.layout.{CellMetrics, PixelPoint, TextLayoutSnapshot}
   * at most a couple of rows does not make visible.
   *
   * GUI-canvas-only by construction: TUI mode measures glyphs with no real font to draw them, so `CursorViewport` never
-  * calls this while `state.runtime.isTuiMode` holds.
+  * calls this while `state.runtime.capabilities.pixelMotion` is false.
   */
 private[manager] object CursorGlideGeometry:
 

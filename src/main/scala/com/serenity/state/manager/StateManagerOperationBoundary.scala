@@ -70,8 +70,7 @@ final private[manager] class StateManagerOperationBoundary private (
       CommandRunner.empty.activate(
         registry,
         state.persisted.config,
-        state.runtime.isTuiMode,
-        state.runtime.keyboardFidelityTier,
+        state.runtime.capabilities,
         state.commandRunnerContext
       )
     val runner = activatedRunner.copy(

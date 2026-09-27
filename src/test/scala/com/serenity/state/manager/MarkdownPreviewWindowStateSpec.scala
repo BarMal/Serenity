@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
@@ -59,7 +60,9 @@ class MarkdownPreviewWindowStateSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.EditorPane(paneId)
       ),
-      runtime = AppState.empty.runtime.copy(isTuiMode = isTuiMode)
+      runtime = AppState.empty.runtime.copy(
+        capabilities = if isTuiMode then FrontendCapabilities.tui() else FrontendCapabilities.gui
+      )
     )
 
   private val openMarkdownPreview =
@@ -112,7 +115,7 @@ class MarkdownPreviewWindowStateSpec extends AnyFlatSpec with Matchers:
     val window       = new FakeWindow
     val stateManager = createStateManager(MarkdownPreviewWindowAvailability.Available(window))
     stateManager
-      .updateState(state => state.copy(runtime = state.runtime.copy(isTuiMode = true)))
+      .updateState(state => state.copy(runtime = state.runtime.copy(capabilities = FrontendCapabilities.tui())))
       .unsafeRunSync()
 
     stateManager.executeCommand(openMarkdownPreview).unsafeRunSync()

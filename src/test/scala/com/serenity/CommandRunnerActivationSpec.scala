@@ -6,6 +6,7 @@ import com.serenity.animation.TransitionKind
 import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
@@ -382,27 +383,26 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     runner.get.optionSelections.get("text-ligatures") shouldBe Some(1)
   }
 
-  "CommandRunner.activate with isTuiMode" should "default to false and carry the flag into settingsGroups (issue #1112)" in {
+  "CommandRunner.activate with capabilities" should "default to GUI and carry the flag into settingsGroups (issue #1112)" in {
     val defaultRunner = CommandRunner.empty.activate(registry, AppConfig.default)
-    defaultRunner.isTuiMode shouldBe false
+    defaultRunner.capabilities shouldBe FrontendCapabilities.gui
     settingsGroup(defaultRunner, "settings-typography").flatMap(_.hint) shouldBe
       Some("Typefaces for prose, code, and interface")
 
-    val tuiRunner = CommandRunner.empty.activate(registry, AppConfig.default, isTuiMode = true)
-    tuiRunner.isTuiMode shouldBe true
+    val tuiRunner = CommandRunner.empty.activate(registry, AppConfig.default, capabilities = FrontendCapabilities.tui())
+    tuiRunner.capabilities.isCellGrid shouldBe true
     settingsGroup(tuiRunner, "settings-typography").flatMap(_.hint) shouldBe
       Some("Inert in TUI mode -- Typefaces for prose, code, and interface")
   }
 
   "CommandRunner.activate with keyboardFidelityTier" should "default to Full and carry the negotiated tier through (issue #1194)" in {
     val defaultRunner = CommandRunner.empty.activate(registry, AppConfig.default)
-    defaultRunner.keyboardFidelityTier shouldBe KeyboardFidelityTier.Full
+    defaultRunner.capabilities.keyboardFidelityTier shouldBe KeyboardFidelityTier.Full
 
     val cappedRunner = CommandRunner.empty.activate(
       registry,
       AppConfig.default,
-      isTuiMode = true,
-      keyboardFidelityTier = KeyboardFidelityTier.ModifyOtherKeys
+      capabilities = FrontendCapabilities.tui(KeyboardFidelityTier.ModifyOtherKeys)
     )
-    cappedRunner.keyboardFidelityTier shouldBe KeyboardFidelityTier.ModifyOtherKeys
+    cappedRunner.capabilities.keyboardFidelityTier shouldBe KeyboardFidelityTier.ModifyOtherKeys
   }

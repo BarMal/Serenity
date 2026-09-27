@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.command.*
 import com.serenity.config.*
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, KeyboardFidelityTier, Modifier}
 import com.serenity.state.models.*
@@ -235,8 +236,11 @@ class CommandRunnerReducerKeybindingRecordingSpec extends AnyFlatSpec with Match
     isTuiMode: Boolean,
     keyboardFidelityTier: KeyboardFidelityTier
   ): AppState =
+    val capabilities =
+      if isTuiMode then FrontendCapabilities.tui(keyboardFidelityTier)
+      else FrontendCapabilities.gui.copy(keyboardFidelityTier = keyboardFidelityTier)
     val base = CommandRunner.empty
-      .activate(registry, AppConfig.default, isTuiMode = isTuiMode, keyboardFidelityTier = keyboardFidelityTier)
+      .activate(registry, AppConfig.default, capabilities = capabilities)
       .openSettings
     val runner = base.withDrilledSettingsSurface(
       SettingsSurfaceState(
@@ -262,8 +266,7 @@ class CommandRunnerReducerKeybindingRecordingSpec extends AnyFlatSpec with Match
             SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
         ),
-        isTuiMode = isTuiMode,
-        keyboardFidelityTier = keyboardFidelityTier
+        capabilities = capabilities
       )
     )
 

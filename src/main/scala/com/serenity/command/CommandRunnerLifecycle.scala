@@ -1,7 +1,7 @@
 package com.serenity.command
 
 import com.serenity.config.*
-import com.serenity.keystroke.KeyboardFidelityTier
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.ui.presets.UiPreset
 
 /** `CommandRunner` methods for the overlay's lifecycle -- activating and deactivating it, rebuilding its config-
@@ -13,25 +13,23 @@ private[command] trait CommandRunnerLifecycle:
 
   /** Activate the command runner with given registry and config.
     *
-    * `isTuiMode` is not carried by `config` (see `AppState.Runtime.isTuiMode`'s doc) -- callers pass it separately from
-    * `state.runtime.isTuiMode` so settings rendering can hide/annotate controls that are inert in cell space.
-    * `keyboardFidelityTier` is likewise passed separately from `state.runtime.keyboardFidelityTier` (issue #1194).
+    * `capabilities` is not carried by `config` (see `AppState.Runtime.capabilities`'s doc) -- callers pass it
+    * separately from `state.runtime.capabilities` so settings rendering can hide/annotate controls that are inert in
+    * cell space, and `CommandRunnerReducer.assignRecordedBinding` can warn on the negotiated keyboard tier (#1194).
     */
   def activate(
     registry: CommandRegistry,
     config: AppConfig,
-    isTuiMode: Boolean = false,
-    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full,
+    capabilities: FrontendCapabilities = FrontendCapabilities.gui,
     context: CommandRunnerContext = CommandRunnerContext.empty
   ): CommandRunner =
     copy(
       isActive = true,
       surface = CommandRunnerSurface.Palette(CommandPaletteState(filteredCommands = registry.getAllCommands)),
       optionSelections = CommandRunnerOptionSelections.default(config),
-      inputItems = CommandRunnerSettingsInputItems.build(config, isTuiMode),
+      inputItems = CommandRunnerSettingsInputItems.build(config, capabilities),
       commandBindings = CommandRunner.commandBindings(config),
-      isTuiMode = isTuiMode,
-      keyboardFidelityTier = keyboardFidelityTier,
+      capabilities = capabilities,
       statusSegments = config.statusLine.segments,
       context = context
     ).syncEditMode
@@ -39,7 +37,7 @@ private[command] trait CommandRunnerLifecycle:
   /** Rebuild input items from a new config (called after a setting is applied) */
   def updateInputItems(config: AppConfig): CommandRunner =
     copy(
-      inputItems = CommandRunnerSettingsInputItems.build(config, isTuiMode),
+      inputItems = CommandRunnerSettingsInputItems.build(config, capabilities),
       optionSelections = CommandRunnerOptionSelections.default(config),
       commandBindings = CommandRunner.commandBindings(config),
       statusSegments = config.statusLine.segments

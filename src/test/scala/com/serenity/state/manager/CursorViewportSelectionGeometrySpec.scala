@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import com.serenity.TestWorkspaceTrees
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, MotionAccessibility}
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -39,7 +40,9 @@ class CursorViewportSelectionGeometrySpec extends AnyFlatSpec with Matchers:
         focus = Focus.EditorPane(paneId),
         config = config(base.persisted.config)
       ),
-      runtime = base.runtime.copy(isTuiMode = isTuiMode)
+      runtime = base.runtime.copy(
+        capabilities = if isTuiMode then FrontendCapabilities.tui() else FrontendCapabilities.gui
+      )
     )
 
   private def bufferWith(cursors: Cursor*): Buffer =

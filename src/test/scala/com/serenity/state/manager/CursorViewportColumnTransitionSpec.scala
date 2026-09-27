@@ -4,6 +4,7 @@ import com.serenity.TestWorkspaceTrees
 import com.serenity.animation.TransitionDirection
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, MotionAccessibility}
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -35,7 +36,7 @@ class CursorViewportColumnTransitionSpec extends AnyFlatSpec with Matchers:
         focus = Focus.EditorPane(paneId),
         config = config(base.persisted.config)
       ),
-      runtime = base.runtime.copy(isTuiMode = true)
+      runtime = base.runtime.copy(capabilities = FrontendCapabilities.tui())
     )
 
   // 30 single-row lines, 8 rows per column -> columns are [0,8) [8,16) [16,24) [24,30). `topLine` is the column

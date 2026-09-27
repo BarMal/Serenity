@@ -1,5 +1,6 @@
 package com.serenity.state.manager
 
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -32,7 +33,12 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
         focus = Focus.EditorPane(paneId)
       )
     )
-    base.copy(runtime = base.runtime.copy(isTuiMode = isTuiMode, viewportSize = Some(ViewportSize(80, 24))))
+    base.copy(runtime =
+      base.runtime.copy(
+        capabilities = if isTuiMode then FrontendCapabilities.tui() else FrontendCapabilities.gui,
+        viewportSize = Some(ViewportSize(80, 24))
+      )
+    )
 
   // No language set -> TypographyRole.Prose (see Buffer.typographyRole), which resolves to a proportional font in
   // GUI mode -- the same fixture shape MouseTargetCacheSpec's "use the renderer's proportional wrapped snapshot"

@@ -6,6 +6,7 @@ import cats.effect.std.Dispatcher
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.AppRuntime
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManagerTestFacade.*
@@ -127,13 +128,14 @@ class AppRuntimeCallbackBridgeSpec extends AnyFlatSpec with Matchers:
   "closeMarkdownPreviewWindowInState" should "clear the preview window's buffer without touching anything else" in {
     val bufferId = BufferId(7)
     val state = AppState.initial.copy(runtime =
-      AppState.initial.runtime.copy(isTuiMode = true, markdownPreviewWindowBuffer = Some(bufferId))
+      AppState.initial.runtime
+        .copy(capabilities = FrontendCapabilities.tui(), markdownPreviewWindowBuffer = Some(bufferId))
     )
 
     val cleared = AppRuntime.closeMarkdownPreviewWindowInState(state)
 
     cleared.runtime.markdownPreviewWindowBuffer shouldBe None
-    cleared.runtime.isTuiMode shouldBe true
+    cleared.runtime.capabilities.isCellGrid shouldBe true
     cleared.persisted shouldBe state.persisted
   }
 

@@ -4,6 +4,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.command.{CommandRunner, RecordingState, SettingsPage, SettingsSurfaceState}
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, InterfaceDensity}
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, KeyboardFidelityTier}
 import com.serenity.rope.Balance
@@ -128,8 +129,7 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
             .activate(
               com.serenity.command.CommandRegistry.default,
               state.persisted.config,
-              isTuiMode = true,
-              keyboardFidelityTier = KeyboardFidelityTier.ModifyOtherKeys
+              capabilities = FrontendCapabilities.tui(KeyboardFidelityTier.ModifyOtherKeys)
             )
             .openSettings
           val runner = activated.withDrilledSettingsSurface(
@@ -156,8 +156,7 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
             persisted = state.persisted.copy(focus = com.serenity.state.models.Focus.Surface(surface.id)),
             runtime = state.runtime.copy(
               uiSurfaces = List(surface),
-              isTuiMode = true,
-              keyboardFidelityTier = KeyboardFidelityTier.ModifyOtherKeys
+              capabilities = FrontendCapabilities.tui(KeyboardFidelityTier.ModifyOtherKeys)
             )
           )
         }

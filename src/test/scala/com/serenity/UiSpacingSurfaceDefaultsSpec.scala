@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -23,7 +24,8 @@ class UiSpacingSurfaceDefaultsSpec extends AnyFlatSpec with Matchers:
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
   private val gui = AppState.initial
-  private val tui = AppState.initial.copy(runtime = AppState.initial.runtime.copy(isTuiMode = true))
+  private val tui =
+    AppState.initial.copy(runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui()))
 
   "an unset UI element gap" should "default to one cell on the GUI and zero on the TUI" in {
     gui.persisted.config.uiElementGap shouldBe None

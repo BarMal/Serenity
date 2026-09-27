@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.config.AppMode
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.RichTextDocument
 import com.serenity.rope.Rope
@@ -26,7 +27,7 @@ class EditingContextSpec extends AnyFlatSpec with Matchers:
         buffers = Map(buffer.id -> buffer),
         config = base.persisted.config.withAppMode(mode)
       ),
-      runtime = base.runtime.copy(isTuiMode = tui)
+      runtime = base.runtime.copy(capabilities = if tui then FrontendCapabilities.tui() else FrontendCapabilities.gui)
     )
 
   "EditingContext" should "classify the active buffer by what it holds" in {

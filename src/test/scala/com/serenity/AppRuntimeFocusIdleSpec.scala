@@ -9,6 +9,7 @@ import cats.effect.{Deferred, IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.frontend.{FrontendCapabilities, GuiFrontend, TuiFrontend}
 import com.serenity.input.InputHandler
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.*
@@ -149,12 +150,12 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
     val program = for
       windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
       earlyRace <- IO.race(
-        AppRuntime.awaitFocusedIdleTick(IO.pure(AppState.initial), windowFocused),
+        AppRuntime.awaitFocusedIdleTick(IO.pure(AppState.initial), windowFocused, GuiFrontend.cursorIdleInterval),
         IO.sleep(150.millis)
       )
       _ <- windowFocused.set(true)
       lateRace <- IO.race(
-        AppRuntime.awaitFocusedIdleTick(IO.pure(AppState.initial), windowFocused),
+        AppRuntime.awaitFocusedIdleTick(IO.pure(AppState.initial), windowFocused, GuiFrontend.cursorIdleInterval),
         IO.sleep(2.seconds)
       )
     yield
@@ -171,7 +172,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
     val program = for
       windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
       result <- IO.race(
-        AppRuntime.awaitFocusedIdleTick(IO.pure(state), windowFocused),
+        AppRuntime.awaitFocusedIdleTick(IO.pure(state), windowFocused, GuiFrontend.cursorIdleInterval),
         IO.sleep(500.millis)
       )
     yield result shouldBe Left(())
@@ -179,16 +180,18 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
     runVirtual(program)
   }
 
+  private val tuiFrontend = TuiFrontend(com.serenity.keystroke.KeyboardFidelityTier.Full)
+
   it should "never wake the idle tick in TUI blink mode -- the caret is delegated to the terminal, zero wakeups" in {
     val tuiBlinkState =
-      AppState.initial.copy(runtime = AppState.initial.runtime.copy(isTuiMode = true))
+      AppState.initial.copy(runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui()))
 
     val program = for
       windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
       // If awaitFocusedIdleTick ever produced a finite sleep here, the race would resolve Left before the 2s
       // sleep on the right; genuinely sleeping forever is the only way this resolves Right.
       result <- IO.race(
-        AppRuntime.awaitFocusedIdleTick(IO.pure(tuiBlinkState), windowFocused),
+        AppRuntime.awaitFocusedIdleTick(IO.pure(tuiBlinkState), windowFocused, tuiFrontend.cursorIdleInterval),
         IO.sleep(2.seconds)
       )
     yield result shouldBe Right(())
@@ -199,12 +202,14 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
   it should "still wake the idle tick in TUI breathe mode -- breathe stays the documented app-painted exception" in {
     val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02).withCursorMode(CursorMode.Breathe)
     val tuiBreatheState =
-      AppState.initial(fastConfig).copy(runtime = AppState.initial(fastConfig).runtime.copy(isTuiMode = true))
+      AppState
+        .initial(fastConfig)
+        .copy(runtime = AppState.initial(fastConfig).runtime.copy(capabilities = FrontendCapabilities.tui()))
 
     val program = for
       windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
       result <- IO.race(
-        AppRuntime.awaitFocusedIdleTick(IO.pure(tuiBreatheState), windowFocused),
+        AppRuntime.awaitFocusedIdleTick(IO.pure(tuiBreatheState), windowFocused, tuiFrontend.cursorIdleInterval),
         IO.sleep(500.millis)
       )
     yield result shouldBe Left(())
@@ -241,7 +246,8 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
             _: Damage,
             _: Map[BufferId, com.serenity.animation.AnimationState]
           ) => renderCalls.update(_ + 1),
-          requestFastRender = IO.unit
+          requestFastRender = IO.unit,
+          cursorIdleInterval = GuiFrontend.cursorIdleInterval
         )
         .compile
         .drain
@@ -261,7 +267,9 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
 
   it should "never render an idle cursor frame in TUI blink mode -- zero idle wakeups, terminal owns the caret" in {
     val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02)
-    val state = AppState.initial(fastConfig).copy(runtime = AppState.initial(fastConfig).runtime.copy(isTuiMode = true))
+    val state = AppState
+      .initial(fastConfig)
+      .copy(runtime = AppState.initial(fastConfig).runtime.copy(capabilities = FrontendCapabilities.tui()))
 
     val program = for
       fastModeSignal     <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
@@ -288,7 +296,8 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
             _: Damage,
             _: Map[BufferId, com.serenity.animation.AnimationState]
           ) => renderCalls.update(_ + 1),
-          requestFastRender = IO.unit
+          requestFastRender = IO.unit,
+          cursorIdleInterval = tuiFrontend.cursorIdleInterval
         )
         .compile
         .drain
@@ -303,7 +312,9 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
 
   it should "keep rendering idle breathe frames in TUI mode -- breathe is app-painted, not delegated to the terminal" in {
     val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02).withCursorMode(CursorMode.Breathe)
-    val state = AppState.initial(fastConfig).copy(runtime = AppState.initial(fastConfig).runtime.copy(isTuiMode = true))
+    val state = AppState
+      .initial(fastConfig)
+      .copy(runtime = AppState.initial(fastConfig).runtime.copy(capabilities = FrontendCapabilities.tui()))
 
     val program = for
       fastModeSignal     <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
@@ -330,7 +341,8 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
             _: Damage,
             _: Map[BufferId, com.serenity.animation.AnimationState]
           ) => renderCalls.update(_ + 1),
-          requestFastRender = IO.unit
+          requestFastRender = IO.unit,
+          cursorIdleInterval = tuiFrontend.cursorIdleInterval
         )
         .compile
         .drain

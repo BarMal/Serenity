@@ -67,9 +67,9 @@ final private[manager] class StateManagerPanelEffects(
       case ViewIntent.PinDiagnosticsPanel =>
         setPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom))
       case ViewIntent.OpenMarkdownPreview =>
-        // In-pane preview is structurally unavailable in the TUI (cell surfaces cannot `drawImage`) -- toggle the
-        // spawned Swing window there instead of pinning the GUI-only panel (issue #1113).
-        if state.runtime.isTuiMode then toggleMarkdownPreviewWindow(state)
+        // In-pane preview is structurally unavailable on a fixed-cell surface (cell surfaces cannot `drawImage`) --
+        // toggle the spawned Swing window there instead of pinning the GUI-only panel (issue #1113).
+        if state.runtime.capabilities.isCellGrid then toggleMarkdownPreviewWindow(state)
         else setPanelPin(PanelKind.MarkdownPreview, Some(PanelPosition.Right))
       case ViewIntent.SetPanelPin(kind, position) =>
         setPanelPin(kind, position)

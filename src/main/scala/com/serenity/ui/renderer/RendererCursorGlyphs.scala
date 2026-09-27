@@ -25,7 +25,7 @@ object RendererCursorGlyphs:
     config: AppConfig,
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
-    isTuiMode: Boolean
+    pixelMotion: Boolean
   ): List[PixelRect] =
 
     buffer.editing.cursors.toList.zipWithIndex.flatMap { (cursor, cursorIndex) =>
@@ -43,7 +43,7 @@ object RendererCursorGlyphs:
             // from this frame's own pane origin instead of the cursor's plain logical position -- see
             // `CursorGlideGeometry`'s doc comment for why the offset is pane-relative rather than an absolute screen
             // pixel captured once at seed time.
-            val (screenXPx, screenYPx) = glidePixelPosition(cursor, isTuiMode) match
+            val (screenXPx, screenYPx) = glidePixelPosition(cursor, pixelMotion) match
               case Some(offset) =>
                 (context.cellMetrics.toPixelX(rect.x) + offset.xPx, context.cellMetrics.toPixelY(rect.y) + offset.yPx)
               case None =>
@@ -71,8 +71,8 @@ object RendererCursorGlyphs:
     * delegation), and `None` once the glide has completed (normally already cleared by
     * `StateManagerEditorCapability.advanceCursorGlides`, checked again here defensively).
     */
-  def glidePixelPosition(cursor: Cursor, isTuiMode: Boolean): Option[PixelPoint] =
-    if isTuiMode then None else cursor.glide.filterNot(_.isComplete).map(_.currentValue)
+  def glidePixelPosition(cursor: Cursor, pixelMotion: Boolean): Option[PixelPoint] =
+    if pixelMotion then cursor.glide.filterNot(_.isComplete).map(_.currentValue) else None
 
   /** The (visual-row index, caret x) the caret is drawn at. Row selection is delegated to
     * [[com.serenity.state.models.NavigationGeometry.visualRowIndexFor]] -- the same lookup vertical navigation uses --

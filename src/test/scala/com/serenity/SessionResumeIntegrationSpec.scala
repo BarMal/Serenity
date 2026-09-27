@@ -111,7 +111,7 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
     program.timeout(30.seconds).unsafeRunSync()
   }
 
-  it should "preserve isTuiMode and keyboardFidelityTier from the current runtime after session restore" in {
+  it should "preserve capabilities from the current runtime after session restore" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
@@ -148,19 +148,18 @@ class SessionResumeIntegrationSpec extends AnyFlatSpec with Matchers with StateM
         secondManager.sessionStartupInfo,
         theme,
         viewportSize,
-        isTuiMode = true,
-        keyboardFidelityTier = KeyboardFidelityTier.ModifyOtherKeys
+        capabilities = com.serenity.frontend.FrontendCapabilities.tui(KeyboardFidelityTier.ModifyOtherKeys)
       )
       startPage = secondInitial.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
       _         = startPage.resume should be(defined)
       _          <- secondManager.applyEvent(TabKey)
       finalState <- secondManager.getCurrentState
 
-      _ = withClue("isTuiMode must survive session restore") {
-        finalState.runtime.isTuiMode shouldBe true
+      _ = withClue("capabilities.isCellGrid must survive session restore") {
+        finalState.runtime.capabilities.isCellGrid shouldBe true
       }
-      _ = withClue("keyboardFidelityTier must survive session restore") {
-        finalState.runtime.keyboardFidelityTier shouldBe KeyboardFidelityTier.ModifyOtherKeys
+      _ = withClue("capabilities.keyboardFidelityTier must survive session restore") {
+        finalState.runtime.capabilities.keyboardFidelityTier shouldBe KeyboardFidelityTier.ModifyOtherKeys
       }
     yield ()
 

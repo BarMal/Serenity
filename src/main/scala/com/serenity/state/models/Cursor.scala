@@ -22,8 +22,8 @@ import com.serenity.ui.layout.PixelPoint
   * enabled -- growing in when a selection is created, resizing as it extends/shrinks, and settling to nothing when
   * cleared. Unlike `glide`, this is not GUI-only: both `RendererHighlights`' measured (GUI) and cell (TUI) painting
   * read the same per-visual-line column extents (`SelectionGeometryState`'s model is column-granular, not pixel-
-  * granular), so it is seeded and advanced regardless of `Runtime.isTuiMode`. `None` once every line's tween completes
-  * or the family is off, read by the renderer as "paint the selection at its live extent directly."
+  * granular), so it is seeded and advanced regardless of `Runtime.capabilities`. `None` once every line's tween
+  * completes or the family is off, read by the renderer as "paint the selection at its live extent directly."
   */
 final case class Cursor(
     position: CursorPosition,

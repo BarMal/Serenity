@@ -8,6 +8,7 @@ import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import com.serenity.app.AppRuntime
 import com.serenity.config.AppConfig
+import com.serenity.frontend.TuiFrontend
 import com.serenity.input.{
   ClipboardStrategy,
   ExternalClipboardTool,
@@ -78,6 +79,7 @@ object TuiRuntime:
           inputHandlerHolder <- IO(new AtomicReference[Option[TerminalInputHandler]](None))
           accessibilitySync  <- AccessibilitySync.empty
           accessibilityBridge = new TuiAccessibilityBridge(writeToTerminal(terminalShell))
+          frontend            = TuiFrontend(keyboardFidelityTier(terminalShell.keyboardProtocolTier))
           _ <- AppRuntime.run(
             initialViewportSize = initialViewportSize,
             makeInputHandler = router =>
@@ -132,8 +134,7 @@ object TuiRuntime:
             registerMarkdownPreviewCloseCallback = registerMarkdownPreviewCloseCallbackFn(previewWindowAvailability),
             openPath = openPath,
             systemClipboard = systemClipboard,
-            isTuiMode = true,
-            keyboardFidelityTier = keyboardFidelityTier(terminalShell.keyboardProtocolTier),
+            frontend = frontend,
             configNotice = configNotice
           )
         yield ()

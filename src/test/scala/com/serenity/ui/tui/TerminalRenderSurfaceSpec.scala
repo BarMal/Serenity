@@ -4,6 +4,7 @@ import java.awt.Color
 import java.io.StringWriter
 
 import com.serenity.config.CursorMode
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.{HardwareCursorShape, HardwareCursorStyle, RendererCursorOverlay, RendererEntryPoints}
@@ -589,5 +590,5 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       // `AppState.initial` itself defaults to -- flagging it as one keeps the line-number gutter at the terminal's
       // flush density (`AppState.effectiveLineNumberMarginLeft`/`effectiveLineNumberPadding`), matching what this
       // spec's hardcoded cursor-position escapes assume.
-      runtime = AppState.initial.runtime.copy(isTuiMode = true)
+      runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui())
     )

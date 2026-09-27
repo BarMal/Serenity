@@ -58,6 +58,26 @@ object ArchitectureChecks {
       Seq("java.awt.Graphics", "com.serenity.ui.renderer", "com.serenity.state.manager"),
       "state models describe data, not painting or effect-boundary orchestration",
       mainOnly = true
+    ),
+    // Issue #1669: the state layer and the command layer read `Runtime.capabilities`/`FrontendCapabilities`, never a
+    // concrete frontend's own implementation package -- `com.serenity.ui.tui` (the TUI frontend: `TerminalShell`,
+    // `TuiRuntime`, the terminal render surface) or `com.serenity.ui.terminal` (the GUI frontend's Swing window and
+    // canvas -- there is no literal `ui.swing` package in this codebase, so this is that boundary's closest real
+    // equivalent). `Main` is deliberately exempt: it is the one place a `Frontend` is selected and constructed, and
+    // must reference both implementation packages to do so.
+    ImportRule(
+      "com/serenity/state",
+      Seq("com.serenity.ui.tui", "com.serenity.ui.terminal"),
+      "the state layer must stay frontend-agnostic (issue #1669): read Runtime.capabilities instead of reaching into " +
+        "a concrete frontend's own implementation package",
+      mainOnly = true
+    ),
+    ImportRule(
+      "com/serenity/command",
+      Seq("com.serenity.ui.tui", "com.serenity.ui.terminal"),
+      "the command layer must stay frontend-agnostic (issue #1669): read FrontendCapabilities instead of reaching " +
+        "into a concrete frontend's own implementation package",
+      mainOnly = true
     )
   )
 

@@ -20,8 +20,7 @@ private[manager] object SessionWorkflowTransitions:
       runtime = restoredState.runtime.copy(
         uiSurfaces = List.empty,
         viewportSize = currentState.runtime.viewportSize,
-        isTuiMode = currentState.runtime.isTuiMode,
-        keyboardFidelityTier = currentState.runtime.keyboardFidelityTier,
+        capabilities = currentState.runtime.capabilities,
         projectTasks = ProjectTaskTransitions.acrossRestore(currentState)
       )
     )
