@@ -16,7 +16,7 @@ final case class Runtime(
     viewportSize: Option[ViewportSize] = None,
     nextBufferId: BufferId = BufferId(0),
     nextPaneId: PaneId = PaneId(0),
-    nextSurfaceId: Int = 0,
+    nextSurfaceId: SurfaceIdSupply = SurfaceIdSupply.initial,
     themeTransition: Option[ThemeTransition] = None,
     surfaceAnimations: Map[SurfaceId, SurfaceAnimationState] = Map.empty,
     // Column-based document layout (issue #1338, Phase 1 animation): the in-flight column-to-column transition for
@@ -39,8 +39,10 @@ final case class Runtime(
     // The theme most recently asked for: a theme load that finishes after a newer request is dropped, not applied.
     requestedThemeName: Option[String] = None,
     companionSprite: CompanionSpriteState = CompanionSpriteState.default,
-    diagnosticsState: DiagnosticsState = DiagnosticsState(),
-    semanticTokensState: SemanticTokensState = SemanticTokensState(),
+    // LSP diagnostics and semantic tokens (issue #1693): grouped into their own sub-record since both are written
+    // from the same `SystemEventReducer` LSP handling and read back together by `AppState.annotationIndex`/
+    // `semanticTokensAvailability`.
+    languageService: LanguageServiceState = LanguageServiceState(),
     // Never persisted -- set once at startup from the launch mode (see AppRuntime.run/AppStartup.initializeState) so
     // settings-surface rendering can hide or annotate controls that are inert in cell space (post-processing effects,
     // typography) without threading AppConfig itself into the command runner.

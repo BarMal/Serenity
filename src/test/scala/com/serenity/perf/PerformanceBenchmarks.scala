@@ -16,7 +16,7 @@ import com.serenity.keystroke.events.{
   MoveRight,
   ScrollDown
 }
-import com.serenity.lsp.client.LspFramer
+import com.serenity.lsp.client.{DocumentUri, LspFramer}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.perf.BenchmarkFixtures.{
@@ -230,24 +230,7 @@ object PerformanceBenchmarks:
       }.toMap)
     )
     val diagnosticsState = commentsState.copy(runtime =
-      commentsState.runtime.copy(diagnosticsState =
-        commentsState.runtime.diagnosticsState.copy(diagnostics =
-          Map(
-            "file:///benchmark.scala" ->
-              (0 until 2_000).toList.map { line =>
-                com.serenity.lsp.model.Diagnostic(
-                  com.serenity.lsp.model.LspRange(
-                    com.serenity.lsp.model.LspPosition(line, 0),
-                    com.serenity.lsp.model.LspPosition(line, 8)
-                  ),
-                  Some(com.serenity.lsp.model.DiagnosticSeverity.Warning),
-                  s"benchmark diagnostic $line",
-                  Some("benchmark")
-                )
-              }
-          )
-        )
-      )
+      commentsState.runtime.copy(languageService = LanguageServiceState(diagnosticsState = benchmarkDiagnosticsState))
     )
     val plainScrollState = multilineState.copy(persisted =
       multilineState.persisted.copy(buffers =
@@ -513,6 +496,21 @@ object PerformanceBenchmarks:
           () => animationState.advanceAllAnimations()
         )
       )
+
+  /** 2,000 synthetic LSP diagnostics attached to a single benchmark document, for the diagnostics-rendering fixture. */
+  private def benchmarkDiagnosticsState: DiagnosticsState =
+    val diagnostics = (0 until 2_000).toList.map { line =>
+      com.serenity.lsp.model.Diagnostic(
+        com.serenity.lsp.model.LspRange(
+          com.serenity.lsp.model.LspPosition(line, 0),
+          com.serenity.lsp.model.LspPosition(line, 8)
+        ),
+        Some(com.serenity.lsp.model.DiagnosticSeverity.Warning),
+        s"benchmark diagnostic $line",
+        Some("benchmark")
+      )
+    }
+    DiagnosticsState(diagnostics = Map(DocumentUri("file:///benchmark.scala") -> diagnostics))
 
   /** Measures `Buffer.equals`/`AppState.equals` under the three shapes of comparison the reducers actually perform: the
     * same instance (the hand-rolled `eq` fast path), a `.copy()` of it (a different instance whose fields -- including

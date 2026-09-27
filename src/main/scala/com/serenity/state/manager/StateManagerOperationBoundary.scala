@@ -7,6 +7,7 @@ import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.{SpellCheckConfig, SpellCheckDictionaryFingerprint}
 import com.serenity.diagnostics.Trace
 import com.serenity.document.CommentRendering
+import com.serenity.lsp.client.DocumentUri
 import com.serenity.spellcheck.{DictionaryLoader, SpellChecker}
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
@@ -22,7 +23,7 @@ private[manager] enum StateManagerOperation:
 final private[manager] class StateManagerOperationBoundary private (
     pendingOperations: Ref[IO, List[StateManagerOperation]],
     modelRef: Ref[IO, Model],
-    documentAnalysisInputsRef: Ref[IO, Option[Map[String, SpellCheckFingerprint]]],
+    documentAnalysisInputsRef: Ref[IO, Option[Map[DocumentUri, SpellCheckFingerprint]]],
     dictionaryFingerprintsRef: Ref[IO, Option[(SpellCheckConfig, List[SpellCheckDictionaryFingerprint])]],
     logger: Logger[IO],
     val effectLanes: EffectLanes,
@@ -268,7 +269,8 @@ final private[manager] class StateManagerOperationBoundary private (
     )
 
   private def requiresDocumentAnalysis(state: AppState): Boolean =
-    state.persisted.config.languageToolsConfig.spellCheck.enabled || state.runtime.diagnosticsState.spellCheckCache.nonEmpty
+    state.persisted.config.languageToolsConfig.spellCheck.enabled ||
+      state.runtime.languageService.diagnosticsState.spellCheckCache.nonEmpty
 
 private[manager] object StateManagerOperationBoundary:
 
@@ -306,7 +308,7 @@ private[manager] object StateManagerOperationBoundary:
   ): IO[StateManagerOperationBoundary] =
     for
       pendingOperations         <- Ref.of[IO, List[StateManagerOperation]](Nil)
-      documentAnalysisInputsRef <- Ref.of[IO, Option[Map[String, SpellCheckFingerprint]]](None)
+      documentAnalysisInputsRef <- Ref.of[IO, Option[Map[DocumentUri, SpellCheckFingerprint]]](None)
       dictionaryFingerprintsRef <-
         Ref.of[IO, Option[(SpellCheckConfig, List[SpellCheckDictionaryFingerprint])]](None)
       effectsShutdownRef <- Ref.of[IO, Boolean](false)

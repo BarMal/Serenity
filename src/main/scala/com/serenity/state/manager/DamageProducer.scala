@@ -172,9 +172,13 @@ object DamageProducer:
     afterBuffer: Buffer
   ): Damage =
     val beforeDiagnostics =
-      before.runtime.diagnosticsState.diagnostics.getOrElse(SpellChecker.diagnosticsUri(beforeBuffer), Nil)
+      before.runtime.languageService.diagnosticsState.diagnostics.getOrElse(
+        SpellChecker.diagnosticsUri(beforeBuffer),
+        Nil
+      )
     val afterDiagnostics =
-      after.runtime.diagnosticsState.diagnostics.getOrElse(SpellChecker.diagnosticsUri(afterBuffer), Nil)
+      after.runtime.languageService.diagnosticsState.diagnostics
+        .getOrElse(SpellChecker.diagnosticsUri(afterBuffer), Nil)
     if beforeDiagnostics == afterDiagnostics then Damage.Nothing
     else Damage.BufferRows(bufferId, diagnosticLines(beforeDiagnostics) ++ diagnosticLines(afterDiagnostics))
 

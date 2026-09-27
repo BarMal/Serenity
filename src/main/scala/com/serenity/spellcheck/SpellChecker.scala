@@ -1,6 +1,7 @@
 package com.serenity.spellcheck
 
 import com.serenity.config.{SpellCheckConfig, SpellCheckDictionaryFingerprint}
+import com.serenity.lsp.client.DocumentUri
 import com.serenity.lsp.model.*
 import com.serenity.state.models.*
 
@@ -71,13 +72,13 @@ object SpellChecker:
     * method itself never touches the filesystem, so it is safe to call from inside `Ref.update`.
     */
   def refreshDiagnostics(state: AppState, dictionary: DictionarySnapshot): AppState =
-    val preserved = state.runtime.diagnosticsState.diagnostics.view
+    val preserved = state.runtime.languageService.diagnosticsState.diagnostics.view
       .mapValues(_.filterNot(isSpellCheckDiagnostic))
       .filter(_._2.nonEmpty)
       .toMap
 
     val (refreshed, cache) =
-      state.persisted.buffers.values.foldLeft((preserved, Map.empty[String, SpellCheckCacheEntry])) {
+      state.persisted.buffers.values.foldLeft((preserved, Map.empty[DocumentUri, SpellCheckCacheEntry])) {
         case ((diagnostics, cache), buffer) =>
           val uri = diagnosticsUri(buffer)
           if shouldCheck(buffer, state.persisted.config.languageToolsConfig.spellCheck) then
@@ -86,7 +87,7 @@ object SpellChecker:
               state.persisted.config.languageToolsConfig.spellCheck,
               dictionary.fingerprints
             )
-            val entry = state.runtime.diagnosticsState.spellCheckCache
+            val entry = state.runtime.languageService.diagnosticsState.spellCheckCache
               .get(uri)
               .filter(_.fingerprint == fingerprint)
               .getOrElse {
@@ -105,8 +106,10 @@ object SpellChecker:
       }
 
     state.copy(runtime =
-      state.runtime.copy(diagnosticsState =
-        state.runtime.diagnosticsState.copy(diagnostics = refreshed, spellCheckCache = cache)
+      state.runtime.copy(languageService =
+        state.runtime.languageService.copy(diagnosticsState =
+          state.runtime.languageService.diagnosticsState.copy(diagnostics = refreshed, spellCheckCache = cache)
+        )
       )
     )
 
@@ -117,7 +120,7 @@ object SpellChecker:
   def analysisFingerprints(
     state: AppState,
     dictionaryFingerprints: List[SpellCheckDictionaryFingerprint]
-  ): Map[String, SpellCheckFingerprint] =
+  ): Map[DocumentUri, SpellCheckFingerprint] =
     state.persisted.buffers.values
       .filter(buffer => shouldCheck(buffer, state.persisted.config.languageToolsConfig.spellCheck))
       .map(buffer =>
@@ -134,15 +137,17 @@ object SpellChecker:
   def applyIfCurrent(
     current: AppState,
     analyzed: AppState,
-    expected: Map[String, SpellCheckFingerprint],
+    expected: Map[DocumentUri, SpellCheckFingerprint],
     dictionaryFingerprints: List[SpellCheckDictionaryFingerprint]
   ): AppState =
     if analysisFingerprints(current, dictionaryFingerprints) == expected then
       current.copy(runtime =
-        current.runtime.copy(diagnosticsState =
-          current.runtime.diagnosticsState.copy(
-            diagnostics = analyzed.runtime.diagnosticsState.diagnostics,
-            spellCheckCache = analyzed.runtime.diagnosticsState.spellCheckCache
+        current.runtime.copy(languageService =
+          current.runtime.languageService.copy(diagnosticsState =
+            current.runtime.languageService.diagnosticsState.copy(
+              diagnostics = analyzed.runtime.languageService.diagnosticsState.diagnostics,
+              spellCheckCache = analyzed.runtime.languageService.diagnosticsState.spellCheckCache
+            )
           )
         )
       )
@@ -156,7 +161,7 @@ object SpellChecker:
     for
       buffer <- state.activeBuffer
       cursor <- state.activeCursorPosition
-      diagnostic <- state.runtime.diagnosticsState.diagnostics
+      diagnostic <- state.runtime.languageService.diagnosticsState.diagnostics
         .getOrElse(diagnosticsUri(buffer), Nil)
         .find(diagnostic => diagnostic.source.contains(Source) && containsCursor(diagnostic.range, cursor))
       line <- buffer.document.content.getLine(diagnostic.range.start.line)
@@ -172,11 +177,11 @@ object SpellChecker:
     val end   = range.end.character.max(start).min(line.length)
     Option.when(end > start)(line.substring(start, end))
 
-  def diagnosticsUri(buffer: Buffer): String =
-    buffer.document.filePath.map(_.toUri.toString).getOrElse(bufferDiagnosticsUri(buffer.id))
+  def diagnosticsUri(buffer: Buffer): DocumentUri =
+    buffer.document.filePath.map(path => DocumentUri(path.toUri.toString)).getOrElse(bufferDiagnosticsUri(buffer.id))
 
-  def bufferDiagnosticsUri(bufferId: BufferId): String =
-    s"buffer:${bufferId.value}"
+  def bufferDiagnosticsUri(bufferId: BufferId): DocumentUri =
+    DocumentUri(s"buffer:${bufferId.value}")
 
   private def shouldCheck(buffer: Buffer, config: SpellCheckConfig): Boolean =
     config.enabled && buffer.usesTextFont

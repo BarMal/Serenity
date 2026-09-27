@@ -1,6 +1,7 @@
 package com.serenity.state.reducers
 
 import com.serenity.keystroke.events.*
+import com.serenity.lsp.client.DocumentUri
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.*
 
@@ -21,12 +22,15 @@ object SystemEventReducer:
 
   private def reduceLspEvent(event: LspEvent, state: AppState): ReducerResult =
     event match
-      case LspEvent.LspDiagnosticsReceived(uri, diagnostics) =>
+      case LspEvent.LspDiagnosticsReceived(rawUri, diagnostics) =>
+        val uri = DocumentUri(rawUri)
         ReducerResult.noEffects(
           state.copy(runtime =
-            state.runtime.copy(diagnosticsState =
-              state.runtime.diagnosticsState
-                .copy(diagnostics = state.runtime.diagnosticsState.diagnostics + (uri -> diagnostics))
+            state.runtime.copy(languageService =
+              state.runtime.languageService.copy(diagnosticsState =
+                state.runtime.languageService.diagnosticsState
+                  .copy(diagnostics = state.runtime.languageService.diagnosticsState.diagnostics + (uri -> diagnostics))
+              )
             )
           )
         )
@@ -59,25 +63,31 @@ object SystemEventReducer:
       case LspEvent.LspRenameReceived(edits, anchor) =>
         RenameEditReducer.apply(edits, anchor, state)
 
-      case LspEvent.LspSemanticTokensReceived(uri, tokens) =>
+      case LspEvent.LspSemanticTokensReceived(rawUri, tokens) =>
+        val uri = DocumentUri(rawUri)
         ReducerResult.noEffects(
           state.copy(runtime =
-            state.runtime.copy(semanticTokensState =
-              state.runtime.semanticTokensState.copy(
-                byUri = state.runtime.semanticTokensState.byUri + (uri -> tokens),
-                unavailableUris = state.runtime.semanticTokensState.unavailableUris - uri
+            state.runtime.copy(languageService =
+              state.runtime.languageService.copy(semanticTokensState =
+                state.runtime.languageService.semanticTokensState.copy(
+                  byUri = state.runtime.languageService.semanticTokensState.byUri + (uri -> tokens),
+                  unavailableUris = state.runtime.languageService.semanticTokensState.unavailableUris - uri
+                )
               )
             )
           )
         )
 
-      case LspEvent.LspSemanticTokensUnavailable(uri) =>
+      case LspEvent.LspSemanticTokensUnavailable(rawUri) =>
+        val uri = DocumentUri(rawUri)
         ReducerResult.noEffects(
           state.copy(runtime =
-            state.runtime.copy(semanticTokensState =
-              state.runtime.semanticTokensState.copy(
-                byUri = state.runtime.semanticTokensState.byUri - uri,
-                unavailableUris = state.runtime.semanticTokensState.unavailableUris + uri
+            state.runtime.copy(languageService =
+              state.runtime.languageService.copy(semanticTokensState =
+                state.runtime.languageService.semanticTokensState.copy(
+                  byUri = state.runtime.languageService.semanticTokensState.byUri - uri,
+                  unavailableUris = state.runtime.languageService.semanticTokensState.unavailableUris + uri
+                )
               )
             )
           )

@@ -41,7 +41,10 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
         config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
       ),
       runtime = AppState.initial.runtime.copy(
-        diagnosticsState = DiagnosticsState(diagnostics = Map(SpellChecker.diagnosticsUri(buffer) -> List(diagnostic)))
+        languageService = LanguageServiceState(
+          diagnosticsState =
+            DiagnosticsState(diagnostics = Map(SpellChecker.diagnosticsUri(buffer) -> List(diagnostic)))
+        )
       )
     )
 

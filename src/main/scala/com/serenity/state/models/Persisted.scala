@@ -1,5 +1,6 @@
 package com.serenity.state.models
 
+import com.serenity.command.CommandId
 import com.serenity.config.*
 import com.serenity.ui.layout.Layout
 import com.serenity.ui.theme.Theme
@@ -16,9 +17,10 @@ final case class Persisted(
     // Tagged with the AppMode active when each file was opened, so the mode/tab widget can offer "recent projects
     // opened in this mode" (issue #1307) rather than reusing the mode-agnostic `recentFiles` list above.
     recentFilesByMode: Map[AppMode, List[java.nio.file.Path]] = Map.empty,
-    // The command runner's recents (issue #1048), keyed by `Command.name` and valued by an incrementing recency
-    // generation. Saved per session (#1719): commands used in one session should not lead the palette in another.
-    commandUsage: Map[String, Int] = Map.empty
+    // The command runner's recents (issue #1048), keyed by `Command.name` (as a `CommandId`, issue #1693) and valued
+    // by an incrementing recency generation. Saved per session (#1719): commands used in one session should not lead
+    // the palette in another.
+    commandUsage: Map[CommandId, Int] = Map.empty
 )
 
 object Persisted:

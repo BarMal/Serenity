@@ -166,9 +166,13 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
       Some("benchmark")
     )
     val after = before.copy(runtime =
-      before.runtime.copy(diagnosticsState =
-        before.runtime.diagnosticsState
-          .copy(diagnostics = before.runtime.diagnosticsState.diagnostics.updated(uri, List(diagnostic)))
+      before.runtime.copy(languageService =
+        before.runtime.languageService.copy(diagnosticsState =
+          before.runtime.languageService.diagnosticsState
+            .copy(diagnostics =
+              before.runtime.languageService.diagnosticsState.diagnostics.updated(uri, List(diagnostic))
+            )
+        )
       )
     )
 

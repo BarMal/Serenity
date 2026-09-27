@@ -1,5 +1,6 @@
 package com.serenity.state.manager
 
+import com.serenity.command.CommandId
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, AppStateValidation}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -15,7 +16,7 @@ class CommandUsageTransitionSpec extends AnyFlatSpec with Matchers:
     val twice = StateManagerEffectHandlers.withCommandUsageRecorded(once, "open")
     val again = StateManagerEffectHandlers.withCommandUsageRecorded(twice, "save")
 
-    again.persisted.commandUsage shouldBe Map("save" -> 3, "open" -> 2)
+    again.persisted.commandUsage shouldBe Map(CommandId("save") -> 3, CommandId("open") -> 2)
     AppStateValidation.validationErrors(again) shouldBe Nil
   }
 

@@ -276,7 +276,7 @@ object UiPreset:
     // Panels restore keyed by their own persisted surface id (not freshly allocated) so identity matches whatever
     // the persisted workspace tree's docked-surface nodes reference.
     val restoredPanels        = preset.dockedPanels.map(docked => docked.panel.toUiSurface(SurfaceId(docked.surfaceId)))
-    val reservedNextSurfaceId = state.runtime.nextSurfaceId.max(SessionLayout.nextSurfaceId(restoredPanels))
+    val reservedNextSurfaceId = state.runtime.nextSurfaceId.reserveAtLeast(SessionLayout.nextSurfaceId(restoredPanels))
 
     // A preset's own persisted `workspaceTree` (issue #820) carries real nested topology, so it takes priority when
     // it still validates against the panes/panels actually being applied. Otherwise redock each panel one at a time

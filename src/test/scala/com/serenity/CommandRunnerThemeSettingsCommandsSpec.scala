@@ -11,6 +11,7 @@ import com.serenity.command.*
 import com.serenity.config.{ConfigManagerTestSupport, SpellCheckConfig}
 import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.*
+import com.serenity.lsp.client.DocumentUri
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
@@ -81,12 +82,14 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
 
   private def awaitDiagnosticMessages(
     stateManager: StateManager,
-    uri: String,
+    uri: DocumentUri,
     expectedMessages: List[String],
     attempts: Int = 40
   ): List[String] =
     def readMessages: IO[List[String]] =
-      stateManager.getCurrentState.map(_.runtime.diagnosticsState.diagnostics.getOrElse(uri, Nil).map(_.message))
+      stateManager.getCurrentState.map(
+        _.runtime.languageService.diagnosticsState.diagnostics.getOrElse(uri, Nil).map(_.message)
+      )
 
     def loop(remaining: Int): IO[List[String]] =
       readMessages.flatMap { messages =>
@@ -166,7 +169,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
       }
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().runtime.diagnosticsState.diagnostics shouldBe empty
+    stateManager.getCurrentState.unsafeRunSync().runtime.languageService.diagnosticsState.diagnostics shouldBe empty
 
     stateManager
       .executeCommand(

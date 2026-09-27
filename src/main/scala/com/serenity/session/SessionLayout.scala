@@ -22,7 +22,7 @@ enum SessionFocus:
 
 object SessionLayout:
 
-  final case class Restored(layout: Layout, surfaces: List[UiSurface], nextSurfaceId: Int)
+  final case class Restored(layout: Layout, surfaces: List[UiSurface], nextSurfaceId: SurfaceIdSupply)
 
   def fromAppState(state: AppState): SessionLayout =
     val dockedPanels  = SessionDockedPanel.captureFrom(state)
@@ -98,15 +98,16 @@ object SessionLayout:
     * restore and UI preset apply (`UiPreset.applyToState`), both of which restore panels keyed by their persisted
     * surface id rather than allocating fresh ones.
     */
-  def nextSurfaceId(surfaces: List[UiSurface]): Int =
-    surfaces
+  def nextSurfaceId(surfaces: List[UiSurface]): SurfaceIdSupply =
+    val highestAllocated = surfaces
       .flatMap { surface =>
         Option
           .when(surface.id.value.startsWith("surface-"))(surface.id.value.stripPrefix("surface-"))
           .flatMap(_.toIntOption)
       }
       .maxOption
-      .getOrElse(-1) + 1
+      .getOrElse(-1)
+    SurfaceIdSupply(highestAllocated + 1)
 
 object SessionEditorPane:
 

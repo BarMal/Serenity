@@ -4,7 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
-import com.serenity.command.{Command, CommandIntent, EditIntent}
+import com.serenity.command.{Command, CommandId, CommandIntent, EditIntent}
 import com.serenity.keystroke.events.{Enter, InsertChar, TabKey, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
@@ -24,7 +24,7 @@ class SessionCommandRecentsSpec extends AnyFlatSpec with Matchers with StateMana
   private val usedInSavedSession = undoCommand("test-recents-saved-session-command")
   private val usedAfterSaving    = undoCommand("test-recents-later-command")
 
-  private def recents(stateManager: StateManager): Map[String, Int] =
+  private def recents(stateManager: StateManager): Map[CommandId, Int] =
     stateManager.getCurrentState.unsafeRunSync().persisted.commandUsage
 
   private def run(stateManager: StateManager, command: Command): Unit =
@@ -53,7 +53,7 @@ class SessionCommandRecentsSpec extends AnyFlatSpec with Matchers with StateMana
     run(stateManager, usedAfterSaving)
     runFromPalette(stateManager, "restore-session")
 
-    savedRecents.keySet should contain(usedInSavedSession.name)
+    savedRecents.keySet should contain(CommandId(usedInSavedSession.name))
     recents(stateManager) shouldBe savedRecents
   }
 
@@ -86,7 +86,7 @@ class SessionCommandRecentsSpec extends AnyFlatSpec with Matchers with StateMana
     runFromPalette(sessionA, "open-session")
     pressEnter(sessionA)
 
-    sessionBRecents.keySet should contain(usedInSavedSession.name)
+    sessionBRecents.keySet should contain(CommandId(usedInSavedSession.name))
     recents(sessionA) shouldBe sessionBRecents
   }
 
@@ -102,7 +102,7 @@ class SessionCommandRecentsSpec extends AnyFlatSpec with Matchers with StateMana
     next.applyEvent(TabKey).unsafeRunSync()
     next.runtimeLifecycle.awaitEffects.unsafeRunSync()
 
-    savedRecents.keySet should contain(usedInSavedSession.name)
+    savedRecents.keySet should contain(CommandId(usedInSavedSession.name))
     recents(next) shouldBe savedRecents
   }
 
