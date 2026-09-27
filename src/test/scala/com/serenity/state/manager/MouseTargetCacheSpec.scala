@@ -63,19 +63,19 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    MouseTargetLayoutKey.from(state, ViewportSize(80, 24)) shouldBe
-      MouseTargetLayoutKey.from(draggedState, ViewportSize(80, 24))
+    authoritativeScene.layoutKeyFor(state, ViewportSize(80, 24)) shouldBe
+      authoritativeScene.layoutKeyFor(draggedState, ViewportSize(80, 24))
   }
 
   it should "reuse the same key instance without rewalking panes/buffers/surfaces when nothing layout-relevant changed" in {
     val buffer = Buffer.fromString(bufferId, "alpha\nbeta\ngamma")
     val state  = stateWith(buffer)
-    // Touches only a field MouseTargetLayoutKey.from never reads, so layout/buffers/uiSurfaces/config/focus
+    // Touches only a field AuthoritativeUiScene.layoutKeyFor never reads, so layout/buffers/uiSurfaces/config/focus
     // all stay reference-identical to the previous call.
     val unrelatedChange = state.copy(runtime = state.runtime.copy(clipboard = Some("copied text")))
 
-    val first  = MouseTargetLayoutKey.from(state, ViewportSize(80, 24))
-    val second = MouseTargetLayoutKey.from(unrelatedChange, ViewportSize(80, 24))
+    val first  = authoritativeScene.layoutKeyFor(state, ViewportSize(80, 24))
+    val second = authoritativeScene.layoutKeyFor(unrelatedChange, ViewportSize(80, 24))
 
     second should be theSameInstanceAs first
   }
@@ -258,8 +258,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val shortState = stateWith(Buffer.fromString(bufferId, "one"))
     val longState  = stateWith(Buffer.fromString(bufferId, (1 to 100).map(i => s"line $i").mkString("\n")))
 
-    MouseTargetLayoutKey.from(shortState, ViewportSize(80, 24)) should not be
-      MouseTargetLayoutKey.from(longState, ViewportSize(80, 24))
+    authoritativeScene.layoutKeyFor(shortState, ViewportSize(80, 24)) should not be
+      authoritativeScene.layoutKeyFor(longState, ViewportSize(80, 24))
   }
 
   it should "invalidate prepared snapshots when font, typography, language, viewport, or rich text changes" in {
@@ -267,7 +267,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val buffer      = plainBuffer.copy(document = plainBuffer.document.copy(language = Some(LanguageId.Scala)))
     val state       = stateWith(buffer)
     val size        = ViewportSize(80, 24)
-    val key         = MouseTargetLayoutKey.from(state, size)
+    val key         = authoritativeScene.layoutKeyFor(state, size)
 
     val fontChanged =
       stateWith(
@@ -286,7 +286,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     )
 
     List(fontChanged, languageChanged, languageRemoved, viewportChanged, richTextChanged).foreach { changed =>
-      MouseTargetLayoutKey.from(changed, size) should not be key
+      authoritativeScene.layoutKeyFor(changed, size) should not be key
     }
   }
 
@@ -298,7 +298,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       state.persisted.copy(config = state.persisted.config.withTextAreaInsets(TextAreaInsets(0.2, 0.1, 0.1, 0.1)))
     )
 
-    MouseTargetLayoutKey.from(insetState, size) should not be MouseTargetLayoutKey.from(state, size)
+    authoritativeScene.layoutKeyFor(insetState, size) should not be authoritativeScene.layoutKeyFor(state, size)
     MouseTargetCache.fromState(insetState, size, authoritativeScene).scene should not be theSameInstanceAs(
       MouseTargetCache.fromState(state, size, authoritativeScene).scene
     )
@@ -312,7 +312,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       state.persisted.copy(config = state.persisted.config.withInterfaceDensity(InterfaceDensity.Spacious))
     )
 
-    MouseTargetLayoutKey.from(spaciousState, size) should not be MouseTargetLayoutKey.from(state, size)
+    authoritativeScene.layoutKeyFor(spaciousState, size) should not be authoritativeScene.layoutKeyFor(state, size)
     MouseTargetCache.fromState(spaciousState, size, authoritativeScene).scene should not be theSameInstanceAs(
       MouseTargetCache.fromState(state, size, authoritativeScene).scene
     )
@@ -402,7 +402,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val columnOn  = stateWith(buffer, base.withColumnMode(true))
     val size      = ViewportSize(200, 24)
 
-    MouseTargetLayoutKey.from(columnOff, size) should not be MouseTargetLayoutKey.from(columnOn, size)
+    authoritativeScene.layoutKeyFor(columnOff, size) should not be authoritativeScene.layoutKeyFor(columnOn, size)
     MouseTargetCache.fromState(columnOn, size, authoritativeScene).scene should not be theSameInstanceAs(
       MouseTargetCache.fromState(columnOff, size, authoritativeScene).scene
     )
@@ -446,7 +446,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val selected = stateWithStartPage(selectedIndex = 0)
     val moved    = stateWithStartPage(selectedIndex = 1)
 
-    MouseTargetLayoutKey.from(selected, size) shouldBe MouseTargetLayoutKey.from(moved, size)
+    authoritativeScene.layoutKeyFor(selected, size) shouldBe authoritativeScene.layoutKeyFor(moved, size)
     MouseTargetCache.fromState(moved, size, authoritativeScene).scene should be theSameInstanceAs
       MouseTargetCache.fromState(selected, size, authoritativeScene).scene
   }
@@ -476,7 +476,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val typing = stateWithCommandPalette(searchTerm = "b")
     val more   = stateWithCommandPalette(searchTerm = "bl")
 
-    MouseTargetLayoutKey.from(typing, size) shouldBe MouseTargetLayoutKey.from(more, size)
+    authoritativeScene.layoutKeyFor(typing, size) shouldBe authoritativeScene.layoutKeyFor(more, size)
     MouseTargetCache.fromState(more, size, authoritativeScene).scene should be theSameInstanceAs
       MouseTargetCache.fromState(typing, size, authoritativeScene).scene
   }
@@ -486,7 +486,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val selected = stateWithCommandPalette(searchTerm = "", selectedIndex = 0)
     val moved    = stateWithCommandPalette(searchTerm = "", selectedIndex = 1)
 
-    MouseTargetLayoutKey.from(selected, size) shouldBe MouseTargetLayoutKey.from(moved, size)
+    authoritativeScene.layoutKeyFor(selected, size) shouldBe authoritativeScene.layoutKeyFor(moved, size)
     MouseTargetCache.fromState(moved, size, authoritativeScene).scene should be theSameInstanceAs
       MouseTargetCache.fromState(selected, size, authoritativeScene).scene
   }

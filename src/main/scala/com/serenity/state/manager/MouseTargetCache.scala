@@ -102,12 +102,13 @@ final private[manager] case class MouseTargetLayoutKey(
 
 private[manager] object MouseTargetLayoutKey:
 
-  /** The state fields [[from]] actually reads. Everything else it derives (focusPaneId, orderedPaneIds, paneBuffers,
+  /** The state fields [[compute]] actually reads. Everything else it derives (focusPaneId, orderedPaneIds, paneBuffers,
     * paneSnapshotInputs, pinnedPanels, lineNumberContent, derivedStatusLineSurface) is a pure function of these plus
     * viewportSize, so if none of these references changed since the last call, the previously computed key is still
-    * correct and the full pane/buffer/surface walk can be skipped.
+    * correct and the full pane/buffer/surface walk can be skipped -- see [[MouseTargetLayoutKeyCache]], the memo that
+    * uses this fast-path check.
     */
-  final private case class FastPathInputs(
+  final private[manager] case class FastPathInputs(
       viewportSize: ViewportSize,
       config: AppConfig,
       layout: Layout,
@@ -117,31 +118,8 @@ private[manager] object MouseTargetLayoutKey:
       modalStack: List[ModalDialog]
   )
 
-  /** `AtomicReference`-backed single-slot memo of the last [[MouseTargetLayoutKey]] computed, keyed on the
-    * [[FastPathInputs]] it was computed from. `from` is called synchronously from mouse-hit-testing
-    * (`ContextualToolbarHitTesting`, `CommandRunnerMouseHitTesting`, `MouseHitTestGeometry`,
-    * `PinnedPanelMouseHitTesting`, `EditorContextMenuHitTesting`) and from the renderer's own scene preparation
-    * (`AuthoritativeUiScene.forState` below) -- none of these run inside an IO fiber, so a `Ref[IO, ...]` here would
-    * need forcing via `unsafeRunSync` right back into a synchronous `def` at every call site, hiding a plain
-    * compare-and-set behind an effect type nothing here ever suspends on. This is the same reasoning already applied to
-    * [[com.serenity.ui.renderer.RendererFrameState.BoundedRefCache]] (#1431/#1434) and to `ThemeManager`'s
-    * highlight/lex caches (#1412/#1431/#1434): `AtomicReference` gives the same lock-free CAS semantics those modules
-    * settled on, without threading `IO` through the entire mouse-targeting/rendering call graph.
-    */
-  private val lastComputation =
-    new java.util.concurrent.atomic.AtomicReference[Option[(FastPathInputs, MouseTargetLayoutKey)]](None)
-
-  private def unchangedSince(previous: FastPathInputs, current: FastPathInputs): Boolean =
-    (previous.viewportSize == current.viewportSize) &&
-      previous.config.eq(current.config) &&
-      previous.layout.eq(current.layout) &&
-      (previous.focus == current.focus) &&
-      previous.buffers.eq(current.buffers) &&
-      previous.uiSurfaces.eq(current.uiSurfaces) &&
-      previous.modalStack.eq(current.modalStack)
-
-  def from(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
-    val inputs = FastPathInputs(
+  private[manager] def fastPathInputs(state: AppState, viewportSize: ViewportSize): FastPathInputs =
+    FastPathInputs(
       viewportSize,
       state.persisted.config,
       state.persisted.layout,
@@ -150,15 +128,17 @@ private[manager] object MouseTargetLayoutKey:
       state.runtime.uiSurfaces,
       state.runtime.modalStack
     )
-    lastComputation.get() match
-      case Some((previousInputs, previousResult)) if unchangedSince(previousInputs, inputs) =>
-        previousResult
-      case _ =>
-        val computed = compute(state, viewportSize)
-        lastComputation.set(Some(inputs -> computed))
-        computed
 
-  private def compute(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
+  private[manager] def unchangedSince(previous: FastPathInputs, current: FastPathInputs): Boolean =
+    (previous.viewportSize == current.viewportSize) &&
+      previous.config.eq(current.config) &&
+      previous.layout.eq(current.layout) &&
+      (previous.focus == current.focus) &&
+      previous.buffers.eq(current.buffers) &&
+      previous.uiSurfaces.eq(current.uiSurfaces) &&
+      previous.modalStack.eq(current.modalStack)
+
+  private[manager] def compute(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
     MouseTargetLayoutKey(
       viewportSize = viewportSize,
       fontConfig = state.persisted.config.editorConfig.fontConfig,
@@ -219,6 +199,37 @@ private[manager] object MouseTargetLayoutKey:
         else Nil
     )
 
+/** Instance-scoped (issue #1677) single-slot memo of the last [[MouseTargetLayoutKey]] computed, keyed on the
+  * [[MouseTargetLayoutKey.FastPathInputs]] it was computed from. One instance lives on each [[AuthoritativeUiScene]] --
+  * itself one per render-owning entity -- rather than the JVM-wide singleton this used to be a field of
+  * `object MouseTargetLayoutKey` itself, so two independently constructed scenes never share or contend on this memo
+  * slot. `from` is called synchronously from mouse-hit-testing (`ContextualToolbarHitTesting`,
+  * `CommandRunnerMouseHitTesting`, `MouseHitTestGeometry`, `PinnedPanelMouseHitTesting`, `EditorContextMenuHitTesting`,
+  * via `AuthoritativeUiScene.layoutKeyFor`) and from the renderer's own scene preparation
+  * (`AuthoritativeUiScene.forState` below) -- none of these run inside an IO fiber, so a `Ref[IO, ...]` here would need
+  * forcing via `unsafeRunSync` right back into a synchronous `def` at every call site, hiding a plain compare-and-set
+  * behind an effect type nothing here ever suspends on. This is the same reasoning already applied to
+  * [[com.serenity.ui.renderer.RendererFrameState.BoundedRefCache]] (#1431/#1434) and to `ThemeManager`'s highlight/lex
+  * caches (#1412/#1431/#1434): `AtomicReference` gives the same lock-free CAS semantics those modules settled on,
+  * without threading `IO` through the entire mouse-targeting/rendering call graph.
+  */
+final private[manager] class MouseTargetLayoutKeyCache:
+
+  private val lastComputation =
+    new java.util.concurrent.atomic.AtomicReference[
+      Option[(MouseTargetLayoutKey.FastPathInputs, MouseTargetLayoutKey)]
+    ](None)
+
+  def from(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
+    val inputs = MouseTargetLayoutKey.fastPathInputs(state, viewportSize)
+    lastComputation.get() match
+      case Some((previousInputs, previousResult)) if MouseTargetLayoutKey.unchangedSince(previousInputs, inputs) =>
+        previousResult
+      case _ =>
+        val computed = MouseTargetLayoutKey.compute(state, viewportSize)
+        lastComputation.set(Some(inputs -> computed))
+        computed
+
 /** The single owner of the prepared scene shared by rendering and mouse targeting.
   *
   * Instance-scoped (issue #1677): one instance is created per render-owning entity (held on [[RenderCaches]], threaded
@@ -229,6 +240,15 @@ private[manager] object MouseTargetLayoutKey:
   */
 final private[serenity] class AuthoritativeUiScene:
   import AuthoritativeUiScene.{SceneFontKey, SceneKey}
+
+  private val layoutKeyCache = new MouseTargetLayoutKeyCache
+
+  /** Instance-scoped (issue #1677): delegates to this scene's own [[MouseTargetLayoutKeyCache]] rather than the
+    * JVM-wide memo `object MouseTargetLayoutKey` used to hold, so callers that need a layout key without a full scene
+    * (mouse-hit-testing) share the exact memo [[forState]] below populates, scoped to this owner.
+    */
+  def layoutKeyFor(state: AppState, viewportSize: ViewportSize): MouseTargetLayoutKey =
+    layoutKeyCache.from(state, viewportSize)
 
   /** Bounded, `LinkedHashMap`(access-order) + `synchronized`-backed cache of the prepared scene, shared by rendering
     * and mouse targeting. `forState` below is called synchronously from the render entry points (`RendererEntryPoints`,
@@ -285,7 +305,7 @@ final private[serenity] class AuthoritativeUiScene:
           paneId -> SceneFontKey(font.getFamily, font.getStyle, font.getSize2D)
         }
     }
-    val key = SceneKey(MouseTargetLayoutKey.from(state, viewportSize), paneFonts, cellMetrics)
+    val key = SceneKey(layoutKeyFor(state, viewportSize), paneFonts, cellMetrics)
     Option(prepared.get(key)).getOrElse {
       val layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
       val base   = UiSceneSnapshot.from(state, layout, viewportSize)
@@ -468,6 +488,6 @@ private[manager] object MouseTargetCache:
     viewportSize: ViewportSize,
     authoritativeScene: AuthoritativeUiScene
   ): MouseTargetCache =
-    val layoutKey = MouseTargetLayoutKey.from(state, viewportSize)
+    val layoutKey = authoritativeScene.layoutKeyFor(state, viewportSize)
     val scene     = authoritativeScene.forState(state, viewportSize)
     MouseTargetCache(layoutKey, scene)

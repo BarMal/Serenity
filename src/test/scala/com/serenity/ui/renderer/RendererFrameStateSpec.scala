@@ -6,7 +6,6 @@ import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.MockRenderSurface
 import com.serenity.state.models.{BufferId, Damage, PaneId, SurfaceId}
-import com.serenity.testkit.CacheCapacityIsolatedTest
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -182,8 +181,7 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
     try test
     finally frameState.configureCacheCapacity(previous)
 
-  "the bounded per-cache store" should "evict the least recently written entry once capacity is exceeded" taggedAs
-    CacheCapacityIsolatedTest in
+  "the bounded per-cache store" should "evict the least recently written entry once capacity is exceeded" in
     withCacheCapacity(64) {
       // One more than the configured per-cache capacity: every screen identity but the very first gets a fresh
       // drain (first-drain semantics == "never tracked"), and the first one must go back to reporting Everything
@@ -198,7 +196,7 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
       frameState.drainScreenDamage(Some(evicted)) shouldBe Damage.Everything
     }
 
-  "configureCacheCapacity" should "clamp to AppConfig's configured bounds" taggedAs CacheCapacityIsolatedTest in
+  "configureCacheCapacity" should "clamp to AppConfig's configured bounds" in
     withCacheCapacity(64) {
       frameState.configureCacheCapacity(Int.MaxValue)
       frameState.currentCacheCapacity shouldBe com.serenity.config.AppConfig.MaxRendererFrameStateCacheCapacity
@@ -207,8 +205,7 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
       frameState.currentCacheCapacity shouldBe com.serenity.config.AppConfig.MinRendererFrameStateCacheCapacity
     }
 
-  it should "shrink the bound live, evicting down to the new capacity on the next write" taggedAs
-    CacheCapacityIsolatedTest in
+  it should "shrink the bound live, evicting down to the new capacity on the next write" in
     withCacheCapacity(8) {
       val screens = List.fill(8)(frameOutput(new Object))
       screens.foreach(output => frameState.drainScreenDamage(Some(output)))
@@ -226,8 +223,7 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
       }
     }
 
-  it should "grow the bound live, so entries beyond the old capacity stop evicting each other" taggedAs
-    CacheCapacityIsolatedTest in
+  it should "grow the bound live, so entries beyond the old capacity stop evicting each other" in
     withCacheCapacity(4) {
       val screens = List.fill(4)(frameOutput(new Object))
       screens.foreach(output => frameState.drainScreenDamage(Some(output)))

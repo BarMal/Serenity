@@ -9,7 +9,6 @@ import com.serenity.config.AppConfig
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{Focus, SurfaceContent}
-import com.serenity.testkit.CacheCapacityIsolatedTest
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
@@ -55,17 +54,16 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     finalState.runtime.capabilities.isCellGrid.shouldBe(false)
   }
 
-  it should "configure RendererFrameState's cache capacity from the loaded config at startup (#1433)" taggedAs
-    CacheCapacityIsolatedTest in {
-      given com.serenity.rope.Balance = com.serenity.rope.Balance.default
-      given LoggerFactory[IO]         = Slf4jFactory.create[IO]
+  it should "configure RendererFrameState's cache capacity from the loaded config at startup (#1433)" in {
+    given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+    given LoggerFactory[IO]         = Slf4jFactory.create[IO]
 
-      val logger       = LoggerFactory[IO].getLogger(using LoggerName("Main"))
-      val config       = AppConfig.default.withRendererFrameStateCacheCapacity(128)
-      val stateManager = StateManager.apply(logger, initialConfig = config).unsafeRunSync()
+    val logger       = LoggerFactory[IO].getLogger(using LoggerName("Main"))
+    val config       = AppConfig.default.withRendererFrameStateCacheCapacity(128)
+    val stateManager = StateManager.apply(logger, initialConfig = config).unsafeRunSync()
 
-      stateManager.renderCaches.frameState.currentCacheCapacity shouldBe 128
-    }
+    stateManager.renderCaches.frameState.currentCacheCapacity shouldBe 128
+  }
 
   it should "default capabilities to GUI and thread it through when requested (issue #1112/#1669)" in {
     given com.serenity.rope.Balance = com.serenity.rope.Balance.default

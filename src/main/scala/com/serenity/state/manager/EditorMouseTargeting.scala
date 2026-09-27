@@ -42,7 +42,7 @@ final private[manager] class EditorMouseTargeting(port: EditorMouseTargetingPort
         }
 
   private def mouseTargetLayout(state: AppState, viewportSize: ViewportSize): IO[MouseTargetCache] =
-    val key = MouseTargetLayoutKey.from(state, viewportSize)
+    val key = port.authoritativeScene.layoutKeyFor(state, viewportSize)
     port.mouseTargetCacheRef.modify {
       case Some(cache) if cache.layoutKey == key =>
         val scene = port.authoritativeScene.forState(state, viewportSize)
