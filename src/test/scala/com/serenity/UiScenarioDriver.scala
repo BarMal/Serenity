@@ -141,7 +141,8 @@ final class UiScenarioDriver private (
         uiFont,
         environment.cellMetrics,
         environment.cellMetrics,
-        cursorColor = None
+        cursorColor = None,
+        com.serenity.state.manager.RenderCaches.create()
       )
       val layout   = LayoutEngine.calculateLayoutWithUI(current, environment.viewport)
       val contract = EditorLayoutContract.from(current, environment.viewport, layout)
@@ -286,7 +287,9 @@ final class UiScenarioDriver private (
         .getOrElse(preferredTop)
       ScenarioPreviewPlacement(
         firstSourceLine,
-        MarkdownDocumentPreview.previewRowForSourceLine(lines, firstSourceLine).getOrElse(firstSourceLine),
+        MarkdownDocumentPreview
+          .previewRowForSourceLine(lines, firstSourceLine, stateManager.renderCaches.markdownPreviewCache)
+          .getOrElse(firstSourceLine),
         drawnImage.bounds
       )
 
@@ -298,7 +301,10 @@ final class UiScenarioDriver private (
     activeSourceLines: Set[Int]
   ): Set[Int] =
     MarkdownDocumentPreview
-      .renderInlineDocument(buffer.document.content.linesFrom(0, buffer.document.content.lineCount))
+      .renderInlineDocument(
+        buffer.document.content.linesFrom(0, buffer.document.content.lineCount),
+        stateManager.renderCaches.markdownPreviewCache
+      )
       .zipWithIndex
       .collect {
         case (previewLine, previewRow)

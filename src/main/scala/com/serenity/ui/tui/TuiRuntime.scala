@@ -222,7 +222,8 @@ object TuiRuntime:
     size: ViewportSize,
     cursorVisible: Boolean,
     cursorColor: Option[java.awt.Color],
-    damage: Damage
+    damage: Damage,
+    caches: com.serenity.state.manager.RenderCaches
   ): Unit =
     if cursorVisible then
       val _ = RendererCursorOverlay.renderWithCursorOverlay(
@@ -235,7 +236,8 @@ object TuiRuntime:
         CellMetricsOne,
         CellMetricsOne,
         cursorColor,
-        damage
+        damage,
+        caches
       )
       ()
     else
@@ -250,7 +252,8 @@ object TuiRuntime:
         CellMetricsOne,
         CellMetricsOne,
         None,
-        damage
+        damage,
+        caches
       )
 
   /** The cursor-only counterpart to [[paintFrame]], separated for the same reason. */
@@ -260,7 +263,8 @@ object TuiRuntime:
     size: ViewportSize,
     cursorVisible: Boolean,
     cursorColor: Option[java.awt.Color],
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState],
+    caches: com.serenity.state.manager.RenderCaches
   ): Unit =
     val _ = RendererCursorOverlay.renderCursorOnly(
       state,
@@ -273,7 +277,8 @@ object TuiRuntime:
       CellMetricsOne,
       CellMetricsOne,
       cursorColor,
-      bufferAnimations
+      bufferAnimations,
+      caches
     )
 
   /** Where a [[TuiAccessibilityBridge]] writes: the terminal's own writer, exactly as `Osc52Clipboard` writes its
@@ -305,13 +310,13 @@ object TuiRuntime:
     accessibilitySync: AccessibilitySync,
     accessibilityBridge: TuiAccessibilityBridge
   ): AppRuntime.RenderFn =
-    (state, cursorVisible, cursorColor, damage, _) =>
+    (state, cursorVisible, cursorColor, damage, _, caches) =>
       for
         size <- shell.viewportSize
         surface = surfaceHolder.forSize(size)
-        _ <- IO(paintFrame(state, surface, size, cursorVisible, cursorColor, damage))
+        _ <- IO(paintFrame(state, surface, size, cursorVisible, cursorColor, damage, caches))
         _ <- syncAccessibility(state, size, accessibilitySync, accessibilityBridge)
-        _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability)
+        _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability, caches)
       yield ()
 
   private def renderCursorOnlyFn(
@@ -321,13 +326,13 @@ object TuiRuntime:
     accessibilitySync: AccessibilitySync,
     accessibilityBridge: TuiAccessibilityBridge
   ): AppRuntime.RenderFn =
-    (state, cursorVisible, cursorColor, _, bufferAnimations) =>
+    (state, cursorVisible, cursorColor, _, bufferAnimations, caches) =>
       for
         size <- shell.viewportSize
         surface = surfaceHolder.forSize(size)
-        _ <- IO(paintCursorOnly(state, surface, size, cursorVisible, cursorColor, bufferAnimations))
+        _ <- IO(paintCursorOnly(state, surface, size, cursorVisible, cursorColor, bufferAnimations, caches))
         _ <- syncAccessibility(state, size, accessibilitySync, accessibilityBridge)
-        _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability)
+        _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability, caches)
       yield ()
 
   /** Pushes a freshly rendered image into the spawned preview window (issue #1113) whenever one is open for the active
@@ -338,13 +343,14 @@ object TuiRuntime:
     */
   private def syncMarkdownPreviewWindow(
     state: AppState,
-    availability: MarkdownPreviewWindowAvailability
+    availability: MarkdownPreviewWindowAvailability,
+    caches: com.serenity.state.manager.RenderCaches
   ): IO[Unit] =
     (availability, state.runtime.markdownPreviewWindowBuffer.flatMap(state.persisted.buffers.get)) match
       case (MarkdownPreviewWindowAvailability.Available(window), Some(buffer)) =>
         window.currentSize.flatMap {
           case (widthPx, heightPx) if widthPx > 0 && heightPx > 0 =>
-            IO(renderMarkdownPreviewImage(state, buffer, widthPx, heightPx)).flatMap(window.updateImage)
+            IO(renderMarkdownPreviewImage(state, buffer, widthPx, heightPx, caches)).flatMap(window.updateImage)
           case _ =>
             // The window hasn't been shown/laid out yet (its panel reports a 0x0 size) -- nothing to draw into.
             IO.unit
@@ -356,7 +362,8 @@ object TuiRuntime:
     state: AppState,
     buffer: Buffer,
     widthPx: Int,
-    heightPx: Int
+    heightPx: Int,
+    caches: com.serenity.state.manager.RenderCaches
   ): java.awt.image.BufferedImage =
     val title = buffer.document.filePath
       .flatMap(path => Option(path.getFileName).map(_.toString))
@@ -370,6 +377,7 @@ object TuiRuntime:
       heightPx = heightPx,
       theme = state.persisted.theme,
       font = MarkdownPreviewWindow.PreviewFont,
+      cache = caches.markdownPreviewCache,
       baseUri = baseUri,
       reuseLastRenderWhileEditing = buffer.markdownPreviewEditGeneration != buffer.markdownPreviewCommittedGeneration
     )

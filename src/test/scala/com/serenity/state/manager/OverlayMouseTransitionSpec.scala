@@ -105,7 +105,8 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
       .overlayRect(lensId)
       .getOrElse(fail("Expected the lens overlay rect"))
 
-    val (result, claimed) = run(opened)(CommentLensMouseHitTesting.click(MouseClick(frame.x, frame.y), opened))
+    val (result, claimed) =
+      run(opened)(CommentLensMouseHitTesting.click(MouseClick(frame.x, frame.y), opened, AuthoritativeUiScene()))
 
     claimed shouldBe true
     result.effects shouldBe Nil
@@ -117,7 +118,7 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
   it should "decline a click when no lens is open" in {
     val state = editorState("hello world")
 
-    run(state)(CommentLensMouseHitTesting.click(MouseClick(1, 1), state))._2 shouldBe false
+    run(state)(CommentLensMouseHitTesting.click(MouseClick(1, 1), state, AuthoritativeUiScene()))._2 shouldBe false
   }
 
   private def withOpenContextMenu: (AppState, ContextMenu, LayoutRect) =
@@ -203,7 +204,8 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
     val state = AppEventReducer.reduce(ToggleContextualToolbar, selected, registry).state
     val point = toolbarItemPoint(state, itemId = "italic")
 
-    val (result, claimed) = run(state)(ContextualToolbarHitTesting.click(MouseClick(point.x, point.y), state))
+    val (result, claimed) =
+      run(state)(ContextualToolbarHitTesting.click(MouseClick(point.x, point.y), state, AuthoritativeUiScene()))
 
     claimed shouldBe true
     result.state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
@@ -213,7 +215,10 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
   it should "decline a click with no toolbar open" in {
     val state = editorState("alpha beta")
 
-    run(state)(ContextualToolbarHitTesting.click(MouseClick(1, 1), state)) shouldBe ((ReducerResult(state, Nil), false))
+    run(state)(ContextualToolbarHitTesting.click(MouseClick(1, 1), state, AuthoritativeUiScene())) shouldBe ((
+      ReducerResult(state, Nil),
+      false
+    ))
   }
 
   private def openCommandRunner: AppState =
@@ -243,7 +248,9 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
     val row   = commandRunnerRow(state, 2)
 
     val (result, claimed) =
-      run(state)(CommandRunnerMouseHitTesting.hover(MouseMove(row.rect.x.toInt, row.rect.y.toInt), state))
+      run(state)(
+        CommandRunnerMouseHitTesting.hover(MouseMove(row.rect.x.toInt, row.rect.y.toInt), state, AuthoritativeUiScene())
+      )
 
     claimed shouldBe true
     result.effects shouldBe Nil
@@ -251,12 +258,14 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
   }
 
   "CommandRunnerMouseHitTesting.click" should "select the clicked row and emit its command, as Enter would" in {
-    val state    = openCommandRunner
-    val row      = commandRunnerRow(state, 2)
-    val hovered  = run(state)(CommandRunnerMouseHitTesting.hover(MouseMove(row.rect.x.toInt, row.rect.y.toInt), state))
+    val state = openCommandRunner
+    val row   = commandRunnerRow(state, 2)
+    val hovered = run(state)(
+      CommandRunnerMouseHitTesting.hover(MouseMove(row.rect.x.toInt, row.rect.y.toInt), state, AuthoritativeUiScene())
+    )
     val expected = runnerFrom(hovered._1.state).selectedCommand.getOrElse(fail("Expected a selected command"))
 
-    val (result, claimed) = run(state)(CommandRunnerMouseHitTesting.click(clickAt(row), state))
+    val (result, claimed) = run(state)(CommandRunnerMouseHitTesting.click(clickAt(row), state, AuthoritativeUiScene()))
 
     claimed shouldBe true
     result.effects shouldBe List(AppEffect.ExecuteCommand(expected))

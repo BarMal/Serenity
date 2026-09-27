@@ -3,6 +3,7 @@ package com.serenity
 import java.nio.file.Paths
 
 import com.serenity.command.*
+import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{PinnedPanelViewModel, TextPanelRow, TextPanelView}
@@ -287,7 +288,7 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val view = PinnedPanelViewModel.resolve(outlinePanel, LayoutRect(0, 0, 18, 40), state)
+    val view = PinnedPanelViewModel.resolve(outlinePanel, LayoutRect(0, 0, 18, 40), state, MarkdownPreviewCache())
 
     view.rows.map(_.plainText) shouldBe List(
       "Class Serenity",
@@ -311,7 +312,7 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     )
     val hoveredPanel = outlinePanel.copy(content = SurfaceContent.Outline(outlineSymbols, Some(Location(30, 0))))
 
-    val view = PinnedPanelViewModel.resolve(hoveredPanel, LayoutRect(0, 0, 18, 40), state)
+    val view = PinnedPanelViewModel.resolve(hoveredPanel, LayoutRect(0, 0, 18, 40), state, MarkdownPreviewCache())
 
     view.rows.map(_.plainText) shouldBe List(
       "Class Serenity",
@@ -362,7 +363,7 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val view = PinnedPanelViewModel.resolve(commentsPanel, LayoutRect(0, 0, 18, 40), state)
+    val view = PinnedPanelViewModel.resolve(commentsPanel, LayoutRect(0, 0, 18, 40), state, MarkdownPreviewCache())
 
     view.rows.map(_.plainText) shouldBe List(
       "Comment: Revise opening",

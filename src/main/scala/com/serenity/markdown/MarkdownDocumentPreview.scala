@@ -54,25 +54,21 @@ object MarkdownDocumentPreview:
       .escapeHtml(true)
       .build()
 
-  def renderHtmlFragment(source: String, title: String, baseUri: Option[URI] = None): String =
+  def renderHtmlFragment(
+    source: String,
+    title: String,
+    cache: MarkdownPreviewCache,
+    baseUri: Option[URI] = None
+  ): String =
     val key =
       MarkdownPreviewCache.HtmlFragmentCacheKey(
         MarkdownPreviewCache.SourceFingerprint.from(source),
         title,
         baseUri.map(_.toString)
       )
-    MarkdownPreviewCache.htmlFragmentCache
-      .synchronized {
-        Option(MarkdownPreviewCache.htmlFragmentCache.get(key))
-      }
-      .getOrElse {
-        val rendered =
-          MarkdownPreviewXhtml.htmlRenderer(extensions, defaultHtmlRenderer, baseUri).render(parser.parse(source))
-        MarkdownPreviewCache.htmlFragmentCache.synchronized {
-          val _ = MarkdownPreviewCache.htmlFragmentCache.put(key, rendered)
-        }
-        rendered
-      }
+    cache.cachedHtmlFragment(key) {
+      MarkdownPreviewXhtml.htmlRenderer(extensions, defaultHtmlRenderer, baseUri).render(parser.parse(source))
+    }
 
   def renderImage(
     source: String,
@@ -81,6 +77,7 @@ object MarkdownDocumentPreview:
     heightPx: Int,
     theme: Theme,
     font: Font,
+    cache: MarkdownPreviewCache,
     baseUri: Option[URI] = None,
     panelChrome: Boolean = true,
     inlineLineHeightPx: Option[Int] = None,
@@ -100,29 +97,20 @@ object MarkdownDocumentPreview:
       inlineLineHeightPx = inlineLineHeightPx,
       inlineRows = false
     )
-    MarkdownPreviewCache.imageCache
-      .synchronized {
-        Option(MarkdownPreviewCache.imageCache.get(key))
-      }
-      .getOrElse {
-        MarkdownPreviewCache.renderOrReuseCommitted(key, reuseLastRenderWhileEditing) {
-          val rendered = renderImageUncached(
-            source,
-            title,
-            safeWidth,
-            safeHeight,
-            theme,
-            font,
-            baseUri,
-            panelChrome,
-            inlineLineHeightPx
-          )
-          MarkdownPreviewCache.imageCache.synchronized {
-            val _ = MarkdownPreviewCache.imageCache.put(key, rendered)
-          }
-          rendered
-        }
-      }
+    cache.cachedImage(key, reuseLastRenderWhileEditing) {
+      renderImageUncached(
+        source,
+        title,
+        safeWidth,
+        safeHeight,
+        theme,
+        font,
+        baseUri,
+        panelChrome,
+        inlineLineHeightPx,
+        cache
+      )
+    }
 
   /** Renders the inline lens directly from its preview rows without reparsing them as Markdown. */
   private[serenity] def renderInlineImage(
@@ -135,6 +123,7 @@ object MarkdownDocumentPreview:
     theme: Theme,
     font: Font,
     inlineLineHeightPx: Int,
+    cache: MarkdownPreviewCache,
     reuseLastRenderWhileEditing: Boolean = false
   ): BufferedImage =
     val rows = inlinePreviewRows(sourceLines, firstSourceLine, maxSourceLines)
@@ -147,6 +136,7 @@ object MarkdownDocumentPreview:
       theme,
       font,
       inlineLineHeightPx,
+      cache,
       reuseLastRenderWhileEditing
     )
 
@@ -160,6 +150,7 @@ object MarkdownDocumentPreview:
     theme: Theme,
     font: Font,
     inlineLineHeightPx: Int,
+    cache: MarkdownPreviewCache,
     reuseLastRenderWhileEditing: Boolean = false
   ): BufferedImage =
     val safeWidth  = widthPx.max(1)
@@ -178,28 +169,18 @@ object MarkdownDocumentPreview:
       inlineLineHeightPx = Some(inlineLineHeightPx.max(1)),
       inlineRows = true
     )
-    MarkdownPreviewCache.imageCache
-      .synchronized {
-        Option(MarkdownPreviewCache.imageCache.get(key))
-      }
-      .getOrElse {
-        MarkdownPreviewCache.renderOrReuseCommitted(key, reuseLastRenderWhileEditing) {
-          val rendered = renderInlineImageUncached(
-            rows,
-            sourceLines,
-            title,
-            safeWidth,
-            safeHeight,
-            theme,
-            font,
-            inlineLineHeightPx.max(1)
-          )
-          MarkdownPreviewCache.imageCache.synchronized {
-            val _ = MarkdownPreviewCache.imageCache.put(key, rendered)
-          }
-          rendered
-        }
-      }
+    cache.cachedImage(key, reuseLastRenderWhileEditing) {
+      renderInlineImageUncached(
+        rows,
+        sourceLines,
+        title,
+        safeWidth,
+        safeHeight,
+        theme,
+        font,
+        inlineLineHeightPx.max(1)
+      )
+    }
 
   private def renderImageUncached(
     source: String,
@@ -210,12 +191,13 @@ object MarkdownDocumentPreview:
     font: Font,
     baseUri: Option[URI],
     panelChrome: Boolean,
-    inlineLineHeightPx: Option[Int]
+    inlineLineHeightPx: Option[Int],
+    cache: MarkdownPreviewCache
   ): BufferedImage =
     try
       val renderer = Java2DRenderer(
         MarkdownPreviewImageResources.parseXhtml(
-          renderXhtml(source, title, theme, font, baseUri, panelChrome, inlineLineHeightPx)
+          renderXhtml(source, title, theme, font, baseUri, panelChrome, inlineLineHeightPx, cache)
         ),
         safeWidth,
         safeHeight
@@ -267,31 +249,35 @@ object MarkdownDocumentPreview:
       case text =>
         MarkdownInlineNormalizer.normalizeInline(text)
 
-  def renderInlineLines(sourceLines: Vector[String]): Vector[String] =
-    renderInlineDocument(sourceLines).map(_.text)
+  def renderInlineLines(sourceLines: Vector[String], cache: MarkdownPreviewCache): Vector[String] =
+    renderInlineDocument(sourceLines, cache).map(_.text)
 
-  def renderInlineDocument(sourceLines: Vector[String]): Vector[InlinePreviewLine] =
-    inlinePreviewIndex(sourceLines).previewLines
+  def renderInlineDocument(sourceLines: Vector[String], cache: MarkdownPreviewCache): Vector[InlinePreviewLine] =
+    inlinePreviewIndex(sourceLines, cache).previewLines
 
-  def inlineTableLineIndexes(sourceLines: Vector[String]): Set[Int] =
-    inlinePreviewIndex(sourceLines).tableLineIndexes
+  def inlineTableLineIndexes(sourceLines: Vector[String], cache: MarkdownPreviewCache): Set[Int] =
+    inlinePreviewIndex(sourceLines, cache).tableLineIndexes
 
-  def renderInlineLineAt(sourceLines: Vector[String], index: Int): String =
-    inlinePreviewIndex(sourceLines).rowsBySourceLine
+  def renderInlineLineAt(sourceLines: Vector[String], index: Int, cache: MarkdownPreviewCache): String =
+    inlinePreviewIndex(sourceLines, cache).rowsBySourceLine
       .get(index)
       .flatMap(_.headOption)
-      .flatMap(renderInlineDocument(sourceLines).lift)
+      .flatMap(renderInlineDocument(sourceLines, cache).lift)
       .map(_.text)
       .orElse(sourceLines.lift(index).map(renderInlineLine))
       .getOrElse("")
 
-  def previewRowForSourceLine(sourceLines: Vector[String], sourceLine: Int): Option[Int] =
-    inlinePreviewIndex(sourceLines).rowsBySourceLine.get(sourceLine).flatMap(_.headOption)
+  def previewRowForSourceLine(sourceLines: Vector[String], sourceLine: Int, cache: MarkdownPreviewCache): Option[Int] =
+    inlinePreviewIndex(sourceLines, cache).rowsBySourceLine.get(sourceLine).flatMap(_.headOption)
 
-  def previewRowsForSourceRange(sourceLines: Vector[String], sourceRange: Range.Inclusive): Option[Range.Inclusive] =
-    val preview = renderInlineDocument(sourceLines)
+  def previewRowsForSourceRange(
+    sourceLines: Vector[String],
+    sourceRange: Range.Inclusive,
+    cache: MarkdownPreviewCache
+  ): Option[Range.Inclusive] =
+    val preview = renderInlineDocument(sourceLines, cache)
     val mappedRows = sourceRange
-      .flatMap(line => inlinePreviewIndex(sourceLines).rowsBySourceLine.getOrElse(line, Vector.empty))
+      .flatMap(line => inlinePreviewIndex(sourceLines, cache).rowsBySourceLine.getOrElse(line, Vector.empty))
       .distinct
     mappedRows match
       case rows if rows.nonEmpty =>
@@ -345,19 +331,11 @@ object MarkdownDocumentPreview:
       .filter(index => index + 1 <= start && MarkdownInlineTablePreview.isTableSeparator(sourceLines(index + 1)))
     tableStart.getOrElse(start)
 
-  private def inlinePreviewIndex(sourceLines: Vector[String]): InlinePreviewIndex =
+  private def inlinePreviewIndex(sourceLines: Vector[String], cache: MarkdownPreviewCache): InlinePreviewIndex =
     val key = MarkdownPreviewCache.InlineDocumentCacheKey(MarkdownPreviewCache.SourceLinesFingerprint.from(sourceLines))
-    MarkdownPreviewCache.inlineDocumentCache
-      .synchronized {
-        Option(MarkdownPreviewCache.inlineDocumentCache.get(key))
-      }
-      .getOrElse {
-        val index = buildInlinePreviewIndex(sourceLines)
-        MarkdownPreviewCache.inlineDocumentCache.synchronized {
-          val _ = MarkdownPreviewCache.inlineDocumentCache.put(key, index)
-        }
-        index
-      }
+    cache.cachedInlineDocument(key) {
+      buildInlinePreviewIndex(sourceLines)
+    }
 
   private def buildInlinePreviewIndex(sourceLines: Vector[String]): InlinePreviewIndex =
     val previewLines = renderInlineDocumentUncached(sourceLines)
@@ -399,6 +377,7 @@ object MarkdownDocumentPreview:
     sourceLines: Vector[String],
     activeLine: Option[Int],
     fallbackTopLine: Int,
+    cache: MarkdownPreviewCache,
     maxSourceLines: Int = Int.MaxValue
   ): PreviewWindow =
     if sourceLines.isEmpty then PreviewWindow(0, 0, "")
@@ -408,9 +387,9 @@ object MarkdownDocumentPreview:
         .getOrElse(fallbackTopLine.max(0).min(sourceLines.length - 1))
       val blockRange      = MarkdownBlockLens.currentBlock(sourceLines, anchorLine)
       val firstSourceLine = blockRange.start.max(0).min(sourceLines.length - 1)
-      val firstPreviewRow = previewRowsForSourceRange(sourceLines, blockRange)
+      val firstPreviewRow = previewRowsForSourceRange(sourceLines, blockRange, cache)
         .map(_.start)
-        .orElse(previewRowForSourceLine(sourceLines, firstSourceLine))
+        .orElse(previewRowForSourceLine(sourceLines, firstSourceLine, cache))
         .getOrElse(firstSourceLine)
       PreviewWindow(
         firstSourceLine = firstSourceLine,
@@ -422,6 +401,7 @@ object MarkdownDocumentPreview:
     sourceLines: Vector[String],
     activeLine: Option[Int],
     fallbackTopLine: Int,
+    cache: MarkdownPreviewCache,
     maxSourceLines: Int = Int.MaxValue
   ): PreviewWindow =
     if sourceLines.isEmpty then PreviewWindow(0, 0, "")
@@ -437,7 +417,7 @@ object MarkdownDocumentPreview:
         if anchorLine < fallbackStart then anchorLine.min(maxStart)
         else if anchorLine >= endExclusive then (anchorLine - safeMax / 2).max(0).min(maxStart)
         else fallbackStart
-      val firstPreviewRow = previewRowForSourceLine(sourceLines, firstSourceLine).getOrElse(firstSourceLine)
+      val firstPreviewRow = previewRowForSourceLine(sourceLines, firstSourceLine, cache).getOrElse(firstSourceLine)
       PreviewWindow(
         firstSourceLine = firstSourceLine,
         firstPreviewRow = firstPreviewRow,
@@ -451,9 +431,10 @@ object MarkdownDocumentPreview:
     font: Font,
     baseUri: Option[URI],
     panelChrome: Boolean,
-    inlineLineHeightPx: Option[Int]
+    inlineLineHeightPx: Option[Int],
+    cache: MarkdownPreviewCache
   ): String =
-    val fragment = renderHtmlFragment(source, title, baseUri)
+    val fragment = renderHtmlFragment(source, title, cache, baseUri)
     MarkdownPreviewXhtml.renderXhtmlFragment(fragment, title, theme, font, panelChrome, inlineLineHeightPx)
 
   private[serenity] def renderInlineXhtml(

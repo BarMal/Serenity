@@ -15,7 +15,8 @@ import com.serenity.ui.layout.*
   */
 final private[manager] case class CommandRunnerMouseHitTestingPort(
     currentState: IO[AppState],
-    applyReducerResult: (ReducerResult, AppState) => IO[Unit]
+    applyReducerResult: (ReducerResult, AppState) => IO[Unit],
+    authoritativeScene: AuthoritativeUiScene
 )
 
 /** Hit-tests hover/click against the open command palette (or its active submenu) and reduces the resulting
@@ -24,21 +25,25 @@ final private[manager] case class CommandRunnerMouseHitTestingPort(
 final private[manager] class CommandRunnerMouseHitTesting(port: CommandRunnerMouseHitTestingPort):
 
   def handleCommandRunnerMouseHover(event: MouseInputEvent, state: AppState): IO[Boolean] =
-    MouseTransition.commit(port.currentState, port.applyReducerResult)(CommandRunnerMouseHitTesting.hover(event, state))
+    MouseTransition.commit(port.currentState, port.applyReducerResult)(
+      CommandRunnerMouseHitTesting.hover(event, state, port.authoritativeScene)
+    )
 
   def handleCommandRunnerMouseClick(click: MouseClick, state: AppState): IO[Boolean] =
-    MouseTransition.commit(port.currentState, port.applyReducerResult)(CommandRunnerMouseHitTesting.click(click, state))
+    MouseTransition.commit(port.currentState, port.applyReducerResult)(
+      CommandRunnerMouseHitTesting.click(click, state, port.authoritativeScene)
+    )
 
 private[manager] object CommandRunnerMouseHitTesting:
 
-  def hover(event: MouseInputEvent, state: AppState): Transition[Boolean] =
-    commandRunnerSelectionAt(event, state) match
+  def hover(event: MouseInputEvent, state: AppState, authoritativeScene: AuthoritativeUiScene): Transition[Boolean] =
+    commandRunnerSelectionAt(event, state, authoritativeScene) match
       case Some(selectEvent) => reduce(selectEvent).as(true)
       case None              => Transition.pure(false)
 
   /** A click selects the row under the pointer, then submits it, exactly as Enter would after moving to it. */
-  def click(click: MouseClick, state: AppState): Transition[Boolean] =
-    commandRunnerSelectionAt(click, state) match
+  def click(click: MouseClick, state: AppState, authoritativeScene: AuthoritativeUiScene): Transition[Boolean] =
+    commandRunnerSelectionAt(click, state, authoritativeScene) match
       case Some(selectEvent) => (reduce(selectEvent) *> reduce(RunnerSubmit)).as(true)
       case None              => Transition.pure(false)
 
@@ -47,12 +52,16 @@ private[manager] object CommandRunnerMouseHitTesting:
       CommandRunnerReducer.reduce(event, current, CommandRegistry.withToggleUI).toTransition
     )
 
-  private def commandRunnerSelectionAt(event: MouseInputEvent, state: AppState): Option[CommandRunnerEvent] =
+  private def commandRunnerSelectionAt(
+    event: MouseInputEvent,
+    state: AppState,
+    authoritativeScene: AuthoritativeUiScene
+  ): Option[CommandRunnerEvent] =
     val surfaces = state.commandRunnerSurface.toList
     if surfaces.isEmpty then None
     else
       state.runtime.viewportSize.flatMap { viewportSize =>
-        val scene = AuthoritativeUiScene.forState(state, viewportSize)
+        val scene = authoritativeScene.forState(state, viewportSize)
         surfaces.view
           .flatMap(surface => commandRunnerSelectionForSurface(event, surface, scene, state))
           .headOption

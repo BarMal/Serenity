@@ -29,21 +29,64 @@
 # `StateManager`/`StateManagerComposition`/`StateManagerCapabilityPorts`/`StateManagerRuntime`/
 # `StateManagerPanelEffects` threading that TUI-only type in directly. All 8 are gone: those files now hold a
 # frontend-neutral type, so the `com/serenity/state` ForbiddenImports rule no longer fires on them at all.
+# paydown: issue #1677 (steps 1-2, #1732/78fb6fa8c/61dc64278) threaded an explicit `RenderCaches` bundle (and
+# instance-scoped `MarkdownPreviewCache`/`DictionaryCache`) through the whole render, mouse-hit-testing, and
+# markdown-preview call graphs, replacing several JVM-wide singleton caches. That threading is an added parameter (or
+# an added `caches: RenderCaches` construction) at nearly every call site it touches, which is why `CharacterRenderer`,
+# several renderer/markdown specs, `PerformanceBenchmarks`, `RendererPaneContent`, `SpellCheckerSpec` and
+# `TerminalRenderSurfaceSpec` all grew: the two `StateManager`/`StateManagerRuntime` line-number shifts below (185/186
+# -> 191/192, 144 -> 146) are the same threading moving the existing `#1669` forbidden-reference hits down a few lines,
+# not new instances of that violation. This step (step 3) only reconciles the baseline for that already-landed growth;
+# it does not itself add any of this threading.
+# paydown: issue #1677 step 3 adds an `ArchitectureChecks` rule forbidding `AtomicReference`/`AtomicInteger`/
+# `synchronized`/`mutable.` inside a top-level `object` (anywhere in `src/main`) or anywhere under `state/models`
+# (`state/models` itself has zero violations under this rule, so no baseline entries are needed for it -- steps 1-2
+# already made it clean). The 13 entries below are every top-level-object hit the rule finds elsewhere, and every one
+# is contained, per-call or per-constructed-instance mutation, not a JVM-wide singleton this issue asks to remove:
+# `RendererCursorOverlay`/`RendererEntryPoints`/`RendererFramePlanner`/`SwingFileDialog` each create a fresh
+# `AtomicReference` local to one render/dialog call, used only to carry a value out of a synchronous Swing/AWT
+# callback within that same call, and discarded once the call returns -- the same "contained, local mutation ...
+# StringBuilder during rendering" exception docs/coding-standards.md already grants, just holding a box instead of a
+# builder. `RuntimeDisplayState`/`TerminalInputHandler`/`TuiRuntime`/`MarkdownPreviewWindow` each construct exactly
+# one `AtomicReference` inside an `object`'s factory method (`apply`/`resource`/`run`) to seed the one new instance
+# (or one bootstrap invocation) being built there -- the field ends up owned by that single instance/invocation, not
+# shared JVM-wide, textually inside the `object` only because Scala's `object`-based smart-constructor idiom puts
+# factory methods there. `HunspellFreeCompoundMatcher`'s `mutable.Map` is already documented in place as "Local,
+# contained mutation ... matching this project's Mutation Policy". None of these was a cache issue #1677 asked to
+# scope to an owning instance -- the one hit that was (`MouseTargetLayoutKey`'s single-slot `AtomicReference` memo,
+# `state/manager/MouseTargetCache.scala`) has been moved onto a new instance-scoped `MouseTargetLayoutKeyCache` owned
+# by `AuthoritativeUiScene` as part of this same step, and is not baselined here.
+main/scala/com/serenity/app/RuntimeDisplayState.scala	forbidden mutable state at line 78: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	100
+main/scala/com/serenity/io/SwingFileDialog.scala	forbidden mutable state at line 35: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/lsp/LspManager.scala	file length	673
 main/scala/com/serenity/rope/Rope.scala	file length	631
-main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	616
+main/scala/com/serenity/spellcheck/HunspellFreeCompoundMatcher.scala	forbidden mutable state at line 106: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	630
 main/scala/com/serenity/ui/renderer/Java2DPostProcessingEffects.scala	method applyGlow	90
+main/scala/com/serenity/ui/renderer/RendererCursorOverlay.scala	forbidden mutable state at line 326: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/renderer/RendererCursorOverlay.scala	forbidden mutable state at line 401: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/renderer/RendererEntryPoints.scala	forbidden mutable state at line 85: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/renderer/RendererEntryPoints.scala	forbidden mutable state at line 260: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/renderer/RendererFramePlanner.scala	forbidden mutable state at line 237: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/renderer/RendererFramePlanner.scala	forbidden mutable state at line 306: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/renderer/RendererPaneContent.scala	file length	604
+main/scala/com/serenity/ui/tui/MarkdownPreviewWindow.scala	forbidden mutable state at line 71: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/tui/TerminalInputHandler.scala	forbidden mutable state at line 175: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/tui/TerminalInputHandler.scala	forbidden mutable state at line 305: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/tui/TuiRuntime.scala	forbidden mutable state at line 79: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	639
-test/scala/com/serenity/GutterAndLineNumbersSpec.scala	file length	637
+test/scala/com/serenity/GutterAndLineNumbersSpec.scala	file length	693
 test/scala/com/serenity/LayoutEngineSpec.scala	file length	669
 test/scala/com/serenity/LineWrappingSpec.scala	file length	751
-test/scala/com/serenity/MarkdownDocumentPreviewSpec.scala	file length	745
-test/scala/com/serenity/RendererSnapshotReuseSpec.scala	file length	618
-test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	695
+test/scala/com/serenity/MarkdownDocumentPreviewSpec.scala	file length	773
+test/scala/com/serenity/RendererSnapshotReuseSpec.scala	file length	629
+test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	722
 test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	713
-test/scala/com/serenity/SpellCheckerDictionaryIoSpec.scala	file length	614
-test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	748
-test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	303
-test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	637
+test/scala/com/serenity/SpellCheckerDictionaryIoSpec.scala	file length	646
+test/scala/com/serenity/SpellCheckerSpec.scala	file length	602
+test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	764
+test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	316
+test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	638
 test/scala/com/serenity/ui/tui/TerminalEmulator.scala	method interpret	84
+test/scala/com/serenity/ui/tui/TerminalRenderSurfaceSpec.scala	file length	606

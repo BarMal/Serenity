@@ -82,8 +82,10 @@ class AppRuntimeRenderSnapshotSpec extends AnyFlatSpec with Matchers:
               _: Boolean,
               _: Option[Color],
               _: Damage,
-              animations: Map[BufferId, AnimationState]
+              animations: Map[BufferId, AnimationState],
+              _: com.serenity.state.manager.RenderCaches
             ) => painted.update(_ :+ (versionOf(state) -> versionOf(animations))),
+            com.serenity.state.manager.RenderCaches.create(),
             _ => IO.unit
           )
           .take(3)

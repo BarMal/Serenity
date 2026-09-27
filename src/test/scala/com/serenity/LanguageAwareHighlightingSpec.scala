@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.SemanticToken
-import com.serenity.ui.theme.{SyntaxElement, Theme, ThemeManager}
+import com.serenity.ui.theme.{SyntaxElement, Theme, ThemeHighlightCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -14,7 +14,8 @@ import org.scalatest.matchers.should.Matchers
   */
 class LanguageAwareHighlightingSpec extends AnyFlatSpec with Matchers:
 
-  private val theme = Theme.dark
+  private val theme          = Theme.dark
+  private val highlightCache = ThemeHighlightCache()
 
   private def token(startCharacter: Int, length: Int, tokenType: String): SemanticToken =
     SemanticToken(
@@ -29,7 +30,7 @@ class LanguageAwareHighlightingSpec extends AnyFlatSpec with Matchers:
     // `trait` is a plain identifier in JavaScript -- no Scala-shaped rule should treat it as a keyword, and the only
     // way it gets a Keyword color now is a server literally classifying it as `keyword`.
     val tokens = List(token(0, 5, "keyword"), token(6, 5, "variable"))
-    val styled = ThemeManager.highlightLine("const trait = 1;", theme, Some(LanguageId.JavaScript), Some(tokens))
+    val styled = highlightCache.highlightLine("const trait = 1;", theme, Some(LanguageId.JavaScript), Some(tokens))
 
     styled.map(_.content).mkString shouldBe "const trait = 1;"
     styled.exists(s => s.content == "const" && s.style == theme.colorFor(SyntaxElement.Keyword).style) shouldBe true
@@ -39,7 +40,7 @@ class LanguageAwareHighlightingSpec extends AnyFlatSpec with Matchers:
 
   it should "render a visibly distinct 'unavailable' style when a declared language has no semantic tokens" in {
     val styled =
-      ThemeManager.highlightLine("def foo(): return True", theme, Some(LanguageId.Python), semanticTokens = None)
+      highlightCache.highlightLine("def foo(): return True", theme, Some(LanguageId.Python), semanticTokens = None)
 
     styled shouldBe List(
       com.serenity.ui.theme.StyledText(
@@ -52,7 +53,7 @@ class LanguageAwareHighlightingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render undeclared-language lines as plain text, distinct from the 'unavailable' style" in {
-    val styled = ThemeManager.highlightLine("some text", theme, language = None)
+    val styled = highlightCache.highlightLine("some text", theme, language = None)
 
     styled shouldBe List(
       com.serenity.ui.theme
@@ -62,13 +63,13 @@ class LanguageAwareHighlightingSpec extends AnyFlatSpec with Matchers:
 
   it should "still color Scala via semantic tokens rather than any special-cased handwritten path" in {
     val tokens = List(token(0, 3, "keyword"))
-    val styled = ThemeManager.highlightLine("val x = 1", theme, Some(LanguageId.Scala), Some(tokens))
+    val styled = highlightCache.highlightLine("val x = 1", theme, Some(LanguageId.Scala), Some(tokens))
 
     styled.exists(s => s.content == "val" && s.style == theme.colorFor(SyntaxElement.Keyword).style) shouldBe true
   }
 
   it should "show the unavailable style for Scala too when it has no semantic tokens" in {
-    val styled = ThemeManager.highlightLine("val x = 1", theme, Some(LanguageId.Scala), semanticTokens = None)
+    val styled = highlightCache.highlightLine("val x = 1", theme, Some(LanguageId.Scala), semanticTokens = None)
 
     styled shouldBe List(
       com.serenity.ui.theme
@@ -78,7 +79,7 @@ class LanguageAwareHighlightingSpec extends AnyFlatSpec with Matchers:
 
   it should "fill the gap between two tokens, and after the last one, with Normal-styled text" in {
     val tokens = List(token(0, 3, "keyword"), token(8, 3, "string"))
-    val styled = ThemeManager.highlightLine("val x = \"y\" !", theme, Some(LanguageId.Scala), Some(tokens))
+    val styled = highlightCache.highlightLine("val x = \"y\" !", theme, Some(LanguageId.Scala), Some(tokens))
 
     styled.map(_.content) shouldBe List("val", " x = ", "\"y\"", " !")
     styled(1).style shouldBe theme.colorFor(SyntaxElement.Normal).style
@@ -87,7 +88,7 @@ class LanguageAwareHighlightingSpec extends AnyFlatSpec with Matchers:
 
   it should "clamp a token whose span runs past the end of the line rather than throw" in {
     val tokens = List(token(4, 100, "string"))
-    val styled = ThemeManager.highlightLine("val \"unterminated", theme, Some(LanguageId.Scala), Some(tokens))
+    val styled = highlightCache.highlightLine("val \"unterminated", theme, Some(LanguageId.Scala), Some(tokens))
 
     styled.map(_.content).mkString shouldBe "val \"unterminated"
     styled.last.content shouldBe "\"unterminated"

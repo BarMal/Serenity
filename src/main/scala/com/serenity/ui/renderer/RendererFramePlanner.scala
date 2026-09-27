@@ -47,7 +47,8 @@ object RendererFramePlanner:
     cursorColor: Option[java.awt.Color],
     output: Option[FrameOutput],
     damage: Damage,
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty,
+    caches: com.serenity.state.manager.RenderCaches = com.serenity.state.manager.RenderCaches.create()
   ): Option[EditorPaneRenderPlan] =
     surface.hideCursor()
 
@@ -58,7 +59,7 @@ object RendererFramePlanner:
     } match
       case Some(page) =>
         surface.clearViewport(state.persisted.theme.background)
-        forgetPreservedContent(surface, output)
+        forgetPreservedContent(surface, output, caches)
         RendererStartPage.renderStartPage(
           page,
           surface,
@@ -78,7 +79,8 @@ object RendererFramePlanner:
             textFont,
             uiFont,
             cellMetrics,
-            uiMetrics
+            uiMetrics,
+            caches = caches
           )
         RendererFloatingPanels.renderFloatingPanels(state, floatContext, scene, Damage.Everything)
         // This branch never reaches `paintFrameLayers`, so paint the modal layer here or a blocking modal opened from
@@ -86,7 +88,7 @@ object RendererFramePlanner:
         paintModalLayer(state, floatContext, scene, isDirty = true)
         None
       case None =>
-        val prepared = RendererFrameState
+        val prepared = caches.frameState
           .preparedSceneFor(surface)
           .filter(_.matches(scene, codeFont, textFont, uiFont, cellMetrics, uiMetrics, viewportSize))
           .getOrElse {
@@ -101,9 +103,10 @@ object RendererFramePlanner:
               textFont,
               uiFont,
               cellMetrics,
-              uiMetrics
+              uiMetrics,
+              caches
             )
-            RendererFrameState.rememberPreparedScene(surface, next)
+            caches.frameState.rememberPreparedScene(surface, next)
             next
           }
         val finalizedScene   = prepared.scene
@@ -118,13 +121,14 @@ object RendererFramePlanner:
           uiFont,
           cellMetrics,
           uiMetrics,
-          bufferAnimations
+          bufferAnimations,
+          caches
         )
         val framePlan = planFrame(state, context, editorRenderPlan, viewportSize, output, damage)
         // Recorded *after* `planFrame` (and thus `dirtyRowsFor`) has read this surface's snapshots for this frame, so
         // this frame's own snapshots become "previous" only for the frame after it -- see
         // `previousSnapshots`' doc comment.
-        RendererFrameState.rememberSnapshots(surface, editorRenderPlan.snapshots)
+        caches.frameState.rememberSnapshots(surface, editorRenderPlan.snapshots)
         framePlan match
           case Some(plan) if plan.preserved.nonEmpty =>
             surface.clearViewportExcept(state.persisted.theme.background, plan.preserved)
@@ -162,7 +166,7 @@ object RendererFramePlanner:
       Layer(ModalLayerId, zOrder = 4, LayerEffect.identity, modalDamage)
     )
     val dirtyLayerIds = LayerCompositor.dirtyLayers(layers).map(_.id).toSet
-    forgetStalePanelLayerBuffers(state, scene, context.surface)
+    forgetStalePanelLayerBuffers(state, scene, context.surface, context.caches)
     val paintByLayer: Map[LayerId, () => Unit] = Map(
       ChromeLayerId -> { () =>
         RendererPaneSetup.renderSpacerColumns(state, context, editorRenderPlan.layoutContract)
@@ -220,9 +224,9 @@ object RendererFramePlanner:
       case Some(support) =>
         scene.modalBackdrop match
           case None =>
-            RendererFrameState.forgetModalLayerBuffer(context.surface)
+            context.caches.frameState.forgetModalLayerBuffer(context.surface)
           case Some(_) =>
-            val cached = RendererFrameState.cachedModalLayerFor(context.surface)
+            val cached = context.caches.frameState.cachedModalLayerFor(context.surface)
             val reusable = !isDirty && cached.exists { c =>
               c.viewportWidth == context.surface.viewportWidth &&
               c.viewportHeight == context.surface.viewportHeight &&
@@ -241,7 +245,7 @@ object RendererFramePlanner:
                   context.surface.viewportHeight,
                   context.cursorVisible
                 )
-                RendererFrameState.rememberModalLayerBuffer(context.surface, newlyCached)
+                context.caches.frameState.rememberModalLayerBuffer(context.surface, newlyCached)
                 context.surface.pixels.compositeFullSurfaceLayer(image)
               }
 
@@ -290,7 +294,7 @@ object RendererFramePlanner:
     context.surface.layerBuffers match
       case None => paintPanel(context)
       case Some(support) =>
-        val cached = RendererFrameState.cachedPanelLayersFor(context.surface).get(surfaceId)
+        val cached = context.caches.frameState.cachedPanelLayersFor(context.surface).get(surfaceId)
         val reusable = !isDirty && cached.exists { c =>
           c.viewportWidth == context.surface.viewportWidth &&
           c.viewportHeight == context.surface.viewportHeight &&
@@ -311,7 +315,7 @@ object RendererFramePlanner:
               context.cursorVisible,
               frameRect
             )
-            RendererFrameState.rememberPanelLayer(context.surface, surfaceId, newlyCached)
+            context.caches.frameState.rememberPanelLayer(context.surface, surfaceId, newlyCached)
             context.surface.pixels.compositeFullSurfaceLayer(image)
           }
 
@@ -319,13 +323,18 @@ object RendererFramePlanner:
     * dismissed panel's cache would otherwise sit in that inner `Map[SurfaceId, _]` forever ([[SurfaceId]] is a plain
     * value, not an object [[RendererFrameState]] can bound the lifetime of any other way).
     */
-  private def forgetStalePanelLayerBuffers(state: AppState, scene: UiSceneSnapshot, surface: RenderSurface): Unit =
+  private def forgetStalePanelLayerBuffers(
+    state: AppState,
+    scene: UiSceneSnapshot,
+    surface: RenderSurface,
+    caches: com.serenity.state.manager.RenderCaches
+  ): Unit =
     val pinnedAndExpandedIds = RendererFloatingPanels.pinnedAndExpandedSurfaces(state).map(_.id).toSet
     val overlays             = OverlayViewModel.fromState(state, scene)
     val floatingIds =
       (overlays.aboveCursor.toList ++ overlays.belowCursorStack ++ overlays.tabBar.toList).flatMap(_.surfaceId).toSet
     val activeIds = pinnedAndExpandedIds ++ floatingIds
-    RendererFrameState.pruneStalePanelLayers(surface, activeIds)
+    caches.frameState.pruneStalePanelLayers(surface, activeIds)
 
   /** Drop every reuse promise attached to this surface and force the next repaint to cover the whole canvas.
     *
@@ -333,16 +342,20 @@ object RendererFramePlanner:
     * entirely, where no pane row survives -- the accumulated damage this identity was tracking is now moot, since
     * everything just got redrawn from nothing this surface's own bookkeeping remembers.
     */
-  def forgetPreservedContent(surface: RenderSurface, output: Option[FrameOutput]): Unit =
+  def forgetPreservedContent(
+    surface: RenderSurface,
+    output: Option[FrameOutput],
+    caches: com.serenity.state.manager.RenderCaches
+  ): Unit =
     surface.persistentContentKey.foreach { key =>
-      RendererFrameState.forgetBufferState(key)
+      caches.frameState.forgetBufferState(key)
       // The previous frame's snapshots and panel rects are reuse promises about pixels this surface no longer holds,
       // so they go with the rest of them. `preparedScenes` stays: it is a layout memo, not a promise about pixels, and
       // its own `matches` check is what decides whether it still applies.
-      RendererFrameState.forgetPreviousFrameState(key)
+      caches.frameState.forgetPreviousFrameState(key)
     }
     output.foreach { value =>
-      RendererFrameState.forgetScreenState(value.screenToken)
+      caches.frameState.forgetScreenState(value.screenToken)
       value.repaintRegion.set(None)
     }
 
@@ -372,8 +385,8 @@ object RendererFramePlanner:
     output: Option[FrameOutput],
     damage: Damage
   ): Option[FramePlan] =
-    RendererFrameState.accumulateBufferDamage(output, damage)
-    RendererFrameState.accumulateScreenDamage(output, damage)
+    context.caches.frameState.accumulateBufferDamage(output, damage)
+    context.caches.frameState.accumulateScreenDamage(output, damage)
 
     val plan = context.surface.persistentContentKey
       .filter(_ => state.persisted.config.surfaceConfig.postProcessingEffect == PostProcessingEffect.Off)
@@ -384,9 +397,9 @@ object RendererFramePlanner:
           renderPlan.paneLayouts.keySet.forall(panes.contains) &&
             state.persisted.layout.orderedPaneIds.forall(panes.contains)
 
-        val bufferDamageSinceLastDraw = RendererFrameState.drainBufferDamage(output, persistenceKey)
+        val bufferDamageSinceLastDraw = context.caches.frameState.drainBufferDamage(output, persistenceKey)
         val inputsOrPanesChanged =
-          RendererFrameState.drawStateChanged(
+          context.caches.frameState.drawStateChanged(
             persistenceKey,
             paneIds,
             RendererFrameState.renderInputsFor(context, viewportSize)
@@ -394,7 +407,10 @@ object RendererFramePlanner:
         val effectiveDamage = if inputsOrPanesChanged then Damage.Everything else bufferDamageSinceLastDraw
 
         val dirtyRowsByPane =
-          panes.map { case (paneId, record) => paneId -> dirtyRowsFor(effectiveDamage, paneId, record, persistenceKey) }
+          panes.map {
+            case (paneId, record) =>
+              paneId -> dirtyRowsFor(effectiveDamage, paneId, record, persistenceKey, context.caches)
+          }
 
         val preserved = panes.toList.flatMap {
           case (paneId, record) =>
@@ -405,16 +421,16 @@ object RendererFramePlanner:
         // The screen shows the previous frame, while the pixels this surface preserves come from the one before that,
         // so the repaint region is measured against damage accumulated since the screen was last published to, and
         // only when every pane is reusable and the published pane set hasn't shifted underneath it.
-        val screenDamageSincePublish = RendererFrameState.drainScreenDamage(output)
+        val screenDamageSincePublish = context.caches.frameState.drainScreenDamage(output)
         val boundedRepaintEligible =
           allPanesReusable &&
-            !RendererFrameState.screenPaneIdsChanged(output, paneIds) &&
+            !context.caches.frameState.screenPaneIdsChanged(output, paneIds) &&
             Damage.isBufferRowsOnly(screenDamageSincePublish)
         val repaintRows =
           Option.when(boundedRepaintEligible) {
             panes.toList.flatMap {
               case (paneId, record) =>
-                dirtyRowsFor(screenDamageSincePublish, paneId, record, persistenceKey).toList
+                dirtyRowsFor(screenDamageSincePublish, paneId, record, persistenceKey, context.caches).toList
                   .flatMap(record.rowRects.lift)
             }
           }
@@ -427,7 +443,7 @@ object RendererFramePlanner:
         )
       }
 
-    if plan.isEmpty then forgetPreservedContent(context.surface, output)
+    if plan.isEmpty then forgetPreservedContent(context.surface, output, context.caches)
     plan
 
   /** Rows of `record` that `damage` marks dirty, translated from buffer line numbers to this pane's current visual row
@@ -440,12 +456,12 @@ object RendererFramePlanner:
     * stale under any theme with a transparent pane background. `Damage.Everything` dirties every row, since it carries
     * no per-buffer detail to translate.
     *
-    * Unioned with [[DirtyLineDiff.dirtyRows]] comparing this pane's previous frame's [[TextLayoutSnapshot]]
-    * ([[RendererFrameState.previousSnapshotsFor]]) against `record.snapshot`: `Damage`'s buffer-line facts only ever
-    * name the paragraph actually edited, so a paragraph whose own content is untouched but whose *screen row* moved --
-    * because an earlier paragraph's edit changed how many rows it wraps into -- is otherwise never marked dirty,
-    * leaving stale pixels from the row's old frame in place. `TextVisualLine` carries no cursor/selection state, so
-    * this catches reflow shifts precisely without making the `Damage`-based half above redundant: a selection- or
+    * Unioned with [[DirtyLineDiff.dirtyRows]] comparing this pane's previous frame's [[TextLayoutSnapshot]] (this
+    * owner's [[RendererFrameState.previousSnapshotsFor]]) against `record.snapshot`: `Damage`'s buffer-line facts only
+    * ever name the paragraph actually edited, so a paragraph whose own content is untouched but whose *screen row*
+    * moved -- because an earlier paragraph's edit changed how many rows it wraps into -- is otherwise never marked
+    * dirty, leaving stale pixels from the row's old frame in place. `TextVisualLine` carries no cursor/selection state,
+    * so this catches reflow shifts precisely without making the `Damage`-based half above redundant: a selection- or
     * cursor-only change can leave every row's `TextVisualLine` equal while still needing a redraw, which only `Damage`
     * reports.
     */
@@ -453,7 +469,8 @@ object RendererFramePlanner:
     damage: Damage,
     paneId: PaneId,
     record: PaneFrameRecord,
-    persistenceKey: SurfaceContentIdentity
+    persistenceKey: SurfaceContentIdentity,
+    caches: com.serenity.state.manager.RenderCaches
   ): Set[Int] =
     val damageDirty =
       if Damage.isEverything(damage) then record.rowBufferLines.indices.toSet
@@ -464,24 +481,25 @@ object RendererFramePlanner:
         }.toSet
         DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++
           record.overflowingRows ++
-          vacatedFloatingSurfaceRows(damage, record, persistenceKey)
-    val previousSnapshot = RendererFrameState.previousSnapshotsFor(persistenceKey).get(paneId)
+          vacatedFloatingSurfaceRows(damage, record, persistenceKey, caches)
+    val previousSnapshot = caches.frameState.previousSnapshotsFor(persistenceKey).get(paneId)
     damageDirty ++ DirtyLineDiff.dirtyRows(previousSnapshot, record.snapshot)
 
   /** Rows of `record` whose pixel band ([[PaneFrameRecord.rowRects]]) intersects the previous frame's rect of any
-    * floating surface `damage` reports as changed ([[Damage.surfaceIds]]). A surface absent from
+    * floating surface `damage` reports as changed ([[Damage.surfaceIds]]). A surface absent from this owner's
     * [[RendererFrameState.previousFloatingSurfaceRectsFor]] (never painted as a floating panel, or this is its first
     * frame) contributes nothing -- there is no earlier rect for it to have vacated.
     */
   private def vacatedFloatingSurfaceRows(
     damage: Damage,
     record: PaneFrameRecord,
-    persistenceKey: SurfaceContentIdentity
+    persistenceKey: SurfaceContentIdentity,
+    caches: com.serenity.state.manager.RenderCaches
   ): Set[Int] =
     val changedSurfaceIds = Damage.surfaceIds(damage)
     if changedSurfaceIds.isEmpty then Set.empty
     else
-      val previousRects = RendererFrameState.previousFloatingSurfaceRectsFor(persistenceKey)
+      val previousRects = caches.frameState.previousFloatingSurfaceRectsFor(persistenceKey)
       val vacatedRects  = changedSurfaceIds.flatMap(previousRects.get)
       if vacatedRects.isEmpty then Set.empty
       else
@@ -500,7 +518,8 @@ object RendererFramePlanner:
     textFont: java.awt.Font,
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
-    uiMetrics: CellMetrics
+    uiMetrics: CellMetrics,
+    caches: com.serenity.state.manager.RenderCaches = com.serenity.state.manager.RenderCaches.create()
   ): PreparedScene =
     val context = RenderContext(
       surface,
@@ -511,7 +530,8 @@ object RendererFramePlanner:
       textFont,
       uiFont,
       cellMetrics,
-      uiMetrics
+      uiMetrics,
+      caches = caches
     )
     val renderPlan = RendererPaneSetup.prepareEditorPaneRenderPlan(state, context, scene)
     PreparedScene(

@@ -30,6 +30,7 @@ private[manager] trait EffectRuntimePort:
   def uiPresetStore: UiPresetStore
   def windowSizeProvider: IO[Option[PreferredWindowSize]]
   def markdownPreviewWindow: com.serenity.frontend.MarkdownPreviewWindowAvailability
+  def renderCaches: RenderCaches
   def trackRecentFile(current: List[Path], path: Path): List[Path] =
     (path :: current.filterNot(_ == path)).take(20)
 
@@ -120,6 +121,7 @@ private[manager] trait EffectModalWorkflowPort:
 private[manager] trait EventStatePort:
   def logger: Logger[IO]
   def mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]]
+  def authoritativeScene: AuthoritativeUiScene
 
 /** Effects and commands triggered by event routing, as a capability record rather than a trait -- nothing here breaks a
   * construction-order cycle (#1389), so mockability is the only reason this needs an interface at all, and a record

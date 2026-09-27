@@ -60,7 +60,13 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     val diagnosticBackground =
       RendererHighlights.diagnosticHighlightBackground(state.persisted.theme, Some(DiagnosticSeverity.Hint.code))
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val highlightedRuns = surface.drawRunPxCalls.filter(_.background == diagnosticBackground).map(_.s)
 
@@ -81,7 +87,13 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     val diagnosticBackground =
       RendererHighlights.diagnosticHighlightBackground(state.persisted.theme, Some(DiagnosticSeverity.Hint.code))
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val highlightedCells = for
       x <- 0 until surface.width
@@ -104,7 +116,13 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     val diagnosticBackground =
       RendererHighlights.diagnosticHighlightBackground(state.persisted.theme, Some(DiagnosticSeverity.Hint.code))
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     diagnosticBackground should not be state.persisted.theme.highlighted.background
     diagnosticBackground should not be RendererHighlights.commentHighlightBackground(state.persisted.theme)

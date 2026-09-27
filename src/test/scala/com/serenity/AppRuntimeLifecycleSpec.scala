@@ -88,14 +88,16 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
           _: Boolean,
           _: Option[Color],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState]
+          _: Map[BufferId, com.serenity.animation.AnimationState],
+          _: com.serenity.state.manager.RenderCaches
         ) => IO.unit,
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
           _: Option[Color],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState]
+          _: Map[BufferId, com.serenity.animation.AnimationState],
+          _: com.serenity.state.manager.RenderCaches
         ) => IO.unit
       ),
       appConfig = AppConfig.default,
@@ -127,14 +129,16 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
           _: Boolean,
           _: Option[Color],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState]
+          _: Map[BufferId, com.serenity.animation.AnimationState],
+          _: com.serenity.state.manager.RenderCaches
         ) => IO.unit,
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
           _: Option[Color],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState]
+          _: Map[BufferId, com.serenity.animation.AnimationState],
+          _: com.serenity.state.manager.RenderCaches
         ) => IO.unit
       ),
       appConfig = AppConfig.default,
@@ -160,14 +164,16 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
           _: Boolean,
           _: Option[Color],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState]
+          _: Map[BufferId, com.serenity.animation.AnimationState],
+          _: com.serenity.state.manager.RenderCaches
         ) => IO.unit,
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
           _: Option[Color],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState]
+          _: Map[BufferId, com.serenity.animation.AnimationState],
+          _: com.serenity.state.manager.RenderCaches
         ) => IO.unit
       ),
       appConfig = AppConfig.default,
@@ -203,14 +209,16 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
           _: Boolean,
           _: Option[Color],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState]
+          _: Map[BufferId, com.serenity.animation.AnimationState],
+          _: com.serenity.state.manager.RenderCaches
         ) => IO.unit,
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
           _: Option[Color],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState]
+          _: Map[BufferId, com.serenity.animation.AnimationState],
+          _: com.serenity.state.manager.RenderCaches
         ) => IO.unit
       ),
       appConfig = AppConfig.default,

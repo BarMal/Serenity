@@ -61,7 +61,7 @@ object RendererFloatingPanels:
       (overlays.aboveCursor.toList ++ belowOverlays).flatMap { overlay =>
         overlay.surfaceId.map(_ -> floatingPanelPixelRect(overlay.rect, context.cellMetrics))
       }.toMap
-    RendererFrameState.rememberFloatingSurfaceRects(context.surface, currentFloatingRects)
+    context.caches.frameState.rememberFloatingSurfaceRects(context.surface, currentFloatingRects)
 
   /** `rect` (in cell/row units, as every [[LayoutRect]] floating panels are placed with is) converted to the pixel
     * rectangle it occupies on screen, using the same `cellMetrics`-based conversion `paneRowRects` uses for pane
@@ -192,7 +192,9 @@ object RendererFloatingPanels:
             case _ =>
               PinnedPanelRenderer.render(
                 layerContext.surface,
-                PinnedPanelViewModel.resolve(surface, rect, state).copy(contentRect = Some(node.contentRect)),
+                PinnedPanelViewModel
+                  .resolve(surface, rect, state, layerContext.caches.markdownPreviewCache)
+                  .copy(contentRect = Some(node.contentRect)),
                 state.persisted.theme,
                 state.persisted.config,
                 layerContext.cellMetrics,
@@ -258,6 +260,7 @@ object RendererFloatingPanels:
       heightPx = heightPx,
       theme = state.persisted.theme,
       font = context.textFont,
+      cache = context.caches.markdownPreviewCache,
       baseUri = baseUri,
       reuseLastRenderWhileEditing =
         buffer.exists(b => b.markdownPreviewEditGeneration != b.markdownPreviewCommittedGeneration)

@@ -16,63 +16,9 @@ object ThemeManager:
   private val inlineCodePattern    = "`[^`]+`".r
   private val linkPattern          = raw"\[([^\]]+)\]\(([^)]+)\)".r
 
-  private val MaxHighlightCacheEntries = 4096
+  private[theme] type HighlightKey = (String, Theme, Option[LanguageId], Option[List[SemanticToken]])
 
-  private type HighlightKey = (String, Theme, Option[LanguageId], Option[List[SemanticToken]])
-
-  /** Bounded, `AtomicReference`-backed replacement for the previous `LinkedHashMap` + `synchronized` highlight cache
-    * (issue #1412). `highlightLine` stays a plain synchronous `def`: it's called from deep inside the Java2D/terminal
-    * paint loop (`CharacterRenderer`, `RendererPaneContent`), which owns its own thread rather than running inside an
-    * IO fiber, so making it return `IO` would mean threading `IO` through the entire rendering call graph -- well
-    * beyond this package. This module was briefly `Ref[IO, ...]`-backed (#1431), with each accessor forcing that `IO`
-    * synchronously via `unsafeRunSync` right back out again to keep this synchronous API -- which just hid a plain
-    * in-memory compare-and-set behind an effect type nothing here ever suspended on, rather than pushing `IO` to an
-    * edge. [[casUpdate]] below is that same compare-and-set directly, with no `IO` to force (#1434). Eviction here is
-    * bounded-FIFO (oldest inserted, not oldest accessed) rather than an access-order LRU -- a deliberate
-    * simplification, since a `ListMap` has no cheap way to bump an existing key to "most recently used" without an
-    * extra write on every cache *hit* too.
-    */
-  private val highlightCacheRef: AtomicReference[ListMap[HighlightKey, List[StyledText]]] =
-    new AtomicReference(ListMap.empty)
-
-  /** Retries `f` against `ref`'s current value until its compare-and-set succeeds -- the plain-value equivalent of
-    * `Ref.update`.
-    */
-  @annotation.tailrec
-  private def casUpdate[A](ref: AtomicReference[A])(f: A => A): Unit =
-    val current = ref.get()
-    val next    = f(current)
-    if !ref.compareAndSet(current, next) then casUpdate(ref)(f)
-
-  private def boundedPut[K, V](cache: ListMap[K, V], key: K, value: V, maxEntries: Int): ListMap[K, V] =
-    val updated = (cache - key) + (key -> value)
-    if updated.size <= maxEntries then updated else updated.drop(updated.size - maxEntries)
-
-  /** Apply syntax highlighting to a line of text, memoized by (line, theme, language, this line's semantic tokens).
-    *
-    * LSP `textDocument/semanticTokens` is the only token source (issues #859/#1177 replaced the previous handwritten,
-    * Scala-shaped regex tokenizer entirely, rather than keeping it as a fallback): `semanticTokens` is `Some` with this
-    * line's tokens (however many that is, including zero) when the document's connected language server has supplied
-    * them, or `None` when it hasn't -- no server connected yet, the server doesn't support semantic tokens, or a
-    * request is still in flight. `None` renders a visibly distinct "unavailable" style rather than silently falling
-    * back to plain text, so a user isn't left wondering whether highlighting is simply absent for this line or
-    * genuinely can't be provided right now.
-    */
-  def highlightLine(
-    line: String,
-    theme: Theme,
-    language: Option[LanguageId] = None,
-    semanticTokens: Option[List[SemanticToken]] = None
-  ): List[StyledText] =
-    val key    = (line, theme, language, semanticTokens)
-    val cached = highlightCacheRef.get().get(key)
-    cached.getOrElse {
-      val computed = computeHighlightLine(line, theme, language, semanticTokens)
-      casUpdate(highlightCacheRef)(boundedPut(_, key, computed, MaxHighlightCacheEntries))
-      computed
-    }
-
-  private def computeHighlightLine(
+  private[theme] def computeHighlightLine(
     line: String,
     theme: Theme,
     language: Option[LanguageId],
@@ -222,3 +168,68 @@ object ThemeManager:
             (plainSegment(cursor, text.length).reverse ::: acc).reverse
 
     loop(0, Nil)
+
+/** Bounded, `AtomicReference`-backed syntax-highlight memoization cache (issue #1412), delegating the actual
+  * highlighting logic to [[ThemeManager.computeHighlightLine]]. `highlightLine` stays a plain synchronous `def`: it's
+  * called from deep inside the Java2D/terminal paint loop (`CharacterRenderer`, `RendererPaneContent`), which owns its
+  * own thread rather than running inside an IO fiber, so making it return `IO` would mean threading `IO` through the
+  * entire rendering call graph -- well beyond this package. This module was briefly `Ref[IO, ...]`-backed (#1431), with
+  * each accessor forcing that `IO` synchronously via `unsafeRunSync` right back out again to keep this synchronous API
+  * -- which just hid a plain in-memory compare-and-set behind an effect type nothing here ever suspended on, rather
+  * than pushing `IO` to an edge. [[casUpdate]] below is that same compare-and-set directly, with no `IO` to force
+  * (#1434). Eviction here is bounded-FIFO (oldest inserted, not oldest accessed) rather than an access-order LRU -- a
+  * deliberate simplification, since a `ListMap` has no cheap way to bump an existing key to "most recently used"
+  * without an extra write on every cache *hit* too.
+  *
+  * Instance-scoped (issue #1677): one instance is created per render-owning entity (held on
+  * [[com.serenity.state.manager.RenderCaches]], threaded through [[com.serenity.ui.renderer.RenderContext]] to every
+  * caller) rather than a JVM-wide singleton, so two independently constructed instances share no cache state and never
+  * contend on the same `AtomicReference`.
+  */
+final class ThemeHighlightCache:
+  import ThemeManager.HighlightKey
+
+  private val MaxHighlightCacheEntries = 4096
+
+  private val highlightCacheRef: AtomicReference[ListMap[HighlightKey, List[StyledText]]] =
+    new AtomicReference(ListMap.empty)
+
+  /** Retries `f` against `ref`'s current value until its compare-and-set succeeds -- the plain-value equivalent of
+    * `Ref.update`.
+    */
+  @annotation.tailrec
+  private def casUpdate[A](ref: AtomicReference[A])(f: A => A): Unit =
+    val current = ref.get()
+    val next    = f(current)
+    if !ref.compareAndSet(current, next) then casUpdate(ref)(f)
+
+  private def boundedPut[K, V](cache: ListMap[K, V], key: K, value: V, maxEntries: Int): ListMap[K, V] =
+    val updated = (cache - key) + (key -> value)
+    if updated.size <= maxEntries then updated else updated.drop(updated.size - maxEntries)
+
+  /** Apply syntax highlighting to a line of text, memoized by (line, theme, language, this line's semantic tokens).
+    *
+    * LSP `textDocument/semanticTokens` is the only token source (issues #859/#1177 replaced the previous handwritten,
+    * Scala-shaped regex tokenizer entirely, rather than keeping it as a fallback): `semanticTokens` is `Some` with this
+    * line's tokens (however many that is, including zero) when the document's connected language server has supplied
+    * them, or `None` when it hasn't -- no server connected yet, the server doesn't support semantic tokens, or a
+    * request is still in flight. `None` renders a visibly distinct "unavailable" style rather than silently falling
+    * back to plain text, so a user isn't left wondering whether highlighting is simply absent for this line or
+    * genuinely can't be provided right now.
+    */
+  def highlightLine(
+    line: String,
+    theme: Theme,
+    language: Option[LanguageId] = None,
+    semanticTokens: Option[List[SemanticToken]] = None
+  ): List[StyledText] =
+    val key    = (line, theme, language, semanticTokens)
+    val cached = highlightCacheRef.get().get(key)
+    cached.getOrElse {
+      val computed = ThemeManager.computeHighlightLine(line, theme, language, semanticTokens)
+      casUpdate(highlightCacheRef)(boundedPut(_, key, computed, MaxHighlightCacheEntries))
+      computed
+    }
+
+object ThemeHighlightCache:
+  def apply(): ThemeHighlightCache = new ThemeHighlightCache

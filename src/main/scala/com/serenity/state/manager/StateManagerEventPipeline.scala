@@ -95,7 +95,10 @@ final private[manager] class StateManagerEventPipeline(
       modelCommit.commitState(newState, fallbackState))
 
   private val editorMouseTargeting = new EditorMouseTargeting(
-    EditorMouseTargetingPort(mouseTargetCacheRef = state.mouseTargetCacheRef)
+    EditorMouseTargetingPort(
+      mouseTargetCacheRef = state.mouseTargetCacheRef,
+      authoritativeScene = state.authoritativeScene
+    )
   )
 
   private val modalMouseHitTesting = new ModalMouseHitTesting(
@@ -115,11 +118,19 @@ final private[manager] class StateManagerEventPipeline(
   )
 
   private val contextualToolbarHitTesting = new ContextualToolbarHitTesting(
-    ContextualToolbarHitTestingPort(currentState = modelCommit.currentState, applyReducerResult = applyReducerResult)
+    ContextualToolbarHitTestingPort(
+      currentState = modelCommit.currentState,
+      applyReducerResult = applyReducerResult,
+      authoritativeScene = state.authoritativeScene
+    )
   )
 
   private val commandRunnerMouseHitTesting = new CommandRunnerMouseHitTesting(
-    CommandRunnerMouseHitTestingPort(currentState = modelCommit.currentState, applyReducerResult = applyReducerResult)
+    CommandRunnerMouseHitTestingPort(
+      currentState = modelCommit.currentState,
+      applyReducerResult = applyReducerResult,
+      authoritativeScene = state.authoritativeScene
+    )
   )
 
   private val pinnedPanelMouseHitTesting = new PinnedPanelMouseHitTesting(
@@ -128,12 +139,17 @@ final private[manager] class StateManagerEventPipeline(
       applyComponentResult = applyComponentResult,
       commitState = modelCommit.commitState,
       updateConfig = updateConfig,
-      resizePinnedPanel = resizePinnedPanel
+      resizePinnedPanel = resizePinnedPanel,
+      authoritativeScene = state.authoritativeScene
     )
   )
 
   private val commentLensMouseHitTesting = new CommentLensMouseHitTesting(
-    CommentLensMouseHitTestingPort(currentState = modelCommit.currentState, applyReducerResult = applyReducerResult)
+    CommentLensMouseHitTestingPort(
+      currentState = modelCommit.currentState,
+      applyReducerResult = applyReducerResult,
+      authoritativeScene = state.authoritativeScene
+    )
   )
 
   private val tabBarDragHitTesting = new TabBarDragHitTesting(
@@ -141,7 +157,11 @@ final private[manager] class StateManagerEventPipeline(
   )
 
   private val mouseHitTesting = new MouseHitTesting(
-    MouseHitTestingPort(currentState = modelCommit.currentState, applyReducerResult = applyReducerResult),
+    MouseHitTestingPort(
+      currentState = modelCommit.currentState,
+      applyReducerResult = applyReducerResult,
+      authoritativeScene = state.authoritativeScene
+    ),
     editorMouseTargeting,
     editorContextMenuHitTesting,
     contextualToolbarHitTesting,

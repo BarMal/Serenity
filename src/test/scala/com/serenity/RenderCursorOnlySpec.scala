@@ -29,7 +29,8 @@ class RenderCursorOnlySpec extends AnyFlatSpec with Matchers:
       state,
       cursorVisible = true,
       surface,
-      ViewportSize(80, 24)
+      ViewportSize(80, 24),
+      com.serenity.state.manager.RenderCaches.create()
     )
   }
 
@@ -47,7 +48,8 @@ class RenderCursorOnlySpec extends AnyFlatSpec with Matchers:
       finalState,
       cursorVisible = false,
       surface,
-      ViewportSize(80, 24)
+      ViewportSize(80, 24),
+      com.serenity.state.manager.RenderCaches.create()
     )
   }
 
@@ -62,7 +64,13 @@ class RenderCursorOnlySpec extends AnyFlatSpec with Matchers:
     sm.setCursorPosition(paneId, 0, 6).unsafeRunSync()
 
     val finalState = sm.getCurrentState.unsafeRunSync()
-    RendererEntryPoints.render(finalState, cursorVisible = true, surface, ViewportSize(80, 24))
+    RendererEntryPoints.render(
+      finalState,
+      cursorVisible = true,
+      surface,
+      ViewportSize(80, 24),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     (0 until surface.height).map(surface.getRow).mkString("\n") should include("Hello, World!")
   }

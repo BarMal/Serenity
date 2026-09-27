@@ -4,7 +4,6 @@ import java.awt.Font
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
-import com.serenity.state.manager.AuthoritativeUiScene
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.RendererEntryPoints
@@ -26,6 +25,7 @@ class RendererMultiColumnGutterRenderSpec extends AnyFlatSpec with Matchers:
 
   private val paneId   = PaneId(0)
   private val bufferId = BufferId(1)
+  private val caches   = com.serenity.state.manager.RenderCaches.create()
 
   private def stateWith(config: AppConfig): AppState =
     // Short numbered lines so each is one visual row and chunk boundaries land on predictable buffer line numbers.
@@ -55,7 +55,7 @@ class RendererMultiColumnGutterRenderSpec extends AnyFlatSpec with Matchers:
       .withColumnGap(2)
 
   private def scene(state: AppState): UiSceneSnapshot =
-    AuthoritativeUiScene.forState(state, viewportSize, monoFont, monoFont)
+    caches.authoritativeScene.forState(state, viewportSize, monoFont, monoFont)
 
   private def render(state: AppState): MockRenderSurface =
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
@@ -67,7 +67,8 @@ class RendererMultiColumnGutterRenderSpec extends AnyFlatSpec with Matchers:
       monoFont,
       monoFont,
       cellMetrics,
-      None
+      None,
+      caches
     )
     surface
 

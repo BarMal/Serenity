@@ -68,7 +68,13 @@ class DiagnosticDimmingCompositionSpec extends AnyFlatSpec with Matchers:
     val state = stateWithDiagnosticOnLine(bufferId, buffer, paneId, diagnosticLine = 2, range = (11, 15))
 
     val surface = new MockRenderSurface(100, 30)
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val theme                   = state.persisted.theme
     val severityCode            = Some(DiagnosticSeverity.Hint.code)
@@ -92,7 +98,13 @@ class DiagnosticDimmingCompositionSpec extends AnyFlatSpec with Matchers:
     val state = stateWithDiagnosticOnLine(bufferId, buffer, paneId, diagnosticLine = 0, range = (6, 10))
 
     val surface = new MockRenderSurface(100, 30)
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val theme                   = state.persisted.theme
     val severityCode            = Some(DiagnosticSeverity.Hint.code)

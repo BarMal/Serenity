@@ -8,7 +8,7 @@ import com.serenity.config.{SpellCheckConfig, SpellCheckDictionaryFingerprint}
 import com.serenity.diagnostics.Trace
 import com.serenity.document.CommentRendering
 import com.serenity.lsp.client.DocumentUri
-import com.serenity.spellcheck.{DictionaryLoader, SpellChecker}
+import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, SpellChecker}
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.CommandRunnerPanelSelections
@@ -35,7 +35,8 @@ final private[manager] class StateManagerOperationBoundary private (
     beforeEffectsShutdown: IO[Unit],
     dispatcher: StateManagerDispatcher,
     fileWriteLedger: FileWriteLedger,
-    discoverDictionaryFingerprints: SpellCheckConfig => IO[List[SpellCheckDictionaryFingerprint]]
+    discoverDictionaryFingerprints: SpellCheckConfig => IO[List[SpellCheckDictionaryFingerprint]],
+    dictionaryCache: DictionaryCache
 ):
   private val DocumentAnalysisDebounce         = 150.millis
   private val FindSearchDebounce               = 50.millis
@@ -257,7 +258,7 @@ final private[manager] class StateManagerOperationBoundary private (
       Trace.timed("analysis.documentAnalysisJob") {
         modelCommit.currentState.flatMap { snapshot =>
           val spellCheckConfig = snapshot.persisted.config.languageToolsConfig.spellCheck
-          IO.blocking(DictionaryLoader.loadSnapshot(spellCheckConfig)).flatMap { dictionary =>
+          IO.blocking(DictionaryLoader.loadSnapshot(spellCheckConfig, dictionaryCache)).flatMap { dictionary =>
             val expected = SpellChecker.analysisFingerprints(snapshot, dictionary.fingerprints)
             val analyzed = SpellChecker.refreshDiagnostics(snapshot, dictionary)
             postResult(EffectResult.DocumentAnalysisCompleted(analyzed, expected, dictionary.fingerprints))
@@ -333,5 +334,6 @@ private[manager] object StateManagerOperationBoundary:
       beforeEffectsShutdown,
       dispatcher,
       fileWriteLedger,
-      discoverDictionaryFingerprints
+      discoverDictionaryFingerprints,
+      DictionaryCache()
     )

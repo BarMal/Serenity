@@ -119,7 +119,8 @@ final private[manager] case class StateManagerRuntime(
     runProjectTask: ProjectTaskLauncher,
     fileManager: FileManager,
     sessionManager: SessionManager,
-    sessionPersistence: SessionPersistence
+    sessionPersistence: SessionPersistence,
+    renderCaches: RenderCaches
 )
 
 private[manager] object StateManagerRuntime:
@@ -142,7 +143,8 @@ private[manager] object StateManagerRuntime:
     onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit],
     fileDialog: Option[FileDialog],
     markdownPreviewWindow: com.serenity.frontend.MarkdownPreviewWindowAvailability =
-      com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable
+      com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable,
+    renderCaches: RenderCaches = RenderCaches.create()
   )(using Balance): StateManagerRuntime =
     val sessionManager = sessionRootOverride
       .map(root => SessionManager.create(root, themeManager, logger, policy))
@@ -167,5 +169,6 @@ private[manager] object StateManagerRuntime:
       runProjectTask = (command, onOutput) => ProjectTaskRunner.runStreaming(command)(onOutput),
       fileManager = new FileManager(),
       sessionManager = sessionManager,
-      sessionPersistence = new SessionPersistence(sessionManager, policy)
+      sessionPersistence = new SessionPersistence(sessionManager, policy),
+      renderCaches = renderCaches
     )

@@ -48,8 +48,20 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
   "RendererEntryPoints.render" should "not repaint the modal layer's own buffer when only editor content changed" in {
     val surface = new CountingLayerBufferSurface(80, 24)
     val before  = stateWith("alpha\nbeta\ngamma", modalDialog)
+    // Shared across both render calls below (issue #1677): a real `StateManager` reuses one `RenderCaches` across
+    // every frame it renders, and it's exactly that reuse -- not a JVM-wide singleton -- these modal-layer-buffer
+    // reuse assertions depend on.
+    val caches = com.serenity.state.manager.RenderCaches.create()
 
-    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      caches
+    )
     surface.newLayerSurfaceCalls.get() shouldBe 1
 
     val editedContent =
@@ -77,7 +89,8 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
       surface,
       viewport,
       None,
-      DamageProducer.forTransition(before, after)
+      DamageProducer.forTransition(before, after),
+      caches
     )
 
     surface.newLayerSurfaceCalls.get() shouldBe 1
@@ -88,8 +101,17 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
   it should "repaint the modal layer's buffer when only the modal's own content changes" in {
     val surface = new CountingLayerBufferSurface(80, 24)
     val before  = stateWith("alpha\nbeta\ngamma", modalDialog)
+    val caches  = com.serenity.state.manager.RenderCaches.create()
 
-    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      caches
+    )
     surface.newLayerSurfaceCalls.get() shouldBe 1
 
     val changedModal =
@@ -99,7 +121,15 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val transitionDamage = DamageProducer.forTransition(before, after)
     transitionDamage shouldBe Damage.Surface(modalId)
 
-    RendererEntryPoints.render(after, cursorVisible = false, surface, viewport, None, transitionDamage)
+    RendererEntryPoints.render(
+      after,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      transitionDamage,
+      caches
+    )
 
     surface.newLayerSurfaceCalls.get() shouldBe 2
   }
@@ -115,8 +145,17 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     )
     val before          = stateWith("alpha\nbeta\ngamma", parent)
     val beforeWithStack = before.copy(runtime = before.runtime.copy(modalStack = List(parent, child)))
+    val caches          = com.serenity.state.manager.RenderCaches.create()
 
-    RendererEntryPoints.render(beforeWithStack, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      beforeWithStack,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      caches
+    )
     surface.newLayerSurfaceCalls.get() shouldBe 1
 
     // Only the bottom (parent) dialog's content changes; the top (child) is untouched.
@@ -127,7 +166,15 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val transitionDamage = DamageProducer.forTransition(beforeWithStack, after)
     transitionDamage shouldBe Damage.Surface(parent.id)
 
-    RendererEntryPoints.render(after, cursorVisible = false, surface, viewport, None, transitionDamage)
+    RendererEntryPoints.render(
+      after,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      transitionDamage,
+      caches
+    )
 
     surface.newLayerSurfaceCalls.get() shouldBe 2
   }
@@ -135,8 +182,17 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
   it should "reuse the cached modal buffer's pixels: composited output matches a fresh repaint" in {
     val surface = new CountingLayerBufferSurface(80, 24)
     val state   = stateWith("alpha\nbeta\ngamma", modalDialog)
+    val caches  = com.serenity.state.manager.RenderCaches.create()
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      caches
+    )
     val firstDrawImageCalls = surface.drawImageCalls.size
     firstDrawImageCalls should be > 0
 
@@ -146,7 +202,8 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
       surface,
       viewport,
       None,
-      DamageProducer.forTransition(state, state)
+      DamageProducer.forTransition(state, state),
+      caches
     )
 
     surface.newLayerSurfaceCalls.get() shouldBe 1

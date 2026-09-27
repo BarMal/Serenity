@@ -53,12 +53,14 @@ class MultiColumnMouseHitTestSpec extends AnyFlatSpec with Matchers:
       runtime = base.runtime.copy(capabilities = FrontendCapabilities.tui(), viewportSize = Some(viewportSize))
     )
 
+  private val authoritativeScene = AuthoritativeUiScene()
+
   private def targeting(state: AppState): EditorMouseTargeting =
     val cacheRef = Ref.unsafe[IO, Option[MouseTargetCache]](None)
-    new EditorMouseTargeting(EditorMouseTargetingPort(cacheRef))
+    new EditorMouseTargeting(EditorMouseTargetingPort(cacheRef, authoritativeScene))
 
   private def sceneOf(state: AppState) =
-    AuthoritativeUiScene.forState(state, viewportSize)
+    authoritativeScene.forState(state, viewportSize)
 
   "resolveMouseTarget, in column mode" should "land a click in column 0 at that column's shown position" in {
     val state      = stateWith(columnConfig)

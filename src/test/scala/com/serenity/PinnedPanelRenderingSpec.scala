@@ -263,7 +263,13 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     val layout    = com.serenity.ui.layout.LayoutEngine.calculateLayout(state, viewport)
     val panelRect = layout.pinnedPanelRects.getOrElse(PanelPosition.Right, fail("Expected right pinned panel rect"))
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, viewport)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.blurRegionCalls should contain(
       surface.BlurRegionCall(panelRect.x, panelRect.y, panelRect.width, panelRect.height, 0.4f)
@@ -289,7 +295,13 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.blurRegionCalls shouldBe empty
   }

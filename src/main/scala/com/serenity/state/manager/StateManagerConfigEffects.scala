@@ -33,6 +33,7 @@ final private[manager] class StateManagerConfigEffects(
     onFontConfigChanged: com.serenity.ui.fonts.FontLoader.FontConfig => IO[Unit],
     deviceTextScaleProvider: IO[Double],
     editor: EffectEditorPort,
+    renderCaches: RenderCaches,
     saveConfig: (AppConfig, java.nio.file.Path) => IO[Either[ConfigError, Unit]] = ConfigManager.saveConfigIO
 )(using balance: com.serenity.rope.Balance):
 
@@ -81,10 +82,7 @@ final private[manager] class StateManagerConfigEffects(
       currentState
         .map(_.persisted.config)
         .flatTap(config =>
-          IO(
-            com.serenity.ui.renderer.RendererFrameState
-              .configureCacheCapacity(config.surfaceConfig.rendererFrameStateCacheCapacity)
-          )
+          IO(renderCaches.frameState.configureCacheCapacity(config.surfaceConfig.rendererFrameStateCacheCapacity))
         )
         .flatTap(config =>
           editor.submitEffect(

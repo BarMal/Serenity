@@ -110,7 +110,7 @@ final class TuiSession private (
       animations <- stateManager.getBufferAnimations
       pending    <- damage.getAndSet(Damage.Nothing)
       surface = surfaces.forSize(size)
-      _       <- IO(TuiRuntime.paintFrame(current, surface, size, true, None, pending))
+      _       <- IO(TuiRuntime.paintFrame(current, surface, size, true, None, pending, stateManager.renderCaches))
       emitted <- drainOutput
       updated <- screenRef.get
     yield TuiScreen(updated, emitted)
@@ -131,9 +131,11 @@ final class TuiSession private (
       size <- shell.viewportSize
       surface = surfaces.forSize(size)
       bufferAnimations <- stateManager.getBufferAnimations
-      _                <- IO(TuiRuntime.paintCursorOnly(current, surface, size, visible, colour, bufferAnimations))
-      emitted          <- drainOutput
-      updated          <- screenRef.get
+      _ <- IO(
+        TuiRuntime.paintCursorOnly(current, surface, size, visible, colour, bufferAnimations, stateManager.renderCaches)
+      )
+      emitted <- drainOutput
+      updated <- screenRef.get
     yield TuiScreen(updated, emitted)
 
   /** Let the interface finish moving, then paint until the frame stops changing.
@@ -201,7 +203,7 @@ final class TuiSession private (
       current <- state
       pending <- damage.getAndSet(Damage.Nothing)
       surface = surfaces.forSize(size)
-      _       <- IO(TuiRuntime.paintFrame(current, surface, size, cursorVisible, None, pending))
+      _ <- IO(TuiRuntime.paintFrame(current, surface, size, cursorVisible, None, pending, stateManager.renderCaches))
       emitted <- drainOutput
       updated <- screenRef.get
     yield TuiScreen(updated, emitted)

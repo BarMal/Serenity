@@ -5,17 +5,29 @@ import java.awt.Color
 import cats.effect.IO
 import com.serenity.input.{InputHandler, InputRouter}
 import com.serenity.keystroke.events.Event
+import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{AppState, BufferId, Damage}
 
 object FrontendRuntime:
 
   /** Paints one frame: the current state, whether the caret is visible this tick, the caret's colour override (if any),
-    * the damage accumulated since the last frame, and the buffer animations in flight. Owned here rather than inline in
-    * `AppRuntime` because it is exactly the shape [[FrontendRuntime.renderFull]]/[[FrontendRuntime.renderCursorOnly]]
-    * share -- moved from `AppRuntime.RenderFn` alongside the rest of this issue's remaining #1669 scope.
+    * the damage accumulated since the last frame, the buffer animations in flight, and the `RenderCaches` instance to
+    * paint with. Owned here rather than inline in `AppRuntime` because it is exactly the shape
+    * [[FrontendRuntime.renderFull]]/[[FrontendRuntime.renderCursorOnly]] share -- moved from `AppRuntime.RenderFn`
+    * alongside the rest of this issue's remaining #1669 scope. `RenderCaches` itself stays a call-time argument rather
+    * than something closed over when a concrete `FrontendRuntime` is built (`Main.runGui`/`TuiRuntime.run`, both before
+    * the owning `StateManager` -- and so its `RenderCaches` -- exists): `AppRuntimeRenderLoops` supplies it from
+    * `stateManager.renderCaches` at each call.
     */
   type RenderFn =
-    (AppState, Boolean, Option[Color], Damage, Map[BufferId, com.serenity.animation.AnimationState]) => IO[Unit]
+    (
+      AppState,
+      Boolean,
+      Option[Color],
+      Damage,
+      Map[BufferId, com.serenity.animation.AnimationState],
+      RenderCaches
+    ) => IO[Unit]
 
 /** The rendering/input bundle a concrete launch builds once its real Swing or terminal resource is acquired
   * (`Main.runGui`/`TuiRuntime.run`), and `AppRuntime.run` takes to get its rendering and input behaviour from -- issue

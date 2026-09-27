@@ -86,37 +86,69 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   }
 
   "SpellChecker dictionary cache" should "hold at most one entry per normalized dictionary path across repeated edits" in {
-    // Scoped to this one dictionary's own cache entry (`DictionaryCache.entryCount`), not `DictionaryCache`'s total
-    // size: `DictionaryCache` is a single process-wide map every spec exercising `DictionaryLoader.loadSnapshot`/`check`
-    // shares, and sbt/ScalaTest run different suites concurrently in the same JVM by default -- a size-based
-    // assertion would spuriously fail whenever an unrelated, concurrently-running suite's own (different-path)
-    // dictionary load happened to land its own cache entry inside this test's window.
+    // Instance-scoped (issue #1677): `DictionaryCache` is owned per caller rather than a JVM-wide singleton, so a
+    // fresh instance here is isolated from every other spec's own loads -- no more scoping this to `entryCount` to
+    // dodge cross-suite interference on a shared process-wide map.
+    val cache      = DictionaryCache()
     val dictionary = writeDic("serenity-bounded-cache", List("hello"))
     val config     = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
 
-    DictionaryCache.entryCount(dictionary) shouldBe 0
-    DictionaryLoader.loadSnapshot(config)
-    DictionaryCache.entryCount(dictionary) shouldBe 1
+    cache.entryCount(dictionary) shouldBe 0
+    DictionaryLoader.loadSnapshot(config, cache)
+    cache.entryCount(dictionary) shouldBe 1
+    cache.size shouldBe 1
 
     (1 to 5).foreach { revision =>
       Files.writeString(dictionary, s"1\nrevision$revision", StandardCharsets.UTF_8)
       Files.setLastModifiedTime(dictionary, FileTime.fromMillis(System.currentTimeMillis() + revision * 10_000L))
-      DictionaryLoader.loadSnapshot(config)
-      DictionaryCache.entryCount(dictionary) shouldBe 1
+      DictionaryLoader.loadSnapshot(config, cache)
+      cache.entryCount(dictionary) shouldBe 1
     }
   }
 
+  it should "evict a dictionary's cache entry once its path leaves the config (#860)" in {
+    val cache       = DictionaryCache()
+    val dictionaryA = writeDic("serenity-evict-a", List("hello"))
+    val dictionaryB = writeDic("serenity-evict-b", List("world"))
+    val bothConfig =
+      SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionaryA.toString, dictionaryB.toString))
+    val onlyAConfig = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionaryA.toString))
+
+    DictionaryLoader.loadSnapshot(bothConfig, cache)
+    cache.entryCount(dictionaryA) shouldBe 1
+    cache.entryCount(dictionaryB) shouldBe 1
+    cache.size shouldBe 2
+
+    DictionaryLoader.loadSnapshot(onlyAConfig, cache)
+    cache.entryCount(dictionaryA) shouldBe 1
+    cache.entryCount(dictionaryB) shouldBe 0
+    cache.size shouldBe 1
+  }
+
+  it should "never let two independently constructed DictionaryCache instances share cache entries" in {
+    val dictionary = writeDic("serenity-cache-isolation", List("hello"))
+    val config     = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
+    val cacheA     = DictionaryCache()
+    val cacheB     = DictionaryCache()
+
+    DictionaryLoader.loadSnapshot(config, cacheA)
+
+    cacheA.entryCount(dictionary) shouldBe 1
+    cacheB.entryCount(dictionary) shouldBe 0
+  }
+
   it should "pick up a dictionary's latest content after repeated edits despite the bounded cache" in {
+    val cache      = DictionaryCache()
     val dictionary = writeDic("serenity-bounded-cache-content", List("hello"))
     val config     = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
 
-    DictionaryLoader.loadSnapshot(config)
+    DictionaryLoader.loadSnapshot(config, cache)
 
     Files.writeString(dictionary, "1\nlatest", StandardCharsets.UTF_8)
     Files.setLastModifiedTime(dictionary, FileTime.fromMillis(System.currentTimeMillis() + 10_000L))
 
     val diagnostics =
-      SpellChecker.analyzeText("latest hello", config, DictionaryLoader.loadSnapshot(config).context)
+      SpellChecker.analyzeText("latest hello", config, DictionaryLoader.loadSnapshot(config, cache).context)
 
     diagnostics.map(_.message) shouldBe List("Possible spelling issue: hello")
   }
@@ -282,7 +314,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
     )
     val config = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
 
-    val context = DictionaryLoader.loadSnapshot(config).context
+    val context = DictionaryLoader.loadSnapshot(config, DictionaryCache()).context
 
     context.compoundCandidateIndex shouldBe CompoundCandidateIndex.build(context.compoundWordFlags)
     context.compoundCandidateIndex.buckets should not be empty
@@ -291,7 +323,7 @@ class SpellCheckerDictionaryIoSpec extends AnyFlatSpec with Matchers:
   it should "leave compoundCandidateIndex empty when no dictionary declares COMPOUNDRULE" in {
     val config = SpellCheckConfig(enabled = true)
 
-    val context = DictionaryLoader.loadSnapshot(config).context
+    val context = DictionaryLoader.loadSnapshot(config, DictionaryCache()).context
 
     context.compoundCandidateIndex shouldBe CompoundCandidateIndex.empty
   }

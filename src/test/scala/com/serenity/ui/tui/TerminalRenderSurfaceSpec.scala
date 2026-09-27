@@ -219,7 +219,13 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    RendererEntryPoints.render(state, cursorVisible = false, rs, viewport)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      rs,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val output = writer.toString
     // first frame: full clear-and-repaint, wrapped in #1172's DEC 2026 synchronized-update brackets
@@ -347,7 +353,8 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
         font,
         cellMetrics,
         cellMetrics,
-        None
+        None,
+        com.serenity.state.manager.RenderCaches.create()
       )
 
       val output = writer.toString
@@ -377,7 +384,8 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       font,
       cellMetrics,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     // The base frame flushes with the caret hidden and the overlay frame presents it, so both escapes appear: what
@@ -403,7 +411,8 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       font,
       cellMetrics,
       cellMetrics,
-      Some(faded)
+      Some(faded),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     writer.toString should include(s"$esc[?25l")
@@ -425,7 +434,8 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       font,
       cellMetrics,
       cellMetrics,
-      Some(bright)
+      Some(bright),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     writer.toString should include(s"$esc[?25h")
@@ -509,7 +519,8 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
         font,
         cellMetrics,
         cellMetrics,
-        None
+        None,
+        com.serenity.state.manager.RenderCaches.create()
       )
 
       val out = writer.toString
@@ -559,7 +570,8 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       font,
       cellMetrics,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val out = writer.toString

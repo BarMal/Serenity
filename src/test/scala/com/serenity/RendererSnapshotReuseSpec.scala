@@ -177,7 +177,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       monoFont,
       monoFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val cursorRects = surface.fillPixelRectCalls
@@ -210,7 +211,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       monoFont,
       monoFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
     surface.drawRunPxCalls.exists(_.s.contains("hello")) shouldBe true
   }
@@ -286,7 +288,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       monoFont,
       monoFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
   }
 
@@ -321,7 +324,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       monoFont,
       monoFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     lineReads.get() shouldBe math.min(buffer.document.content.lineCount, paneContentHeight) + 1
@@ -357,7 +361,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       monoFont,
       monoFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     collects.get() shouldBe 0
@@ -393,7 +398,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       monoFont,
       monoFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     collects.get() shouldBe 0
@@ -437,7 +443,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       monoFont,
       monoFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     lineReads.get() should be < 200
@@ -482,7 +489,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       monoFont,
       monoFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     lineReads.get() should be < 20_000
@@ -525,7 +533,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       monoFont,
       monoFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     // Full-block Markdown lens resolution may inspect the enclosing semantic block.
@@ -566,7 +575,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       monoFont,
       monoFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     lineReads.get() should be < 200_000
@@ -611,7 +621,8 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       monoFont,
       monoFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     lineReads.get() should be < 2_000

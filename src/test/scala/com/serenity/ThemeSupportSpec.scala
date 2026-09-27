@@ -14,6 +14,8 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
+  private val highlightCache = ThemeHighlightCache()
+
   "Theme" should "define basic color scheme" in {
     val darkTheme = Theme.dark
 
@@ -47,7 +49,7 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
       SemanticToken(0, 14, 7, "string", Set.empty)
     )
 
-    val styled = ThemeManager.highlightLine("def hello() = \"world\"", theme, Some(LanguageId.Scala), Some(tokens))
+    val styled = highlightCache.highlightLine("def hello() = \"world\"", theme, Some(LanguageId.Scala), Some(tokens))
 
     styled should not be empty
     styled.exists(s => s.style == theme.colorFor(SyntaxElement.Keyword).style && s.content == "def") shouldBe true
@@ -57,7 +59,8 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
   it should "render a language with no semantic tokens yet as a visibly distinct 'unavailable' style" in {
     val theme = Theme.dark
 
-    val styled = ThemeManager.highlightLine("function hello() { return 'world'; }", theme, Some(LanguageId.JavaScript))
+    val styled =
+      highlightCache.highlightLine("function hello() { return 'world'; }", theme, Some(LanguageId.JavaScript))
 
     styled shouldBe List(
       StyledText("function hello() { return 'world'; }", TextStyle.italic, theme.muted, theme.background)
@@ -67,13 +70,13 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
   it should "highlight markdown headings and list markers with markdown-aware styles" in {
     val theme = Theme.dark
 
-    val heading = ThemeManager.highlightLine("# Heading", theme, Some(LanguageId.Markdown))
+    val heading = highlightCache.highlightLine("# Heading", theme, Some(LanguageId.Markdown))
     heading.head.content shouldBe "# "
     heading.head.style.isBold shouldBe true
     heading(1).content shouldBe "Heading"
     heading(1).style.isBold shouldBe true
 
-    val listItem = ThemeManager.highlightLine("- item", theme, Some(LanguageId.Markdown))
+    val listItem = highlightCache.highlightLine("- item", theme, Some(LanguageId.Markdown))
     listItem.head.content shouldBe "- "
     listItem.head.style.isBold shouldBe true
     listItem(1).content shouldBe "item"
@@ -82,12 +85,12 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
   it should "highlight markdown links and blockquotes with markdown-aware styles" in {
     val theme = Theme.dark
 
-    val link = ThemeManager.highlightLine("See [guide](docs.md)", theme, Some(LanguageId.Markdown))
+    val link = highlightCache.highlightLine("See [guide](docs.md)", theme, Some(LanguageId.Markdown))
     link.map(_.content) shouldBe List("See ", "[", "guide", "](", "docs.md", ")")
     link(2).style.isUnderlined shouldBe true
     link(4).style.isUnderlined shouldBe true
 
-    val quote = ThemeManager.highlightLine("> quoted", theme, Some(LanguageId.Markdown))
+    val quote = highlightCache.highlightLine("> quoted", theme, Some(LanguageId.Markdown))
     quote.head.content shouldBe "> "
     quote.head.style.isItalic shouldBe true
     quote(1).content shouldBe "quoted"
@@ -97,8 +100,8 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
   it should "reuse cached highlighting for the same line, theme, and language" in {
     val theme = Theme.dark
 
-    val first  = ThemeManager.highlightLine("val x = 1", theme, None)
-    val second = ThemeManager.highlightLine("val x = 1", theme, None)
+    val first  = highlightCache.highlightLine("val x = 1", theme, None)
+    val second = highlightCache.highlightLine("val x = 1", theme, None)
 
     second should be theSameInstanceAs first
   }
@@ -106,15 +109,15 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
   it should "reuse cached markdown highlighting for the same line, theme, and language" in {
     val theme = Theme.dark
 
-    val first  = ThemeManager.highlightLine("# Heading", theme, Some(LanguageId.Markdown))
-    val second = ThemeManager.highlightLine("# Heading", theme, Some(LanguageId.Markdown))
+    val first  = highlightCache.highlightLine("# Heading", theme, Some(LanguageId.Markdown))
+    val second = highlightCache.highlightLine("# Heading", theme, Some(LanguageId.Markdown))
 
     second should be theSameInstanceAs first
   }
 
   it should "not reuse cached highlighting when the theme differs" in {
-    val first  = ThemeManager.highlightLine("val x = 1", Theme.dark, None)
-    val second = ThemeManager.highlightLine("val x = 1", Theme.light, None)
+    val first  = highlightCache.highlightLine("val x = 1", Theme.dark, None)
+    val second = highlightCache.highlightLine("val x = 1", Theme.light, None)
 
     second should not be theSameInstanceAs(first)
   }
@@ -158,5 +161,11 @@ class ThemeSupportSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(80, 24)
     noException should be thrownBy
-      RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
+      RendererEntryPoints.render(
+        state,
+        cursorVisible = true,
+        surface,
+        ViewportSize(80, 24),
+        com.serenity.state.manager.RenderCaches.create()
+      )
   }

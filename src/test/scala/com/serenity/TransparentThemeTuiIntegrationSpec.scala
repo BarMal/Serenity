@@ -28,7 +28,13 @@ class TransparentThemeTuiIntegrationSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(theme = DefaultThemes.transparent)
     )
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(20, 5))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(20, 5),
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.flush()
 
     writer.toString should include(";49m")
@@ -42,7 +48,13 @@ class TransparentThemeTuiIntegrationSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(theme = DefaultThemes.defaultDark)
     )
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(20, 5))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(20, 5),
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.flush()
 
     val output = writer.toString

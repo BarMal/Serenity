@@ -58,7 +58,8 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
       monoFont,
       propFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.drawRunPxCalls should not be empty
@@ -76,7 +77,8 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
       monoFont,
       propFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.drawRunPxCalls.exists(_.s.contains("val x = 1")) shouldBe true
@@ -98,7 +100,8 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
       ligatureFont,
       propFont,
       ligatureMetric,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.drawRunPxCalls.exists(_.s.contains("->")) shouldBe true
@@ -115,7 +118,8 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
       monoFont,
       propFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val expectedAscent = com.serenity.ui.layout.TextLayoutSnapshot
@@ -165,7 +169,8 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
       monoFont,
       propFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.drawRunPxCalls.exists(call =>

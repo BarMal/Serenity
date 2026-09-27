@@ -98,6 +98,7 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
       _ => IO.unit,
       IO.pure(1.0),
       rig.editor,
+      com.serenity.state.manager.RenderCaches.create(),
       saveConfig
     )
 

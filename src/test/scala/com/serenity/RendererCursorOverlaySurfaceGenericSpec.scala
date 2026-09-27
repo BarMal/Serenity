@@ -71,7 +71,8 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
       codeFont,
       codeFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
     surface.fillPixelRectCalls shouldBe empty
 
@@ -85,7 +86,8 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
       codeFont,
       cellMetrics,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     rendered shouldBe true
@@ -105,7 +107,8 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
       codeFont,
       cellMetrics,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     rendered shouldBe false
@@ -124,7 +127,8 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
       codeFont,
       cellMetrics,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     rendered shouldBe true
@@ -144,7 +148,8 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
       codeFont,
       cellMetrics,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     rendered shouldBe true

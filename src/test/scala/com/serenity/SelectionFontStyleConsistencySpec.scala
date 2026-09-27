@@ -70,7 +70,13 @@ class SelectionFontStyleConsistencySpec extends AnyFlatSpec with Matchers:
 
     val surface = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val unselectedDraw =
       surface.drawRunPxCalls.find(_.s == proseText).getOrElse(fail("Expected the unselected prose run to be drawn"))

@@ -4,7 +4,7 @@ import java.awt.Color
 
 import scala.annotation.unused
 
-import com.serenity.markdown.MarkdownDocumentPreview
+import com.serenity.markdown.{MarkdownDocumentPreview, MarkdownPreviewCache}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -225,16 +225,26 @@ object SurfaceContentResolver:
   ): ResolvedSurfaceContent =
     ContextualToolbarContentResolver.resolve(toolbarState, state, rect, mode)
 
+  /** `cache` defaults to a freshly constructed [[MarkdownPreviewCache]] (issue #1677) rather than threading a
+    * per-`StateManager` instance down from [[com.serenity.state.manager.RenderCaches]]: this method is reached from
+    * pure layout/geometry computation with no render-cache instance in scope -- `EditorLayoutContract.pinnedGeometry`
+    * (itself called from `AnimationChoreography`, `PinnedPanelAnimations` and `PinnedPanelMouseHitTesting`, none of
+    * which carry a `RenderContext`) -- as well as from the one paint-time caller that does,
+    * [[com.serenity.ui.renderer.PinnedPanelViewModel.resolve]]. The cache here is pure memoization of inline line
+    * splitting with no bearing on correctness, so a caller without a real instance to pass loses only the caching
+    * benefit for this one text-preview path, never a wrong result.
+    */
   def resolveMarkdownPreview(
     title: String,
     content: String,
     rect: LayoutRect,
-    mode: SurfaceRenderMode
+    mode: SurfaceRenderMode,
+    cache: MarkdownPreviewCache = MarkdownPreviewCache()
   ): ResolvedSurfaceContent =
     val contentRows = SurfaceFrameLayout(rect).contentRect.height.max(0)
     val rows =
       MarkdownDocumentPreview
-        .renderInlineLines(content.linesIterator.toVector)
+        .renderInlineLines(content.linesIterator.toVector, cache)
         .take(contentRows)
         .filter(_.trim.nonEmpty)
         .map(OverlayRow(_))

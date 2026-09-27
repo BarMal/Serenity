@@ -40,9 +40,13 @@ private[manager] object MouseHitTestGeometry:
     * and it floats over the document right where the caret is -- so reading the stored list alone let every click on
     * the bar fall through to the hidden text it was covering (#1292).
     */
-  def isInsideFloatingSurface(event: MouseInputEvent, state: AppState): Boolean =
+  def isInsideFloatingSurface(
+    event: MouseInputEvent,
+    state: AppState,
+    authoritativeScene: AuthoritativeUiScene
+  ): Boolean =
     state.runtime.viewportSize.exists { viewportSize =>
-      state.visibleFloatingSurfaces.exists(insideFloatingSurface(event, state, viewportSize, _))
+      state.visibleFloatingSurfaces.exists(insideFloatingSurface(event, state, viewportSize, _, authoritativeScene))
     }
 
   /** Whether `event` lands inside a single floating surface's frame -- the per-surface primitive
@@ -53,9 +57,10 @@ private[manager] object MouseHitTestGeometry:
     event: MouseInputEvent,
     state: AppState,
     viewportSize: ViewportSize,
-    surface: UiSurface
+    surface: UiSurface,
+    authoritativeScene: AuthoritativeUiScene
   ): Boolean =
-    val scene    = AuthoritativeUiScene.forState(state, viewportSize)
+    val scene    = authoritativeScene.forState(state, viewportSize)
     val layout   = scene.calculatedLayout
     val contract = scene.editorContract
     val metrics  = floatingCellMetrics(state)

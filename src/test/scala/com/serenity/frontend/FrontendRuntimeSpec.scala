@@ -5,6 +5,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.input.{InputHandler, InputRouter}
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
+import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{AppState, Damage}
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
@@ -27,7 +28,8 @@ class FrontendRuntimeSpec extends AnyFlatSpec with Matchers:
 
   "FrontendRuntime" should "call through to the input handler it was built with" in {
     val handler = new SilentInputHandler
-    val runtime = FrontendRuntime(_ => IO.pure(handler), (_, _, _, _, _) => IO.unit, (_, _, _, _, _) => IO.unit)
+    val runtime =
+      FrontendRuntime(_ => IO.pure(handler), (_, _, _, _, _, _) => IO.unit, (_, _, _, _, _, _) => IO.unit)
     val router = InputRouter
       .create[IO, Event](
         new com.serenity.keystroke.translators.TextEntryTranslator(
@@ -44,10 +46,10 @@ class FrontendRuntimeSpec extends AnyFlatSpec with Matchers:
       calls <- Ref.of[IO, Int](0)
       runtime = FrontendRuntime(
         _ => IO.pure(new SilentInputHandler),
-        (_, _, _, _, _) => calls.update(_ + 1),
-        (_, _, _, _, _) => IO.unit
+        (_, _, _, _, _, _) => calls.update(_ + 1),
+        (_, _, _, _, _, _) => IO.unit
       )
-      _      <- runtime.renderFull(AppState.initial, true, None, Damage.Everything, Map.empty)
+      _      <- runtime.renderFull(AppState.initial, true, None, Damage.Everything, Map.empty, RenderCaches.create())
       result <- calls.get
     yield result
 
@@ -60,10 +62,10 @@ class FrontendRuntimeSpec extends AnyFlatSpec with Matchers:
       cursorCalls <- Ref.of[IO, Int](0)
       runtime = FrontendRuntime(
         _ => IO.pure(new SilentInputHandler),
-        (_, _, _, _, _) => fullCalls.update(_ + 1),
-        (_, _, _, _, _) => cursorCalls.update(_ + 1)
+        (_, _, _, _, _, _) => fullCalls.update(_ + 1),
+        (_, _, _, _, _, _) => cursorCalls.update(_ + 1)
       )
-      _            <- runtime.renderCursorOnly(AppState.initial, true, None, Damage.Nothing, Map.empty)
+      _ <- runtime.renderCursorOnly(AppState.initial, true, None, Damage.Nothing, Map.empty, RenderCaches.create())
       fullResult   <- fullCalls.get
       cursorResult <- cursorCalls.get
     yield (fullResult, cursorResult)

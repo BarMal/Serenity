@@ -11,7 +11,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.rope.{Balance, Leaf, Rope}
-import com.serenity.spellcheck.{DictionaryLoader, SpellChecker}
+import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, SpellChecker}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -445,7 +445,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val refreshed = SpellChecker.refreshDiagnostics(state, DictionaryLoader.loadSnapshot(config))
+    val refreshed = SpellChecker.refreshDiagnostics(state, DictionaryLoader.loadSnapshot(config, DictionaryCache()))
 
     refreshed.runtime.languageService.diagnosticsState.diagnostics.getOrElse(uri, Nil) shouldBe diagnostics
     refreshed.runtime.languageService.diagnosticsState.spellCheckCache.get(uri).map(_.fingerprint) shouldBe Some(
@@ -480,7 +480,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val refreshed = SpellChecker.refreshDiagnostics(state, DictionaryLoader.loadSnapshot(config))
+    val refreshed = SpellChecker.refreshDiagnostics(state, DictionaryLoader.loadSnapshot(config, DictionaryCache()))
 
     refreshed.runtime.languageService.diagnosticsState.diagnostics.get(uri) shouldBe None
     refreshed.runtime.languageService.diagnosticsState.spellCheckCache.get(uri).map(_.diagnostics) shouldBe Some(Nil)
@@ -490,6 +490,9 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "invalidate cached spell-check diagnostics when dictionary file content changes" in {
+    // One shared `DictionaryCache` across both loads below, so this genuinely exercises invalidation-through-a-cache
+    // (issue #1677's instance-scoped cache with a fingerprint mismatch), not just correctness with no caching at all.
+    val cache      = DictionaryCache()
     val dictionary = writeDic("serenity-cache", List("hello"))
     val config     = SpellCheckConfig(enabled = true, dictionaryPaths = List(dictionary.toString))
     val bufferId   = BufferId(0)
@@ -502,19 +505,20 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
         buffers = Map(bufferId -> buffer)
       )
     )
-    val staleDiagnostics = SpellChecker.refreshDiagnostics(staleState, DictionaryLoader.loadSnapshot(config))
+    val staleDiagnostics = SpellChecker.refreshDiagnostics(staleState, DictionaryLoader.loadSnapshot(config, cache))
     staleDiagnostics.runtime.languageService.diagnosticsState.diagnostics.getOrElse(uri, Nil).map(_.message) shouldBe
       List("Possible spelling issue: added")
 
     Files.writeString(dictionary, "2\nhello\nadded\n", StandardCharsets.UTF_8)
     Files.setLastModifiedTime(dictionary, FileTime.fromMillis(System.currentTimeMillis() + 10_000L))
     val refreshed =
-      SpellChecker.refreshDiagnostics(staleDiagnostics, DictionaryLoader.loadSnapshot(config))
+      SpellChecker.refreshDiagnostics(staleDiagnostics, DictionaryLoader.loadSnapshot(config, cache))
 
     refreshed.runtime.languageService.diagnosticsState.diagnostics.get(uri) shouldBe None
   }
 
   it should "invalidate cached spell-check diagnostics when affix file content changes" in {
+    val cache = DictionaryCache()
     val (dictionary, affix) = writeHunspellDictionary(
       "serenity-affix-cache",
       List("draft/G"),
@@ -531,7 +535,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
         buffers = Map(bufferId -> buffer)
       )
     )
-    val staleDiagnostics = SpellChecker.refreshDiagnostics(staleState, DictionaryLoader.loadSnapshot(config))
+    val staleDiagnostics = SpellChecker.refreshDiagnostics(staleState, DictionaryLoader.loadSnapshot(config, cache))
     staleDiagnostics.runtime.languageService.diagnosticsState.diagnostics.getOrElse(uri, Nil).map(_.message) shouldBe
       List("Possible spelling issue: drafting")
 
@@ -542,7 +546,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     )
     Files.setLastModifiedTime(affix, FileTime.fromMillis(System.currentTimeMillis() + 10_000L))
     val refreshed =
-      SpellChecker.refreshDiagnostics(staleDiagnostics, DictionaryLoader.loadSnapshot(config))
+      SpellChecker.refreshDiagnostics(staleDiagnostics, DictionaryLoader.loadSnapshot(config, cache))
 
     refreshed.runtime.languageService.diagnosticsState.diagnostics.get(uri) shouldBe None
   }
@@ -561,7 +565,7 @@ class SpellCheckerSpec extends AnyFlatSpec with Matchers:
     )
     val currentState =
       staleState.copy(persisted = staleState.persisted.copy(buffers = Map(bufferId -> currentBuffer)))
-    val dictionary = DictionaryLoader.loadSnapshot(config)
+    val dictionary = DictionaryLoader.loadSnapshot(config, DictionaryCache())
     val expected   = SpellChecker.analysisFingerprints(staleState, dictionary.fingerprints)
     val analyzed   = SpellChecker.refreshDiagnostics(staleState, dictionary)
 

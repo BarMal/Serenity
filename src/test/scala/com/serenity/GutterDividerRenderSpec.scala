@@ -38,7 +38,13 @@ class GutterDividerRenderSpec extends AnyFlatSpec with Matchers:
     val layout   = LayoutEngine.calculateLayout(state, viewport)
     val gutter   = layout.lineNumberRect.getOrElse(fail("Expected line number rect"))
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val dividerColumn = gutter.x + gutter.width - 1
     val dividerCalls = surface.fillRectCalls.filter(call =>

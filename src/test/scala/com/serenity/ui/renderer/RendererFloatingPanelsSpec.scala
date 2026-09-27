@@ -70,7 +70,13 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.blurRegionCalls should not be empty
   }
@@ -87,7 +93,13 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
     val state   = docked.copy(persisted = docked.persisted.copy(config = config))
     val surface = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.blurRegionCalls shouldBe empty
   }
@@ -109,7 +121,8 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
     val surface      = new MockRenderSurface(100, 30, persistentContent = true)
     val viewportSize = ViewportSize(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, viewportSize)
+    val caches = com.serenity.state.manager.RenderCaches.create()
+    RendererEntryPoints.render(state, cursorVisible = false, surface, viewportSize, caches)
 
     val layout  = LayoutEngine.calculateLayout(state, viewportSize)
     val overlay = layout.aboveCursorOverlayRect.getOrElse(fail("expected an above-cursor overlay rect"))
@@ -125,7 +138,7 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
     )
 
     val key = SurfaceContentIdentity(surface)
-    RendererFrameState.previousFloatingSurfaceRectsFor(key) shouldBe Map(surfaceId -> expectedRect)
+    caches.frameState.previousFloatingSurfaceRectsFor(key) shouldBe Map(surfaceId -> expectedRect)
   }
 
   "renderPinnedPanels" should "clip an opening docked panel to its in-flight scale-in rect" in {
@@ -151,7 +164,13 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.roundRectClipCalls.map(c => LayoutRect(c.x, c.y, c.width, c.height)) should contain(geometryRect)
   }
@@ -167,7 +186,13 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.roundRectClipCalls shouldBe empty
   }
@@ -196,7 +221,13 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.roundRectClipCalls.map(c => LayoutRect(c.x, c.y, c.width, c.height)) should contain(geometryRect)
   }
@@ -218,10 +249,11 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
     val withoutPeek  = baseState()
     val surface      = new MockRenderSurface(100, 30, persistentContent = true)
     val viewportSize = ViewportSize(100, 30)
+    val caches       = com.serenity.state.manager.RenderCaches.create()
 
-    RendererEntryPoints.render(withPeek, cursorVisible = false, surface, viewportSize)
-    RendererEntryPoints.render(withoutPeek, cursorVisible = false, surface, viewportSize)
+    RendererEntryPoints.render(withPeek, cursorVisible = false, surface, viewportSize, caches)
+    RendererEntryPoints.render(withoutPeek, cursorVisible = false, surface, viewportSize, caches)
 
     val key = SurfaceContentIdentity(surface)
-    RendererFrameState.previousFloatingSurfaceRectsFor(key) shouldBe Map.empty
+    caches.frameState.previousFloatingSurfaceRectsFor(key) shouldBe Map.empty
   }

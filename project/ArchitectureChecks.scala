@@ -126,6 +126,81 @@ object ArchitectureChecks {
     )
   )
 
+  /** #1677: no `AtomicReference`, `AtomicInteger`, `synchronized`, or `mutable.` may live inside a top-level
+    * `object` declaration, or anywhere under `state/models`, in `src/main`. An `object` compiles to a single
+    * JVM-wide instance, so any of these forms held directly in its body -- not inside a nested `class`/`trait`,
+    * which owns a separate instance per construction -- is exactly the shared, un-scoped mutable state this issue
+    * removed from `RendererFrameState`, `ThemeManager`, `CharacterRenderer`, `MarkdownPreviewCache` and
+    * `DictionaryLoader`. The domain model (`state/models`) is held to the same four patterns regardless of
+    * object/class, since a case class describing data must never carry a hidden mutable field at all (`AppState`'s
+    * old `annotationIndexCache` et al.).
+    *
+    * Detection is structural, not a flat per-file text search: a running stack of open `object`/`class`/`trait`/
+    * `enum` frames (by indentation -- the same technique [[bodyLength]] uses to find where a method ends) tracks
+    * what type textually encloses each line, so a legitimately instance-scoped field of a `class` nested inside an
+    * `object` is not mistaken for a field of the object itself -- only an unbroken chain of enclosing `object`s all
+    * the way up counts as top-level. Block (`/** ... */`) and line (`//`) comments are skipped so a comment that
+    * merely explains why a pattern is or isn't used (as this file's own doc comments do) is never itself flagged.
+    */
+  private val MutabilityTokens: Seq[String] = Seq("AtomicReference", "AtomicInteger", "synchronized", "mutable.")
+
+  private val TypeStart =
+    """^(\s*)((?:override|private(?:\[[^\]]+\])?|protected(?:\[[^\]]+\])?|final|sealed|abstract|implicit|case|open)\s+)*(object|class|trait|enum)\b""".r
+
+  final private case class TypeFrame(isObject: Boolean, indent: Int)
+
+  private def mutabilityViolations(path: String, lines: Vector[String]): Seq[Violation] =
+    if (!path.startsWith("main/")) Nil
+    else {
+      val inModels                = path.contains("com/serenity/state/models")
+      var stack: List[TypeFrame]  = Nil
+      var inBlockComment: Boolean = false
+
+      lines.zipWithIndex.flatMap { case (line, index) =>
+        val trimmed = line.trim
+        if (inBlockComment) {
+          if (trimmed.contains("*/")) inBlockComment = false
+          Nil
+        } else if (trimmed.isEmpty || trimmed.startsWith("//") || trimmed.startsWith("*")) {
+          Nil
+        } else if (trimmed.startsWith("/*")) {
+          if (!trimmed.contains("*/")) inBlockComment = true
+          Nil
+        } else {
+          val indent = line.indexWhere(!_.isWhitespace)
+          stack = stack.dropWhile(_.indent >= indent)
+
+          val violation =
+            if (!MutabilityTokens.exists(trimmed.contains)) None
+            else if (inModels)
+              Some(
+                Violation(
+                  path,
+                  s"forbidden mutable state at line ${index + 1}: state/models must hold no AtomicReference/" +
+                    "AtomicInteger/synchronized/mutable. state -- describe data, not hidden mutation (#1677)",
+                  1
+                )
+              )
+            else if (stack.nonEmpty && stack.forall(_.isObject))
+              Some(
+                Violation(
+                  path,
+                  s"forbidden mutable state at line ${index + 1}: a top-level object may not hold AtomicReference/" +
+                    "AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)",
+                  1
+                )
+              )
+            else None
+
+          TypeStart.findPrefixMatchOf(line).foreach { m =>
+            stack = TypeFrame(isObject = m.group(3) == "object", indent) :: stack
+          }
+
+          violation.toSeq
+        }
+      }
+    }
+
   final case class Violation(path: String, detail: String, measured: Int) {
     def key: String = s"$path\t$detail"
     def render: String = s"$key\t$measured"
@@ -225,7 +300,7 @@ object ArchitectureChecks {
       val fileViolation =
         if (lines.length > MaxFileLines) Seq(Violation(path, "file length", lines.length)) else Nil
       fileViolation ++ methodViolations(path, lines) ++ importViolations(path, lines) ++ callViolations(path, lines) ++
-        stateOwnershipViolations(path, lines)
+        stateOwnershipViolations(path, lines) ++ mutabilityViolations(path, lines)
     }
 
   def readBaseline(file: File): Map[String, Int] =
@@ -378,6 +453,97 @@ object ArchitectureChecks {
         "import com.serenity.ui.fonts.FontLoader"
       ),
       expectCaught = true
+    )
+
+    def checkMutability(
+        description: String,
+        lines: Vector[String],
+        expectCaught: Boolean,
+        path: String = "main/scala/com/serenity/ui/renderer/Sample.scala"
+    ): Unit = {
+      val violations = mutabilityViolations(path, lines)
+      require(
+        violations.nonEmpty == expectCaught,
+        s"ArchitectureChecks self-test failed ($description): expected forbidden mutable state to be " +
+          s"${if (expectCaught) "caught" else "ignored"}, got ${violations.size} violation(s)"
+      )
+    }
+
+    checkMutability(
+      "an AtomicReference field held directly by a top-level object",
+      Vector(
+        "package com.serenity.ui.renderer",
+        "object Sample:",
+        "  private val cache = new java.util.concurrent.atomic.AtomicReference[Int](0)"
+      ),
+      expectCaught = true
+    )
+
+    checkMutability(
+      "a synchronized call against a field held directly by a top-level object",
+      Vector(
+        "package com.serenity.ui.renderer",
+        "object Sample:",
+        "  private val lock = new Object",
+        "  def touch(): Unit = lock.synchronized { () }"
+      ),
+      expectCaught = true
+    )
+
+    checkMutability(
+      "a legitimate instance-owned mutable field inside a class nested in an object",
+      Vector(
+        "package com.serenity.ui.renderer",
+        "object Sample:",
+        "  final private class Cache:",
+        "    private val ref = new java.util.concurrent.atomic.AtomicReference[Int](0)"
+      ),
+      expectCaught = false
+    )
+
+    checkMutability(
+      "a line comment that only mentions AtomicReference by name",
+      Vector(
+        "package com.serenity.ui.renderer",
+        "object Sample:",
+        "  // conceptually similar to an AtomicReference-based CAS loop, but isn't one",
+        "  private val x = 1"
+      ),
+      expectCaught = false
+    )
+
+    checkMutability(
+      "a doc-comment opening line mentioning AtomicReference by name",
+      Vector(
+        "package com.serenity.ui.renderer",
+        "/** Bounded, `AtomicReference`-backed cache (kept only in this comment). */",
+        "object Sample:",
+        "  private val x = 1"
+      ),
+      expectCaught = false
+    )
+
+    checkMutability(
+      "state/models forbids the four patterns regardless of object/class",
+      Vector(
+        "package com.serenity.state.models",
+        "final case class Sample(",
+        "  private val cache: java.util.concurrent.atomic.AtomicReference[Int]",
+        ")"
+      ),
+      expectCaught = true,
+      path = "main/scala/com/serenity/state/models/Sample.scala"
+    )
+
+    checkMutability(
+      "the top-level-object rule is scoped to src/main, not test sources",
+      Vector(
+        "package com.serenity.ui.renderer",
+        "object Sample:",
+        "  private val cache = new java.util.concurrent.atomic.AtomicReference[Int](0)"
+      ),
+      expectCaught = false,
+      path = "test/scala/com/serenity/ui/renderer/SampleSpec.scala"
     )
   }
 }

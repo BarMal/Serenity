@@ -35,14 +35,18 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
   private def buffer(state: AppState): Buffer = state.persisted.buffers(BufferId(0))
 
   private def contentRect(state: AppState): LayoutRect =
-    MouseTargetCache.fromState(state, viewport).scene.paneLayouts(PaneId(0)).contentRect
+    MouseTargetCache.fromState(state, viewport, AuthoritativeUiScene()).scene.paneLayouts(PaneId(0)).contentRect
 
   "EditorMouseTargeting.targetAt" should "resolve a point inside the pane to that pane, its buffer, and a cursor" in {
     val state = editorState("alpha beta\ngamma")
     val rect  = contentRect(state)
 
     val target =
-      EditorMouseTargeting.targetAt(MouseClick(rect.x, rect.y), state, MouseTargetCache.fromState(state, viewport))
+      EditorMouseTargeting.targetAt(
+        MouseClick(rect.x, rect.y),
+        state,
+        MouseTargetCache.fromState(state, viewport, AuthoritativeUiScene())
+      )
 
     target.map(_.map((paneId, targetBuffer, _) => (paneId, targetBuffer.id))) shouldBe Right(
       Some((PaneId(0), BufferId(0)))
@@ -52,7 +56,11 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
   it should "resolve a point outside every pane to no target" in {
     val state = editorState("alpha")
 
-    EditorMouseTargeting.targetAt(MouseClick(500, 500), state, MouseTargetCache.fromState(state, viewport)) shouldBe
+    EditorMouseTargeting.targetAt(
+      MouseClick(500, 500),
+      state,
+      MouseTargetCache.fromState(state, viewport, AuthoritativeUiScene())
+    ) shouldBe
       Right(None)
   }
 
@@ -162,7 +170,8 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
     val state  = withExplorer
     val (x, y) = explorerRowPoint(state, 2)
 
-    val (result, claimed) = run(state)(PinnedPanelMouseHitTesting.select(MouseClick(x, y), state, focusPanel = true))
+    val (result, claimed) =
+      run(state)(PinnedPanelMouseHitTesting.select(MouseClick(x, y), state, focusPanel = true, AuthoritativeUiScene()))
 
     claimed shouldBe true
     selectedPath(result.state) shouldBe Some(readme)
@@ -173,26 +182,34 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
     val state  = withExplorer
     val (x, y) = explorerRowPoint(state, 2)
 
-    val (result, claimed) = run(state)(PinnedPanelMouseHitTesting.hover(MouseMove(x, y), state))
+    val (result, claimed) = run(state)(PinnedPanelMouseHitTesting.hover(MouseMove(x, y), state, AuthoritativeUiScene()))
 
     claimed shouldBe true
     selectedPath(result.state) shouldBe Some(readme)
     result.state.persisted.focus shouldBe state.persisted.focus
-    run(result.state)(PinnedPanelMouseHitTesting.hover(MouseMove(x, y), result.state))._1.state shouldBe
+    run(result.state)(
+      PinnedPanelMouseHitTesting.hover(MouseMove(x, y), result.state, AuthoritativeUiScene())
+    )._1.state shouldBe
       theSameInstanceAs(result.state)
   }
 
   "PinnedPanelMouseHitTesting.activation" should "open a double-clicked file row, and do nothing for a single click" in {
-    val state    = withExplorer
-    val (x, y)   = explorerRowPoint(state, 2)
-    val selected = run(state)(PinnedPanelMouseHitTesting.select(MouseClick(x, y), state, focusPanel = true))._1.state
+    val state  = withExplorer
+    val (x, y) = explorerRowPoint(state, 2)
+    val selected = run(state)(
+      PinnedPanelMouseHitTesting.select(MouseClick(x, y), state, focusPanel = true, AuthoritativeUiScene())
+    )._1.state
 
-    PinnedPanelMouseHitTesting.activation(MouseClick(x, y, clickCount = 2), selected) should matchPattern {
+    PinnedPanelMouseHitTesting.activation(
+      MouseClick(x, y, clickCount = 2),
+      selected,
+      AuthoritativeUiScene()
+    ) should matchPattern {
       case Some(
             ComponentResult.ReducerUpdate(ReducerResult(_, List(AppEffect.File(FileEffect.DirectLoadFile(`readme`)))))
           ) =>
     }
-    PinnedPanelMouseHitTesting.activation(MouseClick(x, y), selected) shouldBe None
+    PinnedPanelMouseHitTesting.activation(MouseClick(x, y), selected, AuthoritativeUiScene()) shouldBe None
   }
 
   "PinnedPanelMouseHitTesting.textAreaInsetFromDrag" should "resolve a drag in the top spacer to a top inset" in {

@@ -53,7 +53,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = CellMetrics.fromFont(font),
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val renderedRows = rows(surface)
@@ -115,7 +116,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = CellMetrics.fromFont(font),
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.drawImageCalls should have size 1
@@ -197,7 +199,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = CellMetrics.fromFont(font),
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val renderedRows = rows(surface)
@@ -246,7 +249,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = CellMetrics.fromFont(font),
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val renderedRows = rows(surface)
@@ -291,7 +295,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = CellMetrics.fromFont(font),
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.strokeRoundRectCalls shouldBe empty
@@ -395,7 +400,8 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = metrics,
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     (state, surface, metrics)

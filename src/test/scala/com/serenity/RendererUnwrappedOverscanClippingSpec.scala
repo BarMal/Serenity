@@ -64,7 +64,17 @@ class RendererUnwrappedOverscanClippingSpec extends AnyFlatSpec with Matchers:
     val panelRect    = LayoutEngine.calculateLayout(state, viewportSize).editorPanelRect
     val surface      = new MockRenderSurface(viewportSize.width, viewportSize.height, fontRenderContextOverride = None)
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, viewportSize, font, font, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      font,
+      font,
+      cellMetrics,
+      None,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     // Sanity check: the cell/non-measured path is the one under test -- if this ever starts drawing via drawRunPx
     // instead, the test would vacuously pass without exercising the bug.

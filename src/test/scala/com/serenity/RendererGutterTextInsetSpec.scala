@@ -56,7 +56,17 @@ class RendererGutterTextInsetSpec extends AnyFlatSpec with Matchers:
   private def render(state: AppState, surface: MockRenderSurface): Unit =
     val viewport    = ViewportSize(80, 24)
     val cellMetrics = CellMetrics.fromFont(codeFont)
-    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport, codeFont, textFont, cellMetrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      codeFont,
+      textFont,
+      cellMetrics,
+      None,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
   "a left-placed line-number counter" should "inset its digits a sub-cell amount from the pane edge, toward the divider" in {
     val state   = stateWithBuffer()

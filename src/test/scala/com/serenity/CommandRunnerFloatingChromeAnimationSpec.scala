@@ -120,7 +120,13 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
       .forContent(overlay, state.runtime.uiSurfaces.head.content)
       .contentRect
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val selectedBackground = surface.getBg(commandContentRect.x, commandContentRect.y + 1)
     val selectedForeground = surface.getFg(commandContentRect.x, commandContentRect.y + 1)
@@ -159,7 +165,13 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.strokeRoundRectCalls should not be empty
     surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(12)
@@ -174,7 +186,13 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
 
     val surface = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.strokeRoundRectCalls should not be empty
     surface.strokeRoundRectCalls.headOption.map(_.strokeWidth) shouldBe Some(4.0f)
@@ -189,8 +207,20 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
     val enabledSurface  = new MockRenderSurface(100, 30)
     val disabledSurface = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(enabledState, cursorVisible = true, enabledSurface, ViewportSize(100, 30))
-    RendererEntryPoints.render(disabledState, cursorVisible = true, disabledSurface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      enabledState,
+      cursorVisible = true,
+      enabledSurface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
+    RendererEntryPoints.render(
+      disabledState,
+      cursorVisible = true,
+      disabledSurface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     enabledSurface.roundRectShadowCalls should not be empty
     disabledSurface.roundRectShadowCalls shouldBe empty
@@ -204,7 +234,13 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
     )
     val surface = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(12)
     surface.putStringCalls.map(_.s) should not contain "."
@@ -237,7 +273,8 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
         codeFont,
         Font(Font.SANS_SERIF, Font.PLAIN, 12),
         cellMetrics,
-        None
+        None,
+        com.serenity.state.manager.RenderCaches.create()
       )
       image
 
@@ -285,7 +322,8 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
         codeFont,
         Font(Font.SANS_SERIF, Font.PLAIN, 12),
         cellMetrics,
-        None
+        None,
+        com.serenity.state.manager.RenderCaches.create()
       )
       image
 
@@ -330,7 +368,13 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
     )
     val surface = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(12)
     surface.putStringCalls.map(_.s) should not contain "."

@@ -27,6 +27,9 @@ object AppRuntime:
 
   /** Issue #1669's remaining scope moved this onto [[FrontendRuntime]], the frontend-owned render/input bundle; kept as
     * an alias so callers outside this file (`AppRuntimeRenderLoops`, `TuiRuntime`) don't need to know it moved.
+    * `FrontendRuntime.RenderFn` itself still carries the `RenderCaches` instance as its final argument (#1677's
+    * remaining scope), supplied by callers from `stateManager.renderCaches` rather than closed over when the
+    * `FrontendRuntime` bundle is built.
     */
   private[serenity] type RenderFn = FrontendRuntime.RenderFn
 
@@ -202,7 +205,7 @@ object AppRuntime:
         inputLoop = runInputLoop(stateManager, inputHandler, inputFunnel)
         _ <-
           Resource.make(inputLoop.start)(_.cancel).use { inputFiber =>
-            runtime.renderFull(initialState, true, None, Damage.Everything, Map.empty) >>
+            runtime.renderFull(initialState, true, None, Damage.Everything, Map.empty, stateManager.renderCaches) >>
               logger.info("Initial render completed, starting main loop") >>
               {
                 val idlePhase = AppRuntimeRenderLoops.idleRenderPhase(
@@ -216,7 +219,8 @@ object AppRuntime:
                   breathIndex = breathIndex,
                   renderCursorOnly = runtime.renderCursorOnly,
                   requestFastRender = requestFastRender,
-                  cursorIdleInterval = frontend.cursorIdleInterval
+                  cursorIdleInterval = frontend.cursorIdleInterval,
+                  renderCaches = stateManager.renderCaches
                 )
 
                 val fastPhase = AppRuntimeRenderLoops.fastRenderPhase(
@@ -228,7 +232,8 @@ object AppRuntime:
                   animationTickCadence,
                   currentStateForDiagnostics,
                   checkResizeAndHandle,
-                  runtime.renderFull
+                  runtime.renderFull,
+                  stateManager.renderCaches
                 )
 
                 val renderLoop: Stream[IO, Unit] =

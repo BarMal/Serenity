@@ -126,10 +126,12 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
           _: Boolean,
           _: Option[Color],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState]
+          _: Map[BufferId, com.serenity.animation.AnimationState],
+          _: com.serenity.state.manager.RenderCaches
         ) => renderCalls.update(_ + 1),
         requestFastRender = IO.unit,
-        cursorIdleInterval = GuiFrontend.cursorIdleInterval
+        cursorIdleInterval = GuiFrontend.cursorIdleInterval,
+        renderCaches = com.serenity.state.manager.RenderCaches.create()
       )
       calls <- renderCalls.get
     yield calls shouldBe 0
@@ -158,10 +160,12 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
           _: Boolean,
           _: Option[Color],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState]
+          _: Map[BufferId, com.serenity.animation.AnimationState],
+          _: com.serenity.state.manager.RenderCaches
         ) => IO.unit,
         requestFastRender = IO.unit,
-        cursorIdleInterval = GuiFrontend.cursorIdleInterval
+        cursorIdleInterval = GuiFrontend.cursorIdleInterval,
+        renderCaches = com.serenity.state.manager.RenderCaches.create()
       )
       remaining <- pendingPaintDamage.get
     yield remaining shouldBe damage
@@ -190,10 +194,12 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
           visible: Boolean,
           cursor: Option[Color],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState]
+          _: Map[BufferId, com.serenity.animation.AnimationState],
+          _: com.serenity.state.manager.RenderCaches
         ) => rendered.update(_ :+ (visible -> cursor)),
         requestFastRender = IO.unit,
-        cursorIdleInterval = GuiFrontend.cursorIdleInterval
+        cursorIdleInterval = GuiFrontend.cursorIdleInterval,
+        renderCaches = com.serenity.state.manager.RenderCaches.create()
       )
       frames <- rendered.get
     yield frames shouldBe Vector(false -> None)

@@ -3,7 +3,7 @@ package com.serenity.ui.renderer
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.config.CursorMode
-import com.serenity.state.manager.AuthoritativeUiScene
+import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -28,9 +28,10 @@ object RendererCursorOverlay:
     textFont: java.awt.Font,
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
-    uiMetrics: CellMetrics
+    uiMetrics: CellMetrics,
+    caches: RenderCaches
   ): (CalculatedLayout, EditorPaneRenderPlan) =
-    RendererFrameState
+    caches.frameState
       .preparedSceneFor(surface)
       .filter(_.matches(authoritativeScene, codeFont, textFont, uiFont, cellMetrics, uiMetrics, viewportSize))
       .map(value => value.scene.calculatedLayout -> value.renderPlan)
@@ -46,9 +47,10 @@ object RendererCursorOverlay:
           textFont,
           uiFont,
           cellMetrics,
-          uiMetrics
+          uiMetrics,
+          caches
         )
-        RendererFrameState.rememberPreparedScene(surface, next)
+        caches.frameState.rememberPreparedScene(surface, next)
         next.scene.calculatedLayout -> next.renderPlan
       }
 
@@ -68,7 +70,8 @@ object RendererCursorOverlay:
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty,
+    caches: RenderCaches
   ): List[PixelRect] =
     val context = RenderContext(
       surface,
@@ -80,7 +83,8 @@ object RendererCursorOverlay:
       uiFont,
       cellMetrics,
       uiMetrics,
-      bufferAnimations
+      bufferAnimations,
+      caches
     )
     val cursorRects = RendererPaneContent.renderEditorCursors(state0, context, renderPlan)
     presentHardwareCursor(surface, state0, cursorVisible, cursorRects, cellMetrics, cursorColor)
@@ -141,7 +145,8 @@ object RendererCursorOverlay:
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color]
+    cursorColor: Option[java.awt.Color],
+    caches: RenderCaches
   ): Boolean =
     renderCursorOnly(
       state,
@@ -154,7 +159,8 @@ object RendererCursorOverlay:
       cellMetrics,
       uiMetrics,
       cursorColor,
-      Map.empty
+      Map.empty,
+      caches
     )
 
   def renderCursorOnly(
@@ -168,7 +174,8 @@ object RendererCursorOverlay:
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color],
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState],
+    caches: RenderCaches
   ): Boolean =
     val state0 = RendererEntryPoints.withEffectiveTheme(state)
     // #1105/#1215: a surface reporting no FontRenderContext (a terminal) has no real font rendering to measure
@@ -179,7 +186,7 @@ object RendererCursorOverlay:
     val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
     RendererEntryPoints.withSceneIfNeeded(
       state0,
-      AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
+      caches.authoritativeScene.forState(state0, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
     )(_ => false) { authoritativeScene =>
       val (layout, renderPlan) = resolveCursorRenderPlan(
         state0,
@@ -192,7 +199,8 @@ object RendererCursorOverlay:
         textFont,
         uiFont,
         cellMetrics,
-        uiMetrics
+        uiMetrics,
+        caches
       )
       val _ = paintCursorsOnly(
         state0,
@@ -206,7 +214,8 @@ object RendererCursorOverlay:
         uiFont,
         cellMetrics,
         uiMetrics,
-        bufferAnimations
+        bufferAnimations,
+        caches
       )
       true
     }
@@ -220,7 +229,8 @@ object RendererCursorOverlay:
     uiFont: java.awt.Font,
     uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color],
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty,
+    caches: RenderCaches = RenderCaches.create()
   ): Boolean =
     val state0       = RendererEntryPoints.withEffectiveTheme(state)
     val viewportSize = swingWin.viewportSize
@@ -228,7 +238,7 @@ object RendererCursorOverlay:
     // point in RendererEntryPoints.
     RendererEntryPoints.withSceneIfNeeded(
       state0,
-      AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont)
+      caches.authoritativeScene.forState(state0, viewportSize, codeFont, textFont)
     )(_ => false) { authoritativeScene =>
       // No base content is redrawn by this call, so the base frame contributes nothing to the repaint bound --
       // only the cursor's own old and new pixel rects can have changed on screen.
@@ -246,7 +256,8 @@ object RendererCursorOverlay:
           textFont,
           uiFont,
           swingWin.metrics,
-          uiMetrics
+          uiMetrics,
+          caches
         )
         paintCursorsOnly(
           state0,
@@ -260,7 +271,8 @@ object RendererCursorOverlay:
           uiFont,
           swingWin.metrics,
           uiMetrics,
-          bufferAnimations
+          bufferAnimations,
+          caches
         ).map(RendererFrameState.toAwtRectangle)
       }
     }
@@ -280,7 +292,8 @@ object RendererCursorOverlay:
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color]
+    cursorColor: Option[java.awt.Color],
+    caches: RenderCaches
   ): Boolean =
     renderWithCursorOverlay(
       state,
@@ -292,7 +305,8 @@ object RendererCursorOverlay:
       cellMetrics,
       uiMetrics,
       cursorColor,
-      Damage.Everything
+      Damage.Everything,
+      caches
     )
 
   def renderWithCursorOverlay(
@@ -305,7 +319,8 @@ object RendererCursorOverlay:
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color],
-    damage: Damage
+    damage: Damage,
+    caches: RenderCaches
   ): Boolean =
     val state0        = RendererEntryPoints.withEffectiveTheme(state)
     val repaintRegion = new AtomicReference[Option[PixelRect]](None)
@@ -315,7 +330,7 @@ object RendererCursorOverlay:
     val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
     RendererEntryPoints.withSceneIfNeeded(
       state0,
-      AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
+      caches.authoritativeScene.forState(state0, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
     ) { page =>
       RendererEntryPoints.renderStartPageFrame(
         state0,
@@ -325,7 +340,8 @@ object RendererCursorOverlay:
         uiFont,
         cellMetrics,
         uiMetrics,
-        output
+        output,
+        caches
       )
       true
     } { scene =>
@@ -343,7 +359,8 @@ object RendererCursorOverlay:
           uiMetrics,
           cursorColor = None,
           output,
-          damage
+          damage,
+          caches = caches
         )
         .fold(false) { renderPlan =>
           val _ = paintCursorsOnly(
@@ -357,7 +374,8 @@ object RendererCursorOverlay:
             textFont,
             uiFont,
             cellMetrics,
-            uiMetrics
+            uiMetrics,
+            caches = caches
           )
           true
         }
@@ -373,7 +391,8 @@ object RendererCursorOverlay:
     uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color],
     damage: Damage = Damage.Everything,
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty,
+    caches: RenderCaches = RenderCaches.create()
   ): Boolean =
     val state0       = RendererEntryPoints.withEffectiveTheme(state)
     val viewportSize = swingWin.viewportSize
@@ -394,7 +413,7 @@ object RendererCursorOverlay:
     // point in RendererEntryPoints.
     RendererEntryPoints.withSceneIfNeeded(
       state0,
-      AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont)
+      caches.authoritativeScene.forState(state0, viewportSize, codeFont, textFont)
     ) { page =>
       RendererEntryPoints.renderStartPageFrame(
         state0,
@@ -404,7 +423,8 @@ object RendererCursorOverlay:
         uiFont,
         swingWin.metrics,
         uiMetrics,
-        output
+        output,
+        caches
       )
       // The base frame published above went through onBaseImageReady, which does not repaint the canvas by
       // itself -- only onCursorOverlayReady does. The editor branch below reaches it naturally via its cursor
@@ -427,7 +447,8 @@ object RendererCursorOverlay:
           cursorColor = None,
           output,
           damage,
-          bufferAnimations
+          bufferAnimations,
+          caches
         )
         .fold(false) { renderPlan =>
           val baseDirtyRegion = repaintRegion.get().map(RendererFrameState.toAwtRectangle)
@@ -446,7 +467,8 @@ object RendererCursorOverlay:
               uiFont,
               swingWin.metrics,
               uiMetrics,
-              bufferAnimations
+              bufferAnimations,
+              caches
             ).map(RendererFrameState.toAwtRectangle)
           }
         }

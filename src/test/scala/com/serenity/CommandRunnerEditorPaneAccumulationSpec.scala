@@ -135,7 +135,8 @@ class CommandRunnerEditorPaneAccumulationSpec extends AnyFlatSpec with Matchers:
       cellMetrics,
       uiMetrics,
       None,
-      damage
+      damage,
+      com.serenity.state.manager.RenderCaches.create()
     )
     val out = capturedRef.get()
     pool.publish(out)

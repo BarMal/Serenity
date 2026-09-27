@@ -219,7 +219,13 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   "Renderer" should "render the cursor using theme.cursor when no override is given" in {
     val state   = AppState.initial
     val surface = new MockRenderSurface(80, 24)
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(80, 24),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val (cx, cy) = cursorScreenPos(state)
     surface.getBg(cx, cy) shouldBe Theme.default.cursor
@@ -234,7 +240,8 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      cursorColor = Some(breatheColor)
+      cursorColor = Some(breatheColor),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val (cx, cy) = cursorScreenPos(state)
@@ -250,7 +257,8 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       ViewportSize(80, 24),
-      cursorColor = Some(breatheColor)
+      cursorColor = Some(breatheColor),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val (cx, cy) = cursorScreenPos(state)

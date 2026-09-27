@@ -60,6 +60,12 @@ class UnderscoreRenderingSpec extends AnyFlatSpec with Matchers:
     )
 
     val surface = new MockRenderSurface(80, 24)
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(80, 24),
+      com.serenity.state.manager.RenderCaches.create()
+    )
     // Verify rendering completes without exception
   }
