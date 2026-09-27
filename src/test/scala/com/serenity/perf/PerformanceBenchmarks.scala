@@ -231,24 +231,22 @@ object PerformanceBenchmarks:
     )
     val diagnosticsState = commentsState.copy(runtime =
       commentsState.runtime.copy(languageService =
-        commentsState.runtime.languageService.copy(diagnosticsState =
-          commentsState.runtime.languageService.diagnosticsState.copy(diagnostics =
-            Map(
-              DocumentUri("file:///benchmark.scala") ->
-                (0 until 2_000).toList.map { line =>
-                  com.serenity.lsp.model.Diagnostic(
-                    com.serenity.lsp.model.LspRange(
-                      com.serenity.lsp.model.LspPosition(line, 0),
-                      com.serenity.lsp.model.LspPosition(line, 8)
-                    ),
-                    Some(com.serenity.lsp.model.DiagnosticSeverity.Warning),
-                    s"benchmark diagnostic $line",
-                    Some("benchmark")
-                  )
-                }
-            )
+        LanguageServiceState(diagnosticsState = DiagnosticsState(diagnostics =
+          Map(
+            DocumentUri("file:///benchmark.scala") ->
+              (0 until 2_000).toList.map { line =>
+                com.serenity.lsp.model.Diagnostic(
+                  com.serenity.lsp.model.LspRange(
+                    com.serenity.lsp.model.LspPosition(line, 0),
+                    com.serenity.lsp.model.LspPosition(line, 8)
+                  ),
+                  Some(com.serenity.lsp.model.DiagnosticSeverity.Warning),
+                  s"benchmark diagnostic $line",
+                  Some("benchmark")
+                )
+              }
           )
-        )
+        ))
       )
     )
     val plainScrollState = multilineState.copy(persisted =
