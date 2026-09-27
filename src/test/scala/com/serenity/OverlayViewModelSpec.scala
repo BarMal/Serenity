@@ -56,7 +56,9 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     overlays.belowCursor shouldBe None
 
     val overlay = overlays.aboveCursor.get
-    overlay.rows.map(_.plainText) shouldBe List("List.map(f)")
+    // Content with no bespoke composition of its own (`QuickInfo`) is still painted through one -- the generic
+    // `RowsSurfaceComposition` this content no longer bypasses via a separate plain-rows field (issue #1683).
+    overlay.composition.toList.flatMap(_.paintBoxes).flatMap(_.text) shouldBe List("List.map(f)")
     overlay.rect shouldBe layout.aboveCursorOverlayRect.get
     overlay.contentRect shouldBe Some(
       SurfaceFrameLayout.forContent(overlay.rect, state.runtime.uiSurfaces.head.content).contentRect

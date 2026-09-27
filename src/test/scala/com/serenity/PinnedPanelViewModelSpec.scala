@@ -186,7 +186,7 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     view.contentRect.shouldBe(Some(SurfaceFrameLayout.forContent(rect, panel.content).contentRect))
   }
 
-  it should "derive row slots from an explicit pinned panel content rect" in {
+  it should "position rows from an explicit pinned panel content rect via its composition" in {
     val view = TextPanelView(
       rect = LayoutRect(0, 0, 12, 8),
       contentRect = Some(LayoutRect(2, 3, 6, 4)),
@@ -196,14 +196,14 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
       footer = Some(TextPanelRow("foot"))
     )
 
-    view.contentRowSlots
-      .map(slot => slot.kind -> slot.y)
+    view.composition.paintBoxes
+      .map(box => box.kind -> box.rect.y.toInt)
       .shouldBe(
         List(
-          SurfaceContentRowKind.Header  -> 3,
-          SurfaceContentRowKind.Item(0) -> 4,
-          SurfaceContentRowKind.Item(1) -> 5,
-          SurfaceContentRowKind.Footer  -> 6
+          SurfacePaintKind.Heading -> 3,
+          SurfacePaintKind.Text    -> 4,
+          SurfacePaintKind.Text    -> 5,
+          SurfacePaintKind.Footer  -> 6
         )
       )
   }

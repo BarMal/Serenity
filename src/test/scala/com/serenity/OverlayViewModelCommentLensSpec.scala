@@ -56,11 +56,8 @@ class OverlayViewModelCommentLensSpec extends AnyFlatSpec with Matchers:
       val overlay =
         OverlayViewModel.fromState(state, layout).aboveCursor.getOrElse(fail("Expected a comment lens overlay"))
 
-      // Content is painted entirely from `CommentLensSurfaceComposition` (issue #819, slice 3); draft text and
-      // cursor are read from its paint boxes, not the plain-rows `rows`/`header` fields this content no longer
-      // populates.
-      overlay.header shouldBe None
-      overlay.rows shouldBe Nil
+      // Content is painted entirely from `CommentLensSurfaceComposition` (issue #819, slice 3); `composition` is this
+      // overlay's only content representation (issue #1683) -- draft text and cursor are read from its paint boxes.
       val composition = overlay.composition.getOrElse(fail("Expected a comment lens composition"))
       composition.paintBoxes.map(_.text) shouldBe List(Some("comment"), Some("Review this value"))
       composition.paintBoxes.lastOption.flatMap(_.cursorOffset) shouldBe Some("Review this value".length)

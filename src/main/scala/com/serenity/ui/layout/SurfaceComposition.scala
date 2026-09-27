@@ -37,6 +37,10 @@ enum SurfacePaintKind:
   case TextInput
   case ActionItem
   case Heading
+  // Chrome rows a generic, non-bespoke composition (`RowsSurfaceComposition`, issue #1683) tags distinctly from a
+  // plain `Text` item row, mirroring `Heading`'s existing role for a header row.
+  case Footer
+  case KeyHint
 
 /** Layout strategy for text carried by a composed paint box. */
 enum SurfacePaintLayout:

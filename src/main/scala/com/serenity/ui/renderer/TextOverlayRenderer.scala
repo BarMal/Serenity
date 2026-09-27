@@ -88,21 +88,12 @@ object TextOverlayRenderer:
 
       applyGlassSheen(surface, overlay, theme, config)
       val textInsetPx = SurfaceTextInset.px(config)
-      overlay.composition match
-        case Some(composition) =>
-          drawComposition(
-            surface,
-            composition,
-            theme,
-            cursorVisible,
-            rowColors,
-            font,
-            cellMetrics,
-            textInsetPx,
-            overlay.rect.y
-          )
-        case None =>
-          drawContent(surface, overlay, theme, cursorVisible, rowColors, font, cellMetrics, textInsetPx)
+      // `composition` is `overlay`'s only content representation (issue #1683) -- a surface with genuinely nothing to
+      // paint (no bespoke composition and no rows/header/footer/key-hint given at construction) simply has none, and
+      // there is no separate plain-rows path left to fall back to.
+      overlay.composition.foreach(
+        drawComposition(surface, _, theme, cursorVisible, rowColors, font, cellMetrics, textInsetPx, overlay.rect.y)
+      )
     }
     drawBorder(surface, overlay, theme, config)
 
@@ -144,78 +135,6 @@ object TextOverlayRenderer:
     surface.roundedRects match
       case Some(rounded) => rounded.withRoundRectClip(x, y, width, height, arcPx)(render)
       case None          => render
-
-  private def drawContent(
-    surface: RenderSurface,
-    overlay: TextOverlayView,
-    theme: Theme,
-    cursorVisible: Boolean,
-    rowColors: Int => (Color, Color),
-    font: java.awt.Font,
-    cellMetrics: CellMetrics,
-    textInsetPx: Double
-  ): Unit =
-    val contentRect = overlay.resolvedContentRect
-    val maxLineSize = contentRect.width
-    val floatingGeometry = FloatingSurfaceGeometry.fromCells(
-      overlay.rect,
-      cellMetrics,
-      overlay.borderCells,
-      overlay.rows.length,
-      overlay.header.nonEmpty,
-      overlay.footer.nonEmpty,
-      overlay.itemGapRows,
-      overlay.itemTargetRows,
-      overlay.keyHintRow.nonEmpty
-    )
-
-    overlay.contentRowSlots
-      .foreach { slot =>
-        val row = slot.kind match
-          case SurfaceContentRowKind.Header      => overlay.header
-          case SurfaceContentRowKind.Item(index) => overlay.rows.lift(index)
-          case SurfaceContentRowKind.KeyHint     => overlay.keyHintRow
-          case SurfaceContentRowKind.Footer      => overlay.footer
-        row.foreach { row =>
-          val rowOffset        = slot.y - overlay.rect.y
-          val (animFg, animBg) = rowColors(rowOffset)
-          slot.kind match
-            case SurfaceContentRowKind.Item(index) if overlay.itemGapRows > 0.0 =>
-              floatingGeometry.itemRects.lift(index).foreach { pixelRect =>
-                OverlayRowPainter.renderRow(
-                  surface,
-                  contentRect.x,
-                  slot.y,
-                  maxLineSize,
-                  row,
-                  theme,
-                  cursorVisible,
-                  defaultForeground = Some(animFg),
-                  defaultBackground = Some(animBg),
-                  font = font,
-                  cellMetrics = cellMetrics,
-                  textInsetPx = textInsetPx,
-                  pixelY = Some(math.round(pixelRect.y).toInt),
-                  pixelHeight = Some(math.round(pixelRect.height).toInt)
-                )
-              }
-            case _ =>
-              OverlayRowPainter.renderRow(
-                surface,
-                contentRect.x,
-                slot.y,
-                maxLineSize,
-                row,
-                theme,
-                cursorVisible,
-                defaultForeground = Some(animFg),
-                defaultBackground = Some(animBg),
-                font = font,
-                cellMetrics = cellMetrics,
-                textInsetPx = textInsetPx
-              )
-        }
-      }
 
   private def drawComposition(
     surface: RenderSurface,
