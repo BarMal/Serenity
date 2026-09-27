@@ -9,19 +9,35 @@ final case class TextPanelRow(
     selected: Boolean = false
 )
 
-final case class TextPanelView(
+/** A docked panel's resolved paint plan. `composition` is the panel's *only* stored content representation (issue
+  * #1683) -- there is no second, independently-settable `rows`/`header`/`footer` that could disagree with it and need a
+  * precedence rule, the way this type used to carry both. `rows`/`header`/`footer` below are read-only views derived
+  * from `composition.paintBoxes`, kept only so existing call sites (and `PinnedPanelViewModel.resolve`'s own tests) can
+  * still ask "what text did this panel resolve to" without reaching into paint-box internals.
+  *
+  * The companion's `apply` also still accepts `rows`/`header`/`footer` (as `TextPanelRow`s) for construction: a plain
+  * informational panel with no bespoke `*SurfaceComposition` of its own is built from them, via
+  * [[RowsSurfaceComposition]], rather than every caller having to build a `ResolvedSurfaceComposition` by hand.
+  */
+final case class TextPanelView private[renderer] (
     rect: LayoutRect,
-    contentRect: Option[LayoutRect] = None,
+    contentRect: Option[LayoutRect],
     title: String,
-    rows: List[TextPanelRow],
-    header: Option[TextPanelRow] = None,
-    footer: Option[TextPanelRow] = None,
-    surfaceId: Option[SurfaceId] = None,
-    // Painted in place of `rows`/`header`/`footer` whenever set (issue #819, slice 4) -- mirrors
-    // `TextOverlayView.composition`'s precedence in `TextOverlayRenderer`.
-    composition: Option[ResolvedSurfaceComposition] = None
+    surfaceId: Option[SurfaceId],
+    composition: ResolvedSurfaceComposition
 ):
+  def rows: List[TextPanelRow] =
+    composition.paintBoxes.collect { case box if box.kind == SurfacePaintKind.Text => toPanelRow(box) }
+
+  def header: Option[TextPanelRow] =
+    composition.paintBoxes.collectFirst { case box if box.kind == SurfacePaintKind.Heading => toPanelRow(box) }
+
+  def footer: Option[TextPanelRow] =
+    composition.paintBoxes.collectFirst { case box if box.kind == SurfacePaintKind.Footer => toPanelRow(box) }
+
   def lines: List[String] = (header.toList ++ rows ++ footer.toList).map(_.plainText)
+
+  def contentRowSlots: List[SurfaceContentRowSlot] = RowsSurfaceComposition.contentRowSlots(composition)
 
   def resolvedContentRect: LayoutRect =
     contentRect.getOrElse(SurfaceFrameLayout(rect).contentRect)
@@ -30,13 +46,40 @@ final case class TextPanelView(
     val content = resolvedContentRect
     LayoutRect(content.x, rect.y, content.width, 1)
 
-  def contentRowSlots: List[SurfaceContentRowSlot] =
-    SurfaceFrameLayout.contentRowSlotsFor(
-      resolvedContentRect,
-      rows.length,
-      header.nonEmpty,
-      footer.nonEmpty
+  private def toPanelRow(box: SurfacePaintBox): TextPanelRow =
+    TextPanelRow(plainText = box.text.getOrElse(""), selected = box.selected)
+
+object TextPanelView:
+
+  /** `composition`, when given, wins outright -- there is no dual-path precedence rule to apply, only a choice of which
+    * single composition to store: a caller building a panel for content with no bespoke `*SurfaceComposition` passes
+    * `rows`/`header`/`footer` instead, and this builds the generic one via [[RowsSurfaceComposition]].
+    */
+  def apply(
+    rect: LayoutRect,
+    contentRect: Option[LayoutRect] = None,
+    title: String,
+    rows: List[TextPanelRow] = Nil,
+    header: Option[TextPanelRow] = None,
+    footer: Option[TextPanelRow] = None,
+    surfaceId: Option[SurfaceId] = None,
+    composition: Option[ResolvedSurfaceComposition] = None
+  ): TextPanelView =
+    val resolvedComposition = composition.getOrElse(
+      RowsSurfaceComposition.forResolved(
+        ResolvedSurfaceContent(
+          header = header.map(fromPanelRow),
+          rows = rows.map(fromPanelRow),
+          footer = footer.map(fromPanelRow)
+        ),
+        frameRect = rect,
+        contentRectOverride = contentRect
+      )
     )
+    new TextPanelView(rect, contentRect, title, surfaceId, resolvedComposition)
+
+  private def fromPanelRow(row: TextPanelRow): OverlayRow =
+    OverlayRow(plainText = row.plainText, selected = row.selected)
 
 object PinnedPanelViewModel:
 
@@ -82,38 +125,31 @@ object PinnedPanelViewModel:
       rect = rect,
       contentRect = Some(SurfaceFrameLayout.forContent(rect, surface.content).contentRect),
       title = resolved.title.getOrElse(""),
-      rows = resolved.rows.map(toPanelRow),
-      header = resolved.header.map(toPanelRow),
-      footer = resolved.footer.map(toPanelRow),
       surfaceId = Some(surface.id),
-      composition = compositionFor(surface, rect, state)
+      composition = Some(compositionFor(surface, rect, resolved, state))
     )
 
+  /** Every docked content kind's composition, bespoke where one already exists, otherwise the generic
+    * [[RowsSurfaceComposition]] built from `resolved` -- so a pinned panel is always painted from one composed plan,
+    * never a plain-rows fallback with its own, separately derived geometry (issue #1683).
+    */
   private def compositionFor(
     surface: UiSurface,
     rect: LayoutRect,
+    resolved: ResolvedSurfaceContent,
     state: Option[AppState]
-  ): Option[ResolvedSurfaceComposition] =
+  ): ResolvedSurfaceComposition =
     surface.content match
       case SurfaceContent.DirectoryTree(tree, selectedPath) =>
-        Some(DirectoryTreeSurfaceComposition.forTree(tree, selectedPath, rect))
+        DirectoryTreeSurfaceComposition.forTree(tree, selectedPath, rect)
       case SurfaceContent.Outline(symbols, activeLocation) =>
-        Some(
-          OutlineSurfaceComposition.forOutline(symbols, activeSymbolLocation(symbols, activeLocation, state), rect)
-        )
+        OutlineSurfaceComposition.forOutline(symbols, activeSymbolLocation(symbols, activeLocation, state), rect)
       case SurfaceContent.Diagnostics(issues, activeLocation) =>
-        Some(DiagnosticsSurfaceComposition.forDiagnostics(issues, activeLocation, rect))
+        DiagnosticsSurfaceComposition.forDiagnostics(issues, activeLocation, rect)
       case SurfaceContent.Comments(symbols, activeLocation) =>
-        Some(
-          CommentsSurfaceComposition.forComments(symbols, activeSymbolLocation(symbols, activeLocation, state), rect)
-        )
-      case _ => None
-
-  private def toPanelRow(row: OverlayRow): TextPanelRow =
-    TextPanelRow(
-      plainText = row.plainText,
-      selected = row.selected
-    )
+        CommentsSurfaceComposition.forComments(symbols, activeSymbolLocation(symbols, activeLocation, state), rect)
+      case content =>
+        RowsSurfaceComposition.forResolved(resolved, rect, SurfaceFrameLayout.borderCellsFor(content))
 
   private def activeSymbolLocation(
     symbols: List[Symbol],

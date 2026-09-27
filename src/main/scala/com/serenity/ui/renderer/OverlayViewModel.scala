@@ -6,7 +6,42 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import org.slf4j.LoggerFactory
 
-final case class TextOverlayView(
+/** A floating surface's resolved paint plan. `composition` is the surface's *only* stored content representation (issue
+  * #1683) -- there is no second, independently-settable `rows`/`header`/`footer`/`keyHintRow` that could disagree with
+  * it and need a precedence rule to resolve, the way this type used to carry both (`TextOverlayRenderer` used to pick
+  * `composition` over `rows` whenever it was set).
+  *
+  * The companion's `apply` still accepts `header`/`rows`/`footer`/`keyHintRow` for construction: a plain informational
+  * surface with no bespoke `*SurfaceComposition` of its own is built from them, via [[RowsSurfaceComposition]], rather
+  * than every caller having to build a `ResolvedSurfaceComposition` by hand.
+  */
+final case class TextOverlayView private (
+    rect: LayoutRect,
+    contentRect: Option[LayoutRect],
+    borderCells: Int,
+    animationState: AnimationState,
+    alphaMultiplier: Float,
+    title: Option[String],
+    itemGapRows: Double,
+    itemTargetRows: Int,
+    verticalOffsetRows: Double,
+    surfaceId: Option[SurfaceId],
+    composition: Option[ResolvedSurfaceComposition]
+):
+
+  def resolvedContentRect: LayoutRect =
+    contentRect.getOrElse(com.serenity.ui.layout.SurfaceFrameLayout(rect, borderCells).contentRect)
+
+  def contentRowSlots: List[SurfaceContentRowSlot] =
+    composition.fold(List.empty[SurfaceContentRowSlot])(RowsSurfaceComposition.contentRowSlots)
+
+object TextOverlayView:
+
+  /** `composition`, when given, wins outright -- there is no dual-path precedence rule to apply, only a choice of which
+    * single composition to store: a caller building an overlay for content with no bespoke `*SurfaceComposition` passes
+    * `header`/`rows`/`footer`/`keyHintRow` instead, and this builds the generic one via [[RowsSurfaceComposition]].
+    */
+  def apply(
     rect: LayoutRect,
     contentRect: Option[LayoutRect] = None,
     borderCells: Int = 1,
@@ -22,20 +57,31 @@ final case class TextOverlayView(
     verticalOffsetRows: Double = 0.0,
     surfaceId: Option[SurfaceId] = None,
     composition: Option[ResolvedSurfaceComposition] = None
-):
-
-  def resolvedContentRect: LayoutRect =
-    contentRect.getOrElse(com.serenity.ui.layout.SurfaceFrameLayout(rect, borderCells).contentRect)
-
-  def contentRowSlots: List[SurfaceContentRowSlot] =
-    SurfaceFrameLayout.contentRowSlotsFor(
-      resolvedContentRect,
-      rows.length,
-      header.nonEmpty,
-      footer.nonEmpty,
+  ): TextOverlayView =
+    val resolvedComposition = composition.orElse(
+      Option.when(header.nonEmpty || rows.nonEmpty || footer.nonEmpty || keyHintRow.nonEmpty)(
+        RowsSurfaceComposition.forResolved(
+          ResolvedSurfaceContent(header = header, rows = rows, footer = footer, keyHintRow = keyHintRow),
+          frameRect = rect,
+          borderCells = borderCells,
+          itemGapRows = itemGapRows,
+          itemTargetRows = itemTargetRows,
+          contentRectOverride = contentRect
+        )
+      )
+    )
+    new TextOverlayView(
+      rect,
+      contentRect,
+      borderCells,
+      animationState,
+      alphaMultiplier,
+      title,
       itemGapRows,
       itemTargetRows,
-      keyHintRow.nonEmpty
+      verticalOffsetRows,
+      surfaceId,
+      resolvedComposition
     )
 
 final case class OverlayViews(

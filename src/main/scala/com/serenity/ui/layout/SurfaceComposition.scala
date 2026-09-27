@@ -37,6 +37,10 @@ enum SurfacePaintKind:
   case TextInput
   case ActionItem
   case Heading
+  // Chrome rows a generic, non-bespoke composition (`RowsSurfaceComposition`, issue #1683) tags distinctly from a
+  // plain `Text` item row, mirroring `Heading`'s existing role for a header row.
+  case Footer
+  case KeyHint
 
 /** Layout strategy for text carried by a composed paint box. */
 enum SurfacePaintLayout:
@@ -77,7 +81,17 @@ final case class ResolvedSurfaceComposition(
     intrinsicSize: SurfaceIntrinsicSize,
     paintBoxes: List[SurfacePaintBox],
     hitRegions: List[SurfaceHitRegion],
-    focusOrder: List[SurfaceFocusId]
+    focusOrder: List[SurfaceFocusId],
+    // Set by `RowsSurfaceComposition.forResolved` and by `RowCompositionSupport.planWithRowHits` (issue #1683).
+    // `RowsSurfaceComposition.contentRowSlots` recovers row slots by assuming every non-chrome paint box is a plain
+    // `Item` at the exact `SurfaceFrameLayout.contentRowSlotsFor` position -- true for both of those (the generic
+    // adapter and the flat per-row panel compositions built on `RowCompositionSupport`: `OutlineSurfaceComposition`,
+    // `DiagnosticsSurfaceComposition`, `DirectoryTreeSurfaceComposition`, `CommentsSurfaceComposition`), but not for a
+    // menu/toolbar-shaped bespoke composition (`CommandRunnerSurfaceComposition`, `ContextMenuSurfaceComposition`,
+    // `ContextualToolbarSurfaceComposition`, `CommentLensSurfaceComposition`, `ModalSurfaceComposition`,
+    // `TabBarSurfaceComposition`), which paints real rows through its own, differently-shaped paint-box layout, and
+    // reverse-engineering slots from those would misreport content that was never meant to be read back that way.
+    builtByRowsAdapter: Boolean = false
 ):
 
   /** Resolve the topmost semantic hit at a logical-pixel position. */

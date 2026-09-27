@@ -56,11 +56,16 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     overlays.belowCursor shouldBe None
 
     val overlay = overlays.aboveCursor.get
-    overlay.rows.map(_.plainText) shouldBe List("List.map(f)")
+    // Content with no bespoke composition of its own (`QuickInfo`) is still painted through one -- the generic
+    // `RowsSurfaceComposition` this content no longer bypasses via a separate plain-rows field (issue #1683).
+    overlay.composition.toList.flatMap(_.paintBoxes).flatMap(_.text) shouldBe List("List.map(f)")
     overlay.rect shouldBe layout.aboveCursorOverlayRect.get
     overlay.contentRect shouldBe Some(
       SurfaceFrameLayout.forContent(overlay.rect, state.runtime.uiSurfaces.head.content).contentRect
     )
+    // Composed via the generic `RowsSurfaceComposition` adapter (no bespoke `*SurfaceComposition` of its own), so
+    // `contentRowSlots` recovers real row slots from it (issue #1683).
+    overlay.contentRowSlots.map(_.kind) shouldBe List(SurfaceContentRowKind.Item(0))
   }
 
   it should "derive a below-cursor modal overlay view from unified floating surfaces" in {
@@ -136,6 +141,11 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
     // Content is painted entirely from `CommandRunnerSurfaceComposition` (issue #819, slice 2); item row spacing is
     // read from its paint boxes, not the plain-rows `contentRowSlots` path this content no longer populates.
     overlay.itemGapRows shouldBe 1
+    // `CommandRunnerSurfaceComposition` is a bespoke composition, never the generic `RowsSurfaceComposition` adapter
+    // -- `contentRowSlots` must stay empty even though the composition itself carries real Item/ActionItem paint
+    // boxes (issue #1683 regression: it must not be reverse-engineered from paint boxes that adapter never built).
+    overlay.composition.toList.flatMap(_.paintBoxes) should not be empty
+    overlay.contentRowSlots shouldBe empty
     overlay.composition.toList
       .flatMap(_.paintBoxes)
       .filter(_.focusId.isDefined)

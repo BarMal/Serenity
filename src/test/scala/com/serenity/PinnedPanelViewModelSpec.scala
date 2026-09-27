@@ -148,6 +148,29 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     compact.rows.map(_.plainText) shouldBe List("3 lines", "cursor 7")
   }
 
+  it should "derive non-empty content row slots for a panel composed via the generic RowsSurfaceComposition adapter" in {
+    val view = PinnedPanelViewModel.resolve(terminalPanel, LayoutRect(0, 0, 60, 8))
+
+    view.contentRowSlots should not be empty
+    view.contentRowSlots.map(_.kind) shouldBe List(
+      SurfaceContentRowKind.Item(0),
+      SurfaceContentRowKind.Item(1),
+      SurfaceContentRowKind.Item(2)
+    )
+  }
+
+  it should "derive real content row slots for a panel composed via a RowCompositionSupport-based *SurfaceComposition" in {
+    // `DirectoryTreeSurfaceComposition` is bespoke (never the generic `RowsSurfaceComposition` adapter), but it paints
+    // its rows through `RowCompositionSupport` at the exact same `SurfaceFrameLayout.contentRowSlotsFor` position
+    // `EditorLayoutContract`'s own, independent row-slot geometry derives -- so, unlike a menu/toolbar-shaped bespoke
+    // composition (`CommandRunnerSurfaceComposition`, ...), its `contentRowSlots` must recover the real, per-row
+    // slots, not report none (issue #1683).
+    val view = PinnedPanelViewModel.resolve(panel, LayoutRect(0, 0, 60, 10))
+
+    view.rows should not be empty
+    view.contentRowSlots.map(_.kind) shouldBe view.rows.indices.map(SurfaceContentRowKind.Item.apply).toList
+  }
+
   it should "preserve resolved header and footer rows separately from item rows" in {
     // `ContextMenu` is used as the fixture here purely because it's a content kind whose resolver still produces a
     // header, item rows, and a footer all at once (unlike `ModalWorkflow`, which paints entirely via
@@ -186,7 +209,7 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     view.contentRect.shouldBe(Some(SurfaceFrameLayout.forContent(rect, panel.content).contentRect))
   }
 
-  it should "derive row slots from an explicit pinned panel content rect" in {
+  it should "position rows from an explicit pinned panel content rect via its composition" in {
     val view = TextPanelView(
       rect = LayoutRect(0, 0, 12, 8),
       contentRect = Some(LayoutRect(2, 3, 6, 4)),
@@ -196,14 +219,14 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
       footer = Some(TextPanelRow("foot"))
     )
 
-    view.contentRowSlots
-      .map(slot => slot.kind -> slot.y)
+    view.composition.paintBoxes
+      .map(box => box.kind -> box.rect.y.toInt)
       .shouldBe(
         List(
-          SurfaceContentRowKind.Header  -> 3,
-          SurfaceContentRowKind.Item(0) -> 4,
-          SurfaceContentRowKind.Item(1) -> 5,
-          SurfaceContentRowKind.Footer  -> 6
+          SurfacePaintKind.Heading -> 3,
+          SurfacePaintKind.Text    -> 4,
+          SurfacePaintKind.Text    -> 5,
+          SurfacePaintKind.Footer  -> 6
         )
       )
   }

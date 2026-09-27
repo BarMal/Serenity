@@ -62,7 +62,7 @@ class OverlayLayoutKindSpec extends AnyFlatSpec with Matchers:
 
     val overlay = OverlayViewModel.fromState(listingState, layout).aboveCursor.get
 
-    overlay.rows.map(_.plainText) shouldBe List("repo  src | test | build.sbt")
+    overlay.composition.toList.flatMap(_.paintBoxes).flatMap(_.text) shouldBe List("repo  src | test | build.sbt")
   }
 
   it should "adapt directory listings for vertical surfaces" in {
@@ -75,5 +75,5 @@ class OverlayLayoutKindSpec extends AnyFlatSpec with Matchers:
 
     val overlay = OverlayViewModel.fromState(listingState, layout).aboveCursor.get
 
-    overlay.rows.map(_.plainText) shouldBe List("repo", "src", "test", "build.sbt")
+    overlay.composition.toList.flatMap(_.paintBoxes).flatMap(_.text) shouldBe List("repo", "src", "test", "build.sbt")
   }

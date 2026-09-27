@@ -4,7 +4,7 @@ import java.awt.Color
 
 import com.serenity.animation.AnimationState
 import com.serenity.config.AppConfig
-import com.serenity.ui.layout.{CellMetrics, ResolvedSurfaceComposition, SurfaceContentRowKind}
+import com.serenity.ui.layout.{CellMetrics, ResolvedSurfaceComposition}
 import com.serenity.ui.theme.Theme
 
 object PinnedPanelRenderer:
@@ -43,11 +43,7 @@ object PinnedPanelRenderer:
     applyGlassSheen(surface, panel, theme, config)
     drawBorder(surface, panel, theme, config, animationState)
     drawTitle(surface, panel, theme, animationState, textInsetPx)
-    panel.composition match
-      case Some(composition) =>
-        drawComposition(surface, panel, composition, theme, animationState, cellMetrics, textInsetPx)
-      case None =>
-        drawLines(surface, panel, theme, animationState, cellMetrics, textInsetPx)
+    drawComposition(surface, panel, panel.composition, theme, animationState, cellMetrics, textInsetPx)
 
     surface.effects.foreach(_.setAlpha(1.0f))
     surface.setForegroundColor(theme.foreground)
@@ -90,55 +86,9 @@ object PinnedPanelRenderer:
         renderAnimatedText(surface, titleRect.x, titleRect.y, title, 0, theme.panel.foreground, animationState)
       }
 
-  private def drawLines(
-    surface: RenderSurface,
-    panel: TextPanelView,
-    theme: Theme,
-    animationState: AnimationState,
-    cellMetrics: CellMetrics,
-    textInsetPx: Double
-  ): Unit =
-    val contentRect = panel.resolvedContentRect
-    val maxLineSize = contentRect.width
-    panel.contentRowSlots
-      .foreach { slot =>
-        val maybeRow = slot.kind match
-          case SurfaceContentRowKind.Header      => panel.header
-          case SurfaceContentRowKind.Item(index) => panel.rows.lift(index)
-          case SurfaceContentRowKind.Footer      => panel.footer
-          // Pinned panels never populate a key-hint row today (issue #931, Stage 3's persistent footer is
-          // command-palette/settings-surface-only, and those never pin) -- `PinnedPanelViewModel.contentRowSlots`
-          // never asks `contentRowSlotsFor` for a `KeyHint` slot, so this is unreachable in practice.
-          case SurfaceContentRowKind.KeyHint => None
-
-        maybeRow.foreach { row =>
-          val padded = row.plainText.take(maxLineSize).padTo(maxLineSize, ' ')
-          val (foreground, background) =
-            if row.selected then (theme.highlighted.foreground, theme.highlighted.background)
-            else (theme.panel.foreground, theme.panel.background)
-          surface.setForegroundColor(foreground)
-          surface.setBackgroundColor(background)
-          if row.selected then
-            surface.enableStyle(theme.focusStyle)
-            fillRowBackground(surface, cellMetrics, contentRect.x, slot.y, maxLineSize, background)
-          surface.pixels.withPixelTranslation(textInsetPx, 0.0) {
-            renderAnimatedText(
-              surface,
-              contentRect.x,
-              slot.y,
-              padded,
-              slot.y - panel.rect.y,
-              foreground,
-              animationState
-            )
-          }
-          if row.selected then surface.disableStyle(theme.focusStyle)
-        }
-      }
-
-  /** Paints a composed plan's boxes in place of `drawLines`'s plain rows -- box rects are already whole-cell granular
-    * (built from the same integer content-rect coordinates `contentRowSlotsFor` uses), so no font-metric or sub-cell
-    * mapping is needed, unlike `TextOverlayRenderer.drawComposition`'s pixel-measured floating layout.
+  /** Paints a panel's composed plan -- box rects are already whole-cell granular (built from the same integer
+    * content-rect coordinates `contentRowSlotsFor` uses), so no font-metric or sub-cell mapping is needed, unlike
+    * `TextOverlayRenderer.drawComposition`'s pixel-measured floating layout.
     */
   private def drawComposition(
     surface: RenderSurface,
