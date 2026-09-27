@@ -16,16 +16,29 @@ import com.serenity.state.models.*
 object EditorEventReducer:
   import EditorCursorSupport.{countLines, endTarget, homeTarget, CursorEventContext, TabInsertion}
 
+  // Re-exported so the effect boundary (`EditorGeometryProducer.forEvent`) can see the geometry-window
+  // classification without reaching into `EditorCursorSupport`, which is `private[reducers]` (#1676).
+  export EditorCursorSupport.GeometryRequirement
+
   def reducer(paneId: PaneId)(using balance: com.serenity.rope.Balance): Reducer[TextEntryEvent] =
     Reducer.instance((event, state) => reduce(event, paneId, state))
+
+  /** Exposes [[EditorCursorSupport.geometryRequirement]] to the effect boundary (`EditorGeometryProducer.forEvent`),
+    * which needs to know whether/how large a geometry window to measure for this event without a reducer ever calling
+    * the producer itself (#1676) -- `EditorCursorSupport` is `private[reducers]`, so `state.manager` cannot see it
+    * directly.
+    */
+  def geometryRequirement(event: TextEntryEvent, currentState: AppState): GeometryRequirement =
+    EditorCursorSupport.geometryRequirement(event, currentState)
 
   def reduce(
     event: TextEntryEvent,
     paneId: PaneId,
-    currentState: AppState
+    currentState: AppState,
+    geometry: Option[EditorGeometry] = None
   )(using balance: com.serenity.rope.Balance): ReducerResult =
     currentState.persisted.layout.editorPanes.get(paneId) match
-      case Some(pane) => reduceForPane(event, paneId, pane, currentState)
+      case Some(pane) => reduceForPane(event, paneId, pane, currentState, geometry)
       case None       => ReducerResult.noEffects(currentState)
 
   /** Vertical movement is the one editor reduction whose result depends on measured text geometry, so it lives in its
@@ -44,7 +57,8 @@ object EditorEventReducer:
     event: TextEntryEvent,
     paneId: PaneId,
     pane: EditorPane,
-    currentState: AppState
+    currentState: AppState,
+    geometry: Option[EditorGeometry]
   )(using balance: com.serenity.rope.Balance): ReducerResult =
     event match
       case ScrollDown(lines) =>
@@ -76,13 +90,13 @@ object EditorEventReducer:
           case None => ReducerResult.noEffects(currentState)
 
       case ScrollRight(columns) =>
-        reduceHorizontalScroll(paneId, pane, currentState, columns, direction = 1, ColumnRight)
+        reduceHorizontalScroll(paneId, pane, currentState, geometry, columns, direction = 1, ColumnRight)
 
       case ScrollLeft(columns) =>
-        reduceHorizontalScroll(paneId, pane, currentState, columns, direction = -1, ColumnLeft)
+        reduceHorizontalScroll(paneId, pane, currentState, geometry, columns, direction = -1, ColumnLeft)
 
       case textEvent: TextEntryEvent =>
-        reduceTextEvent(textEvent, paneId, pane, currentState)
+        reduceTextEvent(textEvent, paneId, pane, currentState, geometry)
 
   /** Horizontal scroll gestures (issue #1568): shift+wheel/trackpad delta pans `leftColumn` the same way the vertical
     * wheel above already pans `topLine`, or -- while column mode and word wrap are both on -- reduces exactly as
@@ -102,13 +116,14 @@ object EditorEventReducer:
     paneId: PaneId,
     pane: EditorPane,
     currentState: AppState,
+    geometry: Option[EditorGeometry],
     columns: Int,
     direction: Int,
     columnModeEvent: NavigationEvent
   )(using balance: com.serenity.rope.Balance): ReducerResult =
     val surfaceConfig = currentState.persisted.config.surfaceConfig
     if surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled then
-      reduceTextEvent(columnModeEvent, paneId, pane, currentState)
+      reduceTextEvent(columnModeEvent, paneId, pane, currentState, geometry)
     else if surfaceConfig.wordWrapEnabled then ReducerResult.noEffects(currentState)
     else
       pane.bufferId.flatMap(currentState.persisted.buffers.get) match
@@ -135,12 +150,13 @@ object EditorEventReducer:
     event: TextEntryEvent,
     paneId: PaneId,
     pane: EditorPane,
-    currentState: AppState
+    currentState: AppState,
+    geometry: Option[EditorGeometry]
   )(using balance: com.serenity.rope.Balance): ReducerResult =
     pane.bufferId match
       case Some(bufferId) =>
         currentState.persisted.buffers.get(bufferId) match
-          case Some(buffer) => reduceTextEventForBuffer(event, buffer, paneId, currentState)
+          case Some(buffer) => reduceTextEventForBuffer(event, buffer, paneId, currentState, geometry)
           case None         => ReducerResult.noEffects(currentState)
       case None =>
         handleEventWithoutBuffer(event, paneId, pane, currentState)
@@ -149,9 +165,10 @@ object EditorEventReducer:
     event: TextEntryEvent,
     buffer: Buffer,
     paneId: PaneId,
-    currentState: AppState
+    currentState: AppState,
+    geometry: Option[EditorGeometry]
   ): ReducerResult =
-    val result = reduceCursorsTextEvent(event, buffer, paneId, currentState)
+    val result = reduceCursorsTextEvent(event, buffer, paneId, currentState, geometry)
 
     if refreshesFindResults(event) then result.copy(state = invalidateFindState(result.state, buffer.id))
     else result
@@ -195,7 +212,8 @@ object EditorEventReducer:
     event: TextEntryEvent,
     rawBuffer: Buffer,
     paneId: PaneId,
-    incomingState: AppState
+    incomingState: AppState,
+    geometry: Option[EditorGeometry]
   ): ReducerResult =
     import EditorCursorMovement.*
 
@@ -215,19 +233,19 @@ object EditorEventReducer:
         // reading as the start of the row below (#1292).
         case ExtendSelectionToLineStart =>
           reduceSelectionExtension(buffer, head, currentState)((_, from) =>
-            horizontalTarget(homeTarget(currentState, paneId, from))
+            horizontalTarget(homeTarget(currentState, geometry, from))
           )
         case ExtendSelectionToLineEnd =>
           reduceSelectionExtension(buffer, head, currentState)((target, from) =>
-            horizontalTarget(endTarget(currentState, paneId, target, from))
+            horizontalTarget(endTarget(currentState, geometry, target, from))
           )
         case ExtendSelectionPageUp =>
           reduceSelectionExtension(buffer, head, currentState)((target, from) =>
-            horizontalTarget(pageTarget(target, currentState, paneId, direction = -1)(from))
+            horizontalTarget(pageTarget(target, currentState, geometry, direction = -1)(from))
           )
         case ExtendSelectionPageDown =>
           reduceSelectionExtension(buffer, head, currentState)((target, from) =>
-            horizontalTarget(pageTarget(target, currentState, paneId, direction = 1)(from))
+            horizontalTarget(pageTarget(target, currentState, geometry, direction = 1)(from))
           )
         case _ => ReducerResult.noEffects(currentState)
     else
@@ -239,7 +257,7 @@ object EditorEventReducer:
       // becomes genuinely multi-cursor again doesn't inherit vertical state pinned to stale cursor positions.
       val buffer = if !hasSelection && !isMulti then clearInFlightMultiCursorVerticalState(rawBuffer) else rawBuffer
       val currentState = Focused.replaceBuffer(incomingState, buffer)
-      val ctx          = CursorEventContext(buffer, head, hasSelection, isMulti, currentState, paneId)
+      val ctx          = CursorEventContext(buffer, head, hasSelection, isMulti, currentState, paneId, geometry)
 
       event match
         case InsertChar(_) | TabKey | NewLine | Enter | ReverseTabKey | DeleteBackward | DeleteForward |

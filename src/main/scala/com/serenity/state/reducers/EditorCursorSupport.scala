@@ -1,5 +1,6 @@
 package com.serenity.state.reducers
 
+import com.serenity.keystroke.events.*
 import com.serenity.rope.*
 import com.serenity.state.models.*
 
@@ -22,8 +23,28 @@ private[reducers] object EditorCursorSupport:
       hasSelection: Boolean,
       isMulti: Boolean,
       currentState: AppState,
-      paneId: PaneId
+      paneId: PaneId,
+      geometry: Option[EditorGeometry]
   )
+
+  /** How much measured geometry (if any) an event needs -- decided here, in the pure reducer layer, so the effect
+    * boundary (`EditorGeometryProducer.forEvent`) knows what to build without a reducer ever calling it directly
+    * (#1676). `PageSized` events walk a whole screenful of visual rows in the direction of travel and need a window
+    * that reaches that far; `Default` events (Home/End) only need the cursor's own row, which any window covers.
+    */
+  enum GeometryRequirement:
+    case NotNeeded, Default, PageSized
+
+  def geometryRequirement(event: TextEntryEvent, state: AppState): GeometryRequirement =
+    if !useVisualLineNavigation(state) then GeometryRequirement.NotNeeded
+    else
+      event match
+        case MoveToStart | MoveToEnd | ExtendSelectionToLineStart | ExtendSelectionToLineEnd =>
+          GeometryRequirement.Default
+        case PageUp | PageDown | ColumnLeft | ColumnRight | ExtendSelectionPageUp | ExtendSelectionPageDown =>
+          GeometryRequirement.PageSized
+        case _ =>
+          GeometryRequirement.NotNeeded
 
   def lineColumnToOffset(rope: Rope, line: Int, column: Int): Int =
     rope.lineColumnToOffset(line, column)
@@ -47,10 +68,9 @@ private[reducers] object EditorCursorSupport:
     * available for this pane (e.g. no buffer content yet) even when the setting is on, matching `verticalTarget`'s own
     * `fallbackVerticalMove` fallback pattern for the same situation.
     */
-  def homeTarget(state: AppState, paneId: PaneId, cursor: CursorPosition): CursorPosition =
+  def homeTarget(state: AppState, geometry: Option[EditorGeometry], cursor: CursorPosition): CursorPosition =
     if useVisualLineNavigation(state) then
-      com.serenity.state.manager.EditorGeometryProducer
-        .forPane(state, paneId)
+      geometry
         // The cursor's own affinity, not a normalised one: Home after End has to find the row End left it on, or it
         // reads as already being at the start of the row below and does nothing.
         .flatMap(_.navigation.visualLineFor(cursor))
@@ -63,13 +83,12 @@ private[reducers] object EditorCursorSupport:
     */
   def endTarget(
     state: AppState,
-    paneId: PaneId,
+    geometry: Option[EditorGeometry],
     buffer: Buffer,
     cursor: CursorPosition
   ): CursorPosition =
     if useVisualLineNavigation(state) then
-      com.serenity.state.manager.EditorGeometryProducer
-        .forPane(state, paneId)
+      geometry
         // The cursor's own affinity, so a second End is idempotent rather than walking down a row at a time.
         .flatMap(_.navigation.visualLineFor(cursor))
         // A wrapped row's end is the next row's start, so the landing column alone would put the caret at the far left

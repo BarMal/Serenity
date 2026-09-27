@@ -1,6 +1,8 @@
 package com.serenity.state.manager
 
+import com.serenity.keystroke.events.TextEntryEvent
 import com.serenity.state.models.*
+import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot, ViewportSize}
 
@@ -37,6 +39,26 @@ object EditorGeometryProducer:
       .flatMap(_.bufferId)
       .flatMap(state.persisted.buffers.get)
       .map(buffer => forBuffer(state, buffer, rowsAbove))
+
+  /** The one place production code decides whether/how much geometry a `TextEntryEvent` dispatch needs, so the shell
+    * (`EditorPaneComponent`) and its test-only stand-in (`VerticalNavSupport`) build it identically instead of each
+    * reimplementing the classification (#1676). The classification itself -- whether an event needs geometry at all,
+    * and a page-sized window versus the smaller default -- is [[EditorEventReducer.geometryRequirement]], pure reducer
+    * logic that never touches AWT or the layout engine; only the actual measurement happens here, at the boundary.
+    */
+  def forEvent(event: TextEntryEvent, state: AppState, paneId: PaneId): Option[EditorGeometry] =
+    EditorEventReducer.geometryRequirement(event, state) match
+      case EditorEventReducer.GeometryRequirement.NotNeeded => None
+      case EditorEventReducer.GeometryRequirement.Default   => forPane(state, paneId)
+      case EditorEventReducer.GeometryRequirement.PageSized =>
+        val visibleRows =
+          state.persisted.layout.editorPanes
+            .get(paneId)
+            .flatMap(_.bufferId)
+            .flatMap(state.persisted.buffers.get)
+            .map(buffer => math.max(1, buffer.viewport.visibleLines))
+            .getOrElse(1)
+        forPane(state, paneId, rowsAbove = visibleRows)
 
   private def forBuffer(state: AppState, buffer: Buffer, rowsAbove: Int): EditorGeometry =
     val font    = FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, buffer.typographyRole)

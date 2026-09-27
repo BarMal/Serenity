@@ -177,7 +177,102 @@ class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
   "An event outside this reducer's family" should "fall through to the no-op default, unchanged" in {
     val before = stateWith("hello", List(CursorPosition(0, 0)))
     val buffer = before.persisted.buffers(bufferId)
-    val ctx    = EditorCursorSupport.CursorEventContext(buffer, CursorPosition(0, 0), false, false, before, paneId)
+    val ctx = EditorCursorSupport.CursorEventContext(buffer, CursorPosition(0, 0), false, false, before, paneId, None)
 
     EditorNavigationEventReducer.reduce(NewLine, ctx).state shouldBe before
+  }
+
+  // -- Geometry injection (#1676) -------------------------------------------------------------------------------------
+  //
+  // `homeTarget`/`endTarget`/`pageTarget` take the measured geometry as a parameter rather than reaching for
+  // `EditorGeometryProducer` themselves, so these specs build the geometry directly -- exactly as
+  // `EditorVerticalNavigationReducerSpec` already does for Up/Down -- with no font loading anywhere in the test.
+
+  /** One logical line, "abcdefghij" (10 columns), wrapped at column 5 into two visual rows -- built by hand, not
+    * measured, to pin Home/End/paging against a known wrap boundary without a real font.
+    */
+  private def wrappedRowGeometry: EditorGeometry =
+    EditorGeometry(
+      NavigationGeometry(
+        Vector(
+          TextVisualLine(
+            bufferLine = 0,
+            startColumn = 0,
+            endColumn = 5,
+            text = "abcde",
+            widthPx = 50f,
+            caretStops = Vector.empty
+          ),
+          TextVisualLine(
+            bufferLine = 0,
+            startColumn = 5,
+            endColumn = 10,
+            text = "fghij",
+            widthPx = 50f,
+            caretStops = Vector.empty
+          )
+        )
+      ),
+      charWidthPx = 10,
+      panelWidthColumns = 5
+    )
+
+  "MoveToStart with explicit visual-row geometry" should "land on the start of the cursor's own wrapped row, not the logical line" in {
+    val before = stateWith("abcdefghij", List(CursorPosition(0, 7)))
+
+    val after =
+      EditorEventReducer.reduce(MoveToStart, paneId, before, Some(wrappedRowGeometry)).state.persisted.buffers(bufferId)
+
+    after.editing.cursorPositions shouldBe List(CursorPosition(0, 5))
+  }
+
+  "MoveToStart with no geometry available" should "fall back to the logical line's own start" in {
+    val before = stateWith("abcdefghij", List(CursorPosition(0, 7)))
+
+    val after =
+      EditorEventReducer.reduce(MoveToStart, paneId, before, geometry = None).state.persisted.buffers(bufferId)
+
+    after.editing.cursorPositions shouldBe List(CursorPosition(0, 0))
+  }
+
+  "MoveToEnd with explicit visual-row geometry" should "land on the end of the cursor's own wrapped row, not the logical line's end" in {
+    val before = stateWith("abcdefghij", List(CursorPosition(0, 7)))
+
+    val after =
+      EditorEventReducer.reduce(MoveToEnd, paneId, before, Some(wrappedRowGeometry)).state.persisted.buffers(bufferId)
+
+    after.editing.cursorPositions shouldBe List(CursorPosition(0, 10))
+  }
+
+  "PageDown with explicit page-sized geometry" should "walk visual rows rather than logical lines" in {
+    val manyLines = (0 until 10).map(i => s"line$i").mkString("\n")
+    val buffer = Buffer
+      .fromString(bufferId, manyLines)
+      .copy(editing = EditingStateFixtures(cursors = List(CursorPosition(0, 0))))
+    val before = AppState.initial.copy(persisted =
+      AppState.initial.persisted
+        .copy(buffers = Map(bufferId -> buffer.copy(viewport = buffer.viewport.copy(visibleLines = 2))))
+    )
+    // Every logical line is its own single visual row here (no wrapping), one-to-one with the buffer's ten lines.
+    val geometry = EditorGeometry(
+      NavigationGeometry(
+        (0 until 10).map { line =>
+          TextVisualLine(
+            bufferLine = line,
+            startColumn = 0,
+            endColumn = 5,
+            text = s"line$line",
+            widthPx = 50f,
+            caretStops = Vector.empty
+          )
+        }.toVector
+      ),
+      charWidthPx = 10,
+      panelWidthColumns = 5
+    )
+
+    val after = EditorEventReducer.reduce(PageDown, paneId, before, Some(geometry)).state.persisted.buffers(bufferId)
+
+    // visibleLines = 2, so one PageDown from visual row 0 lands on visual row 2 -- bufferLine 2's own start.
+    after.editing.cursorPositions shouldBe List(CursorPosition(2, 0))
   }

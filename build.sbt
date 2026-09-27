@@ -46,6 +46,9 @@ Compile / run / fork := true
 lazy val architectureBaselineFile = settingKey[File]("Baseline of known architecture-check violations")
 lazy val architectureCheck        = taskKey[Unit]("Fail if any file or method grew past target, or a layer was crossed")
 lazy val writeArchitectureBaseline = taskKey[Unit]("Regenerate the architecture-check baseline from the current tree")
+lazy val architectureChecksSelfTest = taskKey[Unit](
+  "Regression guard for ArchitectureChecks itself: confirms forbidden fully-qualified references are still caught (#1676)"
+)
 
 lazy val root = (project in file("."))
   .settings(
@@ -105,7 +108,12 @@ lazy val root = (project in file("."))
       baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "richtext"
     ),
     architectureBaselineFile := baseDirectory.value / "project" / "architecture-baseline.tsv",
+    architectureChecksSelfTest := {
+      ArchitectureChecks.selfTest()
+      streams.value.log.info("architectureChecksSelfTest: ratchet's own matching still catches FQN evasion")
+    },
     architectureCheck := {
+      architectureChecksSelfTest.value
       val log = streams.value.log
       ArchitectureChecks.check(baseDirectory.value / "src", architectureBaselineFile.value) match {
         case None =>

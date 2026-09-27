@@ -49,8 +49,8 @@ private[reducers] object EditorNavigationEventReducer:
         navigate(cursor => wordBoundaryFrom(buffer, cursor, (rope, offset) => rope.previousWordBoundary(offset)))
       case MoveWordRight =>
         navigate(cursor => wordBoundaryFrom(buffer, cursor, (rope, offset) => rope.nextWordBoundary(offset)))
-      case MoveToStart       => navigate(cursor => homeTarget(currentState, paneId, cursor))
-      case MoveToEnd         => navigateWithAffinity(cursor => endTarget(currentState, paneId, buffer, cursor))
+      case MoveToStart       => navigate(cursor => homeTarget(currentState, geometry, cursor))
+      case MoveToEnd         => navigateWithAffinity(cursor => endTarget(currentState, geometry, buffer, cursor))
       case MoveToStartOfFile => navigate(_ => OriginCursor)
 
       case PageUp   => applyBuffer(target => pageNavigate(target, ctx, direction = -1))
@@ -73,7 +73,7 @@ private[reducers] object EditorNavigationEventReducer:
     applyMultiCursorPageNavigation(
       if hasSelection then collapseSelectionsToFocus(target) else target,
       currentState,
-      paneId,
+      geometry,
       direction,
       pageTarget
     )
@@ -83,7 +83,7 @@ private[reducers] object EditorNavigationEventReducer:
     applyMultiCursorPageNavigation(
       if hasSelection then collapseSelectionsToFocus(target) else target,
       currentState,
-      paneId,
+      geometry,
       direction,
       columnTarget
     )
@@ -135,11 +135,11 @@ private[reducers] object EditorNavigationEventReducer:
   private def applyMultiCursorPageNavigation(
     buffer: Buffer,
     currentState: AppState,
-    paneId: PaneId,
+    geometry: Option[EditorGeometry],
     direction: Int,
-    target: (Buffer, AppState, PaneId, Int) => CursorPosition => CursorPosition
+    target: (Buffer, AppState, Option[EditorGeometry], Int) => CursorPosition => CursorPosition
   ): Buffer =
-    val move = target(buffer, currentState, paneId, direction)
+    val move = target(buffer, currentState, geometry, direction)
 
     val finalCursors = buffer.editing.cursorPositions
       .map(move)
