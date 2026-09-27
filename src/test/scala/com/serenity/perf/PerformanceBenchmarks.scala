@@ -32,6 +32,7 @@ import com.serenity.perf.BenchmarkFixtures.{
 }
 import com.serenity.project.{ProjectTaskDetector, ProjectTaskKind, ProjectTaskTerminal}
 import com.serenity.rope.{Balance, Rope}
+import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{EditorEventReducer, ModalEventReducer}
 import com.serenity.ui.layout.{CellMetrics, Layout, TextLayoutSnapshot}
@@ -200,17 +201,9 @@ object PerformanceBenchmarks:
     val findText       = largeFindDocument(matches = 12_000)
     val markdownLines  = largeMarkdownDocument(sections = 800)
     val markdownSource = markdownLines.mkString("\n")
-    // Shared across every markdown benchmark below (issue #1677): `MarkdownDocumentPreview`'s caches are
-    // instance-scoped now, so one instance stands in for the `RenderCaches.markdownPreviewCache` a real render would
-    // reuse across repeated calls -- matching this benchmark's own intent of measuring repeated/cached lookups, not a
-    // fresh, always-cold cache each iteration.
+    // Shared across every markdown benchmark below, matching a real render's cache reuse across calls (#1677).
     val markdownPreviewCache = MarkdownPreviewCache()
-    // Shared across every render benchmark below (issue #1677): a real `StateManager` builds one `RenderCaches` at
-    // construction and reuses it across every frame it ever renders (`StateManagerComposition.scala`'s
-    // `renderCaches` field), so a fresh `RenderCaches.create()` per render call here would leave every cache
-    // permanently cold -- a 100% miss rate on every iteration, not the warm/steady-state cost these benchmarks
-    // measure.
-    val renderCaches = com.serenity.state.manager.RenderCaches.create()
+    val renderCaches         = RenderCaches.create() // reused below, mirroring StateManager (#1677)
     val longMeasuredLine = TextLayoutSnapshot.visualLineForText(
       "Wi" * 8_000,
       bufferLine = 0,
@@ -654,11 +647,7 @@ object PerformanceBenchmarks:
       )
     )
 
-  private def renderedFrame(
-    state: AppState,
-    deviceScale: Double,
-    caches: com.serenity.state.manager.RenderCaches
-  ): BufferedImage =
+  private def renderedFrame(state: AppState, deviceScale: Double, caches: RenderCaches): BufferedImage =
     val image = reusableFramePools(deviceScale).acquire(
       math.ceil(frameWidthPx * deviceScale).toInt,
       math.ceil(frameHeightPx * deviceScale).toInt,
@@ -716,11 +705,7 @@ object PerformanceBenchmarks:
     )
     image
 
-  private def prepareCursorBaseFrame(
-    state: AppState,
-    window: SwingWindow,
-    caches: com.serenity.state.manager.RenderCaches
-  ): Unit =
+  private def prepareCursorBaseFrame(state: AppState, window: SwingWindow, caches: RenderCaches): Unit =
     RendererEntryPoints.render(
       state,
       cursorVisible = false,
@@ -734,11 +719,7 @@ object PerformanceBenchmarks:
       caches = caches
     )
 
-  private def renderedCursorOverlay(
-    state: AppState,
-    window: SwingWindow,
-    caches: com.serenity.state.manager.RenderCaches
-  ): Boolean =
+  private def renderedCursorOverlay(state: AppState, window: SwingWindow, caches: RenderCaches): Boolean =
     RendererCursorOverlay.renderCursorOnly(
       state,
       cursorVisible = true,
