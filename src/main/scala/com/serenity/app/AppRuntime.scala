@@ -1,6 +1,5 @@
 package com.serenity.app
 
-import java.awt.Color
 import java.nio.file.Path
 
 import scala.concurrent.duration.*
@@ -11,7 +10,7 @@ import cats.syntax.foldable.*
 import cats.syntax.parallel.*
 import cats.syntax.semigroup.*
 import com.serenity.config.{AppConfig, RenderFpsTarget}
-import com.serenity.frontend.Frontend
+import com.serenity.frontend.{Frontend, FrontendRuntime}
 import com.serenity.input.*
 import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
@@ -26,8 +25,10 @@ import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 object AppRuntime:
 
-  private[serenity] type RenderFn =
-    (AppState, Boolean, Option[Color], Damage, Map[BufferId, com.serenity.animation.AnimationState]) => IO[Unit]
+  /** Issue #1669's remaining scope moved this onto [[FrontendRuntime]], the frontend-owned render/input bundle; kept as
+    * an alias so callers outside this file (`AppRuntimeRenderLoops`, `TuiRuntime`) don't need to know it moved.
+    */
+  private[serenity] type RenderFn = FrontendRuntime.RenderFn
 
   private val NanosPerSecond: Long = 1_000_000_000L
 
@@ -116,10 +117,8 @@ object AppRuntime:
 
   def run(
     initialViewportSize: ViewportSize,
-    makeInputHandler: InputRouter[IO, Event] => IO[InputHandler[IO]],
     checkResize: IO[Option[ViewportSize]],
-    renderFull: RenderFn,
-    renderCursorOnly: RenderFn,
+    runtime: FrontendRuntime,
     appConfig: AppConfig,
     makeStateManager: Option[Logger[IO] => IO[StateManager]] = None,
     awaitExternalQuit: IO[Unit] = IO.never,
@@ -150,7 +149,7 @@ object AppRuntime:
           configNotice
         )
         inputRouter    <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
-        inputHandler   <- makeInputHandler(inputRouter)
+        inputHandler   <- runtime.inputHandler(inputRouter)
         _              <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
         fastModeSignal <- SignallingRef.of[IO, Boolean](false)
         pendingDamage  <- Ref.of[IO, Damage](Damage.Nothing)
@@ -203,7 +202,7 @@ object AppRuntime:
         inputLoop = runInputLoop(stateManager, inputHandler, inputFunnel)
         _ <-
           Resource.make(inputLoop.start)(_.cancel).use { inputFiber =>
-            renderFull(initialState, true, None, Damage.Everything, Map.empty) >>
+            runtime.renderFull(initialState, true, None, Damage.Everything, Map.empty) >>
               logger.info("Initial render completed, starting main loop") >>
               {
                 val idlePhase = AppRuntimeRenderLoops.idleRenderPhase(
@@ -215,7 +214,7 @@ object AppRuntime:
                   checkResizeAndHandle = checkResizeAndHandle,
                   cursorVisible = cursorVisible,
                   breathIndex = breathIndex,
-                  renderCursorOnly = renderCursorOnly,
+                  renderCursorOnly = runtime.renderCursorOnly,
                   requestFastRender = requestFastRender,
                   cursorIdleInterval = frontend.cursorIdleInterval
                 )
@@ -229,7 +228,7 @@ object AppRuntime:
                   animationTickCadence,
                   currentStateForDiagnostics,
                   checkResizeAndHandle,
-                  renderFull
+                  runtime.renderFull
                 )
 
                 val renderLoop: Stream[IO, Unit] =

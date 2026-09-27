@@ -5,13 +5,13 @@ import java.nio.file.Path
 import cats.effect.IO
 import com.serenity.command.{PanelKind, ViewIntent}
 import com.serenity.config.{AppConfig, MarkdownViewMode}
+import com.serenity.frontend.MarkdownPreviewWindowAvailability
 import com.serenity.io.{FileEntry, FileManager, FileUtils}
 import com.serenity.keystroke.events.Event
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{PanelStateReducer, PinnedPanelContentReducer}
 import com.serenity.ui.layout.{DirEntry, PanelPosition, PanelTarget, SplitAxis}
-import com.serenity.ui.tui.MarkdownPreviewWindowAvailability
 
 /** Pinned-panel management: pinning/unpinning/moving/resizing the explorer, outline, comments, diagnostics, and
   * markdown-preview panels, plus the [[ViewIntent]] entry points that drive them. The changes themselves are

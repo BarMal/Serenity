@@ -182,8 +182,8 @@ object StateManager:
     windowSizeProvider: IO[Option[PreferredWindowSize]] = IO.pure(None),
     onPreferredWindowSizeChanged: PreferredWindowSize => IO[Unit] = _ => IO.unit,
     fileDialog: Option[FileDialog] = None,
-    markdownPreviewWindow: com.serenity.ui.tui.MarkdownPreviewWindowAvailability =
-      com.serenity.ui.tui.MarkdownPreviewWindowAvailability.Unavailable
+    markdownPreviewWindow: com.serenity.frontend.MarkdownPreviewWindowAvailability =
+      com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
     RendererFrameState.configureCacheCapacity(initialConfig.surfaceConfig.rendererFrameStateCacheCapacity)

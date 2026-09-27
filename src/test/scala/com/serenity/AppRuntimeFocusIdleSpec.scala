@@ -9,7 +9,7 @@ import cats.effect.{Deferred, IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.frontend.{FrontendCapabilities, GuiFrontend, TuiFrontend}
+import com.serenity.frontend.{FrontendCapabilities, FrontendRuntime, GuiFrontend, TuiFrontend}
 import com.serenity.input.InputHandler
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.*
@@ -372,22 +372,24 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
       fiber <- AppRuntime
         .run(
           initialViewportSize = ViewportSize(120, 40),
-          makeInputHandler = _ => IO.pure(new SilentInputHandler),
           checkResize = IO.pure(None),
-          renderFull = (
-            _: AppState,
-            _: Boolean,
-            _: Option[Color],
-            _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState]
-          ) => IO.unit,
-          renderCursorOnly = (
-            _: AppState,
-            _: Boolean,
-            _: Option[Color],
-            _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState]
-          ) => idleRenderCalls.update(_ + 1),
+          runtime = FrontendRuntime(
+            inputHandler = _ => IO.pure(new SilentInputHandler),
+            renderFull = (
+              _: AppState,
+              _: Boolean,
+              _: Option[Color],
+              _: Damage,
+              _: Map[BufferId, com.serenity.animation.AnimationState]
+            ) => IO.unit,
+            renderCursorOnly = (
+              _: AppState,
+              _: Boolean,
+              _: Option[Color],
+              _: Damage,
+              _: Map[BufferId, com.serenity.animation.AnimationState]
+            ) => idleRenderCalls.update(_ + 1)
+          ),
           appConfig = fastConfig,
           makeStateManager = Some(_ => IO.pure(stateManager)),
           awaitExternalQuit = closeRequested.get,
@@ -423,22 +425,24 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
         AppRuntime
           .run(
             initialViewportSize = ViewportSize(120, 40),
-            makeInputHandler = _ => IO.pure(new SilentInputHandler),
             checkResize = IO.pure(None),
-            renderFull = (
-              _: AppState,
-              _: Boolean,
-              _: Option[Color],
-              _: Damage,
-              _: Map[BufferId, com.serenity.animation.AnimationState]
-            ) => IO.unit,
-            renderCursorOnly = (
-              _: AppState,
-              _: Boolean,
-              _: Option[Color],
-              _: Damage,
-              _: Map[BufferId, com.serenity.animation.AnimationState]
-            ) => IO.raiseError(RuntimeException("idle render failed")),
+            runtime = FrontendRuntime(
+              inputHandler = _ => IO.pure(new SilentInputHandler),
+              renderFull = (
+                _: AppState,
+                _: Boolean,
+                _: Option[Color],
+                _: Damage,
+                _: Map[BufferId, com.serenity.animation.AnimationState]
+              ) => IO.unit,
+              renderCursorOnly = (
+                _: AppState,
+                _: Boolean,
+                _: Option[Color],
+                _: Damage,
+                _: Map[BufferId, com.serenity.animation.AnimationState]
+              ) => IO.raiseError(RuntimeException("idle render failed"))
+            ),
             appConfig = AppConfig.default,
             makeStateManager = Some(logger =>
               StateManager.apply(
