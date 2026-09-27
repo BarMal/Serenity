@@ -7,10 +7,10 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** `EditorEditSupport.richTextDocumentAfterEdit`'s staleness guard (`#1663`): it used to re-derive
-  * `buffer.document.content.collect()` and compare it character-for-character against `richTextDocument.plainText`
-  * on every edit -- the O(n) "sync discipline" the issue asks to replace. It now trusts `Buffer.richTextInSync`, an
-  * O(1) comparison of two `Long`s, instead. These specs prove that trust is real: the decision follows the version
-  * stamp even when it disagrees with what a full-text comparison would have found, in both directions.
+  * `buffer.document.content.collect()` and compare it character-for-character against `richTextDocument.plainText` on
+  * every edit -- the O(n) "sync discipline" the issue asks to replace. It now trusts `Buffer.richTextInSync`, an O(1)
+  * comparison of two `Long`s, instead. These specs prove that trust is real: the decision follows the version stamp
+  * even when it disagrees with what a full-text comparison would have found, in both directions.
   */
 class EditorEditSupportRichTextSyncSpec extends AnyFlatSpec with Matchers:
 
@@ -27,7 +27,8 @@ class EditorEditSupportRichTextSyncSpec extends AnyFlatSpec with Matchers:
       // A `RichTextDocument` whose plain text ("wrong text entirely") is nothing like the buffer's ("hello world")
       // -- a full-text `matchesPlainText` re-scan would have failed this and returned `None`. The version stamp
       // says it's still in sync, so the edit is trusted and applied regardless: proof the text is never re-read.
-      val mismatchedText = bufferWith("hello world", Some(RichTextDocument.fromPlainText("wrong text entirely")), inSync = true)
+      val mismatchedText =
+        bufferWith("hello world", Some(RichTextDocument.fromPlainText("wrong text entirely")), inSync = true)
 
       val updated = EditorEditSupport.richTextDocumentAfterEdit(mismatchedText, 0, 0, "X")
 

@@ -77,8 +77,8 @@ final case class Document(
     contentVersion: Long = 0L
 ):
   /** The only sanctioned way to change `content`: keeps `contentVersion` monotonically increasing so a
-    * `richTextDocument` stamped against the old version is correctly seen as stale by `Buffer.richTextInSync`,
-    * without re-comparing any text.
+    * `richTextDocument` stamped against the old version is correctly seen as stale by `Buffer.richTextInSync`, without
+    * re-comparing any text.
     */
   def withContent(newContent: Rope): Document =
     copy(content = newContent, contentVersion = contentVersion + 1, isDirty = true, isNewEmpty = false)
@@ -128,10 +128,10 @@ final case class RichTextState(
     richTextSyncedVersion: Option[Long] = None
 ):
   /** Attaches `document` (or clears it, via `None`) as the paragraph-shaped view of a buffer whose content is at
-    * `contentVersion`, stamping the sync version alongside it so `Buffer.richTextInSync` can trust the pairing
-    * without re-checking any text. This is the one place that sets `richTextDocument` and `richTextSyncedVersion`
-    * together, so every call site attaching a document (freshly built, or carried forward already verified) goes
-    * through the same pairing instead of risking a `richTextDocument` stamped with a stale or missing version.
+    * `contentVersion`, stamping the sync version alongside it so `Buffer.richTextInSync` can trust the pairing without
+    * re-checking any text. This is the one place that sets `richTextDocument` and `richTextSyncedVersion` together, so
+    * every call site attaching a document (freshly built, or carried forward already verified) goes through the same
+    * pairing instead of risking a `richTextDocument` stamped with a stale or missing version.
     */
   def withSyncedDocument(document: Option[RichTextDocument], contentVersion: Long): RichTextState =
     copy(richTextDocument = document, richTextSyncedVersion = document.map(_ => contentVersion))
@@ -217,10 +217,10 @@ final case class Buffer(
     * `richTextDocument` default to their current, unadjusted values -- pass the caller's remapped ones when the edit
     * needs to carry them forward. Every real caller does pass an explicit `richTextDocument` (`None` when there is
     * none, or the result of re-deriving it against the new `content`); the default exists for a caller with no rich
-    * text to carry, so it stamps whatever `richTextDocument` it ends up with as synced to the *new* content version
-    * -- a caller relying on the default while genuinely changing content on a buffer that has a `richTextDocument`
-    * would wrongly mark that unrelated-to-this-edit document as still matching, exactly the drift `#1663` moved away
-    * from checking by full-text comparison. Only safe when the default is left untouched by every caller, as it is.
+    * text to carry, so it stamps whatever `richTextDocument` it ends up with as synced to the *new* content version --
+    * a caller relying on the default while genuinely changing content on a buffer that has a `richTextDocument` would
+    * wrongly mark that unrelated-to-this-edit document as still matching, exactly the drift `#1663` moved away from
+    * checking by full-text comparison. Only safe when the default is left untouched by every caller, as it is.
     *
     * Centralises the five near-identical post-edit `copy` blocks in `EditorEventReducer` (`#1072`), which had already
     * drifted: the merged-deletion path silently kept a stale `richTextDocument` (and stale `multiCursorVerticalStates`)
@@ -242,8 +242,8 @@ final case class Buffer(
 
   /** `O(1)`: whether `richText.richTextDocument` is known to describe `document.content` exactly, replacing a
     * `matchesPlainText` re-comparison of the whole plain text on every check (`#1663`). Relies on every writer of
-    * `richTextDocument` going through [[RichTextState.withSyncedDocument]] (directly, or via [[withEditedContent]])
-    * so the stamped version and `document.contentVersion` only ever agree when the pairing is actually still valid.
+    * `richTextDocument` going through [[RichTextState.withSyncedDocument]] (directly, or via [[withEditedContent]]) so
+    * the stamped version and `document.contentVersion` only ever agree when the pairing is actually still valid.
     */
   def richTextInSync: Boolean =
     richText.richTextDocument.isDefined && richText.richTextSyncedVersion.contains(document.contentVersion)

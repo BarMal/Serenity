@@ -32,7 +32,7 @@ class ParagraphTreeSpec extends AnyFlatSpec with Matchers:
 
   it should "round-trip a very large document, preserving order" in {
     val paragraphs = linear(20_000)
-    val tree        = ParagraphTree.fromParagraphs(paragraphs)
+    val tree       = ParagraphTree.fromParagraphs(paragraphs)
 
     tree.paragraphCount shouldBe 20_000
     tree.toParagraphs shouldBe paragraphs
@@ -87,9 +87,8 @@ class ParagraphTreeSpec extends AnyFlatSpec with Matchers:
   it should "transform only the paragraphs inside the requested index range" in {
     val tree = ParagraphTree.fromParagraphs(linear(10))
 
-    val updated = tree.updatedRange(3, 5) { (paragraph, index) =>
-      paragraph.copy(runs = List(RichTextRun(s"touched-$index")))
-    }
+    val updated =
+      tree.updatedRange(3, 5)((paragraph, index) => paragraph.copy(runs = List(RichTextRun(s"touched-$index"))))
 
     updated.toParagraphs.map(_.plainText) shouldBe List(
       "line-0",
@@ -144,8 +143,8 @@ class ParagraphTreeSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "map every paragraph while preserving shape" in {
-    val tree    = ParagraphTree.fromParagraphs(linear(500))
-    val mapped  = tree.mapAll(p => p.copy(alignment = ParagraphAlignment.Center))
+    val tree   = ParagraphTree.fromParagraphs(linear(500))
+    val mapped = tree.mapAll(p => p.copy(alignment = ParagraphAlignment.Center))
 
     mapped.paragraphCount shouldBe 500
     mapped.toParagraphs.forall(_.alignment == ParagraphAlignment.Center) shouldBe true
@@ -170,7 +169,7 @@ class ParagraphTreeSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val inRangeResult  = tree.forallInRange(1, 2)((paragraph, _) => paragraph.role == ParagraphRole.Body)
+    val inRangeResult    = tree.forallInRange(1, 2)((paragraph, _) => paragraph.role == ParagraphRole.Body)
     val outOfRangeResult = tree.forallInRange(0, 2)((paragraph, _) => paragraph.role == ParagraphRole.Body)
     inRangeResult shouldBe true
     outOfRangeResult shouldBe false

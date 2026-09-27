@@ -132,7 +132,8 @@ class BufferWithEditedContentSpec extends AnyFlatSpec with Matchers:
 
   it should "leave richTextInSync false when the caller clears richTextDocument" in {
     val withRichText = original.copy(richText =
-      original.richText.withSyncedDocument(Some(RichTextDocument.fromPlainText("alpha beta")), original.document.contentVersion)
+      original.richText
+        .withSyncedDocument(Some(RichTextDocument.fromPlainText("alpha beta")), original.document.contentVersion)
     )
     val edited =
       withRichText.withEditedContent(Rope("gamma delta"), List(CursorPosition(0, 1)), richTextDocument = None)
@@ -153,7 +154,8 @@ class BufferWithEditedContentSpec extends AnyFlatSpec with Matchers:
 
   it should "be false when the stamped version no longer matches the current content version" in {
     val synced = original.copy(richText =
-      original.richText.withSyncedDocument(Some(RichTextDocument.fromPlainText("alpha beta")), original.document.contentVersion)
+      original.richText
+        .withSyncedDocument(Some(RichTextDocument.fromPlainText("alpha beta")), original.document.contentVersion)
     )
     val driftedVersion = synced.copy(document = synced.document.withContent(synced.document.content))
     driftedVersion.richTextInSync shouldBe false
@@ -161,7 +163,8 @@ class BufferWithEditedContentSpec extends AnyFlatSpec with Matchers:
 
   it should "be true when richTextDocument was stamped as synced against the current content version" in {
     val synced = original.copy(richText =
-      original.richText.withSyncedDocument(Some(RichTextDocument.fromPlainText("alpha beta")), original.document.contentVersion)
+      original.richText
+        .withSyncedDocument(Some(RichTextDocument.fromPlainText("alpha beta")), original.document.contentVersion)
     )
     synced.richTextInSync shouldBe true
   }

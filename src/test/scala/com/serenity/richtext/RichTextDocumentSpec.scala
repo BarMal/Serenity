@@ -368,7 +368,7 @@ class RichTextDocumentSpec extends AnyFlatSpec with Matchers:
     )
     val afterInsert = afterBold.replaceRange(RichTextRange(RichTextPosition(0, 5), RichTextPosition(0, 5)), "!")
     val afterSplit  = afterInsert.replaceRange(RichTextRange(RichTextPosition(0, 6), RichTextPosition(0, 6)), "\n")
-    val afterRole   = afterSplit.setParagraphRole(
+    val afterRole = afterSplit.setParagraphRole(
       RichTextRange(RichTextPosition(1, 0), RichTextPosition(1, 0)),
       ParagraphRole.Heading(1)
     )
