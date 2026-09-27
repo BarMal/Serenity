@@ -10,10 +10,10 @@ final case class TextPanelRow(
 )
 
 /** A docked panel's resolved paint plan. `composition` is the panel's *only* stored content representation (issue
-  * #1683) -- there is no second, independently-settable `rows`/`header`/`footer` that could disagree with it and need
-  * a precedence rule, the way this type used to carry both. `rows`/`header`/`footer` below are read-only views derived
-  * from `composition.paintBoxes`, kept only so existing call sites (and `PinnedPanelViewModel.resolve`'s own tests)
-  * can still ask "what text did this panel resolve to" without reaching into paint-box internals.
+  * #1683) -- there is no second, independently-settable `rows`/`header`/`footer` that could disagree with it and need a
+  * precedence rule, the way this type used to carry both. `rows`/`header`/`footer` below are read-only views derived
+  * from `composition.paintBoxes`, kept only so existing call sites (and `PinnedPanelViewModel.resolve`'s own tests) can
+  * still ask "what text did this panel resolve to" without reaching into paint-box internals.
   *
   * The companion's `apply` also still accepts `rows`/`header`/`footer` (as `TextPanelRow`s) for construction: a plain
   * informational panel with no bespoke `*SurfaceComposition` of its own is built from them, via
@@ -51,19 +51,19 @@ final case class TextPanelView private[renderer] (
 
 object TextPanelView:
 
-  /** `composition`, when given, wins outright -- there is no dual-path precedence rule to apply, only a choice of
-    * which single composition to store: a caller building a panel for content with no bespoke `*SurfaceComposition`
-    * passes `rows`/`header`/`footer` instead, and this builds the generic one via [[RowsSurfaceComposition]].
+  /** `composition`, when given, wins outright -- there is no dual-path precedence rule to apply, only a choice of which
+    * single composition to store: a caller building a panel for content with no bespoke `*SurfaceComposition` passes
+    * `rows`/`header`/`footer` instead, and this builds the generic one via [[RowsSurfaceComposition]].
     */
   def apply(
-      rect: LayoutRect,
-      contentRect: Option[LayoutRect] = None,
-      title: String,
-      rows: List[TextPanelRow] = Nil,
-      header: Option[TextPanelRow] = None,
-      footer: Option[TextPanelRow] = None,
-      surfaceId: Option[SurfaceId] = None,
-      composition: Option[ResolvedSurfaceComposition] = None
+    rect: LayoutRect,
+    contentRect: Option[LayoutRect] = None,
+    title: String,
+    rows: List[TextPanelRow] = Nil,
+    header: Option[TextPanelRow] = None,
+    footer: Option[TextPanelRow] = None,
+    surfaceId: Option[SurfaceId] = None,
+    composition: Option[ResolvedSurfaceComposition] = None
   ): TextPanelView =
     val resolvedComposition = composition.getOrElse(
       RowsSurfaceComposition.forResolved(
@@ -134,10 +134,10 @@ object PinnedPanelViewModel:
     * never a plain-rows fallback with its own, separately derived geometry (issue #1683).
     */
   private def compositionFor(
-      surface: UiSurface,
-      rect: LayoutRect,
-      resolved: ResolvedSurfaceContent,
-      state: Option[AppState]
+    surface: UiSurface,
+    rect: LayoutRect,
+    resolved: ResolvedSurfaceContent,
+    state: Option[AppState]
   ): ResolvedSurfaceComposition =
     surface.content match
       case SurfaceContent.DirectoryTree(tree, selectedPath) =>
@@ -152,9 +152,9 @@ object PinnedPanelViewModel:
         RowsSurfaceComposition.forResolved(resolved, rect, SurfaceFrameLayout.borderCellsFor(content))
 
   private def activeSymbolLocation(
-      symbols: List[Symbol],
-      fallback: Option[Location],
-      state: Option[AppState]
+    symbols: List[Symbol],
+    fallback: Option[Location],
+    state: Option[AppState]
   ): Option[Location] =
     fallback.orElse {
       state

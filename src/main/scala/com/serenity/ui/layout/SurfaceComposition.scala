@@ -81,7 +81,13 @@ final case class ResolvedSurfaceComposition(
     intrinsicSize: SurfaceIntrinsicSize,
     paintBoxes: List[SurfacePaintBox],
     hitRegions: List[SurfaceHitRegion],
-    focusOrder: List[SurfaceFocusId]
+    focusOrder: List[SurfaceFocusId],
+    // Set only by `RowsSurfaceComposition.forResolved` (issue #1683). `RowsSurfaceComposition.contentRowSlots`
+    // recovers row slots by assuming every non-chrome paint box is a plain `Item`, which holds only for that generic
+    // adapter's own tagging -- a bespoke composition (e.g. `CommandRunnerSurfaceComposition`, `OutlineSurfaceComposition`)
+    // paints real rows through its own paint-box shape, and reverse-engineering slots from those would misreport
+    // content that was never meant to be read back that way.
+    builtByRowsAdapter: Boolean = false
 ):
 
   /** Resolve the topmost semantic hit at a logical-pixel position. */

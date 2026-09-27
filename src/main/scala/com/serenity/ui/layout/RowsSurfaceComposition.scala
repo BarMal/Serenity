@@ -4,15 +4,15 @@ package com.serenity.ui.layout
   * #1683). Turns whatever `SurfaceContentResolver.resolve` already produced (rows/header/footer/keyHint) into the same
   * `ResolvedSurfaceComposition` shape every composed surface (`ContextMenuSurfaceComposition`,
   * `CommandRunnerSurfaceComposition`, ...) already paints through, so `TextPanelView`/`TextOverlayView` need no second,
-  * independently-settable rows/header/footer representation alongside `composition` -- every surface's content, composed
-  * or not, is exactly one `ResolvedSurfaceComposition`.
+  * independently-settable rows/header/footer representation alongside `composition` -- every surface's content,
+  * composed or not, is exactly one `ResolvedSurfaceComposition`.
   *
   * Positions rows via the same `SurfaceFrameLayout.contentRowSlotsFor` geometry the pre-migration rows-only renderers
   * used, so this is a pure re-shaping of already-resolved content, not a second, independently-derived layout.
   * Non-interactive throughout: none of the content kinds this adapter serves (informational panels like `QuickInfo`,
   * `FilePreview`, `ShortcutsHelp`, ...) are focus-navigable or mouse-hit-tested through their composition today, so
-  * `hitRegions`/`focusOrder` are always empty here -- unlike a bespoke composition (e.g. `ContextMenuSurfaceComposition`),
-  * which builds real hit regions for its selectable rows.
+  * `hitRegions`/`focusOrder` are always empty here -- unlike a bespoke composition (e.g.
+  * `ContextMenuSurfaceComposition`), which builds real hit regions for its selectable rows.
   */
 object RowsSurfaceComposition:
 
@@ -62,10 +62,12 @@ object RowsSurfaceComposition:
     }
     ResolvedSurfaceComposition(
       bounds = bounds,
-      intrinsicSize = SurfaceIntrinsicSize(frameRect.width, frameHeight(resolved, borderCells, itemGapRows, itemTargetRows)),
+      intrinsicSize =
+        SurfaceIntrinsicSize(frameRect.width, frameHeight(resolved, borderCells, itemGapRows, itemTargetRows)),
       paintBoxes = boxes,
       hitRegions = Nil,
-      focusOrder = Nil
+      focusOrder = Nil,
+      builtByRowsAdapter = true
     )
 
   private def rowFor(kind: SurfaceContentRowKind, resolved: ResolvedSurfaceContent): Option[OverlayRow] =
@@ -105,21 +107,30 @@ object RowsSurfaceComposition:
       case OverlayRowLayout.PriorityColumns => SurfacePaintLayout.Columns
 
   /** Recovers the `SurfaceContentRowSlot`s a composition's paint boxes were placed at -- the inverse of the
-    * header/item/key-hint/footer tagging `forResolved` (and every bespoke `*SurfaceComposition`) applies, for callers
-    * (contract/geometry cross-checks) that still want that shape rather than reaching into paint-box internals.
+    * header/item/key-hint/footer tagging `forResolved` applies, for callers (contract/geometry cross-checks) that still
+    * want that shape rather than reaching into paint-box internals.
+    *
+    * Only meaningful for a composition this adapter itself built (`composition.builtByRowsAdapter`): a bespoke
+    * composition's paint boxes were never tagged by this rule, so inverting them the same way would misreport their
+    * content as plain item rows. Such a composition reports no row slots here.
     */
   def contentRowSlots(composition: ResolvedSurfaceComposition): List[SurfaceContentRowSlot] =
-    composition.paintBoxes
-      .foldLeft((0, List.empty[SurfaceContentRowSlot])) {
-        case ((itemIndex, acc), box) =>
-          val y = math.round(box.rect.y).toInt
-          box.kind match
-            case SurfacePaintKind.Heading => (itemIndex, acc :+ SurfaceContentRowSlot(SurfaceContentRowKind.Header, y))
-            case SurfacePaintKind.Footer  => (itemIndex, acc :+ SurfaceContentRowSlot(SurfaceContentRowKind.Footer, y))
-            case SurfacePaintKind.KeyHint => (itemIndex, acc :+ SurfaceContentRowSlot(SurfaceContentRowKind.KeyHint, y))
-            case _ => (itemIndex + 1, acc :+ SurfaceContentRowSlot(SurfaceContentRowKind.Item(itemIndex), y))
-      }
-      ._2
+    if !composition.builtByRowsAdapter then Nil
+    else
+      composition.paintBoxes
+        .foldLeft((0, List.empty[SurfaceContentRowSlot])) {
+          case ((itemIndex, acc), box) =>
+            val y = math.round(box.rect.y).toInt
+            box.kind match
+              case SurfacePaintKind.Heading =>
+                (itemIndex, acc :+ SurfaceContentRowSlot(SurfaceContentRowKind.Header, y))
+              case SurfacePaintKind.Footer =>
+                (itemIndex, acc :+ SurfaceContentRowSlot(SurfaceContentRowKind.Footer, y))
+              case SurfacePaintKind.KeyHint =>
+                (itemIndex, acc :+ SurfaceContentRowSlot(SurfaceContentRowKind.KeyHint, y))
+              case _ => (itemIndex + 1, acc :+ SurfaceContentRowSlot(SurfaceContentRowKind.Item(itemIndex), y))
+        }
+        ._2
 
   private def rowRect(bounds: LogicalPixelRect, row: Int): LogicalPixelRect =
     LogicalPixelRect(

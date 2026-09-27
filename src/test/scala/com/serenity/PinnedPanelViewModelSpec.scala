@@ -148,6 +148,27 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     compact.rows.map(_.plainText) shouldBe List("3 lines", "cursor 7")
   }
 
+  it should "derive non-empty content row slots for a panel composed via the generic RowsSurfaceComposition adapter" in {
+    val view = PinnedPanelViewModel.resolve(terminalPanel, LayoutRect(0, 0, 60, 8))
+
+    view.contentRowSlots should not be empty
+    view.contentRowSlots.map(_.kind) shouldBe List(
+      SurfaceContentRowKind.Item(0),
+      SurfaceContentRowKind.Item(1),
+      SurfaceContentRowKind.Item(2)
+    )
+  }
+
+  it should "report no content row slots for a panel composed via a bespoke *SurfaceComposition" in {
+    // `DirectoryTreeSurfaceComposition` paints its own real rows through `RowCompositionSupport`, never through the
+    // generic `RowsSurfaceComposition` adapter -- `contentRowSlots` must not reverse-engineer slots from those paint
+    // boxes the way it would for an adapter-built composition (issue #1683 regression).
+    val view = PinnedPanelViewModel.resolve(panel, LayoutRect(0, 0, 60, 10))
+
+    view.rows should not be empty
+    view.contentRowSlots shouldBe empty
+  }
+
   it should "preserve resolved header and footer rows separately from item rows" in {
     // `ContextMenu` is used as the fixture here purely because it's a content kind whose resolver still produces a
     // header, item rows, and a footer all at once (unlike `ModalWorkflow`, which paints entirely via

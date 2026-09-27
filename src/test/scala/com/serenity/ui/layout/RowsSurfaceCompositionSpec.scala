@@ -118,4 +118,49 @@ class RowsSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     composition.paintBoxes.headOption.map(_.rect.y) shouldBe Some(frameRect.y)
     composition.intrinsicSize shouldBe SurfaceIntrinsicSize(frameRect.width, 1)
   }
+
+  it should "mark the composition it builds as recoverable via contentRowSlots" in {
+    val resolved = ResolvedSurfaceContent(rows = List(OverlayRow("one")))
+
+    RowsSurfaceComposition.forResolved(resolved, frameRect).builtByRowsAdapter shouldBe true
+  }
+
+  "contentRowSlots" should "recover header/item/key-hint/footer slots for a composition this adapter built" in {
+    val resolved = ResolvedSurfaceContent(
+      header = Some(OverlayRow("head")),
+      rows = List(OverlayRow("one"), OverlayRow("two")),
+      keyHintRow = Some(OverlayRow("hint")),
+      footer = Some(OverlayRow("foot"))
+    )
+
+    val composition = RowsSurfaceComposition.forResolved(resolved, frameRect)
+    val slots       = RowsSurfaceComposition.contentRowSlots(composition)
+
+    slots.map(_.kind) shouldBe List(
+      SurfaceContentRowKind.Header,
+      SurfaceContentRowKind.Item(0),
+      SurfaceContentRowKind.Item(1),
+      SurfaceContentRowKind.KeyHint,
+      SurfaceContentRowKind.Footer
+    )
+  }
+
+  it should "stay empty for a composition not built via this adapter, even when it carries real paint boxes" in {
+    // Mirrors a bespoke composition (e.g. `CommandRunnerSurfaceComposition`, `OutlineSurfaceComposition`) -- its
+    // paint boxes were never tagged by `forResolved`'s header/item/key-hint/footer rule, so inverting them the same
+    // way would misreport that content as plain item rows (issue #1683 regression).
+    val bespokeComposition = ResolvedSurfaceComposition(
+      bounds = LogicalPixelRect(0, 0, 20, 3),
+      intrinsicSize = SurfaceIntrinsicSize(20, 3),
+      paintBoxes = List(
+        SurfacePaintBox(kind = SurfacePaintKind.Text, rect = LogicalPixelRect(0, 0, 20, 1), text = Some("item one")),
+        SurfacePaintBox(kind = SurfacePaintKind.ActionItem, rect = LogicalPixelRect(0, 1, 20, 1), text = Some("action"))
+      ),
+      hitRegions = Nil,
+      focusOrder = Nil
+    )
+
+    bespokeComposition.builtByRowsAdapter shouldBe false
+    RowsSurfaceComposition.contentRowSlots(bespokeComposition) shouldBe Nil
+  }
 end RowsSurfaceCompositionSpec
