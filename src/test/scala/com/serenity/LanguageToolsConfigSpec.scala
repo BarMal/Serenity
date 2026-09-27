@@ -173,3 +173,43 @@ class LanguageToolsConfigSpec extends AnyFlatSpec with Matchers:
 
     directories.shouldBe(Nil)
   }
+
+  // #1691: the directories AppRuntime's FileChangeWatcher-backed loop registers a real-time watch on, so an on-disk
+  // dictionary edit invalidates StateManagerOperationBoundary's fingerprint cache without waiting for focus-gain.
+  "SpellCheckConfig.dictionaryWatchDirectories" should "be empty when spell-check is disabled" in {
+    SpellCheckConfig.dictionaryWatchDirectories(SpellCheckConfig(enabled = false)).shouldBe(Set.empty)
+  }
+
+  it should "offer both a configured directory entry and its parent as watch candidates" in {
+    val configuredDirectory = Files.createTempDirectory("serenity-watch-dictionary-dir")
+
+    val directories = SpellCheckConfig.dictionaryWatchDirectories(
+      SpellCheckConfig(enabled = true, dictionaryPaths = List(configuredDirectory.toString))
+    )
+
+    directories.should(contain(configuredDirectory))
+    directories.should(contain(configuredDirectory.getParent))
+  }
+
+  it should "offer both a configured file entry and its parent directory as watch candidates" in {
+    val configuredDirectory = Files.createTempDirectory("serenity-watch-dictionary-file")
+    val configuredFile      = configuredDirectory.resolve("en.dic")
+
+    val directories = SpellCheckConfig.dictionaryWatchDirectories(
+      SpellCheckConfig(enabled = true, dictionaryPaths = List(configuredFile.toString))
+    )
+
+    directories.should(contain(configuredFile))
+    directories.should(contain(configuredDirectory))
+  }
+
+  it should "fall back to the OS-standard directories in the zero-config case" in {
+    val osDirectory = Files.createTempDirectory("serenity-watch-dictionary-os")
+
+    val directories = SpellCheckConfig.dictionaryWatchDirectories(
+      SpellCheckConfig(enabled = true),
+      osDictionaryDirectories = List(osDirectory.toString)
+    )
+
+    directories.shouldBe(Set(osDirectory))
+  }

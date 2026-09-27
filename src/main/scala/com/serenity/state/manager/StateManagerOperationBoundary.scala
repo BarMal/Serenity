@@ -4,7 +4,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
-import com.serenity.config.SpellCheckConfig
+import com.serenity.config.{SpellCheckConfig, SpellCheckDictionaryFingerprint}
 import com.serenity.diagnostics.Trace
 import com.serenity.document.CommentRendering
 import com.serenity.spellcheck.{DictionaryLoader, SpellChecker}
@@ -23,6 +23,7 @@ final private[manager] class StateManagerOperationBoundary private (
     pendingOperations: Ref[IO, List[StateManagerOperation]],
     modelRef: Ref[IO, Model],
     documentAnalysisInputsRef: Ref[IO, Option[Map[String, SpellCheckFingerprint]]],
+    dictionaryFingerprintsRef: Ref[IO, Option[(SpellCheckConfig, List[SpellCheckDictionaryFingerprint])]],
     logger: Logger[IO],
     val effectLanes: EffectLanes,
     releaseEffectLanes: IO[Unit],
@@ -32,7 +33,8 @@ final private[manager] class StateManagerOperationBoundary private (
     beforeDocumentAnalysisStart: IO[Unit],
     beforeEffectsShutdown: IO[Unit],
     dispatcher: StateManagerDispatcher,
-    fileWriteLedger: FileWriteLedger
+    fileWriteLedger: FileWriteLedger,
+    discoverDictionaryFingerprints: SpellCheckConfig => IO[List[SpellCheckDictionaryFingerprint]]
 ):
   private val DocumentAnalysisDebounce         = 150.millis
   private val FindSearchDebounce               = 50.millis
@@ -107,23 +109,75 @@ final private[manager] class StateManagerOperationBoundary private (
         )
       case _ => IO.unit
 
+  /** #1691: `discoverDictionaryFingerprints` is a real filesystem stat per candidate dictionary path, so this only
+    * calls it when there is anything to check (`requiresDocumentAnalysis`) and reuses `dictionaryFingerprintsRef`'s
+    * cached value for as long as the spell-check config it was discovered from stays the same -- a state commit
+    * (this method's caller, via `afterCommit`) fires on every keystroke, but the dictionaries themselves essentially
+    * never change mid-session. `refreshDictionaryFingerprints` is the intentional cache-busting signal for when they
+    * do.
+    */
   def scheduleDocumentAnalysis(): IO[Unit] =
     modelCommit.currentState.flatMap { state =>
-      val spellCheckConfig = state.persisted.config.languageToolsConfig.spellCheck
-      IO.blocking(
-        SpellChecker.analysisFingerprints(state, SpellCheckConfig.discoverDictionaryFingerprints(spellCheckConfig))
-      ).flatMap { inputs =>
-        documentAnalysisInputsRef.modify(previous => Some(inputs) -> previous.forall(_ != inputs)).flatMap {
-          inputsChanged =>
-            if !inputsChanged || !requiresDocumentAnalysis(state) then IO.unit
-            else
-              effectsShutdownRef.get.ifM(
-                IO.unit,
-                beforeDocumentAnalysisStart >> submit(DocumentAnalysisLane, documentAnalysisJob)
-              )
+      if !requiresDocumentAnalysis(state) then IO.unit
+      else
+        val spellCheckConfig = state.persisted.config.languageToolsConfig.spellCheck
+        cachedDictionaryFingerprints(spellCheckConfig).flatMap { dictionaryFingerprints =>
+          val inputs = SpellChecker.analysisFingerprints(state, dictionaryFingerprints)
+          documentAnalysisInputsRef.modify(previous => Some(inputs) -> previous.forall(_ != inputs)).flatMap {
+            inputsChanged =>
+              if !inputsChanged then IO.unit
+              else
+                effectsShutdownRef.get.ifM(
+                  IO.unit,
+                  beforeDocumentAnalysisStart >> submit(DocumentAnalysisLane, documentAnalysisJob)
+                )
+          }
         }
-      }
     }
+
+  /** The dictionary fingerprints for `config`, from `dictionaryFingerprintsRef` when they were last discovered from
+    * this same (normalized) config, otherwise freshly discovered and cached. Keying the cache on the config itself
+    * means a spell-check config change (new `dictionaryPaths`, languages, or enabling it at all) always gets a fresh
+    * discovery -- only an on-disk dictionary edit under an unchanged config can leave this stale, which is exactly
+    * what `refreshDictionaryFingerprints` exists to correct.
+    */
+  private def cachedDictionaryFingerprints(config: SpellCheckConfig): IO[List[SpellCheckDictionaryFingerprint]] =
+    val normalized = config.normalized
+    dictionaryFingerprintsRef.get.flatMap {
+      case Some((cachedConfig, fingerprints)) if cachedConfig == normalized => IO.pure(fingerprints)
+      case _                                                                => discoverAndCacheDictionaryFingerprints(normalized)
+    }
+
+  private def discoverAndCacheDictionaryFingerprints(
+    normalized: SpellCheckConfig
+  ): IO[List[SpellCheckDictionaryFingerprint]] =
+    discoverDictionaryFingerprints(normalized).flatTap(fingerprints =>
+      dictionaryFingerprintsRef.set(Some(normalized -> fingerprints))
+    )
+
+  /** Forces a fresh dictionary-fingerprint discovery (#1691). The primary trigger is the `FileChangeWatcher`-backed
+    * watch loop (`AppRuntime.externalChangeWatchLoop`, via `FileService.dictionaryWatchDirectories`/
+    * `refreshDictionaryFingerprints`) noticing an on-disk change under a watched dictionary directory in real time;
+    * window focus-gain (`StateManagerFileCapability`'s `checkExternalChangesOnFocus`) calls this too, as a cheap
+    * backstop for a change made while the watcher wasn't running or its poll window missed it. Either way, this is the
+    * signal `scheduleDocumentAnalysis`'s cache otherwise has no way to receive, since an on-disk dictionary edit
+    * changes nothing about the spell-check config itself. The next `scheduleDocumentAnalysis` call picks up the
+    * refreshed fingerprints and, if they actually differ, schedules re-analysis exactly as a buffer edit would.
+    */
+  def refreshDictionaryFingerprints(): IO[Unit] =
+    modelCommit.currentState.flatMap { state =>
+      discoverAndCacheDictionaryFingerprints(state.persisted.config.languageToolsConfig.spellCheck.normalized).void
+    }
+
+  /** The directories `AppRuntime.externalChangeWatchLoop` should register a real-time watch on for the *current*
+    * spell-check config (#1691), re-derived from the current model on every call so it tracks a config change the same
+    * cycle the buffer-directory set already does. See `SpellCheckConfig.dictionaryWatchDirectories` for why this is
+    * safe to call every watch-loop cycle without itself touching the filesystem.
+    */
+  def dictionaryWatchDirectories: IO[Set[java.nio.file.Path]] =
+    modelCommit.currentState.map(state =>
+      SpellCheckConfig.dictionaryWatchDirectories(state.persisted.config.languageToolsConfig.spellCheck)
+    )
 
   /** The one quit step, for both a normal and a forced quit: the `Lane.Exclusive` barrier of
     * docs/state-architecture-target.md. Queued and running Sequential work -- file saves, config and preset writes --
@@ -244,14 +298,21 @@ private[manager] object StateManagerOperationBoundary:
     modelRef: Ref[IO, Model],
     logger: Logger[IO],
     beforeDocumentAnalysisStart: IO[Unit] = IO.unit,
-    beforeEffectsShutdown: IO[Unit] = IO.unit
+    beforeEffectsShutdown: IO[Unit] = IO.unit,
+    // Injectable seam for tests (mirrors `SpellCheckConfig.discoverDictionarySourcePaths`'s own
+    // `osDictionaryDirectories` parameter) so a spec can count or fake filesystem stats without touching a real
+    // dictionary directory -- see `StateManagerDictionaryFingerprintCacheSpec`.
+    discoverDictionaryFingerprints: SpellCheckConfig => IO[List[SpellCheckDictionaryFingerprint]] =
+      config => IO.blocking(SpellCheckConfig.discoverDictionaryFingerprints(config))
   ): IO[StateManagerOperationBoundary] =
     for
       pendingOperations         <- Ref.of[IO, List[StateManagerOperation]](Nil)
       documentAnalysisInputsRef <- Ref.of[IO, Option[Map[String, SpellCheckFingerprint]]](None)
-      effectsShutdownRef        <- Ref.of[IO, Boolean](false)
-      effectsShutDown           <- Deferred[IO, Unit]
-      submittedEffects          <- Ref.of[IO, Long](0L)
+      dictionaryFingerprintsRef <-
+        Ref.of[IO, Option[(SpellCheckConfig, List[SpellCheckDictionaryFingerprint])]](None)
+      effectsShutdownRef <- Ref.of[IO, Boolean](false)
+      effectsShutDown    <- Deferred[IO, Unit]
+      submittedEffects   <- Ref.of[IO, Long](0L)
       (effectLanes, releaseEffectLanes) <- EffectLanes
         .resource((lane, error) => logger.error(error)(s"[EFFECTS] Job on $lane failed"))
         .allocated
@@ -261,6 +322,7 @@ private[manager] object StateManagerOperationBoundary:
       pendingOperations,
       modelRef,
       documentAnalysisInputsRef,
+      dictionaryFingerprintsRef,
       logger,
       effectLanes,
       releaseEffectLanes,
@@ -270,5 +332,6 @@ private[manager] object StateManagerOperationBoundary:
       beforeDocumentAnalysisStart,
       beforeEffectsShutdown,
       dispatcher,
-      fileWriteLedger
+      fileWriteLedger,
+      discoverDictionaryFingerprints
     )

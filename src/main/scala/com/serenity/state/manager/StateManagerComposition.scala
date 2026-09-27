@@ -271,7 +271,9 @@ private[manager] class StateManagerComposition(
     editor.updateStateValidated,
     effects,
     events.dispatch,
-    filePersistence.openFile
+    filePersistence.openFile,
+    operations.refreshDictionaryFingerprints(),
+    operations.dictionaryWatchDirectories
   )
 
   // PaneManager's/PanelManager's methods are excluded from the facade export (#1017/#1724): they have no real

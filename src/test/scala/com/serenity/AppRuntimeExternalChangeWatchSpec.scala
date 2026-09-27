@@ -75,6 +75,88 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunTimed(10.seconds) shouldBe Some(Nil)
   }
 
+  it should "call refreshDictionaryFingerprints when a poll cycle sees a change under a watched dictionary directory" in {
+    // #1691: a dictionary directory is watched the same way an open buffer's parent directory is -- via
+    // FileChangeWatcher.sync/pollChangedFiles -- with no open buffers at all, proving the invalidation path doesn't
+    // depend on any buffer being open (unlike the pre-existing focus-in-only backstop).
+    val dictionaryDirectory = Files.createTempDirectory("external-change-watch-dictionary")
+
+    val program = for
+      refreshCount <- Ref.of[IO, Int](0)
+      _ <- FileChangeWatcher.create.use { watcher =>
+        for
+          _ <- watcher.sync(Set(dictionaryDirectory))
+          _ <- IO.blocking(Files.writeString(dictionaryDirectory.resolve("en.dic"), "changed externally"))
+          _ <- AppRuntime
+            .externalChangeWatchLoop(
+              watcher,
+              openBufferPaths = IO.pure(Map.empty),
+              checkBufferForExternalChanges = _ => IO.unit,
+              dictionaryWatchDirectories = IO.pure(Set(dictionaryDirectory)),
+              refreshDictionaryFingerprints = refreshCount.update(_ + 1),
+              pollInterval = 5.seconds
+            )
+            .take(1)
+            .compile
+            .drain
+        yield ()
+      }
+      count <- refreshCount.get
+    yield count
+
+    program.unsafeRunTimed(15.seconds) shouldBe Some(1)
+  }
+
+  it should "not call refreshDictionaryFingerprints when nothing changes under the watched dictionary directory" in {
+    val dictionaryDirectory = Files.createTempDirectory("external-change-watch-dictionary-quiet")
+
+    val program = for
+      refreshCount <- Ref.of[IO, Int](0)
+      _ <- FileChangeWatcher.create.use { watcher =>
+        AppRuntime
+          .externalChangeWatchLoop(
+            watcher,
+            openBufferPaths = IO.pure(Map.empty),
+            checkBufferForExternalChanges = _ => IO.unit,
+            dictionaryWatchDirectories = IO.pure(Set(dictionaryDirectory)),
+            refreshDictionaryFingerprints = refreshCount.update(_ + 1),
+            pollInterval = 1.second
+          )
+          .take(1)
+          .compile
+          .drain
+      }
+      count <- refreshCount.get
+    yield count
+
+    program.unsafeRunTimed(10.seconds) shouldBe Some(0)
+  }
+
+  it should "stay virtual-time-compatible when spell-check is disabled and dictionaryWatchDirectories is empty" in {
+    // Mirrors the buffer-less case below: SpellCheckConfig.dictionaryWatchDirectories returns Set.empty when
+    // disabled (the default), so a real IO.blocking WatchService.poll must still never run here either.
+    val checked = FileChangeWatcher.create.use { watcher =>
+      for
+        refreshCount <- Ref.of[IO, Int](0)
+        _ <- AppRuntime
+          .externalChangeWatchLoop(
+            watcher,
+            openBufferPaths = IO.pure(Map.empty),
+            checkBufferForExternalChanges = _ => IO.unit,
+            dictionaryWatchDirectories = IO.pure(Set.empty),
+            refreshDictionaryFingerprints = refreshCount.update(_ + 1),
+            pollInterval = 2.seconds
+          )
+          .take(3)
+          .compile
+          .drain
+        count <- refreshCount.get
+      yield count
+    }
+
+    runVirtual(checked) shouldBe 0
+  }
+
   it should "stay virtual-time-compatible when there is nothing to watch, instead of blocking on WatchService.poll" in {
     // Regression test: with no open buffers, the loop must sleep rather than call the real, genuinely-blocking
     // WatchService.poll -- otherwise any virtual-time test harness driving AppRuntime.run (VirtualTime.runVirtual's

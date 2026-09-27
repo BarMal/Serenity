@@ -118,6 +118,24 @@ object SpellCheckConfig:
   def discoverDictionaryFingerprints(config: SpellCheckConfig): List[SpellCheckDictionaryFingerprint] =
     dictionaryDependencyPaths(discoverDictionarySourcePaths(config)).map(SpellCheckDictionaryFingerprint.fromPath)
 
+  /** The directories a real-time file watcher (#1691) should register to notice an on-disk dictionary change, without
+    * itself touching the filesystem: a configured `dictionaryPaths` entry may be a directory or a file, and this
+    * doesn't know which, so it offers both the entry and its parent as candidates and leaves it to the watcher's own
+    * registration (`FileChangeWatcher.sync`, which already discards a directory-registration failure for any path
+    * that turns out not to be one) to keep only the one that resolves. Pure and cheap enough to call every watch-loop
+    * cycle, unlike `discoverDictionarySourcePaths`/`discoverDictionaryFingerprints`, which stat the filesystem. Returns
+    * `Set.empty` when spell-check is disabled, since there is nothing worth watching for a feature not in use.
+    */
+  def dictionaryWatchDirectories(
+    config: SpellCheckConfig,
+    osDictionaryDirectories: List[String] = defaultOsDictionaryDirectories()
+  ): Set[Path] =
+    val normalized = config.normalized
+    if !normalized.enabled then Set.empty
+    else if normalized.dictionaryPaths.nonEmpty then
+      normalized.dictionaryPaths.flatMap(pathOption).flatMap(path => path :: Option(path.getParent).toList).toSet
+    else osDictionaryDirectories.flatMap(pathOption).toSet
+
   def dictionaryDependencyPaths(dictionarySourcePaths: List[Path]): List[Path] =
     dictionarySourcePaths.flatMap(path => path :: affixPathForDictionary(path).toList).distinct
 
