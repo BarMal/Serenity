@@ -1,7 +1,5 @@
 package com.serenity.state.models
 
-import java.util.concurrent.atomic.AtomicReference
-
 import com.serenity.config.*
 import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.text.TextStatistics
@@ -13,51 +11,52 @@ final case class AppState(
 ):
 
   // Per-buffer, not a whole-workspace wrapper map: a fresh `AppState` snapshot is produced on essentially every edit
-  // (#1456), so a caller reaching for one buffer's index must not pay an O(buffers) map-build to get there, even
-  // though the actual index computation below was already deferred. Each snapshot still gets its own fresh cache, and
-  // repeated lookups against the same snapshot -- e.g. several render passes over one scene -- reuse the computed
-  // index instead of recomputing it.
+  // (#1456), so a caller reaching for one buffer's index must not pay an O(buffers) map-build to get there. Only the
+  // buffers actually placed in a pane are indexed eagerly, below, at construction -- the render path
+  // (`RendererPaneSetup.prepareEditorPaneRenderPlan`) revisits exactly those buffers every frame until the next edit
+  // produces a new `AppState` (and so a freshly recomputed map), which is the same amortization the old cache gave a
+  // paned buffer after its first touch. `annotationIndex`/`markdownFenceIndex`/`semanticTokensAvailability` still
+  // answer for any buffer, paned or not -- one outside a pane is simply computed on demand, uncached, since nothing
+  // re-renders it every frame to make caching worth its keep.
   //
-  // `AtomicReference` rather than `Ref[IO, Map[...]]`: both caches below are read and written synchronously from
-  // `annotationIndex`/`markdownFenceIndex`, which are called from the render path
-  // (`RendererPaneSetup.prepareEditorPaneRenderPlan`, `RendererPaneContent`, `RendererMarkdownLens.isInlineMarkdownLens`)
-  // -- plain, `Unit`/value-returning methods that run synchronously inside the renderer's own frame-preparation code,
-  // never inside an IO fiber of their own. A `Ref`-backed cache here would just force its `IO` via `unsafeRunSync`
-  // right back into these synchronous signatures at every call site, hiding a plain compare-and-set behind an effect
-  // type nothing here ever suspends on. This is the same tradeoff already settled for
-  // `com.serenity.ui.renderer.RendererFrameState.BoundedRefCache` and `com.serenity.state.manager.MouseTargetCache`'s
-  // `lastComputation` (#1431/#1434), `ThemeManager`'s highlight/lex caches (#1412/#1431/#1434), and
-  // `RuntimeDisplayState` (#1448) -- a lock-free CAS cache reached from synchronous, non-IO call sites, not an
-  // oversight of the "use `Ref[IO,A]`" rule.
-  private val annotationIndexCache: AtomicReference[Map[BufferId, AnnotationLineIndex]] =
-    new AtomicReference(Map.empty)
+  // Plain immutable fields, not `AtomicReference` (#1677): a mutable field -- even one instance-scoped and never
+  // observed to leak across instances -- still turns `AppState` into a value nothing can safely treat as pure data:
+  // `copy`, `equals`/`hashCode`, and every place that reasons about two `AppState`s as independent, referentially
+  // transparent values (not least running two of them in the same JVM in tests) has to reason around it instead.
+  // Eagerly computing just the paned buffers' indexes at construction removes the field without reintroducing the
+  // O(buffers) rebuild #1456 fixed, since construction cost here scales with the pane count, not the buffer count.
+  private def panedBufferIds: Set[BufferId] =
+    persisted.layout.editorPanes.values.flatMap(_.bufferId).toSet
 
-  private val markdownFenceIndexCache: AtomicReference[Map[BufferId, MarkdownBlockLens.FenceRangeIndex]] =
-    new AtomicReference(Map.empty)
+  private val annotationIndexByPanedBuffer: Map[BufferId, AnnotationLineIndex] =
+    panedBufferIds.flatMap(id => persisted.buffers.get(id).map(buffer => id -> computeAnnotationIndex(buffer))).toMap
 
-  private val semanticTokensCache: AtomicReference[Map[BufferId, SemanticTokensAvailability]] =
-    new AtomicReference(Map.empty)
+  private val markdownFenceIndexByPanedBuffer: Map[BufferId, MarkdownBlockLens.FenceRangeIndex] =
+    panedBufferIds.flatMap(id => persisted.buffers.get(id).map(buffer => id -> computeMarkdownFenceIndex(buffer))).toMap
 
-  /** `bufferId`'s annotation index, computed (and cached) only for that buffer -- see `annotationIndexCache`. */
+  private val semanticTokensAvailabilityByPanedBuffer: Map[BufferId, SemanticTokensAvailability] =
+    panedBufferIds
+      .flatMap(id => persisted.buffers.get(id).map(buffer => id -> computeSemanticTokensAvailability(buffer)))
+      .toMap
+
+  /** `bufferId`'s annotation index -- precomputed if `bufferId` is placed in a pane (`annotationIndexByPanedBuffer`),
+    * computed fresh on demand otherwise.
+    */
   def annotationIndex(bufferId: BufferId): Option[AnnotationLineIndex] =
     persisted.buffers.get(bufferId).map { buffer =>
-      annotationIndexCache.get().get(bufferId) match
-        case Some(cached) => cached
-        case None =>
-          val diagnostics =
-            runtime.diagnosticsState.diagnostics.getOrElse(
-              com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer),
-              Nil
-            )
-          val computed = AnnotationLineIndex(
-            buffer.annotations.documentComments.toVector,
-            diagnostics.groupMap(_.range.start.line)(identity)
-          )
-          val _ = annotationIndexCache.updateAndGet(_.updated(bufferId, computed))
-          computed
+      annotationIndexByPanedBuffer.getOrElse(bufferId, computeAnnotationIndex(buffer))
     }
 
-  /** `bufferId`'s semantic-tokens status, computed (and cached) only for that buffer -- see `semanticTokensCache`. See
+  private def computeAnnotationIndex(buffer: Buffer): AnnotationLineIndex =
+    val diagnostics =
+      runtime.diagnosticsState.diagnostics.getOrElse(com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer), Nil)
+    AnnotationLineIndex(
+      buffer.annotations.documentComments.toVector,
+      diagnostics.groupMap(_.range.start.line)(identity)
+    )
+
+  /** `bufferId`'s semantic-tokens status -- precomputed if `bufferId` is placed in a pane
+    * (`semanticTokensAvailabilityByPanedBuffer`), computed fresh on demand otherwise. See
     * [[SemanticTokensAvailability]] for what each case means and how the renderer treats it: `Pending` (no entry in
     * `runtime.semanticTokensState` at all yet) is deliberately distinct from `Unavailable` (confirmed via
     * `unavailableUris`) -- a request still in flight must not render the same muted style as a confirmed absence (issue
@@ -65,32 +64,27 @@ final case class AppState(
     */
   def semanticTokensAvailability(bufferId: BufferId): Option[SemanticTokensAvailability] =
     persisted.buffers.get(bufferId).map { buffer =>
-      semanticTokensCache.get().get(bufferId) match
-        case Some(cached) => cached
-        case None =>
-          val uri = com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer)
-          val computed = runtime.semanticTokensState.byUri.get(uri) match
-            case Some(tokens) => SemanticTokensAvailability.Available(tokens.groupBy(_.line))
-            case None =>
-              if runtime.semanticTokensState.unavailableUris.contains(uri) then SemanticTokensAvailability.Unavailable
-              else SemanticTokensAvailability.Pending
-          val _ = semanticTokensCache.updateAndGet(_.updated(bufferId, computed))
-          computed
+      semanticTokensAvailabilityByPanedBuffer.getOrElse(bufferId, computeSemanticTokensAvailability(buffer))
     }
 
-  /** `bufferId`'s markdown fence-range index, computed (and cached) only for that buffer -- see
-    * `markdownFenceIndexCache`.
+  private def computeSemanticTokensAvailability(buffer: Buffer): SemanticTokensAvailability =
+    val uri = com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer)
+    runtime.semanticTokensState.byUri.get(uri) match
+      case Some(tokens) => SemanticTokensAvailability.Available(tokens.groupBy(_.line))
+      case None =>
+        if runtime.semanticTokensState.unavailableUris.contains(uri) then SemanticTokensAvailability.Unavailable
+        else SemanticTokensAvailability.Pending
+
+  /** `bufferId`'s markdown fence-range index -- precomputed if `bufferId` is placed in a pane
+    * (`markdownFenceIndexByPanedBuffer`), computed fresh on demand otherwise.
     */
   def markdownFenceIndex(bufferId: BufferId): Option[MarkdownBlockLens.FenceRangeIndex] =
     persisted.buffers.get(bufferId).map { buffer =>
-      markdownFenceIndexCache.get().get(bufferId) match
-        case Some(cached) => cached
-        case None =>
-          val computed =
-            MarkdownBlockLens.fenceRangeIndex(buffer.document.content.lineCount, buffer.document.content.getLine)
-          val _ = markdownFenceIndexCache.updateAndGet(_.updated(bufferId, computed))
-          computed
+      markdownFenceIndexByPanedBuffer.getOrElse(bufferId, computeMarkdownFenceIndex(buffer))
     }
+
+  private def computeMarkdownFenceIndex(buffer: Buffer): MarkdownBlockLens.FenceRangeIndex =
+    MarkdownBlockLens.fenceRangeIndex(buffer.document.content.lineCount, buffer.document.content.getLine)
 
   def syntaxHighlightingEnabled: Boolean = persisted.config.languageToolsConfig.syntaxHighlightingEnabled
   def isValid: Boolean                   = AppStateValidation.validationErrors(this).isEmpty
