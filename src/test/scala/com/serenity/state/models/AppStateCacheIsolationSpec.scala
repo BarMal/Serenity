@@ -10,18 +10,18 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** #1677: `annotationIndex`/`markdownFenceIndex`/`semanticTokensAvailability` used to be backed by
-  * `AtomicReference[Map[BufferId, _]]` fields living directly on the `AppState` case class -- a JVM-level mutable
-  * field hiding inside a type the rest of the codebase treats as pure, immutable data. That field was always
-  * instance-scoped in practice (a fresh `AtomicReference` is constructed by every `copy()`), so it never literally
-  * leaked a value from one `AppState` into another -- but its mere presence broke the case-class contract
-  * (`AppState` no longer "describes data", per `ArchitectureChecks.ForbiddenImports`'s reason string for
-  * `state/models`) and made two `AppState`s impossible to reason about as independent, referentially transparent
-  * values, which is exactly what running two of them concurrently in tests requires.
+  * `AtomicReference[Map[BufferId, _]]` fields living directly on the `AppState` case class -- a JVM-level mutable field
+  * hiding inside a type the rest of the codebase treats as pure, immutable data. That field was always instance-scoped
+  * in practice (a fresh `AtomicReference` is constructed by every `copy()`), so it never literally leaked a value from
+  * one `AppState` into another -- but its mere presence broke the case-class contract (`AppState` no longer "describes
+  * data", per `ArchitectureChecks.ForbiddenImports`'s reason string for `state/models`) and made two `AppState`s
+  * impossible to reason about as independent, referentially transparent values, which is exactly what running two of
+  * them concurrently in tests requires.
   *
-  * This spec pins the property directly: two independently constructed `AppState` instances, holding different
-  * buffers under the same `BufferId`, must never let one instance's derived index answer for the other's -- run
-  * both in parallel (interleaved on purpose, not just sequentially) against a single JVM, the way two independent
-  * test suites or two editor instances would.
+  * This spec pins the property directly: two independently constructed `AppState` instances, holding different buffers
+  * under the same `BufferId`, must never let one instance's derived index answer for the other's -- run both in
+  * parallel (interleaved on purpose, not just sequentially) against a single JVM, the way two independent test suites
+  * or two editor instances would.
   */
 class AppStateCacheIsolationSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
