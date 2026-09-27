@@ -106,8 +106,13 @@ private[manager] object EditorTransitions:
     Balance
   ): Option[BufferContentReplacement] =
     state.persisted.buffers.get(bufferId).map { buffer =>
+      // A bulk external replacement (e.g. an LSP formatter, or a file-watch reload) can't cheaply carry the old
+      // richTextDocument's formatting onto entirely new text, so it's dropped here rather than left to be caught,
+      // lazily, the next time something checks `richTextInSync` (#1663) -- there is no "old content" here for a
+      // paragraph-by-paragraph diff to apply against.
       val updatedBuffer = buffer.copy(
-        document = buffer.document.copy(content = Rope(content), isDirty = true, isNewEmpty = false)
+        document = buffer.document.withContent(Rope(content)),
+        richText = RichTextState()
       )
       val documentChange =
         if buffer.document.content.collect() == content then None

@@ -34,7 +34,9 @@ object EditorState:
       case DefaultDocumentMode.Markdown =>
         buffer.copy(document = buffer.document.copy(language = Some(LanguageId.Markdown)))
       case DefaultDocumentMode.RichText =>
-        buffer.copy(richText = buffer.richText.copy(richTextDocument = Some(RichTextDocument.fromPlainText(""))))
+        buffer.copy(richText =
+          buffer.richText.withSyncedDocument(Some(RichTextDocument.fromPlainText("")), buffer.document.contentVersion)
+        )
 
   def insertBufferInOrder(state: AppState, newBufferId: BufferId): AppState =
     state.focusedBufferId match

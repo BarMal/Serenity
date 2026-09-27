@@ -96,3 +96,26 @@ class EditorTransitionsSpec extends AnyFlatSpec with Matchers:
   it should "decline a buffer that does not exist" in {
     EditorTransitions.bufferContentReplaced(AppState.initial, BufferId(42), "text") shouldBe None
   }
+
+  it should "drop a richTextDocument it can't cheaply carry onto the replacement text, and bump the content version" in {
+    // A bulk external replacement (e.g. an LSP formatter or a file-watch reload) has no "old content" to diff a
+    // paragraph-shaped edit against, so the old richTextDocument is dropped immediately here instead of being left
+    // to desync silently and only get caught the next time something checks `richTextInSync` (#1663).
+    val withRichText = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(buffers = AppState.initial.persisted.buffers.map { (id, buffer) =>
+        id -> buffer.copy(richText =
+          buffer.richText.withSyncedDocument(
+            Some(com.serenity.richtext.RichTextDocument.fromPlainText(buffer.document.content.toString)),
+            buffer.document.contentVersion
+          )
+        )
+      })
+    )
+    val before = withRichText.persisted.buffers(BufferId(0))
+    before.richTextInSync shouldBe true
+
+    val replaced = EditorTransitions.bufferContentReplaced(withRichText, BufferId(0), "replacement text")
+
+    replaced.map(_.buffer.richText.richTextDocument) shouldBe Some(None)
+    replaced.map(_.buffer.document.contentVersion) shouldBe Some(before.document.contentVersion + 1)
+  }

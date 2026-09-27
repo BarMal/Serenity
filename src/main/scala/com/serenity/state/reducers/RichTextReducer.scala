@@ -47,7 +47,9 @@ object RichTextReducer:
         withEditedBuffer(
           state,
           buffer,
-          buffer.richText.copy(richTextDocument = Some(updatedDocument), insertionRichTextStyle = Some(insertionStyle))
+          buffer.richText
+            .withSyncedDocument(Some(updatedDocument), buffer.document.contentVersion)
+            .copy(insertionRichTextStyle = Some(insertionStyle))
         )
       case None =>
         state
@@ -73,7 +75,12 @@ object RichTextReducer:
           val baseDocument    = currentDocument(buffer)
           val updatedDocument = ranges.foldLeft(baseDocument)(update).normalized
           if updatedDocument == baseDocument.normalized then state
-          else withEditedBuffer(state, buffer, buffer.richText.copy(richTextDocument = Some(updatedDocument)))
+          else
+            withEditedBuffer(
+              state,
+              buffer,
+              buffer.richText.withSyncedDocument(Some(updatedDocument), buffer.document.contentVersion)
+            )
       case None =>
         state
 
@@ -87,12 +94,14 @@ object RichTextReducer:
       )
     )
 
-  /** The buffer's rich-text document, or a fresh one from its plain text when there is none or it has gone stale. */
+  /** The buffer's rich-text document, or a fresh one from its plain text when there is none or it has gone stale.
+    * `O(1)` in the common (in-sync) case (`#1663`): `buffer.document.content.collect()` -- itself `O(n)` -- is only
+    * ever forced inside `getOrElse`, so it isn't paid unless the document actually needs rebuilding.
+    */
   private def currentDocument(buffer: Buffer): RichTextDocument =
-    val text = buffer.document.content.collect()
     buffer.richText.richTextDocument
-      .filter(_.matchesPlainText(text))
-      .getOrElse(RichTextDocument.fromPlainText(text))
+      .filter(_ => buffer.richTextInSync)
+      .getOrElse(RichTextDocument.fromPlainText(buffer.document.content.collect()))
 
   private def selectionRanges(buffer: Buffer): List[RichTextRange] =
     buffer.allSelections.filter(selection => selection.start != selection.end).map(richTextRange)

@@ -46,7 +46,12 @@ private[manager] object FileResults:
           )
           val richText =
             if unchanged then
-              current.richText.copy(richTextDocument = saved.richText.richTextDocument, richTextFidelity = None)
+              // `unchanged` just proved `saved`'s document matches `current`'s content exactly, so it's synced at
+              // `current`'s *current* content version -- which may have moved since `save.snapshot` was taken (e.g.
+              // an edit undone back to the saved text bumps `contentVersion` without changing the text) (#1663).
+              current.richText
+                .withSyncedDocument(saved.richText.richTextDocument, current.document.contentVersion)
+                .copy(richTextFidelity = None)
             else current.richText.copy(richTextFidelity = None)
           withBuffer(state, current.copy(document = document, richText = richText))
         }

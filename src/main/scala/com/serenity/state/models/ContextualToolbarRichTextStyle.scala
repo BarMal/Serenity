@@ -7,11 +7,14 @@ import com.serenity.richtext.*
   */
 private[models] object ContextualToolbarRichTextStyle:
 
+  /** `O(1)` in the common (in-sync) case (`#1663`): `buffer.document.content.collect()` -- itself `O(n)` -- is only
+    * ever forced inside `getOrElse`, so it isn't paid on every toolbar refresh unless the document actually needs
+    * rebuilding.
+    */
   def richTextDocumentFor(buffer: Buffer): RichTextDocument =
-    val text = buffer.document.content.collect()
     buffer.richText.richTextDocument
-      .filter(_.matchesPlainText(text))
-      .getOrElse(RichTextDocument.fromPlainText(text))
+      .filter(_ => buffer.richTextInSync)
+      .getOrElse(RichTextDocument.fromPlainText(buffer.document.content.collect()))
 
   def activeParagraph(
     buffer: Buffer,
