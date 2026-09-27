@@ -100,7 +100,8 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       codeFont,
       Font(Font.SANS_SERIF, Font.PLAIN, 12),
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val commandLine =
@@ -148,7 +149,13 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       .getOrElse(paneId, fail("Expected pane layout"))
     val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     overlay.x shouldBe paneLayout.contentRect.x
     overlay.width shouldBe paneLayout.contentRect.width
@@ -256,7 +263,13 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       .forContent(overlay, state.runtime.uiSurfaces.head.content)
       .contentRect
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val headerLine =
       (commandContentRect.x until commandContentRect.right)
@@ -285,7 +298,13 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       .forContent(overlay, state.runtime.uiSurfaces.head.content)
       .contentRect
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(55, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(55, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val resultLine =
       (contentRect.x until contentRect.right)
@@ -337,8 +356,20 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val visibleSurface = new MockRenderSurface(100, 30)
     val hiddenSurface  = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = true, visibleSurface, ViewportSize(100, 30))
-    RendererEntryPoints.render(state, cursorVisible = false, hiddenSurface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      visibleSurface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      hiddenSurface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val visibleCursors = visibleSurface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor)
     val hiddenCursors  = hiddenSurface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor)
@@ -386,8 +417,20 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val visibleSurface = new MockRenderSurface(100, 30)
     val hiddenSurface  = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = true, visibleSurface, ViewportSize(100, 30))
-    RendererEntryPoints.render(state, cursorVisible = false, hiddenSurface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      visibleSurface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      hiddenSurface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val submenuRect = layout.belowCursorOverlayStack

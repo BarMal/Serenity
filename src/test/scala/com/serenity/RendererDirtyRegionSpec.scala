@@ -61,7 +61,15 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
 
   "Dirty-line rendering" should "draw every visible row on the first frame" in {
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
-    RendererEntryPoints.render(stateWith(lines), cursorVisible = false, surface, viewport, None, Damage.Nothing)
+    RendererEntryPoints.render(
+      stateWith(lines),
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Nothing,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     lines.foreach(line => drew(surface, line) shouldBe true)
   }
@@ -70,7 +78,13 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
     val state   = stateWith(lines)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.clear()
     RendererEntryPoints.render(
       state,
@@ -78,7 +92,8 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       surface,
       viewport,
       None,
-      DamageProducer.forTransition(state, state)
+      DamageProducer.forTransition(state, state),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     lines.foreach(line => drew(surface, line) shouldBe false)
@@ -95,8 +110,20 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     val state  = stateWith(lines)
     val other  = stateWith(Vector("one", "two", "three", "four"))
 
-    RendererEntryPoints.render(state, cursorVisible = false, first, viewport)
-    RendererEntryPoints.render(other, cursorVisible = false, second, viewport)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      first,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
+    RendererEntryPoints.render(
+      other,
+      cursorVisible = false,
+      second,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     first.clear()
     RendererEntryPoints.render(
       state,
@@ -104,7 +131,8 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       first,
       viewport,
       None,
-      DamageProducer.forTransition(state, state)
+      DamageProducer.forTransition(state, state),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     // Nothing changed on this surface since its own last frame, whatever the other one painted in between.
@@ -115,7 +143,13 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(80, 24)
     val state   = stateWith(lines)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.clear()
     RendererEntryPoints.render(
       state,
@@ -123,7 +157,8 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       surface,
       viewport,
       None,
-      DamageProducer.forTransition(state, state)
+      DamageProducer.forTransition(state, state),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     lines.foreach(line => drew(surface, line) shouldBe true)
@@ -155,7 +190,13 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
         )
       )
 
-    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surface,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.clear()
     RendererEntryPoints.render(
       after,
@@ -163,7 +204,8 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       surface,
       viewport,
       None,
-      DamageProducer.forTransition(before, after)
+      DamageProducer.forTransition(before, after),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     drew(surface, "zetaX") shouldBe true
@@ -185,7 +227,13 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    RendererEntryPoints.render(before, cursorVisible = true, surface, viewport)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = true,
+      surface,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.clear()
     RendererEntryPoints.render(
       after,
@@ -193,7 +241,8 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       surface,
       viewport,
       None,
-      DamageProducer.forTransition(before, after)
+      DamageProducer.forTransition(before, after),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     drew(surface, "alpha") shouldBe true
@@ -220,7 +269,13 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surface,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.clear()
     RendererEntryPoints.render(
       after,
@@ -228,7 +283,8 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       surface,
       viewport,
       None,
-      DamageProducer.forTransition(before, after)
+      DamageProducer.forTransition(before, after),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     drew(surface, "zeta") shouldBe true
@@ -241,7 +297,13 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     val before  = stateWith(lines)
     val after   = before.copy(persisted = before.persisted.copy(theme = Theme.default))
 
-    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surface,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.clear()
     RendererEntryPoints.render(
       after,
@@ -249,7 +311,8 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       surface,
       viewport,
       None,
-      DamageProducer.forTransition(before, after)
+      DamageProducer.forTransition(before, after),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     lines.foreach(line => drew(surface, line) shouldBe true)
@@ -259,7 +322,13 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
     val state   = stateWith(lines)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.clear()
     RendererEntryPoints.render(
       state,
@@ -267,7 +336,8 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       surface,
       viewport,
       None,
-      DamageProducer.forTransition(state, state)
+      DamageProducer.forTransition(state, state),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     drawnText(surface).mkString should include("Line 1, Col 1")
@@ -372,9 +442,25 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     val damage = DamageProducer.forTransition(before, after)
     damage shouldBe Damage.Surface(surfaceId)
 
-    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.clear()
-    RendererEntryPoints.render(after, cursorVisible = false, surface, viewport, None, damage)
+    RendererEntryPoints.render(
+      after,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      damage,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     // The panel repainted its own new rect (around row 7) but not the rows it used to sit over (around row 3) -- a
     // pane row under the vacated rect must be redrawn even though nothing about the buffer content changed there, or
@@ -453,9 +539,25 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
 
       val damage = DamageProducer.forTransition(before, after)
 
-      RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+      RendererEntryPoints.render(
+        before,
+        cursorVisible = false,
+        surface,
+        viewport,
+        None,
+        Damage.Everything,
+        com.serenity.state.manager.RenderCaches.create()
+      )
       surface.clear()
-      RendererEntryPoints.render(after, cursorVisible = false, surface, viewport, None, damage)
+      RendererEntryPoints.render(
+        after,
+        cursorVisible = false,
+        surface,
+        viewport,
+        None,
+        damage,
+        com.serenity.state.manager.RenderCaches.create()
+      )
 
       // MARKERLINE's own buffer line, cursor, selection and content are all unchanged -- only paragraph 0's extra
       // wrapped row pushed it one screen row further down. It must still be redrawn there, or the frame leaves

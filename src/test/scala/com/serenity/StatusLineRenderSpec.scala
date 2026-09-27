@@ -46,7 +46,13 @@ class StatusLineRenderSpec extends AnyFlatSpec with Matchers:
 
   private def rendered(state: AppState): MockRenderSurface =
     val surface = new MockRenderSurface(100, 24)
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 24))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 24),
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface
 
   /** The pinned row is a gutter, painted as measured pixel runs. */

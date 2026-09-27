@@ -211,7 +211,8 @@ object TuiRuntime:
     size: ViewportSize,
     cursorVisible: Boolean,
     cursorColor: Option[java.awt.Color],
-    damage: Damage
+    damage: Damage,
+    caches: com.serenity.state.manager.RenderCaches
   ): Unit =
     if cursorVisible then
       val _ = RendererCursorOverlay.renderWithCursorOverlay(
@@ -224,7 +225,8 @@ object TuiRuntime:
         CellMetricsOne,
         CellMetricsOne,
         cursorColor,
-        damage
+        damage,
+        caches
       )
       ()
     else
@@ -239,7 +241,8 @@ object TuiRuntime:
         CellMetricsOne,
         CellMetricsOne,
         None,
-        damage
+        damage,
+        caches
       )
 
   /** The cursor-only counterpart to [[paintFrame]], separated for the same reason. */
@@ -249,7 +252,8 @@ object TuiRuntime:
     size: ViewportSize,
     cursorVisible: Boolean,
     cursorColor: Option[java.awt.Color],
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState],
+    caches: com.serenity.state.manager.RenderCaches
   ): Unit =
     val _ = RendererCursorOverlay.renderCursorOnly(
       state,
@@ -262,7 +266,8 @@ object TuiRuntime:
       CellMetricsOne,
       CellMetricsOne,
       cursorColor,
-      bufferAnimations
+      bufferAnimations,
+      caches
     )
 
   /** Where a [[TuiAccessibilityBridge]] writes: the terminal's own writer, exactly as `Osc52Clipboard` writes its
@@ -294,11 +299,11 @@ object TuiRuntime:
     accessibilitySync: AccessibilitySync,
     accessibilityBridge: TuiAccessibilityBridge
   ): AppRuntime.RenderFn =
-    (state, cursorVisible, cursorColor, damage, _) =>
+    (state, cursorVisible, cursorColor, damage, _, caches) =>
       for
         size <- shell.viewportSize
         surface = surfaceHolder.forSize(size)
-        _ <- IO(paintFrame(state, surface, size, cursorVisible, cursorColor, damage))
+        _ <- IO(paintFrame(state, surface, size, cursorVisible, cursorColor, damage, caches))
         _ <- syncAccessibility(state, size, accessibilitySync, accessibilityBridge)
         _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability)
       yield ()
@@ -310,11 +315,11 @@ object TuiRuntime:
     accessibilitySync: AccessibilitySync,
     accessibilityBridge: TuiAccessibilityBridge
   ): AppRuntime.RenderFn =
-    (state, cursorVisible, cursorColor, _, bufferAnimations) =>
+    (state, cursorVisible, cursorColor, _, bufferAnimations, caches) =>
       for
         size <- shell.viewportSize
         surface = surfaceHolder.forSize(size)
-        _ <- IO(paintCursorOnly(state, surface, size, cursorVisible, cursorColor, bufferAnimations))
+        _ <- IO(paintCursorOnly(state, surface, size, cursorVisible, cursorColor, bufferAnimations, caches))
         _ <- syncAccessibility(state, size, accessibilitySync, accessibilityBridge)
         _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability)
       yield ()

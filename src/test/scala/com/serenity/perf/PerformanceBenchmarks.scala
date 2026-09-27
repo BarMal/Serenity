@@ -659,7 +659,8 @@ object PerformanceBenchmarks:
       monoFont,
       textFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
     reusableFramePools(deviceScale).publish(image)
     image
@@ -702,7 +703,8 @@ object PerformanceBenchmarks:
       uiFont,
       uiMetrics,
       cursorColor = None,
-      repaintOnFlush = false
+      repaintOnFlush = false,
+      caches = com.serenity.state.manager.RenderCaches.create()
     )
 
   private def renderedCursorOverlay(state: AppState, window: SwingWindow): Boolean =
@@ -714,7 +716,8 @@ object PerformanceBenchmarks:
       textFont,
       uiFont,
       uiMetrics,
-      None
+      None,
+      caches = com.serenity.state.manager.RenderCaches.create()
     )
 
   private def reducedTopLine(result: com.serenity.state.reducers.ReducerResult): Option[Int] =

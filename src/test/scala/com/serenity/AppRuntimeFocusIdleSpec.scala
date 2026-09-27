@@ -244,10 +244,12 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
             _: Boolean,
             _: Option[Color],
             _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState]
+            _: Map[BufferId, com.serenity.animation.AnimationState],
+            _: com.serenity.state.manager.RenderCaches
           ) => renderCalls.update(_ + 1),
           requestFastRender = IO.unit,
-          cursorIdleInterval = GuiFrontend.cursorIdleInterval
+          cursorIdleInterval = GuiFrontend.cursorIdleInterval,
+          renderCaches = com.serenity.state.manager.RenderCaches.create()
         )
         .compile
         .drain
@@ -294,10 +296,12 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
             _: Boolean,
             _: Option[Color],
             _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState]
+            _: Map[BufferId, com.serenity.animation.AnimationState],
+            _: com.serenity.state.manager.RenderCaches
           ) => renderCalls.update(_ + 1),
           requestFastRender = IO.unit,
-          cursorIdleInterval = tuiFrontend.cursorIdleInterval
+          cursorIdleInterval = tuiFrontend.cursorIdleInterval,
+          renderCaches = com.serenity.state.manager.RenderCaches.create()
         )
         .compile
         .drain
@@ -339,10 +343,12 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
             _: Boolean,
             _: Option[Color],
             _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState]
+            _: Map[BufferId, com.serenity.animation.AnimationState],
+            _: com.serenity.state.manager.RenderCaches
           ) => renderCalls.update(_ + 1),
           requestFastRender = IO.unit,
-          cursorIdleInterval = tuiFrontend.cursorIdleInterval
+          cursorIdleInterval = tuiFrontend.cursorIdleInterval,
+          renderCaches = com.serenity.state.manager.RenderCaches.create()
         )
         .compile
         .drain
@@ -379,14 +385,16 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
             _: Boolean,
             _: Option[Color],
             _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState]
+            _: Map[BufferId, com.serenity.animation.AnimationState],
+            _: com.serenity.state.manager.RenderCaches
           ) => IO.unit,
           renderCursorOnly = (
             _: AppState,
             _: Boolean,
             _: Option[Color],
             _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState]
+            _: Map[BufferId, com.serenity.animation.AnimationState],
+            _: com.serenity.state.manager.RenderCaches
           ) => idleRenderCalls.update(_ + 1),
           appConfig = fastConfig,
           makeStateManager = Some(_ => IO.pure(stateManager)),
@@ -430,14 +438,16 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
               _: Boolean,
               _: Option[Color],
               _: Damage,
-              _: Map[BufferId, com.serenity.animation.AnimationState]
+              _: Map[BufferId, com.serenity.animation.AnimationState],
+              _: com.serenity.state.manager.RenderCaches
             ) => IO.unit,
             renderCursorOnly = (
               _: AppState,
               _: Boolean,
               _: Option[Color],
               _: Damage,
-              _: Map[BufferId, com.serenity.animation.AnimationState]
+              _: Map[BufferId, com.serenity.animation.AnimationState],
+              _: com.serenity.state.manager.RenderCaches
             ) => IO.raiseError(RuntimeException("idle render failed")),
             appConfig = AppConfig.default,
             makeStateManager = Some(logger =>

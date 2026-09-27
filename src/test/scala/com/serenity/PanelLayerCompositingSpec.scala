@@ -96,7 +96,15 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = true)
 
-    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
     val after = editContent(before)
@@ -106,7 +114,8 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       surface,
       viewport,
       None,
-      DamageProducer.forTransition(before, after)
+      DamageProducer.forTransition(before, after),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
@@ -116,7 +125,15 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = true)
 
-    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
     val changed          = pinnedPanel.copy(dismissOnMove = true)
@@ -124,7 +141,15 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val transitionDamage = DamageProducer.forTransition(before, after)
     transitionDamage shouldBe Damage.Surface(pinnedId)
 
-    RendererEntryPoints.render(after, cursorVisible = false, surface, viewport, None, transitionDamage)
+    RendererEntryPoints.render(
+      after,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      transitionDamage,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 2
   }
@@ -133,14 +158,30 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = false)
 
-    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
     val after            = editContent(before)
     val transitionDamage = DamageProducer.forTransition(before, after)
     transitionDamage should not be Damage.Nothing
 
-    RendererEntryPoints.render(after, cursorVisible = false, surface, viewport, None, transitionDamage)
+    RendererEntryPoints.render(
+      after,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      transitionDamage,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     // Blur samples the live frame, so an unrelated content change still forces this panel to repaint.
     surface.newSeededLayerSurfaceCalls.get() shouldBe 2
@@ -150,7 +191,15 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surface = new CountingLayerBufferSurface(120, 40)
     val state   = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = false)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     val firstDrawImageCalls = surface.drawImageCalls.size
     firstDrawImageCalls should be > 0
 
@@ -160,7 +209,8 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       surface,
       viewport,
       None,
-      DamageProducer.forTransition(state, state)
+      DamageProducer.forTransition(state, state),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
@@ -179,7 +229,15 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     )
     val before = DockedPanelFixtures.expand(docked, expandedId)
 
-    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
     val after = editContent(before)
@@ -189,7 +247,8 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       surface,
       viewport,
       None,
-      DamageProducer.forTransition(before, after)
+      DamageProducer.forTransition(before, after),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
@@ -204,14 +263,30 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surfaceA = new CountingLayerBufferSurface(120, 40)
     val before   = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = true)
 
-    RendererEntryPoints.render(before, cursorVisible = false, surfaceA, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surfaceA,
+      viewport,
+      None,
+      Damage.Everything,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surfaceA.newSeededLayerSurfaceCalls.get() shouldBe 1
 
     // Stand in for a concurrently running render path -- another suite, another window -- painting a panel with the
     // *same* SurfaceId but a different frame shape.
     val surfaceB     = new CountingLayerBufferSurface(200, 60)
     val wideViewport = ViewportSize(200, 60)
-    RendererEntryPoints.render(before, cursorVisible = false, surfaceB, wideViewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surfaceB,
+      wideViewport,
+      None,
+      Damage.Everything,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val after = editContent(before)
     RendererEntryPoints.render(
@@ -220,7 +295,8 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       surfaceA,
       viewport,
       None,
-      DamageProducer.forTransition(before, after)
+      DamageProducer.forTransition(before, after),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surfaceA.newSeededLayerSurfaceCalls.get() shouldBe 1
@@ -230,7 +306,15 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWith("alpha\nbeta\ngamma", List(floatingPanel), blurOff = true)
 
-    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
     val after = editContent(before)
@@ -240,7 +324,8 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       surface,
       viewport,
       None,
-      DamageProducer.forTransition(before, after)
+      DamageProducer.forTransition(before, after),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
@@ -250,7 +335,15 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWith("alpha\nbeta\ngamma", List(floatingPanel), blurOff = true)
 
-    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.newSeededLayerSurfaceCalls.get() shouldBe 1
 
     val changed          = floatingPanel.copy(content = SurfaceContent.QuickInfo("different text"))
@@ -258,7 +351,15 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val transitionDamage = DamageProducer.forTransition(before, after)
     transitionDamage shouldBe Damage.Surface(floatingId)
 
-    RendererEntryPoints.render(after, cursorVisible = false, surface, viewport, None, transitionDamage)
+    RendererEntryPoints.render(
+      after,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      transitionDamage,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.newSeededLayerSurfaceCalls.get() shouldBe 2
   }

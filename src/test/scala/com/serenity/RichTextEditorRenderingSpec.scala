@@ -165,7 +165,8 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       monoFont,
       textFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.styleCalls should contain(surface.StyleCall("enable", TextStyle.bold))
@@ -191,7 +192,8 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       monoFont,
       textFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.styleCalls should contain(surface.StyleCall("enable", TextStyle.bold))
@@ -221,7 +223,8 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       monoFont,
       textFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.styleCalls should contain(surface.StyleCall("enable", TextStyle.italic))
@@ -244,7 +247,8 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       monoFont,
       textFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.styleCalls should not contain surface.StyleCall("enable", TextStyle.bold)
@@ -280,7 +284,8 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       monoFont,
       textFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.styleCalls should contain(
@@ -312,7 +317,8 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       monoFont,
       textFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.styleCalls should contain(
@@ -344,7 +350,8 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       monoFont,
       textFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val drawCall = surface.drawRunPxCalls.find(_.s == "Centered").getOrElse(fail("expected centered rich text draw"))

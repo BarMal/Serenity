@@ -36,7 +36,8 @@ private[serenity] object AppRuntimeRenderLoops:
     breathIndex: Ref[IO, Int],
     renderCursorOnly: AppRuntime.RenderFn,
     requestFastRender: IO[Unit],
-    cursorIdleInterval: AppConfig => Option[FiniteDuration]
+    cursorIdleInterval: AppConfig => Option[FiniteDuration],
+    renderCaches: com.serenity.state.manager.RenderCaches
   )(using Logger[IO]): Stream[IO, Unit] =
     Stream
       .repeatEval(AppRuntime.awaitFocusedIdleTick(loadModel.map(_.app), windowFocused, cursorIdleInterval))
@@ -51,7 +52,8 @@ private[serenity] object AppRuntimeRenderLoops:
           breathIndex,
           renderCursorOnly,
           requestFastRender,
-          cursorIdleInterval
+          cursorIdleInterval,
+          renderCaches
         )
       )
 
@@ -136,6 +138,7 @@ private[serenity] object AppRuntimeRenderLoops:
     currentStateForDiagnostics: IO[Option[AppState]],
     checkResizeAndHandle: IO[Unit],
     renderFull: AppRuntime.RenderFn,
+    renderCaches: com.serenity.state.manager.RenderCaches,
     sleep: FiniteDuration => IO[Unit] = IO.sleep
   )(using logger: Logger[IO], balance: com.serenity.rope.Balance): Stream[IO, Unit] =
     Stream.eval(pendingDamage.getAndSet(Damage.Nothing)).flatMap { _ =>
@@ -166,7 +169,7 @@ private[serenity] object AppRuntimeRenderLoops:
               )
               paintDamage <- pendingPaintDamage.getAndSet(Damage.Nothing)
               _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(model.app)))(
-                renderFull(model.app, true, None, paintDamage, model.bufferAnimations)
+                renderFull(model.app, true, None, paintDamage, model.bufferAnimations, renderCaches)
               )
             yield active
         }
@@ -258,7 +261,8 @@ private[serenity] object AppRuntimeRenderLoops:
     breathIndex: Ref[IO, Int],
     renderCursorOnly: AppRuntime.RenderFn,
     requestFastRender: IO[Unit],
-    cursorIdleInterval: AppConfig => Option[FiniteDuration]
+    cursorIdleInterval: AppConfig => Option[FiniteDuration],
+    renderCaches: com.serenity.state.manager.RenderCaches
   )(using logger: Logger[IO]): IO[Unit] =
     for
       _ <- withRuntimeDiagnostics("render loop", "idle.resize", currentStateForDiagnostics)(
@@ -285,7 +289,7 @@ private[serenity] object AppRuntimeRenderLoops:
               "render loop",
               "idle.cursor-render",
               IO.pure(Some(state))
-            )(renderCursorOnly(state, visible, cursor, paintDamage, model.bufferAnimations))
+            )(renderCursorOnly(state, visible, cursor, paintDamage, model.bufferAnimations, renderCaches))
               .handleErrorWith(recoverIdleCursorRenderFailure(_, requestFastRender))
           yield ()
         case None =>

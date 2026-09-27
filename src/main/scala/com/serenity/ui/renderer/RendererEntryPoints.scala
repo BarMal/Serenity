@@ -3,7 +3,7 @@ package com.serenity.ui.renderer
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.animation.ThemeInterpolator
-import com.serenity.state.manager.AuthoritativeUiScene
+import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -41,11 +41,12 @@ object RendererEntryPoints:
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    output: Option[FrameOutput]
+    output: Option[FrameOutput],
+    caches: RenderCaches = RenderCaches.create()
   ): Unit =
     surface.hideCursor()
     surface.clearViewport(state.persisted.theme.background)
-    RendererFramePlanner.forgetPreservedContent(surface, output)
+    RendererFramePlanner.forgetPreservedContent(surface, output, caches)
     RendererStartPage.renderStartPage(
       page,
       surface,
@@ -75,7 +76,8 @@ object RendererEntryPoints:
     cursorColor: Option[java.awt.Color],
     repaintOnFlush: Boolean,
     damage: Damage = Damage.Everything,
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty
+    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty,
+    caches: RenderCaches = RenderCaches.create()
   ): Unit =
     val state0 = withEffectiveTheme(state)
     // Set while the frame is drawn, read when it is flushed: None asks for a whole-canvas repaint, Some(rect) for a
@@ -101,25 +103,27 @@ object RendererEntryPoints:
     // surface-generic entry points below).
     val _ = withSceneIfNeeded(
       state0,
-      AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont)
-    )(page => renderStartPageFrame(state0, page, surface, viewportSize, uiFont, swingWin.metrics, uiMetrics, output)) {
-      scene =>
-        RendererFramePlanner.renderFrame(
-          state0,
-          cursorVisible,
-          surface,
-          viewportSize,
-          scene,
-          codeFont,
-          textFont,
-          uiFont,
-          swingWin.metrics,
-          uiMetrics,
-          cursorColor,
-          output,
-          damage,
-          bufferAnimations
-        )
+      caches.authoritativeScene.forState(state0, viewportSize, codeFont, textFont)
+    )(page =>
+      renderStartPageFrame(state0, page, surface, viewportSize, uiFont, swingWin.metrics, uiMetrics, output, caches)
+    ) { scene =>
+      RendererFramePlanner.renderFrame(
+        state0,
+        cursorVisible,
+        surface,
+        viewportSize,
+        scene,
+        codeFont,
+        textFont,
+        uiFont,
+        swingWin.metrics,
+        uiMetrics,
+        cursorColor,
+        output,
+        damage,
+        bufferAnimations,
+        caches
+      )
     }
 
   def render(
@@ -130,9 +134,21 @@ object RendererEntryPoints:
     codeFont: java.awt.Font,
     textFont: java.awt.Font,
     cellMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color]
+    cursorColor: Option[java.awt.Color],
+    caches: RenderCaches
   ): Unit =
-    render(state, cursorVisible, surface, viewportSize, codeFont, textFont, cellMetrics, cursorColor, Damage.Everything)
+    render(
+      state,
+      cursorVisible,
+      surface,
+      viewportSize,
+      codeFont,
+      textFont,
+      cellMetrics,
+      cursorColor,
+      Damage.Everything,
+      caches
+    )
 
   def render(
     state: AppState,
@@ -143,7 +159,8 @@ object RendererEntryPoints:
     textFont: java.awt.Font,
     cellMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color],
-    damage: Damage
+    damage: Damage,
+    caches: RenderCaches
   ): Unit =
     val defaultUiFont = java.awt
       .Font(java.awt.Font.SANS_SERIF, java.awt.Font.PLAIN, codeFont.getSize)
@@ -159,33 +176,8 @@ object RendererEntryPoints:
       cellMetrics,
       CellMetrics.fromFont(defaultUiFont),
       cursorColor,
-      damage
-    )
-
-  def render(
-    state: AppState,
-    cursorVisible: Boolean,
-    surface: RenderSurface,
-    viewportSize: ViewportSize,
-    codeFont: java.awt.Font,
-    textFont: java.awt.Font,
-    uiFont: java.awt.Font,
-    cellMetrics: CellMetrics,
-    uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color]
-  ): Unit =
-    render(
-      state,
-      cursorVisible,
-      surface,
-      viewportSize,
-      codeFont,
-      textFont,
-      uiFont,
-      cellMetrics,
-      uiMetrics,
-      cursorColor,
-      Damage.Everything
+      damage,
+      caches
     )
 
   def render(
@@ -199,7 +191,36 @@ object RendererEntryPoints:
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color],
-    damage: Damage
+    caches: RenderCaches
+  ): Unit =
+    render(
+      state,
+      cursorVisible,
+      surface,
+      viewportSize,
+      codeFont,
+      textFont,
+      uiFont,
+      cellMetrics,
+      uiMetrics,
+      cursorColor,
+      Damage.Everything,
+      caches
+    )
+
+  def render(
+    state: AppState,
+    cursorVisible: Boolean,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    codeFont: java.awt.Font,
+    textFont: java.awt.Font,
+    uiFont: java.awt.Font,
+    cellMetrics: CellMetrics,
+    uiMetrics: CellMetrics,
+    cursorColor: Option[java.awt.Color],
+    damage: Damage,
+    caches: RenderCaches
   ): Unit =
     val _ = renderWithRepaintRegion(
       state,
@@ -212,7 +233,8 @@ object RendererEntryPoints:
       cellMetrics,
       uiMetrics,
       cursorColor,
-      damage
+      damage,
+      caches
     )
 
   /** Render one frame and report which part of the canvas it changed.
@@ -231,7 +253,8 @@ object RendererEntryPoints:
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
     cursorColor: Option[java.awt.Color],
-    damage: Damage = Damage.Everything
+    damage: Damage = Damage.Everything,
+    caches: RenderCaches = RenderCaches.create()
   ): Option[PixelRect] =
     val state0        = withEffectiveTheme(state)
     val repaintRegion = new AtomicReference[Option[PixelRect]](None)
@@ -241,24 +264,26 @@ object RendererEntryPoints:
     val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
     val _ = withSceneIfNeeded(
       state0,
-      AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
-    )(page => renderStartPageFrame(state0, page, surface, viewportSize, uiFont, cellMetrics, uiMetrics, output)) {
-      scene =>
-        RendererFramePlanner.renderFrame(
-          state0,
-          cursorVisible,
-          surface,
-          viewportSize,
-          scene,
-          codeFont,
-          textFont,
-          uiFont,
-          cellMetrics,
-          uiMetrics,
-          cursorColor,
-          output,
-          damage
-        )
+      caches.authoritativeScene.forState(state0, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
+    )(page =>
+      renderStartPageFrame(state0, page, surface, viewportSize, uiFont, cellMetrics, uiMetrics, output, caches)
+    ) { scene =>
+      RendererFramePlanner.renderFrame(
+        state0,
+        cursorVisible,
+        surface,
+        viewportSize,
+        scene,
+        codeFont,
+        textFont,
+        uiFont,
+        cellMetrics,
+        uiMetrics,
+        cursorColor,
+        output,
+        damage,
+        caches = caches
+      )
     }
     repaintRegion.get()
 
@@ -275,7 +300,8 @@ object RendererEntryPoints:
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    cursorColor: Option[java.awt.Color]
+    cursorColor: Option[java.awt.Color],
+    caches: RenderCaches = RenderCaches.create()
   ): List[PixelRect] =
     val state0 = withEffectiveTheme(state)
     // #1105/#1215: see the surface-generic renderCursorOnly in RendererCursorOverlay for why this is scoped to a
@@ -283,7 +309,7 @@ object RendererEntryPoints:
     val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
     withSceneIfNeeded(
       state0,
-      AuthoritativeUiScene.forState(state0, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
+      caches.authoritativeScene.forState(state0, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
     )(_ => Nil) { scene =>
       val prepared = RendererFramePlanner.prepareScene(
         state0,
@@ -296,7 +322,8 @@ object RendererEntryPoints:
         textFont,
         uiFont,
         cellMetrics,
-        uiMetrics
+        uiMetrics,
+        caches
       )
       val context = RenderContext(
         surface,
@@ -307,7 +334,8 @@ object RendererEntryPoints:
         textFont,
         uiFont,
         cellMetrics,
-        uiMetrics
+        uiMetrics,
+        caches = caches
       )
       RendererPaneContent.renderEditorCursors(state0, context, prepared.renderPlan)
     }
@@ -316,18 +344,10 @@ object RendererEntryPoints:
     state: AppState,
     cursorVisible: Boolean,
     surface: RenderSurface,
-    viewportSize: ViewportSize
-  ): Unit =
-    render(state, cursorVisible, surface, viewportSize, None, Damage.Everything)
-
-  def render(
-    state: AppState,
-    cursorVisible: Boolean,
-    surface: RenderSurface,
     viewportSize: ViewportSize,
-    cursorColor: Option[java.awt.Color]
+    caches: RenderCaches
   ): Unit =
-    render(state, cursorVisible, surface, viewportSize, cursorColor, Damage.Everything)
+    render(state, cursorVisible, surface, viewportSize, None, Damage.Everything, caches)
 
   def render(
     state: AppState,
@@ -335,7 +355,18 @@ object RendererEntryPoints:
     surface: RenderSurface,
     viewportSize: ViewportSize,
     cursorColor: Option[java.awt.Color],
-    damage: Damage
+    caches: RenderCaches
+  ): Unit =
+    render(state, cursorVisible, surface, viewportSize, cursorColor, Damage.Everything, caches)
+
+  def render(
+    state: AppState,
+    cursorVisible: Boolean,
+    surface: RenderSurface,
+    viewportSize: ViewportSize,
+    cursorColor: Option[java.awt.Color],
+    damage: Damage,
+    caches: RenderCaches
   ): Unit =
     val defaultFont = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
     render(
@@ -347,5 +378,6 @@ object RendererEntryPoints:
       defaultFont,
       CellMetrics.fromFont(defaultFont),
       cursorColor,
-      damage
+      damage,
+      caches
     )

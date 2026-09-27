@@ -13,7 +13,8 @@ import com.serenity.ui.layout.*
   */
 final private[manager] case class ContextualToolbarHitTestingPort(
     currentState: IO[AppState],
-    applyReducerResult: (ReducerResult, AppState) => IO[Unit]
+    applyReducerResult: (ReducerResult, AppState) => IO[Unit],
+    authoritativeScene: AuthoritativeUiScene
 )
 
 /** Hit-tests hover/click against the open contextual toolbar's top-level items and open detail (dropdown or input),
@@ -22,19 +23,21 @@ final private[manager] case class ContextualToolbarHitTestingPort(
 final private[manager] class ContextualToolbarHitTesting(port: ContextualToolbarHitTestingPort):
 
   def handleContextualToolbarMouseHover(event: MouseInputEvent, state: AppState): IO[Boolean] =
-    IO.pure(ContextualToolbarHitTesting.claimsHover(event, state))
+    IO.pure(ContextualToolbarHitTesting.claimsHover(event, state, port.authoritativeScene))
 
   def handleContextualToolbarMouseClick(click: MouseClick, state: AppState): IO[Boolean] =
-    MouseTransition.commit(port.currentState, port.applyReducerResult)(ContextualToolbarHitTesting.click(click, state))
+    MouseTransition.commit(port.currentState, port.applyReducerResult)(
+      ContextualToolbarHitTesting.click(click, state, port.authoritativeScene)
+    )
 
 private[manager] object ContextualToolbarHitTesting:
 
   /** Hovering the toolbar changes nothing; it only keeps the pointer from reaching the targets underneath. */
-  def claimsHover(event: MouseInputEvent, state: AppState): Boolean =
-    contextualToolbarSelectionAt(event, state).isDefined
+  def claimsHover(event: MouseInputEvent, state: AppState, authoritativeScene: AuthoritativeUiScene): Boolean =
+    contextualToolbarSelectionAt(event, state, authoritativeScene).isDefined
 
-  def click(click: MouseClick, state: AppState): Transition[Boolean] =
-    contextualToolbarSelectionAt(click, state) match
+  def click(click: MouseClick, state: AppState, authoritativeScene: AuthoritativeUiScene): Transition[Boolean] =
+    contextualToolbarSelectionAt(click, state, authoritativeScene) match
       case Some((surface, toolbarState, ContextualToolbarHit.TopLevelItem(index))) =>
         topLevelItemClick(surface, toolbarState, index, state)
       case Some((surface, toolbarState, ContextualToolbarHit.DropdownOption(itemId, optionIndex))) =>
@@ -96,7 +99,8 @@ private[manager] object ContextualToolbarHitTesting:
 
   private def contextualToolbarSelectionAt(
     event: MouseInputEvent,
-    state: AppState
+    state: AppState,
+    authoritativeScene: AuthoritativeUiScene
   ): Option[(UiSurface, ContextualToolbarState, ContextualToolbarHit)] =
     for
       viewportSize <- state.runtime.viewportSize
@@ -104,7 +108,7 @@ private[manager] object ContextualToolbarHitTesting:
       toolbarState <- surface.content match
         case SurfaceContent.ContextualToolbar(toolbarState) => Some(toolbarState)
         case _                                              => None
-      scene    = AuthoritativeUiScene.forState(state, viewportSize)
+      scene    = authoritativeScene.forState(state, viewportSize)
       layout   = scene.calculatedLayout
       contract = scene.editorContract
       frameRect   <- contract.overlayRect(surface.id)

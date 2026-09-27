@@ -6,7 +6,7 @@ import scala.concurrent.{Await, Future}
 
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.SemanticToken
-import com.serenity.ui.theme.{Theme, ThemeManager}
+import com.serenity.ui.theme.{Theme, ThemeHighlightCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -17,7 +17,8 @@ import org.scalatest.matchers.should.Matchers
   */
 class ThemeManagerCacheSpec extends AnyFlatSpec with Matchers:
 
-  private val theme = Theme.dark
+  private val theme          = Theme.dark
+  private val highlightCache = ThemeHighlightCache()
 
   private def keywordToken(length: Int): List[SemanticToken] =
     List(
@@ -25,8 +26,8 @@ class ThemeManagerCacheSpec extends AnyFlatSpec with Matchers:
     )
 
   "highlightLine" should "return an equal, memoized result for a repeated call" in {
-    val first  = ThemeManager.highlightLine("val x = 1", theme, Some(LanguageId.Scala), Some(keywordToken(3)))
-    val second = ThemeManager.highlightLine("val x = 1", theme, Some(LanguageId.Scala), Some(keywordToken(3)))
+    val first  = highlightCache.highlightLine("val x = 1", theme, Some(LanguageId.Scala), Some(keywordToken(3)))
+    val second = highlightCache.highlightLine("val x = 1", theme, Some(LanguageId.Scala), Some(keywordToken(3)))
 
     first shouldBe second
   }
@@ -37,8 +38,8 @@ class ThemeManagerCacheSpec extends AnyFlatSpec with Matchers:
     val futures = Future.traverse(lines) { line =>
       Future {
         val tokens = Some(keywordToken(3))
-        val a      = ThemeManager.highlightLine(line, theme, Some(LanguageId.Scala), tokens)
-        val b      = ThemeManager.highlightLine(line, theme, Some(LanguageId.Scala), tokens)
+        val a      = highlightCache.highlightLine(line, theme, Some(LanguageId.Scala), tokens)
+        val b      = highlightCache.highlightLine(line, theme, Some(LanguageId.Scala), tokens)
         (line, a, b)
       }
     }
@@ -55,17 +56,17 @@ class ThemeManagerCacheSpec extends AnyFlatSpec with Matchers:
     // MaxHighlightCacheEntries is 4096 -- pushing well past that must not raise, and the most recently computed
     // entries must still round-trip correctly (eviction is bounded-FIFO, not a correctness hazard).
     (0 until 4200).foreach(i =>
-      ThemeManager.highlightLine(s"val evictionProbe$i = $i", theme, Some(LanguageId.Scala), Some(keywordToken(3)))
+      highlightCache.highlightLine(s"val evictionProbe$i = $i", theme, Some(LanguageId.Scala), Some(keywordToken(3)))
     )
 
     val recent =
-      ThemeManager.highlightLine("val evictionProbe4199 = 4199", theme, Some(LanguageId.Scala), Some(keywordToken(3)))
+      highlightCache.highlightLine("val evictionProbe4199 = 4199", theme, Some(LanguageId.Scala), Some(keywordToken(3)))
     recent.map(_.content).mkString shouldBe "val evictionProbe4199 = 4199"
   }
 
   it should "not reuse a cached result when this line's semantic tokens differ" in {
-    val first  = ThemeManager.highlightLine("val x = 1", theme, Some(LanguageId.Scala), Some(keywordToken(3)))
-    val second = ThemeManager.highlightLine("val x = 1", theme, Some(LanguageId.Scala), None)
+    val first  = highlightCache.highlightLine("val x = 1", theme, Some(LanguageId.Scala), Some(keywordToken(3)))
+    val second = highlightCache.highlightLine("val x = 1", theme, Some(LanguageId.Scala), None)
 
     second should not be theSameInstanceAs(first)
   }

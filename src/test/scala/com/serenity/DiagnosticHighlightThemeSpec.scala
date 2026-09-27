@@ -84,7 +84,13 @@ class DiagnosticHighlightThemeSpec extends AnyFlatSpec with Matchers:
     )
 
     val surface = new MockRenderSurface(100, 30)
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val highlightedRun = surface.drawRunPxCalls.find(_.s == "beta").getOrElse(fail("Expected \"beta\" to be drawn"))
     highlightedRun.activeStyle.isUnderlined shouldBe true
@@ -127,7 +133,13 @@ class DiagnosticHighlightThemeSpec extends AnyFlatSpec with Matchers:
     )
 
     val surface = new MockRenderSurface(100, 30)
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val highlightedRun = surface.drawRunPxCalls.find(_.s == "beta").getOrElse(fail("Expected \"beta\" to be drawn"))
     highlightedRun.activeStyle.isUnderlined shouldBe false

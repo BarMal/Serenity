@@ -43,7 +43,13 @@ class LineNumberPlacementRenderSpec extends AnyFlatSpec with Matchers:
     val layout  = LayoutEngine.calculateLayout(state, viewport)
     val rect    = layout.lineNumberRect.getOrElse(fail("expected a left counter"))
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val dividerColumn = rect.x + rect.width - 1
     (rect.y until rect.bottom).foreach(row =>
@@ -58,7 +64,13 @@ class LineNumberPlacementRenderSpec extends AnyFlatSpec with Matchers:
     val layout  = LayoutEngine.calculateLayout(state, viewport)
     val rect    = layout.rightLineNumberRect.getOrElse(fail("expected a right counter"))
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val dividerColumn = rect.x
     (rect.y until rect.bottom).foreach(row =>
@@ -74,7 +86,13 @@ class LineNumberPlacementRenderSpec extends AnyFlatSpec with Matchers:
     val left    = layout.lineNumberRect.getOrElse(fail("expected a left counter"))
     val right   = layout.rightLineNumberRect.getOrElse(fail("expected a right counter"))
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.getBg(left.x + left.width - 1, left.y) shouldBe state.persisted.theme.panelBorder
     surface.getBg(right.x, right.y) shouldBe state.persisted.theme.panelBorder

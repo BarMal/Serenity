@@ -391,7 +391,9 @@ object RendererPaneContent:
                 buffer.document.language,
                 styledSegments,
                 clipRightXPx = Some(contentRightXPx),
-                semanticTokens = lineSemanticTokens
+                semanticTokens = lineSemanticTokens,
+                highlightCache = context.caches.themeHighlightCache,
+                graphemeCache = context.caches.graphemeSegmentationCache
               )
             else
               CharacterRenderer.renderStringWithAnimation(
@@ -407,7 +409,8 @@ object RendererPaneContent:
                 bufferStartColumn = visualLine.startColumn,
                 styledSegments = styledSegments,
                 semanticTokens = lineSemanticTokens,
-                maxColumn = Some(rect.right)
+                maxColumn = Some(rect.right),
+                highlightCache = context.caches.themeHighlightCache
               )
 
             RendererHighlights.renderDocumentCommentHighlights(

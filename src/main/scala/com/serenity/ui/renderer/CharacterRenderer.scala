@@ -27,7 +27,7 @@ object CharacterRenderer:
   final private case class CollectedRuns(runs: List[TextRun], endX: Int)
 
   /** A grapheme cluster's boundaries within a line's text, as local character indices. */
-  private case class GraphemeSpan(startLocalIndex: Int, endLocalIndex: Int)
+  private[renderer] case class GraphemeSpan(startLocalIndex: Int, endLocalIndex: Int)
 
   /** A grapheme cluster paired with the effective style it should draw with, before any per-frame animation override is
     * applied.
@@ -44,30 +44,7 @@ object CharacterRenderer:
   /** A grapheme cluster's measured pixel extent along a specific set of caret stops. */
   private case class GraphemeBounds(startLocalIndex: Int, endLocalIndex: Int, startXPx: Float, endXPx: Float)
 
-  private val MaxGraphemeSegmentationCacheEntries = 4096
-
-  /** Grapheme-cluster boundaries are a pure function of a line's text content alone -- independent of theme, animation
-    * state, or caret-stop layout -- so they're memoized the same way `ThemeManager.highlightCache` caches syntax
-    * highlighting: same input, forever the same output, nothing to invalidate. This also removes the redundant double
-    * walk that used to happen every render call, where `graphemeBounds` and `graphemeChars` each independently re-ran
-    * `TextEditing.nextGraphemeBoundary` over the same text.
-    */
-  private val graphemeSegmentationCache =
-    new LinkedHashMap[String, Vector[GraphemeSpan]](16, 0.75f, true):
-      override def removeEldestEntry(eldest: java.util.Map.Entry[String, Vector[GraphemeSpan]]): Boolean =
-        size() > MaxGraphemeSegmentationCacheEntries
-
-  private def graphemeSpans(text: String): Vector[GraphemeSpan] =
-    graphemeSegmentationCache.synchronized(Option(graphemeSegmentationCache.get(text))) match
-      case Some(cached) => cached
-      case None =>
-        val computed = computeGraphemeSpans(text)
-        graphemeSegmentationCache.synchronized {
-          val _ = graphemeSegmentationCache.put(text, computed)
-        }
-        computed
-
-  private def computeGraphemeSpans(text: String): Vector[GraphemeSpan] =
+  private[renderer] def computeGraphemeSpans(text: String): Vector[GraphemeSpan] =
     @annotation.tailrec
     def collect(localIndex: Int, acc: List[GraphemeSpan]): Vector[GraphemeSpan] =
       if localIndex >= text.length then acc.reverse.toVector
@@ -145,7 +122,8 @@ object CharacterRenderer:
     bufferStartColumn: Int = 0,
     styledSegments: Option[List[StyledText]] = None,
     semanticTokens: Option[List[SemanticToken]] = None,
-    maxColumn: Option[Int] = None
+    maxColumn: Option[Int] = None,
+    highlightCache: com.serenity.ui.theme.ThemeHighlightCache = com.serenity.ui.theme.ThemeHighlightCache()
   ): Unit =
     styledSegments match
       case Some(styledTexts) =>
@@ -161,7 +139,7 @@ object CharacterRenderer:
           maxColumn
         )
       case None if syntaxHighlightingEnabled =>
-        val styledTexts = com.serenity.ui.theme.ThemeManager.highlightLine(content, theme, language, semanticTokens)
+        val styledTexts = highlightCache.highlightLine(content, theme, language, semanticTokens)
         renderStyledLineWithAnimation(
           surface,
           x,
@@ -225,15 +203,16 @@ object CharacterRenderer:
     language: Option[LanguageId] = None,
     styledSegments: Option[List[StyledText]] = None,
     clipRightXPx: Option[Float] = None,
-    semanticTokens: Option[List[SemanticToken]] = None
+    semanticTokens: Option[List[SemanticToken]] = None,
+    highlightCache: com.serenity.ui.theme.ThemeHighlightCache = com.serenity.ui.theme.ThemeHighlightCache(),
+    graphemeCache: GraphemeSegmentationCache = GraphemeSegmentationCache()
   ): Unit =
     val text = visualLine.text
     if text.nonEmpty then
       val stops = visualLine.caretStops
       val styledSegments0 =
         styledSegments.getOrElse {
-          if syntaxHighlightingEnabled then
-            com.serenity.ui.theme.ThemeManager.highlightLine(text, theme, language, semanticTokens)
+          if syntaxHighlightingEnabled then highlightCache.highlightLine(text, theme, language, semanticTokens)
           else List(StyledText(text, TextStyle.normal, theme.foreground, theme.background))
         }
 
@@ -246,7 +225,7 @@ object CharacterRenderer:
           endLocalIndex: Int
       )
 
-      val spans = graphemeSpans(text)
+      val spans = graphemeCache.spansFor(text)
 
       val graphemeBounds =
         @annotation.tailrec
@@ -614,3 +593,38 @@ object CharacterRenderer:
       math.round(background.getGreen + (foreground.getGreen - background.getGreen) * t).toInt,
       math.round(background.getBlue + (foreground.getBlue - background.getBlue) * t).toInt
     )
+
+/** Bounded, access-order-eviction memoization cache of [[CharacterRenderer.computeGraphemeSpans]]'s result, one
+  * grapheme boundary walk per distinct line of text. Grapheme-cluster boundaries are a pure function of a line's text
+  * content alone -- independent of theme, animation state, or caret-stop layout -- so they're memoized the same way
+  * `ThemeHighlightCache` caches syntax highlighting: same input, forever the same output, nothing to invalidate. This
+  * also removes the redundant double walk that used to happen every render call, where `graphemeBounds` and
+  * `graphemeChars` each independently re-ran `TextEditing.nextGraphemeBoundary` over the same text.
+  *
+  * Instance-scoped (issue #1677): one instance is created per render-owning entity (held on
+  * [[com.serenity.state.manager.RenderCaches]], threaded through [[RenderContext]] to
+  * [[CharacterRenderer.renderMeasuredLineWithAnimation]]) rather than a JVM-wide singleton, so two independently
+  * constructed instances share no cache state.
+  */
+final class GraphemeSegmentationCache:
+  import CharacterRenderer.GraphemeSpan
+
+  private val MaxGraphemeSegmentationCacheEntries = 4096
+
+  private val cache =
+    new LinkedHashMap[String, Vector[GraphemeSpan]](16, 0.75f, true):
+      override def removeEldestEntry(eldest: java.util.Map.Entry[String, Vector[GraphemeSpan]]): Boolean =
+        size() > MaxGraphemeSegmentationCacheEntries
+
+  private[renderer] def spansFor(text: String): Vector[GraphemeSpan] =
+    cache.synchronized(Option(cache.get(text))) match
+      case Some(cached) => cached
+      case None =>
+        val computed = CharacterRenderer.computeGraphemeSpans(text)
+        cache.synchronized {
+          val _ = cache.put(text, computed)
+        }
+        computed
+
+object GraphemeSegmentationCache:
+  def apply(): GraphemeSegmentationCache = new GraphemeSegmentationCache

@@ -71,7 +71,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
         state,
         cursorVisible = true,
         surface,
-        ViewportSize(100, 30)
+        ViewportSize(100, 30),
+        com.serenity.state.manager.RenderCaches.create()
       )
       surface.drawRunPxCalls.map(_.s) should contain(
         state.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page.title
@@ -95,7 +96,13 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       )
     yield
       val surface = new MockRenderSurface(100, 30)
-      RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+      RendererEntryPoints.render(
+        state,
+        cursorVisible = true,
+        surface,
+        ViewportSize(100, 30),
+        com.serenity.state.manager.RenderCaches.create()
+      )
 
       val renderedLines =
         (0 until 30).flatMap { y =>
@@ -155,7 +162,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
         uiFont,
         codeMetrics,
         uiMetrics,
-        None
+        None,
+        com.serenity.state.manager.RenderCaches.create()
       )
 
       val title    = state.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page.title
@@ -198,7 +206,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
         uiFont,
         codeMetrics,
         uiMetrics,
-        None
+        None,
+        com.serenity.state.manager.RenderCaches.create()
       )
 
       val title    = state.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page.title
@@ -239,7 +248,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
         uiFont,
         codeMetrics,
         uiMetrics,
-        None
+        None,
+        com.serenity.state.manager.RenderCaches.create()
       )
 
       val startPage     = state.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page
@@ -293,7 +303,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       codeFont = codeFont,
       textFont = textFont,
       cellMetrics = codeMetrics,
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val paneRect =
@@ -359,7 +370,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       codeFont = codeFont,
       textFont = textFont,
       cellMetrics = codeMetrics,
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val call = surface.drawRunPxCalls
@@ -404,7 +416,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       codeFont = codeFont,
       textFont = textFont,
       cellMetrics = codeMetrics,
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val contentRect = LayoutEngine
@@ -438,7 +451,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       codeFont = codeFont,
       textFont = textFont,
       cellMetrics = codeMetrics,
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val paneId = state.persisted.layout.activeEditorPaneId.getOrElse(fail("expected active pane"))

@@ -99,7 +99,8 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
         new RecordingSessionPersistence(triggers, root),
         fontConfig => fonts.update(_ :+ fontConfig),
         IO.pure(deviceTextScale),
-        editor
+        editor,
+        com.serenity.state.manager.RenderCaches.create()
       )
     )
 

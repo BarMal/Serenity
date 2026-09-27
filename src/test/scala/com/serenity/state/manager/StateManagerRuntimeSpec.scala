@@ -80,6 +80,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       runtime.fileManager,
       runtime.sessionManager,
       runtime.sessionPersistence,
+      runtime.renderCaches,
       operations
     )
 

@@ -41,6 +41,7 @@ private[manager] class StateManagerComposition(
     val fileManager: FileManager,
     val sessionManager: SessionManager,
     val sessionPersistence: SessionPersistence,
+    val renderCaches: RenderCaches,
     operations: StateManagerOperationBoundary
 )(using providedBalance: Balance):
 
@@ -62,6 +63,7 @@ private[manager] class StateManagerComposition(
   private val runtimeMarkdownPreviewWindow   = markdownPreviewWindow
   private val runtimeFileManager             = fileManager
   private val runtimeSessionPersistence      = sessionPersistence
+  private val runtimeRenderCaches            = renderCaches
 
   private val filePersistence =
     new StateManagerFilePersistence(
@@ -108,6 +110,7 @@ private[manager] class StateManagerComposition(
     val uiPresetStore              = runtimeUiPresetStore
     val windowSizeProvider         = runtimeWindowSizeProvider
     val markdownPreviewWindow      = runtimeMarkdownPreviewWindow
+    val renderCaches               = runtimeRenderCaches
 
   private val effectEditorPort: EffectEditorPort = new EffectEditorPort:
     def enqueueEvent(event: Event): IO[Unit] = operations.enqueueEvent(event)
@@ -240,6 +243,7 @@ private[manager] class StateManagerComposition(
     new EventStatePort:
       val logger              = runtimeLogger
       val mouseTargetCacheRef = runtimeMouseTargetCacheRef
+      val authoritativeScene  = runtimeRenderCaches.authoritativeScene
 
   private val eventEffectPort: EventEffectPort = EventEffectPort(
     interpretEffect = effects.interpretEffect,

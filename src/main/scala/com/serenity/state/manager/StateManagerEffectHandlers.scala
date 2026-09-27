@@ -82,7 +82,8 @@ final private[manager] class StateManagerEffectHandlers(
     sessionPersistence,
     onFontConfigChanged,
     deviceTextScaleProvider,
-    editor
+    editor,
+    runtime.renderCaches
   )
 
   private def commitAppValidated(transition: AppState => AppState): IO[Unit] =

@@ -16,7 +16,6 @@ import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.presets.UiPresetStore
-import com.serenity.ui.renderer.RendererFrameState
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
 import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
@@ -142,6 +141,13 @@ trait StateManager extends StateEngine:
   def fileOpener: FileOpener
   def fileService: FileService
 
+  /** The instance-scoped render/mouse-hit-testing cache bundle for this manager (issue #1677): threaded down through
+    * [[com.serenity.ui.renderer.RenderContext]] to every render entry point, and via [[EventStatePort]] to every
+    * mouse-hit-testing capability, so nothing in the render/hit-testing call graph reaches a JVM-wide singleton cache.
+    * `AppRuntime` reads this once (after building the manager) and threads it into the render-loop callbacks it drives.
+    */
+  def renderCaches: RenderCaches
+
   /** Not part of `StateManager`'s production API: #1724 deleted the `paneManager`/`panelManager` records whose methods
     * (`pinPanel`, `movePinnedPanel`, `loadDirectoryTree`, `createPane`, `switchToPane`, ...) have no real production
     * caller left, so they must not become new public `StateManager` methods purely to satisfy tests. `private[manager]`
@@ -186,7 +192,7 @@ object StateManager:
       com.serenity.ui.tui.MarkdownPreviewWindowAvailability.Unavailable
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
-    RendererFrameState.configureCacheCapacity(initialConfig.surfaceConfig.rendererFrameStateCacheCapacity)
+    val renderCaches = RenderCaches.create(initialConfig.surfaceConfig.rendererFrameStateCacheCapacity)
     for
       resolvedSessionRootOverride <- resolveSessionRootOverride(sessionRootOverride)
       themeNames                  <- themeManager.listAvailableThemes.handleErrorWith(_ => IO.pure(Nil))
@@ -222,7 +228,8 @@ object StateManager:
         windowSizeProvider = windowSizeProvider,
         onPreferredWindowSizeChanged = onPreferredWindowSizeChanged,
         fileDialog = fileDialog,
-        markdownPreviewWindow = markdownPreviewWindow
+        markdownPreviewWindow = markdownPreviewWindow,
+        renderCaches = renderCaches
       )
       stateManager <- fromRuntime(runtime)
     yield stateManager
@@ -293,6 +300,7 @@ object StateManager:
       runtime.fileManager,
       runtime.sessionManager,
       runtime.sessionPersistence,
+      runtime.renderCaches,
       operations
     )
 

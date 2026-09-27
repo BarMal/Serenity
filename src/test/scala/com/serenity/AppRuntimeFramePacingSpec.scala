@@ -143,8 +143,10 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
             _: Boolean,
             _: Option[Color],
             _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState]
+            _: Map[BufferId, com.serenity.animation.AnimationState],
+            _: com.serenity.state.manager.RenderCaches
           ) => animationTicks.get.flatMap(tickCount => rendered.update(_ :+ tickCount)),
+          com.serenity.state.manager.RenderCaches.create(),
           delay => requestedDelays.update(_ :+ delay)
         )
         .take(2)

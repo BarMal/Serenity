@@ -46,7 +46,13 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
 
     val surface = new MockRenderSurface(80, 24)
     noException should be thrownBy
-      RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
+      RendererEntryPoints.render(
+        state,
+        cursorVisible = true,
+        surface,
+        ViewportSize(80, 24),
+        com.serenity.state.manager.RenderCaches.create()
+      )
 
     buffer.document.content.collect() should include("test_func")
     buffer.document.content.collect() should include("\t")

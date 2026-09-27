@@ -4,7 +4,6 @@ import java.awt.Font
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
-import com.serenity.state.manager.AuthoritativeUiScene
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.RendererEntryPoints
@@ -25,6 +24,7 @@ class RendererMultiColumnRenderSpec extends AnyFlatSpec with Matchers:
 
   private val paneId   = PaneId(0)
   private val bufferId = BufferId(1)
+  private val caches   = com.serenity.state.manager.RenderCaches.create()
 
   private def stateWith(config: AppConfig): AppState =
     // Short numbered lines so each is one visual row and chunk boundaries land on predictable line numbers; abundant
@@ -61,7 +61,7 @@ class RendererMultiColumnRenderSpec extends AnyFlatSpec with Matchers:
     // The authoritative scene owns the same per-column placements the render pass paints from, so the test asserts
     // against the placements the renderer itself will use rather than re-deriving the column geometry.
     val scene =
-      AuthoritativeUiScene.forState(state, viewportSize, monoFont, monoFont)
+      caches.authoritativeScene.forState(state, viewportSize, monoFont, monoFont)
     val placements = scene.columnSnapshotsFor(paneId)
     assert(placements.length > 1, s"test setup expected a multi-column page, got ${placements.length} columns")
 
@@ -73,7 +73,8 @@ class RendererMultiColumnRenderSpec extends AnyFlatSpec with Matchers:
       monoFont,
       monoFont,
       cellMetrics,
-      None
+      None,
+      caches
     )
 
     val contentRect = scene.paneLayouts(paneId).contentRect
@@ -91,7 +92,7 @@ class RendererMultiColumnRenderSpec extends AnyFlatSpec with Matchers:
   it should "flow content column -> column, later columns starting past the previous column's last line" in {
     val state = stateWith(columnConfig)
     val scene =
-      AuthoritativeUiScene.forState(state, viewportSize, monoFont, monoFont)
+      caches.authoritativeScene.forState(state, viewportSize, monoFont, monoFont)
     val placements = scene.columnSnapshotsFor(paneId)
 
     placements.sliding(2).foreach {
@@ -105,7 +106,7 @@ class RendererMultiColumnRenderSpec extends AnyFlatSpec with Matchers:
     val state =
       stateWith(AppConfig.default.withoutStatusLine.withLineNumbers(false).withWordWrap(true).withColumnMode(false))
     val scene =
-      AuthoritativeUiScene.forState(state, viewportSize, monoFont, monoFont)
+      caches.authoritativeScene.forState(state, viewportSize, monoFont, monoFont)
 
     scene.columnSnapshotsFor(paneId) shouldBe empty
 
@@ -118,7 +119,8 @@ class RendererMultiColumnRenderSpec extends AnyFlatSpec with Matchers:
       monoFont,
       monoFont,
       cellMetrics,
-      None
+      None,
+      caches
     )
     // Column-0 content still paints at the pane's own left edge.
     val contentRect = scene.paneLayouts(paneId).contentRect

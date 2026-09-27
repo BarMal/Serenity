@@ -79,7 +79,8 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       codeFont,
       textFont,
       cellMetrics,
-      Some(cursorColor)
+      Some(cursorColor),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val buffer       = state.persisted.buffers(bufferId)
@@ -121,7 +122,8 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       codeFont,
       textFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.setFontCalls should contain(textFont)
@@ -142,7 +144,8 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       uiFont,
       cellMetrics,
       CellMetrics.fromFont(uiFont),
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.setFontCalls should contain(uiFont)
@@ -162,7 +165,8 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       codeFont,
       textFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.setFontCalls.last.getFamily shouldBe Font.SANS_SERIF
@@ -183,7 +187,8 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       codeFont,
       textFont,
       cellMetrics,
-      Some(cursorColor)
+      Some(cursorColor),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val buffer       = state.persisted.buffers(bufferId)

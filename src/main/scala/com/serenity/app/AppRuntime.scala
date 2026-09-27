@@ -27,7 +27,14 @@ import org.typelevel.log4cats.{Logger, LoggerFactory}
 object AppRuntime:
 
   private[serenity] type RenderFn =
-    (AppState, Boolean, Option[Color], Damage, Map[BufferId, com.serenity.animation.AnimationState]) => IO[Unit]
+    (
+      AppState,
+      Boolean,
+      Option[Color],
+      Damage,
+      Map[BufferId, com.serenity.animation.AnimationState],
+      com.serenity.state.manager.RenderCaches
+    ) => IO[Unit]
 
   private val NanosPerSecond: Long = 1_000_000_000L
 
@@ -203,7 +210,7 @@ object AppRuntime:
         inputLoop = runInputLoop(stateManager, inputHandler, inputFunnel)
         _ <-
           Resource.make(inputLoop.start)(_.cancel).use { inputFiber =>
-            renderFull(initialState, true, None, Damage.Everything, Map.empty) >>
+            renderFull(initialState, true, None, Damage.Everything, Map.empty, stateManager.renderCaches) >>
               logger.info("Initial render completed, starting main loop") >>
               {
                 val idlePhase = AppRuntimeRenderLoops.idleRenderPhase(
@@ -217,7 +224,8 @@ object AppRuntime:
                   breathIndex = breathIndex,
                   renderCursorOnly = renderCursorOnly,
                   requestFastRender = requestFastRender,
-                  cursorIdleInterval = frontend.cursorIdleInterval
+                  cursorIdleInterval = frontend.cursorIdleInterval,
+                  renderCaches = stateManager.renderCaches
                 )
 
                 val fastPhase = AppRuntimeRenderLoops.fastRenderPhase(
@@ -229,7 +237,8 @@ object AppRuntime:
                   animationTickCadence,
                   currentStateForDiagnostics,
                   checkResizeAndHandle,
-                  renderFull
+                  renderFull,
+                  stateManager.renderCaches
                 )
 
                 val renderLoop: Stream[IO, Unit] =

@@ -12,7 +12,8 @@ import com.serenity.state.reducers.{ReducerResult, Transition}
   */
 final private[manager] case class CommentLensMouseHitTestingPort(
     currentState: IO[AppState],
-    applyReducerResult: (ReducerResult, AppState) => IO[Unit]
+    applyReducerResult: (ReducerResult, AppState) => IO[Unit],
+    authoritativeScene: AuthoritativeUiScene
 )
 
 /** Routes a primary click that lands inside a *read-only* floating comment lens's body to the existing editable state
@@ -30,12 +31,14 @@ final private[manager] case class CommentLensMouseHitTestingPort(
 final private[manager] class CommentLensMouseHitTesting(port: CommentLensMouseHitTestingPort):
 
   def handleCommentLensMouseClick(click: MouseClick, state: AppState): IO[Boolean] =
-    MouseTransition.commit(port.currentState, port.applyReducerResult)(CommentLensMouseHitTesting.click(click, state))
+    MouseTransition.commit(port.currentState, port.applyReducerResult)(
+      CommentLensMouseHitTesting.click(click, state, port.authoritativeScene)
+    )
 
 private[manager] object CommentLensMouseHitTesting:
 
-  def click(click: MouseClick, state: AppState): Transition[Boolean] =
-    readOnlyLensClickedInBody(click, state) match
+  def click(click: MouseClick, state: AppState, authoritativeScene: AuthoritativeUiScene): Transition[Boolean] =
+    readOnlyLensClickedInBody(click, state, authoritativeScene) match
       case Some((surface, lens)) =>
         Transition.modify(replaceLensMode(_, surface, lens.copy(mode = CommentLensMode.Editable))).as(true)
       case None =>
@@ -43,7 +46,8 @@ private[manager] object CommentLensMouseHitTesting:
 
   private def readOnlyLensClickedInBody(
     click: MouseClick,
-    state: AppState
+    state: AppState,
+    authoritativeScene: AuthoritativeUiScene
   ): Option[(UiSurface, CommentLensState)] =
     for
       surface <- state.commentLensSurface
@@ -51,7 +55,7 @@ private[manager] object CommentLensMouseHitTesting:
         case SurfaceContent.CommentLens(lens) if lens.mode == CommentLensMode.ReadOnly => Some(lens)
         case _                                                                         => None
       viewportSize <- state.runtime.viewportSize
-      if MouseHitTestGeometry.insideFloatingSurface(click, state, viewportSize, surface)
+      if MouseHitTestGeometry.insideFloatingSurface(click, state, viewportSize, surface, authoritativeScene)
     yield (surface, lens)
 
   private def replaceLensMode(state: AppState, surface: UiSurface, lens: CommentLensState): AppState =

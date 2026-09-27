@@ -52,7 +52,13 @@ class PeekOverlayRenderingSpec extends AnyFlatSpec with Matchers:
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val overlay = layout.aboveCursorOverlayRect.getOrElse(fail("Expected above-cursor overlay rect"))
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val renderedText =
       (overlay.x + 1 until overlay.right - 1)

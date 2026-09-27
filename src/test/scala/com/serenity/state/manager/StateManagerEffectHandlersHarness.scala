@@ -84,6 +84,7 @@ private[manager] trait StateManagerEffectHandlersHarness:
       val uiPresetStore           = UiPresetStore(sessionRoot.resolve("ui-presets.json"))
       val windowSizeProvider      = IO.pure(None)
       val markdownPreviewWindow   = MarkdownPreviewWindowAvailability.Unavailable
+      val renderCaches            = RenderCaches.create()
 
     val editor = new EffectEditorPort:
       def enqueueEvent(event: Event): IO[Unit] = eventsVar.update(_ :+ event)

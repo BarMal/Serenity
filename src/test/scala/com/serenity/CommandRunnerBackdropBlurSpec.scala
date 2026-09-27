@@ -85,7 +85,13 @@ class CommandRunnerBackdropBlurSpec extends AnyFlatSpec with Matchers:
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.blurRegionCalls should contain(
       surface.BlurRegionCall(overlay.x, overlay.y, overlay.width, overlay.height, 0.6f)
@@ -117,7 +123,8 @@ class CommandRunnerBackdropBlurSpec extends AnyFlatSpec with Matchers:
       codeFont,
       Font(Font.SANS_SERIF, Font.PLAIN, 12),
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.blurRegionTranslations should contain(surface.PixelTranslationCall(0.0, offsetPx))
@@ -135,7 +142,13 @@ class CommandRunnerBackdropBlurSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.blurRegionCalls shouldBe empty
   }
@@ -154,7 +167,13 @@ class CommandRunnerBackdropBlurSpec extends AnyFlatSpec with Matchers:
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.blurRegionCalls should contain(
       surface.BlurRegionCall(overlay.x, overlay.y, overlay.width, overlay.height, 0.42f)

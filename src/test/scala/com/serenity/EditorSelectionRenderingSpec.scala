@@ -44,7 +44,13 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
 
     val surface = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val selectedCells = for
       x <- 0 until surface.width
@@ -76,7 +82,13 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val viewport = ViewportSize(80, 24)
     val surface  = new MockRenderSurface(viewport.width, viewport.height)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val title       = "notes.md"
     val cellMetrics = CellMetrics.fromFont(Font(Font.MONOSPACED, Font.PLAIN, 12))
@@ -126,7 +138,13 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val surface  = new MockRenderSurface(viewport.width, viewport.height)
     val layout   = LayoutEngine.calculateLayout(state, viewport)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val title = "notes.md"
     val headerRects = List(
@@ -191,7 +209,13 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
 
     val surface = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val highlightedLetters = for
       x <- 0 until surface.width
@@ -230,7 +254,13 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
 
     val surface = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val hoveredLineBackgrounds =
       (0 until surface.width).count(x => surface.getBg(x, 2) == state.persisted.theme.panel.background)
@@ -267,7 +297,13 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val surface           = new MockRenderSurface(100, 30)
     val commentBackground = RendererHighlights.commentHighlightBackground(state.persisted.theme)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val commentCells = for
       x <- 0 until surface.width
@@ -309,7 +345,13 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val surface           = new MockRenderSurface(100, 30)
     val commentBackground = RendererHighlights.commentHighlightBackground(state.persisted.theme)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val activeCommentLetters = for
       x <- 0 until surface.width
@@ -351,7 +393,13 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val surface           = new MockRenderSurface(100, 30)
     val commentBackground = RendererHighlights.commentHighlightBackground(state.persisted.theme)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val highlightedRuns = surface.drawRunPxCalls.filter(_.background == commentBackground).map(_.s)
 
@@ -389,7 +437,13 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val surface           = new MockRenderSurface(100, 30)
     val commentBackground = RendererHighlights.commentHighlightBackground(state.persisted.theme)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val alphaStart = (0 until surface.width)
       .find(x => surface.getRow(1).drop(x).startsWith("alpha"))

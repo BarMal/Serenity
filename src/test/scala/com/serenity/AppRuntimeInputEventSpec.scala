@@ -173,14 +173,16 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
             _: Boolean,
             _: Option[Color],
             _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState]
+            _: Map[BufferId, com.serenity.animation.AnimationState],
+            _: com.serenity.state.manager.RenderCaches
           ) => initialRenderStarted.complete(()).flatMap(_ => allowInitialRender.get),
           renderCursorOnly = (
             _: AppState,
             _: Boolean,
             _: Option[Color],
             _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState]
+            _: Map[BufferId, com.serenity.animation.AnimationState],
+            _: com.serenity.state.manager.RenderCaches
           ) => IO.unit,
           appConfig = AppConfig.default,
           makeStateManager = Some(_ => IO.pure(stateManager)),
@@ -225,14 +227,16 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
             _: Boolean,
             _: Option[Color],
             _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState]
+            _: Map[BufferId, com.serenity.animation.AnimationState],
+            _: com.serenity.state.manager.RenderCaches
           ) => inputStarted.get >> IO.raiseError(RuntimeException("initial render failed")),
           renderCursorOnly = (
             _: AppState,
             _: Boolean,
             _: Option[Color],
             _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState]
+            _: Map[BufferId, com.serenity.animation.AnimationState],
+            _: com.serenity.state.manager.RenderCaches
           ) => IO.unit,
           appConfig = AppConfig.default,
           makeStateManager = Some(_ => IO.pure(stateManager)),

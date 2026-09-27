@@ -59,7 +59,8 @@ class WordWrapRenderingSpec extends AnyFlatSpec with Matchers:
       codeFont,
       textFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val contentRuns =

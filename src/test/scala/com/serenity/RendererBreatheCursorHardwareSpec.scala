@@ -68,7 +68,8 @@ class RendererBreatheCursorHardwareSpec extends AnyFlatSpec with Matchers:
       codeFont,
       cellMetrics,
       cellMetrics,
-      cursorColor
+      cursorColor,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
   "Breathe mode on a surface with a hardware cursor" should "show the terminal cursor while the breathe alpha is at or above half brightness" in {

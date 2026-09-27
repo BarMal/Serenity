@@ -12,7 +12,8 @@ import com.serenity.ui.layout.*
   * the only reason this needs an interface at all, and a record fakes trivially without one (#1017).
   */
 final private[manager] case class EditorMouseTargetingPort(
-    mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]]
+    mouseTargetCacheRef: Ref[IO, Option[MouseTargetCache]],
+    authoritativeScene: AuthoritativeUiScene
 )
 
 /** Resolves a mouse event's screen position to an editor pane/buffer/cursor via the shared [[MouseTargetCache]]. Every
@@ -44,11 +45,11 @@ final private[manager] class EditorMouseTargeting(port: EditorMouseTargetingPort
     val key = MouseTargetLayoutKey.from(state, viewportSize)
     port.mouseTargetCacheRef.modify {
       case Some(cache) if cache.layoutKey == key =>
-        val scene = AuthoritativeUiScene.forState(state, viewportSize)
+        val scene = port.authoritativeScene.forState(state, viewportSize)
         val next  = if cache.scene eq scene then cache else cache.copy(scene = scene)
         Some(next) -> next
       case _ =>
-        val next = MouseTargetCache.fromState(state, viewportSize)
+        val next = MouseTargetCache.fromState(state, viewportSize, port.authoritativeScene)
         Some(next) -> next
     }
 

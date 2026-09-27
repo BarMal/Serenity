@@ -42,6 +42,7 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
       statePort = new EventStatePort:
         val logger              = pipelineLogger
         val mouseTargetCacheRef = cacheRef
+        val authoritativeScene  = AuthoritativeUiScene()
       effectPort = EventEffectPort(
         interpretEffect = effect => onEffect(operations, effect),
         interpretCommand = (_, _) => IO.unit

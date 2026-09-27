@@ -26,8 +26,9 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private val paneId   = PaneId(0)
-  private val bufferId = BufferId(1)
+  private val paneId             = PaneId(0)
+  private val bufferId           = BufferId(1)
+  private val authoritativeScene = AuthoritativeUiScene()
 
   private def stateWith(buffer: Buffer, config: AppConfig = AppConfig.default): AppState =
     AppState.initial.copy(persisted =
@@ -83,7 +84,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default.withTextAreaInsets(TextAreaInsets(0.15, 0.10))
     val state  = stateWith(Buffer.fromString(bufferId, "alpha\nbeta"), config)
     val size   = ViewportSize(80, 24)
-    val cache  = MouseTargetCache.fromState(state, size)
+    val cache  = MouseTargetCache.fromState(state, size, authoritativeScene)
     val layout = LayoutEngine.calculateLayoutWithUI(state, size)
 
     cache.scene.paneLayouts shouldBe LayoutEngine.calculateEditorPaneLayouts(state, layout)
@@ -93,8 +94,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
   it should "cache the authoritative scene used for mouse-target geometry" in {
     val state  = stateWith(Buffer.fromString(bufferId, "alpha\nbeta"))
     val size   = ViewportSize(80, 24)
-    val cache  = MouseTargetCache.fromState(state, size)
-    val reused = MouseTargetCache.fromState(state, size)
+    val cache  = MouseTargetCache.fromState(state, size, authoritativeScene)
+    val reused = MouseTargetCache.fromState(state, size, authoritativeScene)
     val layout = LayoutEngine.calculateLayoutWithUI(state, size)
 
     cache.scene.editorContract.workspace.paneLayouts shouldBe cache.scene.paneLayouts
@@ -107,9 +108,9 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val state  = stateWith(buffer.copy(editing = EditingState(List(CursorPosition(0, 1)))))
     val moved  = stateWith(buffer.copy(editing = EditingState(List(CursorPosition(0, 5)))))
     val size   = ViewportSize(80, 24)
-    val scene  = MouseTargetCache.fromState(state, size).scene
+    val scene  = MouseTargetCache.fromState(state, size, authoritativeScene).scene
 
-    MouseTargetCache.fromState(moved, size).scene should be theSameInstanceAs scene
+    MouseTargetCache.fromState(moved, size, authoritativeScene).scene should be theSameInstanceAs scene
   }
 
   it should "use the renderer's proportional wrapped snapshot for hit testing" in {
@@ -121,21 +122,31 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
         .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose)
     val surface = new com.serenity.MockRenderSurface(size.width, size.height)
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, size, mono, text, CellMetrics.fromFont(mono), None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      size,
+      mono,
+      text,
+      CellMetrics.fromFont(mono),
+      None,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
-    val cache    = MouseTargetCache.fromState(state, size)
+    val cache    = MouseTargetCache.fromState(state, size, authoritativeScene)
     val snapshot = cache.scene.textSnapshot(paneId).getOrElse(fail("expected prepared text snapshot"))
 
     snapshot.usesMeasuredLayout shouldBe true
     snapshot.isProportional shouldBe true
     snapshot.visualLines.size should be > 1
-    cache.scene should be theSameInstanceAs MouseTargetCache.fromState(state, size).scene
+    cache.scene should be theSameInstanceAs MouseTargetCache.fromState(state, size, authoritativeScene).scene
   }
 
   it should "wrap a prose pane at the pane's width on the render grid" in {
     val state = stateWith(Buffer.fromString(bufferId, "abcdefghij" * 12))
     val size  = ViewportSize(80, 24)
-    val cache = MouseTargetCache.fromState(state, size)
+    val cache = MouseTargetCache.fromState(state, size, authoritativeScene)
     val codeFont =
       com.serenity.ui.fonts.FontLoader
         .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code)
@@ -159,7 +170,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val state = stateWith(Buffer.fromString(bufferId, "i" * 200))
       .copy(runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui()))
     val size        = ViewportSize(80, 24)
-    val cache       = MouseTargetCache.fromState(state, size)
+    val cache       = MouseTargetCache.fromState(state, size, authoritativeScene)
     val snapshot    = cache.scene.textSnapshot(paneId).getOrElse(fail("expected prepared text snapshot"))
     val contentRect = cache.scene.paneLayouts(paneId).contentRect
 
@@ -171,7 +182,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
   it should "give rendering the scene prepared by mouse targeting first" in {
     val state = stateWith(Buffer.fromString(bufferId, "alpha beta"))
     val size  = ViewportSize(80, 24)
-    val scene = MouseTargetCache.fromState(state, size).scene
+    val scene = MouseTargetCache.fromState(state, size, authoritativeScene).scene
     val codeFont =
       com.serenity.ui.fonts.FontLoader
         .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code)
@@ -188,10 +199,11 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       codeFont,
       textFont,
       CellMetrics.fromFont(codeFont),
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
-    MouseTargetCache.fromState(state, size).scene should be theSameInstanceAs scene
+    MouseTargetCache.fromState(state, size, authoritativeScene).scene should be theSameInstanceAs scene
   }
 
   it should "share a scene when rendering uses an effective theme copy" in {
@@ -210,6 +222,10 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       com.serenity.ui.fonts.FontLoader
         .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose)
     val surface = new com.serenity.MockRenderSurface(size.width, size.height)
+    // Sharing this owner's caches with the assertions below is the point of the test (#1677): rendering and mouse
+    // targeting only ever share a prepared scene when they go through the *same* owner's `RenderCaches`, not because
+    // some JVM-wide cache happens to be shared behind the scenes.
+    val caches = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
       state,
@@ -219,17 +235,23 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       codeFont,
       textFont,
       CellMetrics.fromFont(codeFont),
-      None
+      None,
+      caches
     )
-    val renderedScene = MouseTargetCache.fromState(state, size).scene
+    val renderedScene = MouseTargetCache.fromState(state, size, caches.authoritativeScene).scene
 
-    MouseTargetCache
+    val darkScene = MouseTargetCache
       .fromState(
         state.copy(persisted = state.persisted.copy(theme = com.serenity.ui.theme.Theme.dark)),
-        size
+        size,
+        caches.authoritativeScene
       )
-      .scene should
-      be theSameInstanceAs renderedScene
+      .scene
+    // `should be theSameInstanceAs` infix (ScalaTest's own idiom for this exact check) is what -Werror's
+    // not-declared-infix warning targets; `be(theSameInstanceAs(...))` is not an equivalent rewrite -- it silently
+    // falls back to structural equality's failure path even when the two references are identical, so this stays a
+    // plain `assert` on `eq` instead.
+    assert(darkScene eq renderedScene, "expected mouse targeting to reuse rendering's prepared scene instance")
   }
 
   it should "change when layout-affecting content changes with line numbers enabled" in {
@@ -277,8 +299,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     )
 
     MouseTargetLayoutKey.from(insetState, size) should not be MouseTargetLayoutKey.from(state, size)
-    MouseTargetCache.fromState(insetState, size).scene should not be theSameInstanceAs(
-      MouseTargetCache.fromState(state, size).scene
+    MouseTargetCache.fromState(insetState, size, authoritativeScene).scene should not be theSameInstanceAs(
+      MouseTargetCache.fromState(state, size, authoritativeScene).scene
     )
   }
 
@@ -291,8 +313,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     )
 
     MouseTargetLayoutKey.from(spaciousState, size) should not be MouseTargetLayoutKey.from(state, size)
-    MouseTargetCache.fromState(spaciousState, size).scene should not be theSameInstanceAs(
-      MouseTargetCache.fromState(state, size).scene
+    MouseTargetCache.fromState(spaciousState, size, authoritativeScene).scene should not be theSameInstanceAs(
+      MouseTargetCache.fromState(state, size, authoritativeScene).scene
     )
   }
 
@@ -308,7 +330,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer.fromString(bufferId, (1 to 40).map(_ => "word").mkString(" "))
     val state  = stateWith(buffer, columnConfig)
     val size   = ViewportSize(200, 24)
-    val cache  = MouseTargetCache.fromState(state, size)
+    val cache  = MouseTargetCache.fromState(state, size, authoritativeScene)
     val codeFont =
       com.serenity.ui.fonts.FontLoader
         .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code)
@@ -330,7 +352,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer.fromString(bufferId, (0 until 2000).map(i => s"line-$i").mkString("\n"))
     val state  = stateWith(buffer, columnConfig)
     val size   = ViewportSize(200, 24)
-    val cache  = MouseTargetCache.fromState(state, size)
+    val cache  = MouseTargetCache.fromState(state, size, authoritativeScene)
 
     val placements  = cache.scene.columnSnapshotsFor(paneId)
     val contentRect = cache.scene.paneLayouts(paneId).contentRect
@@ -364,7 +386,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val buffer      = Buffer.fromString(bufferId, (0 until 60).map(i => s"line-$i").mkString("\n"))
     val state       = stateWith(buffer, plainConfig)
     val size        = ViewportSize(200, 24)
-    val cache       = MouseTargetCache.fromState(state, size)
+    val cache       = MouseTargetCache.fromState(state, size, authoritativeScene)
 
     cache.scene.columnSnapshotsFor(paneId) shouldBe empty
     cache.scene.textSnapshot(paneId) should not be empty
@@ -381,8 +403,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val size      = ViewportSize(200, 24)
 
     MouseTargetLayoutKey.from(columnOff, size) should not be MouseTargetLayoutKey.from(columnOn, size)
-    MouseTargetCache.fromState(columnOn, size).scene should not be theSameInstanceAs(
-      MouseTargetCache.fromState(columnOff, size).scene
+    MouseTargetCache.fromState(columnOn, size, authoritativeScene).scene should not be theSameInstanceAs(
+      MouseTargetCache.fromState(columnOff, size, authoritativeScene).scene
     )
   }
 
@@ -425,8 +447,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val moved    = stateWithStartPage(selectedIndex = 1)
 
     MouseTargetLayoutKey.from(selected, size) shouldBe MouseTargetLayoutKey.from(moved, size)
-    MouseTargetCache.fromState(moved, size).scene should be theSameInstanceAs
-      MouseTargetCache.fromState(selected, size).scene
+    MouseTargetCache.fromState(moved, size, authoritativeScene).scene should be theSameInstanceAs
+      MouseTargetCache.fromState(selected, size, authoritativeScene).scene
   }
 
   private val commandPaletteBaseState =
@@ -455,8 +477,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val more   = stateWithCommandPalette(searchTerm = "bl")
 
     MouseTargetLayoutKey.from(typing, size) shouldBe MouseTargetLayoutKey.from(more, size)
-    MouseTargetCache.fromState(more, size).scene should be theSameInstanceAs
-      MouseTargetCache.fromState(typing, size).scene
+    MouseTargetCache.fromState(more, size, authoritativeScene).scene should be theSameInstanceAs
+      MouseTargetCache.fromState(typing, size, authoritativeScene).scene
   }
 
   it should "reuse the prepared scene when only the command palette's selected row changes" in {
@@ -465,8 +487,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val moved    = stateWithCommandPalette(searchTerm = "", selectedIndex = 1)
 
     MouseTargetLayoutKey.from(selected, size) shouldBe MouseTargetLayoutKey.from(moved, size)
-    MouseTargetCache.fromState(moved, size).scene should be theSameInstanceAs
-      MouseTargetCache.fromState(selected, size).scene
+    MouseTargetCache.fromState(moved, size, authoritativeScene).scene should be theSameInstanceAs
+      MouseTargetCache.fromState(selected, size, authoritativeScene).scene
   }
 
   // issue #1059: a drilled-in settings group now renders on the one `CommandPalette` surface, whose

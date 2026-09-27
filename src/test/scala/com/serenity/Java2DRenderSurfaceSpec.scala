@@ -481,7 +481,17 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(8, 5), font, font, metrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(8, 5),
+      font,
+      font,
+      metrics,
+      None,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     new Color(image.getRGB(82, 56), true) shouldBe Theme.light.background
   }
@@ -501,7 +511,17 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(8, 5), font, font, metrics, None)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(8, 5),
+      font,
+      font,
+      metrics,
+      None,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     (0 until image.getHeight).exists(y => new Color(image.getRGB(82, y), true).getRed < 230) shouldBe true
   }

@@ -141,7 +141,8 @@ final class UiScenarioDriver private (
         uiFont,
         environment.cellMetrics,
         environment.cellMetrics,
-        cursorColor = None
+        cursorColor = None,
+        com.serenity.state.manager.RenderCaches.create()
       )
       val layout   = LayoutEngine.calculateLayoutWithUI(current, environment.viewport)
       val contract = EditorLayoutContract.from(current, environment.viewport, layout)

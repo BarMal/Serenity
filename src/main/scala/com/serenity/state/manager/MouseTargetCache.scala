@@ -219,16 +219,16 @@ private[manager] object MouseTargetLayoutKey:
         else Nil
     )
 
-/** The single owner of the prepared scene shared by rendering and mouse targeting. */
-private[serenity] object AuthoritativeUiScene:
-
-  final private case class SceneFontKey(family: String, style: Int, size: Float)
-
-  final private case class SceneKey(
-      layout: MouseTargetLayoutKey,
-      paneFonts: List[(PaneId, SceneFontKey)],
-      cellMetrics: Option[CellMetrics]
-  )
+/** The single owner of the prepared scene shared by rendering and mouse targeting.
+  *
+  * Instance-scoped (issue #1677): one instance is created per render-owning entity (held on [[RenderCaches]], threaded
+  * explicitly to every render entry point and mouse-hit-testing call site) rather than a JVM-wide singleton object. Two
+  * independently constructed instances share no cache state and never contend on the same lock, so two `StateManager`s
+  * can render and hit-test concurrently in one JVM without one's prepared scenes leaking into, or being evicted by, the
+  * other's.
+  */
+final private[serenity] class AuthoritativeUiScene:
+  import AuthoritativeUiScene.{SceneFontKey, SceneKey}
 
   /** Bounded, `LinkedHashMap`(access-order) + `synchronized`-backed cache of the prepared scene, shared by rendering
     * and mouse targeting. `forState` below is called synchronously from the render entry points (`RendererEntryPoints`,
@@ -240,7 +240,9 @@ private[serenity] object AuthoritativeUiScene:
     * on. `synchronized` (rather than a lock-free CAS loop) is fine here because unlike those two modules this cache's
     * whole value -- a `LinkedHashMap` in access-order mode -- is itself mutable and non-swappable-by-reference, so
     * there is no immutable snapshot to CAS between; the critical sections are short (a `get` or a `put`), so contention
-    * is not a concern in the paint/hit-testing hot path this serves.
+    * is not a concern in the paint/hit-testing hot path this serves. The monitor synchronized on is this instance's own
+    * -- scoped to whichever owner constructed it, not shared JVM-wide -- so two owners' `forState` calls never block
+    * each other.
     *
     * 64 is a conservative round number, not a measured bound: it comfortably covers every geometry/font/cell-metrics
     * combination a single window session realistically cycles through (a handful of panes times a handful of
@@ -442,6 +444,18 @@ private[serenity] object AuthoritativeUiScene:
       cellMetrics = Option.when(state.runtime.capabilities.isCellGrid)(CellMetrics.cellUnit)
     )
 
+private[serenity] object AuthoritativeUiScene:
+
+  final private case class SceneFontKey(family: String, style: Int, size: Float)
+
+  final private case class SceneKey(
+      layout: MouseTargetLayoutKey,
+      paneFonts: List[(PaneId, SceneFontKey)],
+      cellMetrics: Option[CellMetrics]
+  )
+
+  def apply(): AuthoritativeUiScene = new AuthoritativeUiScene
+
 final private[manager] case class MouseTargetCache(
     layoutKey: MouseTargetLayoutKey,
     scene: UiSceneSnapshot
@@ -449,7 +463,11 @@ final private[manager] case class MouseTargetCache(
 
 private[manager] object MouseTargetCache:
 
-  def fromState(state: AppState, viewportSize: ViewportSize): MouseTargetCache =
+  def fromState(
+    state: AppState,
+    viewportSize: ViewportSize,
+    authoritativeScene: AuthoritativeUiScene
+  ): MouseTargetCache =
     val layoutKey = MouseTargetLayoutKey.from(state, viewportSize)
-    val scene     = AuthoritativeUiScene.forState(state, viewportSize)
+    val scene     = authoritativeScene.forState(state, viewportSize)
     MouseTargetCache(layoutKey, scene)

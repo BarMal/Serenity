@@ -72,7 +72,8 @@ class RendererColumnTransitionIntegrationSpec extends AnyFlatSpec with Matchers:
       monoFont,
       monoFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     // "L00" is the outgoing column's own first line; painting it at all (on top of whatever the incoming column,
@@ -92,6 +93,7 @@ class RendererColumnTransitionIntegrationSpec extends AnyFlatSpec with Matchers:
       monoFont,
       monoFont,
       cellMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
   }

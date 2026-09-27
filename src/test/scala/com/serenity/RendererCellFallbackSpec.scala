@@ -66,7 +66,8 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       monoFont,
       propFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.drawRunPxCalls shouldBe empty
@@ -86,7 +87,8 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       monoFont,
       propFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.drawRunPxCalls shouldBe empty
@@ -106,7 +108,8 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       monoFont,
       propFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.drawRunPxCalls shouldBe empty
@@ -130,7 +133,8 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       monoFont,
       propFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.drawRunPxCalls shouldBe empty
@@ -153,7 +157,8 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       monoFont,
       propFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.drawRunPxCalls should not be empty
@@ -172,7 +177,8 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       monoFont,
       propFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val titledRows = (0 until viewportSize.height).map(surface.getRow)
@@ -192,7 +198,8 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       monoFont,
       propFont,
       monoMetrics,
-      None
+      None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val rows = (0 until viewportSize.height).map(surface.getRow)

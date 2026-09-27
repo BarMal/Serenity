@@ -257,7 +257,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = CellMetrics.fromFont(font),
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.drawImageCalls should have size 1
@@ -281,7 +282,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = CellMetrics.fromFont(font),
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.drawImageCalls should have size 1
@@ -309,7 +311,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = metrics,
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.drawImageCalls should have size 1
@@ -379,7 +382,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = CellMetrics.fromFont(font),
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val rows = surfaceRows(surface)
@@ -399,7 +403,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = CellMetrics.fromFont(font),
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val rows = surfaceRows(surface)
@@ -422,7 +427,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = metrics,
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.drawImageCalls should have size 1
@@ -478,7 +484,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = CellMetrics.fromFont(font),
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.drawImageCalls should have size 1
@@ -542,7 +549,8 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = CellMetrics.fromFont(font),
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.drawImageCalls.headOption.map(_.image).getOrElse(fail("Expected rendered markdown preview image"))

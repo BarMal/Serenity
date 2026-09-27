@@ -242,7 +242,9 @@ object RendererMarkdownLens:
                   context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                   syntaxHighlightingEnabled = false,
                   language = None,
-                  clipRightXPx = Some(context.cellMetrics.toPixelX(rect.right).toFloat)
+                  clipRightXPx = Some(context.cellMetrics.toPixelX(rect.right).toFloat),
+                  highlightCache = context.caches.themeHighlightCache,
+                  graphemeCache = context.caches.graphemeSegmentationCache
                 )
               else
                 CharacterRenderer.renderStringWithAnimation(
@@ -256,7 +258,8 @@ object RendererMarkdownLens:
                   language = None,
                   bufferLine = visualLine.bufferLine,
                   bufferStartColumn = visualLine.startColumn,
-                  maxColumn = Some(rect.right)
+                  maxColumn = Some(rect.right),
+                  highlightCache = context.caches.themeHighlightCache
                 )
               RendererHighlights.renderSelectionHighlights(
                 context.surface,

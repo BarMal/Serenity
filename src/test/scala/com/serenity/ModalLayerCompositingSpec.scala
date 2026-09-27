@@ -49,7 +49,15 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surface = new CountingLayerBufferSurface(80, 24)
     val before  = stateWith("alpha\nbeta\ngamma", modalDialog)
 
-    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.newLayerSurfaceCalls.get() shouldBe 1
 
     val editedContent =
@@ -77,7 +85,8 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
       surface,
       viewport,
       None,
-      DamageProducer.forTransition(before, after)
+      DamageProducer.forTransition(before, after),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.newLayerSurfaceCalls.get() shouldBe 1
@@ -89,7 +98,15 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surface = new CountingLayerBufferSurface(80, 24)
     val before  = stateWith("alpha\nbeta\ngamma", modalDialog)
 
-    RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.newLayerSurfaceCalls.get() shouldBe 1
 
     val changedModal =
@@ -99,7 +116,15 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val transitionDamage = DamageProducer.forTransition(before, after)
     transitionDamage shouldBe Damage.Surface(modalId)
 
-    RendererEntryPoints.render(after, cursorVisible = false, surface, viewport, None, transitionDamage)
+    RendererEntryPoints.render(
+      after,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      transitionDamage,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.newLayerSurfaceCalls.get() shouldBe 2
   }
@@ -116,7 +141,15 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val before          = stateWith("alpha\nbeta\ngamma", parent)
     val beforeWithStack = before.copy(runtime = before.runtime.copy(modalStack = List(parent, child)))
 
-    RendererEntryPoints.render(beforeWithStack, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      beforeWithStack,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     surface.newLayerSurfaceCalls.get() shouldBe 1
 
     // Only the bottom (parent) dialog's content changes; the top (child) is untouched.
@@ -127,7 +160,15 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val transitionDamage = DamageProducer.forTransition(beforeWithStack, after)
     transitionDamage shouldBe Damage.Surface(parent.id)
 
-    RendererEntryPoints.render(after, cursorVisible = false, surface, viewport, None, transitionDamage)
+    RendererEntryPoints.render(
+      after,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      transitionDamage,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.newLayerSurfaceCalls.get() shouldBe 2
   }
@@ -136,7 +177,15 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val surface = new CountingLayerBufferSurface(80, 24)
     val state   = stateWith("alpha\nbeta\ngamma", modalDialog)
 
-    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport, None, Damage.Everything)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      com.serenity.state.manager.RenderCaches.create()
+    )
     val firstDrawImageCalls = surface.drawImageCalls.size
     firstDrawImageCalls should be > 0
 
@@ -146,7 +195,8 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
       surface,
       viewport,
       None,
-      DamageProducer.forTransition(state, state)
+      DamageProducer.forTransition(state, state),
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     surface.newLayerSurfaceCalls.get() shouldBe 1

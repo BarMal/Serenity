@@ -13,7 +13,8 @@ import com.serenity.state.reducers.{ReducerResult, Transition}
   */
 final private[manager] case class MouseHitTestingPort(
     currentState: IO[AppState],
-    applyReducerResult: (ReducerResult, AppState) => IO[Unit]
+    applyReducerResult: (ReducerResult, AppState) => IO[Unit],
+    authoritativeScene: AuthoritativeUiScene
 )
 
 /** Routes primary/secondary mouse click, press, drag, and move events to the editor, the context menu, the contextual
@@ -39,7 +40,7 @@ final private[manager] class MouseHitTesting(
   def handleMouseClick(click: MouseClick, state: AppState): IO[Unit] =
     click.button match
       case MouseButton.Secondary =>
-        if MouseHitTestGeometry.isInsideFloatingSurface(click, state) then IO.unit
+        if MouseHitTestGeometry.isInsideFloatingSurface(click, state, port.authoritativeScene) then IO.unit
         else contextMenu.openEditorContextMenu(click, state)
       case MouseButton.Primary =>
         startupPage.handleStartupPageMouseClick(click, state).flatMap {
@@ -60,7 +61,8 @@ final private[manager] class MouseHitTesting(
                             commit(TabBarMouseHitTesting.click(click, state)).flatMap {
                               case true => IO.unit
                               case false =>
-                                if MouseHitTestGeometry.isInsideFloatingSurface(click, state) then IO.unit
+                                if MouseHitTestGeometry.isInsideFloatingSurface(click, state, port.authoritativeScene)
+                                then IO.unit
                                 else
                                   pinnedPanel.handlePinnedPanelMouseClick(click, state).flatMap {
                                     case true => IO.unit
@@ -91,7 +93,7 @@ final private[manager] class MouseHitTesting(
           commandRunner.handleCommandRunnerMouseHover(press, state).flatMap {
             case true => IO.unit
             case false =>
-              if MouseHitTestGeometry.isInsideFloatingSurface(press, state) then IO.unit
+              if MouseHitTestGeometry.isInsideFloatingSurface(press, state, port.authoritativeScene) then IO.unit
               else
                 tabBarDrag.handleTabBarPress(press, state).flatMap {
                   case true => IO.unit
@@ -119,7 +121,7 @@ final private[manager] class MouseHitTesting(
               tabBarDrag.handleTabBarDrag(drag, state).flatMap {
                 case true => IO.unit
                 case false =>
-                  if MouseHitTestGeometry.isInsideFloatingSurface(drag, state) then IO.unit
+                  if MouseHitTestGeometry.isInsideFloatingSurface(drag, state, port.authoritativeScene) then IO.unit
                   else
                     editorTargeting
                       .resolveMouseTarget(drag, state)
@@ -139,7 +141,7 @@ final private[manager] class MouseHitTesting(
             commandRunner.handleCommandRunnerMouseHover(move, state).flatMap {
               case true => clearHover
               case false =>
-                if MouseHitTestGeometry.isInsideFloatingSurface(move, state) then clearHover
+                if MouseHitTestGeometry.isInsideFloatingSurface(move, state, port.authoritativeScene) then clearHover
                 else
                   pinnedPanel.handlePinnedPanelMouseHover(move, state).flatMap {
                     case true => clearHover

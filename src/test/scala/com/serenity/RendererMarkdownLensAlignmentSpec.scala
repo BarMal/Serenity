@@ -62,7 +62,8 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = metrics,
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val paneRect =
@@ -120,7 +121,8 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = metrics,
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     val paneRect =
@@ -522,7 +524,8 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
       codeFont = font,
       textFont = font,
       cellMetrics = metrics,
-      cursorColor = None
+      cursorColor = None,
+      com.serenity.state.manager.RenderCaches.create()
     )
 
     (state, surface, metrics)

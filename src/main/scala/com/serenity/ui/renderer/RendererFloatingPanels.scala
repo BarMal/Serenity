@@ -61,7 +61,7 @@ object RendererFloatingPanels:
       (overlays.aboveCursor.toList ++ belowOverlays).flatMap { overlay =>
         overlay.surfaceId.map(_ -> floatingPanelPixelRect(overlay.rect, context.cellMetrics))
       }.toMap
-    RendererFrameState.rememberFloatingSurfaceRects(context.surface, currentFloatingRects)
+    context.caches.frameState.rememberFloatingSurfaceRects(context.surface, currentFloatingRects)
 
   /** `rect` (in cell/row units, as every [[LayoutRect]] floating panels are placed with is) converted to the pixel
     * rectangle it occupies on screen, using the same `cellMetrics`-based conversion `paneRowRects` uses for pane

@@ -75,7 +75,13 @@ class FloatingSurfaceSpec extends AnyFlatSpec with Matchers:
     val state   = DockedPanelFixtures.expand(docked, expandedId)
     val surface = new MockRenderSurface(80, 24)
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(80, 24))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(80, 24),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val frame = UiSceneSnapshot
       .from(state, ViewportSize(80, 24))

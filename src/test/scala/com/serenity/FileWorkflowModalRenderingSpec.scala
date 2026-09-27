@@ -65,7 +65,13 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
       .getOrElse(paneId, fail("Expected pane layout"))
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val filenameLine =
       (overlay.x + 1 until overlay.right - 1).map(x => surface.getChar(x, overlay.y + 2)).mkString.trim
@@ -145,7 +151,13 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
     val layout  = LayoutEngine.calculateLayout(state, ViewportSize(200, 56))
     val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(200, 56))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(200, 56),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val pathLine =
       (overlay.x + 1 until overlay.right - 1).map(x => surface.getChar(x, overlay.y + 3)).mkString.trim
@@ -197,7 +209,13 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
       .getOrElse(paneId, fail("Expected pane layout"))
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val innerLines =
       (overlay.y + 1 until overlay.bottom - 1).toList.map { y =>
@@ -223,7 +241,13 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
     )
     val surface = new MockRenderSurface(100, 30)
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      ViewportSize(100, 30),
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     surface.alphaCalls should contain(0.4f)
     surface.currentAlphaValue shouldBe 1.0f
@@ -264,7 +288,13 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
     val modalDialog  = state.runtime.modalStack.find(_.id == modalId).getOrElse(fail("Expected modal dialog"))
     val modalRect    = LayoutEngine.calculateModalRect(modalDialog, state, layout)
 
-    RendererEntryPoints.render(state, cursorVisible = true, surface, viewportSize)
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = true,
+      surface,
+      viewportSize,
+      com.serenity.state.manager.RenderCaches.create()
+    )
 
     val innerLines =
       (modalRect.y + 1 until modalRect.bottom - 1).toList.map { y =>

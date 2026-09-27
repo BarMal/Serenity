@@ -62,6 +62,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       statePort = new EventStatePort:
         val logger              = quietLogger
         val mouseTargetCacheRef = cacheRef
+        val authoritativeScene  = AuthoritativeUiScene()
       snapshotCommittingEffect = (_: AppEffect) =>
         sharedStateRef.get.flatMap { snapshot =>
           gate.entered.complete(()) >> gate.release.get >> operations.modelCommit.commitState(snapshot, snapshot)
