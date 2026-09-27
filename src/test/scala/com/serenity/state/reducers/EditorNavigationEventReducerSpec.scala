@@ -241,7 +241,9 @@ class EditorNavigationEventReducerSpec extends AnyFlatSpec with Matchers:
     val after =
       EditorEventReducer.reduce(MoveToEnd, paneId, before, Some(wrappedRowGeometry)).state.persisted.buffers(bufferId)
 
-    after.editing.cursorPositions shouldBe List(CursorPosition(0, 10))
+    // End always lands with upstream affinity (a second End must be idempotent rather than reading the boundary
+    // column as the start of the row below -- see EditorCursorSupport.endTarget).
+    after.editing.cursorPositions shouldBe List(CursorPosition(0, 10).upstream)
   }
 
   "PageDown with explicit page-sized geometry" should "walk visual rows rather than logical lines" in {

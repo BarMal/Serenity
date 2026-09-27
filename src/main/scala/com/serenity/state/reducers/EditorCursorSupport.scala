@@ -79,7 +79,9 @@ private[reducers] object EditorCursorSupport:
     else CursorPosition(cursor.line, 0)
 
   /** End's landing column: the end of the cursor's current *visual* row when visual-line navigation applies, otherwise
-    * the logical line's own end (`findLineEnd`). Same geometry-missing fallback as [[homeTarget]].
+    * the logical line's own end (`findLineEnd`). Falls back to the logical end the same way [[homeTarget]] falls back
+    * to the logical start when no geometry is available, but (unlike `homeTarget`) still carries upstream affinity --
+    * see the `getOrElse` below.
     */
   def endTarget(
     state: AppState,
@@ -95,7 +97,10 @@ private[reducers] object EditorCursorSupport:
         // of the row below; upstream affinity is what says the cursor stayed on the row End was pressed on. The
         // logical line's own end is never shared with another row, so marking it there is harmless.
         .map(line => CursorPosition(cursor.line, line.endColumn).upstream)
-        .getOrElse(CursorPosition(cursor.line, findLineEnd(buffer.document.content, cursor.line)))
+        // No measured geometry for this pane yet (e.g. no window built for this event): still mark upstream so a
+        // later Home/End, once geometry is available, resolves the boundary column as this row's end rather than
+        // reading it as the untouched Downstream default and landing on the row below (same reasoning as above).
+        .getOrElse(CursorPosition(cursor.line, findLineEnd(buffer.document.content, cursor.line)).upstream)
     else CursorPosition(cursor.line, findLineEnd(buffer.document.content, cursor.line))
 
   def countLines(rope: Rope): Int =
