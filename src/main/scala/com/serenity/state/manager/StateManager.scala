@@ -124,7 +124,13 @@ final case class FileService(
     // to keep its watched directory set current, then checkBufferForExternalChanges for whichever buffers' files a
     // poll window actually saw change.
     openBufferPaths: IO[Map[Path, BufferId]],
-    checkBufferForExternalChanges: BufferId => IO[Unit]
+    checkBufferForExternalChanges: BufferId => IO[Unit],
+    // #1691: the same FileChangeWatcher poll loop also watches these directories (re-derived from the current
+    // spell-check config on every cycle) and calls refreshDictionaryFingerprints when a poll window sees a change
+    // under one of them, so an on-disk dictionary edit invalidates StateManagerOperationBoundary's fingerprint cache
+    // in real time rather than only on window focus-gain.
+    dictionaryWatchDirectories: IO[Set[Path]],
+    refreshDictionaryFingerprints: IO[Unit]
 )
 
 trait StateManager extends StateEngine:
