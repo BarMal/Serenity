@@ -7,7 +7,7 @@ import com.serenity.state.models.Buffer
 
 private[serenity] object VisibleBufferAnimationCells:
 
-  val DefaultMaxAnimatedCells: Int = 2_000
+  val DefaultMaxAnimatedCells: Int = CellAnimation.DefaultMaxAnimatedCells
 
   def fromBuffer(
     buffer: Buffer,

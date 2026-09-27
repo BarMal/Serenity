@@ -110,10 +110,12 @@ object SessionBuffer:
         bookmarks = sessionBuffer.bookmarks.map(SessionCursorPosition.toCursorPosition),
         documentComments = sessionBuffer.documentComments.map(SessionDocumentComment.toDocumentComment)
       ),
-      richText = RichTextState(
-        richTextDocument = sessionBuffer.richTextDocument,
-        richTextFidelity = sessionBuffer.richTextFidelity
-      )
+      // `fromBuffer` only ever persists a `richTextDocument` that passed `matchesPlainText` against the exact text
+      // being saved, and the `Document` just built above starts at its default `contentVersion` of `0L` -- so a
+      // restored document is, by construction, in sync with this fresh buffer at that version (#1663).
+      richText = RichTextState()
+        .withSyncedDocument(sessionBuffer.richTextDocument, contentVersion = 0L)
+        .copy(richTextFidelity = sessionBuffer.richTextFidelity)
     )
 
   /** A clean file-backed buffer is read from disk through `FileManager` (#1670): the disk is the truth for it, and the

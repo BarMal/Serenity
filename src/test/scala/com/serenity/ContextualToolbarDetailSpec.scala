@@ -70,14 +70,13 @@ class ContextualToolbarDetailSpec extends AnyFlatSpec with Matchers with Context
             "#336699"
           )
           .normalized
-        val nextBuffer = state.persisted
-          .buffers(bufferId)
-          .copy(
-            document =
-              state.persisted.buffers(bufferId).document.copy(content = com.serenity.rope.Rope("alpha beta gamma")),
-            editing = EditingStateFixtures(selection = None, cursors = List(CursorPosition(0, 10))),
-            richText = state.persisted.buffers(bufferId).richText.copy(richTextDocument = Some(document))
-          )
+        val existingBuffer = state.persisted.buffers(bufferId)
+        val nextDocument   = existingBuffer.document.copy(content = com.serenity.rope.Rope("alpha beta gamma"))
+        val nextBuffer = existingBuffer.copy(
+          document = nextDocument,
+          editing = EditingStateFixtures(selection = None, cursors = List(CursorPosition(0, 10))),
+          richText = existingBuffer.richText.withSyncedDocument(Some(document), nextDocument.contentVersion)
+        )
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, nextBuffer)))
       }
       .unsafeRunSync()

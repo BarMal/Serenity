@@ -10,6 +10,22 @@ enum SweepDirection:
 
 final case class CellAnimation(char: Char, startColor: Color, endColor: Color)
 
+object CellAnimation:
+
+  /** Shared cap on how many `CellAnimation`s a single edit's flow/transition batch builds (issue #1676): both the
+    * visible-viewport path (`VisibleBufferAnimationCells`) and the inserted-text path
+    * (`state.reducers.EditorEditSupport`) need the same default, and the latter is a reducer that may not import
+    * `state.manager` -- so the constant lives here, in the AWT-owning package both already depend on, rather than in
+    * either one reaching into the other.
+    */
+  val DefaultMaxAnimatedCells: Int = 2_000
+
+  /** Curries a fixed start/end color pair into a per-character factory, so a caller that only ever draws from one
+    * theme's colors (`EditorEditSupport.insertedCellsFromText`) never has to spell out the `Color` type itself.
+    */
+  def curriedFor(startColor: Color, endColor: Color): Char => CellAnimation =
+    char => CellAnimation(char, startColor, endColor)
+
 object FlowAnimationBuilder:
 
   def build(

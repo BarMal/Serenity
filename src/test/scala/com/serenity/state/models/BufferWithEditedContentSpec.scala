@@ -106,3 +106,65 @@ class BufferWithEditedContentSpec extends AnyFlatSpec with Matchers:
       withRichText.withEditedContent(Rope("gamma delta"), List(CursorPosition(0, 1)), richTextDocument = None)
     edited.richText.richTextDocument shouldBe None
   }
+
+  "Document.withContent" should "bump contentVersion on every call, even to identical text" in {
+    val once  = original.document.withContent(Rope("gamma delta"))
+    val twice = once.withContent(Rope("gamma delta"))
+    once.contentVersion shouldBe original.document.contentVersion + 1
+    twice.contentVersion shouldBe original.document.contentVersion + 2
+  }
+
+  "withEditedContent" should "bump the buffer's contentVersion on every edit" in {
+    val edited = original.withEditedContent(Rope("gamma delta"), List(CursorPosition(0, 1)))
+    edited.document.contentVersion shouldBe original.document.contentVersion + 1
+  }
+
+  it should "mark a supplied richTextDocument as in sync with the new content version" in {
+    val document = RichTextDocument.fromPlainText("gamma delta")
+    val edited = original.withEditedContent(
+      Rope("gamma delta"),
+      List(CursorPosition(0, 1)),
+      richTextDocument = Some(document)
+    )
+    edited.richTextInSync shouldBe true
+    edited.richText.richTextSyncedVersion shouldBe Some(edited.document.contentVersion)
+  }
+
+  it should "leave richTextInSync false when the caller clears richTextDocument" in {
+    val withRichText = original.copy(richText =
+      original.richText
+        .withSyncedDocument(Some(RichTextDocument.fromPlainText("alpha beta")), original.document.contentVersion)
+    )
+    val edited =
+      withRichText.withEditedContent(Rope("gamma delta"), List(CursorPosition(0, 1)), richTextDocument = None)
+    edited.richTextInSync shouldBe false
+  }
+
+  "Buffer.richTextInSync" should "be false when there is no richTextDocument at all" in {
+    original.richText.richTextDocument shouldBe None
+    original.richTextInSync shouldBe false
+  }
+
+  it should "be false when richTextDocument is present but was never stamped as synced" in {
+    val drifted = original.copy(richText =
+      original.richText.copy(richTextDocument = Some(RichTextDocument.fromPlainText("alpha beta")))
+    )
+    drifted.richTextInSync shouldBe false
+  }
+
+  it should "be false when the stamped version no longer matches the current content version" in {
+    val synced = original.copy(richText =
+      original.richText
+        .withSyncedDocument(Some(RichTextDocument.fromPlainText("alpha beta")), original.document.contentVersion)
+    )
+    val driftedVersion = synced.copy(document = synced.document.withContent(synced.document.content))
+    driftedVersion.richTextInSync shouldBe false
+  }
+
+  it should "be true when richTextDocument was stamped as synced against the current content version" in {
+    val synced = original.copy(richText =
+      original.richText
+        .withSyncedDocument(Some(RichTextDocument.fromPlainText("alpha beta")), original.document.contentVersion)
+    )
+    synced.richTextInSync shouldBe true
+  }

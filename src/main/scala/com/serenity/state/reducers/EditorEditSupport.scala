@@ -313,6 +313,11 @@ private[reducers] object EditorEditSupport:
             List(replacementEdit)
           )
         ),
+        // `document` above and `richTextDocument` below both leave `contentVersion`/`richTextSyncedVersion` at
+        // whatever `buffer` already had, rather than updating either: as long as the two only ever move together
+        // (never one without the other), `Buffer.richTextInSync` stays correct without needing either to actually
+        // change on every edit (#1663) -- see `richTextDocumentAfterEdit`, which only ever returns `Some` when
+        // `buffer.richTextInSync` already held.
         richText = buffer.richText.copy(
           richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText)
         )
@@ -377,37 +382,35 @@ private[reducers] object EditorEditSupport:
     endOffset: Int,
     insertedText: String
   ): Option[RichTextDocument] =
-    buffer.richText.richTextDocument.flatMap { document =>
-      Option.when(document.matchesPlainText(buffer.document.content.collect())) {
-        val updatedDocument = document
-          .replaceRange(
-            RichTextRange(
-              richTextPositionForOffset(buffer.document.content, startOffset),
-              richTextPositionForOffset(buffer.document.content, endOffset)
-            ),
-            insertedText
-          )
-          .normalized
-        buffer.richText.insertionRichTextStyle
-          .filter(_ => insertedText.nonEmpty)
-          .map { style =>
-            val updatedContent =
-              insertOrUnchanged(
-                deleteOrUnchanged(buffer.document.content, startOffset, endOffset),
-                startOffset,
-                insertedText
+    buffer.richText.richTextDocument.filter(_ => buffer.richTextInSync).map { document =>
+      val updatedDocument = document
+        .replaceRange(
+          RichTextRange(
+            richTextPositionForOffset(buffer.document.content, startOffset),
+            richTextPositionForOffset(buffer.document.content, endOffset)
+          ),
+          insertedText
+        )
+        .normalized
+      buffer.richText.insertionRichTextStyle
+        .filter(_ => insertedText.nonEmpty)
+        .map { style =>
+          val updatedContent =
+            insertOrUnchanged(
+              deleteOrUnchanged(buffer.document.content, startOffset, endOffset),
+              startOffset,
+              insertedText
+            )
+          updatedDocument
+            .updateInlineStyle(
+              RichTextRange(
+                richTextPositionForOffset(updatedContent, startOffset),
+                richTextPositionForOffset(updatedContent, startOffset + insertedText.length)
               )
-            updatedDocument
-              .updateInlineStyle(
-                RichTextRange(
-                  richTextPositionForOffset(updatedContent, startOffset),
-                  richTextPositionForOffset(updatedContent, startOffset + insertedText.length)
-                )
-              )(_ => style)
-              .normalized
-          }
-          .getOrElse(updatedDocument)
-      }
+            )(_ => style)
+            .normalized
+        }
+        .getOrElse(updatedDocument)
     }
 
   def richTextPositionForOffset(content: Rope, offset: Int): RichTextPosition =
@@ -481,8 +484,10 @@ private[reducers] object EditorEditSupport:
     content: Rope,
     edits: List[MultiCursorEdit],
     state: AppState,
-    maxAnimatedCells: Int = com.serenity.state.manager.VisibleBufferAnimationCells.DefaultMaxAnimatedCells
+    maxAnimatedCells: Int = CellAnimation.DefaultMaxAnimatedCells
   ): Map[CharacterKey, CellAnimation] =
+    val animationFor =
+      CellAnimation.curriedFor(state.persisted.theme.backgroundColor, state.persisted.theme.foregroundColor)
     edits.foldLeft(Map.empty[CharacterKey, CellAnimation]) { (cells, edit) =>
       val remainingBudget = maxAnimatedCells - cells.size
       if remainingBudget <= 0 then cells
@@ -492,8 +497,7 @@ private[reducers] object EditorEditSupport:
           content,
           finalStartOffset,
           edit.insertedText.take(remainingBudget),
-          state.persisted.theme.backgroundColor,
-          state.persisted.theme.foregroundColor
+          animationFor
         )
     }
 
@@ -501,8 +505,7 @@ private[reducers] object EditorEditSupport:
     content: Rope,
     startOffset: Int,
     insertedText: String,
-    startColor: java.awt.Color,
-    endColor: java.awt.Color
+    animationFor: Char => CellAnimation
   ): Map[CharacterKey, CellAnimation] =
     insertedText
       .foldLeft((Map.empty[CharacterKey, CellAnimation], startOffset)) {
@@ -511,7 +514,7 @@ private[reducers] object EditorEditSupport:
         case ((cells, offset), char) =>
           val (line, column) = content.offsetToLineColumn(offset)
           (
-            cells + (CharacterKey(column, line) -> CellAnimation(char, startColor, endColor)),
+            cells + (CharacterKey(column, line) -> animationFor(char)),
             offset + 1
           )
       }

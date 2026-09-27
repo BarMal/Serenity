@@ -21,26 +21,43 @@ object ArchitectureChecks {
   /** A backstop for file sprawl. Deliberately generous: the method check is the real signal. */
   val MaxFileLines = 600
 
+  /** One forbidden-import rule: `pkg` gates which files it applies to (a substring of the relativised path),
+    * `forbidden` is what a matching file may not reference, and `mainOnly` narrows that further to `src/main` --
+    * for a rule whose target is reducer/model *production* purity, a `src/test` spec driving the same
+    * effect-boundary helpers to simulate the full post-reduce pipeline in test setup is not the violation the
+    * rule exists to catch (#1676).
+    */
+  final case class ImportRule(pkg: String, forbidden: Seq[String], reason: String, mainOnly: Boolean = false)
+
   /** Layering rules the package structure implies but nothing enforces.
     *
     * Reducers are pure state transitions. Reaching into AWT or the layout engine from one is what
     * docs/coding-standards.md forbids and what issue #862 exists to undo; this stops it coming back.
     */
-  val ForbiddenImports: Seq[(String, Seq[String], String)] = Seq(
-    (
+  val ForbiddenImports: Seq[ImportRule] = Seq(
+    ImportRule(
       "com/serenity/state/reducers",
-      Seq("java.awt", "com.serenity.ui.fonts", "com.serenity.ui.layout.LayoutEngine", "com.serenity.ui.renderer"),
-      "reducers must stay pure: take measured geometry as a parameter instead of reaching for AWT or the layout engine"
+      Seq(
+        "java.awt",
+        "com.serenity.ui.fonts",
+        "com.serenity.ui.layout.LayoutEngine",
+        "com.serenity.ui.renderer",
+        "com.serenity.state.manager"
+      ),
+      "reducers must stay pure: take measured geometry as a parameter instead of reaching for AWT, the layout " +
+        "engine or the effect-boundary manager -- a fully-qualified reference is still a reference (#1676)",
+      mainOnly = true
     ),
-    (
+    ImportRule(
       "com/serenity/state/reducers",
       Seq("cats.effect"),
       "reducers are pure transitions (#1697): emit an AppEffect for the shell to run instead of an IO"
     ),
-    (
+    ImportRule(
       "com/serenity/state/models",
-      Seq("java.awt.Graphics", "com.serenity.ui.renderer"),
-      "state models describe data, not painting"
+      Seq("java.awt.Graphics", "com.serenity.ui.renderer", "com.serenity.state.manager"),
+      "state models describe data, not painting or effect-boundary orchestration",
+      mainOnly = true
     )
   )
 
@@ -137,14 +154,21 @@ object ArchitectureChecks {
       if (length > MaxMethodLines) Some(Violation(path, s"method $name", length)) else None
     }
 
+  /** Matches a forbidden package/class anywhere in a non-comment line, not only on an `import` line -- a
+    * fully-qualified reference (`com.serenity.state.manager.EditorGeometryProducer.forPane(...)`) reaches the
+    * same forbidden code an `import` would, and evades a check that only looks at `import` lines (#1676). Doc
+    * comments that merely mention a forbidden package by name (as this file's own header does) are excluded the
+    * same way [[callViolations]] already excludes them.
+    */
   private def importViolations(path: String, lines: Vector[String]): Seq[Violation] =
-    ForbiddenImports.flatMap { case (pkg, forbidden, reason) =>
-      if (!path.contains(pkg)) Nil
+    ForbiddenImports.flatMap { rule =>
+      if (!path.contains(rule.pkg) || (rule.mainOnly && !path.startsWith("main/"))) Nil
       else
         lines.zipWithIndex.collect {
           case (line, index)
-              if line.trim.startsWith("import ") && forbidden.exists(f => line.contains(f)) =>
-            Violation(path, s"forbidden import at line ${index + 1}: $reason", 1)
+              if !line.trim.startsWith("//") && !line.trim.startsWith("*") &&
+                rule.forbidden.exists(f => line.contains(f)) =>
+            Violation(path, s"forbidden reference at line ${index + 1}: ${rule.reason}", 1)
         }
     }
 
@@ -245,5 +269,95 @@ object ArchitectureChecks {
            ))
 
     if (problems.isEmpty) None else Some(problems.mkString("\n"))
+  }
+
+  /** Regression guard for the checks themselves (#1676): a reducer that reaches a forbidden package through a
+    * fully-qualified reference rather than an `import` line must still be caught, a plain `import` violation must
+    * still be caught (widening the match can't be allowed to narrow it), and a comment that merely mentions a
+    * forbidden package must not be. Plain `require` assertions rather than a test framework -- `project/` sources
+    * have no test dependency of their own -- run from the `architectureChecksSelfTest` sbt task, which
+    * `architectureCheck` depends on, so CI fails immediately if `importViolations`'s matching is ever narrowed back.
+    */
+  def selfTest(): Unit = {
+    def check(
+        description: String,
+        lines: Vector[String],
+        expectCaught: Boolean,
+        path: String = "main/scala/com/serenity/state/reducers/Sample.scala"
+    ): Unit = {
+      val violations = importViolations(path, lines)
+      require(
+        violations.nonEmpty == expectCaught,
+        s"ArchitectureChecks self-test failed ($description): expected a forbidden reference to be " +
+          s"${if (expectCaught) "caught" else "ignored"}, got ${violations.size} violation(s)"
+      )
+    }
+
+    check(
+      "fully-qualified state.manager call outside an import line",
+      Vector(
+        "package com.serenity.state.reducers",
+        "object Sample:",
+        "  def x(state: Int) = com.serenity.state.manager.EditorGeometryProducer.forPane(state, 0)"
+      ),
+      expectCaught = true
+    )
+
+    check(
+      "fully-qualified java.awt reference outside an import line",
+      Vector(
+        "package com.serenity.state.reducers",
+        "object Sample:",
+        "  def color: java.awt.Color = java.awt.Color.RED"
+      ),
+      expectCaught = true
+    )
+
+    check(
+      "an ordinary forbidden import line",
+      Vector(
+        "package com.serenity.state.reducers",
+        "import com.serenity.ui.fonts.FontLoader"
+      ),
+      expectCaught = true
+    )
+
+    check(
+      "a comment that only mentions a forbidden package by name",
+      Vector(
+        "package com.serenity.state.reducers",
+        "// see com.serenity.state.manager.EditorGeometryProducer for why this stays at the effect boundary"
+      ),
+      expectCaught = false
+    )
+
+    check(
+      "a test spec driving the effect-boundary manager to simulate the full post-reduce pipeline",
+      Vector(
+        "package com.serenity.state.reducers",
+        "import com.serenity.state.manager.CursorViewport"
+      ),
+      expectCaught = false,
+      path = "test/scala/com/serenity/state/reducers/SampleSpec.scala"
+    )
+
+    check(
+      "a test spec driving another effect-boundary helper (ui.fonts) from the same main-only rule",
+      Vector(
+        "package com.serenity.state.reducers",
+        "import com.serenity.ui.fonts.FontLoader"
+      ),
+      expectCaught = false,
+      path = "test/scala/com/serenity/state/reducers/SampleSpec.scala"
+    )
+
+    check(
+      "production code still catches an ordinary forbidden import (java.awt) under the main-only scoping",
+      Vector(
+        "package com.serenity.state.reducers",
+        "import com.serenity.ui.fonts.FontLoader"
+      ),
+      expectCaught = true
+    )
   }
 }

@@ -368,8 +368,12 @@ given Decoder[ParagraphRole] = Decoder.instance { cursor =>
 given Encoder[RichTextParagraph] = deriveEncoder
 given Decoder[RichTextParagraph] = deriveDecoder
 
-given Encoder[RichTextDocument] = deriveEncoder
-given Decoder[RichTextDocument] = deriveDecoder
+// Manual, not derived: RichTextDocument is backed by a ParagraphTree (#1663), not a case class, so
+// deriveEncoder/deriveDecoder no longer apply -- and even if they did, deriving over the tree would leak its
+// internal node shape into the session file format instead of the flat paragraph list every prior save used.
+given Encoder[RichTextDocument] = Encoder.instance(document => Json.obj("paragraphs" -> document.paragraphs.asJson))
+given Decoder[RichTextDocument] =
+  Decoder.instance(_.get[List[RichTextParagraph]]("paragraphs").map(RichTextDocument.apply))
 
 given Encoder[AppConfig] = Encoder.instance(SessionConfigCodec.encode)
 

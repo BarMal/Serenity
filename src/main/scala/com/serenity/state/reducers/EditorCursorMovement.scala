@@ -125,19 +125,15 @@ private[reducers] object EditorCursorMovement:
   def pageTarget(
     buffer: Buffer,
     currentState: AppState,
-    paneId: PaneId,
+    geometry: Option[EditorGeometry],
     direction: Int
   ): CursorPosition => CursorPosition =
     val totalLines  = buffer.document.content.lineCount
     val visibleRows = math.max(1, buffer.viewport.visibleLines)
     // The window has to reach a whole screenful in the direction of travel, which the default geometry only covers
-    // downwards.
-    val geometry =
-      if EditorCursorSupport.useVisualLineNavigation(currentState) then
-        com.serenity.state.manager.EditorGeometryProducer
-          .forPane(currentState, paneId, rowsAbove = visibleRows)
-          .map(_.navigation)
-      else None
+    // downwards -- `EditorGeometryProducer.forEvent` is the one that measures a page-sized window for this event.
+    val navigation =
+      if EditorCursorSupport.useVisualLineNavigation(currentState) then geometry.map(_.navigation) else None
 
     def logicalTarget(cursor: CursorPosition): CursorPosition =
       val targetLine =
@@ -154,9 +150,9 @@ private[reducers] object EditorCursorMovement:
         navigation.visualLines.lift(targetRow).map(line => CursorPosition(line.bufferLine, line.startColumn))
       }
 
-    geometry match
-      case Some(navigation) => cursor => visualTarget(navigation)(cursor).getOrElse(logicalTarget(cursor))
-      case None             => logicalTarget
+    navigation match
+      case Some(nav) => cursor => visualTarget(nav)(cursor).getOrElse(logicalTarget(cursor))
+      case None      => logicalTarget
 
   /** Column-based document layout (issue #1338, Phase 1): where one cursor lands after a `ColumnLeft`/`ColumnRight`
     * move of `direction` -- fixed/discrete jumps of exactly `visibleLines` visual rows, identical to `pageTarget`'s own
@@ -166,10 +162,10 @@ private[reducers] object EditorCursorMovement:
   def columnTarget(
     buffer: Buffer,
     currentState: AppState,
-    paneId: PaneId,
+    geometry: Option[EditorGeometry],
     direction: Int
   ): CursorPosition => CursorPosition =
-    pageTarget(buffer, currentState, paneId, direction)
+    pageTarget(buffer, currentState, geometry, direction)
 
   def activeSelections(buffer: Buffer): List[Selection] =
     buffer.allSelections.distinct

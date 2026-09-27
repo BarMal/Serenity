@@ -126,7 +126,7 @@ class EditorClipboardEventReducerSpec extends AnyFlatSpec with Matchers:
     val before = stateWith("alpha", List(CursorPosition(0, 0)), clipboard = Some("existing"))
     val buffer = before.persisted.buffers(bufferId)
     val ctx =
-      EditorCursorSupport.CursorEventContext(buffer, CursorPosition(0, 0), false, false, before, paneId)
+      EditorCursorSupport.CursorEventContext(buffer, CursorPosition(0, 0), false, false, before, paneId, None)
 
     EditorClipboardEventReducer.reduce(NewLine, ctx).state shouldBe before
   }

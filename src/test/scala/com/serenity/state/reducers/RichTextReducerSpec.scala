@@ -63,6 +63,20 @@ class RichTextReducerSpec extends AnyFlatSpec with Matchers:
     after.richText.insertionRichTextStyle shouldBe Some(RichTextStyle.empty)
   }
 
+  it should "keep a freshly materialized document in sync across a second, chained formatting command" in {
+    // Regression for #1663: `currentDocument` builds a fresh `RichTextDocument` the first time a plain buffer is
+    // formatted. If that fresh document isn't stamped as synced when it's written back, the *second* formatting
+    // command sees `richTextInSync == false` and silently rebuilds from plain text again, discarding the first
+    // command's mark.
+    val state = stateWith(selected("hello world", 0, 0, 0, 5))
+
+    val afterBold   = validReduce(RichTextIntent.ToggleRichTextMark(InlineMark.Bold), state)
+    val afterItalic = validReduce(RichTextIntent.ToggleRichTextMark(InlineMark.Italic), stateWith(afterBold))
+
+    documentOf(afterItalic).paragraphAt(0).map(_.runs.headOption.map(_.style.marks)) shouldBe
+      Some(Some(Set(InlineMark.Bold, InlineMark.Italic)))
+  }
+
   it should "rebuild a stale rich-text document that no longer matches the buffer text" in {
     val stale  = RichTextDocument.fromPlainText("something else")
     val buffer = selected("hello world", 0, 0, 0, 5)

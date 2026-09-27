@@ -13,7 +13,6 @@ import com.serenity.ui.layout.{
   OverlayRowLayout,
   OverlaySegment,
   ResolvedSurfaceComposition,
-  SurfaceContentRowKind,
   SurfaceIntrinsicSize,
   SurfacePaintBox,
   SurfacePaintKind,
@@ -109,7 +108,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
     surface.getRow(2).slice(1, 3) shouldBe "  "
   }
 
-  it should "derive row slots from an explicit overlay content rect" in {
+  it should "position rows from an explicit overlay content rect via its composition" in {
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 10, 6),
       contentRect = Some(LayoutRect(3, 2, 4, 4)),
@@ -118,14 +117,16 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       footer = Some(OverlayRow("foot"))
     )
 
-    overlay.contentRowSlots
-      .map(slot => slot.kind -> slot.y)
+    overlay.composition
+      .map(_.paintBoxes.map(box => box.kind -> box.rect.y.toInt))
       .shouldBe(
-        List(
-          SurfaceContentRowKind.Header  -> 2,
-          SurfaceContentRowKind.Item(0) -> 3,
-          SurfaceContentRowKind.Item(1) -> 4,
-          SurfaceContentRowKind.Footer  -> 5
+        Some(
+          List(
+            SurfacePaintKind.Heading -> 2,
+            SurfacePaintKind.Text    -> 3,
+            SurfacePaintKind.Text    -> 4,
+            SurfacePaintKind.Footer  -> 5
+          )
         )
       )
   }

@@ -45,22 +45,18 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve explicit font size and colour metadata" in {
-    val source = RichTextDocument
-      .oneParagraph(
-        "styled"
-      )
-      .copy(
-        paragraphs = List(
-          RichTextParagraph(
-            List(
-              RichTextRun(
-                "styled",
-                RichTextStyle(fontSize = Some(18.0f), color = Some("#336699"))
-              )
+    val source = RichTextDocument(
+      List(
+        RichTextParagraph(
+          List(
+            RichTextRun(
+              "styled",
+              RichTextStyle(fontSize = Some(18.0f), color = Some("#336699"))
             )
           )
         )
       )
+    )
 
     val decodedStyle = singleParagraph(RtfDocumentCodec.readBytes(RtfDocumentCodec.writeBytes(source))).runs
       .find(_.text.contains("styled"))

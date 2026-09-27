@@ -1,5 +1,6 @@
 package com.serenity.state.manager
 
+import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
@@ -192,4 +193,45 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
     val geometry = EditorGeometryProducer.forPane(tuiState, paneId).getOrElse(fail("expected geometry for pane"))
 
     geometry.navigation.visualRowIndexFor(cursor) shouldBe Some(4)
+  }
+
+  // -- forEvent (#1676): the classification a reducer decides (`EditorEventReducer.geometryRequirement`), the actual
+  // measurement done only here, at the effect boundary, so the shell (`EditorPaneComponent`) never has to duplicate it.
+
+  "EditorGeometryProducer.forEvent" should "return no geometry for an event that never needs it" in {
+    val tuiState = stateWith(Buffer.fromString(bufferId, "hello world"), isTuiMode = true)
+
+    EditorGeometryProducer.forEvent(InsertChar('x'), tuiState, paneId) shouldBe None
+  }
+
+  it should "return no geometry when visual-line navigation is off, even for Home" in {
+    val plainState = stateWith(Buffer.fromString(bufferId, "hello world"), isTuiMode = true)
+    val stateWithoutVisualNav = plainState.copy(persisted =
+      plainState.persisted.copy(config =
+        plainState.persisted.config
+          .copy(surfaceConfig = plainState.persisted.config.surfaceConfig.copy(visualLineCursorNavigation = false))
+      )
+    )
+
+    EditorGeometryProducer.forEvent(MoveToStart, stateWithoutVisualNav, paneId) shouldBe None
+  }
+
+  it should "measure the default single-step window for Home" in {
+    val tuiState = stateWith(Buffer.fromString(bufferId, "hello world"), isTuiMode = true)
+
+    val forEvent = EditorGeometryProducer.forEvent(MoveToStart, tuiState, paneId).getOrElse(fail("expected geometry"))
+    val forPane  = EditorGeometryProducer.forPane(tuiState, paneId).getOrElse(fail("expected geometry"))
+
+    forEvent shouldBe forPane
+  }
+
+  it should "measure a page-sized window, matching the buffer's own visible-lines, for PageDown" in {
+    val buffer0  = Buffer.fromString(bufferId, "hello world")
+    val buffer   = buffer0.copy(viewport = buffer0.viewport.copy(visibleLines = 7))
+    val tuiState = stateWith(buffer, isTuiMode = true)
+
+    val forEvent = EditorGeometryProducer.forEvent(PageDown, tuiState, paneId).getOrElse(fail("expected geometry"))
+    val forPane  = EditorGeometryProducer.forPane(tuiState, paneId, rowsAbove = 7).getOrElse(fail("expected geometry"))
+
+    forEvent shouldBe forPane
   }
