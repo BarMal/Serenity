@@ -25,6 +25,15 @@ package com.serenity.ui.layout
   * Non-interactive throughout: none of the content kinds this adapter serves are focus-navigable or mouse-hit-tested
   * through their composition today, so `hitRegions`/`focusOrder` are always empty here -- unlike a bespoke composition
   * (e.g. `ContextMenuSurfaceComposition`), which builds real hit regions for its selectable rows.
+  *
+  * A named seam within that "no such need" set: `ThemePicker`, `FileSearch`, and `ThemeCreator` already share
+  * `ContextMenu`'s exact windowed-single-selection shape -- `PickerContentResolver` builds each of their rows from the
+  * same `SurfaceFrameLayout.itemWindow`/`adjustedSelectedIndex` pair `ContextMenuSurfaceComposition` uses, with the
+  * same header+footer framing. They go through this generic adapter today only because they're keyboard-driven;
+  * `ContextMenu` earned its own bespoke composition purely because it's mouse-invoked (right-click) and needs real
+  * `ActionItem` paint boxes and hit regions. If any of these three ever needs mouse-click selection, give it its own
+  * `*SurfaceComposition` mirroring `ContextMenuSurfaceComposition` -- the composition boundary is already there in the
+  * shared windowed-selection shape -- rather than growing a kind-specific hit-testing branch inside this adapter.
   */
 object RowsSurfaceComposition:
 
