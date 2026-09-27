@@ -16,17 +16,12 @@ final case class Runtime(
     nextBufferId: BufferId = BufferId(0),
     nextPaneId: PaneId = PaneId(0),
     nextSurfaceId: SurfaceIdSupply = SurfaceIdSupply.initial,
-    surfaceAnimations: Map[SurfaceId, SurfaceAnimationState] = Map.empty,
-    // Column-based document layout (issue #1338, Phase 1 animation): the in-flight column-to-column transition for
-    // each buffer whose active column just moved, if `MotionFamily.ColumnTransitions` is enabled. See
-    // `ColumnTransitionState`'s doc comment for who seeds and advances it.
-    columnTransitions: Map[BufferId, ColumnTransitionState] = Map.empty,
-    // Panel scale-in/out (issue #1085 phase 1): the in-flight grow/shrink geometry for a pinned/docked panel opening
-    // or closing, if `MotionFamily.PanelGeometry` is enabled -- keyed by the real panel's `SurfaceId` while opening, or
-    // the transient close ghost's `SurfaceId` while closing. Independent of `surfaceAnimations`' colour fade, which is
-    // gated by the separate `PinnedPanels` family; see `PinnedPanelAnimations` for who seeds this and
-    // `AnimationChoreography.advancePanelGeometry` for who advances it and reclaims a completed close ghost.
-    panelGeometry: Map[SurfaceId, PanelGeometryState] = Map.empty,
+    // Surface/panel/column motion state (issue #1693): the per-surface fade animation, the per-buffer column-to-column
+    // transition, and the per-surface panel scale-in/out geometry are grouped into their own sub-record since all
+    // three are written from the same handful of reducers/effects and read back together by
+    // `DamageProducer.fullRenderDamage`/`StateManagerEditorCapability`'s tick-active check/advance. See
+    // `MotionState`'s own doc comment.
+    motion: MotionState = MotionState(),
     clipboard: Option[String] = None,
     focusHistory: List[Focus] = List.empty,
     navigation: NavigationHistory = NavigationHistory(),

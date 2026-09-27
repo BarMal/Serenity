@@ -146,8 +146,10 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
       ).advance
     )
     val geometryRect = geometry.currentRect
-    val state        = docked.copy(runtime = docked.runtime.copy(panelGeometry = Map(surfaceId -> geometry)))
-    val surface      = new MockRenderSurface(100, 30)
+    val state = docked.copy(runtime =
+      docked.runtime.copy(motion = docked.runtime.motion.copy(panelGeometry = Map(surfaceId -> geometry)))
+    )
+    val surface = new MockRenderSurface(100, 30)
 
     RendererEntryPoints.render(state, cursorVisible = true, surface, ViewportSize(100, 30))
 
@@ -189,7 +191,7 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
             SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
         ),
-        panelGeometry = Map(ghostId -> geometry)
+        motion = baseState().runtime.motion.copy(panelGeometry = Map(ghostId -> geometry))
       )
     )
     val surface = new MockRenderSurface(100, 30)

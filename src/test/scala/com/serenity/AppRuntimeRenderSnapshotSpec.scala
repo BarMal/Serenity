@@ -29,7 +29,10 @@ class AppRuntimeRenderSnapshotSpec extends AnyFlatSpec with Matchers:
   given Logger[IO] = NoOpLogger.impl[IO]
 
   private val animating: AppState = AppState.initial.copy(runtime =
-    AppState.initial.runtime.copy(surfaceAnimations = Map(SurfaceId("render-snapshot") -> SurfaceAnimationState()))
+    AppState.initial.runtime.copy(motion =
+      AppState.initial.runtime.motion
+        .copy(surfaceAnimations = Map(SurfaceId("render-snapshot") -> SurfaceAnimationState()))
+    )
   )
 
   private def modelAt(version: Int): Model =

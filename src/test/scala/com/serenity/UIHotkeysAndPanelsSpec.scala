@@ -151,7 +151,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     val state     = stateManager.getCurrentState.unsafeRunSync()
     val panel     = state.pinnedSurfaces.headOption.getOrElse(fail("Expected pinned panel"))
-    val animation = state.runtime.surfaceAnimations.get(panel.id).getOrElse(fail("Expected panel animation"))
+    val animation = state.runtime.motion.surfaceAnimations.get(panel.id).getOrElse(fail("Expected panel animation"))
 
     animation.animationState.activeAnimationCount should be > 0
     animation.overlayHeight should be > 0
@@ -165,7 +165,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().runtime.surfaceAnimations shouldBe empty
+    stateManager.getCurrentState.unsafeRunSync().runtime.motion.surfaceAnimations shouldBe empty
 
   it should "unpin one same-side panel at a time starting with the focused panel" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
@@ -222,7 +222,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       case surface @ UiSurface(_, SurfaceContent.GhostOverlay(SurfaceContent.Outline(_, _), _), _, _) => surface
     }
     ghost shouldBe defined
-    ghost.flatMap(surface => state.runtime.surfaceAnimations.get(surface.id).map(_.phase)) shouldBe Some(
+    ghost.flatMap(surface => state.runtime.motion.surfaceAnimations.get(surface.id).map(_.phase)) shouldBe Some(
       SurfacePhase.Exiting
     )
 
@@ -250,7 +250,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.executeCommand(viewCommand(ViewIntent.UnpinPanel(PanelPosition.Right))).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.runtime.surfaceAnimations shouldBe empty
+    state.runtime.motion.surfaceAnimations shouldBe empty
     state.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
 
   // ── Panel scale-in/out (issue #1085 phase 1) ────────────────────────────────
@@ -260,7 +260,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val panel    = state.pinnedSurfaces.headOption.getOrElse(fail("Expected pinned panel"))
-    val geometry = state.runtime.panelGeometry.getOrElse(panel.id, fail("Expected panel geometry animation"))
+    val geometry = state.runtime.motion.panelGeometry.getOrElse(panel.id, fail("Expected panel geometry animation"))
 
     geometry.isComplete shouldBe false
     // Left-docked: the collapsed start rect has zero width at the same x as the full rect.
@@ -288,8 +288,8 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     val panel = state.pinnedSurfaces.headOption.getOrElse(fail("Expected pinned panel"))
-    state.runtime.surfaceAnimations shouldBe empty
-    state.runtime.panelGeometry.get(panel.id) shouldBe defined
+    state.runtime.motion.surfaceAnimations shouldBe empty
+    state.runtime.motion.panelGeometry.get(panel.id) shouldBe defined
 
   it should "keep the PinnedPanels colour fade independent of the panel-geometry scale-in" in new UIFixture:
     stateManager
@@ -311,8 +311,8 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     val panel = state.pinnedSurfaces.headOption.getOrElse(fail("Expected pinned panel"))
-    state.runtime.panelGeometry shouldBe empty
-    state.runtime.surfaceAnimations.get(panel.id) shouldBe defined
+    state.runtime.motion.panelGeometry shouldBe empty
+    state.runtime.motion.surfaceAnimations.get(panel.id) shouldBe defined
 
   it should "skip the panel-geometry scale-in when reduced motion is enabled" in new UIFixture:
     stateManager
@@ -323,7 +323,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().runtime.panelGeometry shouldBe empty
+    stateManager.getCurrentState.unsafeRunSync().runtime.motion.panelGeometry shouldBe empty
 
   it should "advance the panel-geometry scale-in on tick, dropping it once it completes" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
@@ -331,7 +331,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     advanceAnimations(200)
 
-    stateManager.getCurrentState.unsafeRunSync().runtime.panelGeometry.get(panel.id) shouldBe None
+    stateManager.getCurrentState.unsafeRunSync().runtime.motion.panelGeometry.get(panel.id) shouldBe None
 
   it should "shrink the panel back toward its docked edge when unpinning it, independent of the colour fade" in new UIFixture:
     stateManager
@@ -359,8 +359,8 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
         case surface @ UiSurface(_, SurfaceContent.GhostOverlay(SurfaceContent.Outline(_, _), _), _, _) => surface
       }
       .getOrElse(fail("Expected a closing ghost overlay"))
-    afterClose.runtime.surfaceAnimations shouldBe empty
-    val geometry = afterClose.runtime.panelGeometry.getOrElse(ghost.id, fail("Expected closing panel geometry"))
+    afterClose.runtime.motion.surfaceAnimations shouldBe empty
+    val geometry = afterClose.runtime.motion.panelGeometry.getOrElse(ghost.id, fail("Expected closing panel geometry"))
     geometry.tween.start.width should be > 0
     geometry.tween.end.width shouldBe 0
 
@@ -386,7 +386,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     advanceAnimations(200)
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.runtime.panelGeometry shouldBe empty
+    state.runtime.motion.panelGeometry shouldBe empty
     state.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
 
   it should "resize a pinned panel to a new size" in new UIFixture:

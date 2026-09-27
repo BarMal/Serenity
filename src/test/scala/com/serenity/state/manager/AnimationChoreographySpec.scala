@@ -54,7 +54,7 @@ class AnimationChoreographySpec extends AnyFlatSpec with Matchers:
 
     val runnerId = opened.commandRunnerSurface.map(_.id)
     runnerId shouldBe defined
-    next.flatMap(state => runnerId.flatMap(state.runtime.surfaceAnimations.get)).map(_.phase) shouldBe
+    next.flatMap(state => runnerId.flatMap(state.runtime.motion.surfaceAnimations.get)).map(_.phase) shouldBe
       Some(SurfacePhase.Visible)
     next.forall(isValid) shouldBe true
   }
@@ -64,14 +64,16 @@ class AnimationChoreographySpec extends AnyFlatSpec with Matchers:
     val runnerId = opened.commandRunnerSurface.map(_.id)
     val stale = runnerId.fold(opened)(id =>
       opened.copy(runtime =
-        opened.runtime.copy(surfaceAnimations =
-          opened.runtime.surfaceAnimations + (id -> SurfaceAnimationState(
-            SurfacePhase.Visible,
-            AnimationState.empty,
-            overlayHeight = 1,
-            bufferFadeLength = 0,
-            phaseTick = 0
-          ))
+        opened.runtime.copy(motion =
+          opened.runtime.motion.copy(surfaceAnimations =
+            opened.runtime.motion.surfaceAnimations + (id -> SurfaceAnimationState(
+              SurfacePhase.Visible,
+              AnimationState.empty,
+              overlayHeight = 1,
+              bufferFadeLength = 0,
+              phaseTick = 0
+            ))
+          )
         )
       )
     )
@@ -79,7 +81,7 @@ class AnimationChoreographySpec extends AnyFlatSpec with Matchers:
     val next = AnimationChoreography.animateSurfaceTransitions(still, stale)
 
     next shouldBe defined
-    next.map(_.runtime.surfaceAnimations.keySet.intersect(runnerId.toSet)) shouldBe Some(Set.empty)
+    next.map(_.runtime.motion.surfaceAnimations.keySet.intersect(runnerId.toSet)) shouldBe Some(Set.empty)
     next.forall(isValid) shouldBe true
   }
 
@@ -92,7 +94,7 @@ class AnimationChoreographySpec extends AnyFlatSpec with Matchers:
 
     val ghosts = next.map(ghostIds).getOrElse(Nil)
     ghosts should have size 1
-    next.map(state => ghosts.flatMap(state.runtime.surfaceAnimations.get).map(_.phase)) shouldBe
+    next.map(state => ghosts.flatMap(state.runtime.motion.surfaceAnimations.get).map(_.phase)) shouldBe
       Some(List(SurfacePhase.Exiting))
     next.forall(isValid) shouldBe true
   }
@@ -116,7 +118,9 @@ class AnimationChoreographySpec extends AnyFlatSpec with Matchers:
 
     panelId should have size 1
     next.exists(state =>
-      panelId.forall(id => state.runtime.surfaceAnimations.contains(id) || state.runtime.panelGeometry.contains(id))
+      panelId.forall(id =>
+        state.runtime.motion.surfaceAnimations.contains(id) || state.runtime.motion.panelGeometry.contains(id)
+      )
     ) shouldBe true
     next.forall(isValid) shouldBe true
   }

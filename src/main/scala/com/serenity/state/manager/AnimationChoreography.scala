@@ -84,7 +84,7 @@ private[manager] object AnimationChoreography:
     else Some(transitions.foldLeft(currentState)((state, transition) => transition(state)))
 
   def shouldApplySurfaceAnimationHooks(state: AppState): Boolean =
-    state.runtime.surfaceAnimations.nonEmpty ||
+    state.runtime.motion.surfaceAnimations.nonEmpty ||
       state.persisted.config.scaledCommandRunnerAnimation.exists(config => !config.isDisabled) ||
       state.persisted.config.pinnedPanelTransitionSettings.enabled ||
       state.persisted.config.scaledPanelGeometryAnimation.isDefined
@@ -116,7 +116,7 @@ private[manager] object AnimationChoreography:
                 overlayHeight,
                 steps,
                 s,
-                exitingGhost.flatMap(ghost => s.runtime.surfaceAnimations.get(ghost.id).map(_.animationState))
+                exitingGhost.flatMap(ghost => s.runtime.motion.surfaceAnimations.get(ghost.id).map(_.animationState))
               )
             else
               val plan = ElementTransitionPlanner.plan(
@@ -135,24 +135,31 @@ private[manager] object AnimationChoreography:
               )
           val surfaceAnimations =
             if animationState.hasActiveAnimations then
-              s.runtime.surfaceAnimations + (surface.id -> SurfaceAnimationState(
+              s.runtime.motion.surfaceAnimations + (surface.id -> SurfaceAnimationState(
                 phase = SurfacePhase.Visible,
                 animationState = animationState,
                 overlayHeight = overlayHeight,
                 bufferFadeLength = 0,
                 phaseTick = 0
               ))
-            else s.runtime.surfaceAnimations - surface.id
-          exitingGhost.fold(s.copy(runtime = s.runtime.copy(surfaceAnimations = surfaceAnimations))) { ghost =>
+            else s.runtime.motion.surfaceAnimations - surface.id
+          exitingGhost.fold(
+            s.copy(runtime = s.runtime.copy(motion = s.runtime.motion.copy(surfaceAnimations = surfaceAnimations)))
+          ) { ghost =>
             s.copy(runtime =
               s.runtime.copy(
                 uiSurfaces = s.runtime.uiSurfaces.filterNot(_.id == ghost.id),
-                surfaceAnimations = surfaceAnimations - ghost.id
+                motion = s.runtime.motion.copy(surfaceAnimations = surfaceAnimations - ghost.id)
               )
             )
           }
       case _ =>
-        (s: AppState) => s.copy(runtime = s.runtime.copy(surfaceAnimations = s.runtime.surfaceAnimations - surface.id))
+        (s: AppState) =>
+          s.copy(runtime =
+            s.runtime.copy(motion =
+              s.runtime.motion.copy(surfaceAnimations = s.runtime.motion.surfaceAnimations - surface.id)
+            )
+          )
 
   private def commandRunnerFadeInAnimation(
     overlayHeight: Int,
@@ -205,7 +212,7 @@ private[manager] object AnimationChoreography:
           val tSize = prevState.runtime.viewportSize.orElse(s.runtime.viewportSize).getOrElse(ViewportSize(80, 24))
           val previousLayout = LayoutEngine.calculateLayoutWithUI(prevState, tSize)
           val contract       = EditorLayoutContract.from(prevState, tSize, previousLayout)
-          val overlayHeight = prevState.runtime.surfaceAnimations
+          val overlayHeight = prevState.runtime.motion.surfaceAnimations
             .get(closedSurface.id)
             .map(_.overlayHeight)
             .orElse(contract.overlayRect(closedSurface.id).map(_.height))
@@ -218,7 +225,7 @@ private[manager] object AnimationChoreography:
             val panelFg  = s.persisted.theme.panel.foreground
             val transpBg = transparent(panelBg)
             val transpFg = transparent(panelFg)
-            val previousCell = prevState.runtime.surfaceAnimations
+            val previousCell = prevState.runtime.motion.surfaceAnimations
               .get(closedSurface.id)
               .flatMap(_.animationState.getCell(0, rowOffset))
             val currentBg = previousCell.flatMap(_.currentBackground).getOrElse(panelBg)
@@ -253,14 +260,20 @@ private[manager] object AnimationChoreography:
           stateWithId.copy(runtime =
             stateWithId.runtime.copy(
               uiSurfaces = stateWithId.runtime.uiSurfaces :+ ghostSurface,
-              surfaceAnimations = stateWithId.runtime.surfaceAnimations
-                - closedSurface.id
-                + (ghostId -> ghostAnimState)
+              motion = stateWithId.runtime.motion.copy(surfaceAnimations =
+                stateWithId.runtime.motion.surfaceAnimations
+                  - closedSurface.id
+                  + (ghostId -> ghostAnimState)
+              )
             )
           )
       case _ =>
         (s: AppState) =>
-          s.copy(runtime = s.runtime.copy(surfaceAnimations = s.runtime.surfaceAnimations - closedSurface.id))
+          s.copy(runtime =
+            s.runtime.copy(motion =
+              s.runtime.motion.copy(surfaceAnimations = s.runtime.motion.surfaceAnimations - closedSurface.id)
+            )
+          )
 
   private def animatedCommandSurfaces(state: AppState): List[UiSurface] =
     state.runtime.uiSurfaces.filter {
@@ -275,7 +288,7 @@ private[manager] object AnimationChoreography:
   private def matchingExitingCommandGhost(surface: UiSurface, state: AppState): Option[UiSurface] =
     state.runtime.uiSurfaces.find {
       case UiSurface(id, SurfaceContent.GhostOverlay(content, _), _, _) =>
-        state.runtime.surfaceAnimations.get(id).exists(_.phase == SurfacePhase.Exiting) &&
+        state.runtime.motion.surfaceAnimations.get(id).exists(_.phase == SurfacePhase.Exiting) &&
         ((surface.content, content) match
           case (SurfaceContent.CommandPalette(_), SurfaceContent.CommandPalette(_)) => true
           case _                                                                    => false)
@@ -293,7 +306,7 @@ private[manager] object AnimationChoreography:
     (totalFadeFrames - remainingFrames + 1).max(1)
 
   def advanceSurfaceAnimations(state: AppState): AppState =
-    state.runtime.surfaceAnimations.foldLeft(state) {
+    state.runtime.motion.surfaceAnimations.foldLeft(state) {
       case (s, (surfaceId, surfAnim)) =>
         surfAnim.phase match
           case SurfacePhase.BufferFadingOut =>
@@ -322,23 +335,34 @@ private[manager] object AnimationChoreography:
                 phaseTick = 0
               )
               s.copy(runtime =
-                s.runtime.copy(surfaceAnimations = s.runtime.surfaceAnimations + (surfaceId -> newSurfAnim))
+                s.runtime.copy(motion =
+                  s.runtime.motion
+                    .copy(surfaceAnimations = s.runtime.motion.surfaceAnimations + (surfaceId -> newSurfAnim))
+                )
               )
             else
               s.copy(runtime =
-                s.runtime.copy(surfaceAnimations =
-                  s.runtime.surfaceAnimations + (surfaceId -> surfAnim.copy(phaseTick = newTick))
+                s.runtime.copy(motion =
+                  s.runtime.motion.copy(surfaceAnimations =
+                    s.runtime.motion.surfaceAnimations + (surfaceId -> surfAnim.copy(phaseTick = newTick))
+                  )
                 )
               )
 
           case SurfacePhase.Visible =>
             val newAnimState = surfAnim.animationState.advanceAllAnimations()
             if !newAnimState.hasActiveAnimations then
-              s.copy(runtime = s.runtime.copy(surfaceAnimations = s.runtime.surfaceAnimations - surfaceId))
+              s.copy(runtime =
+                s.runtime.copy(motion =
+                  s.runtime.motion.copy(surfaceAnimations = s.runtime.motion.surfaceAnimations - surfaceId)
+                )
+              )
             else
               s.copy(runtime =
-                s.runtime.copy(surfaceAnimations =
-                  s.runtime.surfaceAnimations + (surfaceId -> surfAnim.copy(animationState = newAnimState))
+                s.runtime.copy(motion =
+                  s.runtime.motion.copy(surfaceAnimations =
+                    s.runtime.motion.surfaceAnimations + (surfaceId -> surfAnim.copy(animationState = newAnimState))
+                  )
                 )
               )
 
@@ -348,13 +372,15 @@ private[manager] object AnimationChoreography:
               s.copy(runtime =
                 s.runtime.copy(
                   uiSurfaces = s.runtime.uiSurfaces.filterNot(_.id == surfaceId),
-                  surfaceAnimations = s.runtime.surfaceAnimations - surfaceId
+                  motion = s.runtime.motion.copy(surfaceAnimations = s.runtime.motion.surfaceAnimations - surfaceId)
                 )
               )
             else
               s.copy(runtime =
-                s.runtime.copy(surfaceAnimations =
-                  s.runtime.surfaceAnimations + (surfaceId -> surfAnim.copy(animationState = newAnimState))
+                s.runtime.copy(motion =
+                  s.runtime.motion.copy(surfaceAnimations =
+                    s.runtime.motion.surfaceAnimations + (surfaceId -> surfAnim.copy(animationState = newAnimState))
+                  )
                 )
               )
     }
@@ -368,15 +394,15 @@ private[manager] object AnimationChoreography:
     * panel's own entry (the *open* case's `panelGeometry` key, which never wraps a ghost).
     */
   def advancePanelGeometry(state: AppState): AppState =
-    val advanced                 = state.runtime.panelGeometry.view.mapValues(_.advance).toMap
+    val advanced                 = state.runtime.motion.panelGeometry.view.mapValues(_.advance).toMap
     val (completed, stillFlying) = advanced.partition(_._2.isComplete)
-    val orphanedGhostIds         = completed.keySet.filterNot(state.runtime.surfaceAnimations.contains)
+    val orphanedGhostIds         = completed.keySet.filterNot(state.runtime.motion.surfaceAnimations.contains)
     val ghostIdsToDrop = state.runtime.uiSurfaces.collect {
       case UiSurface(id, SurfaceContent.GhostOverlay(_, _), _, _) if orphanedGhostIds.contains(id) => id
     }.toSet
     state.copy(runtime =
       state.runtime.copy(
-        panelGeometry = stillFlying,
+        motion = state.runtime.motion.copy(panelGeometry = stillFlying),
         uiSurfaces = state.runtime.uiSurfaces.filterNot(surface => ghostIdsToDrop.contains(surface.id))
       )
     )

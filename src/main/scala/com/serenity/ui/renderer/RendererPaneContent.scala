@@ -171,7 +171,7 @@ object RendererPaneContent:
           // content `renderBufferContent` just painted in full. Skipped for the markdown lens, whose content isn't
           // plain wrapped text to begin with.
           if !RendererMarkdownLens.isInlineMarkdownLens(buf, state) then
-            state.runtime.columnTransitions.get(buf.id).foreach { transition =>
+            state.runtime.motion.columnTransitions.get(buf.id).foreach { transition =>
               RendererColumnTransition.render(buf, contentRect, state, context, snap, transition)
             }
         }

@@ -13,10 +13,10 @@ import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-/** Panel scale-in/out (issue #1085 phase 1): `animationTicker.advanceAnimationsOnTick` advances `Runtime.panelGeometry`
-  * once per tick, mirroring `Runtime.columnTransitions`' tick-driven advance (`StateManagerColumnTransitionTickSpec`),
-  * and additionally reclaims a closing ghost overlay once its geometry-only scale-out completes with no colour fade
-  * left to remove it (`AnimationChoreography.advancePanelGeometry`).
+/** Panel scale-in/out (issue #1085 phase 1): `animationTicker.advanceAnimationsOnTick` advances
+  * `Runtime.motion.panelGeometry` once per tick, mirroring `Runtime.motion.columnTransitions`' tick-driven advance
+  * (`StateManagerColumnTransitionTickSpec`), and additionally reclaims a closing ghost overlay once its geometry-only
+  * scale-out completes with no colour fade left to remove it (`AnimationChoreography.advancePanelGeometry`).
   */
 class StateManagerPanelGeometryTickSpec extends AnyFlatSpec with Matchers:
 
@@ -30,14 +30,16 @@ class StateManagerPanelGeometryTickSpec extends AnyFlatSpec with Matchers:
   private def seedGeometry(sm: StateManager, surfaceId: SurfaceId, steps: Int): Unit =
     sm.updateState { state =>
       state.copy(runtime =
-        state.runtime.copy(panelGeometry =
-          Map(
-            surfaceId -> PanelGeometryState(
-              Tween(
-                start = LayoutRect(0, 0, 0, 10),
-                end = LayoutRect(0, 0, 20, 10),
-                curve = EasingCurve.Linear,
-                steps = steps
+        state.runtime.copy(motion =
+          state.runtime.motion.copy(panelGeometry =
+            Map(
+              surfaceId -> PanelGeometryState(
+                Tween(
+                  start = LayoutRect(0, 0, 0, 10),
+                  end = LayoutRect(0, 0, 20, 10),
+                  curve = EasingCurve.Linear,
+                  steps = steps
+                )
               )
             )
           )
@@ -53,7 +55,12 @@ class StateManagerPanelGeometryTickSpec extends AnyFlatSpec with Matchers:
     val result = sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
 
     result shouldBe true
-    sm.getCurrentState.unsafeRunSync().runtime.panelGeometry(surfaceId).currentRect shouldBe LayoutRect(0, 0, 5, 10)
+    sm.getCurrentState.unsafeRunSync().runtime.motion.panelGeometry(surfaceId).currentRect shouldBe LayoutRect(
+      0,
+      0,
+      5,
+      10
+    )
   }
 
   it should "drop the panel-geometry animation once it completes, returning false" in {
@@ -64,7 +71,7 @@ class StateManagerPanelGeometryTickSpec extends AnyFlatSpec with Matchers:
     val result = sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
 
     result shouldBe false
-    sm.getCurrentState.unsafeRunSync().runtime.panelGeometry shouldBe empty
+    sm.getCurrentState.unsafeRunSync().runtime.motion.panelGeometry shouldBe empty
   }
 
   it should "leave other runtime animation state untouched while advancing a panel-geometry animation" in {
@@ -77,8 +84,8 @@ class StateManagerPanelGeometryTickSpec extends AnyFlatSpec with Matchers:
 
     val after = sm.getCurrentState.unsafeRunSync()
     after.runtime.themeDiscovery.transition shouldBe before.runtime.themeDiscovery.transition
-    after.runtime.surfaceAnimations shouldBe before.runtime.surfaceAnimations
-    after.runtime.columnTransitions shouldBe before.runtime.columnTransitions
+    after.runtime.motion.surfaceAnimations shouldBe before.runtime.motion.surfaceAnimations
+    after.runtime.motion.columnTransitions shouldBe before.runtime.motion.columnTransitions
   }
 
   it should "remove a closing ghost overlay once its geometry-only scale-out completes" in {
@@ -93,13 +100,15 @@ class StateManagerPanelGeometryTickSpec extends AnyFlatSpec with Matchers:
       state.copy(runtime =
         state.runtime.copy(
           uiSurfaces = state.runtime.uiSurfaces :+ ghost,
-          panelGeometry = Map(
-            ghostId -> PanelGeometryState(
-              Tween(
-                start = LayoutRect(0, 0, 20, 10),
-                end = LayoutRect(0, 0, 0, 10),
-                curve = EasingCurve.Linear,
-                steps = 1
+          motion = state.runtime.motion.copy(panelGeometry =
+            Map(
+              ghostId -> PanelGeometryState(
+                Tween(
+                  start = LayoutRect(0, 0, 20, 10),
+                  end = LayoutRect(0, 0, 0, 10),
+                  curve = EasingCurve.Linear,
+                  steps = 1
+                )
               )
             )
           )
@@ -110,7 +119,7 @@ class StateManagerPanelGeometryTickSpec extends AnyFlatSpec with Matchers:
     sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
 
     val state = sm.getCurrentState.unsafeRunSync()
-    state.runtime.panelGeometry shouldBe empty
+    state.runtime.motion.panelGeometry shouldBe empty
     state.runtime.uiSurfaces.exists(_.id == ghostId) shouldBe false
   }
 
@@ -127,13 +136,15 @@ class StateManagerPanelGeometryTickSpec extends AnyFlatSpec with Matchers:
     sm.updateState { state =>
       state.copy(runtime =
         state.runtime.copy(
-          panelGeometry = Map(
-            surfaceId -> PanelGeometryState(
-              Tween(
-                start = LayoutRect(0, 0, 0, 10),
-                end = LayoutRect(0, 0, 20, 10),
-                curve = EasingCurve.Linear,
-                steps = 1
+          motion = state.runtime.motion.copy(panelGeometry =
+            Map(
+              surfaceId -> PanelGeometryState(
+                Tween(
+                  start = LayoutRect(0, 0, 0, 10),
+                  end = LayoutRect(0, 0, 20, 10),
+                  curve = EasingCurve.Linear,
+                  steps = 1
+                )
               )
             )
           )
@@ -144,6 +155,6 @@ class StateManagerPanelGeometryTickSpec extends AnyFlatSpec with Matchers:
     sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
 
     val state = sm.getCurrentState.unsafeRunSync()
-    state.runtime.panelGeometry shouldBe empty
+    state.runtime.motion.panelGeometry shouldBe empty
     state.runtime.uiSurfaces.exists(_.id == surfaceId) shouldBe true
   }

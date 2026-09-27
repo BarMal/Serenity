@@ -117,16 +117,16 @@ object RendererFloatingPanels:
 
   /** Panel scale-in/out (issue #1085 phase 1): a new render step alongside the existing colour-cell motion model
     * (`ElementTransitionLowerer`/`AnimatedCell`, which never touches geometry). Reads `surfaceId`'s in-flight
-    * `Tween[LayoutRect].currentValue` from `Runtime.panelGeometry` and clips `render`'s output to it, constraining the
-    * panel's already-computed content -- laid out for its full, final rect either way -- to whatever fraction of that
-    * rect the animation has grown or shrunk to so far. A no-op once the geometry is gone (not animating, or the family
-    * is disabled), or when the surface can't clip at all (falls through to [[withOptionalRoundRectClip]]'s own
-    * unclipped fallback).
+    * `Tween[LayoutRect].currentValue` from `Runtime.motion.panelGeometry` and clips `render`'s output to it,
+    * constraining the panel's already-computed content -- laid out for its full, final rect either way -- to whatever
+    * fraction of that rect the animation has grown or shrunk to so far. A no-op once the geometry is gone (not
+    * animating, or the family is disabled), or when the surface can't clip at all (falls through to
+    * [[withOptionalRoundRectClip]]'s own unclipped fallback).
     */
   private def withPanelGeometryClip(state: AppState, surfaceId: SurfaceId, context: RenderContext)(
     render: => Unit
   ): Unit =
-    state.runtime.panelGeometry.get(surfaceId) match
+    state.runtime.motion.panelGeometry.get(surfaceId) match
       case None => render
       case Some(geometry) =>
         val rect  = geometry.currentRect
@@ -176,7 +176,7 @@ object RendererFloatingPanels:
       surfaceNodes.get(surface.id).foreach { node =>
         val rect = node.frameRect
         val animationState =
-          state.runtime.surfaceAnimations
+          state.runtime.motion.surfaceAnimations
             .get(surface.id)
             .map(_.animationState)
             .getOrElse(com.serenity.animation.AnimationState.empty)

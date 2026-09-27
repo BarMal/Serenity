@@ -88,12 +88,14 @@ class MotionCancellationSpec extends AnyFlatSpec with Matchers:
         uiSurfaces = base.runtime.uiSurfaces ++ surfaces,
         themeDiscovery =
           base.runtime.themeDiscovery.copy(transition = Some(ThemeTransition(base.persisted.theme, 0, 2))),
-        surfaceAnimations =
-          Map(paletteId -> fadeFor(SurfacePhase.Visible), paletteGhost -> fadeFor(SurfacePhase.Exiting)),
-        columnTransitions = Map(
-          bufferId -> ColumnTransitionState.seeded(4, EasingCurve.Linear, TransitionDirection.LeftToRight, 0, 0)
-        ),
-        panelGeometry = Map(panelGhost -> geometry)
+        motion = MotionState(
+          surfaceAnimations =
+            Map(paletteId -> fadeFor(SurfacePhase.Visible), paletteGhost -> fadeFor(SurfacePhase.Exiting)),
+          columnTransitions = Map(
+            bufferId -> ColumnTransitionState.seeded(4, EasingCurve.Linear, TransitionDirection.LeftToRight, 0, 0)
+          ),
+          panelGeometry = Map(panelGhost -> geometry)
+        )
       )
     )
 
@@ -138,9 +140,7 @@ class MotionCancellationSpec extends AnyFlatSpec with Matchers:
     val cancelled = MotionCancellation.Everything.cancelState(inFlight)
 
     cancelled.runtime.themeDiscovery.transition shouldBe None
-    cancelled.runtime.surfaceAnimations shouldBe empty
-    cancelled.runtime.columnTransitions shouldBe empty
-    cancelled.runtime.panelGeometry shouldBe empty
+    cancelled.runtime.motion shouldBe MotionState()
     cancelled.runtime.uiSurfaces.map(_.id) should not contain paletteGhost
     cancelled.runtime.uiSurfaces.map(_.id) should not contain panelGhost
     cursorsOf(cancelled).map(_.glide) shouldBe List(None)
@@ -166,7 +166,7 @@ class MotionCancellationSpec extends AnyFlatSpec with Matchers:
 
     cancelled.runtime.uiSurfaces.map(_.id) should not contain paletteGhost
     cancelled.runtime.uiSurfaces.map(_.id) should contain(panelGhost)
-    cancelled.runtime.surfaceAnimations.keySet should not contain paletteGhost
+    cancelled.runtime.motion.surfaceAnimations.keySet should not contain paletteGhost
     AppStateValidation.validated(cancelled).isRight shouldBe true
   }
 
@@ -174,16 +174,18 @@ class MotionCancellationSpec extends AnyFlatSpec with Matchers:
     val pinned   = PanelStateReducer.pin(PanelContent.Outline(Nil), PanelPosition.Left, 24, inFlight).state
     val panelIds = pinned.pinnedSurfaces.map(_.id).filterNot(inFlight.pinnedSurfaces.map(_.id).contains)
     val seeded = pinned.copy(runtime =
-      pinned.runtime.copy(surfaceAnimations =
-        pinned.runtime.surfaceAnimations ++ panelIds.map(_ -> fadeFor(SurfacePhase.Visible))
+      pinned.runtime.copy(motion =
+        pinned.runtime.motion.copy(surfaceAnimations =
+          pinned.runtime.motion.surfaceAnimations ++ panelIds.map(_ -> fadeFor(SurfacePhase.Visible))
+        )
       )
     )
 
     val cancelled = MotionCancellation.Families(List(MotionFamily.PinnedPanels)).cancelState(seeded)
 
     panelIds should not be empty
-    cancelled.runtime.surfaceAnimations.keySet.intersect(panelIds.toSet) shouldBe empty
-    cancelled.runtime.surfaceAnimations.keySet should contain(paletteGhost)
+    cancelled.runtime.motion.surfaceAnimations.keySet.intersect(panelIds.toSet) shouldBe empty
+    cancelled.runtime.motion.surfaceAnimations.keySet should contain(paletteGhost)
     AppStateValidation.validated(cancelled).isRight shouldBe true
   }
 
@@ -215,15 +217,15 @@ class MotionCancellationSpec extends AnyFlatSpec with Matchers:
   "cancelling the ColumnTransitions family" should "clear every column transition and still validate" in {
     val cancelled = MotionCancellation.Families(List(MotionFamily.ColumnTransitions)).cancelState(inFlight)
 
-    cancelled.runtime.columnTransitions shouldBe empty
-    cancelled.runtime.panelGeometry should not be empty
+    cancelled.runtime.motion.columnTransitions shouldBe empty
+    cancelled.runtime.motion.panelGeometry should not be empty
     AppStateValidation.validated(cancelled).isRight shouldBe true
   }
 
   "cancelling the PanelGeometry family" should "clear geometry and drop a ghost that existed only for it" in {
     val cancelled = MotionCancellation.Families(List(MotionFamily.PanelGeometry)).cancelState(inFlight)
 
-    cancelled.runtime.panelGeometry shouldBe empty
+    cancelled.runtime.motion.panelGeometry shouldBe empty
     cancelled.runtime.uiSurfaces.map(_.id) should not contain panelGhost
     cancelled.runtime.uiSurfaces.map(_.id) should contain(paletteGhost)
     AppStateValidation.validated(cancelled).isRight shouldBe true

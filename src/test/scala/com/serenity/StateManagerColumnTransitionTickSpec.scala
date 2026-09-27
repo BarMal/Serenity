@@ -13,8 +13,8 @@ import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Column-based document layout (issue #1338, Phase 1 animation): `animationTicker.advanceAnimationsOnTick` advances
-  * `Runtime.columnTransitions` once per tick, mirroring `Runtime.themeDiscovery.transition`'s tick-driven advance, and
-  * drops a transition once it completes.
+  * `Runtime.motion.columnTransitions` once per tick, mirroring `Runtime.themeDiscovery.transition`'s tick-driven
+  * advance, and drops a transition once it completes.
   */
 class StateManagerColumnTransitionTickSpec extends AnyFlatSpec with Matchers:
 
@@ -28,13 +28,15 @@ class StateManagerColumnTransitionTickSpec extends AnyFlatSpec with Matchers:
   private def seedTransition(sm: StateManager, bufferId: com.serenity.state.models.BufferId, steps: Int): Unit =
     sm.updateState { state =>
       state.copy(runtime =
-        state.runtime.copy(columnTransitions =
-          Map(
-            bufferId -> ColumnTransitionState(
-              tween = Tween(start = 0.0, end = 1.0, curve = EasingCurve.Linear, steps = steps),
-              direction = TransitionDirection.RightToLeft,
-              previousTopLine = 0,
-              previousTopVisualLine = 0
+        state.runtime.copy(motion =
+          state.runtime.motion.copy(columnTransitions =
+            Map(
+              bufferId -> ColumnTransitionState(
+                tween = Tween(start = 0.0, end = 1.0, curve = EasingCurve.Linear, steps = steps),
+                direction = TransitionDirection.RightToLeft,
+                previousTopLine = 0,
+                previousTopVisualLine = 0
+              )
             )
           )
         )
@@ -60,7 +62,7 @@ class StateManagerColumnTransitionTickSpec extends AnyFlatSpec with Matchers:
     val result = sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
 
     result shouldBe true
-    val advanced = sm.getCurrentState.unsafeRunSync().runtime.columnTransitions(bufferId)
+    val advanced = sm.getCurrentState.unsafeRunSync().runtime.motion.columnTransitions(bufferId)
     advanced.progress shouldBe 0.25
   }
 
@@ -72,7 +74,7 @@ class StateManagerColumnTransitionTickSpec extends AnyFlatSpec with Matchers:
     val result = sm.animationTicker.advanceAnimationsOnTick.unsafeRunSync()
 
     result shouldBe false
-    sm.getCurrentState.unsafeRunSync().runtime.columnTransitions shouldBe empty
+    sm.getCurrentState.unsafeRunSync().runtime.motion.columnTransitions shouldBe empty
   }
 
   it should "leave other runtime animation state untouched while advancing a column transition" in {
@@ -85,5 +87,5 @@ class StateManagerColumnTransitionTickSpec extends AnyFlatSpec with Matchers:
 
     val after = sm.getCurrentState.unsafeRunSync()
     after.runtime.themeDiscovery.transition shouldBe before.runtime.themeDiscovery.transition
-    after.runtime.surfaceAnimations shouldBe before.runtime.surfaceAnimations
+    after.runtime.motion.surfaceAnimations shouldBe before.runtime.motion.surfaceAnimations
   }

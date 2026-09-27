@@ -43,7 +43,7 @@ class CursorPeekAnimationSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
 
     state.runtime.uiSurfaces.exists(_.id == SurfaceId.CursorPeek) shouldBe true
-    val animState = state.runtime.surfaceAnimations.get(SurfaceId.CursorPeek)
+    val animState = state.runtime.motion.surfaceAnimations.get(SurfaceId.CursorPeek)
     animState shouldBe defined
     animState.get.phase shouldBe SurfacePhase.Visible
     animState.get.animationState.hasActiveAnimations shouldBe true
@@ -59,7 +59,7 @@ class CursorPeekAnimationSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(CursorPeekModifierPressed(Modifier.Meta, 0L)).unsafeRunSync()
     val state = sm.getCurrentState.unsafeRunSync()
 
-    state.runtime.surfaceAnimations.get(SurfaceId.CursorPeek) shouldBe None
+    state.runtime.motion.surfaceAnimations.get(SurfaceId.CursorPeek) shouldBe None
   }
 
   it should "skip the settle-in fade under a reduced motion preset with zero speed scale" in {
@@ -78,7 +78,7 @@ class CursorPeekAnimationSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(CursorPeekModifierPressed(Modifier.Meta, 0L)).unsafeRunSync()
     val state = sm.getCurrentState.unsafeRunSync()
 
-    state.runtime.surfaceAnimations.get(SurfaceId.CursorPeek) shouldBe None
+    state.runtime.motion.surfaceAnimations.get(SurfaceId.CursorPeek) shouldBe None
   }
 
   "ending a peek" should "start a settle-out fade (a ghost overlay), removing the live peek surface animation" in {
@@ -90,10 +90,10 @@ class CursorPeekAnimationSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
 
     state.runtime.uiSurfaces.exists(_.id == SurfaceId.CursorPeek) shouldBe false
-    state.runtime.surfaceAnimations.get(SurfaceId.CursorPeek) shouldBe None
+    state.runtime.motion.surfaceAnimations.get(SurfaceId.CursorPeek) shouldBe None
     val exitingGhost = state.runtime.uiSurfaces.collectFirst {
       case surface @ UiSurface(id, SurfaceContent.GhostOverlay(_: SurfaceContent.CommandRunnerPeek, _), _, _)
-          if state.runtime.surfaceAnimations.get(id).exists(_.phase == SurfacePhase.Exiting) =>
+          if state.runtime.motion.surfaceAnimations.get(id).exists(_.phase == SurfacePhase.Exiting) =>
         surface
     }
     exitingGhost shouldBe defined

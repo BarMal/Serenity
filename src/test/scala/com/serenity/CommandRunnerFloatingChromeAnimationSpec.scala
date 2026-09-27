@@ -107,8 +107,9 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
       )
     )
     val state = baseState.copy(
-      runtime = baseState.runtime.copy(surfaceAnimations =
-        Map(surfaceId -> SurfaceAnimationState(animationState = animationState))
+      runtime = baseState.runtime.copy(motion =
+        baseState.runtime.motion
+          .copy(surfaceAnimations = Map(surfaceId -> SurfaceAnimationState(animationState = animationState)))
       )
     )
 
@@ -148,8 +149,9 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
       )
     )
     val state = baseState.copy(
-      runtime = baseState.runtime.copy(surfaceAnimations =
-        Map(surfaceId -> SurfaceAnimationState(animationState = animationState))
+      runtime = baseState.runtime.copy(motion =
+        baseState.runtime.motion
+          .copy(surfaceAnimations = Map(surfaceId -> SurfaceAnimationState(animationState = animationState)))
       )
     )
 

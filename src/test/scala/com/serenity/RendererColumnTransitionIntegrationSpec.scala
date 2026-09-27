@@ -13,8 +13,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Column-based document layout (issue #1338, Phase 1 animation): a full `RendererEntryPoints.render` pass actually
-  * paints the outgoing column's receding text when `AppState.runtime.columnTransitions` holds an in-flight transition
-  * for the active buffer -- not just `RendererColumnTransition.render` in isolation.
+  * paints the outgoing column's receding text when `AppState.runtime.motion.columnTransitions` holds an in-flight
+  * transition for the active buffer -- not just `RendererColumnTransition.render` in isolation.
   */
 class RendererColumnTransitionIntegrationSpec extends AnyFlatSpec with Matchers:
 
@@ -49,13 +49,15 @@ class RendererColumnTransitionIntegrationSpec extends AnyFlatSpec with Matchers:
     val state    = buildState
     val bufferId = state.persisted.bufferOrder.headOption.getOrElse(fail("expected a buffer"))
     val withTransition = state.copy(runtime =
-      state.runtime.copy(columnTransitions =
-        Map(
-          bufferId -> ColumnTransitionState(
-            tween = Tween(start = 0.0, end = 1.0, curve = EasingCurve.Linear, steps = 4, currentFrame = 1),
-            direction = TransitionDirection.RightToLeft,
-            previousTopLine = 0,
-            previousTopVisualLine = 0
+      state.runtime.copy(motion =
+        state.runtime.motion.copy(columnTransitions =
+          Map(
+            bufferId -> ColumnTransitionState(
+              tween = Tween(start = 0.0, end = 1.0, curve = EasingCurve.Linear, steps = 4, currentFrame = 1),
+              direction = TransitionDirection.RightToLeft,
+              previousTopLine = 0,
+              previousTopVisualLine = 0
+            )
           )
         )
       )

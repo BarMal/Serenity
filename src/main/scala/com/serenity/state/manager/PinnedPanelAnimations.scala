@@ -27,12 +27,18 @@ private[manager] object PinnedPanelAnimations:
       case (position, rect) =>
         val withFade = openAnimation(position, rect, state).fold(state)(animation =>
           state.copy(runtime =
-            state.runtime.copy(surfaceAnimations = state.runtime.surfaceAnimations + (surface.id -> animation))
+            state.runtime.copy(motion =
+              state.runtime.motion
+                .copy(surfaceAnimations = state.runtime.motion.surfaceAnimations + (surface.id -> animation))
+            )
           )
         )
         openGeometry(position, rect, withFade).fold(withFade)(geometry =>
           withFade.copy(runtime =
-            withFade.runtime.copy(panelGeometry = withFade.runtime.panelGeometry + (surface.id -> geometry))
+            withFade.runtime.copy(motion =
+              withFade.runtime.motion
+                .copy(panelGeometry = withFade.runtime.motion.panelGeometry + (surface.id -> geometry))
+            )
           )
         )
     }
@@ -62,8 +68,12 @@ private[manager] object PinnedPanelAnimations:
           stateWithId.copy(runtime =
             stateWithId.runtime.copy(
               uiSurfaces = stateWithId.runtime.uiSurfaces :+ ghostSurface,
-              surfaceAnimations = (stateWithId.runtime.surfaceAnimations - closedSurface.id) ++ fade.map(ghostId -> _),
-              panelGeometry = (stateWithId.runtime.panelGeometry - closedSurface.id) ++ geometry.map(ghostId -> _)
+              motion = stateWithId.runtime.motion.copy(
+                surfaceAnimations =
+                  (stateWithId.runtime.motion.surfaceAnimations - closedSurface.id) ++ fade.map(ghostId -> _),
+                panelGeometry =
+                  (stateWithId.runtime.motion.panelGeometry - closedSurface.id) ++ geometry.map(ghostId -> _)
+              )
             )
           )
     }

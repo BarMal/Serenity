@@ -57,10 +57,8 @@ private[manager] object MotionCancellation:
       runtime = state.runtime.copy(
         themeDiscovery = state.runtime.themeDiscovery.copy(transition = None),
         uiSurfaces = state.runtime.uiSurfaces.filterNot(isGhostOverlay),
-        surfaceAnimations = Map.empty,
         companionSprite = state.runtime.companionSprite.resetTyping,
-        columnTransitions = Map.empty,
-        panelGeometry = Map.empty
+        motion = MotionState()
       )
     )
 
@@ -91,19 +89,20 @@ private[manager] object MotionCancellation:
           state.persisted.copy(buffers = state.persisted.buffers.view.mapValues(clearSelectionGeometries).toMap)
         )
       case MotionFamily.ColumnTransitions =>
-        state.copy(runtime = state.runtime.copy(columnTransitions = Map.empty))
+        state.copy(runtime = state.runtime.copy(motion = state.runtime.motion.copy(columnTransitions = Map.empty)))
       case MotionFamily.PanelGeometry =>
         // Clears every in-flight scale-in/out, then drops any close ghost that existed only for this geometry (no
         // `surfaceAnimations` entry of its own) -- otherwise, with its geometry gone and no colour fade left to
         // eventually remove it (`AnimationChoreography.advancePanelGeometry`'s ordinary path), it would sit in
         // `uiSurfaces` forever.
-        val orphanedGhostIds = state.runtime.panelGeometry.keySet.filterNot(state.runtime.surfaceAnimations.contains)
+        val orphanedGhostIds =
+          state.runtime.motion.panelGeometry.keySet.filterNot(state.runtime.motion.surfaceAnimations.contains)
         val ghostIdsToDrop = state.runtime.uiSurfaces.collect {
           case UiSurface(id, SurfaceContent.GhostOverlay(_, _), _, _) if orphanedGhostIds.contains(id) => id
         }.toSet
         state.copy(runtime =
           state.runtime.copy(
-            panelGeometry = Map.empty,
+            motion = state.runtime.motion.copy(panelGeometry = Map.empty),
             uiSurfaces = state.runtime.uiSurfaces.filterNot(surface => ghostIdsToDrop.contains(surface.id))
           )
         )
@@ -123,7 +122,9 @@ private[manager] object MotionCancellation:
     state.copy(runtime =
       state.runtime.copy(
         uiSurfaces = state.runtime.uiSurfaces.filterNot(surface => matches(surface) && isGhostOverlay(surface)),
-        surfaceAnimations = state.runtime.surfaceAnimations.filterNot((surfaceId, _) => matchingIds.contains(surfaceId))
+        motion = state.runtime.motion.copy(surfaceAnimations =
+          state.runtime.motion.surfaceAnimations.filterNot((surfaceId, _) => matchingIds.contains(surfaceId))
+        )
       )
     )
 

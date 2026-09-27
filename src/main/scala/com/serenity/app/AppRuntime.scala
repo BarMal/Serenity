@@ -474,5 +474,5 @@ object AppRuntime:
       s"activePane=${activePane.map(_.toString).getOrElse("none")}",
       activeBufferSummary,
       s"themeTransition=${state.runtime.themeDiscovery.transition.isDefined}",
-      s"surfaceAnimations=${state.runtime.surfaceAnimations.size}"
+      s"surfaceAnimations=${state.runtime.motion.surfaceAnimations.size}"
     ).mkString(" ")

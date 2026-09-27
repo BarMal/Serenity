@@ -70,9 +70,11 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
         config = AppState.initial.persisted.config.withRenderFpsTarget(RenderFpsTarget.Fps30)
       ),
       runtime = AppState.initial.runtime.copy(
-        surfaceAnimations = Map(
-          com.serenity.state.models.SurfaceId("fast-render-regression") -> com.serenity.state.models
-            .SurfaceAnimationState()
+        motion = AppState.initial.runtime.motion.copy(surfaceAnimations =
+          Map(
+            com.serenity.state.models.SurfaceId("fast-render-regression") -> com.serenity.state.models
+              .SurfaceAnimationState()
+          )
         )
       )
     )

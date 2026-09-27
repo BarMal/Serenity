@@ -4,7 +4,8 @@ import com.serenity.animation.Interpolator.given
 import com.serenity.animation.{EasingCurve, TransitionDirection, Tween}
 
 /** Column-based document layout (issue #1338, Phase 1 animation): mid-flight state for the transition painted between
-  * one column's content and the next, keyed by the buffer whose active column just moved (`Runtime.columnTransitions`).
+  * one column's content and the next, keyed by the buffer whose active column just moved
+  * (`Runtime.motion.columnTransitions`).
   *
   * Seeded by `CursorViewport.ensureVisibleCursors` whenever `ColumnLeft`/`ColumnRight` changes which column is showing,
   * and advanced once per render tick by `StateManagerEditorCapability.advanceAnimationsOnTick` -- mirroring

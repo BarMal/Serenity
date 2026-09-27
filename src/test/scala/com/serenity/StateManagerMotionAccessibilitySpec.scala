@@ -417,18 +417,20 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
     stateManager
       .updateState(state =>
         state.copy(runtime =
-          state.runtime.copy(columnTransitions =
-            Map(
-              bufferId -> com.serenity.state.models.ColumnTransitionState(
-                tween = com.serenity.animation.Tween(
-                  start = 0.0,
-                  end = 1.0,
-                  curve = com.serenity.animation.EasingCurve.Linear,
-                  steps = 4
-                ),
-                direction = com.serenity.animation.TransitionDirection.RightToLeft,
-                previousTopLine = 0,
-                previousTopVisualLine = 0
+          state.runtime.copy(motion =
+            state.runtime.motion.copy(columnTransitions =
+              Map(
+                bufferId -> com.serenity.state.models.ColumnTransitionState(
+                  tween = com.serenity.animation.Tween(
+                    start = 0.0,
+                    end = 1.0,
+                    curve = com.serenity.animation.EasingCurve.Linear,
+                    steps = 4
+                  ),
+                  direction = com.serenity.animation.TransitionDirection.RightToLeft,
+                  previousTopLine = 0,
+                  previousTopVisualLine = 0
+                )
               )
             )
           )
@@ -447,5 +449,5 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    stateManager.getCurrentState.unsafeRunSync().runtime.columnTransitions shouldBe empty
+    stateManager.getCurrentState.unsafeRunSync().runtime.motion.columnTransitions shouldBe empty
   }
