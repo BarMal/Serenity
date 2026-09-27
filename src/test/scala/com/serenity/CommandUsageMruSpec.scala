@@ -34,7 +34,7 @@ class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTes
     )
     sm.executeCommand(command).unsafeRunSync()
 
-    sm.getCurrentState.unsafeRunSync().persisted.commandUsage should contain key command.name
+    sm.getCurrentState.unsafeRunSync().persisted.commandUsage should contain key CommandId(command.name)
   }
 
   it should "seed the freshly-activated palette's own commandUsage on the next open" in {
@@ -52,7 +52,7 @@ class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTes
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
-    runnerFrom(sm).commandUsage should contain key command.name
+    runnerFrom(sm).commandUsage should contain key CommandId(command.name)
   }
 
   // #1714: a command that opens a surface commits it on top of the state `interpretCommand` left, so the MRU bump
@@ -72,7 +72,7 @@ class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTes
     sm.applyEvent(Enter).unsafeRunSync()
 
   private def mostRecentCommand(state: AppState): Option[String] =
-    state.persisted.commandUsage.maxByOption(_._2).map(_._1)
+    state.persisted.commandUsage.maxByOption(_._2).map(_._1.value)
 
   "running a surface-opening command from the palette" should "leave the theme chooser open and most recent" in {
     val sm = createStateManager("CommandUsageMruThemeChooser")

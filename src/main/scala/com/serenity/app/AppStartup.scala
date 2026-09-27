@@ -61,7 +61,7 @@ object AppStartup:
             )
           ),
           viewportSize = Some(initialViewportSize),
-          nextSurfaceId = 1,
+          nextSurfaceId = SurfaceIdSupply(1),
           isTuiMode = isTuiMode,
           keyboardFidelityTier = keyboardFidelityTier
         )

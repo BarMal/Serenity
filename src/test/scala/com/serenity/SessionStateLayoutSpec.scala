@@ -157,7 +157,7 @@ class SessionStateLayoutSpec extends AnyFlatSpec with Matchers:
       runtime = AppState.initial.runtime.copy(
         uiSurfaces = panels,
         nextPaneId = PaneId(2),
-        nextSurfaceId = panels.size
+        nextSurfaceId = SurfaceIdSupply(panels.size)
       )
     )
 
@@ -171,7 +171,7 @@ class SessionStateLayoutSpec extends AnyFlatSpec with Matchers:
     restored.persisted.layout.maximizedWorkspaceNodeId shouldBe workspaceTree.nodeIdForSurface(panels(2).id)
     restored.pinnedSurfaces.map(_.id) shouldBe state.pinnedSurfaces.map(_.id)
     restored.pinnedSurfaces.map(_.presentation) shouldBe state.pinnedSurfaces.map(_.presentation)
-    restored.runtime.nextSurfaceId shouldBe panels.size
+    restored.runtime.nextSurfaceId shouldBe SurfaceIdSupply(panels.size)
     restored.isValid shouldBe true
     encoded.hcursor.downField("schemaVersion").as[Int] shouldBe Right(SessionState.CurrentSchemaVersion)
   }

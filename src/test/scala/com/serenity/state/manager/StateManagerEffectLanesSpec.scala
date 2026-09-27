@@ -221,7 +221,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
     withEditorContent(enabled, content)
 
   private def spellingDiagnosticStarts(state: AppState): List[(Int, Int)] =
-    state.runtime.diagnosticsState.diagnostics.values.flatten.toList
+    state.runtime.languageService.diagnosticsState.diagnostics.values.flatten.toList
       .map(diagnostic => (diagnostic.range.start.line, diagnostic.range.start.character))
       .sorted
 

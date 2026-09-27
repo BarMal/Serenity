@@ -213,7 +213,7 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
       ),
       runtime = AppState.initial.runtime.copy(
         uiSurfaces = List(panel),
-        nextSurfaceId = 1
+        nextSurfaceId = SurfaceIdSupply(1)
       )
     )
     val encoded = SessionState.fromAppState(state).asJson

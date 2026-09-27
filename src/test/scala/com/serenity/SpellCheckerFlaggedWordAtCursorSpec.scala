@@ -32,7 +32,9 @@ class SpellCheckerFlaggedWordAtCursorSpec extends AnyFlatSpec with Matchers:
         buffers = Map(bufferId -> buffer)
       ),
       runtime = AppState.initial.runtime.copy(
-        diagnosticsState = AppState.initial.runtime.diagnosticsState.copy(diagnostics = Map(uri -> diagnostics))
+        languageService = AppState.initial.runtime.languageService.copy(diagnosticsState =
+          AppState.initial.runtime.languageService.diagnosticsState.copy(diagnostics = Map(uri -> diagnostics))
+        )
       )
     )
 
@@ -56,7 +58,9 @@ class SpellCheckerFlaggedWordAtCursorSpec extends AnyFlatSpec with Matchers:
         buffers = Map(bufferId -> buffer)
       ),
       runtime = AppState.initial.runtime.copy(
-        diagnosticsState = AppState.initial.runtime.diagnosticsState.copy(diagnostics = Map(uri -> diagnostics))
+        languageService = AppState.initial.runtime.languageService.copy(diagnosticsState =
+          AppState.initial.runtime.languageService.diagnosticsState.copy(diagnostics = Map(uri -> diagnostics))
+        )
       )
     )
 

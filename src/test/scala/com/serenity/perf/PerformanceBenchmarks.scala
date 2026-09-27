@@ -16,7 +16,7 @@ import com.serenity.keystroke.events.{
   MoveRight,
   ScrollDown
 }
-import com.serenity.lsp.client.LspFramer
+import com.serenity.lsp.client.{DocumentUri, LspFramer}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.perf.BenchmarkFixtures.{
@@ -230,21 +230,23 @@ object PerformanceBenchmarks:
       }.toMap)
     )
     val diagnosticsState = commentsState.copy(runtime =
-      commentsState.runtime.copy(diagnosticsState =
-        commentsState.runtime.diagnosticsState.copy(diagnostics =
-          Map(
-            "file:///benchmark.scala" ->
-              (0 until 2_000).toList.map { line =>
-                com.serenity.lsp.model.Diagnostic(
-                  com.serenity.lsp.model.LspRange(
-                    com.serenity.lsp.model.LspPosition(line, 0),
-                    com.serenity.lsp.model.LspPosition(line, 8)
-                  ),
-                  Some(com.serenity.lsp.model.DiagnosticSeverity.Warning),
-                  s"benchmark diagnostic $line",
-                  Some("benchmark")
-                )
-              }
+      commentsState.runtime.copy(languageService =
+        commentsState.runtime.languageService.copy(diagnosticsState =
+          commentsState.runtime.languageService.diagnosticsState.copy(diagnostics =
+            Map(
+              DocumentUri("file:///benchmark.scala") ->
+                (0 until 2_000).toList.map { line =>
+                  com.serenity.lsp.model.Diagnostic(
+                    com.serenity.lsp.model.LspRange(
+                      com.serenity.lsp.model.LspPosition(line, 0),
+                      com.serenity.lsp.model.LspPosition(line, 8)
+                    ),
+                    Some(com.serenity.lsp.model.DiagnosticSeverity.Warning),
+                    s"benchmark diagnostic $line",
+                    Some("benchmark")
+                  )
+                }
+            )
           )
         )
       )

@@ -264,7 +264,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       _          <- operations.scheduleDocumentAnalysis()
       _          <- IO.sleep(1.second)
       after      <- ModelViews.appRef(modelRef).get
-    yield after.runtime.diagnosticsState.diagnostics shouldBe empty
+    yield after.runtime.languageService.diagnosticsState.diagnostics shouldBe empty
 
     runVirtual(program)
   }

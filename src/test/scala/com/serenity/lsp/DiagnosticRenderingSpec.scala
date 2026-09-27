@@ -3,6 +3,7 @@ package com.serenity.lsp
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.LspEvent
+import com.serenity.lsp.client.DocumentUri
 import com.serenity.lsp.model.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -36,8 +37,8 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
     val result = SystemEventReducer.reduce(LspEvent.LspDiagnosticsReceived(uri, diags), state)
 
-    result.state.runtime.diagnosticsState.diagnostics should contain key uri
-    result.state.runtime.diagnosticsState.diagnostics(uri) should have size 2
+    result.state.runtime.languageService.diagnosticsState.diagnostics should contain key DocumentUri(uri)
+    result.state.runtime.languageService.diagnosticsState.diagnostics(DocumentUri(uri)) should have size 2
     result.effects shouldBe empty
   }
 
@@ -47,16 +48,18 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     val initial   = AppState.initial
     val state = initial.copy(
       runtime = initial.runtime.copy(
-        diagnosticsState =
-          initial.runtime.diagnosticsState.copy(diagnostics = Map(uri -> List(diag(0, DiagnosticSeverity.Error))))
+        languageService = initial.runtime.languageService.copy(diagnosticsState =
+          initial.runtime.languageService.diagnosticsState
+            .copy(diagnostics = Map(DocumentUri(uri) -> List(diag(0, DiagnosticSeverity.Error))))
+        )
       )
     )
 
     val newDiags = List(diag(3, DiagnosticSeverity.Warning))
     val result   = SystemEventReducer.reduce(LspEvent.LspDiagnosticsReceived(uri, newDiags), state)
 
-    result.state.runtime.diagnosticsState.diagnostics(uri) should have size 1
-    result.state.runtime.diagnosticsState.diagnostics(uri).head.range.start.line shouldBe 3
+    result.state.runtime.languageService.diagnosticsState.diagnostics(DocumentUri(uri)) should have size 1
+    result.state.runtime.languageService.diagnosticsState.diagnostics(DocumentUri(uri)).head.range.start.line shouldBe 3
   }
 
   it should "clear diagnostics when an empty list is received" in {
@@ -65,13 +68,15 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     val initial   = AppState.initial
     val state = initial.copy(
       runtime = initial.runtime.copy(
-        diagnosticsState =
-          initial.runtime.diagnosticsState.copy(diagnostics = Map(uri -> List(diag(0, DiagnosticSeverity.Error))))
+        languageService = initial.runtime.languageService.copy(diagnosticsState =
+          initial.runtime.languageService.diagnosticsState
+            .copy(diagnostics = Map(DocumentUri(uri) -> List(diag(0, DiagnosticSeverity.Error))))
+        )
       )
     )
 
     val result = SystemEventReducer.reduce(LspEvent.LspDiagnosticsReceived(uri, Nil), state)
-    result.state.runtime.diagnosticsState.diagnostics(uri) shouldBe empty
+    result.state.runtime.languageService.diagnosticsState.diagnostics(DocumentUri(uri)) shouldBe empty
   }
 
   it should "show LSP hover text as a quick-info peek surface" in {
@@ -144,6 +149,8 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(LspEvent.LspDiagnosticsReceived(uri, diags)).unsafeRunSync()
 
     val state = sm.getCurrentState.unsafeRunSync()
-    state.runtime.diagnosticsState.diagnostics should contain key uri
-    state.runtime.diagnosticsState.diagnostics(uri).head.severity shouldBe Some(DiagnosticSeverity.Error)
+    state.runtime.languageService.diagnosticsState.diagnostics should contain key DocumentUri(uri)
+    state.runtime.languageService.diagnosticsState.diagnostics(DocumentUri(uri)).head.severity shouldBe Some(
+      DiagnosticSeverity.Error
+    )
   }

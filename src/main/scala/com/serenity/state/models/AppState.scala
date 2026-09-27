@@ -45,7 +45,7 @@ final case class AppState(
         case Some(cached) => cached
         case None =>
           val diagnostics =
-            runtime.diagnosticsState.diagnostics.getOrElse(
+            runtime.languageService.diagnosticsState.diagnostics.getOrElse(
               com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer),
               Nil
             )
@@ -59,9 +59,9 @@ final case class AppState(
 
   /** `bufferId`'s semantic-tokens status, computed (and cached) only for that buffer -- see `semanticTokensCache`. See
     * [[SemanticTokensAvailability]] for what each case means and how the renderer treats it: `Pending` (no entry in
-    * `runtime.semanticTokensState` at all yet) is deliberately distinct from `Unavailable` (confirmed via
-    * `unavailableUris`) -- a request still in flight must not render the same muted style as a confirmed absence (issue
-    * #859/#1177 rendering-slice review finding).
+    * `runtime.languageService.semanticTokensState` at all yet) is deliberately distinct from `Unavailable` (confirmed
+    * via `unavailableUris`) -- a request still in flight must not render the same muted style as a confirmed absence
+    * (issue #859/#1177 rendering-slice review finding).
     */
   def semanticTokensAvailability(bufferId: BufferId): Option[SemanticTokensAvailability] =
     persisted.buffers.get(bufferId).map { buffer =>
@@ -69,10 +69,11 @@ final case class AppState(
         case Some(cached) => cached
         case None =>
           val uri = com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer)
-          val computed = runtime.semanticTokensState.byUri.get(uri) match
+          val computed = runtime.languageService.semanticTokensState.byUri.get(uri) match
             case Some(tokens) => SemanticTokensAvailability.Available(tokens.groupBy(_.line))
             case None =>
-              if runtime.semanticTokensState.unavailableUris.contains(uri) then SemanticTokensAvailability.Unavailable
+              if runtime.languageService.semanticTokensState.unavailableUris.contains(uri) then
+                SemanticTokensAvailability.Unavailable
               else SemanticTokensAvailability.Pending
           val _ = semanticTokensCache.updateAndGet(_.updated(bufferId, computed))
           computed
@@ -403,8 +404,8 @@ final case class AppState(
       case _                               => false
 
   def allocateSurfaceId: (AppState, SurfaceId) =
-    val surfaceId = SurfaceId(s"surface-${runtime.nextSurfaceId}")
-    (copy(runtime = runtime.copy(nextSurfaceId = runtime.nextSurfaceId + 1)), surfaceId)
+    val (nextSupply, surfaceId) = runtime.nextSurfaceId.next
+    (copy(runtime = runtime.copy(nextSurfaceId = nextSupply)), surfaceId)
 
   def pushFocus(newFocus: Focus): AppState =
     val deduplicated = runtime.focusHistory.filterNot(_ == persisted.focus)
@@ -479,7 +480,7 @@ object AppState:
         uiSurfaces = companionSpriteSurfaces(config),
         nextBufferId = BufferId(1),
         nextPaneId = PaneId(1),
-        nextSurfaceId = 0
+        nextSurfaceId = SurfaceIdSupply.initial
       )
     )
 
