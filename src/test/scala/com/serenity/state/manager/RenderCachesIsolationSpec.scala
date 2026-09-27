@@ -113,6 +113,7 @@ class RenderCachesIsolationSpec extends AnyFlatSpec with Matchers:
         (managerA.renderCaches.themeHighlightCache ne managerB.renderCaches.themeHighlightCache) shouldBe true
         (managerA.renderCaches.graphemeSegmentationCache ne managerB.renderCaches.graphemeSegmentationCache) shouldBe true
         (managerA.renderCaches.authoritativeScene ne managerB.renderCaches.authoritativeScene) shouldBe true
+        (managerA.renderCaches.markdownPreviewCache ne managerB.renderCaches.markdownPreviewCache) shouldBe true
 
     program.unsafeRunSync()
   }

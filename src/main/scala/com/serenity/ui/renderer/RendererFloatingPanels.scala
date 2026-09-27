@@ -192,7 +192,9 @@ object RendererFloatingPanels:
             case _ =>
               PinnedPanelRenderer.render(
                 layerContext.surface,
-                PinnedPanelViewModel.resolve(surface, rect, state).copy(contentRect = Some(node.contentRect)),
+                PinnedPanelViewModel
+                  .resolve(surface, rect, state, layerContext.caches.markdownPreviewCache)
+                  .copy(contentRect = Some(node.contentRect)),
                 state.persisted.theme,
                 state.persisted.config,
                 layerContext.cellMetrics,
@@ -258,6 +260,7 @@ object RendererFloatingPanels:
       heightPx = heightPx,
       theme = state.persisted.theme,
       font = context.textFont,
+      cache = context.caches.markdownPreviewCache,
       baseUri = baseUri,
       reuseLastRenderWhileEditing =
         buffer.exists(b => b.markdownPreviewEditGeneration != b.markdownPreviewCommittedGeneration)

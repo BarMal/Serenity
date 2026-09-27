@@ -38,29 +38,30 @@ final private[spellcheck] case class DictionaryCacheEntry(
     result: DictionaryLoadResult
 )
 
-/** The process-wide bounded dictionary cache backing `DictionaryLoader`.
+/** The bounded dictionary cache backing `DictionaryLoader`.
   *
   * `size` and `entryCount` exist for tests asserting the bounded-per-path contract; they are the intentional
   * observation points on that contract, so tests call them here rather than through an accessor forwarded from
   * `SpellChecker`, which has nothing to do with caching.
+  *
+  * Instance-scoped (issue #1677): owned by the analysis service that calls [[DictionaryLoader.loadSnapshot]]
+  * (`StateManagerOperationBoundary`, one per `StateManager`) rather than living as a JVM-wide singleton `object`, so
+  * two independently constructed instances share no cache state. [[retainOnly]] is `loadSnapshot`'s eviction hook: a
+  * dictionary path removed from config no longer lingers here forever (issue #860), since every load re-derives the
+  * currently configured paths and prunes anything else.
   */
-private[serenity] object DictionaryCache:
+final class DictionaryCache:
 
-  private val Entries = ConcurrentHashMap[String, DictionaryCacheEntry]()
+  private val entries = ConcurrentHashMap[String, DictionaryCacheEntry]()
 
   /** Number of distinct dictionary paths currently cached -- the whole-cache view of the contract that this map holds
     * one entry per normalized path rather than growing with every historical fingerprint.
     */
-  def size: Int = Entries.size()
+  def size: Int = entries.size()
 
-  /** How many entries currently exist for `path`'s own normalized key -- 0 or 1, per the bounded-per-path contract.
-    * Prefer this over `size` in tests: this map is process-wide and shared with every other suite exercising
-    * `DictionaryLoader.loadSnapshot`/`SpellChecker.check` concurrently in the same JVM (sbt/ScalaTest's default
-    * cross-suite parallelism), so a size-based assertion is vulnerable to unrelated suites adding their own
-    * (different-path) entries mid-test, while this stays scoped to the one path under test.
-    */
+  /** How many entries currently exist for `path`'s own normalized key -- 0 or 1, per the bounded-per-path contract. */
   def entryCount(path: Path): Int =
-    if Entries.containsKey(cacheKey(path)) then 1 else 0
+    if entries.containsKey(cacheKey(path)) then 1 else 0
 
   /** Returns the cached load for `path` when it was produced by exactly `fingerprints`, otherwise stores and returns
     * `load()`. Keyed by normalized path so a changed fingerprint replaces the entry rather than adding one.
@@ -70,7 +71,7 @@ private[serenity] object DictionaryCache:
     fingerprints: List[SpellCheckDictionaryFingerprint],
     load: () => DictionaryLoadResult
   ): DictionaryLoadResult =
-    Entries
+    entries
       .compute(
         cacheKey(path),
         (_, existing) =>
@@ -80,8 +81,18 @@ private[serenity] object DictionaryCache:
       )
       .result
 
+  /** Drops every cached entry whose path is not in `activePaths` (issue #860): a dictionary removed from config must
+    * not linger here forever, unboundedly.
+    */
+  private[spellcheck] def retainOnly(activePaths: List[Path]): Unit =
+    val activeKeys = activePaths.map(cacheKey).toSet
+    val _          = entries.keySet().removeIf(key => !activeKeys.contains(key))
+
   private def cacheKey(path: Path): String =
     path.toAbsolutePath.normalize().toString
+
+object DictionaryCache:
+  def apply(): DictionaryCache = new DictionaryCache
 
 /** All dictionary discovery, reading, fingerprinting and caching -- explicit filesystem IO throughout, and the only
   * producer of `DictionaryContext`/`DictionarySnapshot`. Callers must invoke `loadSnapshot` from `IO.blocking` and
@@ -141,10 +152,13 @@ object DictionaryLoader:
     )
   )
 
-  def loadSnapshot(config: SpellCheckConfig): DictionarySnapshot =
-    val normalized      = config.normalized
-    val sourcePaths     = SpellCheckConfig.discoverDictionarySourcePaths(normalized)
-    val externalResults = sourcePaths.map(loadDictionary)
+  def loadSnapshot(config: SpellCheckConfig, cache: DictionaryCache): DictionarySnapshot =
+    val normalized  = config.normalized
+    val sourcePaths = SpellCheckConfig.discoverDictionarySourcePaths(normalized)
+    // #860: a dictionary path that left the config must not linger in the cache forever -- every load re-derives the
+    // currently configured paths and prunes anything else before (re)loading them.
+    cache.retainOnly(sourcePaths)
+    val externalResults = sourcePaths.map(loadDictionary(_, cache))
     val externalWords   = externalResults.flatMap(_.words).toSet
     val externalReplacements =
       mergeReplacementMaps(externalResults.map(_.replacements))
@@ -198,10 +212,10 @@ object DictionaryLoader:
     )
     DictionarySnapshot(context, SpellCheckConfig.discoverDictionaryFingerprints(normalized))
 
-  private def loadDictionary(path: Path): DictionaryLoadResult =
+  private def loadDictionary(path: Path, cache: DictionaryCache): DictionaryLoadResult =
     val dependencyPaths = SpellCheckConfig.dictionaryDependencyPaths(List(path))
     val fingerprints    = dependencyPaths.map(SpellCheckDictionaryFingerprint.fromPath)
-    DictionaryCache.getOrLoad(path, fingerprints, () => readDictionary(path))
+    cache.getOrLoad(path, fingerprints, () => readDictionary(path))
 
   private def readDictionary(path: Path): DictionaryLoadResult =
     if !Files.exists(path) then failedLoad(s"Dictionary file does not exist: $path")

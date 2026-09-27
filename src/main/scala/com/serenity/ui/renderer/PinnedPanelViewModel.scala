@@ -1,6 +1,7 @@
 package com.serenity.ui.renderer
 
 import com.serenity.document.DocumentNavigation
+import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -89,16 +90,32 @@ object PinnedPanelViewModel:
     */
   def fromState(state: AppState, layout: CalculatedLayout): List[TextPanelView] =
     state.pinnedSurfaces.flatMap { surface =>
-      EditorLayoutContract.panelRectFor(surface, state, layout).map(rect => resolve(surface, rect, Some(state)))
+      EditorLayoutContract
+        .panelRectFor(surface, state, layout)
+        .map(rect => resolve(surface, rect, Some(state), MarkdownPreviewCache()))
     }
 
-  def resolve(surface: UiSurface, rect: LayoutRect): TextPanelView =
-    resolve(surface, rect, None)
+  def resolve(
+    surface: UiSurface,
+    rect: LayoutRect,
+    cache: MarkdownPreviewCache = MarkdownPreviewCache()
+  ): TextPanelView =
+    resolve(surface, rect, None, cache)
 
-  def resolve(surface: UiSurface, rect: LayoutRect, state: AppState): TextPanelView =
-    resolve(surface, rect, Some(state))
+  def resolve(
+    surface: UiSurface,
+    rect: LayoutRect,
+    state: AppState,
+    cache: MarkdownPreviewCache
+  ): TextPanelView =
+    resolve(surface, rect, Some(state), cache)
 
-  private def resolve(surface: UiSurface, rect: LayoutRect, state: Option[AppState]): TextPanelView =
+  private def resolve(
+    surface: UiSurface,
+    rect: LayoutRect,
+    state: Option[AppState],
+    cache: MarkdownPreviewCache
+  ): TextPanelView =
     val resolved =
       surface.content match
         case SurfaceContent.MarkdownPreview(bufferId, title) =>
@@ -106,7 +123,7 @@ object PinnedPanelViewModel:
             .flatMap(_.persisted.buffers.get(bufferId))
             .map(_.document.content.collect())
             .getOrElse("")
-          SurfaceContentResolver.resolveMarkdownPreview(title, content, rect, SurfaceRenderMode.Pinned)
+          SurfaceContentResolver.resolveMarkdownPreview(title, content, rect, SurfaceRenderMode.Pinned, cache)
         case SurfaceContent.Outline(symbols, activeLocation) =>
           SurfaceContentResolver.resolve(
             SurfaceContent.Outline(symbols, activeSymbolLocation(symbols, activeLocation, state)),

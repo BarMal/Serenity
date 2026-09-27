@@ -123,7 +123,7 @@ object RendererPaneContent:
         buf  <- buffer
         snap <- bufferSnapshot
         if RendererMarkdownLens.isInlineMarkdownLens(buf, state)
-      yield RendererMarkdownLens.markdownLensFrameFor(buf, snap)
+      yield RendererMarkdownLens.markdownLensFrameFor(buf, snap, context.caches.markdownPreviewCache)
 
     // Multi-column e-reader layout (issue #1338, Phase 2 / slice 1): a column-mode pane paints each column's own
     // snapshot at its own x-origin (`contentRect.x + placement.xOffsetCells`), so the page reads as columns side by
@@ -206,7 +206,9 @@ object RendererPaneContent:
             state.persisted.config,
             cursorContext,
             snap,
-            markdownLensFrame.getOrElse(RendererMarkdownLens.markdownLensFrameFor(buf, snap))
+            markdownLensFrame.getOrElse(
+              RendererMarkdownLens.markdownLensFrameFor(buf, snap, context.caches.markdownPreviewCache)
+            )
           )
         else
           val _ = RendererCursorGlyphs.renderCursors(
@@ -327,7 +329,9 @@ object RendererPaneContent:
   ): Unit =
     context.surface.text.setFont(context.fontForBuffer(buffer))
     if RendererMarkdownLens.isInlineMarkdownLens(buffer, state) then
-      val frame = markdownLensFrame.getOrElse(RendererMarkdownLens.markdownLensFrameFor(buffer, snapshot))
+      val frame = markdownLensFrame.getOrElse(
+        RendererMarkdownLens.markdownLensFrameFor(buffer, snapshot, context.caches.markdownPreviewCache)
+      )
       renderInlineMarkdownPreview(buffer, rect, state, context, frame)
       RendererMarkdownLens.renderMarkdownRawLenses(buffer, rect, state, context, snapshot, frame)
     else renderPlainBufferContent(buffer, rect, state, context, snapshot, annotations, dirtyRows)
@@ -594,6 +598,7 @@ object RendererPaneContent:
         context.cellMetrics.lineHeight,
         context.surface.devicePixelScaleY
       ),
+      cache = context.caches.markdownPreviewCache,
       reuseLastRenderWhileEditing = buffer.markdownPreviewEditGeneration != buffer.markdownPreviewCommittedGeneration
     )
     context.surface.pixels.drawImage(image, rect.x, rect.y, rect.width, rect.height)

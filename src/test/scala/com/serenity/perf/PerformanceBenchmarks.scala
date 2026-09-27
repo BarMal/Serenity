@@ -18,7 +18,7 @@ import com.serenity.keystroke.events.{
 }
 import com.serenity.lsp.client.{DocumentUri, LspFramer}
 import com.serenity.lsp.config.LanguageId
-import com.serenity.markdown.MarkdownDocumentPreview
+import com.serenity.markdown.{MarkdownDocumentPreview, MarkdownPreviewCache}
 import com.serenity.perf.BenchmarkFixtures.{
   deepViewport,
   editorState,
@@ -200,6 +200,11 @@ object PerformanceBenchmarks:
     val findText       = largeFindDocument(matches = 12_000)
     val markdownLines  = largeMarkdownDocument(sections = 800)
     val markdownSource = markdownLines.mkString("\n")
+    // Shared across every markdown benchmark below (issue #1677): `MarkdownDocumentPreview`'s caches are
+    // instance-scoped now, so one instance stands in for the `RenderCaches.markdownPreviewCache` a real render would
+    // reuse across repeated calls -- matching this benchmark's own intent of measuring repeated/cached lookups, not a
+    // fresh, always-cold cache each iteration.
+    val markdownPreviewCache = MarkdownPreviewCache()
     val longMeasuredLine = TextLayoutSnapshot.visualLineForText(
       "Wi" * 8_000,
       bufferLine = 0,
@@ -338,9 +343,11 @@ object PerformanceBenchmarks:
         markdownLines,
         activeLine = Some(1_200),
         fallbackTopLine = 1_000,
+        cache = markdownPreviewCache,
         maxSourceLines = 80
       )
-    val markdownHtmlFragment   = MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark")
+    val markdownHtmlFragment =
+      MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark", markdownPreviewCache)
     val markdownLensFrame      = renderedFrame(markdownState, deviceScale = 1.0)
     val longMeasuredLineFrame  = renderedLongMeasuredLine(longMeasuredLine)
     val advancedAnimationState = animationState.advanceAllAnimations()
@@ -471,15 +478,21 @@ object PerformanceBenchmarks:
           20,
           () => assert(markdownPreviewWindow.firstSourceLine >= 0 && markdownPreviewWindow.source.nonEmpty),
           () =>
-            MarkdownDocumentPreview
-              .previewWindow(markdownLines, activeLine = Some(1_200), fallbackTopLine = 1_000, maxSourceLines = 80)
+            MarkdownDocumentPreview.previewWindow(
+              markdownLines,
+              activeLine = Some(1_200),
+              fallbackTopLine = 1_000,
+              cache = markdownPreviewCache,
+              maxSourceLines = 80
+            )
         ),
         BenchmarkRunner.Benchmark(
           "markdown.preview.html_fragment",
           2,
           8,
           () => assert(markdownHtmlFragment.contains("<h2>")),
-          () => MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark")
+          () =>
+            MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark", markdownPreviewCache)
         ),
         BenchmarkRunner.Benchmark(
           "render.markdown.inline_lens",

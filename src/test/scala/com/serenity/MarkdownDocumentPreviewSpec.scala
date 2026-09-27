@@ -11,7 +11,7 @@ import javax.imageio.ImageIO
 
 import scala.util.Try
 
-import com.serenity.markdown.MarkdownDocumentPreview
+import com.serenity.markdown.{MarkdownDocumentPreview, MarkdownPreviewCache}
 import com.serenity.ui.theme.Theme
 import com.sun.net.httpserver.HttpServer
 import org.scalatest.flatspec.AnyFlatSpec
@@ -19,13 +19,20 @@ import org.scalatest.matchers.should.Matchers
 
 class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
 
+  // Shared across every test in this spec (issue #1677): `MarkdownDocumentPreview`'s caches are instance-scoped now,
+  // not a JVM-wide singleton, so the "reuse"/"not reuse" identity assertions below need one real instance threaded
+  // through both calls being compared, exactly as a single `StateManager`'s `RenderCaches.markdownPreviewCache` would
+  // be threaded through its own repeated renders.
+  private val cache = MarkdownPreviewCache()
+
   "MarkdownDocumentPreview" should "render CommonMark HTML for headings without source markers" in {
     val html = MarkdownDocumentPreview.renderHtmlFragment(
       """# Release Notes
         |
         |## Highlights
         |Plain text""".stripMargin,
-      title = "notes.md"
+      title = "notes.md",
+      cache = cache
     )
 
     html should include("<h1>Release Notes</h1>")
@@ -39,7 +46,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
         || ---- | ---- |
         || Ada | Lead |
         || Grace | Reviewer |""".stripMargin,
-      title = "table.md"
+      title = "table.md",
+      cache = cache
     )
 
     html should include("<table>")
@@ -49,27 +57,15 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
 
   it should "reuse rendered HTML fragments for identical source and base URI" in {
     val source = "# Cached\n\nBody"
-    val first = MarkdownDocumentPreview.renderHtmlFragment(
-      source,
-      title = "cached.md"
-    )
-    val second = MarkdownDocumentPreview.renderHtmlFragment(
-      source,
-      title = "cached.md"
-    )
+    val first  = MarkdownDocumentPreview.renderHtmlFragment(source, title = "cached.md", cache = cache)
+    val second = MarkdownDocumentPreview.renderHtmlFragment(source, title = "cached.md", cache = cache)
 
     second should be theSameInstanceAs first
   }
 
   it should "not reuse cached HTML fragments when source content changes" in {
-    val first = MarkdownDocumentPreview.renderHtmlFragment(
-      "# Cached",
-      title = "cached.md"
-    )
-    val second = MarkdownDocumentPreview.renderHtmlFragment(
-      "# Changed",
-      title = "cached.md"
-    )
+    val first  = MarkdownDocumentPreview.renderHtmlFragment("# Cached", title = "cached.md", cache = cache)
+    val second = MarkdownDocumentPreview.renderHtmlFragment("# Changed", title = "cached.md", cache = cache)
 
     second should not be theSameInstanceAs(first)
     second should include("<h1>Changed</h1>")
@@ -82,7 +78,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
         "| ---- | ----- |",
         "| Ship | Codex |",
         "| Test longer | QA |"
-      )
+      ),
+      cache = cache
     )
 
     rows shouldBe Vector(
@@ -106,7 +103,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       "After | not a table"
     )
 
-    MarkdownDocumentPreview.inlineTableLineIndexes(lines) shouldBe Set(1, 2, 3)
+    MarkdownDocumentPreview.inlineTableLineIndexes(lines, cache = cache) shouldBe Set(1, 2, 3)
   }
 
   it should "map inline preview rows back to their source lines" in {
@@ -118,7 +115,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       "After"
     )
 
-    val preview = MarkdownDocumentPreview.renderInlineDocument(lines)
+    val preview = MarkdownDocumentPreview.renderInlineDocument(lines, cache = cache)
 
     preview.map(_.text) shouldBe Vector(
       "Before",
@@ -130,7 +127,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       "After"
     )
     preview.map(_.sourceLine) shouldBe Vector(Some(0), None, Some(1), Some(2), Some(3), None, Some(4))
-    MarkdownDocumentPreview.previewRowForSourceLine(lines, 3) shouldBe Some(4)
+    MarkdownDocumentPreview.previewRowForSourceLine(lines, 3, cache = cache) shouldBe Some(4)
   }
 
   it should "map source ranges to preview rows including table borders" in {
@@ -142,7 +139,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       "After"
     )
 
-    MarkdownDocumentPreview.previewRowsForSourceRange(lines, 1 to 3) shouldBe Some(1 to 5)
+    MarkdownDocumentPreview.previewRowsForSourceRange(lines, 1 to 3, cache = cache) shouldBe Some(1 to 5)
   }
 
   it should "choose a synced preview window from the active markdown block" in {
@@ -159,17 +156,18 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       "# Later"
     )
 
-    val paragraph = MarkdownDocumentPreview.previewWindow(lines, activeLine = Some(3), fallbackTopLine = 0)
+    val paragraph =
+      MarkdownDocumentPreview.previewWindow(lines, activeLine = Some(3), fallbackTopLine = 0, cache = cache)
     paragraph.firstSourceLine shouldBe 2
     paragraph.firstPreviewRow shouldBe 2
     paragraph.source shouldBe "First paragraph\ncontinued\n\n- one\n  detail\n- two\n\n# Later"
 
-    val list = MarkdownDocumentPreview.previewWindow(lines, activeLine = Some(6), fallbackTopLine = 0)
+    val list = MarkdownDocumentPreview.previewWindow(lines, activeLine = Some(6), fallbackTopLine = 0, cache = cache)
     list.firstSourceLine shouldBe 5
     list.firstPreviewRow shouldBe 5
     list.source shouldBe "- one\n  detail\n- two\n\n# Later"
 
-    val heading = MarkdownDocumentPreview.previewWindow(lines, activeLine = Some(9), fallbackTopLine = 0)
+    val heading = MarkdownDocumentPreview.previewWindow(lines, activeLine = Some(9), fallbackTopLine = 0, cache = cache)
     heading.firstSourceLine shouldBe 9
     heading.firstPreviewRow shouldBe 9
     heading.source shouldBe "# Later"
@@ -182,7 +180,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       lines,
       activeLine = Some(4),
       fallbackTopLine = 0,
-      maxSourceLines = 5
+      maxSourceLines = 5,
+      cache = cache
     )
 
     window.firstSourceLine shouldBe 4
@@ -196,7 +195,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       lines,
       activeLine = Some(19),
       fallbackTopLine = 19,
-      maxSourceLines = 5
+      maxSourceLines = 5,
+      cache = cache
     )
 
     window.firstSourceLine shouldBe 15
@@ -214,7 +214,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       "After"
     )
 
-    val table = MarkdownDocumentPreview.previewWindow(lines, activeLine = Some(4), fallbackTopLine = 0)
+    val table = MarkdownDocumentPreview.previewWindow(lines, activeLine = Some(4), fallbackTopLine = 0, cache = cache)
 
     table.firstSourceLine shouldBe 2
     table.firstPreviewRow shouldBe 2
@@ -225,7 +225,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     val html = MarkdownDocumentPreview.renderHtmlFragment(
       """![Architecture](docs/arch.png)
         |Read the [guide](docs/guide.md) before release.""".stripMargin,
-      title = "images.md"
+      title = "images.md",
+      cache = cache
     )
 
     html should include("""<img src="docs/arch.png" alt="Architecture" />""")
@@ -238,7 +239,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
     val html = MarkdownDocumentPreview.renderHtmlFragment(
       "![Architecture](arch.png)",
       title = "images.md",
-      baseUri = Some(baseUri)
+      baseUri = Some(baseUri),
+      cache = cache
     )
 
     html should include(s"""src="$expected"""")
@@ -256,7 +258,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       heightPx = 120,
       theme = Theme.default,
       font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
-      baseUri = Some(root.toUri)
+      baseUri = Some(root.toUri),
+      cache = cache
     )
 
     containsColor(image, Color(220, 30, 40)) shouldBe true
@@ -275,7 +278,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       heightPx = 120,
       theme = Theme.default,
       font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
-      baseUri = Some(root.toUri)
+      baseUri = Some(root.toUri),
+      cache = cache
     )
 
     containsColor(image, Color(30, 220, 40)) shouldBe false
@@ -294,7 +298,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       heightPx = 120,
       theme = Theme.default,
       font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
-      baseUri = Some(root.toUri)
+      baseUri = Some(root.toUri),
+      cache = cache
     )
 
     containsColor(image, Color(30, 220, 40)) shouldBe false
@@ -315,7 +320,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       heightPx = 120,
       theme = Theme.default,
       font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
-      baseUri = Some(root.toUri)
+      baseUri = Some(root.toUri),
+      cache = cache
     )
 
     containsColor(image, Color(30, 220, 40)) shouldBe false
@@ -340,7 +346,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
         widthPx = 180,
         heightPx = 120,
         theme = Theme.default,
-        font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+        font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
+        cache = cache
       )
 
       image.getWidth shouldBe 180
@@ -363,7 +370,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       widthPx = 180,
       heightPx = 120,
       theme = Theme.default,
-      font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+      font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
+      cache = cache
     )
     val payload = Base64.getEncoder.encodeToString(Array.fill[Byte](3 * 1024 * 1024)(1))
     val oversizedImage = MarkdownDocumentPreview.renderImage(
@@ -372,7 +380,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       widthPx = 180,
       heightPx = 120,
       theme = Theme.default,
-      font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+      font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
+      cache = cache
     )
 
     validImage.getWidth shouldBe 180
@@ -396,7 +405,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       heightPx = 120,
       theme = Theme.default,
       font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
-      baseUri = Some(root.toUri)
+      baseUri = Some(root.toUri),
+      cache = cache
     )
     val dimensionsBounded = MarkdownDocumentPreview.renderImage(
       source = "![Large dimensions](large.png)",
@@ -405,7 +415,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       heightPx = 120,
       theme = Theme.default,
       font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
-      baseUri = Some(root.toUri)
+      baseUri = Some(root.toUri),
+      cache = cache
     )
 
     bytesBounded.getWidth shouldBe 180
@@ -427,7 +438,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       widthPx = 420,
       heightPx = 280,
       theme = Theme.default,
-      font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+      font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
+      cache = cache
     )
 
     image.getWidth shouldBe 420
@@ -447,7 +459,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       heightPx = 80,
       theme = theme,
       font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
-      panelChrome = false
+      panelChrome = false,
+      cache = cache
     )
 
     Color(image.getRGB(1, 1), true) shouldBe theme.background
@@ -513,7 +526,7 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       "| Ready  | Passed |"
     )
     val theme = Theme.default
-    val rows  = MarkdownDocumentPreview.renderInlineDocument(sourceLines)
+    val rows  = MarkdownDocumentPreview.renderInlineDocument(sourceLines, cache = cache)
     val xhtml = MarkdownDocumentPreview.renderInlineXhtml(
       rows = rows,
       sourceLines = sourceLines,
@@ -530,7 +543,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       heightPx = 120,
       theme = theme,
       font = Font(Font.MONOSPACED, Font.PLAIN, 16),
-      inlineLineHeightPx = 24
+      inlineLineHeightPx = 24,
+      cache = cache
     )
 
     xhtml should include("<div class=\"inline-rows\">")
@@ -568,7 +582,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       widthPx = 180,
       heightPx = 240,
       theme = theme,
-      font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
+      font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
+      cache = cache
     )
 
     Color(image.getRGB(image.getWidth - 2, image.getHeight - 2), true) shouldBe theme.panel.background
@@ -582,7 +597,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       widthPx = 240,
       heightPx = 160,
       theme = Theme.default,
-      font = font
+      font = font,
+      cache = cache
     )
     val second = MarkdownDocumentPreview.renderImage(
       source = "# Cached",
@@ -590,7 +606,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       widthPx = 240,
       heightPx = 160,
       theme = Theme.default,
-      font = font
+      font = font,
+      cache = cache
     )
 
     second should be theSameInstanceAs first
@@ -604,7 +621,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       widthPx = 240,
       heightPx = 160,
       theme = Theme.default,
-      font = font
+      font = font,
+      cache = cache
     )
     val second = MarkdownDocumentPreview.renderImage(
       source = "# Changed",
@@ -612,7 +630,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       widthPx = 240,
       heightPx = 160,
       theme = Theme.default,
-      font = font
+      font = font,
+      cache = cache
     )
 
     second should not be theSameInstanceAs(first)
@@ -626,7 +645,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       widthPx = 240,
       heightPx = 160,
       theme = Theme.default,
-      font = font
+      font = font,
+      cache = cache
     )
     val second = MarkdownDocumentPreview.renderImage(
       source = "# Default second, totally different content",
@@ -634,7 +654,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       widthPx = 240,
       heightPx = 160,
       theme = Theme.default,
-      font = font
+      font = font,
+      cache = cache
     )
 
     second should not be theSameInstanceAs(first)
@@ -649,7 +670,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       heightPx = 160,
       theme = Theme.default,
       font = font,
-      reuseLastRenderWhileEditing = true
+      reuseLastRenderWhileEditing = true,
+      cache = cache
     )
     val second = MarkdownDocumentPreview.renderImage(
       source = "# Edit burst second, totally different content",
@@ -658,7 +680,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       heightPx = 160,
       theme = Theme.default,
       font = font,
-      reuseLastRenderWhileEditing = true
+      reuseLastRenderWhileEditing = true,
+      cache = cache
     )
 
     second should be theSameInstanceAs first
@@ -673,7 +696,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       heightPx = 160,
       theme = Theme.default,
       font = font,
-      reuseLastRenderWhileEditing = true
+      reuseLastRenderWhileEditing = true,
+      cache = cache
     )
     val second = MarkdownDocumentPreview.renderImage(
       source = "# Settled second",
@@ -682,7 +706,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       heightPx = 160,
       theme = Theme.default,
       font = font,
-      reuseLastRenderWhileEditing = false
+      reuseLastRenderWhileEditing = false,
+      cache = cache
     )
 
     second should not be theSameInstanceAs(first)
@@ -697,7 +722,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       heightPx = 160,
       theme = Theme.default,
       font = font,
-      reuseLastRenderWhileEditing = true
+      reuseLastRenderWhileEditing = true,
+      cache = cache
     )
     val resized = MarkdownDocumentPreview.renderImage(
       source = "# Edit-burst sizing",
@@ -706,7 +732,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       heightPx = 160,
       theme = Theme.default,
       font = font,
-      reuseLastRenderWhileEditing = true
+      reuseLastRenderWhileEditing = true,
+      cache = cache
     )
 
     resized.getWidth shouldBe 320
@@ -720,7 +747,8 @@ class MarkdownDocumentPreviewSpec extends AnyFlatSpec with Matchers:
       heightPx = 140,
       theme = Theme.default,
       font = Font(Font.SANS_SERIF, Font.PLAIN, 14),
-      reuseLastRenderWhileEditing = true
+      reuseLastRenderWhileEditing = true,
+      cache = cache
     )
 
     image.getWidth shouldBe 200

@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import com.serenity.config.MarkdownViewMode
 import com.serenity.lsp.config.LanguageId
-import com.serenity.markdown.MarkdownDocumentPreview
+import com.serenity.markdown.{MarkdownDocumentPreview, MarkdownPreviewCache}
 import com.serenity.state.manager.FocusedTextBody
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -40,8 +40,12 @@ object RendererMarkdownLens:
       LanguageId.Markdown
     ) && state.persisted.config.markdownViewMode == MarkdownViewMode.InlineLens
 
-  def markdownLensFrameFor(buffer: Buffer, snapshot: TextLayoutSnapshot): MarkdownLensFrame =
-    val previewWindow = markdownPreviewWindow(buffer, buffer.viewport.visibleLines)
+  def markdownLensFrameFor(
+    buffer: Buffer,
+    snapshot: TextLayoutSnapshot,
+    cache: MarkdownPreviewCache
+  ): MarkdownLensFrame =
+    val previewWindow = markdownPreviewWindow(buffer, buffer.viewport.visibleLines, cache)
     val lines = buffer.document.content.linesFrom(
       previewWindow.window.firstSourceLine,
       previewWindow.sourceLineCount
@@ -66,7 +70,8 @@ object RendererMarkdownLens:
       buffer.editing.cursorPositions.map(_.line - previewWindow.window.firstSourceLine).toSet,
       snapshot,
       previewWindow.window,
-      previewWindow.window.firstSourceLine
+      previewWindow.window.firstSourceLine,
+      cache
     )
     MarkdownLensFrame(
       previewWindow.window.firstSourceLine,
@@ -84,13 +89,14 @@ object RendererMarkdownLens:
     activeLines: Set[Int],
     snapshot: TextLayoutSnapshot,
     previewWindow: MarkdownDocumentPreview.PreviewWindow,
-    firstSourceLine: Int
+    firstSourceLine: Int,
+    cache: MarkdownPreviewCache
   ): (Vector[MarkdownDocumentPreview.InlinePreviewLine], Map[Range.Inclusive, MarkdownLensPlacement]) =
     val (rows, placements, _) = activeRanges.foldLeft(
       (baseRows, Map.empty[Range.Inclusive, MarkdownLensPlacement], 0)
     ) {
       case ((rows, placements, rowDelta), blockRange) =>
-        val previewRange = MarkdownDocumentPreview.previewRowsForSourceRange(lines, blockRange).map { range =>
+        val previewRange = MarkdownDocumentPreview.previewRowsForSourceRange(lines, blockRange, cache).map { range =>
           (range.start - previewWindow.firstPreviewRow + rowDelta) to
             (range.end - previewWindow.firstPreviewRow + rowDelta)
         }
@@ -116,7 +122,11 @@ object RendererMarkdownLens:
     }
     rows -> placements
 
-  private def markdownPreviewWindow(buffer: Buffer, visibleRows: Int): MarkdownLensPreviewWindow =
+  private def markdownPreviewWindow(
+    buffer: Buffer,
+    visibleRows: Int,
+    cache: MarkdownPreviewCache
+  ): MarkdownLensPreviewWindow =
     val lineCount = buffer.document.content.lineCount
     if lineCount == 0 then MarkdownLensPreviewWindow(MarkdownDocumentPreview.PreviewWindow(0, 0, ""), 0)
     else
@@ -150,7 +160,8 @@ object RendererMarkdownLens:
           firstPreviewRow = MarkdownDocumentPreview
             .previewRowForSourceLine(
               buffer.document.content.linesFrom(firstSourceLine, math.min(maxSourceLines, lineCount - firstSourceLine)),
-              0
+              0,
+              cache
             )
             .getOrElse(0),
           source = ""
@@ -218,7 +229,14 @@ object RendererMarkdownLens:
       if blockVisualLines.nonEmpty then
         val placement = frame.placements.getOrElse(
           blockRange,
-          markdownLensPlacement(blockRange, blockVisualLines, rect.height, lines, previewWindow)
+          markdownLensPlacement(
+            blockRange,
+            blockVisualLines,
+            rect.height,
+            lines,
+            previewWindow,
+            context.caches.markdownPreviewCache
+          )
         )
         val lensY = rect.y + placement.top
         context.surface.setBackgroundColor(state.persisted.theme.panel.background)
@@ -292,7 +310,14 @@ object RendererMarkdownLens:
       if blockVisualLines.nonEmpty then
         val placement = frame.placements.getOrElse(
           blockRange,
-          markdownLensPlacement(blockRange, blockVisualLines, rect.height, lines, previewWindow)
+          markdownLensPlacement(
+            blockRange,
+            blockVisualLines,
+            rect.height,
+            lines,
+            previewWindow,
+            context.caches.markdownPreviewCache
+          )
         )
         buffer.editing.cursorPositions.zipWithIndex.foreach { (cursor, cursorIndex) =>
           val isPrimaryCursor = cursorIndex == 0
@@ -337,9 +362,10 @@ object RendererMarkdownLens:
     blockVisualLines: Vector[TextVisualLine],
     visibleHeight: Int,
     markdownLines: Vector[String],
-    previewWindow: MarkdownDocumentPreview.PreviewWindow
+    previewWindow: MarkdownDocumentPreview.PreviewWindow,
+    cache: MarkdownPreviewCache
   ): MarkdownLensPlacement =
-    val previewRange = MarkdownDocumentPreview.previewRowsForSourceRange(markdownLines, blockRange)
+    val previewRange = MarkdownDocumentPreview.previewRowsForSourceRange(markdownLines, blockRange, cache)
     val lensHeight = math.max(
       blockVisualLines.length,
       previewRange.map(range => range.end - range.start + 1).getOrElse(0)

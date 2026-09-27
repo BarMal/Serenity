@@ -4,7 +4,7 @@ import java.awt.Font
 
 import com.serenity.config.MarkdownViewMode
 import com.serenity.lsp.config.LanguageId
-import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
+import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview, MarkdownPreviewCache}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.testkit.EditingStateFixtures
@@ -16,6 +16,11 @@ import org.scalatest.matchers.should.Matchers
 class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
+
+  // Independent of the `RenderCaches.create()` each render call below builds for itself: these tests compare rendered
+  // *content* against an expected value computed directly through `MarkdownDocumentPreview`, never object identity, so
+  // the two sides hitting different `MarkdownPreviewCache` instances (issue #1677) has no bearing on the assertions.
+  private val cache = MarkdownPreviewCache()
 
   "Renderer markdown lens" should "size an active table lens to cover the rendered preview table" in {
     val bufferId = BufferId(1)
@@ -242,7 +247,7 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
       val activeRange               = MarkdownBlockLens.currentBlock(sourceLines, cursor.line)
       val baseRows                  = MarkdownDocumentPreview.inlinePreviewRows(sourceLines, 0, sourceLines.length)
       val activePreviewRange = MarkdownDocumentPreview
-        .previewRowsForSourceRange(sourceLines, activeRange)
+        .previewRowsForSourceRange(sourceLines, activeRange, cache)
         .getOrElse(fail("Expected active preview range"))
       val activeSourceRows = if cursor.line == 2 then 2 else activeRange.size
       val lensRows =
@@ -262,7 +267,8 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
           metrics.lineHeight,
           deviceScale = 1.0
         ),
-        inlineLineHeightPx = metrics.lineHeight
+        inlineLineHeightPx = metrics.lineHeight,
+        cache = cache
       )
 
       withClue(s"cursor at source line ${cursor.line}: ") {
@@ -284,7 +290,8 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
               metrics.lineHeight,
               deviceScale = 1.0
             ),
-            inlineLineHeightPx = metrics.lineHeight
+            inlineLineHeightPx = metrics.lineHeight,
+            cache = cache
           )
           withClue(s"non-active preview row $row: ") {
             samePixels(actual, withoutBlock) shouldBe false
@@ -312,7 +319,7 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
     val actual   = surface.drawImageCalls.head.image
     val baseRows = MarkdownDocumentPreview.inlinePreviewRows(sourceLines, 0, sourceLines.length)
     val activeRow = MarkdownDocumentPreview
-      .previewRowForSourceLine(sourceLines, 35)
+      .previewRowForSourceLine(sourceLines, 35, cache)
       .getOrElse(
         fail("Expected active heading preview row")
       )
@@ -328,7 +335,8 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
         metrics.lineHeight,
         deviceScale = 1.0
       ),
-      inlineLineHeightPx = metrics.lineHeight
+      inlineLineHeightPx = metrics.lineHeight,
+      cache = cache
     )
 
     MarkdownDocumentPreview.inlinePreviewRows(sourceLines, 0, sourceLines.length).map(_.text) should contain(
@@ -359,7 +367,8 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
         metrics.lineHeight,
         deviceScale = 1.0
       ),
-      inlineLineHeightPx = metrics.lineHeight
+      inlineLineHeightPx = metrics.lineHeight,
+      cache = cache
     )
 
     samePixels(actual, expected) shouldBe true
@@ -387,7 +396,8 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
         metrics.lineHeight,
         deviceScale = 1.0
       ),
-      inlineLineHeightPx = metrics.lineHeight
+      inlineLineHeightPx = metrics.lineHeight,
+      cache = cache
     )
 
     rawSourceRow(surface, "Code line 0") should be >= 0
@@ -430,7 +440,8 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
         metrics.lineHeight,
         deviceScale = 1.0
       ),
-      inlineLineHeightPx = metrics.lineHeight
+      inlineLineHeightPx = metrics.lineHeight,
+      cache = cache
     )
     val offscreenCaretWindow = MarkdownDocumentPreview.renderInlineImage(
       sourceLines = sourceLines,
@@ -445,7 +456,8 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
         metrics.lineHeight,
         deviceScale = 1.0
       ),
-      inlineLineHeightPx = metrics.lineHeight
+      inlineLineHeightPx = metrics.lineHeight,
+      cache = cache
     )
 
     surface.drawImageCalls should have size 1
@@ -467,12 +479,12 @@ class RendererMarkdownLensAlignmentSpec extends AnyFlatSpec with Matchers:
     val lines = source.linesIterator.toVector
     val previewWindow = MarkdownDocumentPreview.PreviewWindow(
       firstSourceLine = 0,
-      firstPreviewRow = MarkdownDocumentPreview.previewRowForSourceLine(lines, 0).getOrElse(0),
+      firstPreviewRow = MarkdownDocumentPreview.previewRowForSourceLine(lines, 0, cache = cache).getOrElse(0),
       source = source
     )
     val expectedTopRows =
       MarkdownDocumentPreview
-        .previewRowsForSourceRange(lines, cursor.line to (cursor.line + 1))
+        .previewRowsForSourceRange(lines, cursor.line to (cursor.line + 1), cache)
         .map(_.start - previewWindow.firstPreviewRow)
         .getOrElse(cursor.line - previewWindow.firstSourceLine)
 

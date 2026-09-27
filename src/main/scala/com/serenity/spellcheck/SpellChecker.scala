@@ -19,9 +19,13 @@ object SpellChecker:
     * performs filesystem IO synchronously and so must never be called from a pure state method or from inside
     * `Ref.update`. Production analysis instead calls `DictionaryLoader.loadSnapshot` explicitly from `IO.blocking` and
     * passes the resulting `DictionaryContext` into the pure `analyzeText`.
+    *
+    * `cache` defaults to a fresh, unshared [[DictionaryCache]] (issue #1677): this entry point is documented above as a
+    * one-off/test convenience, never a production hot path, so a caller that doesn't care about caching across calls
+    * doesn't need to construct or thread one.
     */
-  def check(text: String, config: SpellCheckConfig): List[Diagnostic] =
-    analyzeText(text, config, DictionaryLoader.loadSnapshot(config).context)
+  def check(text: String, config: SpellCheckConfig, cache: DictionaryCache = DictionaryCache()): List[Diagnostic] =
+    analyzeText(text, config, DictionaryLoader.loadSnapshot(config, cache).context)
 
   /** Pure: matches `text` against an already-loaded `dictionary`. Performs no filesystem access -- its signature
     * carries no `Path`, so there is nothing here for a future change to accidentally turn into IO.

@@ -1,12 +1,14 @@
 package com.serenity.state.manager
 
+import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.ui.renderer.{GraphemeSegmentationCache, RendererFrameState}
 import com.serenity.ui.theme.ThemeHighlightCache
 
 /** Every render/mouse-hit-testing cache that issue #1677 found still living as a JVM-wide singleton `object`, bundled
   * into one instance-scoped owner: [[RendererFrameState]]'s per-frame caches, [[ThemeHighlightCache]]'s syntax
-  * highlight memoization, [[GraphemeSegmentationCache]]'s grapheme-boundary memoization, and [[AuthoritativeUiScene]]'s
-  * prepared-scene cache (with its own lock, now scoped to this instance rather than the JVM).
+  * highlight memoization, [[GraphemeSegmentationCache]]'s grapheme-boundary memoization, [[AuthoritativeUiScene]]'s
+  * prepared-scene cache (with its own lock, now scoped to this instance rather than the JVM), and
+  * [[MarkdownPreviewCache]]'s markdown-preview HTML/image/inline-document caches.
   *
   * One instance is created per render-owning entity -- today, once per [[StateManager]] (see `StateManager.apply`) --
   * and threaded explicitly: down through [[com.serenity.ui.renderer.RenderContext]] to every render entry point and
@@ -18,7 +20,8 @@ final class RenderCaches private (
     val frameState: RendererFrameState,
     val themeHighlightCache: ThemeHighlightCache,
     val graphemeSegmentationCache: GraphemeSegmentationCache,
-    val authoritativeScene: AuthoritativeUiScene
+    val authoritativeScene: AuthoritativeUiScene,
+    val markdownPreviewCache: MarkdownPreviewCache
 )
 
 object RenderCaches:
@@ -32,5 +35,6 @@ object RenderCaches:
       RendererFrameState(rendererFrameStateCacheCapacity),
       ThemeHighlightCache(),
       GraphemeSegmentationCache(),
-      AuthoritativeUiScene()
+      AuthoritativeUiScene(),
+      MarkdownPreviewCache()
     )

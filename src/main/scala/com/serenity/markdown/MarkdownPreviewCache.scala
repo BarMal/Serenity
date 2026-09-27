@@ -1,6 +1,7 @@
 package com.serenity.markdown
 
 import java.awt.Font
+import java.awt.image.BufferedImage
 import java.util.LinkedHashMap
 
 import scala.util.hashing.MurmurHash3
@@ -22,8 +23,102 @@ import com.serenity.ui.theme.Theme
   * rather than swapped by reference (there is no immutable snapshot to compare-and-set between), so `synchronized`
   * around each `get`/`put` is the direct equivalent for a mutable `LinkedHashMap` -- the critical sections are short,
   * so contention is not a concern in this rendering hot path.
+  *
+  * Instance-scoped (issue #1677): one instance is created per render-owning entity (held on
+  * [[com.serenity.state.manager.RenderCaches]], threaded through [[com.serenity.ui.renderer.RenderContext]] and
+  * [[MarkdownDocumentPreview]]'s own entry points to every caller) rather than a JVM-wide singleton `object`, so two
+  * independently constructed instances share no cache state.
   */
-private[markdown] object MarkdownPreviewCache:
+final class MarkdownPreviewCache:
+  import MarkdownPreviewCache.*
+
+  private val imageCache =
+    new LinkedHashMap[ImageCacheKey, BufferedImage](MaxCachedImages, 0.75f, true):
+      override def removeEldestEntry(eldest: java.util.Map.Entry[ImageCacheKey, BufferedImage]): Boolean =
+        size() > MaxCachedImages
+
+  private val editSlotCache =
+    new LinkedHashMap[ImageSlotKey, SlotRender](MaxEditSlotCacheEntries, 0.75f, true):
+      override def removeEldestEntry(eldest: java.util.Map.Entry[ImageSlotKey, SlotRender]): Boolean =
+        size() > MaxEditSlotCacheEntries
+
+  private val htmlFragmentCache =
+    new LinkedHashMap[HtmlFragmentCacheKey, String](MaxCachedHtmlFragments, 0.75f, true):
+      override def removeEldestEntry(eldest: java.util.Map.Entry[HtmlFragmentCacheKey, String]): Boolean =
+        size() > MaxCachedHtmlFragments
+
+  private val inlineDocumentCache =
+    new LinkedHashMap[InlineDocumentCacheKey, MarkdownDocumentPreview.InlinePreviewIndex](
+      MaxCachedInlineDocuments,
+      0.75f,
+      true
+    ):
+      override def removeEldestEntry(
+        eldest: java.util.Map.Entry[InlineDocumentCacheKey, MarkdownDocumentPreview.InlinePreviewIndex]
+      ): Boolean =
+        size() > MaxCachedInlineDocuments
+
+  private[markdown] def cachedHtmlFragment(key: HtmlFragmentCacheKey)(render: => String): String =
+    htmlFragmentCache.synchronized(Option(htmlFragmentCache.get(key))).getOrElse {
+      val rendered = render
+      htmlFragmentCache.synchronized {
+        val _ = htmlFragmentCache.put(key, rendered)
+      }
+      rendered
+    }
+
+  /** Exact-key image cache first, falling back to [[renderOrReuseCommitted]]'s edit-slot reuse on a miss -- the same
+    * two-level lookup `renderImage`/`renderInlineRowsImage` always performed against the (formerly singleton) caches.
+    */
+  private[markdown] def cachedImage(key: ImageCacheKey, reuseLastRenderWhileEditing: Boolean)(
+    render: => BufferedImage
+  ): BufferedImage =
+    imageCache.synchronized(Option(imageCache.get(key))).getOrElse {
+      renderOrReuseCommitted(key, reuseLastRenderWhileEditing) {
+        val rendered = render
+        imageCache.synchronized {
+          val _ = imageCache.put(key, rendered)
+        }
+        rendered
+      }
+    }
+
+  private[markdown] def cachedInlineDocument(key: InlineDocumentCacheKey)(
+    build: => MarkdownDocumentPreview.InlinePreviewIndex
+  ): MarkdownDocumentPreview.InlinePreviewIndex =
+    inlineDocumentCache.synchronized(Option(inlineDocumentCache.get(key))).getOrElse {
+      val index = build
+      inlineDocumentCache.synchronized {
+        val _ = inlineDocumentCache.put(key, index)
+      }
+      index
+    }
+
+  /** While `reuseLastRenderWhileEditing` is true, reuses the last image rendered for this preview slot (same
+    * title/size/theme/font/etc, only the markdown content differing) instead of paying for a fresh flying-saucer layout
+    * pass. Callers set this from an explicit, event-driven signal decided upstream -- e.g. "an edit landed for this
+    * buffer more recently than the last settled render" -- never from wall-clock proximity, so the result is fully
+    * deterministic given the caller's inputs. `false` (every direct caller's default) always renders fresh, exactly as
+    * if this cache didn't exist.
+    */
+  private def renderOrReuseCommitted(key: ImageCacheKey, reuseLastRenderWhileEditing: Boolean)(
+    render: => BufferedImage
+  ): BufferedImage =
+    val slotKey = ImageSlotKey.from(key)
+    val reused =
+      if reuseLastRenderWhileEditing then editSlotCache.synchronized(Option(editSlotCache.get(slotKey))) else None
+    reused match
+      case Some(entry) => entry.image
+      case None =>
+        val rendered = render
+        editSlotCache.synchronized {
+          val _ = editSlotCache.put(slotKey, SlotRender(rendered))
+        }
+        rendered
+
+object MarkdownPreviewCache:
+
+  def apply(): MarkdownPreviewCache = new MarkdownPreviewCache
 
   private val MaxCachedImages          = 24
   private val MaxCachedHtmlFragments   = 48
@@ -80,7 +175,7 @@ private[markdown] object MarkdownPreviewCache:
         key.inlineRows
       )
 
-  final case class SlotRender(image: java.awt.image.BufferedImage)
+  final case class SlotRender(image: BufferedImage)
 
   final case class HtmlFragmentCacheKey(source: SourceFingerprint, title: String, baseUri: Option[String])
 
@@ -96,53 +191,3 @@ private[markdown] object MarkdownPreviewCache:
       )
 
   final case class InlineDocumentCacheKey(source: SourceLinesFingerprint)
-
-  val imageCache =
-    new LinkedHashMap[ImageCacheKey, java.awt.image.BufferedImage](MaxCachedImages, 0.75f, true):
-      override def removeEldestEntry(
-        eldest: java.util.Map.Entry[ImageCacheKey, java.awt.image.BufferedImage]
-      ): Boolean =
-        size() > MaxCachedImages
-
-  val editSlotCache =
-    new LinkedHashMap[ImageSlotKey, SlotRender](MaxEditSlotCacheEntries, 0.75f, true):
-      override def removeEldestEntry(eldest: java.util.Map.Entry[ImageSlotKey, SlotRender]): Boolean =
-        size() > MaxEditSlotCacheEntries
-
-  val htmlFragmentCache =
-    new LinkedHashMap[HtmlFragmentCacheKey, String](MaxCachedHtmlFragments, 0.75f, true):
-      override def removeEldestEntry(eldest: java.util.Map.Entry[HtmlFragmentCacheKey, String]): Boolean =
-        size() > MaxCachedHtmlFragments
-
-  val inlineDocumentCache =
-    new LinkedHashMap[InlineDocumentCacheKey, MarkdownDocumentPreview.InlinePreviewIndex](
-      MaxCachedInlineDocuments,
-      0.75f,
-      true
-    ):
-      override def removeEldestEntry(
-        eldest: java.util.Map.Entry[InlineDocumentCacheKey, MarkdownDocumentPreview.InlinePreviewIndex]
-      ): Boolean =
-        size() > MaxCachedInlineDocuments
-
-  /** While `reuseLastRenderWhileEditing` is true, reuses the last image rendered for this preview slot (same
-    * title/size/theme/font/etc, only the markdown content differing) instead of paying for a fresh flying-saucer layout
-    * pass. Callers set this from an explicit, event-driven signal decided upstream -- e.g. "an edit landed for this
-    * buffer more recently than the last settled render" -- never from wall-clock proximity, so the result is fully
-    * deterministic given the caller's inputs. `false` (every direct caller's default) always renders fresh, exactly as
-    * if this cache didn't exist.
-    */
-  def renderOrReuseCommitted(key: ImageCacheKey, reuseLastRenderWhileEditing: Boolean)(
-    render: => java.awt.image.BufferedImage
-  ): java.awt.image.BufferedImage =
-    val slotKey = ImageSlotKey.from(key)
-    val reused =
-      if reuseLastRenderWhileEditing then editSlotCache.synchronized(Option(editSlotCache.get(slotKey))) else None
-    reused match
-      case Some(entry) => entry.image
-      case None =>
-        val rendered = render
-        editSlotCache.synchronized {
-          val _ = editSlotCache.put(slotKey, SlotRender(rendered))
-        }
-        rendered
