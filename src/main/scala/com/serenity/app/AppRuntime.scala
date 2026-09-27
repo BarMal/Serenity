@@ -311,39 +311,54 @@ object AppRuntime:
         externalChangeWatchLoop(
           fileChangeWatcher,
           stateManager.fileService.openBufferPaths,
-          stateManager.fileService.checkBufferForExternalChanges
+          stateManager.fileService.checkBufferForExternalChanges,
+          stateManager.fileService.dictionaryWatchDirectories,
+          stateManager.fileService.refreshDictionaryFingerprints
         ).interruptWhen(quitSignal).compile.drain
       )
     ).parMapN((_, _, _, _, _, _, _, _) => ())
 
   /** Background half of external-change detection (#1623), complementing the focus-in re-check: each cycle, re-derives
     * the watched directory set from the currently open local buffers (`FileChangeWatcher.sync` handles buffers
-    * opening/closing since the last cycle), polls for real filesystem events, and re-checks every buffer whose file a
-    * poll window actually saw change -- reload-or-prompt exactly like the focus-in path, just not gated on the window
-    * regaining focus.
+    * opening/closing since the last cycle) plus `dictionaryWatchDirectories` (#1691's spell-check dictionary
+    * directories, re-derived the same way from the current config), polls for real filesystem events, and reacts to
+    * whichever kind of watched path a poll window actually saw change: a buffer's file gets the same reload-or-prompt
+    * check the focus-in path runs, and any change under a dictionary directory calls `refreshDictionaryFingerprints` to
+    * invalidate `StateManagerOperationBoundary`'s cached fingerprints -- neither is gated on the window regaining
+    * focus.
     *
     * `WatchService.poll` is a genuine blocking OS call, so it only runs when there is at least one directory to watch
     * -- with nothing open, the cycle sleeps instead. This isn't just an efficiency nicety: a real blocking call left
     * running unconditionally makes this loop, and therefore any `AppRuntime.run` caller, incompatible with a
     * virtual-time test harness (`VirtualTime.runVirtual`'s own `TestControl` treats `IO.blocking` as non-terminating)
     * -- a plain buffer-less startup (the common case every such test starts from) must stay virtual-time-compatible.
+    * Spell-check is disabled by default (`SpellCheckConfig.enabled = false`), so `dictionaryWatchDirectories` is
+    * `Set.empty` in that common case too, and the loop still sleeps rather than polls.
     */
   private[serenity] def externalChangeWatchLoop(
     watcher: com.serenity.io.FileChangeWatcher,
     openBufferPaths: IO[Map[Path, BufferId]],
     checkBufferForExternalChanges: BufferId => IO[Unit],
+    dictionaryWatchDirectories: IO[Set[Path]] = IO.pure(Set.empty),
+    refreshDictionaryFingerprints: IO[Unit] = IO.unit,
     pollInterval: FiniteDuration = 2.seconds
   ): Stream[IO, Unit] =
     Stream.repeatEval(
       for
-        paths <- openBufferPaths
-        _     <- watcher.sync(paths.keys.flatMap(path => Option(path.getParent)).toSet)
+        paths                 <- openBufferPaths
+        dictionaryDirectories <- dictionaryWatchDirectories
+        bufferDirectories  = paths.keys.flatMap(path => Option(path.getParent)).toSet
+        watchedDirectories = bufferDirectories ++ dictionaryDirectories
+        _ <- watcher.sync(watchedDirectories)
         _ <-
-          if paths.isEmpty then IO.sleep(pollInterval)
+          if watchedDirectories.isEmpty then IO.sleep(pollInterval)
           else
-            watcher
-              .pollChangedFiles(pollInterval)
-              .flatMap(changed => changed.flatMap(paths.get).toList.traverse_(checkBufferForExternalChanges))
+            watcher.pollChangedFiles(pollInterval).flatMap { changed =>
+              val dictionaryChanged =
+                changed.exists(path => Option(path.getParent).exists(dictionaryDirectories.contains))
+              changed.flatMap(paths.get).toList.traverse_(checkBufferForExternalChanges) >>
+                (if dictionaryChanged then refreshDictionaryFingerprints else IO.unit)
+            }
       yield ()
     )
 

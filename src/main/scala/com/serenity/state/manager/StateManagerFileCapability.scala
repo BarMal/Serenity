@@ -66,7 +66,13 @@ final private[manager] class StateManagerFileCapability(
     commitValidated: (AppState => AppState) => IO[Unit],
     effects: StateManagerEffectHandlers,
     dispatch: IO[Unit] => IO[Unit],
-    openFileAndWait: Path => IO[Unit]
+    openFileAndWait: Path => IO[Unit],
+    // #1691: the primary invalidation path is `AppRuntime.externalChangeWatchLoop` watching
+    // `dictionaryWatchDirectories` in real time and calling `refreshDictionaryFingerprints` when something under them
+    // changes; wiring the same effect into window focus-gain here is a cheap backstop for a change the watcher wasn't
+    // running for or whose poll window missed, rather than a per-keystroke filesystem stat either way.
+    refreshDictionaryFingerprints: IO[Unit],
+    dictionaryWatchDirectories: IO[Set[Path]]
 ):
 
   // The disk read runs here, off the dispatcher; the decision re-reads state on it, after any in-flight save has
@@ -96,7 +102,10 @@ final private[manager] class StateManagerFileCapability(
   val fileService: FileService = FileService(
     saveBuffer = saveBuffer,
     saveBufferAs = saveBufferAs,
-    checkExternalChangesOnFocus = resolveOnDispatcher(effects.observeFocusedExternalRevisionEffect),
+    checkExternalChangesOnFocus =
+      resolveOnDispatcher(effects.observeFocusedExternalRevisionEffect) >> refreshDictionaryFingerprints,
     openBufferPaths = effects.openBufferPathsEffect,
-    checkBufferForExternalChanges = bufferId => resolveOnDispatcher(effects.observeExternalRevisionEffect(bufferId))
+    checkBufferForExternalChanges = bufferId => resolveOnDispatcher(effects.observeExternalRevisionEffect(bufferId)),
+    dictionaryWatchDirectories = dictionaryWatchDirectories,
+    refreshDictionaryFingerprints = refreshDictionaryFingerprints
   )
