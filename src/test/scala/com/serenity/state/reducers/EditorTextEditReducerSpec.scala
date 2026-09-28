@@ -1,6 +1,7 @@
 package com.serenity.state.reducers
 
 import com.serenity.keystroke.events.*
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.testkit.EditingStateFixtures
@@ -30,6 +31,12 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
   private def stateWithSmartPunctuation(text: String, cursor: CursorPosition): AppState =
     val before = stateWith(text, cursor)
     before.copy(persisted = before.persisted.copy(config = before.persisted.config.withSmartPunctuation(true)))
+
+  private def stateWithMarkdown(text: String, cursor: CursorPosition): AppState =
+    val before = stateWith(text, cursor)
+    val buffer = before.persisted.buffers(bufferId)
+    val markdownBuffer = buffer.copy(document = buffer.document.copy(language = Some(LanguageId.Markdown)))
+    before.copy(persisted = before.persisted.copy(buffers = Map(bufferId -> markdownBuffer)))
 
   private def bufferAfter(event: TextEntryEvent, state: AppState): Buffer =
     EditorEventReducer.reduce(event, paneId, state).state.persisted.buffers(bufferId)
@@ -139,6 +146,39 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
     val before = stateWithSmartPunctuation("hello", CursorPosition(0, 5))
 
     bufferAfter(InsertChar('"'), before).document.content.collect() shouldBe "hello”"
+  }
+
+  "NewLine in a Markdown buffer" should "leave chapter headings alone when they're already in sequence" in {
+    val before = stateWithMarkdown("# Chapter 1\n\n# Chapter 2\n", CursorPosition(2, 11))
+
+    bufferAfter(NewLine, before).document.content.collect() shouldBe "# Chapter 1\n\n# Chapter 2\n\n"
+  }
+
+  it should "resequence chapter headings left out of order by the edit" in {
+    val before = stateWithMarkdown("# Chapter 5\n\n# Chapter 9\n", CursorPosition(2, 11))
+
+    val after = bufferAfter(NewLine, before)
+    after.document.content.collect() shouldBe "# Chapter 1\n\n# Chapter 2\n\n"
+  }
+
+  it should "not renumber a non-Markdown buffer even with a matching heading" in {
+    val before = stateWith("# Chapter 5\n\n# Chapter 9\n", CursorPosition(2, 11))
+
+    bufferAfter(NewLine, before).document.content.collect() shouldBe "# Chapter 5\n\n# Chapter 9\n\n"
+  }
+
+  it should "record a single undo boundary covering both the newline and the renumbering" in {
+    val before = stateWithMarkdown("# Chapter 5\n\n# Chapter 9\n", CursorPosition(2, 11))
+
+    EditorEventReducer.reduce(NewLine, paneId, before).effects.collect {
+      case AppEffect.Undo(boundary: UndoEffect.RecordBoundary) => boundary
+    } should have size 1
+  }
+
+  it should "keep the cursor on the newly inserted line after a renumbering edit lands elsewhere" in {
+    val before = stateWithMarkdown("# Chapter 5\n\n# Chapter 9\n", CursorPosition(2, 11))
+
+    bufferAfter(NewLine, before).editing.cursorPositions shouldBe List(CursorPosition(3, 0))
   }
 
   it should "record a single undo boundary for the replacement, not a separate one for the deleted hyphen" in {
