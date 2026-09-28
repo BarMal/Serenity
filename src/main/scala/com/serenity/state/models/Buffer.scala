@@ -61,8 +61,8 @@ final case class DocumentComment(anchor: CursorPosition, focus: CursorPosition, 
 final case class Placeholder(position: CursorPosition, note: String)
 
 /** A beautiful-but-in-the-way passage cut from the manuscript rather than deleted outright -- Neo's "darlings" QoL
-  * feature. `originalPosition` records where it was cut from, but restoring inserts at the cursor rather than trying
-  * to reopen that exact spot: the document may well have changed shape since the cut.
+  * feature. `originalPosition` records where it was cut from, but restoring inserts at the cursor rather than trying to
+  * reopen that exact spot: the document may well have changed shape since the cut.
   */
 final case class Darling(text: String, originalPosition: CursorPosition)
 

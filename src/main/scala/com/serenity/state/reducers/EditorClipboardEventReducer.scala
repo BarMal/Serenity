@@ -123,9 +123,9 @@ private[reducers] object EditorClipboardEventReducer:
   private def reduceCutToDarlings(ctx: CursorEventContext): ReducerResult =
     import ctx.*
     if hasSelection then
-      val cutText           = selectedTexts(buffer).mkString("\n")
-      val originalPosition  = buffer.primarySelection.map(_.start).getOrElse(head)
-      val (updated, edits)  = deleteSelectedRanges(buffer)
+      val cutText          = selectedTexts(buffer).mkString("\n")
+      val originalPosition = buffer.primarySelection.map(_.start).getOrElse(head)
+      val (updated, edits) = deleteSelectedRanges(buffer)
       val withDarling = updated.copy(
         annotations = updated.annotations.copy(
           darlings = Darling(cutText, originalPosition) :: updated.annotations.darlings
