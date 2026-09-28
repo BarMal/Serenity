@@ -121,6 +121,8 @@ object ConfigFileFormat:
     field("editor.markdown_view"),
     comment("Default mode for new buffers: plain-text, markdown, rich-text"),
     field("editor.default_document_mode"),
+    comment("Word-count goal for the active document; auto means no goal is set"),
+    field("document.word_goal"),
     comment("Text area insets as percentages of the central workspace"),
     field("editor.text_area.left"),
     field("editor.text_area.right"),

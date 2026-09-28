@@ -234,6 +234,9 @@ enum StatusLineIntent:
   /** Off when shown (either placement), back to pinned when off. */
   case ToggleVisibility
 
+  /** Sets or clears (`None`) the active document's word-count goal the `WordGoal` segment shows progress against. */
+  case SetWordGoal(goal: Option[Int])
+
 /** Panel/text-area chrome: line numbers, gutter, word wrap, toolbar, spacing, window chrome and sitter, insets. */
 /** What the editor surface itself shows around and inside the text: chrome rows, wrap, scrolling, insets. */
 enum TextDisplayIntent:

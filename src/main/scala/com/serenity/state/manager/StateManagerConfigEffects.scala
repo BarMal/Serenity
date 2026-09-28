@@ -244,6 +244,8 @@ final private[manager] class StateManagerConfigEffects(
             else StatusLinePlacement.Off
           config.withStatusLinePlacement(next)
         }.void
+      case StatusLineIntent.SetWordGoal(goal) =>
+        updateTextDisplayConfig(_.withWordGoal(goal)).void
 
   private def interpretTextDisplayIntent(intent: TextDisplayIntent): IO[Unit] =
     intent match

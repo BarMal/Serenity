@@ -1,0 +1,37 @@
+package com.serenity.state.models
+
+import com.serenity.config.StatusSegment
+import com.serenity.rope.Balance
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
+class StatusLineTextSpec extends AnyFlatSpec with Matchers:
+
+  given Balance = Balance.default
+
+  private val bufferId = BufferId(0)
+
+  private def stateWith(text: String, wordGoal: Option[Int]): AppState =
+    val buffer = Buffer.fromString(bufferId, text)
+    val base   = AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
+    base.copy(persisted =
+      base.persisted.copy(config = base.persisted.config.withWordGoal(wordGoal))
+    )
+
+  "WordGoal" should "report no goal when none is configured" in {
+    val state = stateWith("one two three", wordGoal = None)
+
+    StatusLineText.render(state, List(StatusSegment.WordGoal)) shouldBe Some("No word goal set")
+  }
+
+  it should "show progress toward the configured goal" in {
+    val state = stateWith("one two three", wordGoal = Some(10))
+
+    StatusLineText.render(state, List(StatusSegment.WordGoal)) shouldBe Some("3 / 10 words (30%)")
+  }
+
+  it should "cap displayed progress at 100% once the goal is met or exceeded" in {
+    val state = stateWith("one two three four five", wordGoal = Some(3))
+
+    StatusLineText.render(state, List(StatusSegment.WordGoal)) shouldBe Some("5 / 3 words (100%)")
+  }
