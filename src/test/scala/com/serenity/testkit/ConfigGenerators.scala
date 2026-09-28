@@ -156,7 +156,8 @@ object ConfigGenerators:
     for
       markdown <- oneOfEnum(MarkdownViewMode.values)
       default  <- oneOfEnum(DefaultDocumentMode.values)
-    yield DocumentConfig(markdown, default)
+      goal     <- Gen.option(Gen.choose(1, 100000))
+    yield DocumentConfig(markdown, default, goal)
 
   val genAppModeConfig: Gen[AppModeConfig] =
     for

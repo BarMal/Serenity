@@ -215,7 +215,8 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     "status-mode",
     "status-word-count",
     "status-char-count",
-    "status-reading-time"
+    "status-reading-time",
+    "status-word-goal"
   )
 
   it should "expose the status line's placement and one toggle per segment in its own settings group" in {
@@ -225,7 +226,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     runner.optionSelections.get("status-position") shouldBe Some(0)
     runner.optionSelections.get("status-title") shouldBe Some(1)
     settingsGroup(runner, "settings-status-line").map(_.children.map(_.id)) shouldBe
-      Some("status-placement" :: statusToggleIds)
+      Some(("status-placement" :: statusToggleIds) :+ "word-goal")
   }
 
   // #1298: reorder commands are listed in the segments' real current order (Position, then Title) and only offer
@@ -236,7 +237,10 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty.activate(registry, config)
 
     settingsGroup(runner, "settings-status-line").map(_.children.map(_.id)) shouldBe
-      Some("status-placement" :: statusToggleIds ++ List("move-status-position-later", "move-status-title-earlier"))
+      Some(
+        "status-placement" :: statusToggleIds ++
+          List("move-status-position-later", "move-status-title-earlier", "word-goal")
+      )
   }
 
   it should "expose the status line placement as pinned, floating or off" in {

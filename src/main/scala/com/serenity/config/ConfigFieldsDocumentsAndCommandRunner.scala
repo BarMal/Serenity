@@ -35,6 +35,10 @@ private[config] object ConfigFieldsDocumentsAndCommandRunner:
         text => DefaultDocumentMode.values.find(_.toString == text)
       )
     )(_.defaultDocumentMode, (config, value) => config.withDefaultDocumentMode(value)),
+    field("document.word_goal", "word_goal")(int.filtered(_ > 0).orAuto)(
+      _.documentConfig.wordGoal,
+      (config, value) => config.withWordGoal(value)
+    ),
     named("workspace.mode", "appMode", "app.mode")(
       enumerated(AppMode.fromConfigKey, _.configKey, text => AppMode.values.find(_.toString == text))
     )(_.appMode, (config, value) => config.withAppMode(value)),

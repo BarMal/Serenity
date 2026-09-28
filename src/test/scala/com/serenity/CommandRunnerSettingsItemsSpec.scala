@@ -200,7 +200,8 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
       "status-mode",
       "status-word-count",
       "status-char-count",
-      "status-reading-time"
+      "status-reading-time",
+      "status-word-goal"
     )
   }
 

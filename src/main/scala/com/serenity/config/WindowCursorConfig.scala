@@ -43,7 +43,11 @@ final case class EditorConfig(
 
 final case class DocumentConfig(
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
-    defaultMode: DefaultDocumentMode = DefaultDocumentMode.PlainText
+    defaultMode: DefaultDocumentMode = DefaultDocumentMode.PlainText,
+    // A target word count for the active document; `None` means no goal is set. Progress is shown by the
+    // `StatusSegment.WordGoal` status-line segment as the document's total word count against this target -- not a
+    // daily-delta tracker, since that would need date-based session state this config has no home for yet.
+    wordGoal: Option[Int] = None
 )
 
 final case class AppModeConfig(

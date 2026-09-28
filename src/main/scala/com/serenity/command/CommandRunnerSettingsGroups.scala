@@ -77,7 +77,8 @@ object CommandRunnerSettingsGroups:
       "Status Line",
       "Placement, segments, and their order",
       CommandRunnerSettingsStatusLineItems.placementOptionItem(optionSelections) ::
-        CommandRunnerSettingsStatusLineItems.segmentItems(optionSelections, statusSegments)
+        CommandRunnerSettingsStatusLineItems.segmentItems(optionSelections, statusSegments) ++
+        input("word-goal")
     )
     val textAreaGroup = group(
       "settings-text-area",

@@ -289,6 +289,10 @@ final case class AppConfig(
   def withDefaultDocumentMode(mode: DefaultDocumentMode): AppConfig =
     withDocumentConfig(documentConfig.copy(defaultMode = mode))
 
+  /** Create a new config with the active document's word-count goal set (or cleared, via `None`). */
+  def withWordGoal(goal: Option[Int]): AppConfig =
+    withDocumentConfig(documentConfig.copy(wordGoal = goal))
+
   def withAppModeConfig(config: AppModeConfig): AppConfig =
     copy(appModeConfig = config)
 

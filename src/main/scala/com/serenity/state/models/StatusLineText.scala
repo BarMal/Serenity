@@ -36,3 +36,10 @@ object StatusLineText:
         s"${TextStatistics.of(buffer.document.content).characterCount} chars"
       case StatusSegment.ReadingTime =>
         s"~${TextStatistics.of(buffer.document.content).readingTimeMinutes} min read"
+      case StatusSegment.WordGoal =>
+        state.persisted.config.documentConfig.wordGoal match
+          case None => "No word goal set"
+          case Some(goal) =>
+            val total   = TextStatistics.of(buffer.document.content).wordCount
+            val percent = if goal <= 0 then 0 else math.min(100, total * 100 / goal)
+            s"$total / $goal words ($percent%)"

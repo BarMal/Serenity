@@ -123,6 +123,24 @@ object CommandRunnerSettingsInputItems:
             .nonEmptyText(text)
             .map(commandIntentArg => CommandIntent.Placeholders(PlaceholderIntent.AddPlaceholder(commandIntentArg))),
         category = CommandCategory.Edit
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "word-goal",
+        label = "Word Goal",
+        hint = "Target word count, or \"auto\"/blank to clear",
+        currentValue = config.documentConfig.wordGoal.fold("")(_.toString),
+        kind = CommandSurfaceItem.InputKind.FreeText,
+        parse = text =>
+          text.trim.toLowerCase match
+            case "" | "auto" | "off" | "none" =>
+              Some(CommandIntent.Settings(SettingsIntent.StatusLine(StatusLineIntent.SetWordGoal(None))))
+            case trimmed =>
+              trimmed.toIntOption
+                .filter(_ > 0)
+                .map(goal =>
+                  CommandIntent.Settings(SettingsIntent.StatusLine(StatusLineIntent.SetWordGoal(Some(goal))))
+                ),
+        category = CommandCategory.Settings
       )
     )
 
