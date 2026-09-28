@@ -226,7 +226,7 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     runner.optionSelections.get("status-position") shouldBe Some(0)
     runner.optionSelections.get("status-title") shouldBe Some(1)
     settingsGroup(runner, "settings-status-line").map(_.children.map(_.id)) shouldBe
-      Some("status-placement" :: statusToggleIds :+ "word-goal")
+      Some(("status-placement" :: statusToggleIds) :+ "word-goal")
   }
 
   // #1298: reorder commands are listed in the segments' real current order (Position, then Title) and only offer
