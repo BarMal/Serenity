@@ -14,9 +14,7 @@ class StatusLineTextSpec extends AnyFlatSpec with Matchers:
   private def stateWith(text: String, wordGoal: Option[Int]): AppState =
     val buffer = Buffer.fromString(bufferId, text)
     val base   = AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
-    base.copy(persisted =
-      base.persisted.copy(config = base.persisted.config.withWordGoal(wordGoal))
-    )
+    base.copy(persisted = base.persisted.copy(config = base.persisted.config.withWordGoal(wordGoal)))
 
   "WordGoal" should "report no goal when none is configured" in {
     val state = stateWith("one two three", wordGoal = None)
