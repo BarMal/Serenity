@@ -86,6 +86,10 @@ final case class AppConfig(
   def withSyntaxHighlighting(enabled: Boolean): AppConfig =
     withLanguageToolsConfig(languageToolsConfig.copy(syntaxHighlightingEnabled = enabled))
 
+  /** Create a new config with as-you-type smart punctuation (curly quotes, em dashes, ellipses) toggled */
+  def withSmartPunctuation(enabled: Boolean): AppConfig =
+    withLanguageToolsConfig(languageToolsConfig.copy(smartPunctuationEnabled = enabled))
+
   def withHotkeyConfig(config: HotkeyConfig): AppConfig =
     withInputConfig(inputConfig.copy(hotkeyConfig = config))
 

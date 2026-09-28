@@ -16,6 +16,10 @@ private[config] object ConfigFieldsLanguageAndTypography:
       _.languageToolsConfig.syntaxHighlightingEnabled,
       (config, value) => config.withSyntaxHighlighting(value)
     ),
+    field("editor.smart_punctuation", "smart_punctuation")(boolean)(
+      _.languageToolsConfig.smartPunctuationEnabled,
+      (config, value) => config.withSmartPunctuation(value)
+    ),
     field("spellcheck.enabled", "spellcheck_enabled")(boolean)(
       _.languageToolsConfig.spellCheck.enabled,
       (config, value) => config.withSpellCheck(config.languageToolsConfig.spellCheck.copy(enabled = value))

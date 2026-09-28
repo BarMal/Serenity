@@ -177,7 +177,8 @@ object SpellCheckConfig:
 final case class LanguageToolsConfig(
     syntaxHighlightingEnabled: Boolean = false,
     lspUserConfig: LspUserConfig = LspUserConfig.empty,
-    spellCheck: SpellCheckConfig = SpellCheckConfig()
+    spellCheck: SpellCheckConfig = SpellCheckConfig(),
+    smartPunctuationEnabled: Boolean = false
 ):
 
   def normalized: LanguageToolsConfig =
