@@ -29,9 +29,7 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
 
   private def stateWithSmartPunctuation(text: String, cursor: CursorPosition): AppState =
     val before = stateWith(text, cursor)
-    before.copy(persisted =
-      before.persisted.copy(config = before.persisted.config.withSmartPunctuation(true))
-    )
+    before.copy(persisted = before.persisted.copy(config = before.persisted.config.withSmartPunctuation(true)))
 
   private def bufferAfter(event: TextEntryEvent, state: AppState): Buffer =
     EditorEventReducer.reduce(event, paneId, state).state.persisted.buffers(bufferId)

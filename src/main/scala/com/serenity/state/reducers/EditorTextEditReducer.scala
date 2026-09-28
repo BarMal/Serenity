@@ -229,7 +229,11 @@ private[reducers] object EditorTextEditReducer:
       currentState,
       Focused.modifyBufferWithIdAndEmit(buffer.id) { current =>
         val newContent =
-          insertOrUnchanged(deleteOrUnchanged(current.document.content, startOffset, endOffset), startOffset, insertedText)
+          insertOrUnchanged(
+            deleteOrUnchanged(current.document.content, startOffset, endOffset),
+            startOffset,
+            insertedText
+          )
         val newCursor = newContent.offsetToCursorPosition(startOffset + insertedText.length)
         val edit      = MultiCursorEdit(0, startOffset, endOffset, insertedText)
         val replaced = current.copy(
@@ -243,11 +247,12 @@ private[reducers] object EditorTextEditReducer:
               List(edit)
             )
           ),
-          richText =
-            current.richText.copy(richTextDocument = richTextDocumentAfterEdit(current, startOffset, endOffset, insertedText))
+          richText = current.richText.copy(richTextDocument =
+            richTextDocumentAfterEdit(current, startOffset, endOffset, insertedText)
+          )
         )
         val (animated, delta) = addInsertionAnimations(replaced, currentState, List(edit))
-        val edits              = List(edit)
+        val edits             = List(edit)
         val effects =
           animationRemapEffects(buffer.id, current.document.content, animated.document.content, edits) ++
             animationMergeEffects(buffer.id, delta) ++
