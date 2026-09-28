@@ -18,7 +18,8 @@ private[manager] object PanelSymbolLookup:
   def outlineSymbolsForBuffer(buffer: Buffer): List[Symbol] =
     (
       DocumentOutline.forBuffer(buffer) ++
-        DocumentNavigation.bookmarkSymbols(buffer.annotations.bookmarks)
+        DocumentNavigation.bookmarkSymbols(buffer.annotations.bookmarks) ++
+        DocumentNavigation.placeholderSymbols(buffer.annotations.placeholders)
     )
       .sortBy(symbol => (symbol.location.line, symbol.location.column, symbol.name))
 

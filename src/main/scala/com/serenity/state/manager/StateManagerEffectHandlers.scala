@@ -234,20 +234,21 @@ final private[manager] class StateManagerEffectHandlers(
   // silent.
   private[manager] def interpretCommand(command: Command, state: AppState): IO[Unit] =
     val dispatch = command.intent match
-      case CommandIntent.Lifecycle(intent)   => interpretLifecycleIntent(intent, state)
-      case CommandIntent.File(intent)        => interpretFileIntent(intent, state)
-      case CommandIntent.Edit(intent)        => interpretEditIntent(intent)
-      case CommandIntent.RichText(intent)    => richTextEffects.interpret(intent)
-      case CommandIntent.Comments(intent)    => navigationEffects.interpretComments(intent)
-      case CommandIntent.Navigation(intent)  => navigationEffects.interpretNavigation(intent)
-      case CommandIntent.Lsp(intent)         => projectLspEffects.interpretLsp(intent, state)
-      case CommandIntent.Theme(intent)       => surfacePopupEffects.interpretThemeIntent(intent, state)
-      case CommandIntent.View(intent)        => panelEffects.interpret(intent, state)
-      case CommandIntent.Project(intent)     => projectLspEffects.interpretProject(intent, state)
-      case CommandIntent.Session(intent)     => interpretSessionIntent(intent, state)
-      case CommandIntent.Keybindings(intent) => keybindingEffects.interpret(intent)
-      case CommandIntent.UiPresets(intent)   => uiPresetEffects.interpret(intent)
-      case CommandIntent.Settings(intent)    => configEffects.interpret(intent, state)
+      case CommandIntent.Lifecycle(intent)    => interpretLifecycleIntent(intent, state)
+      case CommandIntent.File(intent)         => interpretFileIntent(intent, state)
+      case CommandIntent.Edit(intent)         => interpretEditIntent(intent)
+      case CommandIntent.RichText(intent)     => richTextEffects.interpret(intent)
+      case CommandIntent.Comments(intent)     => navigationEffects.interpretComments(intent)
+      case CommandIntent.Placeholders(intent) => navigationEffects.interpretPlaceholders(intent)
+      case CommandIntent.Navigation(intent)   => navigationEffects.interpretNavigation(intent)
+      case CommandIntent.Lsp(intent)          => projectLspEffects.interpretLsp(intent, state)
+      case CommandIntent.Theme(intent)        => surfacePopupEffects.interpretThemeIntent(intent, state)
+      case CommandIntent.View(intent)         => panelEffects.interpret(intent, state)
+      case CommandIntent.Project(intent)      => projectLspEffects.interpretProject(intent, state)
+      case CommandIntent.Session(intent)      => interpretSessionIntent(intent, state)
+      case CommandIntent.Keybindings(intent)  => keybindingEffects.interpret(intent)
+      case CommandIntent.UiPresets(intent)    => uiPresetEffects.interpret(intent)
+      case CommandIntent.Settings(intent)     => configEffects.interpret(intent, state)
     // issue #1048: MRU tracking -- every executed command counts toward its recency, regardless of what triggered
     // it (palette, mouse click, contextual toolbar, ...), living on `persisted` since `CommandRunner` itself is
     // reconstructed fresh each time the palette opens (`CommandRunner.recordCommandUsage`'s own doc).

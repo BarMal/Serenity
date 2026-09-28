@@ -1,7 +1,7 @@
 package com.serenity.state.manager
 
 import com.serenity.animation.{AnimationConfig, AnimationOwner}
-import com.serenity.command.{CommentsIntent, NavigationIntent}
+import com.serenity.command.{CommentsIntent, NavigationIntent, PlaceholderIntent}
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.MotionPreset
 import com.serenity.rope.Balance
@@ -21,13 +21,14 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
     content: String,
     cursor: CursorPosition = CursorPosition(0, 0),
     bookmarks: List[CursorPosition] = Nil,
-    comments: List[DocumentComment] = Nil
+    comments: List[DocumentComment] = Nil,
+    placeholders: List[Placeholder] = Nil
   ): AppState =
     val buffer = Buffer
       .fromString(BufferId(0), content)
       .copy(
         editing = EditingState(List(cursor)),
-        annotations = Annotations(bookmarks = bookmarks, documentComments = comments)
+        annotations = Annotations(bookmarks = bookmarks, documentComments = comments, placeholders = placeholders)
       )
     AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(BufferId(0) -> buffer)))
 
@@ -244,7 +245,8 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
 
   // --- Comment lens ----------------------------------------------------------------------------------------------
 
-  private val comment = DocumentComment(CursorPosition(0, 0), CursorPosition(0, 5), "Needs work")
+  private val comment     = DocumentComment(CursorPosition(0, 0), CursorPosition(0, 5), "Needs work")
+  private val placeholder = Placeholder(CursorPosition(0, 2), "Pick a real name")
 
   it should "open the comment lens on the active comment as a valid state" in {
     val state = stateWithBuffer("hello world", cursor = CursorPosition(0, 2), comments = List(comment))
@@ -370,4 +372,70 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
     result.state.runtime.navigation shouldBe state.runtime.navigation
     commentLensTargets(result.state) shouldBe List(Some(only))
     result.effects shouldBe Nil
+  }
+
+  // --- Placeholders ------------------------------------------------------------------------------------------------
+
+  it should "add a placeholder at the cursor and mark the buffer dirty" in {
+    val state = stateWithBuffer("hello world")
+
+    val result = validApplied(NavigationTransitions.placeholders(PlaceholderIntent.AddPlaceholder("A note"), state))
+
+    buffer0(result.state).annotations.placeholders shouldBe
+      List(Placeholder(CursorPosition(0, 0), "A note"))
+    buffer0(result.state).document.isDirty shouldBe true
+  }
+
+  it should "replace the note of the placeholder at the cursor instead of adding another" in {
+    val state = stateWithBuffer("hello world", cursor = placeholder.position, placeholders = List(placeholder))
+
+    val result = validApplied(NavigationTransitions.placeholders(PlaceholderIntent.AddPlaceholder("New note"), state))
+
+    buffer0(result.state).annotations.placeholders shouldBe List(placeholder.copy(note = "New note"))
+  }
+
+  it should "default blank placeholder note text to TODO" in {
+    val result = validApplied(
+      NavigationTransitions.placeholders(PlaceholderIntent.AddPlaceholder("  "), stateWithBuffer("hi"))
+    )
+
+    buffer0(result.state).annotations.placeholders.map(_.note) shouldBe List("TODO")
+  }
+
+  it should "delete the placeholder at the cursor and mark the buffer dirty" in {
+    val state =
+      stateWithBuffer("hello world", cursor = placeholder.position, placeholders = List(placeholder))
+
+    val result = validApplied(NavigationTransitions.placeholders(PlaceholderIntent.DeletePlaceholder, state))
+
+    buffer0(result.state).annotations.placeholders shouldBe Nil
+    buffer0(result.state).document.isDirty shouldBe true
+  }
+
+  it should "leave the buffer clean when there is no placeholder at the cursor to delete" in {
+    val state = stateWithBuffer("hello world", cursor = CursorPosition(0, 8), placeholders = List(placeholder))
+
+    val result = validApplied(NavigationTransitions.placeholders(PlaceholderIntent.DeletePlaceholder, state))
+
+    buffer0(result.state).annotations.placeholders shouldBe List(placeholder)
+    buffer0(result.state).document.isDirty shouldBe false
+  }
+
+  it should "ignore placeholder edits without an active editor buffer" in {
+    val state = withoutActiveEditor(stateWithBuffer("hello world"))
+
+    NavigationTransitions.placeholders(PlaceholderIntent.AddPlaceholder("x"), state) shouldBe
+      NavigationOutcome.Ignored(Some("[CMD] Add placeholder requested without an active editor buffer"))
+    NavigationTransitions.placeholders(PlaceholderIntent.DeletePlaceholder, state) shouldBe
+      NavigationOutcome.Ignored(Some("[CMD] Delete placeholder requested without an active editor buffer"))
+  }
+
+  it should "jump to the next placeholder" in {
+    val first  = Placeholder(CursorPosition(0, 0), "First")
+    val second = Placeholder(CursorPosition(2, 0), "Second")
+    val state  = stateWithBuffer("aaaaa\nbbbbb\nccccc", placeholders = List(first, second))
+
+    val result = validApplied(NavigationTransitions.placeholders(PlaceholderIntent.NextPlaceholder, state))
+
+    result.state.activeCursorPosition shouldBe Some(CursorPosition(2, 0))
   }

@@ -74,6 +74,9 @@ given Decoder[SessionFindResult] = deriveDecoder
 given Encoder[SessionDocumentComment] = deriveEncoder
 given Decoder[SessionDocumentComment] = deriveDecoder
 
+given Encoder[SessionPlaceholder] = deriveEncoder
+given Decoder[SessionPlaceholder] = deriveDecoder
+
 given Encoder[SessionFindState] = deriveEncoder
 
 given Decoder[SessionFindState] = Decoder.instance { cursor =>
@@ -104,6 +107,7 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     findState        <- cursor.getOrElse[Option[SessionFindState]]("findState")(None)
     bookmarks        <- cursor.getOrElse[List[SessionCursorPosition]]("bookmarks")(Nil)
     documentComments <- cursor.getOrElse[List[SessionDocumentComment]]("documentComments")(Nil)
+    placeholders     <- cursor.getOrElse[List[SessionPlaceholder]]("placeholders")(Nil)
     lineEnding       <- cursor.getOrElse[Option[String]]("lineEnding")(None)
     revision         <- cursor.getOrElse[Option[String]]("revision")(None)
   yield SessionBuffer(
@@ -120,6 +124,7 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     findState,
     bookmarks,
     documentComments,
+    placeholders,
     lineEnding,
     revision
   )

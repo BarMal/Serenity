@@ -61,6 +61,27 @@ private[command] object CommandRegistryNavigationCommands:
       CommandIntent.Comments(CommentsIntent.NextDocumentComment),
       CommandCategory.View,
       label = "Next Document Comment"
+    ),
+    Command.typed(
+      "delete-placeholder",
+      "Delete the placeholder at the current cursor.",
+      CommandIntent.Placeholders(PlaceholderIntent.DeletePlaceholder),
+      CommandCategory.Edit,
+      label = "Delete Placeholder"
+    ),
+    Command.typed(
+      "next-placeholder",
+      "Go to the next placeholder.",
+      CommandIntent.Placeholders(PlaceholderIntent.NextPlaceholder),
+      CommandCategory.View,
+      label = "Next Placeholder"
+    ),
+    Command.typed(
+      "previous-placeholder",
+      "Go to the previous placeholder.",
+      CommandIntent.Placeholders(PlaceholderIntent.PreviousPlaceholder),
+      CommandCategory.View,
+      label = "Previous Placeholder"
     )
   )
 

@@ -111,6 +111,18 @@ object CommandRunnerSettingsInputItems:
             .nonEmptyText(text)
             .map(commandIntentArg => CommandIntent.Comments(CommentsIntent.AddDocumentComment(commandIntentArg))),
         category = CommandCategory.Edit
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "add-placeholder",
+        label = "Add Placeholder",
+        hint = "Note for the placeholder",
+        currentValue = "",
+        kind = CommandSurfaceItem.InputKind.FreeText,
+        parse = text =>
+          CommandRunnerSettingsTextParsing
+            .nonEmptyText(text)
+            .map(commandIntentArg => CommandIntent.Placeholders(PlaceholderIntent.AddPlaceholder(commandIntentArg))),
+        category = CommandCategory.Edit
       )
     )
 

@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.IO
 import cats.syntax.all.*
-import com.serenity.command.{CommentsIntent, NavigationIntent}
+import com.serenity.command.{CommentsIntent, NavigationIntent, PlaceholderIntent}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.AppEffect
 
@@ -16,6 +16,9 @@ final private[manager] class StateManagerNavigationEffects(
 
   private[manager] def interpretComments(intent: CommentsIntent): IO[Unit] =
     commit(NavigationTransitions.comments(intent, _))
+
+  private[manager] def interpretPlaceholders(intent: PlaceholderIntent): IO[Unit] =
+    commit(NavigationTransitions.placeholders(intent, _))
 
   private[manager] def interpretNavigation(intent: NavigationIntent): IO[Unit] =
     commit(NavigationTransitions.navigation(intent, _))
