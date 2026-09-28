@@ -1,6 +1,7 @@
 package com.serenity.state.reducers
 
 import com.serenity.animation.*
+import com.serenity.document.ChapterRenumbering
 import com.serenity.keystroke.events.*
 import com.serenity.rope.*
 import com.serenity.state.models.*
@@ -55,7 +56,7 @@ private[reducers] object EditorTextEditReducer:
       case NewLine | Enter =>
         if hasSelection then applyEditedBuffer(groupable = false)(applyMultiSelectionReplacement(_, "\n"))
         else if isMulti then applyEditedBuffer(groupable = false)(applyMultiCursorInsertion(_, "\n"))
-        else insertAtCursor(buffer, head, "\n", currentState, paneId, groupable = false)
+        else insertNewlineWithChapterRenumbering(buffer, head, currentState, paneId)
 
       case ReverseTabKey =>
         val targetLines =
@@ -258,6 +259,64 @@ private[reducers] object EditorTextEditReducer:
             animationMergeEffects(buffer.id, delta) ++
             undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable)
         (animated, effects)
+      }
+    )
+
+  /** `NewLine`/`Enter`'s single-cursor, no-selection path: inserts the newline, then -- Markdown buffers only, and only
+    * when a "Chapter <number>" heading is now out of sequence -- resequences every chapter heading's number in one more
+    * edit, folded into the same undo boundary as the newline itself. Two separate `animationRemapEffects` calls rather
+    * than one combined edit list: the renumbering edits' offsets are computed against the buffer *after* the newline
+    * lands, so they are only valid replayed against that same content, not the original.
+    */
+  private def insertNewlineWithChapterRenumbering(
+    buffer: Buffer,
+    cursor: CursorPosition,
+    currentState: AppState,
+    paneId: PaneId
+  ): ReducerResult =
+    ReducerResult.fromTransition(
+      currentState,
+      Focused.modifyBufferWithIdAndEmit(buffer.id) { current =>
+        val (afterNewline, primaryEdit) = replaceSelectionOrInsert(current, cursor, "\n")
+        val newlineCursor = afterNewline.editing.cursorPositions.headOption.getOrElse(CursorPosition(0, 0))
+        val newlineCursorOffset =
+          afterNewline.document.content.lineColumnToOffset(newlineCursor.line, newlineCursor.column)
+
+        val renumbers = ChapterRenumbering.pendingRenumbers(afterNewline)
+        val (contentBuffer, renumberEdits) =
+          if renumbers.isEmpty then (afterNewline, Nil)
+          else
+            val edits = renumbers.zipWithIndex.map {
+              case ((start, end, text), index) => MultiCursorEdit(index, start, end, text)
+            }
+            applyTrackedEdits(afterNewline, List(newlineCursorOffset), edits)
+
+        val (_, delta1) = addInsertionAnimations(afterNewline, currentState, List(primaryEdit))
+        val (_, delta2) = addInsertionAnimations(contentBuffer, currentState, renumberEdits)
+
+        val renumberAnimationEffects =
+          if renumberEdits.isEmpty then Nil
+          else
+            animationRemapEffects(
+              buffer.id,
+              afterNewline.document.content,
+              contentBuffer.document.content,
+              renumberEdits
+            )
+
+        val effects =
+          animationRemapEffects(
+            buffer.id,
+            current.document.content,
+            afterNewline.document.content,
+            List(primaryEdit)
+          ) ++
+            renumberAnimationEffects ++
+            animationMergeEffects(buffer.id, delta1) ++
+            animationMergeEffects(buffer.id, delta2) ++
+            undoBoundaryEffects(buffer.id, paneId, buffer, primaryEdit :: renumberEdits, groupable = false)
+
+        (contentBuffer, effects)
       }
     )
 
