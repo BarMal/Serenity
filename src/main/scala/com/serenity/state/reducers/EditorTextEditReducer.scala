@@ -278,7 +278,7 @@ private[reducers] object EditorTextEditReducer:
       currentState,
       Focused.modifyBufferWithIdAndEmit(buffer.id) { current =>
         val (afterNewline, primaryEdit) = replaceSelectionOrInsert(current, cursor, "\n")
-        val newlineCursor = afterNewline.editing.cursorPositions.head
+        val newlineCursor = afterNewline.editing.cursorPositions.headOption.getOrElse(CursorPosition(0, 0))
         val newlineCursorOffset =
           afterNewline.document.content.lineColumnToOffset(newlineCursor.line, newlineCursor.column)
 
