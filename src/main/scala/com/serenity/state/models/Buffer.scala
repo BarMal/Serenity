@@ -60,6 +60,12 @@ final case class DocumentComment(anchor: CursorPosition, focus: CursorPosition, 
   */
 final case class Placeholder(position: CursorPosition, note: String)
 
+/** A beautiful-but-in-the-way passage cut from the manuscript rather than deleted outright -- Neo's "darlings" QoL
+  * feature. `originalPosition` records where it was cut from, but restoring inserts at the cursor rather than trying
+  * to reopen that exact spot: the document may well have changed shape since the cut.
+  */
+final case class Darling(text: String, originalPosition: CursorPosition)
+
 /** A buffer's on-disk identity and content -- what makes it "this file", independent of how it's being edited or
   * displayed. Split out by #1002 so `Buffer` itself no longer spans unrelated subdomains.
   */
@@ -119,7 +125,8 @@ object EditingState:
 final case class Annotations(
     bookmarks: List[CursorPosition] = Nil,
     documentComments: List[DocumentComment] = Nil,
-    placeholders: List[Placeholder] = Nil
+    placeholders: List[Placeholder] = Nil,
+    darlings: List[Darling] = Nil
 )
 
 /** Rich-text authoring state layered on top of the buffer's plain-text `Rope` content. */

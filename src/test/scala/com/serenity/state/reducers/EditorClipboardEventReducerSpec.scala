@@ -23,11 +23,15 @@ class EditorClipboardEventReducerSpec extends AnyFlatSpec with Matchers:
     text: String,
     cursors: List[CursorPosition],
     selection: Option[Selection] = None,
-    clipboard: Option[String] = None
+    clipboard: Option[String] = None,
+    darlings: List[Darling] = Nil
   ): AppState =
     val buffer = Buffer
       .fromString(bufferId, text)
-      .copy(editing = EditingStateFixtures(cursors = cursors, selection = selection))
+      .copy(
+        editing = EditingStateFixtures(cursors = cursors, selection = selection),
+        annotations = Annotations(darlings = darlings)
+      )
     val base = AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
     base.copy(runtime = base.runtime.copy(clipboard = clipboard))
 
@@ -120,6 +124,71 @@ class EditorClipboardEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val after = bufferAfter(Paste, before)
     after.document.content.collect() shouldBe "aX\nbX\ncX"
+  }
+
+  "CutToDarlings with an active selection" should "remove the selection into darlings, leaving the clipboard alone" in {
+    val before = stateWith(
+      "alpha beta",
+      List(CursorPosition(0, 10)),
+      selection = Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10))),
+      clipboard = Some("existing")
+    )
+
+    val after = bufferAfter(CutToDarlings, before)
+    after.document.content.collect() shouldBe "alpha "
+    after.annotations.darlings shouldBe List(Darling("beta", CursorPosition(0, 6)))
+    clipboardAfter(CutToDarlings, before) shouldBe Some("existing")
+  }
+
+  "CutToDarlings without a selection" should "leave the buffer untouched" in {
+    val before = stateWith("alpha beta", List(CursorPosition(0, 5)))
+
+    resultOf(CutToDarlings, before).state shouldBe before
+  }
+
+  "CutToDarlings with an existing darling" should "prepend the new cut, most recent first" in {
+    val existing = Darling("older", CursorPosition(2, 0))
+    val before = stateWith(
+      "alpha beta",
+      List(CursorPosition(0, 10)),
+      selection = Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10))),
+      darlings = List(existing)
+    )
+
+    bufferAfter(CutToDarlings, before).annotations.darlings shouldBe
+      List(Darling("beta", CursorPosition(0, 6)), existing)
+  }
+
+  "RestoreDarling with nothing cut" should "leave the buffer untouched" in {
+    val before = stateWith("alpha", List(CursorPosition(0, 5)))
+
+    resultOf(RestoreDarling, before).state shouldBe before
+  }
+
+  "RestoreDarling with a single cursor" should "insert the most recent darling at the cursor and pop it" in {
+    val recent = Darling("XY", CursorPosition(4, 0))
+    val older  = Darling("Z", CursorPosition(9, 0))
+    val before = stateWith("ab", List(CursorPosition(0, 1)), darlings = List(recent, older))
+
+    val after = bufferAfter(RestoreDarling, before)
+    after.document.content.collect() shouldBe "aXYb"
+    after.editing.cursorPositions shouldBe List(CursorPosition(0, 3))
+    after.annotations.darlings shouldBe List(older)
+  }
+
+  "RestoreDarling with an active selection" should "replace the selection with the darling's text" in {
+    val recent = Darling("XY", CursorPosition(4, 0))
+    val before = stateWith(
+      "alpha beta",
+      List(CursorPosition(0, 10)),
+      selection = Some(Selection(CursorPosition(0, 6), CursorPosition(0, 10))),
+      darlings = List(recent)
+    )
+
+    val after = bufferAfter(RestoreDarling, before)
+    after.document.content.collect() shouldBe "alpha XY"
+    after.primarySelection shouldBe None
+    after.annotations.darlings shouldBe Nil
   }
 
   "An unrecognised event" should "leave the clipboard and buffer untouched" in {

@@ -25,6 +25,7 @@ final case class SessionBuffer(
     bookmarks: List[SessionCursorPosition] = Nil,
     documentComments: List[SessionDocumentComment] = Nil,
     placeholders: List[SessionPlaceholder] = Nil,
+    darlings: List[SessionDarling] = Nil,
     lineEnding: Option[String] = None,
     // The on-disk revision the buffer's content was based on (#1670), so a dirty buffer restored from the session
     // still detects a file changed since.
@@ -66,6 +67,11 @@ final case class SessionPlaceholder(
     note: String
 )
 
+final case class SessionDarling(
+    text: String,
+    originalPosition: SessionCursorPosition
+)
+
 object SessionBuffer:
 
   def fromBuffer(buffer: Buffer, persistUnsaved: Boolean = true): SessionBuffer =
@@ -90,6 +96,7 @@ object SessionBuffer:
       bookmarks = buffer.annotations.bookmarks.map(SessionCursorPosition.fromCursorPosition),
       documentComments = buffer.annotations.documentComments.map(SessionDocumentComment.fromDocumentComment),
       placeholders = buffer.annotations.placeholders.map(SessionPlaceholder.fromPlaceholder),
+      darlings = buffer.annotations.darlings.map(SessionDarling.fromDarling),
       revision = buffer.document.revision.map(_.value)
     )
 
@@ -116,7 +123,8 @@ object SessionBuffer:
       annotations = Annotations(
         bookmarks = sessionBuffer.bookmarks.map(SessionCursorPosition.toCursorPosition),
         documentComments = sessionBuffer.documentComments.map(SessionDocumentComment.toDocumentComment),
-        placeholders = sessionBuffer.placeholders.map(SessionPlaceholder.toPlaceholder)
+        placeholders = sessionBuffer.placeholders.map(SessionPlaceholder.toPlaceholder),
+        darlings = sessionBuffer.darlings.map(SessionDarling.toDarling)
       ),
       // `fromBuffer` only ever persists a `richTextDocument` that passed `matchesPlainText` against the exact text
       // being saved, and the `Document` just built above starts at its default `contentVersion` of `0L` -- so a
@@ -237,4 +245,18 @@ object SessionPlaceholder:
     Placeholder(
       position = SessionCursorPosition.toCursorPosition(sessionPlaceholder.position),
       note = sessionPlaceholder.note
+    )
+
+object SessionDarling:
+
+  def fromDarling(darling: Darling): SessionDarling =
+    SessionDarling(
+      text = darling.text,
+      originalPosition = SessionCursorPosition.fromCursorPosition(darling.originalPosition)
+    )
+
+  def toDarling(sessionDarling: SessionDarling): Darling =
+    Darling(
+      text = sessionDarling.text,
+      originalPosition = SessionCursorPosition.toCursorPosition(sessionDarling.originalPosition)
     )

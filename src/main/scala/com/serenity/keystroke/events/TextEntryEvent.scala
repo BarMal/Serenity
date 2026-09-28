@@ -63,3 +63,5 @@ case object Cut                            extends TextEntryEvent
 case object Undo                           extends TextEntryEvent
 case object Redo                           extends TextEntryEvent
 case object ToggleSyntaxHighlighting       extends TextEntryEvent
+case object CutToDarlings                  extends TextEntryEvent
+case object RestoreDarling                 extends TextEntryEvent

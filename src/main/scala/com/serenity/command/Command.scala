@@ -336,6 +336,7 @@ enum CommandIntent:
   case RichText(intent: RichTextIntent)
   case Comments(intent: CommentsIntent)
   case Placeholders(intent: PlaceholderIntent)
+  case Darlings(intent: DarlingIntent)
   case Navigation(intent: NavigationIntent)
   case Lsp(intent: LspIntent)
   case Theme(intent: ThemeIntent)

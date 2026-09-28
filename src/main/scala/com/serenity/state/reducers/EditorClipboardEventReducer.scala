@@ -16,10 +16,12 @@ private[reducers] object EditorClipboardEventReducer:
 
   def reduce(event: TextEntryEvent, ctx: CursorEventContext): ReducerResult =
     event match
-      case Copy  => reduceCopy(ctx)
-      case Cut   => reduceCut(ctx)
-      case Paste => reducePaste(ctx)
-      case _     => ReducerResult.noEffects(ctx.currentState)
+      case Copy           => reduceCopy(ctx)
+      case Cut            => reduceCut(ctx)
+      case Paste          => reducePaste(ctx)
+      case CutToDarlings  => reduceCutToDarlings(ctx)
+      case RestoreDarling => reduceRestoreDarling(ctx)
+      case _              => ReducerResult.noEffects(ctx.currentState)
 
   private def reduceCopy(ctx: CursorEventContext): ReducerResult =
     import ctx.*
@@ -104,6 +106,68 @@ private[reducers] object EditorClipboardEventReducer:
             updatedBuffer.document.content,
             edits
           ) ++
+            animationMergeEffects(buffer.id, delta) ++
+            undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+        ReducerResult(
+          currentState.copy(persisted =
+            currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
+          ),
+          effects
+        )
+
+  /** Neo's "darlings": cuts the active selection into `annotations.darlings` instead of the ordinary clipboard, so it
+    * can be brought back later with [[reduceRestoreDarling]] even after other cuts/copies have overwritten the
+    * clipboard. A no-op without an active selection -- unlike `Cut`, there is no sensible "whole line" fallback for a
+    * passage someone deliberately set aside.
+    */
+  private def reduceCutToDarlings(ctx: CursorEventContext): ReducerResult =
+    import ctx.*
+    if hasSelection then
+      val cutText           = selectedTexts(buffer).mkString("\n")
+      val originalPosition  = buffer.primarySelection.map(_.start).getOrElse(head)
+      val (updated, edits)  = deleteSelectedRanges(buffer)
+      val withDarling = updated.copy(
+        annotations = updated.annotations.copy(
+          darlings = Darling(cutText, originalPosition) :: updated.annotations.darlings
+        )
+      )
+      ReducerResult(
+        currentState.copy(persisted =
+          currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> withDarling))
+        ),
+        animationRemapEffects(buffer.id, buffer.document.content, withDarling.document.content, edits) ++
+          undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+      )
+    else ReducerResult.noEffects(currentState)
+
+  /** Restores the most recently cut darling at the cursor (LIFO, mirroring undo), replacing an active selection if
+    * there is one -- the single-cursor path only, like `Paste`'s own single-cursor branch this mirrors.
+    */
+  private def reduceRestoreDarling(ctx: CursorEventContext): ReducerResult =
+    import ctx.*
+    buffer.annotations.darlings match
+      case Nil => ReducerResult.noEffects(currentState)
+      case mostRecent :: rest =>
+        val bufferWithoutDarling              = buffer.copy(annotations = buffer.annotations.copy(darlings = rest))
+        val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(bufferWithoutDarling, head, mostRecent.text)
+        val replacedCursor                    = replacedBuffer.editing.cursors.head
+        val newCursor                         = replacedCursor.position
+        val withoutAnimations = bufferWithoutDarling.copy(
+          document = bufferWithoutDarling.document.copy(
+            content = replacedBuffer.document.content,
+            isDirty = replacedBuffer.document.isDirty,
+            isNewEmpty = replacedBuffer.document.isNewEmpty
+          ),
+          editing = bufferWithoutDarling.editing.withPrimary(
+            Cursor(newCursor, replacedCursor.selectionAnchor, Some(newCursor.column), None)
+          ),
+          annotations = replacedBuffer.annotations,
+          richText = replacedBuffer.richText
+        )
+        val (updatedBuffer, delta) = addInsertionAnimations(withoutAnimations, currentState, List(replacementEdit))
+        val edits                  = List(replacementEdit)
+        val effects =
+          animationRemapEffects(buffer.id, buffer.document.content, updatedBuffer.document.content, edits) ++
             animationMergeEffects(buffer.id, delta) ++
             undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
         ReducerResult(

@@ -77,6 +77,9 @@ given Decoder[SessionDocumentComment] = deriveDecoder
 given Encoder[SessionPlaceholder] = deriveEncoder
 given Decoder[SessionPlaceholder] = deriveDecoder
 
+given Encoder[SessionDarling] = deriveEncoder
+given Decoder[SessionDarling] = deriveDecoder
+
 given Encoder[SessionFindState] = deriveEncoder
 
 given Decoder[SessionFindState] = Decoder.instance { cursor =>
@@ -108,6 +111,7 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     bookmarks        <- cursor.getOrElse[List[SessionCursorPosition]]("bookmarks")(Nil)
     documentComments <- cursor.getOrElse[List[SessionDocumentComment]]("documentComments")(Nil)
     placeholders     <- cursor.getOrElse[List[SessionPlaceholder]]("placeholders")(Nil)
+    darlings         <- cursor.getOrElse[List[SessionDarling]]("darlings")(Nil)
     lineEnding       <- cursor.getOrElse[Option[String]]("lineEnding")(None)
     revision         <- cursor.getOrElse[Option[String]]("revision")(None)
   yield SessionBuffer(
@@ -125,6 +129,7 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     bookmarks,
     documentComments,
     placeholders,
+    darlings,
     lineEnding,
     revision
   )

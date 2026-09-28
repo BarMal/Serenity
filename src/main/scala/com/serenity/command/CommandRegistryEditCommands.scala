@@ -58,6 +58,20 @@ private[command] object CommandRegistryEditCommands:
       label = "Paste"
     ),
     Command.typed(
+      "cut-to-darlings",
+      "Cut the active selection to Darlings instead of deleting it outright.",
+      CommandIntent.Darlings(DarlingIntent.CutToDarlings),
+      CommandCategory.Edit,
+      label = "Cut to Darlings"
+    ),
+    Command.typed(
+      "restore-darling",
+      "Restore the most recently cut Darling at the cursor.",
+      CommandIntent.Darlings(DarlingIntent.RestoreDarling),
+      CommandCategory.Edit,
+      label = "Restore Darling"
+    ),
+    Command.typed(
       "select-all",
       "Select all text in the current file.",
       CommandIntent.Edit(EditIntent.SelectAll),
