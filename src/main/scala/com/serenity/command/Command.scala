@@ -70,12 +70,6 @@ enum CommentsIntent:
   case NextDocumentComment
   case PreviousDocumentComment
 
-enum PlaceholderIntent:
-  case AddPlaceholder(note: String)
-  case DeletePlaceholder
-  case NextPlaceholder
-  case PreviousPlaceholder
-
 enum NavigationIntent:
   case OpenGotoLine
   case ToggleBookmark
