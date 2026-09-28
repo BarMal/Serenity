@@ -84,6 +84,7 @@ object ConfigFileFormat:
     blank,
     comment("Editor: what the text area shows"),
     field("editor.syntax_highlighting"),
+    field("editor.smart_punctuation"),
     field("editor.word_wrap"),
     field("editor.visual_line_navigation"),
     comment("Keep the cursor's line vertically centred (typewriter scrolling), padding past the document's end"),
