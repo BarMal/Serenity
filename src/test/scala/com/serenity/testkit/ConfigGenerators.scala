@@ -366,21 +366,22 @@ object ConfigGenerators:
 
   val genAppConfig: Gen[AppConfig] =
     for
-      editor    <- genEditorConfig
-      surface   <- genSurfaceConfig
-      cursor    <- genCursorConfig
-      window    <- genWindowConfig
-      companion <- genCompanionSpriteConfig
-      flair     <- oneOfEnum(VisualFlairLevel.values)
-      document  <- genDocumentConfig
-      interface <- genInterfaceConfig
-      input     <- genInputConfig
-      syntax    <- Gen.oneOf(true, false)
-      spell     <- genSpellCheckConfig
-      appMode   <- genAppModeConfig
-      status    <- genStatusLineConfig
-      motion    <- genMotionEdit
-      material  <- genMaterialEdit
+      editor           <- genEditorConfig
+      surface          <- genSurfaceConfig
+      cursor           <- genCursorConfig
+      window           <- genWindowConfig
+      companion        <- genCompanionSpriteConfig
+      flair            <- oneOfEnum(VisualFlairLevel.values)
+      document         <- genDocumentConfig
+      interface        <- genInterfaceConfig
+      input            <- genInputConfig
+      syntax           <- Gen.oneOf(true, false)
+      smartPunctuation <- Gen.oneOf(true, false)
+      spell            <- genSpellCheckConfig
+      appMode          <- genAppModeConfig
+      status           <- genStatusLineConfig
+      motion           <- genMotionEdit
+      material         <- genMaterialEdit
     yield (motion andThen material)(
       AppConfig(
         editorConfig = editor,
@@ -392,7 +393,11 @@ object ConfigGenerators:
         visualFlairLevel = flair,
         documentConfig = document,
         interfaceConfig = interface,
-        languageToolsConfig = LanguageToolsConfig(syntaxHighlightingEnabled = syntax, spellCheck = spell),
+        languageToolsConfig = LanguageToolsConfig(
+          syntaxHighlightingEnabled = syntax,
+          spellCheck = spell,
+          smartPunctuationEnabled = smartPunctuation
+        ),
         appModeConfig = appMode,
         statusLine = status
       )

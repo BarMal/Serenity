@@ -27,6 +27,10 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
         .copy(editing = EditingStateFixtures(cursors = List(cursor), selection = selection))
     AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
 
+  private def stateWithSmartPunctuation(text: String, cursor: CursorPosition): AppState =
+    val before = stateWith(text, cursor)
+    before.copy(persisted = before.persisted.copy(config = before.persisted.config.withSmartPunctuation(true)))
+
   private def bufferAfter(event: TextEntryEvent, state: AppState): Buffer =
     EditorEventReducer.reduce(event, paneId, state).state.persisted.buffers(bufferId)
 
@@ -103,6 +107,46 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
     val after = bufferAfter(InsertChar('e'), before)
     after.document.content.collect() shouldBe "hello"
     after.editing.cursorPositions shouldBe List(CursorPosition(0, 2))
+  }
+
+  it should "insert a literal hyphen when smart punctuation is disabled (the default)" in {
+    val before = stateWith("a", CursorPosition(0, 1))
+
+    bufferAfter(InsertChar('-'), before).document.content.collect() shouldBe "a-"
+  }
+
+  "InsertChar with smart punctuation enabled" should "turn a second consecutive hyphen into an em dash" in {
+    val before = stateWithSmartPunctuation("a-", CursorPosition(0, 2))
+
+    val after = bufferAfter(InsertChar('-'), before)
+    after.document.content.collect() shouldBe "a—"
+    after.editing.cursorPositions shouldBe List(CursorPosition(0, 2))
+  }
+
+  it should "turn a third consecutive period into a true ellipsis" in {
+    val before = stateWithSmartPunctuation("a..", CursorPosition(0, 3))
+
+    bufferAfter(InsertChar('.'), before).document.content.collect() shouldBe "a…"
+  }
+
+  it should "open a curly double quote at the start of a line" in {
+    val before = stateWithSmartPunctuation("", CursorPosition(0, 0))
+
+    bufferAfter(InsertChar('"'), before).document.content.collect() shouldBe "“"
+  }
+
+  it should "close a curly double quote right after a word" in {
+    val before = stateWithSmartPunctuation("hello", CursorPosition(0, 5))
+
+    bufferAfter(InsertChar('"'), before).document.content.collect() shouldBe "hello”"
+  }
+
+  it should "record a single undo boundary for the replacement, not a separate one for the deleted hyphen" in {
+    val before = stateWithSmartPunctuation("a-", CursorPosition(0, 2))
+
+    EditorEventReducer.reduce(InsertChar('-'), paneId, before).effects.collect {
+      case AppEffect.Undo(boundary: UndoEffect.RecordBoundary) => boundary
+    } should have size 1
   }
 
   /** All four deletion events share one selection arm (`deleteSelectedRanges`) ahead of their own without-a-selection

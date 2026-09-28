@@ -4,6 +4,7 @@ import com.serenity.animation.*
 import com.serenity.keystroke.events.*
 import com.serenity.rope.*
 import com.serenity.state.models.*
+import com.serenity.text.SmartPunctuation
 
 /** Character/newline/tab insertion, indent/unindent and the four deletions -- the family that mutates document content
   * directly at the cursor(s). Split out of `EditorEventReducer.reduceCursorsEditEvent` when that file grew past its
@@ -33,7 +34,12 @@ private[reducers] object EditorTextEditReducer:
       case InsertChar(char) =>
         if hasSelection then applyEditedBuffer(groupable = true)(applyMultiSelectionReplacement(_, char.toString))
         else if isMulti then applyEditedBuffer(groupable = true)(applyMultiCursorInsertion(_, char.toString))
-        else insertAtCursor(buffer, head, char.toString, currentState, paneId, groupable = true)
+        else
+          smartPunctuationReplacement(buffer, head, char, currentState) match
+            case Some((startOffset, endOffset, insertedText)) =>
+              replaceRangeAtCursor(buffer, startOffset, endOffset, insertedText, currentState, paneId, groupable = true)
+            case None =>
+              insertAtCursor(buffer, head, char.toString, currentState, paneId, groupable = true)
 
       case TabKey =>
         if hasSelection then
@@ -188,6 +194,72 @@ private[reducers] object EditorTextEditReducer:
       richText = buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""))
     )
     (baseBuffer, MultiCursorEdit(0, startOffset, endOffset, ""))
+
+  /** The single-cursor, no-selection typing path only (#1442-adjacent QoL feature): the multi-cursor/selection cases
+    * are rarer for the kind of quote/dash/ellipsis runs this looks at, and are left as plain insertion for now.
+    */
+  private def smartPunctuationReplacement(
+    buffer: Buffer,
+    cursor: CursorPosition,
+    char: Char,
+    currentState: AppState
+  ): Option[(Int, Int, String)] =
+    if !currentState.persisted.config.languageToolsConfig.smartPunctuationEnabled then None
+    else
+      val offset = buffer.document.content.lineColumnToOffset(cursor.line, cursor.column)
+      val precedingText =
+        buffer.document.content.sliceString(math.max(0, offset - SmartPunctuation.lookbehind), offset)
+      SmartPunctuation.replacementFor(char, precedingText).map {
+        case (charsToReplace, insertedText) => (offset - charsToReplace, offset, insertedText)
+      }
+
+  /** Replaces `[startOffset, endOffset)` with `insertedText` and moves the cursor to just past it -- the smart-
+    * punctuation sibling of `insertAtCursor`, which only ever inserts at a single point.
+    */
+  private def replaceRangeAtCursor(
+    buffer: Buffer,
+    startOffset: Int,
+    endOffset: Int,
+    insertedText: String,
+    currentState: AppState,
+    paneId: PaneId,
+    groupable: Boolean
+  ): ReducerResult =
+    ReducerResult.fromTransition(
+      currentState,
+      Focused.modifyBufferWithIdAndEmit(buffer.id) { current =>
+        val newContent =
+          insertOrUnchanged(
+            deleteOrUnchanged(current.document.content, startOffset, endOffset),
+            startOffset,
+            insertedText
+          )
+        val newCursor = newContent.offsetToCursorPosition(startOffset + insertedText.length)
+        val edit      = MultiCursorEdit(0, startOffset, endOffset, insertedText)
+        val replaced = current.copy(
+          document = current.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
+          editing = current.editing.withPrimary(Cursor(newCursor)),
+          annotations = current.annotations.copy(
+            documentComments = adjustDocumentComments(
+              current.annotations.documentComments,
+              current.document.content,
+              newContent,
+              List(edit)
+            )
+          ),
+          richText = current.richText.copy(richTextDocument =
+            richTextDocumentAfterEdit(current, startOffset, endOffset, insertedText)
+          )
+        )
+        val (animated, delta) = addInsertionAnimations(replaced, currentState, List(edit))
+        val edits             = List(edit)
+        val effects =
+          animationRemapEffects(buffer.id, current.document.content, animated.document.content, edits) ++
+            animationMergeEffects(buffer.id, delta) ++
+            undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable)
+        (animated, effects)
+      }
+    )
 
   private def insertAtCursor(
     buffer: Buffer,
