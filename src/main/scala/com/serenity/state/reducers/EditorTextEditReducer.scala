@@ -262,11 +262,11 @@ private[reducers] object EditorTextEditReducer:
       }
     )
 
-  /** `NewLine`/`Enter`'s single-cursor, no-selection path: inserts the newline, then -- Markdown buffers only, and
-    * only when a "Chapter <number>" heading is now out of sequence -- resequences every chapter heading's number in
-    * one more edit, folded into the same undo boundary as the newline itself. Two separate `animationRemapEffects`
-    * calls rather than one combined edit list: the renumbering edits' offsets are computed against the buffer
-    * *after* the newline lands, so they are only valid replayed against that same content, not the original.
+  /** `NewLine`/`Enter`'s single-cursor, no-selection path: inserts the newline, then -- Markdown buffers only, and only
+    * when a "Chapter <number>" heading is now out of sequence -- resequences every chapter heading's number in one more
+    * edit, folded into the same undo boundary as the newline itself. Two separate `animationRemapEffects` calls rather
+    * than one combined edit list: the renumbering edits' offsets are computed against the buffer *after* the newline
+    * lands, so they are only valid replayed against that same content, not the original.
     */
   private def insertNewlineWithChapterRenumbering(
     buffer: Buffer,

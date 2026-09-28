@@ -33,8 +33,8 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
     before.copy(persisted = before.persisted.copy(config = before.persisted.config.withSmartPunctuation(true)))
 
   private def stateWithMarkdown(text: String, cursor: CursorPosition): AppState =
-    val before = stateWith(text, cursor)
-    val buffer = before.persisted.buffers(bufferId)
+    val before         = stateWith(text, cursor)
+    val buffer         = before.persisted.buffers(bufferId)
     val markdownBuffer = buffer.copy(document = buffer.document.copy(language = Some(LanguageId.Markdown)))
     before.copy(persisted = before.persisted.copy(buffers = Map(bufferId -> markdownBuffer)))
 
