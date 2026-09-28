@@ -16,16 +16,16 @@ given Decoder[PanelPosition] = Decoder.decodeString.emap {
 given Encoder[SymbolKind] = Encoder.encodeString.contramap(_.toString)
 
 given Decoder[SymbolKind] = Decoder.decodeString.emap {
-  case "Function" => Right(SymbolKind.Function)
-  case "Class"    => Right(SymbolKind.Class)
-  case "Method"   => Right(SymbolKind.Method)
-  case "Variable" => Right(SymbolKind.Variable)
-  case "Constant" => Right(SymbolKind.Constant)
-  case "Heading"  => Right(SymbolKind.Heading)
+  case "Function"    => Right(SymbolKind.Function)
+  case "Class"       => Right(SymbolKind.Class)
+  case "Method"      => Right(SymbolKind.Method)
+  case "Variable"    => Right(SymbolKind.Variable)
+  case "Constant"    => Right(SymbolKind.Constant)
+  case "Heading"     => Right(SymbolKind.Heading)
   case "Bookmark"    => Right(SymbolKind.Bookmark)
   case "Section"     => Right(SymbolKind.Section)
   case "Placeholder" => Right(SymbolKind.Placeholder)
-  case other      => Left(s"Unknown SymbolKind: $other")
+  case other         => Left(s"Unknown SymbolKind: $other")
 }
 
 given Encoder[DiagnosticSeverity] = Encoder.encodeString.contramap(_.toString)

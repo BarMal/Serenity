@@ -121,9 +121,7 @@ object CommandRunnerSettingsInputItems:
         parse = text =>
           CommandRunnerSettingsTextParsing
             .nonEmptyText(text)
-            .map(commandIntentArg =>
-              CommandIntent.Placeholders(PlaceholderIntent.AddPlaceholder(commandIntentArg))
-            ),
+            .map(commandIntentArg => CommandIntent.Placeholders(PlaceholderIntent.AddPlaceholder(commandIntentArg))),
         category = CommandCategory.Edit
       )
     )

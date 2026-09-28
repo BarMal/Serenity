@@ -33,9 +33,9 @@ private[manager] object NavigationTransitions:
   def placeholders(intent: PlaceholderIntent, state: AppState): NavigationOutcome =
     intent match
       case PlaceholderIntent.AddPlaceholder(note) => addPlaceholder(state, note)
-      case PlaceholderIntent.DeletePlaceholder     => deletePlaceholder(state)
-      case PlaceholderIntent.NextPlaceholder       => navigatePlaceholder(state, DocumentNavigation.nextSymbol)
-      case PlaceholderIntent.PreviousPlaceholder   => navigatePlaceholder(state, DocumentNavigation.previousSymbol)
+      case PlaceholderIntent.DeletePlaceholder    => deletePlaceholder(state)
+      case PlaceholderIntent.NextPlaceholder      => navigatePlaceholder(state, DocumentNavigation.nextSymbol)
+      case PlaceholderIntent.PreviousPlaceholder  => navigatePlaceholder(state, DocumentNavigation.previousSymbol)
 
   def navigation(intent: NavigationIntent, state: AppState): NavigationOutcome =
     intent match

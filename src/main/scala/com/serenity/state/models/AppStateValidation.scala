@@ -76,12 +76,12 @@ object AppStateValidation:
 
     errors.result()
 
-  /** Every cursor, selection endpoint, bookmark, comment and placeholder position must name a line that actually
-    * exists in that buffer's current content. Column is checked only for non-negativity, not against the line's
-    * length: this codebase routinely carries a cursor/selection column past end-of-line between an edit and the
-    * next clamp (`Rope.lineColumnToOffset` clamps on read rather than rejecting), so a column-vs-line-length check
-    * would flag that ordinary, self-correcting slack as a hard commit failure. The line itself identifies *which
-    * document position this is*, which is the coordinate that must never dangle.
+  /** Every cursor, selection endpoint, bookmark, comment and placeholder position must name a line that actually exists
+    * in that buffer's current content. Column is checked only for non-negativity, not against the line's length: this
+    * codebase routinely carries a cursor/selection column past end-of-line between an edit and the next clamp
+    * (`Rope.lineColumnToOffset` clamps on read rather than rejecting), so a column-vs-line-length check would flag that
+    * ordinary, self-correcting slack as a hard commit failure. The line itself identifies *which document position this
+    * is*, which is the coordinate that must never dangle.
     */
   private def documentPositionErrors(state: AppState): List[String] =
     val errors = List.newBuilder[String]
