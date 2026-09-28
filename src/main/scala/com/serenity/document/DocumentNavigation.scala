@@ -1,7 +1,7 @@
 package com.serenity.document
 
 import com.serenity.state.models.given
-import com.serenity.state.models.{CursorPosition, DocumentComment}
+import com.serenity.state.models.{CursorPosition, DocumentComment, Placeholder}
 import com.serenity.ui.layout.{Location, Symbol, SymbolKind}
 
 object DocumentNavigation:
@@ -38,6 +38,17 @@ object DocumentNavigation:
           name = s"Comment: ${commentTitle(comment.text)}",
           kind = SymbolKind.Comment,
           location = Location(comment.start.line, comment.start.column)
+        )
+      }
+
+  def placeholderSymbols(placeholders: List[Placeholder]): List[Symbol] =
+    placeholders
+      .sortBy(placeholder => (placeholder.position.line, placeholder.position.column))
+      .map { placeholder =>
+        Symbol(
+          name = s"Placeholder: ${commentTitle(placeholder.note)}",
+          kind = SymbolKind.Placeholder,
+          location = Location(placeholder.position.line, placeholder.position.column)
         )
       }
 

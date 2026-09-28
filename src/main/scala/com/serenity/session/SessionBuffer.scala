@@ -24,6 +24,7 @@ final case class SessionBuffer(
     findState: Option[SessionFindState] = None,
     bookmarks: List[SessionCursorPosition] = Nil,
     documentComments: List[SessionDocumentComment] = Nil,
+    placeholders: List[SessionPlaceholder] = Nil,
     lineEnding: Option[String] = None,
     // The on-disk revision the buffer's content was based on (#1670), so a dirty buffer restored from the session
     // still detects a file changed since.
@@ -60,6 +61,11 @@ final case class SessionDocumentComment(
     text: String
 )
 
+final case class SessionPlaceholder(
+    position: SessionCursorPosition,
+    note: String
+)
+
 object SessionBuffer:
 
   def fromBuffer(buffer: Buffer, persistUnsaved: Boolean = true): SessionBuffer =
@@ -83,6 +89,7 @@ object SessionBuffer:
       findState = buffer.findState.map(SessionFindState.fromFindState),
       bookmarks = buffer.annotations.bookmarks.map(SessionCursorPosition.fromCursorPosition),
       documentComments = buffer.annotations.documentComments.map(SessionDocumentComment.fromDocumentComment),
+      placeholders = buffer.annotations.placeholders.map(SessionPlaceholder.fromPlaceholder),
       revision = buffer.document.revision.map(_.value)
     )
 
@@ -108,7 +115,8 @@ object SessionBuffer:
       findState = sessionBuffer.findState.map(SessionFindState.toFindState),
       annotations = Annotations(
         bookmarks = sessionBuffer.bookmarks.map(SessionCursorPosition.toCursorPosition),
-        documentComments = sessionBuffer.documentComments.map(SessionDocumentComment.toDocumentComment)
+        documentComments = sessionBuffer.documentComments.map(SessionDocumentComment.toDocumentComment),
+        placeholders = sessionBuffer.placeholders.map(SessionPlaceholder.toPlaceholder)
       ),
       // `fromBuffer` only ever persists a `richTextDocument` that passed `matchesPlainText` against the exact text
       // being saved, and the `Document` just built above starts at its default `contentVersion` of `0L` -- so a
@@ -215,4 +223,18 @@ object SessionDocumentComment:
       anchor = SessionCursorPosition.toCursorPosition(sessionComment.anchor),
       focus = SessionCursorPosition.toCursorPosition(sessionComment.focus),
       text = sessionComment.text
+    )
+
+object SessionPlaceholder:
+
+  def fromPlaceholder(placeholder: Placeholder): SessionPlaceholder =
+    SessionPlaceholder(
+      position = SessionCursorPosition.fromCursorPosition(placeholder.position),
+      note = placeholder.note
+    )
+
+  def toPlaceholder(sessionPlaceholder: SessionPlaceholder): Placeholder =
+    Placeholder(
+      position = SessionCursorPosition.toCursorPosition(sessionPlaceholder.position),
+      note = sessionPlaceholder.note
     )

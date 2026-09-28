@@ -70,6 +70,12 @@ enum CommentsIntent:
   case NextDocumentComment
   case PreviousDocumentComment
 
+enum PlaceholderIntent:
+  case AddPlaceholder(note: String)
+  case DeletePlaceholder
+  case NextPlaceholder
+  case PreviousPlaceholder
+
 enum NavigationIntent:
   case OpenGotoLine
   case ToggleBookmark
@@ -335,6 +341,7 @@ enum CommandIntent:
   case Edit(intent: EditIntent)
   case RichText(intent: RichTextIntent)
   case Comments(intent: CommentsIntent)
+  case Placeholders(intent: PlaceholderIntent)
   case Navigation(intent: NavigationIntent)
   case Lsp(intent: LspIntent)
   case Theme(intent: ThemeIntent)

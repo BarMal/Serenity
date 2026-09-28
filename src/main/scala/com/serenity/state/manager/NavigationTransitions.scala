@@ -1,7 +1,7 @@
 package com.serenity.state.manager
 
 import com.serenity.animation.{AnimationOwner, FlowAnimationBuilder, FlowDirection, SweepDirection}
-import com.serenity.command.{CommentsIntent, NavigationIntent}
+import com.serenity.command.{CommentsIntent, NavigationIntent, PlaceholderIntent}
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.document.{CommentRendering, DocumentNavigation}
 import com.serenity.rope.*
@@ -29,6 +29,13 @@ private[manager] object NavigationTransitions:
       case CommentsIntent.DeleteDocumentComment    => deleteDocumentComment(state)
       case CommentsIntent.NextDocumentComment      => navigateDocumentComment(state, DocumentNavigation.nextSymbol)
       case CommentsIntent.PreviousDocumentComment  => navigateDocumentComment(state, DocumentNavigation.previousSymbol)
+
+  def placeholders(intent: PlaceholderIntent, state: AppState): NavigationOutcome =
+    intent match
+      case PlaceholderIntent.AddPlaceholder(note) => addPlaceholder(state, note)
+      case PlaceholderIntent.DeletePlaceholder     => deletePlaceholder(state)
+      case PlaceholderIntent.NextPlaceholder       => navigatePlaceholder(state, DocumentNavigation.nextSymbol)
+      case PlaceholderIntent.PreviousPlaceholder   => navigatePlaceholder(state, DocumentNavigation.previousSymbol)
 
   def navigation(intent: NavigationIntent, state: AppState): NavigationOutcome =
     intent match
@@ -84,6 +91,14 @@ private[manager] object NavigationTransitions:
       chooseSymbol,
       "Document comment",
       onTargetResolved = Some(CommentRendering.openLensAtCursor)
+    )
+
+  private def navigatePlaceholder(state: AppState, chooseSymbol: SymbolChooser): NavigationOutcome =
+    navigateSymbols(
+      state,
+      buffer => DocumentNavigation.placeholderSymbols(buffer.annotations.placeholders),
+      chooseSymbol,
+      "Placeholder"
     )
 
   private def navigateSymbols(
@@ -290,6 +305,46 @@ private[manager] object NavigationTransitions:
         )
       case None =>
         ignored("[CMD] Delete document comment requested without an active editor buffer")
+
+  private def addPlaceholder(state: AppState, note: String): NavigationOutcome =
+    activeEditorBuffer(state) match
+      case Some((_, buffer)) =>
+        val cursor               = snapCursorAfterGrapheme(buffer, primaryCursor(buffer))
+        val placeholderNote      = Option(note.trim).filter(_.nonEmpty).getOrElse("TODO")
+        val existingPlaceholders = buffer.annotations.placeholders
+        val updated =
+          (Placeholder(cursor, placeholderNote) :: existingPlaceholders.filterNot(_.position == cursor))
+            .sortBy(placeholder => (placeholder.position.line, placeholder.position.column))
+        applied(
+          withBuffer(
+            state,
+            buffer.copy(
+              annotations = buffer.annotations.copy(placeholders = updated),
+              document = buffer.document.copy(isDirty = true)
+            )
+          )
+        )
+      case None =>
+        ignored("[CMD] Add placeholder requested without an active editor buffer")
+
+  private def deletePlaceholder(state: AppState): NavigationOutcome =
+    activeEditorBuffer(state) match
+      case Some((_, buffer)) =>
+        val cursor       = primaryCursor(buffer)
+        val placeholders = buffer.annotations.placeholders.filterNot(_.position == cursor)
+        applied(
+          withBuffer(
+            state,
+            buffer.copy(
+              annotations = buffer.annotations.copy(placeholders = placeholders),
+              document = buffer.document.copy(
+                isDirty = buffer.document.isDirty || placeholders != buffer.annotations.placeholders
+              )
+            )
+          )
+        )
+      case None =>
+        ignored("[CMD] Delete placeholder requested without an active editor buffer")
 
   private def withBuffer(state: AppState, buffer: Buffer): AppState =
     state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> buffer)))

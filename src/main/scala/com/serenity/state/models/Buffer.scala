@@ -55,6 +55,11 @@ final case class Selection(anchor: CursorPosition, focus: CursorPosition) extend
 
 final case class DocumentComment(anchor: CursorPosition, focus: CursorPosition, text: String) extends DirectedRange
 
+/** A to-do marker at a single buffer position, carrying a short note about what still needs writing there -- Neo's
+  * "placeholder" QoL feature: drop a mark and a sticky note, keep writing, come back and resolve it later.
+  */
+final case class Placeholder(position: CursorPosition, note: String)
+
 /** A buffer's on-disk identity and content -- what makes it "this file", independent of how it's being edited or
   * displayed. Split out by #1002 so `Buffer` itself no longer spans unrelated subdomains.
   */
@@ -113,7 +118,8 @@ object EditingState:
 /** User-authored markers anchored to buffer positions, independent of the document's own content. */
 final case class Annotations(
     bookmarks: List[CursorPosition] = Nil,
-    documentComments: List[DocumentComment] = Nil
+    documentComments: List[DocumentComment] = Nil,
+    placeholders: List[Placeholder] = Nil
 )
 
 /** Rich-text authoring state layered on top of the buffer's plain-text `Rope` content. */

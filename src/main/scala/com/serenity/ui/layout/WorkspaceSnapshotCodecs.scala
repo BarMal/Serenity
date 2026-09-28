@@ -22,8 +22,9 @@ given Decoder[SymbolKind] = Decoder.decodeString.emap {
   case "Variable" => Right(SymbolKind.Variable)
   case "Constant" => Right(SymbolKind.Constant)
   case "Heading"  => Right(SymbolKind.Heading)
-  case "Bookmark" => Right(SymbolKind.Bookmark)
-  case "Section"  => Right(SymbolKind.Section)
+  case "Bookmark"    => Right(SymbolKind.Bookmark)
+  case "Section"     => Right(SymbolKind.Section)
+  case "Placeholder" => Right(SymbolKind.Placeholder)
   case other      => Left(s"Unknown SymbolKind: $other")
 }
 
