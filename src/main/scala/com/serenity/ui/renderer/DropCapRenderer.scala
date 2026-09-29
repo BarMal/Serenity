@@ -246,7 +246,7 @@ object DropCapRenderer:
       true,
       context.surface,
       context.fontForBuffer(buffer),
-      Some(context.surface.text.fontRenderContext),
+      context.surface.text.fontRenderContext,
       theme,
       xOriginPx,
       lineTopPx,
