@@ -101,11 +101,11 @@ object RtfDocumentCodec:
 
     document.paragraphs.zipWithIndex.foreach { (paragraph, index) =>
       val paragraphStart = styledDocument.getLength
-      paragraph.runs.foreach { run =>
+      runsForWriting(paragraph).foreach { (text, style) =>
         styledDocument.insertString(
           styledDocument.getLength,
-          run.text.replace('\n', InlineLineBreakMarker),
-          attributesFromStyle(headingAdjustedStyle(run.style, paragraph.role))
+          text.replace('\n', InlineLineBreakMarker),
+          attributesFromStyle(style)
         )
       }
 
@@ -156,10 +156,37 @@ object RtfDocumentCodec:
     */
   private def headingAdjustedStyle(style: RichTextStyle, role: ParagraphRole): RichTextStyle =
     role match
-      case ParagraphRole.Body => style
+      case ParagraphRole.Body | ParagraphRole.DropCap(_) => style
       case ParagraphRole.Heading(level) =>
         val boost = HeadingFontSizeBoost.getOrElse(level.max(1).min(6), 1f)
         style.withMark(InlineMark.Bold).withFontSize(style.fontSize.getOrElse(DefaultBodyFontSize) + boost)
+
+  /** The (text, style) pairs to insert for one paragraph, applying each role's RTF approximation. For
+    * [[ParagraphRole.DropCap]] -- like [[ParagraphRole.Heading]] (see [[headingAdjustedStyle]]'s doc) -- RTF has no
+    * first-class drop-cap concept, so only the paragraph's very first character is approximated: boosted bold and a
+    * size scaled by the drop cap's line span. Reading that RTF back sees an ordinary bold, oversized first character,
+    * not a recoverable drop-cap role -- the same accepted, one-way limitation as the heading approximation.
+    */
+  private def runsForWriting(paragraph: RichTextParagraph): List[(String, RichTextStyle)] =
+    paragraph.role match
+      case ParagraphRole.DropCap(lines) => splitDropCapFirstCharacter(paragraph.runs, lines)
+      case role                         => paragraph.runs.map(run => (run.text, headingAdjustedStyle(run.style, role)))
+
+  private def splitDropCapFirstCharacter(runs: List[RichTextRun], lines: Int): List[(String, RichTextStyle)] =
+    runs match
+      case first :: rest if first.text.nonEmpty =>
+        val codePoint  = first.text.codePointAt(0)
+        val charCount  = Character.charCount(codePoint)
+        val head       = first.text.take(charCount)
+        val tail       = first.text.drop(charCount)
+        val headEntry  = (head, dropCapAdjustedStyle(first.style, lines))
+        val tailEntry  = Option.when(tail.nonEmpty)((tail, first.style))
+        headEntry :: tailEntry.toList ++ rest.map(run => (run.text, run.style))
+      case other => other.map(run => (run.text, run.style))
+
+  private def dropCapAdjustedStyle(style: RichTextStyle, lines: Int): RichTextStyle =
+    val boostedSize = style.fontSize.getOrElse(DefaultBodyFontSize) * lines.max(1).toFloat
+    style.withMark(InlineMark.Bold).withFontSize(boostedSize)
 
   private def attributesFromStyle(style: RichTextStyle): SwingText.AttributeSet =
     val attributes = SwingText.SimpleAttributeSet()

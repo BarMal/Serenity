@@ -47,7 +47,11 @@ final case class DocumentConfig(
     // A target word count for the active document; `None` means no goal is set. Progress is shown by the
     // `StatusSegment.WordGoal` status-line segment as the document's total word count against this target -- not a
     // daily-delta tracker, since that would need date-based session state this config has no home for yet.
-    wordGoal: Option[Int] = None
+    wordGoal: Option[Int] = None,
+    // Gates the multi-line drop cap paragraph role (issue: "Drop caps"). When false, a paragraph already tagged
+    // ParagraphRole.DropCap keeps that role in the document (no data loss), but rendering/layout treats it as plain
+    // Body -- see RichTextStyling/TextLayoutSnapshot's drop-cap gating.
+    dropCapsEnabled: Boolean = true
 )
 
 final case class AppModeConfig(

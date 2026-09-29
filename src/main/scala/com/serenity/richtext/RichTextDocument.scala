@@ -17,6 +17,23 @@ enum ParagraphRole:
   case Body
   case Heading(level: Int)
 
+  /** A printed-book-style drop cap: the paragraph's first character renders as a large glyph spanning `lines` visual
+    * lines, with body text wrapping in beside it. `lines` is clamped to at least 1 by [[ParagraphRole.dropCap]].
+    */
+  case DropCap(lines: Int)
+
+object ParagraphRole:
+  /** The conventional drop cap span used by the `paragraph-drop-cap` command and by codecs that only track a boolean
+    * "has a drop cap" flag (DOCX/ODT round-trip the exact line count; this is the default when creating one fresh).
+    */
+  val DefaultDropCapLines: Int = 3
+
+  /** Smart constructor clamping the span to at least one line -- a zero/negative span would collapse the multi-line
+    * layout reservation to nothing while still tagging the paragraph as a drop cap.
+    */
+  def dropCap(lines: Int = DefaultDropCapLines): ParagraphRole =
+    DropCap(lines.max(1))
+
 /** Inline style for a contiguous text run. */
 final case class RichTextStyle(
     marks: Set[InlineMark] = Set.empty,

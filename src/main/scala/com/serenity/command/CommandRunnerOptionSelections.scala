@@ -57,6 +57,7 @@ object CommandRunnerOptionSelections:
       "visual-flair-level"            -> visualFlairLevelIndex(config.visualFlairLevel),
       "markdown-view"                 -> markdownViewModeIndex(documentConfig.markdownViewMode),
       "default-document-mode"         -> defaultDocumentModeIndex(documentConfig.defaultMode),
+      "drop-caps-enabled"             -> enabledIndex(documentConfig.dropCapsEnabled),
       "spellcheck-enabled"            -> enabledIndex(languageToolsConfig.spellCheck.enabled),
       "app-mode"                      -> appModeIndex(config.appMode),
       "settings-show-all"             -> enabledIndex(config.showAllSettingsRegardlessOfMode),

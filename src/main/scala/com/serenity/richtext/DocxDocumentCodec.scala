@@ -29,6 +29,7 @@ object DocxDocumentCodec:
     "pPr",
     "jc",
     "pStyle",
+    "framePr",
     "r",
     "rPr",
     "b",
@@ -119,9 +120,13 @@ object DocxDocumentCodec:
       .map(alignmentFromValue)
       .getOrElse(ParagraphAlignment.Left)
     val role = paragraphProperties
-      .flatMap(childElement(_, WNs, "pStyle"))
-      .flatMap(attribute(_, WNs, "val"))
-      .flatMap(headingRoleFromStyle)
+      .flatMap(dropCapRoleFromProperties)
+      .orElse(
+        paragraphProperties
+          .flatMap(childElement(_, WNs, "pStyle"))
+          .flatMap(attribute(_, WNs, "val"))
+          .flatMap(headingRoleFromStyle)
+      )
       .getOrElse(ParagraphRole.Body)
     RichTextParagraph(
       childElements(element).flatMap(runsFromNode),
@@ -135,6 +140,18 @@ object DocxDocumentCodec:
       case "right" | "end"       => ParagraphAlignment.Right
       case "both" | "distribute" => ParagraphAlignment.Justify
       case _                     => ParagraphAlignment.Left
+
+  /** DOCX's native drop cap representation: a `w:framePr` paragraph frame property carrying `w:dropCap` (`"drop"` or
+    * `"margin"`, either meaning the first character is a drop cap) and `w:lines` (the span, in lines). This is a
+    * paragraph *frame* property, not a named style, unlike headings.
+    */
+  private def dropCapRoleFromProperties(paragraphProperties: Element): Option[ParagraphRole] =
+    childElement(paragraphProperties, WNs, "framePr").flatMap { frame =>
+      attribute(frame, WNs, "dropCap").filter(_.nonEmpty).map { _ =>
+        val lines = attribute(frame, WNs, "lines").flatMap(_.toIntOption).getOrElse(ParagraphRole.DefaultDropCapLines)
+        ParagraphRole.dropCap(lines)
+      }
+    }
 
   private def headingRoleFromStyle(value: String): Option[ParagraphRole] =
     val normalized = value.toLowerCase
@@ -215,6 +232,10 @@ object DocxDocumentCodec:
         None
       case ParagraphRole.Heading(level) =>
         Some(s"""<w:pStyle w:val="Heading${level.max(1)}"/>""")
+      case ParagraphRole.DropCap(lines) =>
+        Some(
+          s"""<w:framePr w:dropCap="drop" w:lines="${lines.max(1)}" w:wrap="around" w:vAnchor="text" w:hAnchor="text"/>"""
+        )
     val alignmentProperty = Option
       .when(paragraph.alignment != ParagraphAlignment.Left)(
         s"""<w:jc w:val="${alignmentValue(paragraph.alignment)}"/>"""

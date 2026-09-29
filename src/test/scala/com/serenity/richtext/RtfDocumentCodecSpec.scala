@@ -107,6 +107,32 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
     headingSize.map(_ > bodyStyle.flatMap(_.fontSize).getOrElse(12f)) shouldBe Some(true)
   }
 
+  it should "visually approximate a drop cap paragraph's first character as bold, larger text, losing the role" in {
+    val source = RichTextDocument(
+      List(
+        RichTextParagraph(List(RichTextRun("Chapter One")), role = ParagraphRole.DropCap(3)),
+        RichTextParagraph(List(RichTextRun("Body copy")))
+      )
+    )
+
+    val decoded = RtfDocumentCodec.readBytes(RtfDocumentCodec.writeBytes(source))
+
+    decoded.paragraphs.head.plainText shouldBe "Chapter One"
+    // The role itself is lost -- RTF has no first-class drop-cap concept (see RtfDocumentCodec.runsForWriting's doc).
+    decoded.paragraphs.head.role shouldBe ParagraphRole.Body
+
+    val firstCharStyle = decoded.paragraphs.head.runs.headOption.map(_.style)
+    val restStyle       = decoded.paragraphs.head.runs.find(_.text.contains("hapter")).map(_.style)
+    val bodyStyle        = decoded.paragraphs(1).runs.find(_.text.contains("Body copy")).map(_.style)
+
+    firstCharStyle.map(_.marks) shouldBe Some(Set(InlineMark.Bold))
+    val firstCharSize = firstCharStyle.flatMap(_.fontSize)
+    firstCharSize shouldBe defined
+    firstCharSize.map(_ > bodyStyle.flatMap(_.fontSize).getOrElse(12f)) shouldBe Some(true)
+    // Only the very first character is boosted -- the rest of the paragraph keeps its ordinary style.
+    restStyle.map(_.marks) shouldBe Some(Set.empty)
+  }
+
   it should "preserve empty paragraphs through an RTF round trip" in {
     val source = RichTextDocument.fromPlainText("First\n\nThird")
 

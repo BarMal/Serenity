@@ -124,6 +124,16 @@ object CommandRunnerSettingsItems:
       hint = Some("Mode for newly-created documents")
     )
 
+  private[command] def dropCapsEnabledOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
+    CommandRunnerSettingsOptionItemHelpers.enabledOptionItem(
+      id = "drop-caps-enabled",
+      label = "Drop Caps",
+      selectedIndex = optionSelections.getOrElse("drop-caps-enabled", 0),
+      enabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetDropCapsEnabled(true))),
+      disabledIntent = CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetDropCapsEnabled(false))),
+      hint = "Render a flagged paragraph's first letter as a large multi-line glyph"
+    )
+
   private[command] def appModeOptionItem(optionSelections: Map[String, Int]): CommandSurfaceItem.OptionItem =
     CommandSurfaceItem.OptionItem(
       id = "app-mode",

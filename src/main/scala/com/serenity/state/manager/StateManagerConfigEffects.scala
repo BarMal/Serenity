@@ -305,6 +305,8 @@ final private[manager] class StateManagerConfigEffects(
         updateTextDisplayConfig(_.withTextAreaTopInset(value)).void
       case TextDisplayIntent.SetTextAreaBottomInset(value) =>
         updateTextDisplayConfig(_.withTextAreaBottomInset(value)).void
+      case TextDisplayIntent.SetDropCapsEnabled(enabled) =>
+        updateTextDisplayConfig(_.withDropCapsEnabled(enabled)).void
 
   private def updateLineNumberLayout(update: LineNumberLayout => LineNumberLayout): IO[Unit] =
     updateTextDisplayConfig(config => config.withLineNumberLayout(update(config.lineNumberLayout))).void

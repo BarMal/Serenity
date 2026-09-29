@@ -111,6 +111,60 @@ class OdtDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
     document.paragraphs.map(_.role) shouldBe List(ParagraphRole.Heading(3), ParagraphRole.Body)
   }
 
+  it should "read and write drop cap paragraph roles and their line span" in {
+    val source = RichTextDocument(
+      List(
+        RichTextParagraph.plain("Chapter One", role = ParagraphRole.DropCap(4)),
+        RichTextParagraph.plain("Body")
+      )
+    )
+
+    val decoded = OdtDocumentCodec.readBytes(OdtDocumentCodec.writeBytes(source)).value
+
+    decoded.paragraphs.map(_.plainText) shouldBe List("Chapter One", "Body")
+    decoded.paragraphs.map(_.role) shouldBe List(ParagraphRole.DropCap(4), ParagraphRole.Body)
+  }
+
+  it should "distinguish a drop cap paragraph from a plain one sharing the same alignment" in {
+    val source = RichTextDocument(
+      List(
+        RichTextParagraph.plain("Chapter One", alignment = ParagraphAlignment.Left, role = ParagraphRole.DropCap(3)),
+        RichTextParagraph.plain("Body", alignment = ParagraphAlignment.Left)
+      )
+    )
+
+    val decoded = OdtDocumentCodec.readBytes(OdtDocumentCodec.writeBytes(source)).value
+
+    decoded.paragraphs.map(_.role) shouldBe List(ParagraphRole.DropCap(3), ParagraphRole.Body)
+  }
+
+  it should "read existing ODT style:drop-cap paragraph properties as a rich text drop cap role" in {
+    val contentXml =
+      """<?xml version="1.0" encoding="UTF-8"?>
+        |<office:document-content
+        |    xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+        |    xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+        |    xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+        |    xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0">
+        |  <office:automatic-styles>
+        |    <style:style style:name="Pdrop" style:family="paragraph">
+        |      <style:paragraph-properties fo:text-align="start"><style:drop-cap style:lines="3" style:length="1"/></style:paragraph-properties>
+        |    </style:style>
+        |  </office:automatic-styles>
+        |  <office:body>
+        |    <office:text>
+        |      <text:p text:style-name="Pdrop">Chapter One</text:p>
+        |      <text:p>Body</text:p>
+        |    </office:text>
+        |  </office:body>
+        |</office:document-content>""".stripMargin
+
+    val document = OdtDocumentCodec.readBytes(odtBytes(contentXml)).value
+
+    document.paragraphs.map(_.plainText) shouldBe List("Chapter One", "Body")
+    document.paragraphs.map(_.role) shouldBe List(ParagraphRole.DropCap(3), ParagraphRole.Body)
+  }
+
   it should "preserve explicit font size, family, and colour metadata" in {
     val source = RichTextDocument(
       List(

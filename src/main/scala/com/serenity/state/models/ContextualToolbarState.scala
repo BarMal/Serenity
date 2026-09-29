@@ -488,10 +488,15 @@ object ContextualToolbar:
             s"H$level",
             CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Heading(level)))
           )
+        ) :+
+        CommandOption(
+          "Drop Cap",
+          CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.dropCap()))
         )
     val paragraphRoleIndex = paragraphRole match
       case ParagraphRole.Body           => 0
-      case ParagraphRole.Heading(level) => level.max(1).min(paragraphRoleOptions.length - 1)
+      case ParagraphRole.Heading(level) => level.max(1).min(paragraphRoleOptions.length - 2)
+      case ParagraphRole.DropCap(_)     => paragraphRoleOptions.length - 1
 
     List(
       ContextualToolbarItem.Dropdown(

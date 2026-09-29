@@ -163,6 +163,13 @@ private[command] object CommandRegistryEditCommands:
       label = "Heading 3"
     ),
     Command.typed(
+      "paragraph-drop-cap",
+      "Set the active paragraph to start with a multi-line drop cap.",
+      CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.dropCap())),
+      CommandCategory.Edit,
+      label = "Drop Cap"
+    ),
+    Command.typed(
       "align-left",
       "Align the active paragraph to the left.",
       CommandIntent.RichText(RichTextIntent.SetRichTextParagraphAlignment(ParagraphAlignment.Left)),
