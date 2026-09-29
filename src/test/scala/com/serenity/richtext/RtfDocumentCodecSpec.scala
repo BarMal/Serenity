@@ -122,8 +122,8 @@ class RtfDocumentCodecSpec extends AnyFlatSpec with Matchers:
     decoded.paragraphs.head.role shouldBe ParagraphRole.Body
 
     val firstCharStyle = decoded.paragraphs.head.runs.headOption.map(_.style)
-    val restStyle       = decoded.paragraphs.head.runs.find(_.text.contains("hapter")).map(_.style)
-    val bodyStyle        = decoded.paragraphs(1).runs.find(_.text.contains("Body copy")).map(_.style)
+    val restStyle      = decoded.paragraphs.head.runs.find(_.text.contains("hapter")).map(_.style)
+    val bodyStyle      = decoded.paragraphs(1).runs.find(_.text.contains("Body copy")).map(_.style)
 
     firstCharStyle.map(_.marks) shouldBe Some(Set(InlineMark.Bold))
     val firstCharSize = firstCharStyle.flatMap(_.fontSize)

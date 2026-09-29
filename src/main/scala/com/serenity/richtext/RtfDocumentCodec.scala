@@ -175,12 +175,12 @@ object RtfDocumentCodec:
   private def splitDropCapFirstCharacter(runs: List[RichTextRun], lines: Int): List[(String, RichTextStyle)] =
     runs match
       case first :: rest if first.text.nonEmpty =>
-        val codePoint  = first.text.codePointAt(0)
-        val charCount  = Character.charCount(codePoint)
-        val head       = first.text.take(charCount)
-        val tail       = first.text.drop(charCount)
-        val headEntry  = (head, dropCapAdjustedStyle(first.style, lines))
-        val tailEntry  = Option.when(tail.nonEmpty)((tail, first.style))
+        val codePoint = first.text.codePointAt(0)
+        val charCount = Character.charCount(codePoint)
+        val head      = first.text.take(charCount)
+        val tail      = first.text.drop(charCount)
+        val headEntry = (head, dropCapAdjustedStyle(first.style, lines))
+        val tailEntry = Option.when(tail.nonEmpty)((tail, first.style))
         headEntry :: tailEntry.toList ++ rest.map(run => (run.text, run.style))
       case other => other.map(run => (run.text, run.style))
 

@@ -7,8 +7,8 @@ import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.TextVisualLine
 import com.serenity.ui.theme.{RichTextStyling, TextStyle}
 
-/** Pure geometry for a multi-line drop cap paragraph: which of a paragraph's visual lines the glyph spans, and the
-  * left inset those lines reserve so body text wraps in beside the glyph instead of under it.
+/** Pure geometry for a multi-line drop cap paragraph: which of a paragraph's visual lines the glyph spans, and the left
+  * inset those lines reserve so body text wraps in beside the glyph instead of under it.
   *
   * Deliberately kept separate from [[TextCaretMeasurement.LineFontResolver.lineMetrics]] (which drives each visual
   * line's own `heightPx`/`ascentPx`): a drop cap's oversized glyph must NOT inflate its home line's height the way a

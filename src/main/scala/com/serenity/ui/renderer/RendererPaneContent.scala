@@ -389,7 +389,6 @@ object RendererPaneContent:
                 styledSegments,
                 context,
                 buffer,
-                lineTheme,
                 xOriginPx,
                 lineTopPx,
                 rowHeightPxFor(visualLine, snapshot),
@@ -414,7 +413,7 @@ object RendererPaneContent:
                 maxColumn = Some(rect.right),
                 highlightCache = context.caches.themeHighlightCache
               )
-              DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, context.surface, screenX, screenY, lineTheme)
+              DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, context.surface, screenX, screenY)
 
             RendererHighlights.renderDocumentCommentHighlights(
               context.surface,

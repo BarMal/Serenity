@@ -135,8 +135,8 @@ object OdtDocumentCodec:
   private def paragraphStyleFromElement(element: Element): Option[(String, OdtParagraphStyle)] =
     Option
       .when(attribute(element, StyleNs, "family").contains("paragraph")) {
-        val properties = childElement(element, StyleNs, "paragraph-properties")
-        val alignment   = properties.flatMap(paragraphAlignmentFromProperties).getOrElse(ParagraphAlignment.Left)
+        val properties   = childElement(element, StyleNs, "paragraph-properties")
+        val alignment    = properties.flatMap(paragraphAlignmentFromProperties).getOrElse(ParagraphAlignment.Left)
         val dropCapLines = properties.flatMap(dropCapLinesFromProperties)
         attribute(element, StyleNs, "name").map(_ -> OdtParagraphStyle(alignment, dropCapLines))
       }
@@ -179,7 +179,7 @@ object OdtDocumentCodec:
 
   private def paragraphFromElement(element: Element, styles: OdtStyles): RichTextParagraph =
     val paragraphStyle = attribute(element, TextNs, "style-name").flatMap(styles.paragraphStyles.get)
-    val alignment       = paragraphStyle.map(_.alignment).getOrElse(ParagraphAlignment.Left)
+    val alignment      = paragraphStyle.map(_.alignment).getOrElse(ParagraphAlignment.Left)
     val role =
       if element.getNamespaceURI == TextNs && element.getLocalName == "h" then
         ParagraphRole.Heading(attribute(element, TextNs, "outline-level").flatMap(_.toIntOption).getOrElse(1).max(1))
@@ -259,9 +259,11 @@ object OdtDocumentCodec:
            |    </style:style>""".stripMargin)
     val paragraphStyles = paragraphStyleNames.toList
       .sortBy(_._2)
-      .map((style, name) => s"""    <style:style style:name="$name" style:family="paragraph">
+      .map((style, name) =>
+        s"""    <style:style style:name="$name" style:family="paragraph">
            |      <style:paragraph-properties fo:text-align="${alignmentAttribute(style.alignment)}">${dropCapXml(style.dropCapLines)}</style:paragraph-properties>
-           |    </style:style>""".stripMargin)
+           |    </style:style>""".stripMargin
+      )
     (textStyles ++ paragraphStyles).mkString("\n")
 
   private def dropCapXml(dropCapLines: Option[Int]): String =

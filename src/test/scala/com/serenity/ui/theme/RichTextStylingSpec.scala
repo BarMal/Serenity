@@ -42,7 +42,11 @@ class RichTextStylingSpec extends AnyFlatSpec with Matchers:
 
   it should "return None for a non-drop-cap role" in {
     RichTextStyling.dropCapGlyphStyle(RichTextStyle.empty, ParagraphRole.Body, baseFontSizePx = 12.0f) shouldBe None
-    RichTextStyling.dropCapGlyphStyle(RichTextStyle.empty, ParagraphRole.Heading(1), baseFontSizePx = 12.0f) shouldBe None
+    RichTextStyling.dropCapGlyphStyle(
+      RichTextStyle.empty,
+      ParagraphRole.Heading(1),
+      baseFontSizePx = 12.0f
+    ) shouldBe None
   }
 
   "RichTextStyling.dropCapSplitFontSpans" should "split the first character of a drop cap paragraph's home line into its own glyph span" in {

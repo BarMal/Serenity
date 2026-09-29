@@ -62,7 +62,14 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
   "DropCapRenderer.renderGlyphCell" should "write the character as a single bold cell" in {
     val surface = MockRenderSurface(80, 40)
 
-    DropCapRenderer.renderGlyphCell(surface, x = 2, y = 1, glyphText = "C", accentForeground = Color.RED, background = Color.BLACK)
+    DropCapRenderer.renderGlyphCell(
+      surface,
+      x = 2,
+      y = 1,
+      glyphText = "C",
+      accentForeground = Color.RED,
+      background = Color.BLACK
+    )
 
     surface.getChar(2, 1) shouldBe 'C'
     surface.styleCalls.map(_.style) should contain(TextStyle(isBold = true))
@@ -176,7 +183,7 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave a non-drop-cap paragraph's line untouched, even on the measured path" in {
-    val document = RichTextDocument(List(RichTextParagraph.plain("Hello world")))
+    val document                  = RichTextDocument(List(RichTextParagraph.plain("Hello world")))
     val (dropCapSnap, visualLine) = dropCapSnapshot("Hello world")
     val snapshot                  = dropCapSnap.copy(richTextDocument = Some(document))
     val state                     = AppState.empty
@@ -208,7 +215,7 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
     val state                  = AppState.empty
     val surface                = MockRenderSurface(200, 40)
 
-    DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, surface, x = 2, y = 1, state.persisted.theme)
+    DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, surface, x = 2, y = 1)
 
     surface.getChar(2, 1) shouldBe 'H'
     surface.styleCalls.map(_.style) should contain(TextStyle(isBold = true))
@@ -221,17 +228,17 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
     val state                     = AppState.empty
     val surface                   = MockRenderSurface(200, 40)
 
-    DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, surface, x = 2, y = 1, state.persisted.theme)
+    DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, surface, x = 2, y = 1)
 
     surface.putStringCalls shouldBe empty
   }
 
   it should "do nothing when the config toggle is off, even for a drop cap paragraph" in {
     val (snapshot, visualLine) = dropCapSnapshot("Hello world")
-    val state = AppState.empty(com.serenity.config.AppConfig.default.withDropCapsEnabled(false))
-    val surface = MockRenderSurface(200, 40)
+    val state                  = AppState.empty(com.serenity.config.AppConfig.default.withDropCapsEnabled(false))
+    val surface                = MockRenderSurface(200, 40)
 
-    DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, surface, x = 2, y = 1, state.persisted.theme)
+    DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, surface, x = 2, y = 1)
 
     surface.putStringCalls shouldBe empty
   }

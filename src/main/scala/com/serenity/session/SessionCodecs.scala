@@ -364,7 +364,10 @@ given Decoder[ParagraphRole] = Decoder.instance { cursor =>
     case Some("heading") =>
       cursor.downField("level").as[Option[Int]].map(level => ParagraphRole.Heading(level.getOrElse(1).max(1)))
     case Some("drop_cap") =>
-      cursor.downField("lines").as[Option[Int]].map(lines => ParagraphRole.dropCap(lines.getOrElse(ParagraphRole.DefaultDropCapLines)))
+      cursor
+        .downField("lines")
+        .as[Option[Int]]
+        .map(lines => ParagraphRole.dropCap(lines.getOrElse(ParagraphRole.DefaultDropCapLines)))
     case Some("body") | None =>
       Right(ParagraphRole.Body)
     case Some(other) =>

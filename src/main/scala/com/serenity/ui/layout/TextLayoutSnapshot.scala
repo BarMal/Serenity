@@ -375,10 +375,10 @@ object TextLayoutSnapshot:
         if startColumn >= line.length || acc.length >= maxVisualLines then acc
         else
           val lineWithinParagraph = acc.length
-          val insetPx      = DropCapLayout.leftInsetPx(paragraphRole, lineWithinParagraph, dropCapGlyphWidthPx)
-          val wrapWidthPx  = math.max(1, panelWidthPx - math.round(insetPx))
-          val remaining    = line.substring(startColumn)
-          val segmentStart = baseColumn + startColumn
+          val insetPx             = DropCapLayout.leftInsetPx(paragraphRole, lineWithinParagraph, dropCapGlyphWidthPx)
+          val wrapWidthPx         = math.max(1, panelWidthPx - math.round(insetPx))
+          val remaining           = line.substring(startColumn)
+          val segmentStart        = baseColumn + startColumn
           val fittingLength =
             fittingSegmentLength(remaining, wrapWidthPx, segmentStart, resolver, frc, measuredLayout, cellMetrics)
           val segmentLength    = wordBoundarySegmentLength(remaining, fittingLength)
