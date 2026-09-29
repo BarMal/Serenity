@@ -217,7 +217,8 @@ object RendererPaneSetup:
           fontRenderContext,
           cellMetricsOverride = cellMetricsForSnapshot,
           forceCellLayout = !hasFontRenderContext,
-          proseScale = proseScale
+          proseScale = proseScale,
+          dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled
         )
       else
         TextLayoutSnapshot.fromBuffer(
@@ -232,7 +233,8 @@ object RendererPaneSetup:
           // still bake real (and here, meaningless -- #1105) measured advances into the snapshot, discarding
           // `context.cellMetrics`.
           forceCellLayout = !hasFontRenderContext,
-          proseScale = proseScale
+          proseScale = proseScale,
+          dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled
         )
     if hasFontRenderContext then snapshot else snapshot.copy(usesMeasuredLayout = false)
 

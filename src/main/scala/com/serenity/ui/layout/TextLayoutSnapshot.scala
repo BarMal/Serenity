@@ -6,7 +6,7 @@ import java.awt.{Font, RenderingHints}
 import java.util.Locale
 
 import com.ibm.icu.text.BreakIterator
-import com.serenity.richtext.{ParagraphAlignment, RichTextDocument}
+import com.serenity.richtext.{ParagraphAlignment, ParagraphRole, RichTextDocument}
 import com.serenity.state.models.{
   Buffer,
   CursorPosition,
@@ -18,6 +18,7 @@ import com.serenity.state.models.{
 }
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.TextCaretMeasurement.*
+import com.serenity.ui.theme.RichTextStyling
 
 final case class TextLayoutSnapshot(
     visualLines: Vector[TextVisualLine],
@@ -196,7 +197,10 @@ object TextLayoutSnapshot:
     forceCellLayout: Boolean = false,
     // Prose zoom (1x = authored). Multiplies each rich-text run's font size for measurement so caret advances, wrap
     // points, and per-line heights track the scaled glyphs the draw path paints. Only affects rich-text buffers.
-    proseScale: Float = 1.0f
+    proseScale: Float = 1.0f,
+    // `document.drop_caps_enabled` config toggle (`RichTextStyling.effectiveRole`'s gate). Defaults to the config's
+    // own default so callers that predate drop caps keep measuring exactly as before.
+    dropCapsEnabled: Boolean = true
   ): TextLayoutSnapshot =
     val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout =
@@ -230,7 +234,8 @@ object TextLayoutSnapshot:
         visualLineLimit,
         richDocument,
         wordWrapEnabled,
-        proseScale
+        proseScale,
+        dropCapsEnabled
       ).drop(viewportTopVisualLine).take(buffer.viewport.visibleLines)
 
     TextLayoutSnapshot(
@@ -260,7 +265,8 @@ object TextLayoutSnapshot:
     visualLineLimit: Int,
     richDocument: Option[RichTextDocument],
     wordWrapEnabled: Boolean,
-    proseScale: Float
+    proseScale: Float,
+    dropCapsEnabled: Boolean = true
   ): Vector[TextVisualLine] =
     @annotation.tailrec
     def loop(lines: Vector[(Int, String)], acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
@@ -280,6 +286,16 @@ object TextLayoutSnapshot:
             val resolver =
               if measuredLayout then resolverForLine(font, richDocument, lineIndex, rawLine.length, proseScale)
               else singleFontResolver(font)
+            // The role `RichTextStyling.dropCapSplitFontSpans`/painting will treat this paragraph as, honouring the
+            // config toggle -- only a measured layout has real font metrics to size and reserve the glyph's width with
+            // (TUI's cell grid never spans a glyph across rows, per `DropCapRenderer.renderGlyphCell`'s own doc comment).
+            val effectiveRole =
+              richDocument.flatMap(_.paragraphAt(lineIndex)).map(_.role).getOrElse(ParagraphRole.Body)
+            val paragraphRole = RichTextStyling.effectiveRole(effectiveRole, dropCapsEnabled)
+            val glyphWidthPx =
+              if measuredLayout then
+                DropCapLayout.measuredGlyphWidthPx(font, frc, richDocument, lineIndex, paragraphRole, proseScale)
+              else 0.0f
             val wrapped =
               if remainingVisualLines <= 0 then Vector.empty
               else if wordWrapEnabled then
@@ -292,19 +308,26 @@ object TextLayoutSnapshot:
                   measuredLayout,
                   cellMetrics,
                   startColumn,
-                  remainingVisualLines
+                  remainingVisualLines,
+                  paragraphRole,
+                  glyphWidthPx
                 )
               else
                 Vector(
-                  shapeSegment(
-                    visibleSlice,
-                    lineIndex,
-                    startColumn,
-                    startColumn + visibleSlice.length,
-                    resolver,
-                    frc,
-                    measuredLayout,
-                    cellMetrics
+                  DropCapLayout.applyInset(
+                    shapeSegment(
+                      visibleSlice,
+                      lineIndex,
+                      startColumn,
+                      startColumn + visibleSlice.length,
+                      resolver,
+                      frc,
+                      measuredLayout,
+                      cellMetrics
+                    ),
+                    paragraphRole,
+                    lineWithinParagraph = 0,
+                    glyphWidthPx
                   )
                 )
             val aligned = applyParagraphAlignment(wrapped, lineIndex, panelWidthPx, richDocument)
@@ -330,26 +353,43 @@ object TextLayoutSnapshot:
     measuredLayout: Boolean,
     cellMetrics: CellMetrics,
     baseColumn: Int = 0,
-    maxVisualLines: Int = Int.MaxValue
+    maxVisualLines: Int = Int.MaxValue,
+    // A drop cap paragraph's first `paragraphRole.lines` visual lines (0-based `lineWithinParagraph`, tracked below via
+    // `acc.length`) reserve `dropCapGlyphWidthPx` of left margin so wrapping leaves room for the glyph beside them --
+    // `ParagraphRole.Body` (every non-drop-cap caller's default) makes both branches below exactly today's behaviour.
+    paragraphRole: ParagraphRole = ParagraphRole.Body,
+    dropCapGlyphWidthPx: Float = 0.0f
   ): Vector[TextVisualLine] =
     if maxVisualLines <= 0 then Vector.empty
     else if line.isEmpty then
-      Vector(shapeSegment("", bufferLine, baseColumn, baseColumn, resolver, frc, measuredLayout, cellMetrics))
+      Vector(
+        DropCapLayout.applyInset(
+          shapeSegment("", bufferLine, baseColumn, baseColumn, resolver, frc, measuredLayout, cellMetrics),
+          paragraphRole,
+          lineWithinParagraph = 0,
+          dropCapGlyphWidthPx
+        )
+      )
     else
       def loop(startColumn: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
         if startColumn >= line.length || acc.length >= maxVisualLines then acc
         else
+          val lineWithinParagraph = acc.length
+          val insetPx      = DropCapLayout.leftInsetPx(paragraphRole, lineWithinParagraph, dropCapGlyphWidthPx)
+          val wrapWidthPx  = math.max(1, panelWidthPx - math.round(insetPx))
           val remaining    = line.substring(startColumn)
           val segmentStart = baseColumn + startColumn
           val fittingLength =
-            fittingSegmentLength(remaining, panelWidthPx, segmentStart, resolver, frc, measuredLayout, cellMetrics)
+            fittingSegmentLength(remaining, wrapWidthPx, segmentStart, resolver, frc, measuredLayout, cellMetrics)
           val segmentLength    = wordBoundarySegmentLength(remaining, fittingLength)
           val endColumnInSlice = startColumn + segmentLength
           val segment          = line.substring(startColumn, endColumnInSlice)
           val segmentEnd       = baseColumn + endColumnInSlice
           val visualLine =
             shapeSegment(segment, bufferLine, segmentStart, segmentEnd, resolver, frc, measuredLayout, cellMetrics)
-          loop(endColumnInSlice, acc :+ visualLine)
+          val insetLine =
+            DropCapLayout.applyInset(visualLine, paragraphRole, lineWithinParagraph, dropCapGlyphWidthPx)
+          loop(endColumnInSlice, acc :+ insetLine)
 
       loop(0, Vector.empty)
 

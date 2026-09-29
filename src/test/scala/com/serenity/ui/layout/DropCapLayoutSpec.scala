@@ -61,3 +61,16 @@ class DropCapLayoutSpec extends AnyFlatSpec with Matchers:
   it should "be zero for a non-drop-cap role" in {
     DropCapLayout.glyphHeightPx(ParagraphRole.Body, normalLineHeightPx = 16) shouldBe 0
   }
+
+  "DropCapLayout.homeLineRole" should "return the drop cap role only at the paragraph's home line" in {
+    DropCapLayout.homeLineRole(ParagraphRole.DropCap(3), startColumn = 0) shouldBe Some(ParagraphRole.DropCap(3))
+  }
+
+  it should "return None for a wrapped continuation line of the same paragraph" in {
+    DropCapLayout.homeLineRole(ParagraphRole.DropCap(3), startColumn = 12) shouldBe None
+  }
+
+  it should "return None for a non-drop-cap role even at column 0" in {
+    DropCapLayout.homeLineRole(ParagraphRole.Body, startColumn = 0) shouldBe None
+    DropCapLayout.homeLineRole(ParagraphRole.Heading(1), startColumn = 0) shouldBe None
+  }
