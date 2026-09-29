@@ -205,7 +205,8 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       SurfaceRenderMode.Floating
     )
 
-    resolved.rows.flatMap(_.segments.headOption.map(_.text)) shouldBe List("Default Document", "Markdown View")
+    resolved.rows.flatMap(_.segments.headOption.map(_.text)) shouldBe
+      List("Default Document", "Markdown View", "Drop Caps")
   }
 
   it should "expand the selected preset group's own children inline as the capped group preview" in {
