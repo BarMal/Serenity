@@ -482,16 +482,21 @@ object ContextualToolbar:
 
   private def paragraphRoleItems(paragraphRole: ParagraphRole): List[ContextualToolbarItem] =
     val paragraphRoleOptions =
-      CommandOption("Body", CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Body))) ::
+      (CommandOption("Body", CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Body))) ::
         (1 to 6).toList.map(level =>
           CommandOption(
             s"H$level",
             CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Heading(level)))
           )
+        )) :+
+        CommandOption(
+          "Drop Cap",
+          CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.dropCap()))
         )
     val paragraphRoleIndex = paragraphRole match
       case ParagraphRole.Body           => 0
-      case ParagraphRole.Heading(level) => level.max(1).min(paragraphRoleOptions.length - 1)
+      case ParagraphRole.Heading(level) => level.max(1).min(paragraphRoleOptions.length - 2)
+      case ParagraphRole.DropCap(_)     => paragraphRoleOptions.length - 1
 
     List(
       ContextualToolbarItem.Dropdown(

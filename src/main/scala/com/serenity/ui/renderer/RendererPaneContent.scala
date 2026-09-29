@@ -382,22 +382,19 @@ object RendererPaneContent:
               case SemanticTokensAvailability.Pending           => Some(Nil)
               case SemanticTokensAvailability.Unavailable       => None
             if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
-              CharacterRenderer.renderMeasuredLineWithAnimation(
-                context.surface,
+              DropCapRenderer.renderMeasuredHomeAware(
+                snapshot,
+                state,
+                visualLine,
+                styledSegments,
+                context,
+                buffer,
                 xOriginPx,
                 lineTopPx,
                 rowHeightPxFor(visualLine, snapshot),
                 rowAscentPxFor(visualLine, snapshot),
-                visualLine,
-                lineTheme,
-                context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
-                state.syntaxHighlightingEnabled,
-                buffer.document.language,
-                styledSegments,
-                clipRightXPx = Some(contentRightXPx),
-                semanticTokens = lineSemanticTokens,
-                highlightCache = context.caches.themeHighlightCache,
-                graphemeCache = context.caches.graphemeSegmentationCache
+                contentRightXPx,
+                lineSemanticTokens
               )
             else
               CharacterRenderer.renderStringWithAnimation(
@@ -416,6 +413,7 @@ object RendererPaneContent:
                 maxColumn = Some(rect.right),
                 highlightCache = context.caches.themeHighlightCache
               )
+              DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, context.surface, screenX, screenY)
 
             RendererHighlights.renderDocumentCommentHighlights(
               context.surface,

@@ -248,7 +248,8 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-document-defaults").label shouldBe "Document Defaults"
     nestedGroup("settings-document-defaults").children.map(_.id) should contain allOf (
       "default-document-mode",
-      "markdown-view"
+      "markdown-view",
+      "drop-caps-enabled"
     )
   }
 
@@ -404,6 +405,26 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.PlainText)),
       CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown)),
       CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.RichText))
+    )
+  }
+
+  it should "surface drop caps as a toggle in the document defaults settings group" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default.withDropCapsEnabled(false).withShowAllSettingsRegardlessOfMode(true))
+
+    val documentDefaultsGroup = groupByIdRecursive(runner.settingsGroups, "settings-document-defaults")
+
+    val dropCaps =
+      documentDefaultsGroup.children
+        .collectFirst { case item: CommandSurfaceItem.OptionItem if item.id == "drop-caps-enabled" => item }
+        .getOrElse(fail("missing drop caps option"))
+
+    dropCaps.selectedOption shouldBe "Off"
+    dropCaps.options.map(_.intent) shouldBe List(
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetDropCapsEnabled(true))),
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetDropCapsEnabled(false)))
     )
   }
 

@@ -334,6 +334,20 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.currentConfig.surfaceConfig.columnGap shouldBe 4
   }
 
+  it should "set drop caps enabled" in {
+    val fixture = harness()
+
+    fixture.config
+      .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.SetDropCapsEnabled(false)), AppState.initial)
+      .unsafeRunSync()
+    fixture.currentConfig.documentConfig.dropCapsEnabled shouldBe false
+
+    fixture.config
+      .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.SetDropCapsEnabled(true)), AppState.initial)
+      .unsafeRunSync()
+    fixture.currentConfig.documentConfig.dropCapsEnabled shouldBe true
+  }
+
   it should "write the current config to disk on an explicit save without touching the session" in {
     val fixture = harness()
 

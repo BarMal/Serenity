@@ -106,6 +106,32 @@ class DocxDocumentCodecSpec extends AnyFlatSpec with Matchers with EitherValues:
     style.color shouldBe Some("#336699")
   }
 
+  it should "preserve a drop cap paragraph role and its line span" in {
+    val source = RichTextDocument(
+      List(RichTextParagraph.plain("Chapter One", role = ParagraphRole.DropCap(4)))
+    )
+
+    val decoded   = DocxDocumentCodec.readBytes(DocxDocumentCodec.writeBytes(source)).value
+    val paragraph = singleParagraph(decoded)
+
+    paragraph.role shouldBe ParagraphRole.DropCap(4)
+    paragraph.plainText shouldBe "Chapter One"
+  }
+
+  it should "write drop cap paragraphs using the native w:framePr representation" in {
+    val source = RichTextDocument(
+      List(RichTextParagraph.plain("Chapter One", role = ParagraphRole.DropCap(3)))
+    )
+
+    val documentXml = RichTextArchive
+      .zipEntry(DocxDocumentCodec.writeBytes(source), "word/document.xml", "DOCX")
+      .map(new String(_, java.nio.charset.StandardCharsets.UTF_8))
+      .getOrElse(fail("word/document.xml missing from written DOCX archive"))
+
+    documentXml should include("""w:dropCap="drop"""")
+    documentXml should include("""w:lines="3"""")
+  }
+
   it should "write tabs and line breaks as native DOCX run elements" in {
     val source = RichTextDocument.oneParagraph("alpha\tbeta\ngamma")
 

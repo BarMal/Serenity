@@ -266,6 +266,7 @@ enum TextDisplayIntent:
   case SetTextAreaRightInset(value: Double)
   case SetTextAreaTopInset(value: Double)
   case SetTextAreaBottomInset(value: Double)
+  case SetDropCapsEnabled(enabled: Boolean)
 
 /** How interface surfaces are sized and spaced: density, gaps, corner radius, window chrome, key hints. */
 enum InterfaceChromeIntent:

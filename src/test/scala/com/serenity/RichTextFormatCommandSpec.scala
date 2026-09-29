@@ -69,6 +69,9 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     registry.findCommand("paragraph-body").map(_.intent) shouldBe Some(
       CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Body))
     )
+    registry.findCommand("paragraph-drop-cap").map(_.intent) shouldBe Some(
+      CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.dropCap()))
+    )
     registry.findCommand("align-center").map(_.intent) shouldBe Some(
       CommandIntent.RichText(RichTextIntent.SetRichTextParagraphAlignment(ParagraphAlignment.Center))
     )
@@ -183,6 +186,36 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
     buffer.document.isDirty shouldBe true
     buffer.richText.richTextDocument.map(_.paragraphs.map(_.role)) shouldBe Some(
       List(ParagraphRole.Heading(1), ParagraphRole.Body)
+    )
+  }
+
+  it should "apply the drop cap role to the active cursor paragraph" in {
+    val stateManager = createStateManager()
+    val bufferId     = stateManager.createBuffer("Chapter One\nBody", None).unsafeRunSync()
+    stateManager.setBufferForPane(com.serenity.state.models.PaneId(0), bufferId).unsafeRunSync()
+    stateManager
+      .updateState { state =>
+        state.copy(persisted =
+          state.persisted.copy(
+            buffers = state.persisted.buffers.updated(
+              bufferId,
+              state.persisted
+                .buffers(bufferId)
+                .withEditing(_ => EditingState(List(com.serenity.state.models.CursorPosition(0, 3))))
+            )
+          )
+        )
+      }
+      .unsafeRunSync()
+    val command =
+      CommandRegistry.withToggleUI.findCommand("paragraph-drop-cap").getOrElse(fail("missing paragraph-drop-cap"))
+
+    stateManager.executeCommand(command).unsafeRunSync()
+
+    val buffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
+    buffer.document.isDirty shouldBe true
+    buffer.richText.richTextDocument.map(_.paragraphs.map(_.role)) shouldBe Some(
+      List(ParagraphRole.DropCap(ParagraphRole.DefaultDropCapLines), ParagraphRole.Body)
     )
   }
 

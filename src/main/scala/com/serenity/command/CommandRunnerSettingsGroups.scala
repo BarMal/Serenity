@@ -89,10 +89,11 @@ object CommandRunnerSettingsGroups:
     val documentDefaultsGroup = group(
       "settings-document-defaults",
       "Document Defaults",
-      "New document mode and Markdown view",
+      "New document mode, Markdown view, and drop caps",
       List(
         CommandRunnerSettingsItems.defaultDocumentModeOptionItem(optionSelections),
-        CommandRunnerSettingsItems.markdownViewOptionItem(optionSelections)
+        CommandRunnerSettingsItems.markdownViewOptionItem(optionSelections),
+        CommandRunnerSettingsItems.dropCapsEnabledOptionItem(optionSelections)
       )
     )
     // issue #1057: the one-shot navigation commands that used to sit here are ordinary palette commands. The one item

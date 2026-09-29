@@ -123,6 +123,8 @@ object ConfigFileFormat:
     field("editor.default_document_mode"),
     comment("Word-count goal for the active document; auto means no goal is set"),
     field("document.word_goal"),
+    comment("Multi-line drop caps: render a drop-cap paragraph's first character as a large, multi-line glyph"),
+    field("document.drop_caps_enabled"),
     comment("Text area insets as percentages of the central workspace"),
     field("editor.text_area.left"),
     field("editor.text_area.right"),

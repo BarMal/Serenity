@@ -60,6 +60,7 @@ object DocumentOutline:
     role match
       case ParagraphRole.Heading(_) => true
       case ParagraphRole.Body       => false
+      case ParagraphRole.DropCap(_) => false
 
   /** Walks the commonmark AST for `Heading` nodes rather than regex-scanning raw lines, so a `#`-prefixed line inside a
     * fenced code block is never mistaken for a heading.

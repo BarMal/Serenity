@@ -136,6 +136,22 @@ class RichTextDocumentSpec extends AnyFlatSpec with Matchers:
     marked.paragraphs.head.runs.head.style.marks shouldBe Set(InlineMark.Bold)
   }
 
+  it should "preserve drop cap paragraph roles independently from inline marks" in {
+    val document = RichTextDocument(
+      List(
+        RichTextParagraph.plain("Chapter One", role = ParagraphRole.DropCap(3))
+      )
+    )
+
+    val marked = document.applyMark(
+      RichTextRange(RichTextPosition(0, 0), RichTextPosition(0, 11)),
+      InlineMark.Bold
+    )
+
+    marked.paragraphs.head.role shouldBe ParagraphRole.DropCap(3)
+    marked.paragraphs.head.runs.head.style.marks shouldBe Set(InlineMark.Bold)
+  }
+
   it should "toggle an absent inline mark on across the range" in {
     val document = RichTextDocument.oneParagraph("alpha beta gamma")
 
@@ -189,6 +205,38 @@ class RichTextDocumentSpec extends AnyFlatSpec with Matchers:
       ParagraphRole.Body
     )
     updated.plainText shouldBe document.plainText
+  }
+
+  it should "set a drop cap paragraph role across the selected paragraph range" in {
+    val document = RichTextDocument(
+      List(
+        RichTextParagraph.plain("Chapter One"),
+        RichTextParagraph.plain("Opening body")
+      )
+    )
+
+    val updated = document.setParagraphRole(
+      RichTextRange(RichTextPosition(0, 0), RichTextPosition(0, 0)),
+      ParagraphRole.DropCap(3)
+    )
+
+    updated.paragraphs.map(_.role) shouldBe List(
+      ParagraphRole.DropCap(3),
+      ParagraphRole.Body
+    )
+    updated.plainText shouldBe document.plainText
+  }
+
+  it should "flag a drop cap paragraph as carrying formatting" in {
+    val document = RichTextDocument(List(RichTextParagraph.plain("Chapter One", role = ParagraphRole.DropCap(3))))
+
+    document.hasFormatting shouldBe true
+  }
+
+  it should "clamp a non-positive drop cap span to one line via the smart constructor" in {
+    ParagraphRole.dropCap(0) shouldBe ParagraphRole.DropCap(1)
+    ParagraphRole.dropCap(-5) shouldBe ParagraphRole.DropCap(1)
+    ParagraphRole.dropCap() shouldBe ParagraphRole.DropCap(ParagraphRole.DefaultDropCapLines)
   }
 
   it should "set paragraph alignment across the selected paragraph range" in {

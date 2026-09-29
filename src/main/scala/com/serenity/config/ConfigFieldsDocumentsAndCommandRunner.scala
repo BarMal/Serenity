@@ -39,6 +39,10 @@ private[config] object ConfigFieldsDocumentsAndCommandRunner:
       _.documentConfig.wordGoal,
       (config, value) => config.withWordGoal(value)
     ),
+    field("document.drop_caps_enabled", "drop_caps_enabled")(boolean)(
+      _.documentConfig.dropCapsEnabled,
+      (config, value) => config.withDropCapsEnabled(value)
+    ),
     named("workspace.mode", "appMode", "app.mode")(
       enumerated(AppMode.fromConfigKey, _.configKey, text => AppMode.values.find(_.toString == text))
     )(_.appMode, (config, value) => config.withAppMode(value)),

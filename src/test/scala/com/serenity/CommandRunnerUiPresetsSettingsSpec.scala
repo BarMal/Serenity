@@ -162,7 +162,7 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
     uiFont.children.map(_.id) should contain allOf ("ui-font", "ui-ligatures", "ui-font-size")
     val documentDefaults = groupByIdRecursive(List(editPreset), "settings-preset-document-defaults")
     documentDefaults.label shouldBe "Document Defaults"
-    documentDefaults.children.map(_.id) shouldBe List("default-document-mode", "markdown-view")
+    documentDefaults.children.map(_.id) shouldBe List("default-document-mode", "markdown-view", "drop-caps-enabled")
     val spellcheck = groupByIdRecursive(List(editPreset), "settings-preset-spellcheck")
     spellcheck.label shouldBe "Spell Check"
     spellcheck.children.map(_.id) should contain allOf (

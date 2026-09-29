@@ -393,7 +393,8 @@ final private[serenity] class AuthoritativeUiScene:
                 cellMetricsOverride = Some(fontMetrics),
                 forceCellLayout = cellMetrics.isDefined,
                 proseScale = proseScale,
-                columnCount = columnCount
+                columnCount = columnCount,
+                dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled
               )
               // Only a genuinely multi-column page carries per-column placements. A single fitted column is fully
               // served by `textSnapshots` alone (identical to the pre-multi-column render path, including its
@@ -423,7 +424,8 @@ final private[serenity] class AuthoritativeUiScene:
                     font,
                     cellMetricsOverride = Some(fontMetrics),
                     forceCellLayout = cellMetrics.isDefined,
-                    proseScale = proseScale
+                    proseScale = proseScale,
+                    dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled
                   )
                 )
               paneId -> (activeSnapshot, placements)
@@ -436,7 +438,8 @@ final private[serenity] class AuthoritativeUiScene:
                 cellMetricsOverride = Some(fontMetrics),
                 forceCellLayout = cellMetrics.isDefined,
                 // Match the render path's prose zoom so hit-testing rows/advances line up with what was drawn.
-                proseScale = proseScale
+                proseScale = proseScale,
+                dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled
               )
               paneId -> (single, Vector.empty[ColumnSnapshotPlacement])
       }

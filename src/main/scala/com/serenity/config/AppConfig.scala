@@ -293,6 +293,10 @@ final case class AppConfig(
   def withWordGoal(goal: Option[Int]): AppConfig =
     withDocumentConfig(documentConfig.copy(wordGoal = goal))
 
+  /** Create a new config with the multi-line drop cap paragraph role's rendering enabled or disabled. */
+  def withDropCapsEnabled(enabled: Boolean): AppConfig =
+    withDocumentConfig(documentConfig.copy(dropCapsEnabled = enabled))
+
   def withAppModeConfig(config: AppModeConfig): AppConfig =
     copy(appModeConfig = config)
 

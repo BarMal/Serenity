@@ -352,12 +352,22 @@ given Encoder[ParagraphRole] = Encoder.instance {
       "type"  -> io.circe.Json.fromString("heading"),
       "level" -> io.circe.Json.fromInt(level.max(1))
     )
+  case ParagraphRole.DropCap(lines) =>
+    io.circe.Json.obj(
+      "type"  -> io.circe.Json.fromString("drop_cap"),
+      "lines" -> io.circe.Json.fromInt(lines.max(1))
+    )
 }
 
 given Decoder[ParagraphRole] = Decoder.instance { cursor =>
   cursor.downField("type").as[Option[String]].flatMap {
     case Some("heading") =>
       cursor.downField("level").as[Option[Int]].map(level => ParagraphRole.Heading(level.getOrElse(1).max(1)))
+    case Some("drop_cap") =>
+      cursor
+        .downField("lines")
+        .as[Option[Int]]
+        .map(lines => ParagraphRole.dropCap(lines.getOrElse(ParagraphRole.DefaultDropCapLines)))
     case Some("body") | None =>
       Right(ParagraphRole.Body)
     case Some(other) =>

@@ -25,6 +25,7 @@ object OdtDocumentCodec:
     "style",
     "text-properties",
     "paragraph-properties",
+    "drop-cap",
     "body",
     "text",
     "p",
@@ -35,9 +36,16 @@ object OdtDocumentCodec:
     "line-break"
   )
 
+  /** A paragraph style's alignment and, when the style carries a `<style:drop-cap>` child, the drop cap's line span.
+    * Keeping both on the same style keyed by name (rather than a separate lookup) is what lets the write side dedupe
+    * paragraphs sharing both properties into one style, and keeps a drop-cap paragraph and a plain one with the same
+    * alignment from colliding onto the same style.
+    */
+  final private case class OdtParagraphStyle(alignment: ParagraphAlignment, dropCapLines: Option[Int])
+
   final private case class OdtStyles(
       textStyles: Map[String, RichTextStyle],
-      paragraphStyles: Map[String, ParagraphAlignment]
+      paragraphStyles: Map[String, OdtParagraphStyle]
   )
 
   def read(path: Path): IO[RichTextDocument] =
@@ -124,13 +132,13 @@ object OdtDocumentCodec:
       }
       .flatten
 
-  private def paragraphStyleFromElement(element: Element): Option[(String, ParagraphAlignment)] =
+  private def paragraphStyleFromElement(element: Element): Option[(String, OdtParagraphStyle)] =
     Option
       .when(attribute(element, StyleNs, "family").contains("paragraph")) {
-        val alignment = childElement(element, StyleNs, "paragraph-properties")
-          .flatMap(paragraphAlignmentFromProperties)
-          .getOrElse(ParagraphAlignment.Left)
-        attribute(element, StyleNs, "name").map(_ -> alignment)
+        val properties   = childElement(element, StyleNs, "paragraph-properties")
+        val alignment    = properties.flatMap(paragraphAlignmentFromProperties).getOrElse(ParagraphAlignment.Left)
+        val dropCapLines = properties.flatMap(dropCapLinesFromProperties)
+        attribute(element, StyleNs, "name").map(_ -> OdtParagraphStyle(alignment, dropCapLines))
       }
       .flatten
 
@@ -163,15 +171,19 @@ object OdtDocumentCodec:
       case _                       => ParagraphAlignment.Left
     }
 
+  /** ODF's native drop cap representation: a `<style:drop-cap style:lines="N" style:length="M"/>` child of the
+    * paragraph style's `<style:paragraph-properties>`, per ODF 1.2 section 17.17.
+    */
+  private def dropCapLinesFromProperties(element: Element): Option[Int] =
+    childElement(element, StyleNs, "drop-cap").flatMap(attribute(_, StyleNs, "lines")).flatMap(_.toIntOption)
+
   private def paragraphFromElement(element: Element, styles: OdtStyles): RichTextParagraph =
-    val alignment = attribute(element, TextNs, "style-name")
-      .flatMap(styles.paragraphStyles.get)
-      .getOrElse(ParagraphAlignment.Left)
-    val role = Option
-      .when(element.getNamespaceURI == TextNs && element.getLocalName == "h") {
+    val paragraphStyle = attribute(element, TextNs, "style-name").flatMap(styles.paragraphStyles.get)
+    val alignment      = paragraphStyle.map(_.alignment).getOrElse(ParagraphAlignment.Left)
+    val role =
+      if element.getNamespaceURI == TextNs && element.getLocalName == "h" then
         ParagraphRole.Heading(attribute(element, TextNs, "outline-level").flatMap(_.toIntOption).getOrElse(1).max(1))
-      }
-      .getOrElse(ParagraphRole.Body)
+      else paragraphStyle.flatMap(_.dropCapLines).map(ParagraphRole.dropCap).getOrElse(ParagraphRole.Body)
     RichTextParagraph(runsFromChildren(element, RichTextStyle.empty, styles), alignment, role).normalized
 
   private def runsFromChildren(element: Element, currentStyle: RichTextStyle, styles: OdtStyles): List[RichTextRun] =
@@ -211,10 +223,10 @@ object OdtDocumentCodec:
   private def contentXml(document: RichTextDocument): String =
     val textStyleNames = distinctRunStyles(document).zipWithIndex.map((style, index) => style -> s"T$index").toMap
     val paragraphStyleNames = document.paragraphs
-      .map(_.alignment)
+      .map(paragraph => OdtParagraphStyle(paragraph.alignment, dropCapLinesOf(paragraph.role)))
       .distinct
       .zipWithIndex
-      .map((alignment, index) => alignment -> s"P$index")
+      .map((style, index) => style -> s"P$index")
       .toMap
 
     s"""<?xml version="1.0" encoding="UTF-8"?>
@@ -238,7 +250,7 @@ object OdtDocumentCodec:
 
   private def automaticStylesXml(
     textStyleNames: Map[RichTextStyle, String],
-    paragraphStyleNames: Map[ParagraphAlignment, String]
+    paragraphStyleNames: Map[OdtParagraphStyle, String]
   ): String =
     val textStyles = textStyleNames.toList
       .sortBy(_._2)
@@ -247,10 +259,20 @@ object OdtDocumentCodec:
            |    </style:style>""".stripMargin)
     val paragraphStyles = paragraphStyleNames.toList
       .sortBy(_._2)
-      .map((alignment, name) => s"""    <style:style style:name="$name" style:family="paragraph">
-           |      <style:paragraph-properties fo:text-align="${alignmentAttribute(alignment)}"/>
-           |    </style:style>""".stripMargin)
+      .map((style, name) =>
+        s"""    <style:style style:name="$name" style:family="paragraph">
+           |      <style:paragraph-properties fo:text-align="${alignmentAttribute(style.alignment)}">${dropCapXml(style.dropCapLines)}</style:paragraph-properties>
+           |    </style:style>""".stripMargin
+      )
     (textStyles ++ paragraphStyles).mkString("\n")
+
+  private def dropCapXml(dropCapLines: Option[Int]): String =
+    dropCapLines.map(lines => s"""<style:drop-cap style:lines="${lines.max(1)}" style:length="1"/>""").getOrElse("")
+
+  private def dropCapLinesOf(role: ParagraphRole): Option[Int] =
+    role match
+      case ParagraphRole.DropCap(lines) => Some(lines.max(1))
+      case _                            => None
 
   private def textPropertiesAttributes(style: RichTextStyle): String =
     List(
@@ -276,13 +298,14 @@ object OdtDocumentCodec:
   private def paragraphsXml(
     document: RichTextDocument,
     textStyleNames: Map[RichTextStyle, String],
-    paragraphStyleNames: Map[ParagraphAlignment, String]
+    paragraphStyleNames: Map[OdtParagraphStyle, String]
   ): String =
     document.paragraphs
       .map(paragraph =>
-        val styleName = paragraphStyleNames(paragraph.alignment)
+        val styleName =
+          paragraphStyleNames(OdtParagraphStyle(paragraph.alignment, dropCapLinesOf(paragraph.role)))
         paragraph.role match
-          case ParagraphRole.Body =>
+          case ParagraphRole.Body | ParagraphRole.DropCap(_) =>
             s"""      <text:p text:style-name="$styleName">${runsXml(paragraph.runs, textStyleNames)}</text:p>"""
           case ParagraphRole.Heading(level) =>
             s"""      <text:h text:outline-level="${level.max(1)}" text:style-name="$styleName">${runsXml(paragraph.runs, textStyleNames)}</text:h>"""

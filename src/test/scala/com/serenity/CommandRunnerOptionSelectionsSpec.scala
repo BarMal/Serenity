@@ -27,6 +27,14 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     disabled("command-runner-key-hints") shouldBe 1
   }
 
+  it should "select the drop caps enabled state" in {
+    val enabled = CommandRunnerOptionSelections.default(AppConfig.default)
+    enabled("drop-caps-enabled") shouldBe 0
+
+    val disabled = CommandRunnerOptionSelections.default(AppConfig.default.withDropCapsEnabled(false))
+    disabled("drop-caps-enabled") shouldBe 1
+  }
+
   "CommandRunnerOptionSelections" should "derive option indices from current app config" in {
     val codeFont = FontLoader.availableMonospaceFamilies.drop(1).headOption.getOrElse("missing-code-font")
     val textFont = FontLoader.availableTextFamilies.drop(1).headOption.getOrElse("missing-text-font")
@@ -98,6 +106,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("window-chrome") shouldBe 2
     selections("markdown-view") shouldBe 2
     selections("default-document-mode") shouldBe 2
+    selections("drop-caps-enabled") shouldBe 0
     selections("contextual-toolbar-display") shouldBe 1
     // issue #1044: "spellcheck-enabled" now encodes On=0/Off=1 (`enabledIndex`) like every other boolean toggle,
     // for a config with spellCheck.enabled = true -- previously the dedicated On=1/Off=0 `spellCheckEnabledIndex`.

@@ -30,7 +30,9 @@ object TextLayoutSnapshotColumnMode:
     cellMetricsOverride: Option[CellMetrics] = None,
     forceCellLayout: Boolean = false,
     proseScale: Float = 1.0f,
-    columnCount: Int = 1
+    columnCount: Int = 1,
+    // `document.drop_caps_enabled` config toggle -- see `TextLayoutSnapshot.fromBuffer`'s own parameter.
+    dropCapsEnabled: Boolean = true
   ): Vector[Vector[TextVisualLine]] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
@@ -52,7 +54,8 @@ object TextLayoutSnapshotColumnMode:
       visualLineLimit,
       richDocument,
       wordWrapEnabled = true,
-      proseScale
+      proseScale,
+      dropCapsEnabled
     ).drop(topVisualLine).take(totalRowsNeeded)
 
     allVisualLines.grouped(visibleLines).toVector
@@ -72,7 +75,8 @@ object TextLayoutSnapshotColumnMode:
     fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     cellMetricsOverride: Option[CellMetrics] = None,
     forceCellLayout: Boolean = false,
-    proseScale: Float = 1.0f
+    proseScale: Float = 1.0f,
+    dropCapsEnabled: Boolean = true
   ): TextLayoutSnapshot =
     fromBufferColumns(
       buffer,
@@ -82,7 +86,8 @@ object TextLayoutSnapshotColumnMode:
       cellMetricsOverride,
       forceCellLayout,
       proseScale,
-      columnCount = 1
+      columnCount = 1,
+      dropCapsEnabled
     ).headOption.getOrElse(
       emptyColumnSnapshot(columnWidthPx, font, fontRenderContext, cellMetricsOverride, forceCellLayout, proseScale)
     )
@@ -103,7 +108,8 @@ object TextLayoutSnapshotColumnMode:
     cellMetricsOverride: Option[CellMetrics] = None,
     forceCellLayout: Boolean = false,
     proseScale: Float = 1.0f,
-    columnCount: Int = 1
+    columnCount: Int = 1,
+    dropCapsEnabled: Boolean = true
   ): Vector[TextLayoutSnapshot] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
@@ -127,7 +133,8 @@ object TextLayoutSnapshotColumnMode:
       cellMetricsOverride,
       forceCellLayout,
       proseScale,
-      columnCount
+      columnCount,
+      dropCapsEnabled
     ).map { chunk =>
       TextLayoutSnapshot(
         visualLines = chunk,
