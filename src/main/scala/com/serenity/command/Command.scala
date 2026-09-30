@@ -259,6 +259,7 @@ enum TextDisplayIntent:
   case SetColumnMode(enabled: Boolean)
   case SetColumnTargetWidth(cells: Int)
   case SetColumnGap(cells: Int)
+  case SetColumnCount(count: Option[Int])
   case SetFocusedTextBody(enabled: Boolean)
   case SetContextualToolbarEnabled(enabled: Boolean)
   case SetContextualToolbarDisplayMode(mode: ToolbarDisplayMode)

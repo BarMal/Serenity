@@ -291,6 +291,8 @@ final private[manager] class StateManagerConfigEffects(
         updateTextDisplayConfig(config => config.withColumnTargetWidth(cells)).void
       case TextDisplayIntent.SetColumnGap(cells) =>
         updateTextDisplayConfig(config => config.withColumnGap(cells)).void
+      case TextDisplayIntent.SetColumnCount(count) =>
+        updateTextDisplayConfig(config => config.withColumnCount(count)).void
       case TextDisplayIntent.SetFocusedTextBody(enabled) =>
         updateTextDisplayConfig(config => config.withFocusedTextBody(enabled)).void
       case TextDisplayIntent.SetContextualToolbarEnabled(enabled) =>

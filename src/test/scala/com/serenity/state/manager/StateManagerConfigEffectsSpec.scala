@@ -334,6 +334,20 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.currentConfig.surfaceConfig.columnGap shouldBe 4
   }
 
+  it should "set an explicit column count and clear it back to Auto" in {
+    val fixture = harness()
+
+    fixture.config
+      .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnCount(Some(3))), AppState.initial)
+      .unsafeRunSync()
+    fixture.currentConfig.surfaceConfig.columnCount shouldBe Some(3)
+
+    fixture.config
+      .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnCount(None)), AppState.initial)
+      .unsafeRunSync()
+    fixture.currentConfig.surfaceConfig.columnCount shouldBe None
+  }
+
   it should "set drop caps enabled" in {
     val fixture = harness()
 
