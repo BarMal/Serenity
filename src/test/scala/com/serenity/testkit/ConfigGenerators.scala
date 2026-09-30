@@ -282,6 +282,7 @@ object ConfigGenerators:
       columnMode        <- Gen.oneOf(true, false)
       columnTargetWidth <- Gen.choose(1, 400)
       columnGap         <- Gen.choose(0, 40)
+      columnCount       <- Gen.option(Gen.choose(1, 20))
     yield SurfaceConfig(
       showLineNumbers = lineNumbers,
       showPaneHeaders = paneHeaders,
@@ -311,7 +312,8 @@ object ConfigGenerators:
       diagnosticHighlightBlendWeight = diagnosticBlendWeight,
       columnModeEnabled = columnMode,
       columnTargetWidthCells = columnTargetWidth,
-      columnGap = columnGap
+      columnGap = columnGap,
+      columnCount = columnCount
     )
 
   /** The material settings, applied through the setters for the same reason as the motion ones: choosing a blur or a
