@@ -413,6 +413,43 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  // Count-driven columns (issue #1338, Phase 2 / slice 4): `columnCount` feeds `LayoutEngine.resolvedColumnCount`
+  // just as `columnTargetWidthCells`/`columnGap` do, so a live change to it -- with target width and gap unchanged --
+  // must also invalidate the cached scene, or the mouse-hit-testing/render scene silently keeps the old column count.
+  it should "invalidate the scene key when the explicit column count is changed live" in {
+    val base       = AppConfig.default.withWordWrap(true).withColumnMode(true).withColumnTargetWidth(20)
+    val buffer     = Buffer.fromString(bufferId, "alpha beta")
+    val autoCount  = stateWith(buffer, base.withColumnCount(None))
+    val countThree = stateWith(buffer, base.withColumnCount(Some(3)))
+    val size       = ViewportSize(200, 24)
+
+    authoritativeScene.layoutKeyFor(autoCount, size) should not be authoritativeScene.layoutKeyFor(countThree, size)
+    MouseTargetCache.fromState(countThree, size, authoritativeScene).scene should not be theSameInstanceAs(
+      MouseTargetCache.fromState(autoCount, size, authoritativeScene).scene
+    )
+  }
+
+  // Count-driven columns (issue #1338, Phase 2 / slice 4): `columnCount = Some(3)` on a pane wide enough to fit more
+  // than 3 columns at the target width must still yield exactly 3 placements -- the explicit count pins the column
+  // count rather than letting the pane's width decide it (Auto's behaviour, covered above).
+  it should "carry exactly the pinned column count of placements when columnCount is set on a wide pane" in {
+    val columnConfig =
+      AppConfig.default
+        .withWordWrap(true)
+        .withColumnMode(true)
+        .withColumnTargetWidth(20)
+        .withColumnGap(2)
+        .withColumnCount(Some(3))
+    val buffer = Buffer.fromString(bufferId, (0 until 2000).map(i => s"line-$i").mkString("\n"))
+    val state  = stateWith(buffer, columnConfig)
+    val size   = ViewportSize(400, 24)
+    val cache  = MouseTargetCache.fromState(state, size, authoritativeScene)
+
+    val placements = cache.scene.columnSnapshotsFor(paneId)
+    placements.length shouldBe 3
+    placements.map(_.columnIndex) shouldBe List(0, 1, 2)
+  }
+
   private def stateWithStartPage(selectedIndex: Int): AppState =
     val newSessionCommand = Command.typed(
       "startup.new-session",

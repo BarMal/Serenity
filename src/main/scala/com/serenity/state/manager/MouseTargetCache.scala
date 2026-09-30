@@ -70,6 +70,9 @@ final private[manager] case class MouseTargetLayoutKey(
     columnModeEnabled: Boolean,
     columnTargetWidthCells: Int,
     columnGap: Int,
+    // Count-driven columns (issue #1338, Phase 2 / slice 4): `resolvedColumnCount` reads this too, so a live change
+    // to the explicit column count (with target width/gap unchanged) must also invalidate the cached scene.
+    columnCount: Option[Int],
     minimumPaneWidth: Int,
     textAreaInsets: TextAreaInsets,
     interfaceDensity: InterfaceDensity,
@@ -147,6 +150,7 @@ private[manager] object MouseTargetLayoutKey:
       columnModeEnabled = state.persisted.config.surfaceConfig.columnModeEnabled,
       columnTargetWidthCells = state.persisted.config.surfaceConfig.columnTargetWidthCells,
       columnGap = state.persisted.config.surfaceConfig.columnGap,
+      columnCount = state.persisted.config.surfaceConfig.columnCount,
       minimumPaneWidth = state.persisted.config.editorConfig.minimumPaneWidth,
       textAreaInsets = state.persisted.config.surfaceConfig.textAreaInsets,
       interfaceDensity = state.persisted.config.interfaceDensity,
