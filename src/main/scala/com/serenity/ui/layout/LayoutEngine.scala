@@ -412,7 +412,9 @@ object LayoutEngine:
 
   /** Column-based document layout (issue #1338, Phase 1): "as many columns as fit" at a configured target width, not a
     * fixed user-picked count -- only takes effect while `wordWrapEnabled` is also on, otherwise this is exactly the
-    * three-argument overload above.
+    * three-argument overload above. Slice 4: delegates to the count-driven [[resolvedColumnCount]] seam via a
+    * `SurfaceConfig` carrying these legacy width/gap args in Auto mode (`columnCount = None`), so the width-driven
+    * result is byte-for-byte the same as before while all the real resolve logic lives in the one seam.
     */
   def updateBufferViewportDimensions(
     buffer: Buffer,
@@ -422,9 +424,30 @@ object LayoutEngine:
     columnTargetWidthCells: Int,
     columnGap: Int
   ): Viewport =
+    updateBufferViewportDimensions(
+      buffer,
+      panelRect,
+      wordWrapEnabled,
+      columnModeEnabled,
+      SurfaceConfig(columnTargetWidthCells = columnTargetWidthCells, columnGap = columnGap)
+    )
+
+  /** Multi-column e-reader layout (issue #1338, Phase 2 / slice 4): the count-driven seam. The number of columns comes
+    * from [[resolvedColumnCount]] (Auto reproduces the width-driven count; `Some(n)` pins n, clamped to the pane), and
+    * a single column's text width from [[columnWidthCellsForCount]]. Only takes effect while `columnModeEnabled &&
+    * wordWrapEnabled`, otherwise this is the plain full-width viewport sizing.
+    */
+  def updateBufferViewportDimensions(
+    buffer: Buffer,
+    panelRect: LayoutRect,
+    wordWrapEnabled: Boolean,
+    columnModeEnabled: Boolean,
+    surfaceConfig: SurfaceConfig
+  ): Viewport =
     val effectivePanelRect =
       if columnModeEnabled && wordWrapEnabled then
-        panelRect.copy(width = columnWidthCells(panelRect.width, columnTargetWidthCells, columnGap))
+        val count = resolvedColumnCount(panelRect.width, surfaceConfig)
+        panelRect.copy(width = columnWidthCellsForCount(panelRect.width, count, surfaceConfig.columnGap))
       else panelRect
     val resizedViewport = updateViewportDimensions(buffer.viewport, effectivePanelRect)
     val clampedLeftColumn =
@@ -448,6 +471,41 @@ object LayoutEngine:
     val gap   = columnGap.max(0)
     val count = columnCount(contentWidthCells, columnTargetWidthCells, columnGap)
     math.max(1, (contentWidthCells - (count - 1) * gap) / count)
+
+  /** Multi-column e-reader layout (issue #1338, Phase 2 / slice 4): the anti-absurdity floor on a column's text width
+    * in cells -- NOT a readability target (that is `columnTargetWidthCells`, which drives Auto mode), just the point
+    * below which pinning yet another column would leave each one too narrow to hold anything meaningful. It exists only
+    * to bound `columnCount = Some(n)` against the pane in `maxColumnsThatFit`/`resolvedColumnCount`.
+    */
+  val MinColumnTextWidthCells = 8
+
+  /** The most columns `contentWidthCells` can hold before each would fall below the [[MinColumnTextWidthCells]] floor --
+    * how many columns of `(MinColumnTextWidthCells + gap)` fit, mirroring [[columnCount]]'s fit math, never fewer than
+    * one. The upper clamp `resolvedColumnCount` applies to an explicit `columnCount = Some(n)`.
+    */
+  def maxColumnsThatFit(contentWidthCells: Int, gap: Int): Int =
+    val clampedGap = gap.max(0)
+    math.max(1, (contentWidthCells + clampedGap) / (MinColumnTextWidthCells + clampedGap))
+
+  /** The single seam every column-count caller routes through. Auto (`surfaceConfig.columnCount = None`) reproduces the
+    * width-driven [[columnCount]] exactly; an explicit `Some(n)` pins n, clamped to `[1, maxColumnsThatFit]` so an
+    * absurd count can never leave columns below the anti-absurdity floor. A zero-width pane (no laid-out window yet)
+    * collapses to a single column on either path, since `maxColumnsThatFit` is then one.
+    */
+  def resolvedColumnCount(contentWidthCells: Int, surfaceConfig: SurfaceConfig): Int =
+    val requested =
+      surfaceConfig.columnCount.getOrElse(
+        columnCount(contentWidthCells, surfaceConfig.columnTargetWidthCells, surfaceConfig.columnGap)
+      )
+    requested.max(1).min(maxColumnsThatFit(contentWidthCells, surfaceConfig.columnGap))
+
+  /** The width of one column when exactly `count` columns (and the `count - 1` gaps between them) are fitted into
+    * `contentWidthCells` -- the count-driven counterpart to [[columnWidthCells]], which derives the count itself.
+    */
+  def columnWidthCellsForCount(contentWidthCells: Int, count: Int, gap: Int): Int =
+    val clampedGap   = gap.max(0)
+    val clampedCount = count.max(1)
+    math.max(1, (contentWidthCells - (clampedCount - 1) * clampedGap) / clampedCount)
 
   private def clampLeftColumnForBuffer(buffer: Buffer, viewport: Viewport): Int =
     val visibleColumns = math.max(1, viewport.visibleColumns)
@@ -486,8 +544,7 @@ object LayoutEngine:
                   contentRect,
                   surfaceConfig.wordWrapEnabled,
                   columnModeEnabled = surfaceConfig.columnModeEnabled,
-                  columnTargetWidthCells = surfaceConfig.columnTargetWidthCells,
-                  columnGap = surfaceConfig.columnGap
+                  surfaceConfig
                 )
               )
           }
