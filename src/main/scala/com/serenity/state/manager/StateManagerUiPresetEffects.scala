@@ -27,7 +27,6 @@ final private[manager] class StateManagerUiPresetEffects(
     persistConfigFile: AppConfig => IO[Unit],
     withUpdatedRunnerConfig: (AppState, AppConfig) => AppState,
     openMarkdownPreview: IO[Unit],
-    loadPinnedDirectoryEffect: (com.serenity.ui.layout.PanelPosition, java.nio.file.Path) => IO[Unit],
     commitValidated: (AppState => AppState) => IO[Unit],
     lanes: EffectLanePort
 )(using balance: com.serenity.rope.Balance):
@@ -235,7 +234,6 @@ final private[manager] class StateManagerUiPresetEffects(
     persistConfigFile(appliedConfig) >>
       onFontConfigChanged(appliedConfig.editorConfig.fontConfig)
         .handleErrorWith(error => logger.error(error)("[PRESET] Failed to apply preset font config")) >>
-      reloadPresetDirectories(preset) >>
       openPresetMarkdownPreviewIfNeeded(preset) >>
       lanes.submitEffect(
         PersistenceLanes.Config,
@@ -247,17 +245,6 @@ final private[manager] class StateManagerUiPresetEffects(
   private def openPresetMarkdownPreviewIfNeeded(preset: UiPreset): IO[Unit] =
     if preset.config.markdownViewMode == MarkdownViewMode.SplitPreview then openMarkdownPreview
     else IO.unit
-
-  private def reloadPresetDirectories(preset: UiPreset): IO[Unit] =
-    preset.pinnedPanels.traverse_ { panel =>
-      panel.content match
-        case com.serenity.ui.layout.SessionPanelContent.DirectoryTree(rootPath, _, expandedPaths) =>
-          (rootPath :: expandedPaths).distinct.traverse_(path =>
-            loadPinnedDirectoryEffect(panel.position, java.nio.file.Path.of(path))
-          )
-        case _ =>
-          IO.unit
-    }
 
   private def duplicateUiPresetEffect(sourceName: String, targetName: String): IO[Unit] =
     (normalizedPresetName(sourceName), normalizedPresetName(targetName)) match

@@ -1,17 +1,16 @@
 package com.serenity.state.manager
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Paths
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.{PanelKind, ViewIntent}
 import com.serenity.frontend.{FrontendCapabilities, MarkdownPreviewWindowAvailability}
-import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.undo.{HistoryEntry, UndoState}
-import com.serenity.ui.layout.{PanelPosition, PanelTarget, PeekContent}
+import com.serenity.ui.layout.{DirectoryTreeData, PanelPosition, PanelTarget, PeekContent}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.noop.NoOpLogger
@@ -56,8 +55,6 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
       new StateManagerPanelEffects(
         stateRef.get,
         NoOpLogger.impl[IO],
-        new FileManager(),
-        EffectLanePortFixtures.immediate(stateRef),
         markdownPreviewWindow,
         transition =>
           modelRef.get.flatMap(model =>
@@ -273,30 +270,19 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "pin the explorer root as an undo step and fill in its listing, selecting the first entry" in {
-    val directory = Files.createTempDirectory("panel-effects-explorer")
-    val child     = Files.createDirectory(directory.resolve("src"))
-    try
-      val fixture = harness()
+  it should "pin the explorer root as an undo step, leaving its listing to the commit boundary" in {
+    val directory = Paths.get("/repo")
+    val fixture   = harness()
 
-      fixture.panels.pinExplorerPanelEffect(PanelPosition.Left, directory, 30).unsafeRunSync()
+    fixture.panels.pinExplorerPanelEffect(PanelPosition.Left, directory, 30).unsafeRunSync()
 
-      val model = fixture.modelRef.get.unsafeRunSync()
-      model.app.pinnedSurfaces.map(_.content) match
-        case List(SurfaceContent.DirectoryTree(tree, selectedPath)) =>
-          tree.rootPath shouldBe directory
-          tree.entries.get(directory).map(_.map(_.path)) shouldBe Some(List(child))
-          selectedPath shouldBe Some(child)
-        case other =>
-          fail(s"Expected a single pinned explorer, got $other")
-      model.app.persisted.layout.workspaceTree.flatMap(
-        _.positionForSurface(model.app.pinnedSurfaces.head.id)
-      ) shouldBe Some(PanelPosition.Left)
-      model.undo.undoStack shouldBe Vector(HistoryEntry.PanelChange.capture(AppState.initial))
-      fixture.events.get.unsafeRunSync() shouldBe Nil
-    finally
-      Files.deleteIfExists(child)
-      Files.deleteIfExists(directory)
+    val model = fixture.modelRef.get.unsafeRunSync()
+    model.app.pinnedSurfaces.map(_.content) shouldBe List(SurfaceContent.DirectoryTree(DirectoryTreeData(directory)))
+    model.app.persisted.layout.workspaceTree.flatMap(
+      _.positionForSurface(model.app.pinnedSurfaces.head.id)
+    ) shouldBe Some(PanelPosition.Left)
+    model.undo.undoStack shouldBe Vector(HistoryEntry.PanelChange.capture(AppState.initial))
+    fixture.events.get.unsafeRunSync() shouldBe Nil
   }
 
   it should "persist the markdown view mode and unpin the preview panel when returning to source" in {

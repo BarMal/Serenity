@@ -8,7 +8,16 @@ import com.serenity.lsp.model.{Diagnostic as LspDiagnostic, DiagnosticSeverity a
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{Diagnostic, DiagnosticSeverity, Location, PanelPosition, Symbol, SymbolKind}
+import com.serenity.ui.layout.{
+  Diagnostic,
+  DiagnosticSeverity,
+  DirEntry,
+  DirectoryTreeData,
+  Location,
+  PanelPosition,
+  Symbol,
+  SymbolKind
+}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -148,5 +157,51 @@ class PanelContentSyncSpec extends AnyFlatSpec with Matchers:
     val (switched, secondId) = shownInActivePane(before, "# Second\n", "b.md")
 
     panelContent(PanelContentSync.synced(switched, before)) shouldBe SurfaceContent.MarkdownPreview(secondId, "b.md")
+  }
+  "A docked explorer" should "wait on every directory it shows but has no listing for" in {
+    val root   = Paths.get("/repo")
+    val src    = root.resolve("src")
+    val before = AppState.initial
+    val after  = docked(before, SurfaceContent.DirectoryTree(DirectoryTreeData(root, expandedPaths = Set(src))))
+
+    val synced = PanelContentSync.synced(after, before)
+
+    panelContent(synced) shouldBe
+      SurfaceContent.DirectoryTree(DirectoryTreeData(root, expandedPaths = Set(src), loading = Set(root, src)))
+    PanelContentSync.explorerListingsDue(synced, before) shouldBe List(panelId -> root, panelId -> src)
+  }
+
+  it should "not ask again for a listing already on its way, or one that failed" in {
+    val root = Paths.get("/repo")
+    val src  = root.resolve("src")
+    val waiting = docked(
+      AppState.initial,
+      SurfaceContent.DirectoryTree(
+        DirectoryTreeData(root, expandedPaths = Set(src), loading = Set(root), failed = Map(src -> "denied"))
+      )
+    )
+
+    PanelContentSync.synced(waiting, waiting) shouldBe waiting
+    PanelContentSync.explorerListingsDue(waiting, waiting) shouldBe Nil
+  }
+
+  it should "list a stale directory again, keeping its entries on show meanwhile" in {
+    val root    = Paths.get("/repo")
+    val listing = List(DirEntry(root.resolve("a.md"), "a.md", isDirectory = false))
+    val stale   = DirectoryTreeData(root, entries = Map(root -> listing), stale = Set(root))
+    val state   = docked(AppState.initial, SurfaceContent.DirectoryTree(stale))
+
+    panelContent(PanelContentSync.synced(state, state)) shouldBe
+      SurfaceContent.DirectoryTree(stale.copy(loading = Set(root)))
+  }
+  it should "mark only directories it has listed as stale" in {
+    val root    = Paths.get("/repo")
+    val listing = List(DirEntry(root.resolve("a.md"), "a.md", isDirectory = false))
+    val listed  = DirectoryTreeData(root, entries = Map(root -> listing))
+    val state   = docked(AppState.initial, SurfaceContent.DirectoryTree(listed))
+
+    panelContent(PanelContentSync.withStaleDirectories(state, Set(root, Paths.get("/elsewhere")))) shouldBe
+      SurfaceContent.DirectoryTree(listed.copy(stale = Set(root)))
+    PanelContentSync.explorerWatchDirectories(state) shouldBe Set(root)
   }
 end PanelContentSyncSpec

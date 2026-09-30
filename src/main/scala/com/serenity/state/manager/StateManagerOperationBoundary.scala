@@ -1,5 +1,7 @@
 package com.serenity.state.manager
 
+import java.nio.file.Path
+
 import scala.concurrent.duration.*
 
 import cats.effect.*
@@ -8,11 +10,13 @@ import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.{SpellCheckConfig, SpellCheckDictionaryFingerprint}
 import com.serenity.diagnostics.Trace
 import com.serenity.document.CommentRendering
+import com.serenity.io.{FileBrowser, FileEntry}
 import com.serenity.lsp.client.DocumentUri
 import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, SpellChecker}
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.CommandRunnerPanelSelections
+import com.serenity.ui.layout.DirEntry
 import org.typelevel.log4cats.Logger
 
 /** Operations emitted by capabilities for ordered interpretation at the event boundary. */
@@ -37,7 +41,8 @@ final private[manager] class StateManagerOperationBoundary private (
     dispatcher: StateManagerDispatcher,
     fileWriteLedger: FileWriteLedger,
     discoverDictionaryFingerprints: SpellCheckConfig => IO[List[SpellCheckDictionaryFingerprint]],
-    dictionaryCache: DictionaryCache
+    dictionaryCache: DictionaryCache,
+    listDirectory: Path => IO[List[DirEntry]]
 ):
   private val DocumentAnalysisDebounce         = 150.millis
   private val FindSearchDebounce               = 50.millis
@@ -100,7 +105,8 @@ final private[manager] class StateManagerOperationBoundary private (
   /** The follow-up work of every `ModelCommit` app-state commit. */
   private[manager] def afterCommit(fallbackState: AppState, committedState: AppState): IO[Unit] =
     logModalTransition(fallbackState, committedState) >> scheduleDocumentAnalysis() >>
-      PanelContentSync.outlineRefreshDue(committedState, fallbackState).traverse_(scheduleOutlineRefresh)
+      PanelContentSync.outlineRefreshDue(committedState, fallbackState).traverse_(scheduleOutlineRefresh) >>
+      PanelContentSync.explorerListingsDue(committedState, fallbackState).traverse_(listExplorerDirectory)
 
   private[manager] def logRejectedCommit(errors: List[String]): IO[Unit] =
     logger.error(s"State validation failed: ${errors.mkString(", ")}")
@@ -183,6 +189,16 @@ final private[manager] class StateManagerOperationBoundary private (
       SpellCheckConfig.dictionaryWatchDirectories(state.persisted.config.languageToolsConfig.spellCheck)
     )
 
+  def explorerWatchDirectories: IO[Set[Path]] =
+    modelCommit.currentState.map(PanelContentSync.explorerWatchDirectories)
+
+  def markExplorerDirectoriesStale(directories: Set[Path]): IO[Unit] =
+    dispatch(
+      modelCommit.updateValidated(model =>
+        Some(model.copy(app = PanelContentSync.withStaleDirectories(model.app, directories)))
+      )
+    )
+
   /** The one quit step, for both a normal and a forced quit: the `Lane.Exclusive` barrier of
     * docs/state-architecture-target.md. Queued and running Sequential work -- file saves, config and preset writes --
     * finishes first, for at most [[ShutdownGracePeriod]] so a write that hangs cannot wedge quitting; switch-latest and
@@ -260,6 +276,16 @@ final private[manager] class StateManagerOperationBoundary private (
       }
     )
 
+  private def listExplorerDirectory(surfaceId: SurfaceId, path: Path): IO[Unit] =
+    submit(
+      Lane.Keyed(LaneKey.ExplorerListing(surfaceId, path.toAbsolutePath.normalize), LanePolicy.SwitchLatest),
+      listDirectory(path).attempt.flatMap { listing =>
+        val result = listing.leftMap(error => Option(error.getMessage).getOrElse(error.getClass.getSimpleName))
+        listing.left.toOption.traverse_(error => logger.error(error)(s"[FILE] Failed to load directory $path")) >>
+          postResult(EffectResult.ExplorerListed(surfaceId, path, result))
+      }
+    )
+
   private def markdownPreviewCommitLane(bufferId: BufferId): Lane.Keyed =
     Lane.Keyed(LaneKey.MarkdownPreview(bufferId), LanePolicy.SwitchLatest)
 
@@ -313,6 +339,17 @@ private[manager] object StateManagerOperationBoundary:
       )
     else state
 
+  /** A directory listing for an explorer. `FileBrowser` lists a missing directory as empty, which an explorer would
+    * show as an empty folder, so an empty listing is checked for the directory still being there.
+    */
+  def explorerListing(list: Path => IO[List[FileEntry]])(directory: Path): IO[List[DirEntry]] =
+    list(directory).flatMap { entries =>
+      if entries.nonEmpty then IO.pure(entries.map(entry => DirEntry(entry.path, entry.name, entry.isDirectory)))
+      else
+        IO.blocking(java.nio.file.Files.isDirectory(directory))
+          .ifM(IO.pure(Nil), IO.raiseError(new java.io.FileNotFoundException("folder not found")))
+    }
+
   /** `StateManager` is built as a plain `IO` (by the app and by many specs), so no `Resource` owns these lanes: they
     * are allocated here and released by [[StateManagerOperationBoundary.shutdownEffects]] on the quit path.
     */
@@ -325,7 +362,8 @@ private[manager] object StateManagerOperationBoundary:
     // `osDictionaryDirectories` parameter) so a spec can count or fake filesystem stats without touching a real
     // dictionary directory -- see `StateManagerDictionaryFingerprintCacheSpec`.
     discoverDictionaryFingerprints: SpellCheckConfig => IO[List[SpellCheckDictionaryFingerprint]] = config =>
-      IO.blocking(SpellCheckConfig.discoverDictionaryFingerprints(config))
+      IO.blocking(SpellCheckConfig.discoverDictionaryFingerprints(config)),
+    listDirectory: Path => IO[List[DirEntry]] = explorerListing(FileBrowser.listDirectory)
   ): IO[StateManagerOperationBoundary] =
     for
       pendingOperations         <- Ref.of[IO, List[StateManagerOperation]](Nil)
@@ -356,5 +394,6 @@ private[manager] object StateManagerOperationBoundary:
       dispatcher,
       fileWriteLedger,
       discoverDictionaryFingerprints,
-      DictionaryCache()
+      DictionaryCache(),
+      listDirectory
     )

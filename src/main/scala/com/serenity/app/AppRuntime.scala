@@ -295,7 +295,9 @@ object AppRuntime:
           stateManager.fileService.openBufferPaths,
           stateManager.fileService.checkBufferForExternalChanges,
           stateManager.fileService.dictionaryWatchDirectories,
-          stateManager.fileService.refreshDictionaryFingerprints
+          stateManager.fileService.refreshDictionaryFingerprints,
+          stateManager.fileService.explorerWatchDirectories,
+          stateManager.fileService.markExplorerDirectoriesStale
         ).interruptWhen(quitSignal).compile.drain
       )
     ).parMapN((_, _, _, _, _, _, _, _) => ())
@@ -323,23 +325,27 @@ object AppRuntime:
     checkBufferForExternalChanges: BufferId => IO[Unit],
     dictionaryWatchDirectories: IO[Set[Path]] = IO.pure(Set.empty),
     refreshDictionaryFingerprints: IO[Unit] = IO.unit,
+    explorerWatchDirectories: IO[Set[Path]] = IO.pure(Set.empty),
+    markExplorerDirectoriesStale: Set[Path] => IO[Unit] = _ => IO.unit,
     pollInterval: FiniteDuration = 2.seconds
   ): Stream[IO, Unit] =
     Stream.repeatEval(
       for
         paths                 <- openBufferPaths
         dictionaryDirectories <- dictionaryWatchDirectories
+        explorerDirectories   <- explorerWatchDirectories
         bufferDirectories  = paths.keys.flatMap(path => Option(path.getParent)).toSet
-        watchedDirectories = bufferDirectories ++ dictionaryDirectories
+        watchedDirectories = bufferDirectories ++ dictionaryDirectories ++ explorerDirectories
         _ <- watcher.sync(watchedDirectories)
         _ <-
           if watchedDirectories.isEmpty then IO.sleep(pollInterval)
           else
             watcher.pollChangedFiles(pollInterval).flatMap { changed =>
-              val dictionaryChanged =
-                changed.exists(path => Option(path.getParent).exists(dictionaryDirectories.contains))
+              val changedDirectories = changed.flatMap(path => Option(path.getParent))
+              val staleExplorers     = changedDirectories.intersect(explorerDirectories)
               changed.flatMap(paths.get).toList.traverse_(checkBufferForExternalChanges) >>
-                (if dictionaryChanged then refreshDictionaryFingerprints else IO.unit)
+                IO.whenA(changedDirectories.exists(dictionaryDirectories.contains))(refreshDictionaryFingerprints) >>
+                IO.whenA(staleExplorers.nonEmpty)(markExplorerDirectoriesStale(staleExplorers))
             }
       yield ()
     )

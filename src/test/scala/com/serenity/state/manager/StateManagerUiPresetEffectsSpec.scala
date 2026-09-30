@@ -42,7 +42,6 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
       val fontConfigs: Ref[IO, List[FontLoader.FontConfig]],
       val persistedConfigs: Ref[IO, List[AppConfig]],
       val markdownPreviewOpens: Ref[IO, Int],
-      val pinnedDirectoryLoads: Ref[IO, List[(PanelPosition, Path)]],
       val presets: StateManagerUiPresetEffects
   ):
     def currentState: AppState = stateRef.get.unsafeRunSync()
@@ -56,6 +55,16 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
         }
         .getOrElse(fail("Expected a CommandPalette surface to be present"))
 
+  private def leftExplorerAwaiting(state: AppState): Set[Path] =
+    state.pinnedSurfaces
+      .filter(surface =>
+        state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(PanelPosition.Left)
+      )
+      .map(_.content)
+      .collect { case SurfaceContent.DirectoryTree(tree, _) => tree.awaitingListing }
+      .flatten
+      .toSet
+
   private def harness(
     initialState: AppState = AppState.initial,
     windowSize: Option[PreferredWindowSize] = None
@@ -67,7 +76,6 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
     val fonts     = Ref.of[IO, List[FontLoader.FontConfig]](Nil).unsafeRunSync()
     val persisted = Ref.of[IO, List[AppConfig]](Nil).unsafeRunSync()
     val previews  = Ref.of[IO, Int](0).unsafeRunSync()
-    val loads     = Ref.of[IO, List[(PanelPosition, Path)]](Nil).unsafeRunSync()
 
     new Harness(
       stateRef,
@@ -76,7 +84,6 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
       fonts,
       persisted,
       previews,
-      loads,
       new StateManagerUiPresetEffects(
         stateRef.get,
         NoOpLogger.impl[IO],
@@ -88,7 +95,6 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
         config => persisted.update(_ :+ config),
         (state, _) => state,
         previews.update(_ + 1),
-        (position, path) => loads.update(_ :+ (position -> path)),
         transition => stateRef.update(state => AppStateValidation.validated(transition(state)).getOrElse(state)),
         inlineLanes(stateRef)
       )
@@ -212,7 +218,7 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.markdownPreviewOpens.get.unsafeRunSync() shouldBe 0
   }
 
-  it should "apply a built-in workflow preset and reload its pinned directory panels" in {
+  it should "apply a built-in workflow preset and leave its pinned directory panels awaiting a listing" in {
     val fixture = harness(commandPaletteState())
 
     fixture.presets.interpret(UiPresetsIntent.ApplyUiPreset("Code")).unsafeRunSync()
@@ -222,7 +228,8 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
     after.pinnedSurfaces.exists(surface =>
       after.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(PanelPosition.Left)
     ) shouldBe true
-    fixture.pinnedDirectoryLoads.get.unsafeRunSync() shouldBe List(PanelPosition.Left -> Path.of("."))
+    // The commit boundary lists every directory a docked explorer is waiting on.
+    leftExplorerAwaiting(after) shouldBe Set(Path.of("."))
   }
 
   /** All of `changes`' keys, `fixture.currentRunner`'s trailing "Apply Selected Changes" default selection --
@@ -263,7 +270,7 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.markdownPreviewOpens.get.unsafeRunSync() shouldBe 0
   }
 
-  it should "apply a built-in workflow preset and reload its pinned directory panels, on confirm" in {
+  it should "apply a built-in workflow preset and leave its pinned directory panels awaiting a listing, on confirm" in {
     val fixture = harness(commandPaletteState())
     fixture.presets.interpret(UiPresetsIntent.ReviewUiPreset("Code")).unsafeRunSync()
 
@@ -276,7 +283,8 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
     after.pinnedSurfaces.exists(surface =>
       after.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(PanelPosition.Left)
     ) shouldBe true
-    fixture.pinnedDirectoryLoads.get.unsafeRunSync() shouldBe List(PanelPosition.Left -> Path.of("."))
+    // The commit boundary lists every directory a docked explorer is waiting on.
+    leftExplorerAwaiting(after) shouldBe Set(Path.of("."))
   }
 
   it should "reject applying a preset that requires an unavailable font" in {

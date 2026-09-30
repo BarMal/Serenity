@@ -1,14 +1,18 @@
 package com.serenity.state.manager
 
+import java.nio.file.Path
+
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{Diagnostic as LspDiagnostic, DiagnosticSeverity as LspSeverity}
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{Diagnostic, DiagnosticSeverity, Location, Symbol}
+import com.serenity.ui.layout.{Diagnostic, DiagnosticSeverity, DirectoryTreeData, Location, Symbol}
 
 /** Keeps docked panels that derive from the active document -- outline, comments, diagnostics, markdown preview -- in
-  * step with it. Runs on every commit, so no event source has to remember to refresh them, and recomputes a panel only
-  * when something it derives from actually changed: a panel's stored content is otherwise left exactly as it was.
+  * step with it, and marks every directory a docked explorer shows but hasn't listed as loading, whatever docked it (a
+  * pin, a restored session, a UI preset) or expanded it. Runs on every commit, so no event source has to remember to
+  * refresh them, and recomputes a panel only when something it derives from actually changed: a panel's stored content
+  * is otherwise left exactly as it was.
   *
   * Follows the active editor pane rather than the focused one, so focusing a panel doesn't empty it. An outline is
   * re-parsed synchronously only when the active document switches; an edit instead makes [[outlineRefreshDue]] ask for
@@ -26,6 +30,28 @@ private[manager] object PanelContentSync:
     }
     if updated.corresponds(state.runtime.uiSurfaces)(_ eq _) then state
     else state.copy(runtime = state.runtime.copy(uiSurfaces = updated))
+
+  /** The directories docked explorers show a listing of, to watch for changes made outside the editor. */
+  def explorerWatchDirectories(state: AppState): Set[Path] =
+    dockedTrees(state).flatMap((_, tree) => tree.entries.keySet.intersect(tree.expandedPaths + tree.rootPath)).toSet
+
+  /** Marks each of `directories` a docked explorer has listed as stale, so it is listed again. */
+  def withStaleDirectories(state: AppState, directories: Set[Path]): AppState =
+    val updated = state.runtime.uiSurfaces.map {
+      case surface @ UiSurface(_, SurfaceContent.DirectoryTree(tree, selectedPath), SurfacePresentation.Docked, _)
+          if directories.exists(tree.entries.contains) =>
+        val stale = tree.stale ++ directories.filter(tree.entries.contains)
+        surface.copy(content = SurfaceContent.DirectoryTree(tree.copy(stale = stale), selectedPath))
+      case surface => surface
+    }
+    state.copy(runtime = state.runtime.copy(uiSurfaces = updated))
+
+  /** Every directory a docked explorer started waiting on in this commit, for the caller to list. */
+  def explorerListingsDue(state: AppState, previous: AppState): List[(SurfaceId, Path)] =
+    val previouslyLoading = explorerLoading(previous).toMap
+    explorerLoading(state).flatMap { (surfaceId, loading) =>
+      (loading -- previouslyLoading.getOrElse(surfaceId, Set.empty)).toList.sorted.map(surfaceId -> _)
+    }
 
   /** The active buffer, when a docked outline shows it and it changed without switching. */
   def outlineRefreshDue(state: AppState, previous: AppState): Option[BufferId] =
@@ -79,6 +105,8 @@ private[manager] object PanelContentSync:
           if sourceSwitched(source, previousSource) ||
             !(sourceDiagnostics(state, source) eq sourceDiagnostics(previous, source)) =>
         Some(diagnosticsContent(state, source))
+      case SurfaceContent.DirectoryTree(tree, selectedPath) if tree.awaitingListing.nonEmpty =>
+        Some(SurfaceContent.DirectoryTree(tree.listingRequested(tree.awaitingListing), selectedPath))
       case SurfaceContent.MarkdownPreview(bufferId, _) =>
         source
           .filter(buffer => buffer.id != bufferId && buffer.document.language.contains(LanguageId.Markdown))
@@ -87,6 +115,14 @@ private[manager] object PanelContentSync:
 
   private def sourceSwitched(source: Option[Buffer], previousSource: Option[Buffer]): Boolean =
     source.map(_.id) != previousSource.map(_.id)
+
+  private def explorerLoading(state: AppState): List[(SurfaceId, Set[Path])] =
+    dockedTrees(state).map((id, tree) => id -> tree.loading)
+
+  private def dockedTrees(state: AppState): List[(SurfaceId, DirectoryTreeData)] =
+    state.runtime.uiSurfaces.collect {
+      case UiSurface(id, SurfaceContent.DirectoryTree(tree, _), SurfacePresentation.Docked, _) => id -> tree
+    }
 
   private def hasDockedOutline(state: AppState): Boolean =
     state.runtime.uiSurfaces.exists {

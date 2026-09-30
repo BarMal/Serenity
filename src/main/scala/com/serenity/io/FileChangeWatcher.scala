@@ -1,6 +1,6 @@
 package com.serenity.io
 
-import java.nio.file.StandardWatchEventKinds.{ENTRY_CREATE, ENTRY_MODIFY}
+import java.nio.file.StandardWatchEventKinds.{ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY}
 import java.nio.file.{FileSystems, Path, WatchKey}
 
 import scala.concurrent.duration.FiniteDuration
@@ -31,7 +31,7 @@ final class FileChangeWatcher private (
       for
         added <- toAdd.toList.traverse(directory =>
           IO.blocking(
-            directory.register(watchService, ENTRY_MODIFY, ENTRY_CREATE)
+            directory.register(watchService, ENTRY_MODIFY, ENTRY_CREATE, ENTRY_DELETE)
           ).attempt
             .map(_.toOption.map(directory -> _))
         )

@@ -53,11 +53,40 @@ object PanelContent:
       case SurfaceContent.CompanionSprite                     => Some(CompanionSprite)
       case _                                                  => None
 
+/** `loading`, `stale` and `failed` track each shown directory's listing: a directory is listed when it is shown (the
+  * root, or expanded) and has no listing yet or a stale one, unless a listing is already on its way or last failed.
+  */
 final case class DirectoryTreeData(
     rootPath: Path,
     expandedPaths: Set[Path] = Set.empty,
-    entries: Map[Path, List[DirEntry]] = Map.empty
-)
+    entries: Map[Path, List[DirEntry]] = Map.empty,
+    loading: Set[Path] = Set.empty,
+    stale: Set[Path] = Set.empty,
+    failed: Map[Path, String] = Map.empty
+):
+
+  def awaitingListing: Set[Path] =
+    (expandedPaths + rootPath).filter(path =>
+      (!entries.contains(path) || stale.contains(path)) && !loading.contains(path) && !failed.contains(path)
+    )
+
+  def listingRequested(paths: Set[Path]): DirectoryTreeData =
+    copy(loading = loading ++ paths)
+
+  def listed(path: Path, listing: List[DirEntry]): DirectoryTreeData =
+    copy(
+      entries = entries.updated(path, listing),
+      loading = loading - path,
+      stale = stale - path,
+      failed = failed - path
+    )
+
+  def listingFailed(path: Path, reason: String): DirectoryTreeData =
+    copy(loading = loading - path, failed = failed.updated(path, reason))
+
+  /** Clears `path`'s failure so it is listed again the next time it is shown. */
+  def retried(path: Path): DirectoryTreeData =
+    copy(failed = failed - path)
 
 final case class DirectoryTreeRow(
     path: Path,
@@ -66,7 +95,9 @@ final case class DirectoryTreeRow(
     depth: Int,
     isRoot: Boolean,
     isExpanded: Boolean,
-    isLoaded: Boolean
+    isLoaded: Boolean,
+    isLoading: Boolean = false,
+    failure: Option[String] = None
 )
 
 object DirectoryTreeData:
@@ -87,7 +118,9 @@ object DirectoryTreeData:
       depth = 0,
       isRoot = true,
       isExpanded = true,
-      isLoaded = tree.entries.contains(tree.rootPath)
+      isLoaded = tree.entries.contains(tree.rootPath),
+      isLoading = tree.loading.contains(tree.rootPath),
+      failure = tree.failed.get(tree.rootPath)
     )
 
   private def flattenChildren(tree: DirectoryTreeData, directory: Path, depth: Int): List[DirectoryTreeRow] =
@@ -100,7 +133,9 @@ object DirectoryTreeData:
           depth = depth,
           isRoot = false,
           isExpanded = entry.isDirectory && tree.expandedPaths.contains(entry.path),
-          isLoaded = entry.isDirectory && tree.entries.contains(entry.path)
+          isLoaded = entry.isDirectory && tree.entries.contains(entry.path),
+          isLoading = tree.loading.contains(entry.path),
+          failure = tree.failed.get(entry.path)
         )
       )
       if entry.isDirectory && tree.expandedPaths.contains(entry.path) then
