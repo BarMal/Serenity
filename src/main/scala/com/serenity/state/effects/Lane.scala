@@ -3,8 +3,7 @@ package com.serenity.state.effects
 import java.nio.file.Path
 
 import com.serenity.lsp.config.LanguageId
-import com.serenity.state.models.BufferId
-import com.serenity.ui.layout.PanelPosition
+import com.serenity.state.models.{BufferId, SurfaceId}
 
 enum LaneKey:
   /** Callers pass canonical paths, so two buffers on one file share a lane. */
@@ -19,7 +18,7 @@ enum LaneKey:
   /** One explorer panel's listing of `path`: a newer listing supersedes it, another panel's listing of the same
     * directory does not.
     */
-  case ExplorerListing(position: PanelPosition, path: Path)
+  case ExplorerListing(surfaceId: SurfaceId, path: Path)
 
   /** Docked outline panels' re-parse after an edit burst: a newer edit supersedes the pending one. */
   case OutlineRefresh

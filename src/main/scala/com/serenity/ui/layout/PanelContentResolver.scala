@@ -59,11 +59,17 @@ private[layout] object PanelContentResolver:
           else if row.isLoaded then "▸ "
           else "▹ "
         else ""
-      val indent = "  " * row.depth
+      val indent   = "  " * row.depth
+      val label    = s"$indent$marker${row.name}"
+      val selected = selectedPath.contains(row.path)
+      val status = row.failure
+        .map(reason => OverlaySegment(s"  couldn't open: $reason", selected, OverlayTone.Error))
+        .orElse(Option.when(row.isLoading)(OverlaySegment("  loading…", selected, OverlayTone.Muted)))
       DirectoryTreeRowView(
         row = OverlayRow(
-          plainText = s"$indent$marker${row.name}",
-          selected = selectedPath.contains(row.path)
+          plainText = label + status.fold("")(_.text),
+          selected = selected,
+          segments = status.fold(Nil)(note => List(OverlaySegment(label, selected), note))
         ),
         path = row.path
       )
@@ -120,7 +126,11 @@ private[layout] object PanelContentResolver:
           visibleSymbols
             .map(symbol => if activeLocation.contains(symbol.location) then s"[${symbol.name}]" else symbol.name)
             .mkString(" | ")
-        ).filter(_.nonEmpty).map(text => OutlineRowView(OverlayRow(text, selected = activeVisible), None))
+        ).filter(_.nonEmpty).map(text => OutlineRowView(OverlayRow(text, selected = activeVisible), None)) match
+          case Nil  => List(OutlineRowView(emptyStateRow("No headings in this document"), None))
+          case rows => rows
+      case SurfaceLayoutKind.Vertical | SurfaceLayoutKind.Square if symbols.isEmpty =>
+        List(OutlineRowView(emptyStateRow("No headings in this document"), None))
       case SurfaceLayoutKind.Vertical =>
         symbols.take(math.max(1, rect.height - 2)).zipWithIndex.map {
           case (symbol, index) =>
@@ -178,7 +188,11 @@ private[layout] object PanelContentResolver:
           visibleSymbols
             .map(symbol => if activeLocation.contains(symbol.location) then s"[${symbol.name}]" else symbol.name)
             .mkString(" | ")
-        ).filter(_.nonEmpty).map(text => CommentsRowView(OverlayRow(text, selected = activeVisible), None))
+        ).filter(_.nonEmpty).map(text => CommentsRowView(OverlayRow(text, selected = activeVisible), None)) match
+          case Nil  => List(CommentsRowView(emptyStateRow("No comments in this document"), None))
+          case rows => rows
+      case SurfaceLayoutKind.Vertical | SurfaceLayoutKind.Square if symbols.isEmpty =>
+        List(CommentsRowView(emptyStateRow("No comments in this document"), None))
       case SurfaceLayoutKind.Vertical | SurfaceLayoutKind.Square =>
         symbols.take(math.max(1, rect.height - 2)).zipWithIndex.map {
           case (symbol, index) =>
@@ -231,6 +245,8 @@ private[layout] object PanelContentResolver:
     SurfaceLayoutKind.classify(rect) match
       case SurfaceLayoutKind.Horizontal =>
         List(DiagnosticsRowView(OverlayRow(s"$errorCount error | $warningCount warning | $infoCount info"), None))
+      case SurfaceLayoutKind.Vertical if issues.isEmpty =>
+        List(DiagnosticsRowView(emptyStateRow("No problems in this document"), None))
       case SurfaceLayoutKind.Vertical =>
         issues.take(math.max(1, rect.height - 2)).zipWithIndex.map {
           case (issue, index) =>
@@ -239,6 +255,8 @@ private[layout] object PanelContentResolver:
               Some(index)
             )
         }
+      case SurfaceLayoutKind.Square if issues.isEmpty =>
+        List(DiagnosticsRowView(emptyStateRow("No problems in this document"), None))
       case SurfaceLayoutKind.Square =>
         DiagnosticsRowView(OverlayRow(s"$errorCount error, $warningCount warning"), None) ::
           issues.take(math.max(0, rect.height - 3)).zipWithIndex.map {
@@ -264,6 +282,10 @@ private[layout] object PanelContentResolver:
       SurfaceContentResolver.titleFor(mode, "diagnostics"),
       rows = diagnosticsRowViews(rect, issues, activeLocation).map(_.row)
     )
+
+  /** A muted, unselectable row standing in for a list with nothing in it. */
+  private def emptyStateRow(message: String): OverlayRow =
+    OverlayRow(message, segments = List(OverlaySegment(message, tone = OverlayTone.Muted)))
 
   /** The toggleable keyboard-shortcuts reference (issue #1247). Deliberately not layout-kind-branched like
     * `resolveOutline`/`resolveDiagnostics` above -- there is no "current" entry to highlight or compact down to a

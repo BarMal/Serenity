@@ -41,22 +41,28 @@ object PinnedPanelContentReducer:
       state
     )
 
-  /** Applied only while the explorer at `position` is still rooted at `root`. */
-  def applyRootListing(position: PanelPosition, root: Path, listing: List[DirEntry], state: AppState): AppState =
-    explorerAt(position, state)(_.rootPath == root).fold(state) { (surface, tree, selectedPath) =>
-      val listed   = tree.copy(entries = tree.entries.updated(root, listing))
-      val selected = selectedPath.orElse(listing.headOption.map(_.path))
-      replaceSurface(state, surface.copy(content = SurfaceContent.DirectoryTree(listed, selected)))
-    }
-
-  /** Expands `path` with its listing -- applied only while the explorer at `position` still shows the tree `path` is
-    * in.
+  /** Applies a listing of `path` to the explorer `surfaceId`, wherever it is docked now -- only while that explorer is
+    * still waiting on it, so a listing it no longer wants (collapsed, re-rooted, closed) is dropped. The root's first
+    * listing also selects its first entry, so keyboard navigation has somewhere to start.
     */
-  def applyDirectoryListing(position: PanelPosition, path: Path, listing: List[DirEntry], state: AppState): AppState =
-    explorerAt(position, state)(tree => path.startsWith(tree.rootPath)).fold(state) { (surface, tree, selectedPath) =>
-      val expanded = tree.copy(expandedPaths = tree.expandedPaths + path, entries = tree.entries.updated(path, listing))
-      val selected = if selectedPath.forall(_ == path) then Some(path) else selectedPath
-      replaceSurface(state, surface.copy(content = SurfaceContent.DirectoryTree(expanded, selected)))
+  def applyListing(
+    surfaceId: SurfaceId,
+    path: Path,
+    listing: Either[String, List[DirEntry]],
+    state: AppState
+  ): AppState =
+    state.surfaceById(surfaceId).fold(state) { surface =>
+      surface.content match
+        case SurfaceContent.DirectoryTree(tree, selectedPath) if tree.loading.contains(path) =>
+          val content = listing match
+            case Right(entries) =>
+              val selected =
+                if path == tree.rootPath then selectedPath.orElse(entries.headOption.map(_.path)) else selectedPath
+              SurfaceContent.DirectoryTree(tree.listed(path, entries), selected)
+            case Left(reason) =>
+              SurfaceContent.DirectoryTree(tree.listingFailed(path, reason), selectedPath)
+          replaceSurface(state, surface.copy(content = content))
+        case _ => state
     }
 
   def selectFileInExplorer(targetPath: Path, state: AppState): ReducerResult =
@@ -82,16 +88,6 @@ object PinnedPanelContentReducer:
       }
     }
     ReducerResult.noEffects(withoutSource)
-
-  private def explorerAt(position: PanelPosition, state: AppState)(
-    shows: DirectoryTreeData => Boolean
-  ): Option[(UiSurface, DirectoryTreeData, Option[Path])] =
-    state.pinnedSurfaces.reverse.collectFirst {
-      case surface @ UiSurface(_, SurfaceContent.DirectoryTree(tree, selectedPath), _, _)
-          if shows(tree) &&
-            state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(position) =>
-        (surface, tree, selectedPath)
-    }
 
   private def newestPinned(state: AppState)(matches: SurfaceContent => Boolean): Option[UiSurface] =
     state.pinnedSurfaces.reverse.find(surface => matches(surface.content))

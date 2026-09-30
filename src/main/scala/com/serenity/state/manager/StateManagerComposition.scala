@@ -277,7 +277,9 @@ private[manager] class StateManagerComposition(
     events.dispatch,
     filePersistence.openFile,
     operations.refreshDictionaryFingerprints(),
-    operations.dictionaryWatchDirectories
+    operations.dictionaryWatchDirectories,
+    operations.explorerWatchDirectories,
+    operations.markExplorerDirectoriesStale
   )
 
   // PaneManager's/PanelManager's methods are excluded from the facade export (#1017/#1724): they have no real

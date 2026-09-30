@@ -99,7 +99,7 @@ class StateManagerEffectDispatcherSpec extends AnyFlatSpec with Matchers:
 
   it should "route Explorer to the explorer dependency" in {
     val fixture = harness()
-    val effect  = ExplorerEffect.LoadDirectory(PanelPosition.Left, Path.of("/tmp"))
+    val effect  = ExplorerEffect.OpenRoot(PanelPosition.Left, Path.of("/tmp"), 30)
 
     fixture.interpreter.interpret(AppEffect.Explorer(effect)).unsafeRunSync()
 

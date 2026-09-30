@@ -16,7 +16,6 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.state.undo.UndoState
 import com.serenity.testkit.VirtualTime.runVirtual
-import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -44,7 +43,11 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
       triggers.update(_ :+ trigger)
 
   /** A real operation boundary (dispatcher + lanes) over a model, with the editor port every effect family uses. */
-  final private class Rig(val modelRef: Ref[IO, Model], val operations: StateManagerOperationBoundary):
+  final private class Rig(
+      val modelRef: Ref[IO, Model],
+      val operations: StateManagerOperationBoundary,
+      val listedDirectories: Ref[IO, List[Path]]
+  ):
     val stateRef: Ref[IO, AppState] = ModelViews.appRef(modelRef)
     private val modelCommit         = operations.modelCommit
 
@@ -80,9 +83,15 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
 
   private def rig(initial: AppState = AppState.initial): IO[Rig] =
     for
-      modelRef   <- Ref.of[IO, Model](Model(initial, UndoState(), Map.empty))
-      operations <- StateManagerOperationBoundary.create(modelRef, quietLogger)
-    yield Rig(modelRef, operations)
+      modelRef <- Ref.of[IO, Model](Model(initial, UndoState(), Map.empty))
+      listed   <- Ref.of[IO, List[Path]](Nil)
+      // Virtual time never finishes a real blocking directory read, so listings are recorded instead.
+      operations <- StateManagerOperationBoundary.create(
+        modelRef,
+        quietLogger,
+        listDirectory = path => listed.update(_ :+ path).as(Nil)
+      )
+    yield Rig(modelRef, operations, listed)
 
   private def configEffects(
     rig: Rig,
@@ -139,8 +148,7 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
     state.persisted.buffers(BufferId(0)).document.content.toString
 
   final private class PresetRecorders(
-      val persistedConfigs: Ref[IO, List[AppConfig]],
-      val pinnedDirectoryLoads: Ref[IO, List[(PanelPosition, Path)]]
+      val persistedConfigs: Ref[IO, List[AppConfig]]
   )
 
   private def presetEffects(
@@ -150,7 +158,6 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
   ): IO[(StateManagerUiPresetEffects, PresetRecorders)] =
     for
       persisted <- Ref.of[IO, List[AppConfig]](Nil)
-      loads     <- Ref.of[IO, List[(PanelPosition, Path)]](Nil)
       triggers  <- Ref.of[IO, List[SessionSaveTrigger]](Nil)
     yield (
       new StateManagerUiPresetEffects(
@@ -164,11 +171,10 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
         config => persisted.update(_ :+ config),
         StateManagerConfigEffects.withUpdatedRunnerConfig,
         IO.unit,
-        (position, path) => loads.update(_ :+ (position -> path)),
         rig.commit,
         rig.editor
       ),
-      PresetRecorders(persisted, loads)
+      PresetRecorders(persisted)
     )
 
   /** A preset store whose `create` waits for `gate` before writing. */
@@ -280,11 +286,11 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
         _                    <- gate.complete(())
         _                    <- rig.operations.awaitEffects
         persisted            <- recorders.persistedConfigs.get
-        loads                <- recorders.pinnedDirectoryLoads.get
+        listed               <- rig.listedDirectories.get
         after                <- rig.stateRef.get
-      yield (persisted.size, loads, after.runtime.pendingUiPresetApply)
+      yield (persisted.size, listed, after.runtime.pendingUiPresetApply)
 
-    runVirtual(program) shouldBe (1, List(PanelPosition.Left -> Path.of(".")), None)
+    runVirtual(program) shouldBe (1, List(Path.of(".")), None)
   }
 
   "Shutting down effects" should "finish at once when no persistence work is pending" in {

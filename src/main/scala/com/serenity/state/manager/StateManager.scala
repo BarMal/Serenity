@@ -129,7 +129,10 @@ final case class FileService(
     // under one of them, so an on-disk dictionary edit invalidates StateManagerOperationBoundary's fingerprint cache
     // in real time rather than only on window focus-gain.
     dictionaryWatchDirectories: IO[Set[Path]],
-    refreshDictionaryFingerprints: IO[Unit]
+    refreshDictionaryFingerprints: IO[Unit],
+    // The directories docked explorers show, and a way to have them re-listed after a change made outside the editor.
+    explorerWatchDirectories: IO[Set[Path]],
+    markExplorerDirectoriesStale: Set[Path] => IO[Unit]
 )
 
 trait StateManager extends StateEngine:
@@ -239,7 +242,11 @@ object StateManager:
     */
   private[manager] def fromRuntime(runtime: StateManagerRuntime)(using Balance): IO[StateManager] =
     StateManagerOperationBoundary
-      .create(runtime.modelRef, runtime.logger)
+      .create(
+        runtime.modelRef,
+        runtime.logger,
+        listDirectory = StateManagerOperationBoundary.explorerListing(runtime.fileManager.listDirectory)
+      )
       .map(operations => new StateManagerImpl(runtime, operations))
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =

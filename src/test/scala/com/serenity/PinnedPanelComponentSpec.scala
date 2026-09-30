@@ -120,29 +120,28 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
       )
   }
 
-  it should "emit a load-directory effect when activating a selected directory in the explorer panel" in {
+  it should "expand an unlisted directory when activating it, leaving its listing to the commit boundary" in {
     val root        = Paths.get("/repo")
     val selectedDir = root.resolve("src")
-    val state = dockedState(
-      SurfaceContent.DirectoryTree(
-        DirectoryTreeData(
-          root,
-          entries = Map(root -> List(DirEntry(selectedDir, "src", isDirectory = true)))
-        ),
-        selectedPath = Some(selectedDir)
-      )
+    val tree = DirectoryTreeData(
+      root,
+      entries = Map(root -> List(DirEntry(selectedDir, "src", isDirectory = true))),
+      failed = Map(selectedDir -> "Permission denied")
     )
+    val state = dockedState(SurfaceContent.DirectoryTree(tree, selectedPath = Some(selectedDir)))
 
     val component = PinnedPanelComponent(PanelPosition.Left)
 
     component.processEvent(PanelInputEvent.Activate, state) match
-      case ComponentResult.ReducerUpdate(result) =>
-        result shouldBe ReducerResult.withEffect(
-          state,
-          AppEffect.Explorer(ExplorerEffect.LoadDirectory(PanelPosition.Left, selectedDir))
+      case ComponentResult.StateChange(update) =>
+        update(state).pinnedSurfaces.map(_.content) shouldBe List(
+          SurfaceContent.DirectoryTree(
+            tree.copy(expandedPaths = Set(selectedDir), failed = Map.empty),
+            Some(selectedDir)
+          )
         )
       case other =>
-        fail(s"Expected ReducerUpdate, got $other")
+        fail(s"Expected StateChange, got $other")
   }
 
   it should "collapse an expanded directory when navigating left on that selection" in {

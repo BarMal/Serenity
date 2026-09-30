@@ -111,8 +111,6 @@ final private[manager] class StateManagerEffectHandlers(
   private val panelEffects = new StateManagerPanelEffects(
     currentState,
     logger,
-    fileManager,
-    editor,
     markdownPreviewWindow,
     updateModelValidated,
     enqueueEvent,
@@ -137,7 +135,6 @@ final private[manager] class StateManagerEffectHandlers(
     configEffects.persistConfigFile,
     StateManagerConfigEffects.withUpdatedRunnerConfig,
     panelEffects.openMarkdownPreview,
-    panelEffects.loadPinnedDirectoryEffect,
     commitAppValidated,
     editor
   )
@@ -208,8 +205,6 @@ final private[manager] class StateManagerEffectHandlers(
     effect match
       case ExplorerEffect.OpenRoot(position, path, size) =>
         panelEffects.pinExplorerPanelEffect(position, path, size)
-      case ExplorerEffect.LoadDirectory(position, path) =>
-        panelEffects.loadPinnedDirectoryEffect(position, path)
 
   private def interpretWorkflowEffect(effect: WorkflowEffect): IO[Unit] =
     workflowEffects.interpret(effect)

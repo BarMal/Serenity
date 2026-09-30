@@ -3,7 +3,7 @@ package com.serenity.state.components
 import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.{AppState, Focus, SurfacePresentation, movedToEndWhere}
-import com.serenity.state.reducers.{AppEffect, ExplorerEffect, FileEffect, ReducerResult}
+import com.serenity.state.reducers.{AppEffect, FileEffect, ReducerResult}
 import com.serenity.ui.layout.{DirectoryTreeData, PanelPosition}
 
 class PinnedPanelComponent(
@@ -88,22 +88,15 @@ class PinnedPanelComponent(
             .flatMap(path => visibleRows.find(_.path == path))
             .map { row =>
               if row.isDirectory then
-                if row.isExpanded then ComponentResult.noChange
-                else if row.isLoaded then
+                if row.isExpanded && row.failure.isEmpty then ComponentResult.noChange
+                else
                   val updated = surface.copy(
                     content = com.serenity.state.models.SurfaceContent.DirectoryTree(
-                      tree.copy(expandedPaths = tree.expandedPaths + row.path),
+                      tree.copy(expandedPaths = tree.expandedPaths + row.path).retried(row.path),
                       Some(row.path)
                     )
                   )
                   ComponentResult.updateState(replaceSurface(_, updated))
-                else
-                  ComponentResult.reducerResult(
-                    ReducerResult.withEffect(
-                      currentState,
-                      AppEffect.Explorer(ExplorerEffect.LoadDirectory(position, row.path))
-                    )
-                  )
               else
                 ComponentResult.reducerResult(
                   ReducerResult.withEffect(currentState, AppEffect.File(FileEffect.DirectLoadFile(row.path)))

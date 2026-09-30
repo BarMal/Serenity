@@ -32,7 +32,6 @@ enum FileEffect:
 
 enum ExplorerEffect:
   case OpenRoot(position: PanelPosition, path: Path, size: Int)
-  case LoadDirectory(position: PanelPosition, path: Path)
 
 enum WorkflowEffect:
   case RequestOpenFile

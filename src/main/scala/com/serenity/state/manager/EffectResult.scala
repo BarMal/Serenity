@@ -28,7 +28,7 @@ import com.serenity.state.reducers.{
   ReducerResult,
   ThemeStateReducer
 }
-import com.serenity.ui.layout.{DirEntry, PanelPosition, Symbol}
+import com.serenity.ui.layout.{DirEntry, Symbol}
 import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.Theme
 
@@ -64,8 +64,8 @@ private[manager] enum EffectResult:
   case UiPresetApplyResolved(request: Long, resolution: UiPresetApplyResolution)
 
   // ---- Explorer and theme results (#1697 Wave 3: explorer/theme lanes) ----
-  case ExplorerRootListed(position: PanelPosition, root: Path, listing: List[DirEntry])
-  case DirectoryListed(position: PanelPosition, path: Path, listing: List[DirEntry])
+  /** A docked explorer's listing of `path`, or why it could not be read. */
+  case ExplorerListed(surfaceId: SurfaceId, path: Path, listing: Either[String, List[DirEntry]])
   case ExplorerFileMoved(source: Path)
   case ThemeLoaded(requestedName: String, theme: Theme)
   case ThemeReloaded(requestedName: String, theme: Theme)
@@ -132,10 +132,8 @@ private[manager] object EffectResult:
         UiPresetTransitions.resolveApply(state, request, resolution)
 
       // ---- Explorer and theme results (#1697 Wave 3: explorer/theme lanes) ----
-      case ExplorerRootListed(position, root, listing) =>
-        PinnedPanelContentReducer.applyRootListing(position, root, listing, state)
-      case DirectoryListed(position, path, listing) =>
-        PinnedPanelContentReducer.applyDirectoryListing(position, path, listing, state)
+      case ExplorerListed(surfaceId, path, listing) =>
+        PinnedPanelContentReducer.applyListing(surfaceId, path, listing, state)
       case ExplorerFileMoved(source) =>
         PinnedPanelContentReducer.forgetMovedFile(source, state).state
       case ThemeLoaded(requestedName, theme) =>

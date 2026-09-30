@@ -72,4 +72,21 @@ class DirectoryTreeSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
 
     resolved.focusOrder.size shouldBe resolved.paintBoxes.size
   }
+
+  "directoryTreeRowViews" should "note a directory still loading, muted, and one that failed, as an error" in {
+    val waiting = tree.copy(
+      expandedPaths = Set(root, src, test),
+      loading = Set(src),
+      failed = Map(test -> "Permission denied")
+    )
+
+    val rows = PanelContentResolver.directoryTreeRowViews(LayoutRect(0, 0, 40, 10), waiting, selectedPath = None)
+
+    rows.map(_.row.plainText) should contain allOf ("  ▾ src  loading…", "  ▾ test  couldn't open: Permission denied")
+    rows.flatMap(_.row.segments).map(segment => segment.text -> segment.tone) should contain allOf (
+      "  loading…"                         -> OverlayTone.Muted,
+      "  couldn't open: Permission denied" -> OverlayTone.Error
+    )
+  }
+
 end DirectoryTreeSurfaceCompositionSpec

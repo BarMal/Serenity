@@ -181,3 +181,36 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
 
     runVirtual(checked) shouldBe Nil
   }
+
+  it should "mark an explorer directory stale when a file is added to or removed from it" in {
+    val directory = Files.createTempDirectory("external-change-watch-explorer")
+    val added     = directory.resolve("new.md")
+
+    val program = for
+      staleBatches <- Ref.of[IO, List[Set[java.nio.file.Path]]](Nil)
+      _ <- FileChangeWatcher.create.use { watcher =>
+        for
+          _ <- watcher.sync(Set(directory))
+          _ <- IO.blocking(Files.writeString(added, "created externally"))
+          _ <- AppRuntime
+            .externalChangeWatchLoop(
+              watcher,
+              openBufferPaths = IO.pure(Map.empty),
+              checkBufferForExternalChanges = _ => IO.unit,
+              explorerWatchDirectories = IO.pure(Set(directory)),
+              markExplorerDirectoriesStale = directories => staleBatches.update(_ :+ directories),
+              pollInterval = 5.seconds
+            )
+            .take(1)
+            .compile
+            .drain
+        yield ()
+      }
+      stale <- staleBatches.get
+    yield stale
+
+    try program.unsafeRunTimed(15.seconds) shouldBe Some(List(Set(directory)))
+    finally
+      Files.deleteIfExists(added)
+      Files.deleteIfExists(directory)
+  }

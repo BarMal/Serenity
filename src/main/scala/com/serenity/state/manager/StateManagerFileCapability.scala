@@ -72,7 +72,9 @@ final private[manager] class StateManagerFileCapability(
     // changes; wiring the same effect into window focus-gain here is a cheap backstop for a change the watcher wasn't
     // running for or whose poll window missed, rather than a per-keystroke filesystem stat either way.
     refreshDictionaryFingerprints: IO[Unit],
-    dictionaryWatchDirectories: IO[Set[Path]]
+    dictionaryWatchDirectories: IO[Set[Path]],
+    explorerWatchDirectories: IO[Set[Path]],
+    markExplorerDirectoriesStale: Set[Path] => IO[Unit]
 ):
 
   // The disk read runs here, off the dispatcher; the decision re-reads state on it, after any in-flight save has
@@ -107,5 +109,7 @@ final private[manager] class StateManagerFileCapability(
     openBufferPaths = effects.openBufferPathsEffect,
     checkBufferForExternalChanges = bufferId => resolveOnDispatcher(effects.observeExternalRevisionEffect(bufferId)),
     dictionaryWatchDirectories = dictionaryWatchDirectories,
-    refreshDictionaryFingerprints = refreshDictionaryFingerprints
+    refreshDictionaryFingerprints = refreshDictionaryFingerprints,
+    explorerWatchDirectories = explorerWatchDirectories,
+    markExplorerDirectoriesStale = markExplorerDirectoriesStale
   )
