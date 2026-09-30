@@ -20,6 +20,9 @@ enum LaneKey:
     * directory does not.
     */
   case ExplorerListing(position: PanelPosition, path: Path)
+
+  /** Docked outline panels' re-parse after an edit burst: a newer edit supersedes the pending one. */
+  case OutlineRefresh
   case Search, Analysis, Theme, Config, Presets, Keybindings, Session, Project, Dialog, Timer
 
 enum LanePolicy:

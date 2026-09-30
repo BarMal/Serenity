@@ -169,15 +169,13 @@ private[manager] object UiPresetTransitions:
         state
 
   private def hydratePresetSymbolPanels(state: AppState): AppState =
-    val outlineSymbolsList = PanelSymbolLookup.outlineSymbols(state)
-    val outlineActive      = PanelSymbolLookup.currentSymbolActiveLocation(outlineSymbolsList, state)
-    val commentSymbolsList = PanelSymbolLookup.commentPanelSymbols(state)
-    val commentActive      = PanelSymbolLookup.currentSymbolActiveLocation(commentSymbolsList, state)
     val hydratedSurfaces = state.runtime.uiSurfaces.map {
       case surface @ UiSurface(_, SurfaceContent.Outline(_, _), SurfacePresentation.Docked, _) =>
-        surface.copy(content = SurfaceContent.Outline(outlineSymbolsList, outlineActive))
+        surface.copy(content = PanelContentSync.outlineContent(state.activeBuffer))
       case surface @ UiSurface(_, SurfaceContent.Comments(_, _), SurfacePresentation.Docked, _) =>
-        surface.copy(content = SurfaceContent.Comments(commentSymbolsList, commentActive))
+        surface.copy(content = PanelContentSync.commentsContent(state.activeBuffer))
+      case surface @ UiSurface(_, SurfaceContent.Diagnostics(_, _), SurfacePresentation.Docked, _) =>
+        surface.copy(content = PanelContentSync.diagnosticsContent(state, state.activeBuffer))
       case surface =>
         surface
     }

@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import scala.concurrent.duration.*
 
 import cats.effect.*
+import cats.syntax.all.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.{SpellCheckConfig, SpellCheckDictionaryFingerprint}
 import com.serenity.diagnostics.Trace
@@ -41,7 +42,9 @@ final private[manager] class StateManagerOperationBoundary private (
   private val DocumentAnalysisDebounce         = 150.millis
   private val FindSearchDebounce               = 50.millis
   private val MarkdownPreviewCommitDebounce    = 150.millis
+  private val OutlineRefreshDebounce           = 150.millis
   private val FindSearchLane: Lane.Keyed       = Lane.Keyed(LaneKey.Search, LanePolicy.SwitchLatest)
+  private val OutlineRefreshLane: Lane.Keyed   = Lane.Keyed(LaneKey.OutlineRefresh, LanePolicy.SwitchLatest)
   private val DocumentAnalysisLane: Lane.Keyed = Lane.Keyed(LaneKey.Analysis, LanePolicy.SwitchLatest)
   private val ShutdownGracePeriod              = 5.seconds
 
@@ -96,7 +99,8 @@ final private[manager] class StateManagerOperationBoundary private (
 
   /** The follow-up work of every `ModelCommit` app-state commit. */
   private[manager] def afterCommit(fallbackState: AppState, committedState: AppState): IO[Unit] =
-    logModalTransition(fallbackState, committedState) >> scheduleDocumentAnalysis()
+    logModalTransition(fallbackState, committedState) >> scheduleDocumentAnalysis() >>
+      PanelContentSync.outlineRefreshDue(committedState, fallbackState).traverse_(scheduleOutlineRefresh)
 
   private[manager] def logRejectedCommit(errors: List[String]): IO[Unit] =
     logger.error(s"State validation failed: ${errors.mkString(", ")}")
@@ -240,6 +244,22 @@ final private[manager] class StateManagerOperationBoundary private (
       IO.sleep(MarkdownPreviewCommitDebounce) >> postResult(EffectResult.MarkdownPreviewSettled(bufferId, generation))
     )
 
+  /** Re-parses the outline of `bufferId` once edits to it pause: large documents take several milliseconds to parse,
+    * too long to repeat on every keystroke. The result is dropped if the buffer changed again before it landed.
+    */
+  private def scheduleOutlineRefresh(bufferId: BufferId): IO[Unit] =
+    submit(
+      OutlineRefreshLane,
+      IO.sleep(OutlineRefreshDebounce) >> modelCommit.currentState.flatMap { snapshot =>
+        snapshot.persisted.buffers.get(bufferId).traverse_ { buffer =>
+          IO.delay(PanelSymbolLookup.outlineSymbolsForBuffer(buffer))
+            .flatMap(symbols =>
+              postResult(EffectResult.OutlineRefreshed(bufferId, buffer.document.contentVersion, symbols))
+            )
+        }
+      }
+    )
+
   private def markdownPreviewCommitLane(bufferId: BufferId): Lane.Keyed =
     Lane.Keyed(LaneKey.MarkdownPreview(bufferId), LanePolicy.SwitchLatest)
 
@@ -284,6 +304,7 @@ private[manager] object StateManagerOperationBoundary:
     AppStateValidation
       .validated(normalizeCommandRunnerFocus(newState))
       .map(CommentRendering.syncFloatingLensWithCursor(_, fallbackState))
+      .map(PanelContentSync.synced(_, fallbackState))
 
   private def normalizeCommandRunnerFocus(state: AppState): AppState =
     if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() then

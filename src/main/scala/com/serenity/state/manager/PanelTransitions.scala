@@ -34,18 +34,15 @@ private[manager] object PanelTransitions:
           upsert(surface.content)
         )
       case PanelKind.Outline =>
-        val symbols = PanelSymbolLookup.outlineSymbols(state)
-        upsert(SurfaceContent.Outline(symbols, PanelSymbolLookup.currentSymbolActiveLocation(symbols, state)))
+        upsert(PanelContentSync.outlineContent(state.activeBuffer))
       case PanelKind.Comments =>
         // #1551: the pin-to-side command and the `CommentDisplayMode` setting used to disagree about whether comments
         // are visible -- pinning always showed live comment content regardless of the setting.
         if state.persisted.config.surfaceConfig.commentDisplayMode == CommentDisplayMode.Off then
           PanelPinPlan.Report("Comments are hidden -- comment display is turned off in Settings.")
-        else
-          val symbols = PanelSymbolLookup.commentPanelSymbols(state)
-          upsert(SurfaceContent.Comments(symbols, PanelSymbolLookup.currentSymbolActiveLocation(symbols, state)))
+        else upsert(PanelContentSync.commentsContent(state.activeBuffer))
       case PanelKind.Diagnostics =>
-        upsert(SurfaceContent.Diagnostics(Nil))
+        upsert(PanelContentSync.diagnosticsContent(state, state.activeBuffer))
       case PanelKind.MarkdownPreview =>
         markdownPreviewContent(state).fold(
           PanelPinPlan.Ignore("[CMD] Markdown preview requested without an active Markdown buffer")
@@ -215,19 +212,13 @@ private[manager] object PanelTransitions:
     state.copy(runtime = state.runtime.copy(markdownPreviewWindowBuffer = bufferId))
 
   def markdownPreviewBufferId(state: AppState): Option[BufferId] =
-    focusedMarkdownBuffer(state).map(_.id)
+    activeMarkdownBuffer(state).map(_.id)
 
   private def markdownPreviewContent(state: AppState): Option[SurfaceContent] =
-    focusedMarkdownBuffer(state).map { buffer =>
-      val title = buffer.document.filePath
-        .flatMap(path => Option(path.getFileName).map(_.toString))
-        .getOrElse("Untitled")
-      SurfaceContent.MarkdownPreview(buffer.id, title)
-    }
+    activeMarkdownBuffer(state).map(PanelContentSync.markdownPreviewContent)
 
-  private def focusedMarkdownBuffer(state: AppState): Option[Buffer] =
-    state.focusedBufferId
-      .flatMap(state.persisted.buffers.get)
+  private def activeMarkdownBuffer(state: AppState): Option[Buffer] =
+    state.activeBuffer
       .filter(_.document.language.contains(LanguageId.Markdown))
 
   private def newestPanelKindSurface(kind: PanelKind, state: AppState): Option[UiSurface] =
