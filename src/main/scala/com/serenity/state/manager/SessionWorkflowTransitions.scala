@@ -12,13 +12,14 @@ import com.serenity.ui.layout.{LayoutEngine, SplitAxis}
   */
 private[manager] object SessionWorkflowTransitions:
 
-  /** `restoredState` with this run's runtime chrome: viewport, terminal mode and keyboard tier. Every surface is
-    * dropped, the one the restore was chosen from included.
+  /** `restoredState` with this run's runtime chrome: viewport, terminal mode and keyboard tier. Every floating surface
+    * is dropped, the one the restore was chosen from included; docked panels stay, since the restored workspace tree
+    * names them and would fail validation without them.
     */
   def restoredIntoViewport(restoredState: AppState, currentState: AppState): AppState =
     val restored = restoredState.copy(
       runtime = restoredState.runtime.copy(
-        uiSurfaces = List.empty,
+        uiSurfaces = restoredState.runtime.uiSurfaces.filter(_.presentation == SurfacePresentation.Docked),
         viewportSize = currentState.runtime.viewportSize,
         capabilities = currentState.runtime.capabilities,
         projectTasks = ProjectTaskTransitions.acrossRestore(currentState)
