@@ -157,8 +157,9 @@ object EditorGeometryProducer:
     LayoutEngine.calculateLayout(state, viewportSize).editorPanelRect.width
 
   /** One column's TEXT width in cells for `buffer`'s own pane, derived the same way
-    * `CursorViewport.adjustForCursorColumnMode` (via `columnCountForBuffer`) and `RendererPaneSetup` do --
-    * `LayoutEngine.columnWidthCells` of the pane's full content width, MINUS the per-column line-number rail
+    * `CursorViewport.adjustForCursorColumnMode` (via `columnCountForBuffer`) and `RendererPaneSetup` do -- the count
+    * from `LayoutEngine.resolvedColumnCount` and the width from `LayoutEngine.columnWidthCellsForCount` of the pane's
+    * full content width (issue #1338 slice 4's count-driven seam), MINUS the per-column line-number rail
     * (`LayoutEngine.perColumnGutterWidth`, issue #1338 slice 2), so nav folds lines at exactly the width the column's
     * text is rendered and wrapped at. The rail is 0 cells when line numbers are off, leaving the full column width.
     * `None` when there is no laid-out window (`runtime.viewportSize` unset) or the buffer's pane cannot be found, so
@@ -177,8 +178,8 @@ object EditorGeometryProducer:
         .flatten
         .filter(_ > 0)
         .map { contentWidth =>
-          val bandWidth =
-            LayoutEngine.columnWidthCells(contentWidth, surfaceConfig.columnTargetWidthCells, surfaceConfig.columnGap)
+          val count     = LayoutEngine.resolvedColumnCount(contentWidth, surfaceConfig)
+          val bandWidth = LayoutEngine.columnWidthCellsForCount(contentWidth, count, surfaceConfig.columnGap)
           (bandWidth - LayoutEngine.perColumnGutterWidth(state)).max(1)
         }
     }

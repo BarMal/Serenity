@@ -150,17 +150,17 @@ object RendererPaneSetup:
     val bufferMetrics        = CellMetrics.fromFont(bufferFont)
     val surfaceConfig        = state.persisted.config.surfaceConfig
     // Column-based document layout (issue #1338): narrows the viewport (and so `baseViewport.visibleColumns`) to one
-    // column's width, the same math `LayoutEngine.columnWidthCells` uses, whenever column mode and word wrap are both
-    // on -- otherwise this is exactly the three-argument overload every pane used before, so off-path rendering is
-    // unaffected.
+    // column's width whenever column mode and word wrap are both on -- otherwise this is exactly the three-argument
+    // overload every pane used before, so off-path rendering is unaffected. Slice 4: the column width comes from the
+    // count-driven `LayoutEngine.resolvedColumnCount`/`columnWidthCellsForCount` seam (via the `surfaceConfig`
+    // overload), so a pinned `columnCount` narrows the same way Auto does.
     val baseViewport =
       LayoutEngine.updateBufferViewportDimensions(
         buffer,
         contentRect,
         surfaceConfig.wordWrapEnabled,
         columnModeEnabled = surfaceConfig.columnModeEnabled,
-        columnTargetWidthCells = surfaceConfig.columnTargetWidthCells,
-        columnGap = surfaceConfig.columnGap
+        surfaceConfig
       )
     val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
     val fontRenderContext =

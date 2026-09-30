@@ -431,9 +431,10 @@ object CursorViewport:
 
     viewport.copy(topLine = topLine, leftColumn = 0, topVisualLine = topVisualLine)
 
-  /** How many e-reader columns a page shows for `buffer`'s pane -- `LayoutEngine.columnCount` of the pane's own full
-    * content width (in cells) at the configured target width/gap. The buffer's own `viewport.visibleColumns` here is
-    * already the NARROWED single-column width, so the full pane width has to be recovered from the pane layout. When
+  /** How many e-reader columns a page shows for `buffer`'s pane -- `LayoutEngine.resolvedColumnCount` of the pane's own
+    * full content width (in cells): Auto fits "as many as fit" at the configured target width/gap, an explicit
+    * `columnCount` pins the count (issue #1338 slice 4). The buffer's own `viewport.visibleColumns` here is already the
+    * NARROWED single-column width, so the full pane width has to be recovered from the pane layout. When
     * `runtime.viewportSize` is unset (no laid-out window yet -- e.g. a reducer test) the full width is unknown, so this
     * falls back to a single column, which makes [[adjustForCursorColumnMode]]'s page anchoring exactly the
     * active-column anchoring it did before multi-column pages existed.
@@ -450,13 +451,8 @@ object CursorViewport:
             paneLayouts.get(paneId).map(_.contentRect.width)
         }.flatten
         paneContentWidth match
-          case None => 1
-          case Some(contentWidth) =>
-            LayoutEngine.columnCount(
-              contentWidth,
-              surfaceConfig.columnTargetWidthCells,
-              surfaceConfig.columnGap
-            )
+          case None               => 1
+          case Some(contentWidth) => LayoutEngine.resolvedColumnCount(contentWidth, surfaceConfig)
 
   private def previewFontForBuffer(
     buffer: Buffer,
