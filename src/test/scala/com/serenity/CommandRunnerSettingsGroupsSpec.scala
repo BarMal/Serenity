@@ -195,6 +195,8 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "line-wrap",
       "visual-line-navigation",
       "typewriter-scrolling",
+      "columns",
+      "column-gap",
       "wheel-scroll-lines",
       "focused-text-body",
       "contextual-toolbar",
@@ -323,6 +325,46 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
         SettingsIntent.TextDisplay(TextDisplayIntent.SetContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly))
       )
     )
+  }
+
+  // Multi-column e-reader layout (issue #1338, Phase 2 / slice 4): the count and gap steppers are always visible in
+  // the text-display group, whether or not column mode itself is on -- unlike a setting gated behind a toggle, there
+  // is no dependency here to hide behind.
+  it should "surface column count and gap as always-visible input rows regardless of column mode" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val columnModeOff     = CommandRunner.empty.activate(registry, AppConfig.default.withColumnMode(false))
+    val columnModeOn =
+      CommandRunner.empty.activate(registry, AppConfig.default.withColumnMode(true).withColumnCount(Some(3)))
+
+    val textDisplayOff = groupByIdRecursive(columnModeOff.settingsGroups, "settings-text-display")
+    val textDisplayOn  = groupByIdRecursive(columnModeOn.settingsGroups, "settings-text-display")
+
+    textDisplayOff.children.map(_.id) should contain allOf ("columns", "column-gap")
+    textDisplayOn.children.map(_.id) should contain allOf ("columns", "column-gap")
+
+    val columnsItem = textDisplayOn.children
+      .collectFirst { case item: CommandSurfaceItem.InputItem if item.id == "columns" => item }
+      .getOrElse(fail("missing columns input item"))
+    columnsItem.currentValue shouldBe "3"
+    columnsItem.parse("auto") shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnCount(None)))
+    )
+    columnsItem.parse("5") shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnCount(Some(5))))
+    )
+    columnsItem.steppedIntent(1) shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnCount(Some(4))))
+    )
+
+    val autoColumnsItem = groupByIdRecursive(columnModeOff.settingsGroups, "settings-text-display").children
+      .collectFirst { case item: CommandSurfaceItem.InputItem if item.id == "columns" => item }
+      .getOrElse(fail("missing columns input item"))
+    autoColumnsItem.currentValue shouldBe "auto"
+    autoColumnsItem.steppedIntent(1) shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnCount(Some(1))))
+    )
+    autoColumnsItem.steppedIntent(-1) shouldBe None
   }
 
   // issue #1046: command-runner visible-rows/item-gap-rows/cursor-gap-rows are no longer separate settings rows --

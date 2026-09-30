@@ -70,6 +70,9 @@ final private[manager] case class MouseTargetLayoutKey(
     columnModeEnabled: Boolean,
     columnTargetWidthCells: Int,
     columnGap: Int,
+    // Count-driven columns (issue #1338, Phase 2 / slice 4): `resolvedColumnCount` reads this too, so a live change
+    // to the explicit column count (with target width/gap unchanged) must also invalidate the cached scene.
+    columnCount: Option[Int],
     minimumPaneWidth: Int,
     textAreaInsets: TextAreaInsets,
     interfaceDensity: InterfaceDensity,
@@ -147,6 +150,7 @@ private[manager] object MouseTargetLayoutKey:
       columnModeEnabled = state.persisted.config.surfaceConfig.columnModeEnabled,
       columnTargetWidthCells = state.persisted.config.surfaceConfig.columnTargetWidthCells,
       columnGap = state.persisted.config.surfaceConfig.columnGap,
+      columnCount = state.persisted.config.surfaceConfig.columnCount,
       minimumPaneWidth = state.persisted.config.editorConfig.minimumPaneWidth,
       textAreaInsets = state.persisted.config.surfaceConfig.textAreaInsets,
       interfaceDensity = state.persisted.config.interfaceDensity,
@@ -336,8 +340,7 @@ final private[serenity] class AuthoritativeUiScene:
                 paneLayout.contentRect,
                 surfaceConfig.wordWrapEnabled,
                 columnModeEnabled = surfaceConfig.columnModeEnabled,
-                columnTargetWidthCells = surfaceConfig.columnTargetWidthCells,
-                columnGap = surfaceConfig.columnGap
+                surfaceConfig
               )
             val visibleColumns =
               if surfaceConfig.wordWrapEnabled then baseViewport.visibleColumns
@@ -374,18 +377,15 @@ final private[serenity] class AuthoritativeUiScene:
               // above). Slice 2: each column carries its own line-number rail on its left edge, so its TEXT wraps in the
               // band minus that rail (`columnTextWidthCells`) while the band itself (placement `columnWidthCells`) and
               // the inter-column offset stay full-width -- matching `RendererPaneSetup.snapshotForBuffer`'s column
-              // branch. `columnCount` fits "as many columns as fit" the pane's full content width; each column is
-              // placed at `columnIndex * (columnWidth + gap)` cells.
+              // branch. Slice 4: `resolvedColumnCount` is count-driven -- Auto fits "as many columns as fit" the pane's
+              // full content width, `Some(n)` pins n; each column is placed at `columnIndex * (columnWidth + gap)`
+              // cells.
               val columnWidthCells     = math.max(1, viewport.visibleColumns)
               val gutterWidthCells     = LayoutEngine.perColumnGutterWidth(state)
               val columnTextWidthCells = math.max(1, columnWidthCells - gutterWidthCells)
               val columnTextWidthPx    = math.max(1, columnTextWidthCells * gridMetrics.charWidth)
               val columnCount =
-                LayoutEngine.columnCount(
-                  paneLayout.contentRect.width,
-                  surfaceConfig.columnTargetWidthCells,
-                  surfaceConfig.columnGap
-                )
+                LayoutEngine.resolvedColumnCount(paneLayout.contentRect.width, surfaceConfig)
               val columnSnapshotList = TextLayoutSnapshot.fromBufferColumns(
                 buffer.copy(viewport = viewport),
                 columnTextWidthPx,

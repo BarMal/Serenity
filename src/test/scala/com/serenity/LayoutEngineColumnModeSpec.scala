@@ -44,6 +44,60 @@ class LayoutEngineColumnModeSpec extends AnyFlatSpec with Matchers:
     LayoutEngine.columnWidthCells(contentWidthCells = 40, columnTargetWidthCells = 80, columnGap = 2) shouldBe 40
   }
 
+  // Multi-column e-reader layout (issue #1338, Phase 2 / slice 4): count-driven resolution. `resolvedColumnCount` is
+  // the single seam every caller routes through -- Auto (`columnCount = None`) reproduces the width-driven count;
+  // `Some(n)` pins n, clamped to what the pane can hold (the anti-absurdity `MinColumnTextWidthCells` floor).
+  behavior of "LayoutEngine.maxColumnsThatFit"
+
+  it should "count how many minimum-width columns (plus the gap between them) fit, never fewer than one" in {
+    // (200 + 2) / (8 + 2) = 20 columns of the 8-cell anti-absurdity floor.
+    LayoutEngine.maxColumnsThatFit(contentWidthCells = 200, gap = 2) shouldBe 20
+    // Narrower than a single floor column still yields one.
+    LayoutEngine.maxColumnsThatFit(contentWidthCells = 4, gap = 2) shouldBe 1
+  }
+
+  behavior of "LayoutEngine.resolvedColumnCount"
+
+  it should "reproduce the width-driven count in Auto mode (columnCount = None)" in {
+    val surfaceConfig = AppConfig.default.withColumnTargetWidth(80).withColumnGap(2).surfaceConfig
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig) shouldBe
+      LayoutEngine.columnCount(contentWidthCells = 200, columnTargetWidthCells = 80, columnGap = 2)
+  }
+
+  it should "pin exactly the configured count when set and it fits" in {
+    val surfaceConfig = AppConfig.default.withColumnGap(2).withColumnCount(Some(3)).surfaceConfig
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig) shouldBe 3
+  }
+
+  it should "clamp an absurd configured count down to what the pane can hold" in {
+    val surfaceConfig = AppConfig.default.withColumnGap(2).withColumnCount(Some(1000)).surfaceConfig
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig) shouldBe
+      LayoutEngine.maxColumnsThatFit(contentWidthCells = 200, gap = 2)
+  }
+
+  it should "clamp a configured count of zero or less up to one" in {
+    val surfaceConfig = AppConfig.default.withColumnGap(2).withColumnCount(Some(0)).surfaceConfig
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig) shouldBe 1
+  }
+
+  it should "yield a single column when the pane width is unknown (zero content width)" in {
+    val autoConfig  = AppConfig.default.withColumnCount(None).surfaceConfig
+    val countConfig = AppConfig.default.withColumnCount(Some(3)).surfaceConfig
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 0, autoConfig) shouldBe 1
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 0, countConfig) shouldBe 1
+  }
+
+  behavior of "LayoutEngine.columnWidthCellsForCount"
+
+  it should "divide the content width evenly across a fixed count after subtracting the gaps" in {
+    // 3 columns in 200 with gap 2: (200 - 2*2) / 3 = 65 cells each.
+    LayoutEngine.columnWidthCellsForCount(contentWidthCells = 200, count = 3, gap = 2) shouldBe 65
+  }
+
+  it should "never fall below one cell, even for an over-large count" in {
+    LayoutEngine.columnWidthCellsForCount(contentWidthCells = 10, count = 20, gap = 2) shouldBe 1
+  }
+
   behavior of "LayoutEngine.updateBufferViewportDimensions with column mode"
 
   private def bufferWithViewport: Buffer =

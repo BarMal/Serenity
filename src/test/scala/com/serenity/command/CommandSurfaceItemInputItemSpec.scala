@@ -68,6 +68,54 @@ class CommandSurfaceItemInputItemSpec extends AnyFlatSpec with Matchers:
     decimalItem("not-a-number").steppedIntent(1) shouldBe None
   }
 
+  private def columnCountItem(current: String): CommandSurfaceItem.InputItem =
+    CommandSurfaceItem.InputItem(
+      id = "test-column-count",
+      label = "Test Column Count",
+      hint = "Columns, or auto",
+      currentValue = current,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
+      parse = text =>
+        text.trim.toLowerCase match
+          case "auto" | "0" =>
+            Some(CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnCount(None))))
+          case trimmed =>
+            trimmed.toIntOption
+              .filter(_ >= 1)
+              .map(count =>
+                CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnCount(Some(count))))
+              ),
+      category = CommandCategory.Settings,
+      defaultValue = Some("auto"),
+      stepFromAuto = Some(1)
+    )
+
+  "steppedIntent" should "step up from the Auto sentinel to the value stepFromAuto names" in {
+    columnCountItem("auto").steppedIntent(1) shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnCount(Some(1))))
+    )
+  }
+
+  it should "stay at Auto when stepping down from it" in {
+    columnCountItem("auto").steppedIntent(-1) shouldBe None
+  }
+
+  it should "step down from 1 back to Auto" in {
+    columnCountItem("1").steppedIntent(-1) shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnCount(None)))
+    )
+  }
+
+  it should "step up from a numeric column count normally" in {
+    columnCountItem("2").steppedIntent(1) shouldBe Some(
+      CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnCount(Some(3))))
+    )
+  }
+
+  it should "not step up from the Auto sentinel when the item has no stepFromAuto" in {
+    decimalItem("not-a-number").copy(stepFromAuto = None).steppedIntent(1) shouldBe None
+  }
+
   it should "return None for free-text and binding input kinds" in {
     val freeText = CommandSurfaceItem.InputItem(
       id = "test-free-text",

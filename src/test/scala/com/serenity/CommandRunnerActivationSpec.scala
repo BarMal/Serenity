@@ -186,6 +186,8 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         "line-wrap",
         "visual-line-navigation",
         "typewriter-scrolling",
+        "columns",
+        "column-gap",
         "wheel-scroll-lines",
         "focused-text-body",
         "contextual-toolbar",

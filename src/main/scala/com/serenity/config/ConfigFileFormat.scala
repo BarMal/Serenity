@@ -96,6 +96,7 @@ object ConfigFileFormat:
     field("editor.column_mode"),
     field("editor.column_target_width"),
     field("editor.column_gap"),
+    field("editor.column_count"),
     field("editor.line_numbers"),
     comment(
       "Line-number placement (left, right, both) and cell spacing: margin from the panel edge to the counter, " +

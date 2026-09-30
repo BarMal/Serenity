@@ -100,6 +100,20 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.columnGap,
       (config, value) => config.withColumnGap(value)
     ),
+    // Multi-column e-reader layout (issue #1338, Phase 2 / slice 4): count-driven mode. `auto` (the default) keeps
+    // today's width-driven column count; a positive integer pins exactly that many columns.
+    named(
+      "editor.column_count",
+      "columnCount",
+      "display.column_count",
+      "display.column.count",
+      "display_column_count"
+    )(
+      int.filtered(_ >= 1).orAuto
+    )(
+      _.surfaceConfig.columnCount,
+      (config, value) => config.withColumnCount(value)
+    ),
     named(
       "editor.line_numbers",
       "showLineNumbers",

@@ -27,10 +27,15 @@ final case class SurfaceConfig(
     // infrastructure exists today. Only takes effect while `wordWrapEnabled` is also on -- otherwise a no-op, falling
     // back to ordinary vertical scrolling.
     columnModeEnabled: Boolean = false,
-    // Target column width in cells; the actual column count is however many of this width (plus `columnGap`) fit the
-    // pane, not a fixed user-picked count.
+    // Target column width in cells; used only in Auto mode (`columnCount = None`), where the count is however many of
+    // this width (plus `columnGap`) fit the pane.
     columnTargetWidthCells: Int = 80,
     columnGap: Int = 2,
+    // Multi-column e-reader layout (issue #1338, Phase 2 / slice 4): count-driven mode. `None` is Auto -- the
+    // width-driven "as many columns of `columnTargetWidthCells` as fit" behaviour above, unchanged. `Some(n)` pins
+    // exactly n columns, each column's width auto-derived to fit. The clamp to the pane-dependent maximum lives in
+    // `LayoutEngine.resolvedColumnCount`, not in `normalized` -- `normalized` has no pane width to clamp against.
+    columnCount: Option[Int] = None,
     focusedTextBodyEnabled: Boolean = false,
     contextualToolbarEnabled: Boolean = true,
     contextualToolbarDisplayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText,

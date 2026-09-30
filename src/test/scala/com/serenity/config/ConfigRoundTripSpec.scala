@@ -80,6 +80,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withColumnMode(true)
     .withColumnTargetWidth(60)
     .withColumnGap(4)
+    .withColumnCount(Some(5))
     .withFocusedTextBody(true)
     .withContextualToolbarEnabled(false)
     .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
