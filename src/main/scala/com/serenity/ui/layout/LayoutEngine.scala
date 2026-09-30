@@ -479,9 +479,9 @@ object LayoutEngine:
     */
   val MinColumnTextWidthCells = 8
 
-  /** The most columns `contentWidthCells` can hold before each would fall below the [[MinColumnTextWidthCells]] floor --
-    * how many columns of `(MinColumnTextWidthCells + gap)` fit, mirroring [[columnCount]]'s fit math, never fewer than
-    * one. The upper clamp `resolvedColumnCount` applies to an explicit `columnCount = Some(n)`.
+  /** The most columns `contentWidthCells` can hold before each would fall below the [[MinColumnTextWidthCells]] floor
+    * -- how many columns of `(MinColumnTextWidthCells + gap)` fit, mirroring [[columnCount]]'s fit math, never fewer
+    * than one. The upper clamp `resolvedColumnCount` applies to an explicit `columnCount = Some(n)`.
     */
   def maxColumnsThatFit(contentWidthCells: Int, gap: Int): Int =
     val clampedGap = gap.max(0)
