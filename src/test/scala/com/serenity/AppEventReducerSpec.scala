@@ -66,7 +66,12 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "open the contextual toolbar below the cursor without stealing editor focus" in {
     val initialState =
-      AppState.initial.copy(persisted = AppState.initial.persisted.copy(focus = Focus.EditorPane(PaneId(0))))
+      AppState.initial.copy(persisted =
+        AppState.initial.persisted.copy(
+          focus = Focus.EditorPane(PaneId(0)),
+          config = AppState.initial.persisted.config.withAppMode(com.serenity.config.AppMode.Prose)
+        )
+      )
 
     val result  = AppEventReducer.reduce(ToggleContextualToolbar, initialState, registry)
     val surface = result.state.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar"))

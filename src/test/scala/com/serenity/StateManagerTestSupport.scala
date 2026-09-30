@@ -7,6 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.io.FileDialog
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.AppState
 import com.serenity.testkit.AwaitCondition
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -45,6 +46,12 @@ trait StateManagerTestSupport:
     fileDialog: Option[FileDialog] = None
   ): StateManager =
     createStateManagerIO(loggerName, onFontConfigChanged, deviceTextScaleProvider, fileDialog).unsafeRunSync()
+
+  /** A state manager in prose mode, for specs exercising prose-only tooling (rich text, the formatting toolbar). */
+  protected def createProseStateManager(loggerName: String): StateManager =
+    val stateManager = createStateManager(loggerName)
+    stateManager.updateState(TestAppModes.prose).unsafeRunSync()
+    stateManager
 
   /** Polls until `settled` holds, for work that lands after the call that started it returns -- a file opened through a
     * lane, or a save (#1671, #1672).

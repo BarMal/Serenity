@@ -12,6 +12,9 @@ import org.scalatest.matchers.should.Matchers
 
 class SurfaceContentResolverContextualToolbarSpec extends AnyFlatSpec with Matchers:
 
+  // The formatting toolbar's rich-text controls belong to prose mode.
+  private val proseInitial = TestAppModes.prose(AppState.initial)
+
   given Balance = Balance.default
 
   private def singlePaneLayout(paneId: PaneId, bufferId: BufferId): Layout =
@@ -49,8 +52,8 @@ class SurfaceContentResolverContextualToolbarSpec extends AnyFlatSpec with Match
     ).normalized
     val paneId       = PaneId(0)
     val sourceBuffer = Buffer.fromString(bufferId, "alpha beta")
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = proseInitial.copy(
+      persisted = proseInitial.persisted.copy(
         buffers = Map(
           bufferId -> sourceBuffer.copy(
             editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus)),
@@ -83,8 +86,8 @@ class SurfaceContentResolverContextualToolbarSpec extends AnyFlatSpec with Match
   }
 
   it should "retain icon-font runs alongside labels in IconAndText toolbars" in {
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = proseInitial.copy(
+      persisted = proseInitial.persisted.copy(
         config = AppConfig.default.withContextualToolbarDisplayMode(ToolbarDisplayMode.IconAndText)
       )
     )
@@ -130,8 +133,8 @@ class SurfaceContentResolverContextualToolbarSpec extends AnyFlatSpec with Match
     ).normalized
     val paneId       = PaneId(0)
     val sourceBuffer = Buffer.fromString(bufferId, "alpha beta")
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = proseInitial.copy(
+      persisted = proseInitial.persisted.copy(
         buffers = Map(
           bufferId -> sourceBuffer.copy(
             editing = EditingStateFixtures(selection = Some(selection), cursors = List(selection.focus)),

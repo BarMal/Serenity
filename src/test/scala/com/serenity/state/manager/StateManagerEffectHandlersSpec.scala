@@ -227,6 +227,55 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
   }
 
   // ---------------------------------------------------------------------------------------------------------------
+  // Command scope (mode/frontend availability)
+  // ---------------------------------------------------------------------------------------------------------------
+
+  private def inMode(mode: AppMode): AppState =
+    AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(config = AppState.initial.persisted.config.withAppMode(mode))
+    )
+
+  it should "refuse a code command in a prose workspace with a notice, and not run it" in {
+    val state   = inMode(AppMode.Prose)
+    val fixture = harness(state)
+
+    fixture.handlers
+      .interpretCommand(
+        command(CommandIntent.Project(ProjectIntent.RunProjectTask(com.serenity.project.ProjectTaskKind.Build))),
+        state
+      )
+      .unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe List(
+      s"showPeek:${com.serenity.ui.layout.PeekContent.QuickInfo("Only available in code mode.")}"
+    )
+  }
+
+  it should "refuse a prose command in a code workspace with a notice, and not run it" in {
+    val state   = inMode(AppMode.Code)
+    val fixture = harness(state)
+
+    fixture.handlers
+      .interpretCommand(command(CommandIntent.Darlings(DarlingIntent.CutToDarlings)), state)
+      .unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe List(
+      s"showPeek:${com.serenity.ui.layout.PeekContent.QuickInfo("Only available in prose mode.")}"
+    )
+  }
+
+  it should "not count a refused command towards recency" in {
+    val state   = inMode(AppMode.Prose)
+    val fixture = harness(state)
+
+    fixture.handlers
+      .interpretCommand(command(CommandIntent.Lsp(LspIntent.RequestLspHover)), state)
+      .unsafeRunSync()
+
+    fixture.currentState.persisted.commandUsage shouldBe empty
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------
   // Edit intents
   // ---------------------------------------------------------------------------------------------------------------
 

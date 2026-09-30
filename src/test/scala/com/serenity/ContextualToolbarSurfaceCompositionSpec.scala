@@ -18,7 +18,7 @@ class ContextualToolbarSurfaceCompositionSpec extends AnyFlatSpec with Matchers 
 
   "forToolbar" should
     "map the toolbar's first row to a Distributed paint box with the same segments SurfaceContentResolver paints (issue #819)" in {
-      val stateManager = createStateManager("ContextualToolbarSurfaceCompositionSpec-distributed-mapping")
+      val stateManager = createProseStateManager("ContextualToolbarSurfaceCompositionSpec-distributed-mapping")
 
       stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
       seedToolbarDocument(stateManager)
@@ -43,7 +43,7 @@ class ContextualToolbarSurfaceCompositionSpec extends AnyFlatSpec with Matchers 
     }
 
   it should "resolve a click at a top-level item's cell to the same ContextualToolbarHit ContextualToolbarLayout.hitAt returns" in {
-    val stateManager = createStateManager("ContextualToolbarSurfaceCompositionSpec-top-level-hit")
+    val stateManager = createProseStateManager("ContextualToolbarSurfaceCompositionSpec-top-level-hit")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -73,7 +73,7 @@ class ContextualToolbarSurfaceCompositionSpec extends AnyFlatSpec with Matchers 
   }
 
   it should "resolve a click on a group-separator gutter to no hit, matching ContextualToolbarLayout.hitAt" in {
-    val stateManager = createStateManager("ContextualToolbarSurfaceCompositionSpec-separator-gap")
+    val stateManager = createProseStateManager("ContextualToolbarSurfaceCompositionSpec-separator-gap")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
     seedToolbarDocument(stateManager)

@@ -13,7 +13,7 @@ import com.serenity.rope.*
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
-import com.serenity.ui.layout.PanelPosition
+import com.serenity.ui.layout.{PanelPosition, PeekContent}
 
 /** A buffer's file seen on disk at a revision other than the one the buffer held when it was read (#1623). */
 final private[manager] case class ExternalRevisionObservation(
@@ -233,6 +233,15 @@ final private[manager] class StateManagerEffectHandlers(
   // how it was triggered -- rather than only on the effect path, which used to leave palette/mouse-driven commands
   // silent.
   private[manager] def interpretCommand(command: Command, state: AppState): IO[Unit] =
+    // Every entry path lands here, so this one check also covers hotkeys, menus and the toolbar -- which is what
+    // keeps a command hidden from the palette in this mode/frontend from still running by another route.
+    command.scope.unavailableReason(state.editingContext) match
+      case Some(reason) =>
+        logger.info(s"[COMMAND] refused ${command.name}: $reason") >>
+          showPeek(PeekContent.QuickInfo(reason), state.activeCursorPosition.getOrElse(CursorPosition(0, 0)))
+      case None => dispatchCommand(command, state)
+
+  private def dispatchCommand(command: Command, state: AppState): IO[Unit] =
     val dispatch = command.intent match
       case CommandIntent.Lifecycle(intent)    => interpretLifecycleIntent(intent, state)
       case CommandIntent.File(intent)         => interpretFileIntent(intent, state)

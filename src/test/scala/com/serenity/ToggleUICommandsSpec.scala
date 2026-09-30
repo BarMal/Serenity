@@ -367,6 +367,12 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
 
   it should "open the contextual toolbar without toggling the setting" in {
     val stateManager = createStateManager()
+    // The toolbar only opens when it has items, and a plain buffer's (rich-text) items belong to prose mode.
+    stateManager
+      .updateState(s =>
+        s.copy(persisted = s.persisted.copy(config = s.persisted.config.withAppMode(com.serenity.config.AppMode.Prose)))
+      )
+      .unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.contextualToolbarEnabled shouldBe true
 

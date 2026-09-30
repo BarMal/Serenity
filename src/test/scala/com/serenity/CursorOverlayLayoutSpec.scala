@@ -443,6 +443,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val state = base.copy(
       persisted = base.persisted.copy(config =
         AppState.initial.persisted.config
+          .withAppMode(com.serenity.config.AppMode.Prose)
           .withUiElementGap(Some(0.25))
           .withCommandRunnerCursorGapRows(Some(0.5))
       ),

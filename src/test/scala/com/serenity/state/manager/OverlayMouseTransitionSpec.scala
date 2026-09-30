@@ -151,6 +151,29 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
     opened.persisted.focus shouldBe Focus.Surface(SurfaceId("context-menu"))
   }
 
+  private def contextMenuNames(mode: com.serenity.config.AppMode): List[String] =
+    val base   = editorState("alpha beta")
+    val state  = base.copy(persisted = base.persisted.copy(config = base.persisted.config.withAppMode(mode)))
+    val buffer = state.persisted.buffers(BufferId(0))
+    run(state)(
+      EditorContextMenuHitTesting.open(Some((PaneId(0), buffer, CursorPosition(0, 1))))
+    )._1.state.contextMenuSurface
+      .map(_.content) match
+      case Some(SurfaceContent.ContextMenu(menu)) => menu.items.map(_.id)
+      case other                                  => fail(s"Expected an open context menu, got $other")
+
+  it should "leave prose formatting out of the menu in a code workspace" in {
+    val names = contextMenuNames(com.serenity.config.AppMode.Code)
+
+    names should contain("copy")
+    names should not contain "bold"
+    names should not contain "heading-1"
+  }
+
+  it should "offer prose formatting in the menu in a prose workspace" in {
+    contextMenuNames(com.serenity.config.AppMode.Prose) should contain allOf ("copy", "bold", "heading-1")
+  }
+
   "EditorContextMenuHitTesting.click" should "dismiss the menu, restore focus, and emit the clicked item's command" in {
     val (opened, menu, frame) = withOpenContextMenu
     val item                  = contextMenuItem(opened, menu, frame, 0)
@@ -189,7 +212,7 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
   }
 
   "ContextualToolbarHitTesting.click" should "emit a button's command and hand focus back to the editor" in {
-    val base      = editorState("alpha beta", ViewportSize(160, 40))
+    val base      = com.serenity.TestAppModes.prose(editorState("alpha beta", ViewportSize(160, 40)))
     val buffer    = base.persisted.buffers(BufferId(0))
     val selection = Selection(CursorPosition(0, 6), CursorPosition(0, 10))
     val selected = base.copy(persisted =

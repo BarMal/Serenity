@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.command.{CommandRunner, FileIntent}
-import com.serenity.config.{AppConfig, InterfaceDensity}
+import com.serenity.config.{AppConfig, AppMode, InterfaceDensity}
 import com.serenity.rope.Balance
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
@@ -353,7 +353,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val initialState = AppState.initial
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
-        config = AppConfig.default.withUiElementGap(Some(1)),
+        config = AppConfig.default.withUiElementGap(Some(1)).withAppMode(AppMode.Prose),
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(

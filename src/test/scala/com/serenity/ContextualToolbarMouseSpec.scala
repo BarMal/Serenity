@@ -22,7 +22,7 @@ import org.scalatest.matchers.should.Matchers
 class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with ContextualToolbarTestSupport:
 
   "Contextual toolbar" should "select and execute toolbar items on click without stealing editor focus" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-mouse")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-mouse")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
     stateManager
@@ -72,7 +72,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
   }
 
   it should "select toolbar items at their fractional code-metric pixel offset when UI fonts differ" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-fractional-mouse")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-fractional-mouse")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
     stateManager
@@ -116,7 +116,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
   }
 
   it should "retain toolbar focus for a clicked text-entry control, then restore editor focus on submit" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-mouse-input-focus")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-mouse-input-focus")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -137,7 +137,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
   }
 
   it should "restore editor focus when a button is clicked while a toolbar detail is open" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-mouse-button-after-detail")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-mouse-button-after-detail")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
     stateManager
@@ -171,7 +171,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
   }
 
   it should "open a paragraph role dropdown and apply the clicked option" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-role-dropdown")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-role-dropdown")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
     stateManager
@@ -218,7 +218,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
   }
 
   it should "open a paragraph role dropdown and apply heading level 4" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-role-dropdown-h4")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-role-dropdown-h4")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
     stateManager
@@ -259,7 +259,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
   }
 
   it should "open a color dropdown and apply the clicked preset" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-color-dropdown")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-color-dropdown")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(160, 40))).unsafeRunSync()
     stateManager
@@ -301,7 +301,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
   }
 
   it should "ignore hover and clicks on compact toolbar separator gutters" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-separator-pointer")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-separator-pointer")
 
     stateManager
       .updateState(state =>
@@ -351,7 +351,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
   }
 
   it should "ignore fractional toolbar separator drags before editor targeting" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-fractional-separator-drag")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-fractional-separator-drag")
 
     stateManager
       .updateState(state =>
@@ -390,7 +390,7 @@ class ContextualToolbarMouseSpec extends AnyFlatSpec with Matchers with Contextu
   }
 
   it should "ignore fractional toolbar separator secondary clicks before opening an editor context menu" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-fractional-separator-secondary-click")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-fractional-separator-secondary-click")
 
     stateManager
       .updateState(state =>

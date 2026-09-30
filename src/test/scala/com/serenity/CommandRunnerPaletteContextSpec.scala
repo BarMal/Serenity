@@ -26,6 +26,13 @@ class CommandRunnerPaletteContextSpec extends AnyFlatSpec with Matchers:
       .visibleItems
       .collect { case CommandSurfaceItem.CommandItem(command) => command.name }
 
+  private def searchedCommands(editing: EditingContext, term: String): List[String] =
+    CommandRunner.empty
+      .activate(registry, AppConfig.default, context = CommandRunnerContext(editingContext = Some(editing)))
+      .updateSearchTerm(term)(using registry)
+      .visibleItems
+      .collect { case CommandSurfaceItem.CommandItem(command) => command.name }
+
   "the opening palette" should "keep Settings as its first row even when other commands were used more recently" in {
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
@@ -40,7 +47,7 @@ class CommandRunnerPaletteContextSpec extends AnyFlatSpec with Matchers:
     openingCommands(None) should contain allOf ("lsp-hover", "project-run", "bold", "markdown-preview", "save")
   }
 
-  it should "leave code tooling out of a prose workspace, but keep it searchable" in {
+  it should "leave code tooling out of a prose workspace, search included" in {
     val prose = openingCommands(Some(context(AppMode.Prose, Some(BufferKind.PlainText))))
 
     prose should not contain "lsp-hover"
@@ -48,16 +55,20 @@ class CommandRunnerPaletteContextSpec extends AnyFlatSpec with Matchers:
     prose should not contain "format"
     prose should contain("save")
 
-    val searched = CommandRunner.empty
-      .activate(
-        registry,
-        AppConfig.default,
-        context = CommandRunnerContext(editingContext = Some(context(AppMode.Prose, None)))
-      )
-      .updateSearchTerm("project run")(using registry)
-    searched.visibleItems.collect { case CommandSurfaceItem.CommandItem(command) => command.name } should contain(
-      "project-run"
-    )
+    searchedCommands(context(AppMode.Prose, None), "project run") should not contain "project-run"
+  }
+
+  it should "leave prose tooling out of a code workspace, search included" in {
+    val code = openingCommands(Some(context(AppMode.Code, Some(BufferKind.RichText))))
+
+    code should not contain "bold"
+    code should not contain "cut-to-darlings"
+    searchedCommands(context(AppMode.Code, None), "bold") should not contain "bold"
+    searchedCommands(context(AppMode.Code, None), "darlings") should not contain "cut-to-darlings"
+  }
+
+  it should "keep rich-text formatting searchable on a plain buffer in a prose workspace" in {
+    searchedCommands(context(AppMode.Prose, Some(BufferKind.PlainText)), "bold") should contain("bold")
   }
 
   it should "offer code tooling in a code workspace" in {

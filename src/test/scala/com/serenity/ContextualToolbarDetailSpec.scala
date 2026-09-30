@@ -19,7 +19,7 @@ import org.scalatest.matchers.should.Matchers
 class ContextualToolbarDetailSpec extends AnyFlatSpec with Matchers with ContextualToolbarTestSupport:
 
   "Contextual toolbar" should "leave editor typing active while the toolbar is open" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-editor-focus")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-editor-focus")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     stateManager
@@ -45,7 +45,7 @@ class ContextualToolbarDetailSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "keep the formatted run state when the caret sits on its trailing boundary" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-caret-boundary-style")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-caret-boundary-style")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     stateManager
@@ -91,7 +91,7 @@ class ContextualToolbarDetailSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "execute the focused formatting command on Enter" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-enter")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-enter")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     stateManager
@@ -124,7 +124,7 @@ class ContextualToolbarDetailSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "dismiss on Escape and restore editor focus" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-escape")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-escape")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
@@ -137,7 +137,7 @@ class ContextualToolbarDetailSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "open a focused font size field with the current value prefilled, accept edits, and apply them on Enter" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-font-size")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-font-size")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -167,7 +167,7 @@ class ContextualToolbarDetailSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "retain its intrinsic compact width when a font-family detail opens" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-font-family-compact-width")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-font-family-compact-width")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -184,7 +184,7 @@ class ContextualToolbarDetailSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "open a focused font family field with the current value prefilled, accept edits, and apply them on Enter" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-font-family-input")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-font-family-input")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -212,7 +212,7 @@ class ContextualToolbarDetailSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "open a focused color field with the current value prefilled, accept hex edits, and apply them on Enter" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-color-input")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-color-input")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -240,7 +240,7 @@ class ContextualToolbarDetailSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "close an open toolbar control on Escape before dismissing the toolbar" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-escape-detail")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-escape-detail")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()

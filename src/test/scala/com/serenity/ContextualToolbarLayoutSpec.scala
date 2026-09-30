@@ -18,7 +18,7 @@ import org.scalatest.matchers.should.Matchers
 class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with ContextualToolbarTestSupport:
 
   it should "compact and balance the default formatting toolbar when its intrinsic width exceeds the pane" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-default-constrained-pane")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-default-constrained-pane")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(140, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -52,7 +52,7 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "center short wrapped rows and leave their surrounding padding inactive" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-centered-wrapped-rows")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-centered-wrapped-rows")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(140, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -93,7 +93,7 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "never exceed its compact width cap when balanced groups are wider" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-absolute-compact-cap")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-absolute-compact-cap")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -112,7 +112,7 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "wrap a fitting toolbar before it consumes most of the active editor pane" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-near-full-width-regression")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-near-full-width-regression")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(200, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -137,7 +137,7 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "use the fewest balanced rows without becoming a wide panel" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-wide-palette-regression")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-wide-palette-regression")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(215, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -164,7 +164,7 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "keep a long font family from widening the compact toolbar to the pane" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-long-font-family")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-long-font-family")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(160, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager, fontFamily = "A deliberately long font family name for compact toolbar coverage")
@@ -196,7 +196,7 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "map each rendered compact toolbar cell and leave separator gutters inert" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-variable-width-hit-regions")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-variable-width-hit-regions")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(78, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -221,7 +221,7 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "keep prose formatting controls in semantic clusters when rows wrap" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-clustered-rows")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-clustered-rows")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -242,7 +242,7 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "use one compact row when the editor has room for all formatting controls" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-compact-row")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-compact-row")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -256,7 +256,7 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
   }
 
   it should "move focus vertically between wrapped toolbar rows" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-vertical-top-level")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-vertical-top-level")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(26, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
