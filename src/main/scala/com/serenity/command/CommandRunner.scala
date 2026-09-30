@@ -100,7 +100,9 @@ final case class CommandRunner(
       case CommandRunnerSurface.PresetDiffReview(presetName, changes, _) =>
         presetDiffReviewItems(presetName, changes)
       case CommandRunnerSurface.Palette(state) =>
-        val commandItems = state.filteredCommands.map(CommandSurfaceItem.CommandItem(_))
+        val commandItems = state.filteredCommands
+          .filter(CommandRelevance.isAvailable(_, context.editingContext))
+          .map(CommandSurfaceItem.CommandItem(_))
         // Category tabs are retired (issue #931): an empty query is just every command, no category to default to.
         // Settings are still reachable here -- via search, below -- exactly as issue #931's "fold into text search"
         // intends; there is just no longer a separate navigation mode for it.
@@ -150,8 +152,11 @@ final case class CommandRunner(
       // that lets a recently-used command float above an equally (or less) relevant one without ever displacing a
       // clearly stronger match, since a `sortBy` is stable across ties in `-commandUsage`.
       else
+        // Filtered before the cap, so commands this mode/frontend hides can't crowd available ones out of it.
         registry
-          .searchCommands(term, maxResults = 50)
+          .searchCommands(term, maxResults = registry.getAllCommands.size)
+          .filter(CommandRelevance.isAvailable(_, context.editingContext))
+          .take(50)
           .sortBy(command => -commandUsage.getOrElse(CommandId(command.name), 0))
     val updatedState = CommandPaletteState(term, 0, filtered)
     val updatedSurface = surface match

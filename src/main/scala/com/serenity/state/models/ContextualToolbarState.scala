@@ -220,8 +220,12 @@ object ContextualToolbar:
         // Prose workspaces have no project to build/test/run/debug (issue #1294), so the buttons that would launch one
         // are never offered there, even for a buffer whose own language happens to read as code.
         case Some(BufferKind.Code(_)) if context.hasCodeTooling => codeItems
-        case _                                                  => proseItems(state, buffer)
+        case _ if proseScope.admits(context)                    => proseItems(state, buffer)
+        case _                                                  => Nil
     }
+
+  // Every prose control applies a `RichText` intent, so the group as a whole shares that family's scope.
+  private val proseScope = CommandScope(CommandFamily.Prose, FrontendSupport.Both)
 
   def focusedCommand(
     toolbarState: ContextualToolbarState,

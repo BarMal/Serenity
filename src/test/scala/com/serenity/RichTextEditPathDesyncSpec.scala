@@ -28,8 +28,11 @@ class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private def createStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("RichTextEditPathDesyncSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    val logger       = LoggerFactory[IO].getLogger(using LoggerName("RichTextEditPathDesyncSpec"))
+    val stateManager = StateManager.apply(logger).unsafeRunSync()
+    // Rich-text formatting belongs to prose mode.
+    stateManager.updateState(TestAppModes.prose).unsafeRunSync()
+    stateManager
 
   private def boldSelection(
     stateManager: StateManager,

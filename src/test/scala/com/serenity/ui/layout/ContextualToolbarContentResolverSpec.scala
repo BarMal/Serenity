@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
 import com.serenity.TestWorkspaceTrees
+import com.serenity.config.AppMode
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -43,9 +44,19 @@ class ContextualToolbarContentResolverSpec extends AnyFlatSpec with Matchers:
           activeEditorPaneId = Some(paneId),
           workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
-        focus = Focus.EditorPane(paneId)
+        focus = Focus.EditorPane(paneId),
+        config = AppState.initial.persisted.config.withAppMode(AppMode.Prose)
       )
     )
+
+  "itemsFor" should "offer no prose formatting controls in a code workspace" in {
+    val codeState = proseState.copy(persisted =
+      proseState.persisted.copy(config = proseState.persisted.config.withAppMode(AppMode.Code))
+    )
+
+    ContextualToolbar.itemsFor(codeState) shouldBe empty
+    ContextualToolbar.itemsFor(proseState).map(_.id) should contain("bold")
+  }
 
   "resolve" should "wrap toolbar items across multiple Distributed rows when the rect is narrow" in {
     val resolved = ContextualToolbarContentResolver.resolve(

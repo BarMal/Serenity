@@ -16,6 +16,7 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
     val driver = UiScenarioDriver
       .create("contextual-toolbar", UiScenarioEnvironment(viewport = com.serenity.ui.layout.ViewportSize(60, 28)))
       .unsafeRunSync()
+    driver.updateState(TestAppModes.prose).unsafeRunSync()
     driver.dispatch(ToggleContextualToolbar).unsafeRunSync()
     val opened    = driver.renderFrame("opened").unsafeRunSync()
     val surfaceId = opened.evidence.surfaceRects.keys.headOption.getOrElse(fail("Expected toolbar rectangle"))
@@ -39,6 +40,7 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
         UiScenarioEnvironment(viewport = com.serenity.ui.layout.ViewportSize(215, 30))
       )
       .unsafeRunSync()
+    driver.updateState(TestAppModes.prose).unsafeRunSync()
     driver
       .updateState { state =>
         val bufferId  = state.focusedBufferId.getOrElse(BufferId(0))
@@ -75,6 +77,7 @@ class ContextualToolbarUiScenarioSpec extends AnyFlatSpec with Matchers:
         UiScenarioEnvironment(viewport = com.serenity.ui.layout.ViewportSize(42, 28))
       )
       .unsafeRunSync()
+    driver.updateState(TestAppModes.prose).unsafeRunSync()
     driver
       .updateState { state =>
         val bufferId  = state.focusedBufferId.getOrElse(BufferId(0))

@@ -1,8 +1,8 @@
 package com.serenity
 
 import com.serenity.command.*
-import com.serenity.config.AppConfig
 import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.{AppConfig, AppMode}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -456,7 +456,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
           workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.Surface(SurfaceId("command-runner")),
-        config = AppConfig.default.withUiElementGap(Some(0.25))
+        config = AppConfig.default.withUiElementGap(Some(0.25)).withAppMode(AppMode.Prose)
       ),
       runtime = AppState.initial.runtime.copy(
         uiSurfaces = List(

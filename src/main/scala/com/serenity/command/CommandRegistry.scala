@@ -1,6 +1,8 @@
 package com.serenity.command
 
 import com.serenity.command.CommandSurfaceItem.CommandItem
+import com.serenity.config.AppMode
+import com.serenity.state.models.Shell
 import com.serenity.ui.presets.UiPreset
 
 class CommandRegistry(private val commands: List[Command]):
@@ -17,6 +19,17 @@ class CommandRegistry(private val commands: List[Command]):
     }.toMap
 
   def getAllCommands: List[Command] = commands
+
+  /** The commands usable in `mode` on `shell`, in registry order (the palette's recency ranking is a stable sort over
+    * it).
+    */
+  def availableCommands(mode: AppMode, shell: Shell): List[Command] =
+    val admitted =
+      for
+        family   <- CommandFamily.values.toSet if family.modes.contains(mode)
+        frontend <- FrontendSupport.values.toSet if frontend.shells.contains(shell)
+      yield CommandScope(family, frontend)
+    commands.filter(command => admitted.contains(command.scope))
 
   def searchCommands(term: String, maxResults: Int = 5): List[Command] =
     searcher.search(term, maxResults)

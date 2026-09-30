@@ -19,7 +19,7 @@ import org.scalatest.matchers.should.Matchers
 class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with ContextualToolbarTestSupport:
 
   "Contextual toolbar" should "toggle on below the cursor without stealing focus and stack above the command runner" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-stack")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-stack")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
@@ -51,7 +51,7 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
   }
 
   it should "follow the active cursor while it remains open" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-follow-caret")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-follow-caret")
 
     stateManager
       .updateState(state =>
@@ -96,7 +96,7 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
   }
 
   it should "move below the cursor line when there is no room above the selection" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-top-row-placement")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-top-row-placement")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 20))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -118,7 +118,7 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
   }
 
   it should "prefer the compact palette above the editing target when that safe placement fits" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-above-placement")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-above-placement")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -154,7 +154,7 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
   }
 
   it should "anchor above the start of a multi-line selection rather than its trailing caret" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-selection-anchor")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-selection-anchor")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     stateManager
@@ -190,7 +190,7 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
   }
 
   it should "center on the bounding box of a same-line selection" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-inline-selection-center")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-inline-selection-center")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(160, 30))).unsafeRunSync()
     stateManager
@@ -223,7 +223,7 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
   }
 
   it should "place below a top-edge multi-line selection without covering its selected text" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-top-edge-selection-placement")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-top-edge-selection-placement")
 
     // A few rows taller than the bare minimum this test used to need: with the gutter now claiming 2 more cells
     // for the unset line-number margin/padding's GUI default, the toolbar's available width narrows enough that
@@ -259,7 +259,7 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
   }
 
   it should "not leave a detached toolbar visible when its anchor scrolls out of view" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-offscreen-anchor")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-offscreen-anchor")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 20))).unsafeRunSync()
     stateManager

@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.IO
 import cats.syntax.all.*
-import com.serenity.command.CommandRegistry
+import com.serenity.command.{CommandRegistry, scope}
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
@@ -89,22 +89,25 @@ private[manager] object EditorContextMenuHitTesting:
   def open(target: Option[(PaneId, Buffer, CursorPosition)]): Transition[Unit] =
     target match
       case Some((paneId, _, clickedCursor)) =>
-        editorContextMenu(Focus.EditorPane(paneId)).fold(Transition.unit) { menu =>
-          val surface = UiSurface(
-            id = ContextMenuSurfaceId,
-            content = SurfaceContent.ContextMenu(menu),
-            presentation = SurfacePresentation.Floating(Some(clickedCursor), SurfacePlacement.BelowCursor)
-          )
-          Transition.modify { current =>
-            current
-              .copy(runtime =
-                current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(isContextMenuSurface) :+ surface)
-              )
-              .pushFocus(Focus.Surface(ContextMenuSurfaceId))
-          }
-        }
+        Transition.inspect(_.editingContext).flatMap(editing => openMenu(paneId, clickedCursor, editing))
       case None =>
         dismissIfOpen
+
+  private def openMenu(paneId: PaneId, clickedCursor: CursorPosition, editing: EditingContext): Transition[Unit] =
+    editorContextMenu(Focus.EditorPane(paneId), editing).fold(Transition.unit) { menu =>
+      val surface = UiSurface(
+        id = ContextMenuSurfaceId,
+        content = SurfaceContent.ContextMenu(menu),
+        presentation = SurfacePresentation.Floating(Some(clickedCursor), SurfacePlacement.BelowCursor)
+      )
+      Transition.modify { current =>
+        current
+          .copy(runtime =
+            current.runtime.copy(uiSurfaces = current.runtime.uiSurfaces.filterNot(isContextMenuSurface) :+ surface)
+          )
+          .pushFocus(Focus.Surface(ContextMenuSurfaceId))
+      }
+    }
 
   def hover(event: MouseInputEvent, state: AppState): Transition[Boolean] =
     contextMenuSelectionAt(event, state) match
@@ -214,10 +217,13 @@ private[manager] object EditorContextMenuHitTesting:
       !composition.paintBoxes.exists(_.rect.contains(event.col.toDouble, event.row.toDouble)))
       .getOrElse(false)
 
-  private def editorContextMenu(targetFocus: Focus): Option[ContextMenu] =
+  private def editorContextMenu(targetFocus: Focus, editing: EditingContext): Option[ContextMenu] =
     val registry = CommandRegistry.withToggleUI
     val items = EditorContextMenuCommands.flatMap { name =>
-      registry.findCommand(name).map(command => ContextMenuItem(command.name, command.label, command))
+      registry
+        .findCommand(name)
+        .filter(_.scope.admits(editing))
+        .map(command => ContextMenuItem(command.name, command.label, command))
     }
     Option.when(items.nonEmpty)(ContextMenu("editor", targetFocus, items))
 

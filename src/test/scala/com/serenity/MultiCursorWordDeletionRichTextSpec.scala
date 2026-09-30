@@ -27,8 +27,11 @@ class MultiCursorWordDeletionRichTextSpec extends AnyFlatSpec with Matchers:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private def createStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("MultiCursorWordDeletionRichTextSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    val logger       = LoggerFactory[IO].getLogger(using LoggerName("MultiCursorWordDeletionRichTextSpec"))
+    val stateManager = StateManager.apply(logger).unsafeRunSync()
+    // Rich-text formatting belongs to prose mode.
+    stateManager.updateState(TestAppModes.prose).unsafeRunSync()
+    stateManager
 
   "a merged multi-cursor word deletion" should "keep richTextDocument in sync with the edited content" in {
     val stateManager = createStateManager()

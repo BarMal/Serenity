@@ -121,10 +121,9 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    val terminalText = bottomTerminalText(stateManager.getCurrentState.unsafeRunSync())
-      .getOrElse(fail("Expected bottom terminal panel"))
-
-    terminalText should include("not available in prose mode")
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    bottomTerminalText(state) shouldBe None
+    state.peekSurface.map(_.content) shouldBe Some(SurfaceContent.QuickInfo("Only available in code mode."))
   }
 
   it should "update the project terminal panel in place rather than pinning a new surface each refresh" in {

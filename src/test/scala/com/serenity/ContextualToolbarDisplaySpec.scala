@@ -24,7 +24,7 @@ import org.scalatest.matchers.should.Matchers
 class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with ContextualToolbarTestSupport:
 
   "Contextual toolbar" should "separate paragraph-role and alignment controls into their own compact groups" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-semantic-groups")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-semantic-groups")
 
     seedToolbarDocument(stateManager)
 
@@ -37,7 +37,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
   }
 
   it should "open with the configured display mode and refresh when the preference changes" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-display-mode")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-display-mode")
 
     stateManager
       .updateState(state =>
@@ -147,7 +147,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
     ContextualToolbar.codeItems.map(_.icon) shouldBe List("", "", "", "")
     ContextualToolbar.codeItems.map(_.label) shouldBe List("Build", "Test", "Run", "Run Debug Task")
 
-    val stateManager = createStateManager("ContextualToolbarSpec-glyphs")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-glyphs")
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
 
@@ -175,7 +175,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
   }
 
   it should "render every compact toolbar control as an icon-only glyph" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-rendered-glyphs")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-rendered-glyphs")
     val viewport     = ViewportSize(120, 30)
     stateManager
       .updateState(state =>
@@ -219,7 +219,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
   }
 
   it should "visually separate semantic formatting control groups" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-group-separators")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-group-separators")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
@@ -241,7 +241,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
   }
 
   it should "render icon-font glyphs alongside labels in IconAndText mode" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-rendered-icon-and-text")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-rendered-icon-and-text")
     val viewport     = ViewportSize(120, 30)
     stateManager
       .updateState(state =>
@@ -282,7 +282,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
   }
 
   it should "use toolbar glyphs supported by the bundled Material Icons Round font" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-font-coverage")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-font-coverage")
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
     seedToolbarDocument(stateManager)
 
@@ -300,7 +300,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
   }
 
   it should "preserve a selected hex value at the exact compact toolbar width" in {
-    val stateManager = createStateManager("ContextualToolbarSpec-compact-selected-hex")
+    val stateManager = createProseStateManager("ContextualToolbarSpec-compact-selected-hex")
     val viewport     = ViewportSize(78, 30)
 
     stateManager

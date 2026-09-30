@@ -330,17 +330,6 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
       "save",
       "find",
       "replace",
-      "bold",
-      "italic",
-      "underline",
-      "heading-1",
-      "heading-2",
-      "heading-3",
-      "paragraph-body",
-      "align-left",
-      "align-center",
-      "align-right",
-      "align-justify",
       "goto-line",
       "toggle-bookmark",
       "add-document-comment",
@@ -352,6 +341,8 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
       "next-document-symbol",
       "previous-document-symbol"
     )
+    // A code workspace: the prose formatting commands aren't offered.
+    menu.items.map(_.id) should contain noneOf ("bold", "italic", "heading-1", "align-left")
     state.persisted.focus shouldBe Focus.Surface(SurfaceId("context-menu"))
   }
 

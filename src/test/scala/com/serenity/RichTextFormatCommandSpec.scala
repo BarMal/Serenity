@@ -28,8 +28,11 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private def createStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("RichTextFormatCommandSpec"))
-    StateManager.apply(logger).unsafeRunSync()
+    val logger       = LoggerFactory[IO].getLogger(using LoggerName("RichTextFormatCommandSpec"))
+    val stateManager = StateManager.apply(logger).unsafeRunSync()
+    // Rich-text formatting belongs to prose mode.
+    stateManager.updateState(TestAppModes.prose).unsafeRunSync()
+    stateManager
 
   private def selectedStateManager(text: String, selection: Selection): (StateManager, BufferId) =
     val stateManager = createStateManager()
