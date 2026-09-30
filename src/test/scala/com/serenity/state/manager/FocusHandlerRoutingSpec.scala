@@ -103,6 +103,10 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
     FocusHandlerRouting.forSurfaceContent(commentLens).getClass.getSimpleName shouldBe "CommentLensComponent"
   }
 
+  it should "route the context menu to a ContextMenuComponent, not the dismiss-on-any-key peek handler" in {
+    FocusHandlerRouting.forSurfaceContent(contextMenu).getClass.getSimpleName shouldBe "ContextMenuComponent"
+  }
+
   it should "route the start page to a StartupPageComponent" in {
     FocusHandlerRouting.forSurfaceContent(startPage).getClass.getSimpleName shouldBe "StartupPageComponent"
   }
@@ -128,7 +132,6 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
       cursorInfoBar,
       directoryListing,
       directoryTree,
-      contextMenu,
       markdownPreview,
       terminal,
       outline,

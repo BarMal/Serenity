@@ -147,10 +147,7 @@ private[manager] object EditorContextMenuHitTesting:
   val dismissIfOpen: Transition[Unit] =
     Transition.modify(state => if state.contextMenuSurface.isDefined then dismissContextMenu(state) else state)
 
-  def dismissContextMenu(state: AppState): AppState =
-    state
-      .copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(isContextMenuSurface)))
-      .popFocus
+  def dismissContextMenu(state: AppState): AppState = state.withoutContextMenu
 
   /** Resolves hover/click against the context menu's own `ResolvedSurfaceComposition` (issue #819, slice 2) -- the same
     * composition `OverlayViewModel` paints from, via `SurfaceHitRegion.hitAt`, rather than a parallel

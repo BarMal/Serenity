@@ -327,6 +327,18 @@ final case class AppState(
       case _                             => false
     }
 
+  /** Closes the context menu, handing focus back to whatever held it before the menu opened. */
+  def withoutContextMenu: AppState =
+    copy(runtime =
+      runtime.copy(uiSurfaces =
+        runtime.uiSurfaces.filterNot(surface =>
+          surface.content match
+            case SurfaceContent.ContextMenu(_) => true
+            case _                             => false
+        )
+      )
+    ).popFocus
+
   def commentLensSurface: Option[UiSurface] =
     findSurface {
       case SurfaceContent.CommentLens(_) => true

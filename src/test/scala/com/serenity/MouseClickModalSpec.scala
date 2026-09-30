@@ -374,6 +374,38 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
     after.runtime.clipboard shouldBe Some("hello")
   }
 
+  it should "run a context menu command chosen from the keyboard, rather than closing on the first arrow key" in {
+    val sm       = makeStateManager()
+    val bufferId = sm.createBuffer("hello\nworld", None).unsafeRunSync()
+    sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
+    sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
+    sm.applyEvent(MouseClick(18, 2, button = MouseButton.Secondary)).unsafeRunSync()
+
+    def openMenu: ContextMenu =
+      sm.getCurrentState
+        .unsafeRunSync()
+        .contextMenuSurface
+        .flatMap {
+          _.content match
+            case SurfaceContent.ContextMenu(menu) => Some(menu)
+            case _                                => None
+        }
+        .getOrElse(fail("Expected the context menu to still be open"))
+
+    val copyIndex = openMenu.items.indexWhere(_.id == "copy")
+    copyIndex should be >= 0
+    // A full lap first, wrapping past the last item, so arrow keys are exercised whichever index `copy` has.
+    (0 until openMenu.items.size + copyIndex).foreach(_ => sm.applyEvent(MoveDown).unsafeRunSync())
+    openMenu.selectedIndex shouldBe copyIndex
+
+    sm.applyEvent(Enter).unsafeRunSync()
+
+    val after = sm.getCurrentState.unsafeRunSync()
+    after.contextMenuSurface shouldBe None
+    after.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+    after.runtime.clipboard shouldBe Some("hello")
+  }
+
   it should "not select a context menu item when clicking a configured item gap" in {
     val sm       = makeStateManager()
     val bufferId = sm.createBuffer("hello\nworld", None).unsafeRunSync()
