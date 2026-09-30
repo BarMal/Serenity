@@ -76,6 +76,50 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
     )
   )
 
+  /** Multi-column e-reader layout (issue #1338, Phase 2 / slice 4): count-driven columns, always visible regardless of
+    * whether column mode is on. "columns" is Auto-inclusive (`stepFromAuto`, mirroring `columnCount`'s own
+    * Auto/`Some(n)` split); "column-gap" is a plain non-negative cell count, like `columnGap` itself.
+    */
+  private[command] def columnItems(
+    columnCountValue: String,
+    columnGapValue: String
+  ): List[CommandSurfaceItem.InputItem] =
+    List(
+      CommandSurfaceItem.InputItem(
+        id = "columns",
+        label = "Columns",
+        hint = "Column count, or auto (1+)",
+        currentValue = columnCountValue,
+        kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
+        parse = text =>
+          text.trim.toLowerCase match
+            case "auto" | "0" =>
+              Some(CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnCount(None))))
+            case trimmed =>
+              trimmed.toIntOption
+                .filter(_ >= 1)
+                .map(count =>
+                  CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnCount(Some(count))))
+                ),
+        category = CommandCategory.Settings,
+        defaultValue = Some("auto"),
+        stepFromAuto = Some(1)
+      ),
+      CommandSurfaceItem.InputItem(
+        id = "column-gap",
+        label = "Column Gap",
+        hint = "Cells between columns",
+        currentValue = columnGapValue,
+        kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
+        parse = text =>
+          text.toIntOption
+            .filter(_ >= 0)
+            .map(cells => CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnGap(cells)))),
+        category = CommandCategory.Settings,
+        defaultValue = Some(AppConfig.default.surfaceConfig.columnGap.toString)
+      )
+    )
+
   private[command] def spellCheckItems(spellCheck: SpellCheckConfig): List[CommandSurfaceItem.InputItem] = List(
     CommandSurfaceItem.InputItem(
       id = "spellcheck-languages",

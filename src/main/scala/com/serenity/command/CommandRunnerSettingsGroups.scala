@@ -66,7 +66,7 @@ object CommandRunnerSettingsGroups:
         CommandRunnerSettingsTextDisplayItems.lineWrapOptionItem(optionSelections),
         CommandRunnerSettingsTextDisplayItems.visualLineNavigationOptionItem(optionSelections),
         CommandRunnerSettingsTextDisplayItems.typewriterScrollingOptionItem(optionSelections)
-      ) ++ input("wheel-scroll-lines") ++ List(
+      ) ++ input("columns", "column-gap") ++ input("wheel-scroll-lines") ++ List(
         CommandRunnerSettingsTextDisplayItems.focusedTextBodyOptionItem(optionSelections),
         CommandRunnerSettingsTextDisplayItems.contextualToolbarOptionItem(optionSelections),
         CommandRunnerSettingsTextDisplayItems.contextualToolbarDisplayModeOptionItem(optionSelections)

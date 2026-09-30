@@ -50,6 +50,8 @@ object CommandRunnerSettingsInputItems:
       lineNumberMarginLeftValue: String,
       lineNumberMarginRightValue: String,
       lineNumberPaddingValue: String,
+      columnCountValue: String,
+      columnGapValue: String,
       spellCheck: SpellCheckConfig,
       companionSpriteConfig: CompanionSpriteConfig
   )
@@ -89,6 +91,8 @@ object CommandRunnerSettingsInputItems:
       lineNumberMarginRightValue = surfaceConfig.lineNumberLayout.marginRight.toString,
       lineNumberPaddingValue =
         surfaceConfig.lineNumberLayout.padding.fold(if capabilities.isCellGrid then "0" else "1")(_.toString),
+      columnCountValue = surfaceConfig.columnCount.fold("auto")(_.toString),
+      columnGapValue = surfaceConfig.columnGap.toString,
       spellCheck = languageToolsConfig.spellCheck.normalized,
       companionSpriteConfig = config.companionSpriteConfig
     )
@@ -154,6 +158,7 @@ object CommandRunnerSettingsInputItems:
         v.textAreaTopValue,
         v.textAreaBottomValue
       ) ++
+      CommandRunnerSettingsInputItemsTextAreaAndSpellCheck.columnItems(v.columnCountValue, v.columnGapValue) ++
       CommandRunnerSettingsInputItemsTextAreaAndSpellCheck.spellCheckItems(v.spellCheck) ++
       CommandRunnerSettingsInputItemsMotion.animationTimingItems(
         v.durationValue,

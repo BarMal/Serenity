@@ -471,11 +471,10 @@ object CommandSurfaceItem:
       parse: String => Option[CommandIntent],
       category: CommandCategory,
       // issue #1056: the row's default value, formatted exactly like `currentValue` (`None` where no meaningful
-      // default exists -- a transient, selection-scoped value like rich-text formatting, or a name/binding with no
-      // single "default" to speak of). Where set, it both renders (`SurfaceContentResolver`) and drives one-key
-      // reset: typing the literal "default" (case-insensitive, mirroring the existing keybinding-reset convention)
-      // resets the row instead of being parsed as a value (`parseOrDefault`).
-      defaultValue: Option[String] = None
+      // default exists). Where set, it both renders (`SurfaceContentResolver`) and drives one-key reset: typing the
+      // literal "default" resets the row instead of being parsed as a value (`parseOrDefault`).
+      defaultValue: Option[String] = None,
+      stepFromAuto: Option[Int] = None
   ) extends CommandSurfaceItem:
     override lazy val searchText: String = s"$label $hint"
 
@@ -508,15 +507,15 @@ object CommandSurfaceItem:
       if text.trim.equalsIgnoreCase("default") then defaultValue.flatMap(parse).orElse(parse(text)) else parse(text)
 
     /** issue #1056: step a numeric setting by one increment without typing, clamped to whatever range this item's own
-      * `parse` already enforces -- stepping past the enforced bound simply parses to `None` (a no-op) rather than
-      * needing a second, separately-maintained copy of each field's min/max. `direction` is `+1`/`-1`; non-numeric
-      * kinds (and rich-text's font size, which has no live value to step from) return `None`.
+      * `parse` already enforces. A non-numeric `currentValue` is the Auto sentinel: `+1` steps to `stepFromAuto`, `-1`
+      * stays at Auto; non-numeric kinds otherwise return `None`.
       */
     def steppedIntent(direction: Int): Option[CommandIntent] =
+      def fromAuto = if direction > 0 then stepFromAuto.flatMap(s => parse(s.toString)) else None
       kind match
         case InputKind.Numeric(decimal) =>
-          val step = if decimal then InputItem.DecimalStep else InputItem.IntegerStep
-          currentValue.toDoubleOption.flatMap { value =>
+          currentValue.toDoubleOption.fold(fromAuto) { value =>
+            val step      = if decimal then InputItem.DecimalStep else InputItem.IntegerStep
             val nextValue = value + (direction * step)
             val nextText  = if decimal then f"$nextValue%.2f" else math.round(nextValue).toString
             parse(nextText)
