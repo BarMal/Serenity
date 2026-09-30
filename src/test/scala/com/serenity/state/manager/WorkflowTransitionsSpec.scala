@@ -2,10 +2,12 @@ package com.serenity.state.manager
 
 import java.nio.file.Paths
 
+import com.serenity.DockedPanelFixtures
 import com.serenity.rope.Balance
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
+import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -148,6 +150,23 @@ class WorkflowTransitionsSpec extends AnyFlatSpec with Matchers:
 
     restored.persisted.buffers.keySet shouldBe saved.persisted.buffers.keySet
     restored.runtime.uiSurfaces shouldBe empty
+  }
+
+  it should "keep the session's docked panels, so the restored workspace tree still validates" in {
+    val (state, pickerId) = withPicker(AppState.initial)
+    val outlineId         = SurfaceId("outline")
+    val saved = DockedPanelFixtures.dock(
+      EditorTransitions.bufferCreated(AppState.initial, "saved", None).created,
+      outlineId,
+      SurfaceContent.Outline(Nil, None),
+      PanelPosition.Left,
+      30
+    )
+
+    val restored = SessionWorkflowTransitions.withNamedSessionLoaded(state, pickerId, Some(saved))
+
+    restored.runtime.uiSurfaces.map(_.id) shouldBe List(outlineId)
+    AppStateValidation.validationErrors(restored) shouldBe Nil
   }
 
   it should "be dropped once the picker was dismissed" in {
