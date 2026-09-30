@@ -174,6 +174,9 @@ final case class AppConfig(
   def withColumnGap(cells: Int): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(columnGap = cells))
 
+  def withColumnCount(count: Option[Int]): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(columnCount = count))
+
   def withFocusedTextBody(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(focusedTextBodyEnabled = enabled))
 

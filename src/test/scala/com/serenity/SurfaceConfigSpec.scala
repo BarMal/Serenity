@@ -56,6 +56,27 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     default.columnGap.shouldBe(2)
   }
 
+  // Multi-column e-reader layout (issue #1338, Phase 2 / slice 4): count-driven, Auto-inclusive. `columnCount = None`
+  // means Auto (the width-driven "as many as fit" behaviour); `Some(n)` pins exactly n columns. The clamp to the
+  // pane-dependent maximum lives in the resolver (`LayoutEngine.resolvedColumnCount`), not here, since `normalized`
+  // has no pane width to clamp against.
+  "SurfaceConfig" should "default columnCount to None (Auto)" in {
+    SurfaceConfig().columnCount shouldBe None
+  }
+
+  "AppConfig.withColumnCount" should "set an explicit column count" in {
+    AppConfig.default.withColumnCount(Some(3)).surfaceConfig.columnCount shouldBe Some(3)
+  }
+
+  it should "clear the column count back to Auto" in {
+    AppConfig.default.withColumnCount(Some(3)).withColumnCount(None).surfaceConfig.columnCount shouldBe None
+  }
+
+  it should "leave columnCount untouched in normalized (its max is pane-width dependent, clamped in the resolver)" in {
+    SurfaceConfig(columnCount = Some(999)).normalized.columnCount shouldBe Some(999)
+    SurfaceConfig(columnCount = None).normalized.columnCount shouldBe None
+  }
+
   "SurfaceConfig.normalized" should "clamp columnGap to non-negative" in {
     SurfaceConfig(columnGap = -5).normalized.columnGap.shouldBe(0)
     SurfaceConfig(columnGap = 5).normalized.columnGap.shouldBe(5)
