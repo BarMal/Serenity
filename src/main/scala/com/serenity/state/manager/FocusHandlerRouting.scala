@@ -37,6 +37,7 @@ private[manager] object FocusHandlerRouting:
     * behaviour, where every one of them fell through a wildcard to `PeekOverlayComponent`.
     */
   private val peekOverlay: LocalEventHandler = new PeekOverlayComponent()
+  private val contextMenu: LocalEventHandler = new ContextMenuComponent()
 
   private val modalGotoLine: LocalEventHandler          = new ModalComponent(ModalType.GotoLine)
   private val modalRenameSymbol: LocalEventHandler      = new ModalComponent(ModalType.RenameSymbol)
@@ -94,7 +95,7 @@ private[manager] object FocusHandlerRouting:
       case SurfaceContent.SymbolDefinition(_, _)    => peekOverlay
       case SurfaceContent.StatusLine(_)             => peekOverlay
       case SurfaceContent.DirectoryListing(_, _, _) => peekOverlay
-      case SurfaceContent.ContextMenu(_)            => peekOverlay
+      case SurfaceContent.ContextMenu(_)            => contextMenu
       case SurfaceContent.MarkdownPreview(_, _)     => peekOverlay
       case SurfaceContent.DirectoryTree(_, _)       => peekOverlay
       case SurfaceContent.Terminal(_, _)            => peekOverlay
