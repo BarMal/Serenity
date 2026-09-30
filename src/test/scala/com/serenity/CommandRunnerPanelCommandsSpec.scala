@@ -182,7 +182,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
       List(
         Symbol("Chapter One", SymbolKind.Heading, Location(0, 0)),
         Symbol("Scene Two", SymbolKind.Heading, Location(4, 0))
-      ) -> Some(Location(0, 0))
+      ) -> None // no stored selection: the renderer follows the cursor, so the highlight never freezes at pin time
     )
   }
 

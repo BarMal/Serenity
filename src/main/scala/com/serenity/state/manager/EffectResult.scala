@@ -28,7 +28,7 @@ import com.serenity.state.reducers.{
   ReducerResult,
   ThemeStateReducer
 }
-import com.serenity.ui.layout.{DirEntry, PanelPosition}
+import com.serenity.ui.layout.{DirEntry, PanelPosition, Symbol}
 import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.Theme
 
@@ -39,6 +39,9 @@ import com.serenity.ui.theme.Theme
 private[manager] enum EffectResult:
   case FindSearchCompleted(request: FindSearchRequest, results: List[FindResult])
   case MarkdownPreviewSettled(bufferId: BufferId, generation: Long)
+
+  /** The outline of `bufferId` as of `contentVersion`, for docked outline panels. */
+  case OutlineRefreshed(bufferId: BufferId, contentVersion: Long, symbols: List[Symbol])
 
   case DocumentAnalysisCompleted(
       analyzed: AppState,
@@ -101,6 +104,8 @@ private[manager] object EffectResult:
     result match
       case FindSearchCompleted(request, results) =>
         CursorViewport.ensureVisibleCursors(state, ModalEventReducer.applyFindSearchResults(state, request, results))
+      case OutlineRefreshed(bufferId, contentVersion, symbols) =>
+        PanelContentSync.withRefreshedOutline(state, bufferId, contentVersion, symbols)
       case MarkdownPreviewSettled(bufferId, generation) =>
         state.persisted.buffers.get(bufferId).filter(_.markdownPreviewEditGeneration == generation).fold(state) {
           buffer =>
