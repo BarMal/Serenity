@@ -25,44 +25,46 @@ object RendererCursorGlyphs:
     config: AppConfig,
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
-    pixelMotion: Boolean
+    pixelMotion: Boolean,
+    paintsCursor: CursorPosition => Boolean = _ => true
   ): List[PixelRect] =
 
-    buffer.editing.cursors.toList.zipWithIndex.flatMap { (cursor, cursorIndex) =>
-      val isPrimaryCursor = cursorIndex == 0
-      val shouldRenderCursor =
-        context.cursorVisible || (buffer.editing.cursors.size > 1 && !isPrimaryCursor)
-      calculateCursorVisualPosition(cursor.position, snapshot) match
-        case Some((visualLine, xPx)) if shouldRenderCursor =>
-          if RendererPaneContent.visualLineVisible(rect, visualLine, context, snapshot)
-          then
-            val effectiveCursorColor = cursorColorFor(config, theme, context, isPrimaryCursor)
-            val caretWidthPx         = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
-            val rowMetrics           = RendererPaneContent.textRowMetrics(rect, context, snapshot)
-            // Caret-glide (issue #1085 phase 2): while a glide is in flight, paint at its tweened pane-relative offset
-            // from this frame's own pane origin instead of the cursor's plain logical position -- see
-            // `CursorGlideGeometry`'s doc comment for why the offset is pane-relative rather than an absolute screen
-            // pixel captured once at seed time.
-            val (screenXPx, screenYPx) = glidePixelPosition(cursor, pixelMotion) match
-              case Some(offset) =>
-                (context.cellMetrics.toPixelX(rect.x) + offset.xPx, context.cellMetrics.toPixelY(rect.y) + offset.yPx)
-              case None =>
-                (context.cellMetrics.toPixelX(rect.x) + math.round(xPx), rowMetrics.cursorTopPx(visualLine))
-            // Caret is as tall as the row it sits on, so on a heading line it grows with the heading (#1542 prose scale).
-            val caretHeightPx = rowMetrics.rowHeightPx(visualLine)
-            caretWithin(rect, context.cellMetrics, screenXPx, caretWidthPx) match
-              case Some((caretXPx, widthPx)) =>
-                context.surface.pixels.fillPixelRect(
-                  caretXPx,
-                  screenYPx,
-                  widthPx,
-                  caretHeightPx,
-                  effectiveCursorColor
-                )
-                List(PixelRect(caretXPx, screenYPx, widthPx, caretHeightPx))
-              case None => Nil
-          else Nil
-        case _ => Nil
+    buffer.editing.cursors.toList.zipWithIndex.filter((cursor, _) => paintsCursor(cursor.position)).flatMap {
+      (cursor, cursorIndex) =>
+        val isPrimaryCursor = cursorIndex == 0
+        val shouldRenderCursor =
+          context.cursorVisible || (buffer.editing.cursors.size > 1 && !isPrimaryCursor)
+        calculateCursorVisualPosition(cursor.position, snapshot) match
+          case Some((visualLine, xPx)) if shouldRenderCursor =>
+            if RendererPaneContent.visualLineVisible(rect, visualLine, context, snapshot)
+            then
+              val effectiveCursorColor = cursorColorFor(config, theme, context, isPrimaryCursor)
+              val caretWidthPx         = math.max(2, math.round(context.cellMetrics.charWidth * 0.12f))
+              val rowMetrics           = RendererPaneContent.textRowMetrics(rect, context, snapshot)
+              // Caret-glide (issue #1085 phase 2): while a glide is in flight, paint at its tweened pane-relative offset
+              // from this frame's own pane origin instead of the cursor's plain logical position -- see
+              // `CursorGlideGeometry`'s doc comment for why the offset is pane-relative rather than an absolute screen
+              // pixel captured once at seed time.
+              val (screenXPx, screenYPx) = glidePixelPosition(cursor, pixelMotion) match
+                case Some(offset) =>
+                  (context.cellMetrics.toPixelX(rect.x) + offset.xPx, context.cellMetrics.toPixelY(rect.y) + offset.yPx)
+                case None =>
+                  (context.cellMetrics.toPixelX(rect.x) + math.round(xPx), rowMetrics.cursorTopPx(visualLine))
+              // Caret is as tall as the row it sits on, so on a heading line it grows with the heading (#1542 prose scale).
+              val caretHeightPx = rowMetrics.rowHeightPx(visualLine)
+              caretWithin(rect, context.cellMetrics, screenXPx, caretWidthPx) match
+                case Some((caretXPx, widthPx)) =>
+                  context.surface.pixels.fillPixelRect(
+                    caretXPx,
+                    screenYPx,
+                    widthPx,
+                    caretHeightPx,
+                    effectiveCursorColor
+                  )
+                  List(PixelRect(caretXPx, screenYPx, widthPx, caretHeightPx))
+                case None => Nil
+            else Nil
+          case _ => Nil
     }
 
   /** Caret-glide (issue #1085 phase 2): the pane-relative pixel offset to paint `cursor` at instead of its plain
@@ -89,6 +91,21 @@ object RendererCursorGlyphs:
       val xPx  = line.xForColumn(cursor.column).getOrElse(line.widthPx)
       (visualIndex, xPx)
     }
+
+  /** The column a caret belongs to. A wrapped line that continues into the next column leaves a cursor on the boundary
+    * column matching both: the end of the earlier column's last row and the start of the later column's first. The
+    * cursor's [[RowAffinity]] settles it exactly as it does between two rows of one snapshot -- downstream (the
+    * default) is the later column, upstream the earlier -- so only one column paints it, and a terminal's single
+    * hardware cursor is never placed from the wrong one.
+    */
+  def owningColumn(
+    columnPlacements: Vector[ColumnSnapshotPlacement],
+    position: CursorPosition
+  ): Option[ColumnSnapshotPlacement] =
+    val holding = columnPlacements.filter(_.snapshot.navigationGeometry.visualRowIndexFor(position).isDefined)
+    position.rowAffinity match
+      case RowAffinity.Upstream   => holding.headOption
+      case RowAffinity.Downstream => holding.lastOption
 
   def measuredRunWidthWithin(
     rect: LayoutRect,

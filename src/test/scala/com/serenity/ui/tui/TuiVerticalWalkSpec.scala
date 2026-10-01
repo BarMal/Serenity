@@ -47,14 +47,15 @@ class TuiVerticalWalkSpec extends TuiSpec:
   )
 
   /** What the caret is sitting on, against what the cursor says it should be on. `None` when there is nothing to
-    * compare: the cursor is at a line end or on a space, where the cell under the caret is blank either way.
+    * compare: the cursor is at a line end, where the cell under the caret is blank either way. A cursor on a space is
+    * compared too: at a wrap boundary a wrong caret lands on a different space, so only the position catches it.
     */
   private def caretMismatch(screen: TuiScreen, current: com.serenity.state.models.AppState): Option[String] =
     for
       buffer   <- focusedBuffer(current)
       cursor   <- buffer.editing.cursorPositions.headOption
       line     <- buffer.document.content.getLine(cursor.line)
-      expected <- line.lift(cursor.column).filterNot(_.isWhitespace)
+      expected <- line.lift(cursor.column).filterNot(_ == '\t')
       (col, row) = screen.caret
       shown      = screen.cellAt(col, row).text
       if shown != expected.toString
@@ -78,6 +79,54 @@ class TuiVerticalWalkSpec extends TuiSpec:
           ups   <- walk(arrowUp, 130)
         yield (downs ++ ups).take(5) shouldBe Nil
       }
+
+  private def rtfParagraph(index: Int): String = index % 7 match
+    case 0 => s"\\qc\\b\\fs48 Chapter $index\\b0\\fs24\\ql"
+    case 1 => words.indices.map(step => words((step * 7 + index) % words.length)).mkString(" ") * (2 + index % 5)
+    case 2 => "The \\b bold run\\b0 and \\i an italic one\\i0 " + paragraph(index)
+    case 3 => ""
+    case 4 => "\\li720 " + paragraph(index)
+    case 5 => paragraph(index + 90)
+    case _ => "\\i " + paragraph(index) + "\\i0"
+
+  private val richText =
+    "{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Times New Roman;}}\\fs24 " + (0 until 60)
+      .map(rtfParagraph)
+      .mkString("\\par\n") + "\\par}"
+
+  "Down through a rich text document in two pinned columns" should "keep the caret on the cursor's character throughout" in
+    runTui(
+      TuiEnvironment
+        .withFile(richText, "chapters.rtf")
+        .withViewport(ViewportSize(187, 58))
+        .withConfig(_.withWordWrap(true).withColumnMode(true).withColumnCount(Some(2)))
+    ) {
+      for
+        rich  <- state.map(current => focusedBuffer(current).exists(_.richText.richTextDocument.isDefined))
+        downs <- walk(arrowDown, 300)
+      yield
+        rich shouldBe true
+        downs.take(5) shouldBe Nil
+    }
+
+  "PageDown through a rich text document in two pinned columns" should "land the caret on the cursor's character and reach the end" in
+    runTui(
+      TuiEnvironment
+        .withFile(richText, "chapters.rtf")
+        .withViewport(ViewportSize(187, 58))
+        .withConfig(_.withWordWrap(true).withColumnMode(true).withColumnCount(Some(2)))
+    ) {
+      for steps <- (0 until 12).toList.traverse { _ =>
+            press(TuiKeys.PageDown) >> settledScreen.flatMap(screen =>
+              state.map(current =>
+                (caretMismatch(screen, current), focusedBuffer(current).flatMap(_.editing.cursorPositions.headOption))
+              )
+            )
+          }
+      yield
+        steps.flatMap(_._1).take(5) shouldBe Nil
+        steps.lastOption.flatMap(_._2).map(_.line) shouldBe Some(richText.split("\\\\par").length - 2)
+    }
 
   "Down and Up after column mode is switched off" should "keep the caret on the cursor's character throughout" in
     runTui(TuiEnvironment.withFile(prose).withConfig(_.withWordWrap(true).withColumnMode(true))) {
