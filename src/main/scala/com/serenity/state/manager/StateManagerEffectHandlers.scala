@@ -57,7 +57,7 @@ final private[manager] class StateManagerEffectHandlers(
           panelEffects.pinExplorerPanelEffect(
             PanelPosition.Left,
             path,
-            PanelTransitions.defaultPanelSize(PanelKind.Explorer, PanelPosition.Left)
+            PanelRegistry.registrationFor(PanelId.Explorer).defaultSize(PanelPosition.Left)
           )
       )
     def submitReplace(surfaceId: SurfaceId): IO[Unit]           = submitReplaceWorkflowEffect(surfaceId)

@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.IO
-import com.serenity.command.{PanelKind, ViewIntent}
+import com.serenity.command.ViewIntent
 import com.serenity.config.{AppConfig, MarkdownViewMode}
 import com.serenity.frontend.MarkdownPreviewWindowAvailability
 import com.serenity.io.FileUtils
@@ -56,24 +56,24 @@ final private[manager] class StateManagerPanelEffects(
       case ViewIntent.ClosePane =>
         commitApp(com.serenity.state.core.EditorState.removeFocusedPane)
       case ViewIntent.PinExplorerPanel =>
-        setPanelPin(PanelKind.Explorer, Some(PanelPosition.Left))
+        pinAtDefaultEdge(PanelId.Explorer)
       case ViewIntent.PinOutlinePanel =>
-        setPanelPin(PanelKind.Outline, Some(PanelPosition.Right))
+        pinAtDefaultEdge(PanelId.Outline)
       case ViewIntent.PinCommentsPanel =>
-        setPanelPin(PanelKind.Comments, Some(PanelPosition.Right))
+        pinAtDefaultEdge(PanelId.Comments)
       case ViewIntent.PinDiagnosticsPanel =>
-        setPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom))
+        pinAtDefaultEdge(PanelId.Diagnostics)
       case ViewIntent.OpenMarkdownPreview =>
         // In-pane preview is structurally unavailable on a fixed-cell surface (cell surfaces cannot `drawImage`) --
         // toggle the spawned Swing window there instead of pinning the GUI-only panel (issue #1113).
         if state.runtime.capabilities.isCellGrid then toggleMarkdownPreviewWindow(state)
-        else setPanelPin(PanelKind.MarkdownPreview, Some(PanelPosition.Right))
-      case ViewIntent.SetPanelPin(kind, position) =>
-        setPanelPin(kind, position)
-      case ViewIntent.MovePanelEarlier(kind) =>
-        commitApp(PanelTransitions.reorderPanelKind(kind, delta = -1))
-      case ViewIntent.MovePanelLater(kind) =>
-        commitApp(PanelTransitions.reorderPanelKind(kind, delta = 1))
+        else pinAtDefaultEdge(PanelId.MarkdownPreview)
+      case ViewIntent.SetPanelPin(id, position) =>
+        setPanelPin(id, position)
+      case ViewIntent.MovePanelEarlier(id) =>
+        commitApp(PanelTransitions.reorderPanel(id, delta = -1))
+      case ViewIntent.MovePanelLater(id) =>
+        commitApp(PanelTransitions.reorderPanel(id, delta = 1))
       case ViewIntent.SetMarkdownViewMode(mode) =>
         setMarkdownViewMode(mode)
       case ViewIntent.SetDefaultDocumentMode(mode) =>
@@ -107,7 +107,7 @@ final private[manager] class StateManagerPanelEffects(
       case MarkdownViewMode.SplitPreview =>
         updateConfigEffect >> openMarkdownPreview
       case MarkdownViewMode.Source | MarkdownViewMode.InlineLens =>
-        updateConfigEffect >> commitApp(PanelTransitions.removePanelKind(PanelKind.MarkdownPreview))
+        updateConfigEffect >> commitApp(PanelTransitions.removePanel(PanelId.MarkdownPreview))
 
   // Closing the project-task output panel while its task is still running must stop it -- otherwise the task's next
   // output batch (`ProjectTaskTransitions`) re-pins the panel (issue #1294).
@@ -122,14 +122,21 @@ final private[manager] class StateManagerPanelEffects(
       (if closingRunningTaskPanel then cancelProjectTaskSilently else IO.unit)
 
   private[manager] def openMarkdownPreview: IO[Unit] =
-    pinPanelKind(PanelKind.MarkdownPreview, PanelPosition.Right, refreshSelections = false)
+    pinPanel(
+      PanelId.MarkdownPreview,
+      PanelRegistry.registrationFor(PanelId.MarkdownPreview).defaultPosition,
+      refreshSelections = false
+    )
 
-  private def setPanelPin(kind: PanelKind, position: Option[PanelPosition]): IO[Unit] =
+  private def pinAtDefaultEdge(id: PanelId): IO[Unit] =
+    setPanelPin(id, Some(PanelRegistry.registrationFor(id).defaultPosition))
+
+  private def setPanelPin(id: PanelId, position: Option[PanelPosition]): IO[Unit] =
     position match
       case None =>
-        commitModel(PanelTransitions.panelChange(_, PanelTransitions.removePanelKind(kind), refreshSelections = true))
+        commitModel(PanelTransitions.panelChange(_, PanelTransitions.removePanel(id), refreshSelections = true))
       case Some(targetPosition) =>
-        pinPanelKind(kind, targetPosition, refreshSelections = true)
+        pinPanel(id, targetPosition, refreshSelections = true)
 
   /** The command/keyboard resize entry point (issue #1310) onto the same `resizePinnedPanel` -- and, through it,
     * `PanelStateReducer.resize` -- the existing mouse-drag path already uses: one shared resize state fed by all three
@@ -145,14 +152,14 @@ final private[manager] class StateManagerPanelEffects(
           IO.unit
     }
 
-  /** Only the kind-based pin/unpin mutations declare an undo boundary (#1016 PR4) -- not `MovePanelEarlier`/`Later`'s
+  /** Only the per-panel pin/unpin mutations declare an undo boundary (#1016 PR4) -- not `MovePanelEarlier`/`Later`'s
     * same-edge reordering, which adjusts an already-pinned panel rather than pinning or unpinning one.
     */
-  private def pinPanelKind(kind: PanelKind, position: PanelPosition, refreshSelections: Boolean): IO[Unit] =
+  private def pinPanel(id: PanelId, position: PanelPosition, refreshSelections: Boolean): IO[Unit] =
     currentState.flatMap { state =>
       val refreshed =
         if refreshSelections then commitApp(PanelTransitions.withCommandRunnerPanelSelections) else IO.unit
-      PanelTransitions.pinPlan(kind, position, state) match
+      PanelTransitions.pinPlan(id, position, state) match
         case PanelPinPlan.Commit(update) =>
           commitModel(PanelTransitions.panelChange(_, update, refreshSelections))
         case PanelPinPlan.LoadExplorerRoot(size) =>

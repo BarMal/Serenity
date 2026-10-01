@@ -30,6 +30,12 @@ final case class UiPreset(
   /** Flat view of the persisted panel content, independent of workspace-tree topology. */
   def pinnedPanels: List[SessionPinnedPanel] = dockedPanels.map(_.panel)
 
+  /** This preset with its docked panels moved onto their fixed surface ids (see [[SessionDockedPanel.withPanelIds]]).
+    */
+  def withPanelIds: UiPreset =
+    val (panels, tree) = SessionDockedPanel.withPanelIds(dockedPanels, workspaceTree)
+    copy(dockedPanels = panels, workspaceTree = tree)
+
 object UiPreset:
 
   /** Schema version 2 adds workspace trees, docked panel snapshots, and maximised-node identity -- the same shape
@@ -247,11 +253,11 @@ object UiPreset:
     )
 
   def applyToState(preset: UiPreset, state: AppState, theme: Theme): AppState =
-    applyToState(preset, state, theme, preset.config)
+    applyToState(preset.withPanelIds, state, theme, preset.config)
 
   /** Apply a built-in workflow without replacing unrelated persisted configuration. */
   def applyBuiltInWorkflowToState(preset: UiPreset, state: AppState, theme: Theme): AppState =
-    applyToState(preset, state, theme, mergeBuiltInWorkflowConfig(state.persisted.config, preset))
+    applyToState(preset.withPanelIds, state, theme, mergeBuiltInWorkflowConfig(state.persisted.config, preset))
 
   private def applyToState(preset: UiPreset, state: AppState, theme: Theme, config: AppConfig): AppState =
     val unpinnedSurfaces = state.runtime.uiSurfaces.filter {

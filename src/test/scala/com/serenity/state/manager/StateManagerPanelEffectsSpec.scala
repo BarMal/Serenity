@@ -4,7 +4,7 @@ import java.nio.file.Paths
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
-import com.serenity.command.{PanelKind, ViewIntent}
+import com.serenity.command.ViewIntent
 import com.serenity.frontend.{FrontendCapabilities, MarkdownPreviewWindowAvailability}
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
@@ -128,7 +128,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.panels.interpret(ViewIntent.PinDiagnosticsPanel, AppState.initial).unsafeRunSync()
     fixture.panels
       .interpret(
-        ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Right)),
+        ViewIntent.SetPanelPin(PanelId.Diagnostics, Some(PanelPosition.Right)),
         fixture.stateRef.get.unsafeRunSync()
       )
       .unsafeRunSync()
@@ -161,7 +161,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
 
     fixture.panels.interpret(ViewIntent.PinDiagnosticsPanel, AppState.initial).unsafeRunSync()
     fixture.panels
-      .interpret(ViewIntent.SetPanelPin(PanelKind.Diagnostics, None), fixture.stateRef.get.unsafeRunSync())
+      .interpret(ViewIntent.SetPanelPin(PanelId.Diagnostics, None), fixture.stateRef.get.unsafeRunSync())
       .unsafeRunSync()
 
     fixture.currentSurfaces.filter(_.content == SurfaceContent.Diagnostics(Nil)) shouldBe Nil
@@ -261,7 +261,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     val fixture = harness(offState)
 
     fixture.panels
-      .interpret(ViewIntent.SetPanelPin(PanelKind.Comments, Some(PanelPosition.Left)), offState)
+      .interpret(ViewIntent.SetPanelPin(PanelId.Comments, Some(PanelPosition.Left)), offState)
       .unsafeRunSync()
 
     fixture.currentSurfaces.map(_.content) shouldBe List(SurfaceContent.Comments(Nil, None))

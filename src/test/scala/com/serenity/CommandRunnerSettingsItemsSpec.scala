@@ -1,6 +1,7 @@
 package com.serenity.command
 
 import com.serenity.config.{BackgroundStyle, PostProcessingEffect, StatusSegment, WindowChromeMode}
+import com.serenity.state.models.PanelId
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.presets.UiPreset
 import org.scalatest.flatspec.AnyFlatSpec
@@ -96,11 +97,11 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     )
     outline.selectedOption shouldBe "Right"
     outline.selectedIntent shouldBe Some(
-      CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right)))
+      CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Outline, Some(PanelPosition.Right)))
     )
     diagnostics.selectedOption shouldBe "Left"
     diagnostics.selectedIntent shouldBe Some(
-      CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Left)))
+      CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Diagnostics, Some(PanelPosition.Left)))
     )
     workspaceItems.map(_.id) should not contain "settings-panel-order"
   }

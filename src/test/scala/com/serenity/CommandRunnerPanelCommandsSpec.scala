@@ -296,7 +296,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "panel-diagnostics-pin-bottom",
           "Pin diagnostics at the bottom.",
-          CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom))),
+          CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Diagnostics, Some(PanelPosition.Bottom))),
           CommandCategory.Settings
         )
       )
@@ -306,7 +306,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "panel-outline-pin-right",
           "Pin outline on the right.",
-          CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right))),
+          CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Outline, Some(PanelPosition.Right))),
           CommandCategory.Settings
         )
       )
@@ -316,7 +316,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "panel-outline-pin-left",
           "Move outline to the left.",
-          CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Left))),
+          CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Outline, Some(PanelPosition.Left))),
           CommandCategory.Settings
         )
       )
@@ -342,7 +342,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "panel-outline-pin-right",
           "Pin outline on the right.",
-          CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right))),
+          CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Outline, Some(PanelPosition.Right))),
           CommandCategory.Settings
         )
       )
@@ -352,7 +352,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "panel-diagnostics-pin-bottom",
           "Pin diagnostics at the bottom.",
-          CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom))),
+          CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Diagnostics, Some(PanelPosition.Bottom))),
           CommandCategory.Settings
         )
       )
@@ -362,7 +362,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "panel-outline-pin-off",
           "Hide outline panel.",
-          CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, None)),
+          CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Outline, None)),
           CommandCategory.Settings
         )
       )

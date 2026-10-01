@@ -58,7 +58,7 @@ class PanelPinUndoSpec extends AnyFlatSpec with Matchers:
     sm.executeCommand(viewCommand(ViewIntent.PinOutlinePanel)).unsafeRunSync()
     val afterPin = sm.getCurrentState.unsafeRunSync()
 
-    sm.executeCommand(viewCommand(ViewIntent.SetPanelPin(com.serenity.command.PanelKind.Outline, None)))
+    sm.executeCommand(viewCommand(ViewIntent.SetPanelPin(com.serenity.state.models.PanelId.Outline, None)))
       .unsafeRunSync()
     sm.getCurrentState.unsafeRunSync().pinnedSurfaces shouldBe Nil
 

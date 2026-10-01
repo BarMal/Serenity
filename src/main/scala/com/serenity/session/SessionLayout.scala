@@ -67,17 +67,19 @@ object SessionLayout:
     val orderedPaneIds =
       val requested = sessionLayout.editorPanes.map(pane => PaneId(pane.id)).filter(editorPanes.contains)
       requested ++ editorPanes.keys.toList.filterNot(requested.contains).sortBy(_.value)
-    val surfaces = sessionLayout.dockedPanels.foldLeft(List.empty[UiSurface]) { (restored, persisted) =>
+    val (dockedPanels, savedTree) =
+      SessionDockedPanel.withPanelIds(sessionLayout.dockedPanels, sessionLayout.workspaceTree)
+    val surfaces = dockedPanels.foldLeft(List.empty[UiSurface]) { (restored, persisted) =>
       val surface = persisted.panel.toUiSurface(SurfaceId(persisted.surfaceId))
       if restored.exists(_.id == surface.id) then restored else restored :+ surface
     }
     val pinnedSurfaceIds = surfaces.map(_.id).toSet
-    val decodedTree = sessionLayout.workspaceTree
+    val decodedTree = savedTree
       .flatMap(SessionWorkspaceNode.toWorkspaceNode)
       .map(WorkspaceTree.apply)
       .filter(_.validationErrors(editorPanes.keySet, pinnedSurfaceIds).isEmpty)
     val fallbackTree =
-      SessionDockedPanel.fallbackWorkspaceTree(orderedPaneIds, sessionLayout.dockedPanels)
+      SessionDockedPanel.fallbackWorkspaceTree(orderedPaneIds, dockedPanels)
     val workspaceTree = decodedTree.orElse(fallbackTree)
     val maximized = sessionLayout.maximizedWorkspaceNodeId
       .map(WorkspaceNodeId.apply)

@@ -4,6 +4,7 @@ import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.rope.Balance
+import com.serenity.state.models.PanelId
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
@@ -279,9 +280,9 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     pinOptions.foreach(_.options.map(_.label) shouldBe List("Off", "Top", "Right", "Bottom", "Left"))
     pinOptions.find(_.id == "panel-outline-pin").map(_.selectedOption) shouldBe Some("Right")
     pinOptions.find(_.id == "panel-outline-pin").flatMap(_.selectedIntent) shouldBe
-      Some(CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right))))
+      Some(CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Outline, Some(PanelPosition.Right))))
     pinOptions.find(_.id == "panel-diagnostics-pin").flatMap(_.selectedIntent) shouldBe
-      Some(CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Left))))
+      Some(CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Diagnostics, Some(PanelPosition.Left))))
   }
 
   it should "show current text display states as settings options" in {

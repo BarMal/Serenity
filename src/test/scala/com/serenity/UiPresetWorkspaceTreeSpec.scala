@@ -142,16 +142,17 @@ class UiPresetWorkspaceTreeSpec extends AnyFlatSpec with Matchers:
     val restored = UiPreset.applyToState(preset, state, Theme.dark)
 
     restored.persisted.layout.workspaceTree.map(_.paneIds) shouldBe Some(List(pane0, pane1))
-    restored.persisted.layout.workspaceTree.map(_.dockedSurfaceIds) shouldBe Some(List(SurfaceId("surface-7")))
+    // A preset saved before panels had fixed ids is moved onto the panel's own id, nested tree intact.
+    restored.persisted.layout.workspaceTree.map(_.dockedSurfaceIds) shouldBe Some(List(PanelId.Outline.surfaceId))
     restored.persisted.layout.workspaceTree.map(_.root.axis) shouldBe Some(Some(SplitAxis.Horizontal))
     restored.pinnedSurfaces should have size 1
-    restored.pinnedSurfaces.head.id shouldBe SurfaceId("surface-7")
+    restored.pinnedSurfaces.head.id shouldBe PanelId.Outline.surfaceId
     restored.pinnedSurfaces.head.presentation shouldBe SurfacePresentation.Docked
     restored.persisted.layout.workspaceTree.flatMap(
-      _.positionForSurface(SurfaceId("surface-7"))
+      _.positionForSurface(PanelId.Outline.surfaceId)
     ) shouldBe Some(PanelPosition.Left)
     restored.persisted.layout.workspaceTree.flatMap(
-      _.currentSize(SurfaceId("surface-7"), restored.runtime.viewportSize)
+      _.currentSize(PanelId.Outline.surfaceId, restored.runtime.viewportSize)
     ) shouldBe Some(30)
     restored.isValid shouldBe true
   }

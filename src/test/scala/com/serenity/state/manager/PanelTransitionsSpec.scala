@@ -1,7 +1,7 @@
 package com.serenity.state.manager
 
 import com.serenity.DockedPanelFixtures
-import com.serenity.command.{CommandRegistry, PanelKind}
+import com.serenity.command.CommandRegistry
 import com.serenity.config.CommentDisplayMode
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.lsp.config.LanguageId
@@ -39,35 +39,55 @@ class PanelTransitionsSpec extends AnyFlatSpec with Matchers:
     val expanded = DockedPanelFixtures.expand(docked, previewId)
     expanded.copy(persisted = expanded.persisted.copy(focus = Focus.Surface(previewId)))
 
-  private def kindOf(state: AppState, kind: PanelKind): List[UiSurface] =
-    state.runtime.uiSurfaces.filter(surface => PanelTransitions.panelKindOf(surface.content).contains(kind))
+  private def kindOf(state: AppState, kind: PanelId): List[UiSurface] =
+    state.runtime.uiSurfaces.filter(surface => PanelId.forContent(surface.content).contains(kind))
 
-  "removePanelKind" should "unwind focus, the workspace tree and the maximised node together with the surface" in {
-    val removed = PanelTransitions.removePanelKind(PanelKind.MarkdownPreview)(valid(focusedMaximisedPreview))
+  "removePanel" should "unwind focus, the workspace tree and the maximised node together with the surface" in {
+    val removed = PanelTransitions.removePanel(PanelId.MarkdownPreview)(valid(focusedMaximisedPreview))
 
     valid(removed)
-    kindOf(removed, PanelKind.MarkdownPreview) shouldBe Nil
+    kindOf(removed, PanelId.MarkdownPreview) shouldBe Nil
     removed.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
     removed.persisted.layout.maximizedWorkspaceNodeId shouldBe None
     removed.persisted.layout.workspaceTree.flatMap(_.positionForSurface(previewId)) shouldBe None
   }
 
   it should "leave a state without that kind unchanged" in {
-    PanelTransitions.removePanelKind(PanelKind.Outline)(AppState.initial) shouldBe AppState.initial
+    PanelTransitions.removePanel(PanelId.Outline)(AppState.initial) shouldBe AppState.initial
   }
 
-  "upsertPanelKind" should "dock a new panel of the kind at the requested edge" in {
-    val pinned = PanelTransitions.upsertPanelKind(
-      PanelKind.Diagnostics,
+  "upsertPanel" should "dock a new panel of the kind at the requested edge" in {
+    val pinned = PanelTransitions.upsertPanel(
+      PanelId.Diagnostics,
       SurfaceContent.Diagnostics(Nil),
       PanelPosition.Bottom,
       10
     )(AppState.initial)
 
     valid(pinned)
-    kindOf(pinned, PanelKind.Diagnostics).flatMap(surface =>
+    kindOf(pinned, PanelId.Diagnostics).flatMap(surface =>
       pinned.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id))
     ) shouldBe List(PanelPosition.Bottom)
+  }
+
+  it should "dock a new panel under the panel's fixed surface id" in {
+    val pinned =
+      PanelTransitions.upsertPanel(PanelId.Outline, SurfaceContent.Outline(Nil), PanelPosition.Right, 30)(
+        AppState.initial
+      )
+
+    kindOf(pinned, PanelId.Outline).map(_.id) shouldBe List(PanelId.Outline.surfaceId)
+  }
+
+  "pinPlan" should "size a panel from its registration's default for the requested edge" in {
+    val plan = PanelTransitions.pinPlan(PanelId.Diagnostics, PanelPosition.Left, AppState.initial)
+    val pinned = plan match
+      case PanelPinPlan.Commit(update) => update(AppState.initial)
+      case other                       => fail(s"Expected a commit, got $other")
+
+    pinned.persisted.layout.workspaceTree.flatMap(
+      _.currentSize(PanelId.Diagnostics.surfaceId, pinned.runtime.viewportSize)
+    ) shouldBe Some(PanelRegistry.registrationFor(PanelId.Diagnostics).defaultSize(PanelPosition.Left))
   }
 
   "panelChange" should "record the pre-change panel layout as an undo entry in the same model" in {
@@ -75,12 +95,12 @@ class PanelTransitionsSpec extends AnyFlatSpec with Matchers:
 
     val next = PanelTransitions.panelChange(
       model,
-      PanelTransitions.removePanelKind(PanelKind.MarkdownPreview),
+      PanelTransitions.removePanel(PanelId.MarkdownPreview),
       refreshSelections = false
     )
 
     valid(next.app)
-    kindOf(next.app, PanelKind.MarkdownPreview) shouldBe Nil
+    kindOf(next.app, PanelId.MarkdownPreview) shouldBe Nil
     next.undo.undoStack shouldBe Vector(HistoryEntry.PanelChange.capture(focusedMaximisedPreview))
   }
 
@@ -89,7 +109,7 @@ class PanelTransitionsSpec extends AnyFlatSpec with Matchers:
 
     val next = PanelTransitions.panelChange(
       model,
-      PanelTransitions.removePanelKind(PanelKind.Outline),
+      PanelTransitions.removePanel(PanelId.Outline),
       refreshSelections = false
     )
 
@@ -102,7 +122,7 @@ class PanelTransitionsSpec extends AnyFlatSpec with Matchers:
 
     val next = PanelTransitions.panelChange(
       model,
-      PanelTransitions.upsertPanelKind(PanelKind.Diagnostics, SurfaceContent.Diagnostics(Nil), PanelPosition.Left, 30),
+      PanelTransitions.upsertPanel(PanelId.Diagnostics, SurfaceContent.Diagnostics(Nil), PanelPosition.Left, 30),
       refreshSelections = true
     )
 
@@ -114,17 +134,17 @@ class PanelTransitionsSpec extends AnyFlatSpec with Matchers:
   }
 
   "pinPlan" should "commit a docked diagnostics panel at its default size" in {
-    PanelTransitions.pinPlan(PanelKind.Diagnostics, PanelPosition.Bottom, AppState.initial) match
+    PanelTransitions.pinPlan(PanelId.Diagnostics, PanelPosition.Bottom, AppState.initial) match
       case PanelPinPlan.Commit(update) =>
         val pinned = valid(update(AppState.initial))
-        kindOf(pinned, PanelKind.Diagnostics).flatMap(surface =>
+        kindOf(pinned, PanelId.Diagnostics).flatMap(surface =>
           PanelStateReducer.currentSize(surface.id, pinned)
         ) shouldBe List(10)
       case other => fail(s"Expected a commit, got $other")
   }
 
   it should "ask for the explorer root to be loaded when no explorer is pinned yet" in {
-    PanelTransitions.pinPlan(PanelKind.Explorer, PanelPosition.Left, AppState.initial) shouldBe
+    PanelTransitions.pinPlan(PanelId.Explorer, PanelPosition.Left, AppState.initial) shouldBe
       PanelPinPlan.LoadExplorerRoot(30)
   }
 
@@ -134,12 +154,12 @@ class PanelTransitionsSpec extends AnyFlatSpec with Matchers:
         .copy(config = AppState.initial.persisted.config.withCommentDisplayMode(CommentDisplayMode.Off))
     )
 
-    PanelTransitions.pinPlan(PanelKind.Comments, PanelPosition.Right, off) shouldBe
+    PanelTransitions.pinPlan(PanelId.Comments, PanelPosition.Right, off) shouldBe
       PanelPinPlan.Report("Comments are hidden -- comment display is turned off in Settings.")
   }
 
   it should "ignore a markdown preview request without a focused Markdown buffer" in {
-    PanelTransitions.pinPlan(PanelKind.MarkdownPreview, PanelPosition.Right, AppState.initial) match
+    PanelTransitions.pinPlan(PanelId.MarkdownPreview, PanelPosition.Right, AppState.initial) match
       case PanelPinPlan.Ignore(_) => succeed
       case other                  => fail(s"Expected the request to be ignored, got $other")
   }
@@ -151,9 +171,9 @@ class PanelTransitionsSpec extends AnyFlatSpec with Matchers:
       })
     )
 
-    PanelTransitions.pinPlan(PanelKind.MarkdownPreview, PanelPosition.Right, markdown) match
+    PanelTransitions.pinPlan(PanelId.MarkdownPreview, PanelPosition.Right, markdown) match
       case PanelPinPlan.Commit(update) =>
-        kindOf(valid(update(markdown)), PanelKind.MarkdownPreview).map(_.content) shouldBe
+        kindOf(valid(update(markdown)), PanelId.MarkdownPreview).map(_.content) shouldBe
           List(SurfaceContent.MarkdownPreview(BufferId(0), "Untitled"))
       case other => fail(s"Expected a commit, got $other")
   }

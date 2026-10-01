@@ -1,64 +1,21 @@
 package com.serenity.state.reducers
 
-import com.serenity.command.PanelKind
 import com.serenity.state.models.*
 import com.serenity.ui.layout.PanelPosition
 
 private[serenity] object CommandRunnerPanelSelections:
 
   def fromState(state: AppState): Map[String, Int] =
-    List(
-      PanelKind.Explorer,
-      PanelKind.Outline,
-      PanelKind.Comments,
-      PanelKind.Diagnostics,
-      PanelKind.MarkdownPreview
-    ).map(kind => optionId(kind) -> selectedIndex(kind, state)).toMap
+    PanelId.values.toList.map(id => optionId(id) -> selectedIndex(id, state)).toMap
 
-  private def selectedIndex(kind: PanelKind, state: AppState): Int =
+  private def selectedIndex(id: PanelId, state: AppState): Int =
     state.runtime.uiSurfaces.reverse
-      .find(surface => panelKind(surface.content).contains(kind))
+      .find(surface => PanelId.forContent(surface.content).contains(id))
       .flatMap(surface => positionOf(surface, state))
       .map(positionIndex)
       .getOrElse(0)
 
-  private def optionId(kind: PanelKind): String =
-    kind match
-      case PanelKind.Explorer        => "panel-explorer-pin"
-      case PanelKind.Outline         => "panel-outline-pin"
-      case PanelKind.Comments        => "panel-comments-pin"
-      case PanelKind.Diagnostics     => "panel-diagnostics-pin"
-      case PanelKind.MarkdownPreview => "panel-markdown-preview-pin"
-
-  private def panelKind(content: SurfaceContent): Option[PanelKind] =
-    content match
-      case SurfaceContent.DirectoryTree(_, _)       => Some(PanelKind.Explorer)
-      case SurfaceContent.Outline(_, _)             => Some(PanelKind.Outline)
-      case SurfaceContent.Comments(_, _)            => Some(PanelKind.Comments)
-      case SurfaceContent.Diagnostics(_, _)         => Some(PanelKind.Diagnostics)
-      case SurfaceContent.MarkdownPreview(_, _)     => Some(PanelKind.MarkdownPreview)
-      case SurfaceContent.StartPage(_)              => None
-      case SurfaceContent.QuickInfo(_)              => None
-      case SurfaceContent.FilePreview(_, _)         => None
-      case SurfaceContent.SymbolDefinition(_, _)    => None
-      case SurfaceContent.StatusLine(_)             => None
-      case SurfaceContent.DirectoryListing(_, _, _) => None
-      case SurfaceContent.CommandPalette(_)         => None
-      case SurfaceContent.CommandRunnerPeek(_)      => None
-      case SurfaceContent.ThemePicker(_)            => None
-      case SurfaceContent.ThemeCreator(_)           => None
-      case SurfaceContent.FileSearch(_)             => None
-      case SurfaceContent.ContextualToolbar(_)      => None
-      case SurfaceContent.ContextMenu(_)            => None
-      case SurfaceContent.CommentLens(_)            => None
-      case SurfaceContent.ModalWorkflow(_)          => None
-      case SurfaceContent.Terminal(_, _)            => None
-      case SurfaceContent.ShortcutsHelp(_)          => None
-      case SurfaceContent.TabList(_, _)             => None
-      case SurfaceContent.RecentFilesInMode(_, _)   => None
-      case SurfaceContent.TabBar(_, _)              => None
-      case SurfaceContent.GhostOverlay(_, _)        => None
-      case SurfaceContent.CompanionSprite           => None
+  private def optionId(id: PanelId): String = s"panel-${id.key}-pin"
 
   private def positionOf(surface: UiSurface, state: AppState): Option[PanelPosition] =
     surface.presentation match
