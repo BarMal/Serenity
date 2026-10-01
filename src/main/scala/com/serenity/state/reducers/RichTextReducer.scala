@@ -33,18 +33,30 @@ object RichTextReducer:
               val label = Option(path.getFileName).fold(path.toString)(_.toString)
               RichTextRoute.AskToConvert(ConfirmPrompt.convertToRichText(label, intent))
         case BufferKind.Markdown =>
-          intent match
-            case RichTextIntent.ConvertToRichText(_) =>
-              RichTextRoute.Refuse("Markdown files keep their formatting as Markdown syntax.")
-            case _ => RichTextRoute.Apply
+          MarkdownFormattingReducer.syntaxFor(intent).fold(RichTextRoute.Refuse(_), _ => RichTextRoute.Apply)
         case BufferKind.RichText => RichTextRoute.Apply
     }
 
+  /** A Markdown file is formatted by editing its source (see [[MarkdownFormattingReducer]]); every other buffer through
+    * its rich-text document.
+    */
   def reduce(intent: RichTextIntent, state: AppState): ReducerResult =
-    ReducerResult.noEffects(intent match
+    activeMarkdownBuffer(state) match
+      case Some((paneId, buffer)) => MarkdownFormattingReducer.reduce(intent, state, paneId, buffer)
+      case None                   => ReducerResult.noEffects(reduceRichText(intent, state))
+
+  private def activeMarkdownBuffer(state: AppState): Option[(PaneId, Buffer)] =
+    for
+      paneId <- state.persisted.layout.activeEditorPaneId
+      buffer <- activeEditorBuffer(state)
+      if EditingContext.bufferKind(buffer) == BufferKind.Markdown
+    yield (paneId, buffer)
+
+  private def reduceRichText(intent: RichTextIntent, state: AppState): AppState =
+    intent match
       case RichTextIntent.ConvertToRichText(andThen) =>
         val converted = convert(state)
-        andThen.fold(converted)(reduce(_, converted).state)
+        andThen.fold(converted)(reduceRichText(_, converted))
       case RichTextIntent.ToggleRichTextMark(mark) =>
         toggleMark(state, mark)
       case RichTextIntent.SetRichTextFontFamily(family) =>
@@ -58,7 +70,7 @@ object RichTextReducer:
       case RichTextIntent.SetRichTextParagraphRole(role) =>
         updateParagraphs(state)((document, range) => document.setParagraphRole(range, role))
       case RichTextIntent.SetRichTextParagraphAlignment(alignment) =>
-        updateParagraphs(state)((document, range) => document.setParagraphAlignment(range, alignment)))
+        updateParagraphs(state)((document, range) => document.setParagraphAlignment(range, alignment))
 
   private def convert(state: AppState): AppState =
     activeEditorBuffer(state).fold(state) { buffer =>
