@@ -117,7 +117,7 @@ class StateManagerExternalChangeEffectHandlersSpec
         modalStack = List(
           ModalDialog(
             SurfaceId("existing-conflict"),
-            Modal.ReloadConflict(ReloadConflictState(bufferId, "watch-check-already-prompted.md")),
+            Modal.Confirm(ConfirmPrompt.reloadConflict(bufferId, "watch-check-already-prompted.md")),
             ModalPlacement.Centered
           )
         )

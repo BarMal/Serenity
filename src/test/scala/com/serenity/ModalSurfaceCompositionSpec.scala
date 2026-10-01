@@ -49,18 +49,18 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     ModalSurfaceComposition.closeFrameHeight(targetRows = 2) shouldBe 10
   }
 
-  it should "scale reload-conflict action targets with interface density without changing action identity" in {
-    val workflow = ReloadConflictState(BufferId(7), "notes.md")
-    val frame    = LayoutRect(0, 0, 40, 12)
+  it should "scale confirm action targets with interface density without changing action identity" in {
+    val prompt = ConfirmPrompt.reloadConflict(BufferId(7), "notes.md")
+    val frame  = LayoutRect(0, 0, 40, 12)
 
-    val compact     = ModalSurfaceComposition.forModal(Modal.ReloadConflict(workflow), frame, targetRows = 1).get
-    val comfortable = ModalSurfaceComposition.forModal(Modal.ReloadConflict(workflow), frame, targetRows = 2).get
+    val compact     = ModalSurfaceComposition.forModal(Modal.Confirm(prompt), frame, targetRows = 1).get
+    val comfortable = ModalSurfaceComposition.forModal(Modal.Confirm(prompt), frame, targetRows = 2).get
 
     compact.hitRegions.map(_.actionId) shouldBe comfortable.hitRegions.map(_.actionId)
     compact.hitRegions.map(_.rect.height).distinct shouldBe List(1.0)
     comfortable.hitRegions.map(_.rect.height).distinct shouldBe List(2.0)
-    ModalSurfaceComposition.reloadConflictFrameHeight(targetRows = 1) shouldBe 7
-    ModalSurfaceComposition.reloadConflictFrameHeight(targetRows = 2) shouldBe 10
+    ModalSurfaceComposition.frameHeight(Modal.Confirm(prompt), targetRows = 1) shouldBe 7
+    ModalSurfaceComposition.frameHeight(Modal.Confirm(prompt), targetRows = 2) shouldBe 10
   }
 
   it should "map only declared close action identities back to workflow choices" in {
@@ -70,34 +70,22 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     ModalSurfaceComposition.closeChoice(SurfaceActionId("unsupported")) shouldBe None
   }
 
-  it should "derive reload-conflict paint, focus, and hit geometry from one plan (#1623)" in {
-    val workflow = ReloadConflictState(
-      BufferId(7),
-      "notes.md",
-      selectedChoice = ReloadConflictChoice.Overwrite
-    )
+  it should "derive a confirm prompt's paint, focus, and hit geometry from one plan" in {
+    val prompt  = ConfirmPrompt.reloadConflict(BufferId(7), "notes.md")
+    val onFirst = prompt.copy(choices = prompt.choices.select(1, 3))
 
-    val plan = planFor(Modal.ReloadConflict(workflow), targetRows = 1)
+    val plan = planFor(Modal.Confirm(onFirst), targetRows = 1)
 
-    plan.focusOrder shouldBe List(
-      SurfaceFocusId("reload-conflict-reload"),
-      SurfaceFocusId("reload-conflict-overwrite"),
-      SurfaceFocusId("reload-conflict-cancel")
-    )
+    plan.paintBoxes.flatMap(_.text).take(2) shouldBe List("File changed on disk", "notes.md")
+    plan.focusOrder shouldBe List(0, 1, 2).map(index => SurfaceFocusId(ConfirmComposition.choiceActionId(index).value))
     plan.hitRegions.map(_.semanticLabel) shouldBe List("Reload from disk", "Overwrite", "Cancel")
-    plan.paintBoxes
-      .find(_.actionId.contains(SurfaceActionId("reload-conflict-overwrite")))
-      .exists(_.selected) shouldBe true
+    plan.paintBoxes.find(_.actionId.contains(ConfirmComposition.choiceActionId(1))).exists(_.selected) shouldBe true
   }
 
-  it should "map only declared reload-conflict action identities back to workflow choices" in {
-    ModalSurfaceComposition.reloadConflictChoice(SurfaceActionId("reload-conflict-reload")) shouldBe
-      Some(ReloadConflictChoice.Reload)
-    ModalSurfaceComposition.reloadConflictChoice(SurfaceActionId("reload-conflict-overwrite")) shouldBe
-      Some(ReloadConflictChoice.Overwrite)
-    ModalSurfaceComposition.reloadConflictChoice(SurfaceActionId("reload-conflict-cancel")) shouldBe
-      Some(ReloadConflictChoice.Cancel)
-    ModalSurfaceComposition.reloadConflictChoice(SurfaceActionId("unsupported")) shouldBe None
+  it should "map only its own confirm action identities back to choice indices" in {
+    ConfirmComposition.choiceIndex(ConfirmComposition.choiceActionId(2).value) shouldBe Some(2)
+    ConfirmComposition.choiceIndex("close-save") shouldBe None
+    ConfirmComposition.choiceIndex("confirm-choice-x") shouldBe None
   }
 
   it should "reflow every close action inside a height-constrained frame" in {

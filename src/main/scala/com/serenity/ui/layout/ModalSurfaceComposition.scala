@@ -4,10 +4,9 @@ import com.serenity.config.{HotkeyTrigger, ModalKeyAction}
 import com.serenity.session.SessionMetadata
 import com.serenity.state.models.*
 
-/** Declarative composition plans for blocking workflow surfaces. The close-confirmation and reload-conflict ("N
-  * choices, pick one") compositions live in `ModalConfirmationComposition` -- split out purely to keep both files under
-  * this repo's architecture-ratchet file-length limit -- and are forwarded here unchanged for existing external
-  * callers.
+/** Declarative composition plans for blocking workflow surfaces. The close-confirmation composition lives in
+  * `ModalConfirmationComposition` and every [[ConfirmPrompt]] in `ConfirmComposition`, split out to keep this file
+  * under the architecture-ratchet file-length limit.
   */
 object ModalSurfaceComposition:
 
@@ -24,9 +23,8 @@ object ModalSurfaceComposition:
   ): Option[ResolvedSurfaceComposition] =
     modal match
       case Modal.CloseWorkflow(workflow) => Some(close(workflow, frameRect, targetRows))
-      case Modal.ReloadConflict(workflow) =>
-        Some(ModalConfirmationComposition.reloadConflict(workflow, frameRect, targetRows))
-      case Modal.GotoLine(input) => Some(inputPlan("Go to line", input, "goto-line", frameRect))
+      case Modal.Confirm(prompt)         => Some(ConfirmComposition.forPrompt(prompt, frameRect, targetRows))
+      case Modal.GotoLine(input)         => Some(inputPlan("Go to line", input, "goto-line", frameRect))
       case Modal.RenameSymbol(_, _, _, _, _, input) =>
         Some(inputPlan("Rename symbol", input, "rename-symbol", frameRect))
       case Modal.Find(query, results, currentIndex) =>
@@ -58,8 +56,8 @@ object ModalSurfaceComposition:
         // header + filename + path + format rows, plus up to 4 suggestions, plus a status/create-dir footer and the
         // keybinding-hints footer (issue #1253).
         math.max(9, math.min(14, workflow.suggestions.take(4).size + 8))
-      case Modal.CloseWorkflow(_)  => closeFrameHeight(actionRows)
-      case Modal.ReloadConflict(_) => reloadConflictFrameHeight(actionRows)
+      case Modal.CloseWorkflow(_) => closeFrameHeight(actionRows)
+      case Modal.Confirm(prompt)  => ConfirmComposition.frameHeight(prompt, actionRows)
 
   /** Resolve close-confirmation paint, focus, and hit geometry in the shared layout grid. */
   def close(workflow: CloseWorkflowState, frameRect: LayoutRect, targetRows: Int): ResolvedSurfaceComposition =
@@ -72,14 +70,6 @@ object ModalSurfaceComposition:
   /** Translate a declared close action identity into its reducer choice. */
   def closeChoice(actionId: SurfaceActionId): Option[CloseWorkflowChoice] =
     ModalConfirmationComposition.closeChoice(actionId)
-
-  /** Frame height required by the external-change-conflict composition. */
-  def reloadConflictFrameHeight(targetRows: Int): Int =
-    ModalConfirmationComposition.reloadConflictFrameHeight(targetRows)
-
-  /** Translate a declared reload-conflict action identity into its reducer choice. */
-  def reloadConflictChoice(actionId: SurfaceActionId): Option[ReloadConflictChoice] =
-    ModalConfirmationComposition.reloadConflictChoice(actionId)
 
   private def inputPlan(
     label: String,

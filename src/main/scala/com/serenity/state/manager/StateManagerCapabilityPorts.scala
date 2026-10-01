@@ -82,6 +82,8 @@ private[manager] trait EffectFilePort:
   // #1623: re-reads the buffer's file from disk in place (same BufferId, cursor/viewport/undo state untouched),
   // replacing only its document/rich-text content and capturing a fresh revision.
   def reloadBuffer(bufferId: BufferId): IO[Unit]
+  // #1623: saves over a file that changed on disk since it was read, skipping the stale-save check.
+  def forceSaveExistingBuffer(bufferId: BufferId): IO[Unit]
 
 private[manager] trait EffectSessionPort:
   def sessionPersistence: SessionPersistence
@@ -101,9 +103,8 @@ private[manager] trait EffectModalWorkflowPort:
   def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
   def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
   // #1623: opens the reload/overwrite/cancel prompt for a buffer whose save was rejected as stale, or whose focus-in
-  // re-check found the on-disk file changed underneath it; submitReloadConflictEffect resolves the user's choice.
+  // re-check found the on-disk file changed underneath it.
   def openReloadConflictModal(state: AppState, bufferId: BufferId, bufferLabel: String): IO[Unit]
-  def submitReloadConflictEffect(surfaceId: SurfaceId): IO[Unit]
   def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit]
   def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState
   def createStartupSession(): IO[Unit]

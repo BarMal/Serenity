@@ -296,7 +296,7 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
     f.stateManager.fileService.checkBufferForExternalChanges(id).unsafeRunSync()
 
     f.state.runtime.modalStack.map(_.modal) should matchPattern {
-      case List(Modal.ReloadConflict(ReloadConflictState(`id`, _, _))) =>
+      case List(Modal.Confirm(prompt)) if prompt.choices.items.headOption.map(_.action).contains(reloadOf(id)) =>
     }
   }
 
@@ -350,11 +350,16 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
       .timeout(5.seconds)
       .unsafeRunSync()
 
+  private def reloadOf(id: BufferId): ConfirmAction =
+    ConfirmAction.Run(com.serenity.command.ExternalChangeCommands.reloadFromDisk(id))
+
   private def restoredBuffer(f: Fixture, path: Path): Buffer =
     f.state.persisted.buffers.values.find(_.document.filePath.contains(path)).getOrElse(fail(s"$path not restored"))
 
   private def reloadConflicts(f: Fixture): List[Modal] =
-    f.state.runtime.modalStack.map(_.modal).collect { case conflict: Modal.ReloadConflict => conflict }
+    f.state.runtime.modalStack.map(_.modal).collect {
+      case conflict @ Modal.Confirm(prompt) if prompt.title == "File changed on disk" => conflict
+    }
 
   "A session-restored buffer" should "refuse to overwrite a file changed on disk after the restore (#1670)" in {
     val f    = fixture()

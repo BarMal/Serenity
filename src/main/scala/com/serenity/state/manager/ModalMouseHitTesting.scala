@@ -30,13 +30,13 @@ private[manager] object ModalMouseHitTesting:
       case Modal.FileWorkflow(_)                => ModalType.FileWorkflow
       case Modal.ReplaceWorkflow(_)             => ModalType.ReplaceWorkflow
       case Modal.CloseWorkflow(_)               => ModalType.CloseWorkflow
-      case Modal.ReloadConflict(_)              => ModalType.ReloadConflict
+      case Modal.Confirm(_)                     => ModalType.Confirm
       case Modal.SessionNamePrompt(_, _)        => ModalType.SessionNamePrompt
       case Modal.SessionList(_, _, _)           => ModalType.SessionList
       case Modal.Custom(name, _)                => ModalType.Custom(name)
 
-  /** A click on an action button of the close or reload-conflict prompt also submits it: those prompts have no separate
-    * confirm step, so picking Save/Discard/Cancel (or Reload/Overwrite/Cancel) is the decision itself.
+  /** A click on an action button of the close prompt or a confirm prompt also submits it: those prompts have no
+    * separate confirm step, so picking a choice is the decision itself.
     */
   def input(event: MouseInputEvent, state: AppState): Transition[Unit] =
     event match
@@ -44,7 +44,7 @@ private[manager] object ModalMouseHitTesting:
         modalHitAt(click, state).fold(Transition.unit) { (modal, hit) =>
           val clickedType = modalType(modal)
           val submits =
-            (clickedType == ModalType.CloseWorkflow || clickedType == ModalType.ReloadConflict) &&
+            (clickedType == ModalType.CloseWorkflow || clickedType == ModalType.Confirm) &&
               hit.actionId.nonEmpty
           reduce(clickedType, ModalClick(hit.focusId.value, hit.actionId.map(_.value))) *>
             (if submits then reduce(clickedType, ModalSubmit) else Transition.unit)

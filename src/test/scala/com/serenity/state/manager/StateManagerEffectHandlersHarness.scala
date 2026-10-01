@@ -150,6 +150,7 @@ private[manager] trait StateManagerEffectHandlersHarness:
         callsVar.update(_ :+ s"saveExistingBuffer:$id") >> saveExistingBufferHook(id).handleErrorWith(onFailure)
       def saveBufferAs(id: BufferId, path: Path): IO[Unit] = callsVar.update(_ :+ s"saveBufferAs:$id:$path")
       def reloadBuffer(id: BufferId): IO[Unit]             = callsVar.update(_ :+ s"reloadBuffer:$id")
+      def forceSaveExistingBuffer(id: BufferId): IO[Unit]  = callsVar.update(_ :+ s"forceSaveExistingBuffer:$id")
       def loadFile(path: Path): IO[Unit]                   = filePersistence.loadFile(path)
       def openFromDialog(dialog: FileDialog): IO[Unit]     = filePersistence.openFromDialog(dialog)
       def isSaving(path: Path): IO[Boolean]                = filePersistence.isSaving(path)
@@ -182,8 +183,6 @@ private[manager] trait StateManagerEffectHandlersHarness:
         callsVar.update(_ :+ s"submitCloseWorkflowEffect:$surfaceId")
       def openReloadConflictModal(state: AppState, bufferId: BufferId, bufferLabel: String): IO[Unit] =
         callsVar.update(_ :+ s"openReloadConflictModal:$bufferId:$bufferLabel")
-      def submitReloadConflictEffect(surfaceId: SurfaceId): IO[Unit] =
-        callsVar.update(_ :+ s"submitReloadConflictEffect:$surfaceId")
       def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit] =
         callsVar.update(_ :+ s"createFileWorkflowDirectoriesEffect:$surfaceId")
       def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
