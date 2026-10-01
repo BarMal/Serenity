@@ -52,25 +52,8 @@ final private[manager] class StateManagerWorkflowCapability(
     */
   private[manager] def openReloadConflictModal(state: AppState, bufferId: BufferId, bufferLabel: String): IO[Unit] =
     val modalState =
-      ModalStateReducer.show(Modal.ReloadConflict(ReloadConflictState(bufferId, bufferLabel)), state).state
+      ModalStateReducer.show(Modal.Confirm(ConfirmPrompt.reloadConflict(bufferId, bufferLabel)), state).state
     modelCommit.commitState(modalState, state)
-
-  private def reloadConflictSurface(state: AppState, surfaceId: SurfaceId): Option[ReloadConflictState] =
-    state.runtime.modalStack.find(_.id == surfaceId).collect {
-      case ModalDialog(_, Modal.ReloadConflict(workflow), _) => workflow
-    }
-
-  private[manager] def submitReloadConflictEffect(surfaceId: SurfaceId): IO[Unit] =
-    modelCommit.currentState.flatMap { state =>
-      reloadConflictSurface(state, surfaceId) match
-        case Some(workflow) =>
-          val dismiss = commit(_.dismissTopModal)
-          workflow.selectedChoice match
-            case ReloadConflictChoice.Cancel    => dismiss
-            case ReloadConflictChoice.Reload    => filePersistence.reloadBuffer(workflow.bufferId) >> dismiss
-            case ReloadConflictChoice.Overwrite => filePersistence.forceSaveExistingBuffer(workflow.bufferId) >> dismiss
-        case None => IO.unit
-    }
 
   private[manager] def openFileWorkflowModal(
     mode: FileWorkflowMode,

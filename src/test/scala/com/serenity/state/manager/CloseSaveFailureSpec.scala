@@ -118,7 +118,9 @@ class CloseSaveFailureSpec extends AnyFlatSpec with Matchers:
     f.send(CloseTab)
     f.send(Enter)
 
-    f.state.runtime.modalStack.map(_.modal) should matchPattern { case List(_: Modal.ReloadConflict) => }
+    f.state.runtime.modalStack.map(_.modal) should matchPattern {
+      case List(Modal.Confirm(prompt)) if prompt.title == "File changed on disk" =>
+    }
     f.buffer(id).map(_.document.isDirty) shouldBe Some(true)
 
     f.send(Escape)
@@ -128,6 +130,41 @@ class CloseSaveFailureSpec extends AnyFlatSpec with Matchers:
     f.buffer(id).map(_.document.content.collect()) shouldBe Some("adraft")
     f.buffer(id).map(_.document.isDirty) shouldBe Some(true)
     Files.readString(path) shouldBe "changed elsewhere"
+  }
+
+  it should "reload the file from disk when Reload is chosen in the conflict prompt" in {
+    val f    = fixture()
+    val path = file(f.directory, "notes.txt", "draft")
+    val id   = f.open(path)
+    f.send(InsertChar('a'))
+    Files.writeString(path, "changed elsewhere")
+    f.send(CloseTab)
+    f.send(Enter)
+
+    f.send(Enter)
+
+    val reloaded = com.serenity.testkit.AwaitCondition
+      .awaitValue(IO(f.buffer(id)))(_.exists(_.document.content.collect() == "changed elsewhere"))
+      .unsafeRunSync()
+    reloaded.map(_.document.isDirty) shouldBe Some(false)
+    f.state.runtime.modalStack shouldBe empty
+  }
+
+  it should "save over the changed file when Overwrite is chosen in the conflict prompt" in {
+    val f    = fixture()
+    val path = file(f.directory, "notes.txt", "draft")
+    val id   = f.open(path)
+    f.send(InsertChar('a'))
+    Files.writeString(path, "changed elsewhere")
+    f.send(CloseTab)
+    f.send(Enter)
+
+    f.send(com.serenity.keystroke.events.TabKey)
+    f.send(Enter)
+
+    com.serenity.testkit.AwaitCondition.awaitValue(IO(Files.readString(path)))(_ == "adraft").unsafeRunSync()
+    f.buffer(id).map(_.document.isDirty) shouldBe Some(false)
+    f.state.runtime.modalStack shouldBe empty
   }
 
   "Quitting with two unsaved buffers" should "neither quit nor close anything when the first save fails" in {

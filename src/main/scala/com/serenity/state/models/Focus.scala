@@ -12,7 +12,7 @@ enum ModalType:
   case FileWorkflow
   case ReplaceWorkflow
   case CloseWorkflow
-  case ReloadConflict
+  case Confirm
   case SessionNamePrompt
   case SessionList
   case Custom(name: String)

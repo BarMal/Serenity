@@ -1,10 +1,7 @@
 package com.serenity.command
 
-import java.nio.file.Path
-
 import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.*
-import com.serenity.lsp.config.LanguageId
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
 import com.serenity.state.models.{PanelId, SurfaceId}
@@ -28,18 +25,6 @@ enum PanelKind:
 
 enum LifecycleIntent:
   case QuitApp
-
-enum FileIntent:
-  case SaveCurrentFile
-  case SaveCurrentFileAs
-  case OpenFile
-  case OpenRecentFile(path: Path)
-  case OpenFileSearch
-  case CloseAll
-  case CloseOthers
-  case CloseCurrentFile
-  case NewFile
-  case SetBufferLanguage(language: Option[LanguageId])
 
 enum EditIntent:
   case FindInCurrentFile

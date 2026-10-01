@@ -177,6 +177,7 @@ private[manager] class StateManagerComposition(
       filePersistence.submitSave(bufferId, onFailure)
     def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit]       = filePersistence.saveBufferAs(bufferId, path)
     def reloadBuffer(bufferId: BufferId): IO[Unit]                   = filePersistence.reloadBuffer(bufferId)
+    def forceSaveExistingBuffer(bufferId: BufferId): IO[Unit]        = filePersistence.forceSaveExistingBuffer(bufferId)
     def loadFile(path: Path): IO[Unit]                               = filePersistence.loadFile(path)
     def openFromDialog(dialog: com.serenity.io.FileDialog): IO[Unit] = filePersistence.openFromDialog(dialog)
     def isSaving(path: Path): IO[Boolean]                            = filePersistence.isSaving(path)
@@ -213,8 +214,6 @@ private[manager] class StateManagerComposition(
       workflow.submitCloseWorkflowEffect(surfaceId)
     def openReloadConflictModal(state: AppState, bufferId: BufferId, bufferLabel: String): IO[Unit] =
       workflow.openReloadConflictModal(state, bufferId, bufferLabel)
-    def submitReloadConflictEffect(surfaceId: SurfaceId): IO[Unit] =
-      workflow.submitReloadConflictEffect(surfaceId)
     def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit] =
       workflow.createFileWorkflowDirectoriesEffect(surfaceId)
     def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =

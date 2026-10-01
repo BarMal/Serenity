@@ -63,7 +63,6 @@ final private[manager] class StateManagerEffectHandlers(
     def submitReplace(surfaceId: SurfaceId): IO[Unit]           = submitReplaceWorkflowEffect(surfaceId)
     def beginClose(scope: CloseScope): IO[Unit]                 = currentState.flatMap(beginCloseAction(scope, _))
     def submitClose(surfaceId: SurfaceId): IO[Unit]             = submitCloseWorkflowEffect(surfaceId)
-    def submitReloadConflict(surfaceId: SurfaceId): IO[Unit]    = submitReloadConflictEffect(surfaceId)
     def createDirectories(surfaceId: SurfaceId): IO[Unit]       = createFileWorkflowDirectoriesEffect(surfaceId)
     def submitSessionNamePrompt(surfaceId: SurfaceId): IO[Unit] = submitSessionNamePromptEffect(surfaceId)
     def submitSessionList(surfaceId: SurfaceId): IO[Unit]       = submitSessionListEffect(surfaceId))
@@ -296,6 +295,10 @@ final private[manager] class StateManagerEffectHandlers(
         )
       case FileIntent.SetBufferLanguage(language) =>
         setBufferLanguage(state, language)
+      case FileIntent.ReloadFromDisk(bufferId) =>
+        reloadBuffer(bufferId)
+      case FileIntent.OverwriteOnDisk(bufferId) =>
+        forceSaveExistingBuffer(bufferId)
 
   private def setBufferLanguage(state: AppState, language: Option[LanguageId]): IO[Unit] =
     (state.focusedBufferId, state.focusedBufferId.flatMap(state.persisted.buffers.get)) match

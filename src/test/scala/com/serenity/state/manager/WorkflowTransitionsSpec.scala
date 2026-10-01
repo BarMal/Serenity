@@ -122,7 +122,12 @@ class WorkflowTransitionsSpec extends AnyFlatSpec with Matchers:
 
     conflicted.runtime.actionStack shouldBe empty
     conflicted.runtime.modalStack.map(_.modal) should matchPattern {
-      case List(Modal.ReloadConflict(ReloadConflictState(BufferId(0), _, _))) =>
+      case List(Modal.Confirm(prompt))
+          if prompt.choices.items.headOption
+            .map(_.action)
+            .contains(
+              ConfirmAction.Run(com.serenity.command.ExternalChangeCommands.reloadFromDisk(BufferId(0)))
+            ) =>
     }
   }
 

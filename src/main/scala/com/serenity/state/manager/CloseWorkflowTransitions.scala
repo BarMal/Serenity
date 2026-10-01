@@ -52,8 +52,8 @@ final private[manager] class CloseWorkflowTransitions(ensureCommandRunnerSurface
   /** The save found the file changed on disk: abandon the close and ask how to resolve the conflict. */
   def conflicted(surfaceId: SurfaceId, workflow: CloseWorkflowState, state: AppState): AppState =
     val bufferId = workflow.currentBufferId
-    val conflict = ReloadConflictState(bufferId, closeBufferLabel(state, bufferId))
-    ModalStateReducer.show(Modal.ReloadConflict(conflict), abandoned(surfaceId, workflow, state)).state
+    val conflict = ConfirmPrompt.reloadConflict(bufferId, closeBufferLabel(state, bufferId))
+    ModalStateReducer.show(Modal.Confirm(conflict), abandoned(surfaceId, workflow, state)).state
 
   /** The close workflow waiting on a save of `bufferId`, if any. */
   def pendingOn(state: AppState, bufferId: BufferId): Option[CloseWorkflowState] =
