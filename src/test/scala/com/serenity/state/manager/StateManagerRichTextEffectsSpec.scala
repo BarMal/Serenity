@@ -1,8 +1,8 @@
 package com.serenity.state.manager
 
-import cats.effect.unsafe.implicits.global
 import java.nio.file.Paths
 
+import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.RichTextIntent
 import com.serenity.lsp.config.LanguageId
