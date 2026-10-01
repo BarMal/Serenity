@@ -35,7 +35,7 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
   )
 
   private val markdownPreview: SurfaceContent = SurfaceContent.MarkdownPreview(BufferId(1), "title")
-  private val modalGotoLine: SurfaceContent   = SurfaceContent.ModalWorkflow(Modal.GotoLine(""))
+  private val modalGotoLine: SurfaceContent   = SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine("")))
   private val modalCustomA: SurfaceContent    = SurfaceContent.ModalWorkflow(Modal.Custom("plugin-a", ""))
   private val modalCustomB: SurfaceContent    = SurfaceContent.ModalWorkflow(Modal.Custom("plugin-b", ""))
   private val terminal: SurfaceContent        = SurfaceContent.Terminal("buffer", 0)
@@ -112,8 +112,10 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "route a known modal kind to a pooled ModalComponent, reused across dispatches" in {
-    val first  = FocusHandlerRouting.forSurfaceContent(modalGotoLine)
-    val second = FocusHandlerRouting.forSurfaceContent(SurfaceContent.ModalWorkflow(Modal.GotoLine("different draft")))
+    val first = FocusHandlerRouting.forSurfaceContent(modalGotoLine)
+    val second = FocusHandlerRouting.forSurfaceContent(
+      SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine("different draft")))
+    )
     first.getClass.getSimpleName shouldBe "ModalComponent"
     first should be theSameInstanceAs second
   }

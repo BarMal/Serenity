@@ -267,7 +267,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.nav.interpretNavigation(NavigationIntent.OpenGotoLine).unsafeRunSync()
 
     fixture.currentState.runtime.uiSurfaces.map(_.content) match
-      case List(SurfaceContent.ModalWorkflow(Modal.GotoLine(input))) => input shouldBe ""
+      case List(SurfaceContent.ModalWorkflow(Modal.TextPrompt(prompt))) => prompt shouldBe TextPrompt.gotoLine()
       case other => fail(s"Expected a single GotoLine modal, got $other")
   }
 

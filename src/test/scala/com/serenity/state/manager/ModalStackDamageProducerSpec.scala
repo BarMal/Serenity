@@ -28,34 +28,38 @@ class ModalStackDamageProducerSpec extends AnyFlatSpec with Matchers:
 
   "DamageProducer.forTransition" should "report Everything when a modal dialog appears on the stack" in {
     val before = stateWithContent("alpha")
-    val dialog = ModalDialog(SurfaceId("goto"), Modal.GotoLine(""), ModalPlacement.Centered)
+    val dialog = ModalDialog(SurfaceId("goto"), Modal.TextPrompt(TextPrompt.gotoLine("")), ModalPlacement.Centered)
     val after  = before.copy(runtime = before.runtime.copy(modalStack = List(dialog)))
 
     DamageProducer.forTransition(before, after) shouldBe Damage.Everything
   }
 
   it should "report Damage.Surface scoped to a modal dialog when only its own content changes" in {
-    val dialog = ModalDialog(SurfaceId("goto"), Modal.GotoLine(""), ModalPlacement.Centered)
+    val dialog = ModalDialog(SurfaceId("goto"), Modal.TextPrompt(TextPrompt.gotoLine("")), ModalPlacement.Centered)
     val bare   = stateWithContent("alpha")
     val before = bare.copy(runtime = bare.runtime.copy(modalStack = List(dialog)))
-    val after  = before.copy(runtime = before.runtime.copy(modalStack = List(dialog.copy(modal = Modal.GotoLine("1")))))
+    val after = before.copy(runtime =
+      before.runtime.copy(modalStack = List(dialog.copy(modal = Modal.TextPrompt(TextPrompt.gotoLine("1")))))
+    )
 
     DamageProducer.forTransition(before, after) shouldBe Damage.Surface(SurfaceId("goto"))
   }
 
   it should "report Damage.Surface scoped to only the changed dialog when a second modal is stacked on top" in {
-    val parent = ModalDialog(SurfaceId("parent"), Modal.GotoLine(""), ModalPlacement.Centered)
-    val child  = ModalDialog(SurfaceId("child"), Modal.GotoLine(""), ModalPlacement.Centered)
+    val parent = ModalDialog(SurfaceId("parent"), Modal.TextPrompt(TextPrompt.gotoLine("")), ModalPlacement.Centered)
+    val child  = ModalDialog(SurfaceId("child"), Modal.TextPrompt(TextPrompt.gotoLine("")), ModalPlacement.Centered)
     val bare   = stateWithContent("alpha")
     val before = bare.copy(runtime = bare.runtime.copy(modalStack = List(parent, child)))
     val after =
-      before.copy(runtime = before.runtime.copy(modalStack = List(parent.copy(modal = Modal.GotoLine("1")), child)))
+      before.copy(runtime =
+        before.runtime.copy(modalStack = List(parent.copy(modal = Modal.TextPrompt(TextPrompt.gotoLine("1"))), child))
+      )
 
     DamageProducer.forTransition(before, after) shouldBe Damage.Surface(SurfaceId("parent"))
   }
 
   it should "report Everything when a modal dialog changes alongside another surface" in {
-    val dialog = ModalDialog(SurfaceId("goto"), Modal.GotoLine(""), ModalPlacement.Centered)
+    val dialog = ModalDialog(SurfaceId("goto"), Modal.TextPrompt(TextPrompt.gotoLine("")), ModalPlacement.Centered)
     val pinned = UiSurface(
       SurfaceId("outline"),
       SurfaceContent.Outline(Nil),
@@ -65,7 +69,7 @@ class ModalStackDamageProducerSpec extends AnyFlatSpec with Matchers:
     val before = bare.copy(runtime = bare.runtime.copy(modalStack = List(dialog), uiSurfaces = List(pinned)))
     val after = before.copy(runtime =
       before.runtime.copy(
-        modalStack = List(dialog.copy(modal = Modal.GotoLine("1"))),
+        modalStack = List(dialog.copy(modal = Modal.TextPrompt(TextPrompt.gotoLine("1")))),
         uiSurfaces = List(pinned.copy(dismissOnMove = true))
       )
     )
@@ -74,7 +78,7 @@ class ModalStackDamageProducerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report Everything when a modal dialog closes" in {
-    val dialog = ModalDialog(SurfaceId("goto"), Modal.GotoLine(""), ModalPlacement.Centered)
+    val dialog = ModalDialog(SurfaceId("goto"), Modal.TextPrompt(TextPrompt.gotoLine("")), ModalPlacement.Centered)
     val bare   = stateWithContent("alpha")
     val before = bare.copy(runtime = bare.runtime.copy(modalStack = List(dialog)))
     val after  = before.copy(runtime = before.runtime.copy(modalStack = Nil))

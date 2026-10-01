@@ -40,7 +40,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(OpenGotoLine, paneId, initialState).state
     val modalSurface = updatedState.modalSurface
 
-    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.GotoLine("")))
+    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine(""))))
     updatedState.persisted.focus shouldBe Focus.Surface(modalSurface.get.id)
   }
 

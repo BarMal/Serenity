@@ -1,7 +1,6 @@
 package com.serenity.state.models
 
 import com.serenity.io.{DocumentFormat, FileType, SaveFormat}
-import com.serenity.lsp.config.LanguageId
 import com.serenity.session.{SessionId, SessionMetadata}
 import com.serenity.text.TextEditing
 
@@ -432,7 +431,7 @@ object FileWorkflowState:
           bufferHasRichFormatting = bufferHasRichFormatting
         )
 
-/** What a [[Modal.SessionNamePrompt]] is collecting a name for -- naming a brand-new session (issue #1390's
+/** What a session-name [[TextPrompt]] is collecting a name for -- naming a brand-new session (issue #1390's
   * `saveSessionAs`) or renaming an existing one (`renameSession`, which needs to know which session).
   */
 enum SessionNamePromptMode:
@@ -440,7 +439,7 @@ enum SessionNamePromptMode:
   case Rename(sessionId: SessionId)
 
 /** What selecting an entry in a [[Modal.SessionList]] does -- load it (`SessionManager.loadSession`) or hand it off to
-  * a [[Modal.SessionNamePrompt]] to collect its new name (`SessionManager.renameSession` needs both the id and the new
+  * a session-name [[TextPrompt]] to collect its new name (`SessionManager.renameSession` needs both the id and the new
   * name, so renaming a listed session is a two-step pick-then-name flow).
   */
 enum SessionListPurpose:
@@ -449,29 +448,9 @@ enum SessionListPurpose:
 
 enum Modal:
 
-  case GotoLine(
-      input: String
-  )
-
-  /** The "new name" prompt for `textDocument/rename` (#1467): `uri`/`languageId`/`line`/`character`/`anchor` are the
-    * invocation site, captured when the prompt opens rather than re-read from the cursor on submit, so a rename still
-    * targets the symbol it was opened for even if focus or the cursor moves while the modal is up.
-    */
-  case RenameSymbol(
-      uri: String,
-      languageId: LanguageId,
-      line: Int,
-      character: Int,
-      anchor: CursorPosition,
-      input: String
-  )
-
-  /** Named-session prompt (issue #1390): a single free-text field, styled and driven exactly like [[GotoLine]] --
-    * `mode` decides whether submitting calls `saveSessionAs` or `renameSession`.
-    */
-  case SessionNamePrompt(
-      mode: SessionNamePromptMode,
-      input: String
+  /** A one-field prompt -- go to line, rename symbol, name a session; see [[TextPrompt]]. */
+  case TextPrompt(
+      prompt: com.serenity.state.models.TextPrompt
   )
 
   /** The `SessionManager.listSessions()` picker (issue #1390) -- structurally the same query-less list-with-selection

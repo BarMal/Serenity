@@ -170,7 +170,12 @@ final private[manager] class StateManagerProjectLspEffects(
     activeLspRequestTarget(state) match
       case Some((uri, languageId, cursor, buffer)) =>
         showModal(
-          Modal.RenameSymbol(uri, languageId, cursor.line, cursor.column, cursor, wordAtCursor(buffer, cursor))
+          Modal.TextPrompt(
+            TextPrompt.renameSymbol(
+              RenameSite(uri, languageId, cursor.line, cursor.column, cursor),
+              wordAtCursor(buffer, cursor)
+            )
+          )
         )
       case None =>
         showLspUnavailablePeek(state)

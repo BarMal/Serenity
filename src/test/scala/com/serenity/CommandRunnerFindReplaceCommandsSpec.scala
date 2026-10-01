@@ -68,7 +68,7 @@ class CommandRunnerFindReplaceCommandsSpec extends AnyFlatSpec with Matchers:
     val modalSurface = updatedState.modalSurface
 
     updatedState.commandRunnerSurface shouldBe None
-    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.GotoLine("")))
+    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine(""))))
     updatedState.persisted.focus shouldBe Focus.Surface(modalSurface.get.id)
   }
 

@@ -252,7 +252,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
     // Then: Modal should be open
     val modalState   = stateManager.getCurrentState.unsafeRunSync()
     val modalSurface = modalState.modalSurface
-    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.GotoLine("")))
+    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine(""))))
     modalState.persisted.focus shouldBe Focus.Surface(modalSurface.get.id)
 
     // When: Type line number

@@ -6,13 +6,11 @@ enum Focus:
   case Modal
 
 enum ModalType:
-  case GotoLine
-  case RenameSymbol
+  case TextPrompt
   case Find
   case FileWorkflow
   case ReplaceWorkflow
   case CloseWorkflow
   case Confirm
-  case SessionNamePrompt
   case SessionList
   case Custom(name: String)

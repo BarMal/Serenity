@@ -70,7 +70,9 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
   "NavigationTransitions" should "open the goto-line modal as a valid state" in {
     val result = validApplied(NavigationTransitions.navigation(NavigationIntent.OpenGotoLine, AppState.initial))
 
-    result.state.runtime.uiSurfaces.map(_.content) shouldBe List(SurfaceContent.ModalWorkflow(Modal.GotoLine("")))
+    result.state.runtime.uiSurfaces.map(_.content) shouldBe List(
+      SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine("")))
+    )
     result.effects shouldBe Nil
   }
 

@@ -24,16 +24,12 @@ object ModalSurfaceComposition:
     modal match
       case Modal.CloseWorkflow(workflow) => Some(close(workflow, frameRect, targetRows))
       case Modal.Confirm(prompt)         => Some(ConfirmComposition.forPrompt(prompt, frameRect, targetRows))
-      case Modal.GotoLine(input)         => Some(inputPlan("Go to line", input, "goto-line", frameRect))
-      case Modal.RenameSymbol(_, _, _, _, _, input) =>
-        Some(inputPlan("Rename symbol", input, "rename-symbol", frameRect))
+      case Modal.TextPrompt(prompt)      => Some(textPromptPlan(prompt, frameRect))
       case Modal.Find(query, results, currentIndex) =>
         Some(findPlan(query, results, currentIndex, frameRect))
       case Modal.Custom(name, input)       => Some(inputPlan(name, input, "custom-input", frameRect))
       case Modal.FileWorkflow(workflow)    => Some(filePlan(workflow, frameRect, modalBindings))
       case Modal.ReplaceWorkflow(workflow) => Some(replacePlan(workflow, frameRect, targetRows))
-      case Modal.SessionNamePrompt(mode, input) =>
-        Some(inputPlan(sessionNamePromptLabel(mode), input, "session-name", frameRect))
       case Modal.SessionList(sessions, selectedIndex, purpose) =>
         Some(sessionListPlan(sessions, selectedIndex, purpose, frameRect))
 
@@ -41,14 +37,12 @@ object ModalSurfaceComposition:
   def frameHeight(modal: Modal, targetRows: Int): Int =
     val actionRows = math.max(1, targetRows)
     modal match
-      case Modal.GotoLine(_)                    => 3
-      case Modal.RenameSymbol(_, _, _, _, _, _) => 3
-      case Modal.Find(_, Nil, _)                => 5
-      case Modal.Custom(_, _)                   => 4
-      case Modal.Find(_, _, _)                  => 6
-      case Modal.SessionNamePrompt(_, _)        => 3
-      case Modal.SessionList(Nil, _, _)         => 3
-      case Modal.SessionList(_, _, _)           => 6
+      case Modal.TextPrompt(_)          => 3
+      case Modal.Find(_, Nil, _)        => 5
+      case Modal.Custom(_, _)           => 4
+      case Modal.Find(_, _, _)          => 6
+      case Modal.SessionList(Nil, _, _) => 3
+      case Modal.SessionList(_, _, _)   => 6
       case Modal.ReplaceWorkflow(workflow) =>
         val contentRows = 3 + actionRows * 2 + workflow.statusMessage.fold(0)(_ => 1)
         SurfaceFrameLayout.DefaultBorderCells * 2 + contentRows
@@ -75,7 +69,8 @@ object ModalSurfaceComposition:
     label: String,
     value: String,
     focusId: String,
-    frameRect: LayoutRect
+    frameRect: LayoutRect,
+    caret: Option[Int] = None
   ): ResolvedSurfaceComposition =
     val content = SurfaceFrameLayout(frameRect).contentRect
     val bounds  = logicalRect(content.x, content.y, content.width, content.height)
@@ -83,9 +78,17 @@ object ModalSurfaceComposition:
       label,
       value,
       SurfaceFocusId(focusId),
-      bounds.copy(height = math.min(1.0, bounds.height))
+      bounds.copy(height = math.min(1.0, bounds.height)),
+      caret = caret
     )
     plan(bounds, List(row))
+
+  private def textPromptPlan(prompt: TextPrompt, frameRect: LayoutRect): ResolvedSurfaceComposition =
+    val focusId = prompt.purpose match
+      case TextPromptPurpose.GotoLine        => "goto-line"
+      case TextPromptPurpose.SessionName(_)  => "session-name"
+      case TextPromptPurpose.RenameSymbol(_) => "rename-symbol"
+    inputPlan(prompt.label, prompt.input, focusId, frameRect, Some(prompt.field.caret))
 
   private def findPlan(
     query: String,
@@ -115,11 +118,6 @@ object ModalSurfaceComposition:
       )
     }
     plan(bounds, headerBox :: queryBox :: resultBoxes ++ footer.toList)
-
-  private def sessionNamePromptLabel(mode: SessionNamePromptMode): String =
-    mode match
-      case SessionNamePromptMode.SaveAs    => "Save session as"
-      case SessionNamePromptMode.Rename(_) => "Rename session"
 
   /** Renders `SessionManager.listSessions()` the same shape as `findPlan`'s results (a header, then one row per entry,
     * the selected one highlighted) -- there is no query field here, since this list is never filtered.
@@ -408,7 +406,8 @@ object ModalSurfaceComposition:
     selected: Boolean = true,
     cursorAtEnd: Boolean = true,
     segments: List[OverlaySegment] = Nil,
-    layout: SurfacePaintLayout = SurfacePaintLayout.Plain
+    layout: SurfacePaintLayout = SurfacePaintLayout.Plain,
+    caret: Option[Int] = None
   ): SurfacePaintBox =
     SurfacePaintBox(
       kind = SurfacePaintKind.TextInput,
@@ -417,7 +416,7 @@ object ModalSurfaceComposition:
       focusId = Some(focusId),
       semanticLabel = Some(label),
       selected = selected,
-      cursorOffset = Option.when(selected && cursorAtEnd)(label.length + 1 + value.length),
+      cursorOffset = Option.when(selected && cursorAtEnd)(label.length + 1 + caret.getOrElse(value.length)),
       segments = if segments.nonEmpty then segments else List(OverlaySegment(label), OverlaySegment(value)),
       layout = if segments.nonEmpty then layout else SurfacePaintLayout.Split
     )

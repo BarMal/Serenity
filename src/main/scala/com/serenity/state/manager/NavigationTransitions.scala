@@ -40,7 +40,7 @@ private[manager] object NavigationTransitions:
   def navigation(intent: NavigationIntent, state: AppState): NavigationOutcome =
     intent match
       case NavigationIntent.OpenGotoLine =>
-        NavigationOutcome.Applied(ModalStateReducer.show(Modal.GotoLine(""), state))
+        NavigationOutcome.Applied(ModalStateReducer.show(Modal.TextPrompt(TextPrompt.gotoLine()), state))
       case NavigationIntent.ToggleBookmark         => toggleBookmark(state)
       case NavigationIntent.NextBookmark           => navigateBookmark(state, DocumentNavigation.nextSymbol)
       case NavigationIntent.PreviousBookmark       => navigateBookmark(state, DocumentNavigation.previousSymbol)

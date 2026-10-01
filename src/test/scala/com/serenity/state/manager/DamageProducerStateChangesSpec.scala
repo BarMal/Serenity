@@ -379,7 +379,7 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
       SurfaceContent.Comments(Nil),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
-    val dialog = ModalDialog(SurfaceId("goto"), Modal.GotoLine(""), ModalPlacement.Centered)
+    val dialog = ModalDialog(SurfaceId("goto"), Modal.TextPrompt(TextPrompt.gotoLine("")), ModalPlacement.Centered)
     val bare   = stateWithContent("alpha")
     val state = bare.copy(
       persisted = bare.persisted.copy(focus = Focus.Modal),

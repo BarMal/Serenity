@@ -71,7 +71,7 @@ enum LspIntent:
   case RequestLspDefinition
   case RequestLspReferences
   // No parameter -- like `RequestLspDefinition`, the target symbol is resolved from the cursor position at interpret
-  // time. Opens the `Modal.RenameSymbol` prompt for the new name; the rename itself is requested on that modal's
+  // time. Opens the rename-symbol `TextPrompt` for the new name; the rename itself is requested on that modal's
   // submit, not here (#1467).
   case OpenRenameSymbolPrompt
 

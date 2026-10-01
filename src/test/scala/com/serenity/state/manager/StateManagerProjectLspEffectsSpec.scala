@@ -285,7 +285,9 @@ class StateManagerProjectLspEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.effects.interpretLsp(LspIntent.OpenRenameSymbolPrompt, state).unsafeRunSync()
 
     fixture.modals.get.unsafeRunSync() shouldBe List(
-      Modal.RenameSymbol(path.toUri.toString, LanguageId.Scala, 0, 8, cursor, "someValue")
+      Modal.TextPrompt(
+        TextPrompt.renameSymbol(RenameSite(path.toUri.toString, LanguageId.Scala, 0, 8, cursor), "someValue")
+      )
     )
     fixture.peeks.get.unsafeRunSync() shouldBe Nil
   }
