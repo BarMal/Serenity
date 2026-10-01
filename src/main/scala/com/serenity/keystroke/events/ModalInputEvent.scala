@@ -2,11 +2,14 @@ package com.serenity.keystroke.events
 
 sealed trait ModalInputEvent
 
-final case class ModalInsertChar(char: Char)         extends ModalInputEvent
-case object ModalDeleteBackward                      extends ModalInputEvent
-case object ModalDeleteForward                       extends ModalInputEvent
-case object ModalDeleteWordBackward                  extends ModalInputEvent
-case object ModalDeleteWordForward                   extends ModalInputEvent
+final case class ModalInsertChar(char: Char) extends ModalInputEvent
+case object ModalDeleteBackward              extends ModalInputEvent
+case object ModalDeleteForward               extends ModalInputEvent
+case object ModalDeleteWordBackward          extends ModalInputEvent
+case object ModalDeleteWordForward           extends ModalInputEvent
+
+/** Inserts `AppState.runtime.clipboard`, which the input layer refreshes from the system clipboard before a paste. */
+case object ModalPaste                               extends ModalInputEvent
 final case class ModalNavigate(direction: Direction) extends ModalInputEvent
 
 /** Moves the selected item of a reorderable list, rather than the selection (Alt+Up/Down by default). */
@@ -47,7 +50,7 @@ object ModalInputEvent:
         case FocusIntent.PreviousGroup       => Some(ModalPreviousField)
         case FocusIntent.Submit              => Some(ModalSubmit)
         case FocusIntent.Dismiss             => Some(ModalDismiss)
-        case FocusIntent.Paste               => None
+        case FocusIntent.Paste               => Some(ModalPaste)
 
   def fromEvent(event: Event): Option[ModalInputEvent] =
     event match
