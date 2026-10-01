@@ -49,16 +49,6 @@ object PopupSurfaceReducer:
         .pushFocus(Focus.Surface(surfaceId))
     )
 
-  private def openFocused(content: SurfaceContent, state: AppState): ReducerResult =
-    val (stateWithId, surfaceId) = state.allocateSurfaceId
-    val popup                    = belowCursor(surfaceId, content, state)
-    ReducerResult.noEffects(
-      stateWithId.copy(
-        persisted = stateWithId.persisted.copy(focus = Focus.Surface(surfaceId)),
-        runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ popup)
-      )
-    )
-
   private def belowCursor(surfaceId: SurfaceId, content: SurfaceContent, state: AppState): UiSurface =
     UiSurface(
       id = surfaceId,
