@@ -2,8 +2,9 @@ package com.serenity
 
 import java.nio.file.Path
 
+import com.serenity.command.CommandFamily
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{DirectoryTreeData, PanelPosition}
+import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -24,7 +25,19 @@ class PanelRegistrySpec extends AnyFlatSpec with Matchers:
     PanelId.forContent(SurfaceContent.Comments(Nil)) shouldBe Some(PanelId.Comments)
     PanelId.forContent(SurfaceContent.Diagnostics(Nil)) shouldBe Some(PanelId.Diagnostics)
     PanelId.forContent(SurfaceContent.MarkdownPreview(BufferId(0), "notes.md")) shouldBe Some(PanelId.MarkdownPreview)
+    PanelId.forContent(SurfaceContent.Terminal("done", 0)) shouldBe Some(PanelId.ProjectOutput)
+    PanelId.forContent(SurfaceContent.CompanionSprite) shouldBe Some(PanelId.Companion)
     PanelId.forContent(SurfaceContent.QuickInfo("hover")) shouldBe None
+  }
+
+  it should "name the panel for every kind of dockable content" in {
+    PanelId.of(PanelContent.Terminal("done", 0)) shouldBe PanelId.ProjectOutput
+    PanelId.of(PanelContent.CompanionSprite) shouldBe PanelId.Companion
+    PanelId.of(PanelContent.Outline(Nil)) shouldBe PanelId.Outline
+  }
+
+  it should "dock the companion sprite under the surface id the rest of the app already knows it by" in {
+    PanelId.Companion.surfaceId shouldBe SurfaceId.CompanionSprite
   }
 
   "PanelRegistry.default" should "register every panel" in {
@@ -43,8 +56,23 @@ class PanelRegistrySpec extends AnyFlatSpec with Matchers:
       PanelId.Outline         -> PanelPosition.Right,
       PanelId.Comments        -> PanelPosition.Right,
       PanelId.Diagnostics     -> PanelPosition.Bottom,
-      PanelId.MarkdownPreview -> PanelPosition.Right
+      PanelId.MarkdownPreview -> PanelPosition.Right,
+      PanelId.ProjectOutput   -> PanelPosition.Bottom,
+      PanelId.Companion       -> PanelPosition.Right
     )
+  }
+
+  it should "size project output and the companion as they were sized before they were registered" in {
+    PanelRegistry.registrationFor(PanelId.ProjectOutput).defaultSize(PanelPosition.Bottom) shouldBe 14
+    PanelRegistry.registrationFor(PanelId.Companion).defaultSize(PanelPosition.Right) shouldBe
+      com.serenity.animation.sprite.CompanionSpriteConfig.DefaultSize
+  }
+
+  it should "put the language-tooling panels in the code family, and the rest everywhere" in {
+    PanelId.values.filter(id => PanelRegistry.registrationFor(id).family == CommandFamily.Code).toSet shouldBe
+      Set(PanelId.Diagnostics, PanelId.ProjectOutput)
+    PanelId.values.map(id => PanelRegistry.registrationFor(id).family).toSet shouldBe
+      Set(CommandFamily.Code, CommandFamily.Core)
   }
 
   it should "size side-docked panels wider than top/bottom ones, and the Markdown preview wider still" in {

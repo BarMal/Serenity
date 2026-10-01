@@ -153,10 +153,10 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     twice.persisted.focus shouldBe Focus.Surface(PanelId.Explorer.surfaceId)
   }
 
-  it should "give content that is not a registered panel a freshly allocated surface id" in {
+  it should "dock project output under its fixed surface id too" in {
     val pinned = PanelStateReducer.pin(PanelContent.Terminal("done", 0), PanelPosition.Bottom, 12, baseState).state
 
-    pinned.pinnedSurfaces.map(_.id.value).forall(_.startsWith("surface-")) shouldBe true
+    pinned.pinnedSurfaces.map(_.id) shouldBe List(PanelId.ProjectOutput.surfaceId)
   }
 
   it should "declare an undo boundary for pin and unpin (#1016 PR4), capturing the pre-change state" in {

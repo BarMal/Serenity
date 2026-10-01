@@ -206,7 +206,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
-  it should "cancel a running project task when its output panel is closed" in {
+  it should "keep a running project task going when its output panel is closed" in {
     val program = for
       task             <- endlessTask
       (composition, _) <- projectComposition(List(task))
@@ -222,20 +222,14 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         ),
         stateWithPanel
       )
-      _               <- task.destroyed.get
       stateAfterUnpin <- composition.getCurrentState
+      destroyedEarly  <- task.destroyed.tryGet
+      _               <- composition.interpretCommand(projectCommand(ProjectIntent.CancelProjectTask), AppState.initial)
+      _               <- task.destroyed.get
     yield
-      stateAfterUnpin.runtime.projectTasks.running shouldBe None
-      stateAfterUnpin.pinnedSurfaces.exists { surface =>
-        surface.content match
-          case SurfaceContent.Terminal(_, _) =>
-            stateAfterUnpin.persisted.layout.workspaceTree
-              .flatMap(_.positionForSurface(surface.id))
-              .contains(
-                PanelPosition.Bottom
-              )
-          case _ => false
-      } shouldBe false
+      destroyedEarly shouldBe None
+      stateAfterUnpin.runtime.projectTasks.running shouldBe defined
+      stateAfterUnpin.surfaceById(com.serenity.state.models.PanelId.ProjectOutput.surfaceId) shouldBe None
 
     program.unsafeRunSync()
   }

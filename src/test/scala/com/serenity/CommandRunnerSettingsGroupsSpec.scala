@@ -100,7 +100,9 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "panel-outline-pin",
       "panel-comments-pin",
       "panel-diagnostics-pin",
-      "panel-markdown-preview-pin"
+      "panel-markdown-preview-pin",
+      "panel-project-output-pin",
+      "panel-companion-pin"
     )
     nestedGroup("settings-ui-presets").children.map(_.id) shouldBe List(
       "settings-preset-select",
@@ -275,7 +277,9 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "panel-outline-pin",
       "panel-comments-pin",
       "panel-diagnostics-pin",
-      "panel-markdown-preview-pin"
+      "panel-markdown-preview-pin",
+      "panel-project-output-pin",
+      "panel-companion-pin"
     )
     pinOptions.foreach(_.options.map(_.label) shouldBe List("Off", "Top", "Right", "Bottom", "Left"))
     pinOptions.find(_.id == "panel-outline-pin").map(_.selectedOption) shouldBe Some("Right")
@@ -283,6 +287,21 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       Some(CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Outline, Some(PanelPosition.Right))))
     pinOptions.find(_.id == "panel-diagnostics-pin").flatMap(_.selectedIntent) shouldBe
       Some(CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Diagnostics, Some(PanelPosition.Left))))
+  }
+
+  it should "leave the code-only panels out of the panel pins in a prose workspace" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default)
+      .copy(optionSelections = Map("app-mode" -> 1))
+      .openSettings
+
+    val workspace = groupByIdRecursive(runner.settingsGroups, "settings-workspace-layout")
+    val pinIds    = groupById(workspace.children, "settings-panel-pins").children.map(_.id)
+
+    pinIds should contain allOf ("panel-outline-pin", "panel-companion-pin")
+    pinIds should contain noneOf ("panel-diagnostics-pin", "panel-project-output-pin")
   }
 
   it should "show current text display states as settings options" in {

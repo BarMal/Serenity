@@ -104,9 +104,8 @@ final private[manager] class StateManagerProjectLspEffects(
         pinProjectTerminal(if wasRunning then "Project task cancelled." else "No project task is running.")
     }
 
-  /** Same cancellation as `cancelProjectTask`, without the confirmation pin -- for closing the output panel itself
-    * (issue #1294), where re-pinning a "cancelled" message would immediately undo the close. Supersedes the lane even
-    * when the state records no task, so a process whose record was lost (a session restore) still stops.
+  /** The cancellation itself, without the confirmation `cancelProjectTask` shows. Supersedes the lane even when the
+    * state records no task, so a process whose record was lost (a session restore) still stops.
     */
   private[manager] def cancelProjectTaskSilently: IO[Unit] =
     commitApp(ProjectTaskTransitions.released) >> lanes.submitEffect(TaskLane, IO.unit)

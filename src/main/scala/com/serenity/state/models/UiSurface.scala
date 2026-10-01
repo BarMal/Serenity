@@ -38,10 +38,10 @@ object SurfaceId:
 
   val RecentFilesInMode: SurfaceId = SurfaceId("recent-files-in-mode")
 
-  /** Reserved id for the companion sprite pane -- a fixed constant like [[ShortcutsHelp]], since at most one instance
-    * exists at a time and the settings toggle looks it up by id to decide whether to open or close it.
+  /** The companion sprite pane's id: the registered panel's own fixed id, since the settings toggle looks it up by id
+    * to decide whether to open or close it.
     */
-  val CompanionSprite: SurfaceId = SurfaceId("companion-sprite")
+  val CompanionSprite: SurfaceId = PanelId.Companion.surfaceId
 
 /** An executable option displayed on the startup launch surface. */
 enum StartupActionSection:

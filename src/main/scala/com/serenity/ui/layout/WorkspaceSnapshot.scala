@@ -223,11 +223,10 @@ object SessionDockedPanel:
       SessionPinnedPanel.fromSurface(surface, state).map(SessionDockedPanel(surface.id.value, _))
     }
 
-  /** Moves each saved panel that is a registered [[PanelId]] onto that panel's fixed surface id, renaming the workspace
-    * tree's reference to it in step. Panels saved before panels had fixed ids carry an allocated `surface-N` id;
-    * content with no fixed id keeps whatever it was saved under. Of two saved panels of the same kind only the first is
-    * kept -- the second's tree node then no longer resolves, which restore already handles by falling back to a rebuilt
-    * tree.
+  /** Moves each saved panel onto its [[PanelId]]'s fixed surface id, renaming the workspace tree's reference to it in
+    * step: panels saved before panels had fixed ids carry an allocated `surface-N` id (or, for the companion, its old
+    * reserved one). Of two saved panels of the same kind only the first is kept -- the second's tree node then no
+    * longer resolves, which restore already handles by falling back to a rebuilt tree.
     */
   def withPanelIds(
     panels: List[SessionDockedPanel],
@@ -235,13 +234,21 @@ object SessionDockedPanel:
   ): (List[SessionDockedPanel], Option[SessionWorkspaceNode]) =
     val (kept, renames) = panels.foldLeft((List.empty[SessionDockedPanel], Map.empty[String, String])) {
       case ((kept, renames), docked) =>
-        PanelId.forContent(docked.panel.content.toSurfaceContent).map(_.surfaceId.value) match
-          case None                                             => (kept :+ docked, renames)
-          case Some(fixed) if kept.exists(_.surfaceId == fixed) => (kept, renames)
-          case Some(fixed) =>
-            (kept :+ docked.copy(surfaceId = fixed), renames + (docked.surfaceId -> fixed))
+        val fixed = panelIdOf(docked.panel.content).surfaceId.value
+        if kept.exists(_.surfaceId == fixed) then (kept, renames)
+        else (kept :+ docked.copy(surfaceId = fixed), renames + (docked.surfaceId -> fixed))
     }
     (kept, tree.map(renamed(_, renames)))
+
+  private def panelIdOf(content: SessionPanelContent): PanelId =
+    content match
+      case SessionPanelContent.DirectoryTree(_, _, _) => PanelId.Explorer
+      case SessionPanelContent.Terminal(_, _)         => PanelId.ProjectOutput
+      case SessionPanelContent.Outline(_)             => PanelId.Outline
+      case SessionPanelContent.Comments(_)            => PanelId.Comments
+      case SessionPanelContent.Diagnostics(_)         => PanelId.Diagnostics
+      case SessionPanelContent.MarkdownPreview(_, _)  => PanelId.MarkdownPreview
+      case SessionPanelContent.CompanionSprite        => PanelId.Companion
 
   private def renamed(node: SessionWorkspaceNode, renames: Map[String, String]): SessionWorkspaceNode =
     node match

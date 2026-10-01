@@ -12,13 +12,16 @@ object PinnedPanelContentReducer:
 
   private val ExplorerSize = 30
 
+  /** Shows `text` in the project output panel, docking it if it isn't, and records it as the latest output. */
   def pinOrUpdateTerminal(text: String, position: PanelPosition, size: Int, state: AppState): ReducerResult =
-    newestPinned(state)(isTerminal) match
+    val recorded =
+      state.copy(runtime = state.runtime.copy(projectTasks = state.runtime.projectTasks.copy(terminalText = text)))
+    newestPinned(recorded)(isTerminal) match
       case Some(surface) =>
         val refreshed = surface.copy(content = SurfaceContent.Terminal(text, text.length))
-        ReducerResult.noEffects(replaceSurface(state, refreshed))
+        ReducerResult.noEffects(replaceSurface(recorded, refreshed))
       case None =>
-        PanelStateReducer.pin(PanelContent.Terminal(text, text.length), position, size, state)
+        PanelStateReducer.pin(PanelContent.Terminal(text, text.length), position, size, recorded)
 
   def loadDirectoryTree(rootPath: Path, files: List[String], state: AppState): ReducerResult =
     val entries = files.map(name => DirEntry(rootPath.resolve(name), name, isDirectory = name.endsWith("/")))

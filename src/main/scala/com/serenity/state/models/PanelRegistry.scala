@@ -1,6 +1,8 @@
 package com.serenity.state.models
 
-import com.serenity.ui.layout.PanelPosition
+import com.serenity.animation.sprite.CompanionSpriteConfig
+import com.serenity.command.CommandFamily
+import com.serenity.ui.layout.{PanelContent, PanelPosition}
 
 /** Every panel the workspace can show, registered once with [[PanelRegistry]] (issue #1310). An enum rather than an
   * open string id so that [[PanelRegistry.registrationFor]], and every match on a panel, is checked for exhaustiveness:
@@ -12,11 +14,23 @@ enum PanelId(val key: String):
   case Comments        extends PanelId("comments")
   case Diagnostics     extends PanelId("diagnostics")
   case MarkdownPreview extends PanelId("markdown-preview")
+  case ProjectOutput   extends PanelId("project-output")
+  case Companion       extends PanelId("companion")
 
   /** The surface id this panel is always docked under, so there is at most one of each. */
   def surfaceId: SurfaceId = SurfaceId(s"panel-$key")
 
 object PanelId:
+
+  def of(content: PanelContent): PanelId =
+    content match
+      case PanelContent.DirectoryTree(_, _)   => Explorer
+      case PanelContent.Outline(_, _)         => Outline
+      case PanelContent.Comments(_, _)        => Comments
+      case PanelContent.Diagnostics(_, _)     => Diagnostics
+      case PanelContent.MarkdownPreview(_, _) => MarkdownPreview
+      case PanelContent.Terminal(_, _)        => ProjectOutput
+      case PanelContent.CompanionSprite       => Companion
 
   /** Exhaustive over [[SurfaceContent]] on purpose: a new kind of content has to decide whether it is a panel. */
   def forContent(content: SurfaceContent): Option[PanelId] =
@@ -41,13 +55,13 @@ object PanelId:
       case SurfaceContent.ContextMenu(_)            => None
       case SurfaceContent.CommentLens(_)            => None
       case SurfaceContent.ModalWorkflow(_)          => None
-      case SurfaceContent.Terminal(_, _)            => None
+      case SurfaceContent.Terminal(_, _)            => Some(ProjectOutput)
       case SurfaceContent.ShortcutsHelp(_)          => None
       case SurfaceContent.TabList(_, _)             => None
       case SurfaceContent.RecentFilesInMode(_, _)   => None
       case SurfaceContent.TabBar(_, _)              => None
       case SurfaceContent.GhostOverlay(_, _)        => None
-      case SurfaceContent.CompanionSprite           => None
+      case SurfaceContent.CompanionSprite           => Some(Companion)
 
 /** A display mode a registered panel can be shown through (issue #1310). Shortcut-summoned (mode 2) is deliberately
   * absent until #1311's chord system exposes a `Command`-typed completion to register against -- adding a case nothing
@@ -58,9 +72,9 @@ enum PanelDisplayMode:
   case Corner
   case Dock
 
-/** One panel's identity, label and default placement. `paletteContent` builds the panel's floating presentation for
-  * [[PanelDisplayMode.Palette]]; docked content is derived from state by the panel itself (`PanelContentSync`), so a
-  * dock-only panel has none.
+/** One panel's identity, label, default placement, and the mode family it belongs to (it is offered only where that
+  * family's commands are). `paletteContent` builds the panel's floating presentation for [[PanelDisplayMode.Palette]];
+  * docked content is derived from state by the panel itself (`PanelContentSync`), so a dock-only panel has none.
   */
 final case class PanelRegistration(
     id: PanelId,
@@ -68,6 +82,7 @@ final case class PanelRegistration(
     description: String,
     defaultPosition: PanelPosition,
     defaultSize: PanelPosition => Int,
+    family: CommandFamily,
     supportedModes: Set[PanelDisplayMode],
     paletteContent: Option[AppState => SurfaceContent] = None
 )
@@ -102,12 +117,19 @@ object PanelRegistry:
         docked(id, "Comments", "The active document's comments.", PanelPosition.Right)
       case PanelId.Diagnostics =>
         docked(id, "Diagnostics", "Language-server and spelling issues in the active document.", PanelPosition.Bottom)
+          .copy(family = CommandFamily.Code)
       case PanelId.MarkdownPreview =>
         docked(id, "Markdown Preview", "A rendered preview of the active Markdown document.", PanelPosition.Right)
           .copy(defaultSize = _ => 40)
+      case PanelId.ProjectOutput =>
+        docked(id, "Project Output", "Output from the latest build, test or run task.", PanelPosition.Bottom)
+          .copy(defaultSize = _ => 14, family = CommandFamily.Code)
+      case PanelId.Companion =>
+        docked(id, "Companion", "A small pixel-art companion that reacts to your typing.", PanelPosition.Right)
+          .copy(defaultSize = _ => CompanionSpriteConfig.DefaultSize)
 
   private def docked(id: PanelId, label: String, description: String, position: PanelPosition): PanelRegistration =
-    PanelRegistration(id, label, description, position, sideOrEdgeSize, Set(PanelDisplayMode.Dock))
+    PanelRegistration(id, label, description, position, sideOrEdgeSize, CommandFamily.Core, Set(PanelDisplayMode.Dock))
 
   private def sideOrEdgeSize(position: PanelPosition): Int =
     position match

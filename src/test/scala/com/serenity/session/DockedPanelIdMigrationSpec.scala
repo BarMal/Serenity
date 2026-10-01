@@ -38,11 +38,13 @@ class DockedPanelIdMigrationSpec extends AnyFlatSpec with Matchers:
     tree.toList.flatMap(dockedSurfaceIds) should not contain "surface-3"
   }
 
-  it should "leave panels that have no fixed id, and their nodes, as they were" in {
-    val (panels, tree) = SessionDockedPanel.withPanelIds(List(legacyOutline, legacyTerminal), Some(legacyTree))
+  it should "move project output and the companion, including the companion's old reserved id" in {
+    val companion = docked("companion-sprite", PanelPosition.Right, SessionPanelContent.CompanionSprite)
+    val (panels, tree) =
+      SessionDockedPanel.withPanelIds(List(legacyOutline, legacyTerminal, companion), Some(legacyTree))
 
-    panels.map(_.surfaceId) shouldBe List("panel-outline", "surface-7")
-    tree.toList.flatMap(dockedSurfaceIds) should contain("surface-7")
+    panels.map(_.surfaceId) shouldBe List("panel-outline", "panel-project-output", "panel-companion")
+    tree.toList.flatMap(dockedSurfaceIds) should contain allOf ("panel-outline", "panel-project-output")
   }
 
   it should "keep only the first of two saved panels of the same kind" in {
@@ -68,7 +70,7 @@ class DockedPanelIdMigrationSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    restored.surfaces.map(_.id) shouldBe List(PanelId.Outline.surfaceId, SurfaceId("surface-7"))
+    restored.surfaces.map(_.id) shouldBe List(PanelId.Outline.surfaceId, PanelId.ProjectOutput.surfaceId)
     restored.layout.workspaceTree.flatMap(_.positionForSurface(PanelId.Outline.surfaceId)) shouldBe
       Some(PanelPosition.Right)
   }

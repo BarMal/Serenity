@@ -470,11 +470,11 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
   private def terminalPinned(model: Model): Boolean =
     model.app.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.Terminal])
 
-  /** An effect result that both changes state and records undo -- e.g. a project-task result that re-pins the Terminal
-    * panel -- must not do so in two separate model writes: a crash or a rejected commit between them would otherwise
-    * leave state committed with no undo entry, or vice versa (#1697 Wave 4).
+  /** A project-task result used to re-pin the Terminal panel, committing that pin and its undo boundary together (#1697
+    * Wave 4). It now only records the latest output: a hidden output panel stays hidden, so nothing is pinned and no
+    * undo boundary is recorded, in any write.
     */
-  "A project-task result that re-pins the Terminal panel" should "commit its state and undo boundary in one write" in {
+  "A project-task result" should "record the latest output without re-showing the output panel or touching undo" in {
     val running = RunningProjectTask(id = 0L, command = terminalTaskCommand, output = "")
     val before = Model(
       AppState.initial.copy(runtime =
@@ -497,8 +497,9 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
 
     val (writes, after) = program.unsafeRunSync()
 
-    terminalPinned(after) shouldBe true
-    after.undo.undoStack should have size 1
+    after.app.runtime.projectTasks.terminalText shouldBe
+      com.serenity.project.ProjectTaskTerminal.completed(ProjectTaskResult(terminalTaskCommand, 0, "done"))
     writes should not be empty
-    all(writes.map(model => terminalPinned(model) == model.undo.undoStack.nonEmpty)) shouldBe true
+    all(writes.map(terminalPinned)) shouldBe false
+    all(writes.map(_.undo.undoStack.isEmpty)) shouldBe true
   }

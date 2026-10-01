@@ -187,6 +187,6 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     terminalSurfaces.head.content shouldBe SurfaceContent.Terminal("second output", "second output".length)
   }
 
-  // See StateManagerRuntimeSpec ("should cancel a running project task when its output panel is closed") for the
+  // See StateManagerRuntimeSpec ("should keep a running project task going when its output panel is closed") for the
   // deterministic version of this: it needs a fake never-completing fiber rather than a real spawned process, so it
   // lives alongside the other project-task-fiber tests that already build a StateManagerComposition directly.
