@@ -28,15 +28,18 @@ object ModalSurfaceComposition:
       case Modal.FileWorkflow(workflow)    => Some(filePlan(workflow, frameRect, modalBindings))
       case Modal.ReplaceWorkflow(workflow) => Some(replacePlan(workflow, frameRect, targetRows))
       case Modal.ListPicker(picker)        => Some(ListPickerComposition.forPicker(picker, frameRect))
+      case Modal.PanelArrangement(arrangement) =>
+        Some(PanelArrangementComposition.forArrangement(arrangement, frameRect, modalBindings))
 
   /** Return the minimum frame height needed to show a modal workflow at the requested density. */
   def frameHeight(modal: Modal, targetRows: Int): Int =
     val actionRows = math.max(1, targetRows)
     modal match
-      case Modal.TextPrompt(_)      => 3
-      case Modal.Find(_, Nil, _)    => 5
-      case Modal.Find(_, _, _)      => 6
-      case Modal.ListPicker(picker) => ListPickerComposition.frameHeight(picker)
+      case Modal.TextPrompt(_)                 => 3
+      case Modal.Find(_, Nil, _)               => 5
+      case Modal.Find(_, _, _)                 => 6
+      case Modal.ListPicker(picker)            => ListPickerComposition.frameHeight(picker)
+      case Modal.PanelArrangement(arrangement) => PanelArrangementComposition.frameHeight(arrangement)
       case Modal.ReplaceWorkflow(workflow) =>
         val contentRows = 3 + actionRows * 2 + workflow.statusMessage.fold(0)(_ => 1)
         SurfaceFrameLayout.DefaultBorderCells * 2 + contentRows

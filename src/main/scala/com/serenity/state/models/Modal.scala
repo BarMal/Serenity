@@ -450,6 +450,11 @@ enum Modal:
       picker: com.serenity.state.models.ListPicker
   )
 
+  /** Which panels show, on which edge and in what order; see [[PanelArrangement]]. */
+  case PanelArrangement(
+      arrangement: com.serenity.state.models.PanelArrangement
+  )
+
   case Find(
       query: String,
       results: List[FindResult],

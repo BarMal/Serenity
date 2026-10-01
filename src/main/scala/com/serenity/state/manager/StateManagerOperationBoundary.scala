@@ -331,6 +331,7 @@ private[manager] object StateManagerOperationBoundary:
       .validated(normalizeCommandRunnerFocus(newState))
       .map(CommentRendering.syncFloatingLensWithCursor(_, fallbackState))
       .map(PanelContentSync.synced(_, fallbackState))
+      .map(PanelArrangement.resyncedIn)
 
   private def normalizeCommandRunnerFocus(state: AppState): AppState =
     if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() then

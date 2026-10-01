@@ -270,6 +270,64 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.stateRef.get.unsafeRunSync().persisted.focus shouldBe Focus.Surface(PanelId.Outline.surfaceId)
   }
 
+  private def rightEdge: AppState =
+    com.serenity.DockedPanelFixtures.dockAllContent(
+      AppState.initial,
+      List(
+        (PanelId.Outline.surfaceId, SurfaceContent.Outline(Nil), PanelPosition.Right, 20),
+        (PanelId.Comments.surfaceId, SurfaceContent.Comments(Nil), PanelPosition.Right, 10)
+      )
+    )
+
+  private def edgeOrder(state: AppState, position: PanelPosition): List[SurfaceId] =
+    state.persisted.layout.workspaceTree.toList.flatMap(tree =>
+      tree.dockedSurfaceIds.filter(tree.positionForSurface(_).contains(position))
+    )
+
+  it should "place a panel at a given index on its own edge, keeping each panel's size" in {
+    val state   = rightEdge
+    val fixture = harness(state)
+    def size(id: PanelId, in: AppState) =
+      com.serenity.state.reducers.PanelStateReducer.currentSize(id.surfaceId, in)
+
+    fixture.panels
+      .interpret(ViewIntent.PlacePanel(PanelId.Comments, Some(PanelPosition.Right), 0), state)
+      .unsafeRunSync()
+
+    val placed = fixture.stateRef.get.unsafeRunSync()
+    edgeOrder(placed, PanelPosition.Right) shouldBe List(PanelId.Comments.surfaceId, PanelId.Outline.surfaceId)
+    size(PanelId.Outline, placed) shouldBe size(PanelId.Outline, state)
+    size(PanelId.Comments, placed) shouldBe size(PanelId.Comments, state)
+  }
+
+  it should "place a panel at the start of another edge" in {
+    val state = com.serenity.DockedPanelFixtures.dock(
+      rightEdge,
+      PanelId.Diagnostics.surfaceId,
+      SurfaceContent.Diagnostics(Nil),
+      PanelPosition.Bottom,
+      10
+    )
+    val fixture = harness(state)
+
+    fixture.panels
+      .interpret(ViewIntent.PlacePanel(PanelId.Comments, Some(PanelPosition.Bottom), 0), state)
+      .unsafeRunSync()
+
+    val placed = fixture.stateRef.get.unsafeRunSync()
+    edgeOrder(placed, PanelPosition.Bottom) shouldBe List(PanelId.Comments.surfaceId, PanelId.Diagnostics.surfaceId)
+    edgeOrder(placed, PanelPosition.Right) shouldBe List(PanelId.Outline.surfaceId)
+  }
+
+  it should "hide a panel placed nowhere" in {
+    val state   = rightEdge
+    val fixture = harness(state)
+
+    fixture.panels.interpret(ViewIntent.PlacePanel(PanelId.Outline, None, 0), state).unsafeRunSync()
+
+    edgeOrder(fixture.stateRef.get.unsafeRunSync(), PanelPosition.Right) shouldBe List(PanelId.Comments.surfaceId)
+  }
+
   it should "show a hidden panel before focusing it" in {
     val fixture = harness()
 

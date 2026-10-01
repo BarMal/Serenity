@@ -22,12 +22,13 @@ object ModalEventReducer:
 
   def reduce(modalType: ModalType, event: ModalInputEvent, currentState: AppState): ReducerResult =
     modalType match
-      case ModalType.TextPrompt      => ModalTextPromptReducer.reduce(event, currentState)
-      case ModalType.Find            => ModalFindReducer.reduce(event, currentState)
-      case ModalType.FileWorkflow    => ModalFileWorkflowReducer.reduce(event, currentState)
-      case ModalType.ReplaceWorkflow => ModalReplaceWorkflowReducer.reduce(event, currentState)
-      case ModalType.Confirm         => ModalConfirmReducer.reduce(event, currentState)
-      case ModalType.ListPicker      => ModalListPickerReducer.reduce(event, currentState)
+      case ModalType.TextPrompt       => ModalTextPromptReducer.reduce(event, currentState)
+      case ModalType.Find             => ModalFindReducer.reduce(event, currentState)
+      case ModalType.FileWorkflow     => ModalFileWorkflowReducer.reduce(event, currentState)
+      case ModalType.ReplaceWorkflow  => ModalReplaceWorkflowReducer.reduce(event, currentState)
+      case ModalType.Confirm          => ModalConfirmReducer.reduce(event, currentState)
+      case ModalType.ListPicker       => ModalListPickerReducer.reduce(event, currentState)
+      case ModalType.PanelArrangement => ModalPanelArrangementReducer.reduce(event, currentState)
 
   def applyFindSearchResults(
     state: AppState,

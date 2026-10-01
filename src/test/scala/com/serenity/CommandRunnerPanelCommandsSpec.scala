@@ -405,3 +405,35 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
 
     sm.getCurrentState.unsafeRunSync().persisted.focus shouldBe Focus.Surface(PanelId.Outline.surfaceId)
   }
+
+  it should "arrange panels from the command runner: move one down its edge, hide it, then close the list" in {
+    val sm = createStateManager()
+    sm.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 28).unsafeRunSync()
+    sm.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 28).unsafeRunSync()
+    def rightEdge(state: AppState) =
+      state.persisted.layout.workspaceTree.toList.flatMap(tree =>
+        tree.dockedSurfaceIds.filter(tree.positionForSurface(_).contains(PanelPosition.Right))
+      )
+    def arrangement(state: AppState) =
+      state.modalSurface.map(_.content).collect {
+        case SurfaceContent.ModalWorkflow(Modal.PanelArrangement(arrangement)) => arrangement
+      }
+
+    executeCommandThroughRunner(sm, "arrange-panels", "arrange-panels")
+    arrangement(sm.getCurrentState.unsafeRunSync()).flatMap(_.selected) shouldBe Some(PanelId.Outline)
+
+    sm.applyEvent(ModalMove(Direction.Down)).unsafeRunSync()
+    val moved = sm.getCurrentState.unsafeRunSync()
+    rightEdge(moved) shouldBe List(PanelId.Diagnostics.surfaceId, PanelId.Outline.surfaceId)
+    arrangement(moved).map(_.panelsIn(ArrangementSection.Right)) shouldBe
+      Some(Vector(PanelId.Diagnostics, PanelId.Outline))
+    arrangement(moved).flatMap(_.selected) shouldBe Some(PanelId.Outline)
+
+    sm.applyEvent(ModalSubmit).unsafeRunSync()
+    val hidden = sm.getCurrentState.unsafeRunSync()
+    rightEdge(hidden) shouldBe List(PanelId.Diagnostics.surfaceId)
+    arrangement(hidden).map(_.panelsIn(ArrangementSection.Hidden).contains(PanelId.Outline)) shouldBe Some(true)
+
+    sm.applyEvent(ModalDismiss).unsafeRunSync()
+    arrangement(sm.getCurrentState.unsafeRunSync()) shouldBe None
+  }

@@ -100,8 +100,14 @@ enum ViewIntent:
 
   /** Moves focus to the nearest editor pane or docked panel in `direction`. */
   case FocusInDirection(direction: Direction)
-  case MovePanelEarlier(id: PanelId)
-  case MovePanelLater(id: PanelId)
+
+  /** Docks a panel `index` panels in from the start of `position`'s edge (moving it there if it is elsewhere), or hides
+    * it when `position` is `None`.
+    */
+  case PlacePanel(id: PanelId, position: Option[PanelPosition], index: Int)
+
+  /** Opens the Arrange Panels list. */
+  case ArrangePanels
   case SetPanelPin(id: PanelId, position: Option[PanelPosition])
   case OpenMarkdownPreview
   case SetMarkdownViewMode(mode: MarkdownViewMode)

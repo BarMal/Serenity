@@ -24,12 +24,13 @@ private[manager] object ModalMouseHitTesting:
 
   def modalType(modal: Modal): ModalType =
     modal match
-      case Modal.TextPrompt(_)      => ModalType.TextPrompt
-      case Modal.Find(_, _, _)      => ModalType.Find
-      case Modal.FileWorkflow(_)    => ModalType.FileWorkflow
-      case Modal.ReplaceWorkflow(_) => ModalType.ReplaceWorkflow
-      case Modal.Confirm(_)         => ModalType.Confirm
-      case Modal.ListPicker(_)      => ModalType.ListPicker
+      case Modal.TextPrompt(_)       => ModalType.TextPrompt
+      case Modal.Find(_, _, _)       => ModalType.Find
+      case Modal.FileWorkflow(_)     => ModalType.FileWorkflow
+      case Modal.ReplaceWorkflow(_)  => ModalType.ReplaceWorkflow
+      case Modal.Confirm(_)          => ModalType.Confirm
+      case Modal.ListPicker(_)       => ModalType.ListPicker
+      case Modal.PanelArrangement(_) => ModalType.PanelArrangement
 
   /** A click on an action button of a confirm prompt or a list picker also submits it: those have no separate confirm
     * step, so picking a choice is the decision itself.

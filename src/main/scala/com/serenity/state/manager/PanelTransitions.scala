@@ -164,31 +164,19 @@ private[manager] object PanelTransitions:
     * nesting for that edge (issue #817: the tree is the sole record of same-edge order, via `WorkspaceTree.dock`'s
     * insertion-order nesting), rather than splicing `uiSurfaces` and leaving a later reconciliation pass to notice.
     */
-  def reorderPanel(id: PanelId, delta: Int)(state: AppState): AppState =
-    if delta == 0 then state
-    else
-      state.persisted.layout.workspaceTree match
-        case None => state
-        case Some(tree) =>
-          def panelOf(surfaceId: SurfaceId): Option[PanelId] =
-            state.runtime.uiSurfaces.find(_.id == surfaceId).flatMap(surface => PanelId.forContent(surface.content))
-          tree.dockedSurfaceIds.find(surfaceId => panelOf(surfaceId).contains(id)) match
-            case None => state
-            case Some(targetId) =>
-              tree.positionForSurface(targetId) match
-                case None => state
-                case Some(targetPosition) =>
-                  val sameEdge =
-                    tree.dockedSurfaceIds.filter(id => tree.positionForSurface(id).contains(targetPosition))
-                  val currentIndex = sameEdge.indexOf(targetId)
-                  val targetIndex  = (currentIndex + delta).max(0).min(sameEdge.length - 1)
-                  if currentIndex < 0 || currentIndex == targetIndex then state
-                  else
-                    val desiredOrder  = moveWithinList(sameEdge, currentIndex, targetIndex)
-                    val reorderedTree = tree.reorderAt(targetPosition, desiredOrder)
-                    state.copy(persisted =
-                      state.persisted.copy(layout = state.persisted.layout.copy(workspaceTree = Some(reorderedTree)))
-                    )
+  /** Moves a docked panel to `index` among the panels on its edge, clamped to that edge's length. */
+  def movePanelTo(id: PanelId, index: Int)(state: AppState): AppState =
+    val reordered = for
+      tree     <- state.persisted.layout.workspaceTree
+      position <- tree.positionForSurface(id.surfaceId)
+      sameEdge = tree.dockedSurfaceIds.filter(tree.positionForSurface(_).contains(position))
+      from     = sameEdge.indexOf(id.surfaceId)
+      to       = index.max(0).min(sameEdge.length - 1)
+      if from >= 0 && from != to
+    yield tree.reorderAt(position, moveWithinList(sameEdge, from, to))
+    reordered.fold(state)(tree =>
+      state.copy(persisted = state.persisted.copy(layout = state.persisted.layout.copy(workspaceTree = Some(tree))))
+    )
 
   private def moveWithinList[A](values: List[A], from: Int, to: Int): List[A] =
     if from == to then values

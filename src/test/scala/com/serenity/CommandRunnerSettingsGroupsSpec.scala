@@ -4,9 +4,7 @@ import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.rope.Balance
-import com.serenity.state.models.PanelId
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -92,18 +90,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     )
     val workspaceLayoutGroup = nestedGroup("settings-workspace-layout")
     workspaceLayoutGroup.label shouldBe "Panels"
-    workspaceLayoutGroup.children.map(_.id) shouldBe List("settings-panel-pins")
-    val panelPins = groupById(workspaceLayoutGroup.children, "settings-panel-pins")
-    panelPins.label shouldBe "Panel Pins"
-    panelPins.children.map(_.id) shouldBe List(
-      "panel-explorer-pin",
-      "panel-outline-pin",
-      "panel-comments-pin",
-      "panel-diagnostics-pin",
-      "panel-markdown-preview-pin",
-      "panel-project-output-pin",
-      "panel-companion-pin"
-    )
+    workspaceLayoutGroup.children.map(_.id) shouldBe List("arrange-panels")
     nestedGroup("settings-ui-presets").children.map(_.id) shouldBe List(
       "settings-preset-select",
       "settings-preset-create",
@@ -259,49 +246,18 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
 
   // issue #931: category tabs are retired -- see the "group related settings" test above for why this fixture uses
   // `.openSettings` now.
-  it should "surface workspace panel pins as dynamic option rows" in {
+  it should "open the Arrange Panels list from the Panels group, in either mode" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
-      .copy(optionSelections = Map("panel-outline-pin" -> 2, "panel-diagnostics-pin" -> 4))
-      .openSettings
+    def panelsGroupIntents(selections: Map[String, Int]) =
+      val runner =
+        CommandRunner.empty.activate(registry, AppConfig.default).copy(optionSelections = selections).openSettings
+      groupByIdRecursive(runner.settingsGroups, "settings-workspace-layout").children.collect {
+        case CommandSurfaceItem.CommandItem(command, _) => command.intent
+      }
 
-    val workspace = groupByIdRecursive(runner.settingsGroups, "settings-workspace-layout")
-
-    val panelPins  = groupById(workspace.children, "settings-panel-pins")
-    val pinOptions = panelPins.children.collect { case option: CommandSurfaceItem.OptionItem => option }
-
-    pinOptions.map(_.id) shouldBe List(
-      "panel-explorer-pin",
-      "panel-outline-pin",
-      "panel-comments-pin",
-      "panel-diagnostics-pin",
-      "panel-markdown-preview-pin",
-      "panel-project-output-pin",
-      "panel-companion-pin"
-    )
-    pinOptions.foreach(_.options.map(_.label) shouldBe List("Off", "Top", "Right", "Bottom", "Left"))
-    pinOptions.find(_.id == "panel-outline-pin").map(_.selectedOption) shouldBe Some("Right")
-    pinOptions.find(_.id == "panel-outline-pin").flatMap(_.selectedIntent) shouldBe
-      Some(CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Outline, Some(PanelPosition.Right))))
-    pinOptions.find(_.id == "panel-diagnostics-pin").flatMap(_.selectedIntent) shouldBe
-      Some(CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Diagnostics, Some(PanelPosition.Left))))
-  }
-
-  it should "leave the code-only panels out of the panel pins in a prose workspace" in {
-    val registry          = CommandRegistry.default
-    given CommandRegistry = registry
-    val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
-      .copy(optionSelections = Map("app-mode" -> 1))
-      .openSettings
-
-    val workspace = groupByIdRecursive(runner.settingsGroups, "settings-workspace-layout")
-    val pinIds    = groupById(workspace.children, "settings-panel-pins").children.map(_.id)
-
-    pinIds should contain allOf ("panel-outline-pin", "panel-companion-pin")
-    pinIds should contain noneOf ("panel-diagnostics-pin", "panel-project-output-pin")
+    panelsGroupIntents(Map.empty) shouldBe List(CommandIntent.View(ViewIntent.ArrangePanels))
+    panelsGroupIntents(Map("app-mode" -> 1)) shouldBe List(CommandIntent.View(ViewIntent.ArrangePanels))
   }
 
   it should "show current text display states as settings options" in {

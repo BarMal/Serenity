@@ -3,7 +3,7 @@ package com.serenity.input
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.*
-import com.serenity.state.models.{AppState, SurfaceContent}
+import com.serenity.state.models.{AppState, Modal, SurfaceContent}
 
 object FocusedInputTranslator:
 
@@ -18,7 +18,8 @@ object FocusedInputTranslator:
       form: SingleLineFormTranslator,
       pinnedPanel: PinnedPanelTranslator,
       peekOverlay: PeekOverlayTranslator,
-      globalHotkey: GlobalHotkeyTranslator
+      globalHotkey: GlobalHotkeyTranslator,
+      itemMoves: ItemMoveTranslator
   )
 
   object TranslatorSet:
@@ -30,7 +31,8 @@ object FocusedInputTranslator:
         new SingleLineFormTranslator(config),
         new PinnedPanelTranslator(config),
         new PeekOverlayTranslator(config),
-        new GlobalHotkeyTranslator(config)
+        new GlobalHotkeyTranslator(config),
+        new ItemMoveTranslator(config)
       )
 
   /** The one place the real clock is sampled; the overload below takes it explicitly. */
@@ -76,6 +78,13 @@ object FocusedInputTranslator:
           case None =>
             translators.editor
 
+    // The arrangement list's move keys default to Alt+Up/Down, which are also the global focus keys; while the list has
+    // focus they move its panel instead.
+    val arranging = state.activeSurface.exists(_.content match
+      case SurfaceContent.ModalWorkflow(Modal.PanelArrangement(_)) => true
+      case _                                                       => false)
+
     if state.hasBlockingModal then translators.form
     else if recordingBinding then new HotkeyRecordingTranslator(now)
+    else if arranging then CompositeTranslator(translators.itemMoves, translators.globalHotkey, localTranslator)
     else CompositeTranslator(translators.globalHotkey, localTranslator)

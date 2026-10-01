@@ -1,8 +1,6 @@
 package com.serenity.command
 
 import com.serenity.config.{BackgroundStyle, PostProcessingEffect, StatusSegment, WindowChromeMode}
-import com.serenity.state.models.PanelId
-import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.presets.UiPreset
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -73,77 +71,10 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     chrome.options.map(_.label) shouldBe List("Auto (Linux Rounded)", "Native", "Native Themed (Windows)", "Custom")
   }
 
-  it should "build workspace panel controls with bounded selections" in {
-    val workspaceItems = CommandRunnerSettingsPanelItems.workspaceLayoutItems(
-      Map("panel-outline-pin" -> 2, "panel-diagnostics-pin" -> 99)
-    )
-
-    val panelPins = workspaceItems
-      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-panel-pins" => group }
-      .getOrElse(fail("missing panel pins group"))
-    val outline = panelPins.children
-      .collectFirst { case option: CommandSurfaceItem.OptionItem if option.id == "panel-outline-pin" => option }
-      .getOrElse(fail("missing outline pin option"))
-    val diagnostics = panelPins.children
-      .collectFirst { case option: CommandSurfaceItem.OptionItem if option.id == "panel-diagnostics-pin" => option }
-      .getOrElse(fail("missing diagnostics pin option"))
-
-    panelPins.children.map(_.id) shouldBe List(
-      "panel-explorer-pin",
-      "panel-outline-pin",
-      "panel-comments-pin",
-      "panel-diagnostics-pin",
-      "panel-markdown-preview-pin",
-      "panel-project-output-pin",
-      "panel-companion-pin"
-    )
-    outline.selectedOption shouldBe "Right"
-    outline.selectedIntent shouldBe Some(
-      CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Outline, Some(PanelPosition.Right)))
-    )
-    diagnostics.selectedOption shouldBe "Left"
-    diagnostics.selectedIntent shouldBe Some(
-      CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Diagnostics, Some(PanelPosition.Left)))
-    )
-    workspaceItems.map(_.id) should not contain "settings-panel-order"
-  }
-
-  it should "hide panel order controls unless multiple panels share an edge" in {
-    val noPanels = CommandRunnerSettingsPanelItems.workspaceLayoutItems(Map.empty)
-    val separateEdges = CommandRunnerSettingsPanelItems.workspaceLayoutItems(
-      Map("panel-outline-pin" -> 2, "panel-diagnostics-pin" -> 3)
-    )
-    val sameEdge = CommandRunnerSettingsPanelItems.workspaceLayoutItems(
-      Map("panel-outline-pin" -> 2, "panel-diagnostics-pin" -> 2)
-    )
-    val sameEdgeWithSeparatePanel = CommandRunnerSettingsPanelItems.workspaceLayoutItems(
-      Map("panel-outline-pin" -> 2, "panel-diagnostics-pin" -> 2, "panel-explorer-pin" -> 3)
-    )
-
-    noPanels.map(_.id) should not contain "settings-panel-order"
-    separateEdges.map(_.id) should not contain "settings-panel-order"
-
-    val panelOrder = sameEdge
-      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-panel-order" => group }
-      .getOrElse(fail("missing panel order group"))
-    panelOrder.children.collect { case CommandSurfaceItem.CommandItem(command, _) => command.name } shouldBe List(
-      "move-outline-panel-earlier",
-      "move-outline-panel-later",
-      "move-diagnostics-panel-earlier",
-      "move-diagnostics-panel-later"
-    )
-
-    val separatePanelOrder = sameEdgeWithSeparatePanel
-      .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-panel-order" => group }
-      .getOrElse(fail("missing panel order group"))
-    separatePanelOrder.children.collect {
-      case CommandSurfaceItem.CommandItem(command, _) => command.name
-    } shouldBe List(
-      "move-outline-panel-earlier",
-      "move-outline-panel-later",
-      "move-diagnostics-panel-earlier",
-      "move-diagnostics-panel-later"
-    )
+  it should "offer the Arrange Panels list in place of a pin row per panel and separate order commands" in {
+    CommandRunnerSettingsPanelItems.workspaceLayoutItems.collect {
+      case CommandSurfaceItem.CommandItem(command, _) => command.name -> command.intent
+    } shouldBe List("arrange-panels" -> CommandIntent.View(ViewIntent.ArrangePanels))
   }
 
   it should "normalize preset previews for the combined preset picker" in {
@@ -170,13 +101,7 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     // issue #1057: Focus/Expand/Unpin/Collapse used to appear here as a "Panel Actions" settings group once two
     // edges had pinned panels -- that was a duplicate of ordinary CommandRegistry commands with no persisted value
     // of its own. It never appears now, regardless of what's pinned.
-    val noPanels = CommandRunnerSettingsPanelItems.workspaceLayoutItems(Map.empty)
-    noPanels.map(_.id) should not contain "settings-panel-actions"
-
-    val leftAndRightPanels = CommandRunnerSettingsPanelItems.workspaceLayoutItems(
-      Map("panel-outline-pin" -> 4, "panel-diagnostics-pin" -> 2)
-    )
-    leftAndRightPanels.map(_.id) should not contain "settings-panel-actions"
+    CommandRunnerSettingsPanelItems.workspaceLayoutItems.map(_.id) should not contain "settings-panel-actions"
   }
 
   it should "build a command-runner key-hints option item toggling the persistent footer (issue #931, Stage 3)" in {

@@ -37,12 +37,13 @@ private[manager] object FocusHandlerRouting:
   private val peekOverlay: LocalEventHandler = new PeekOverlayComponent()
   private val contextMenu: LocalEventHandler = new ContextMenuComponent()
 
-  private val modalTextPrompt: LocalEventHandler      = new ModalComponent(ModalType.TextPrompt)
-  private val modalFind: LocalEventHandler            = new ModalComponent(ModalType.Find)
-  private val modalFileWorkflow: LocalEventHandler    = new ModalComponent(ModalType.FileWorkflow)
-  private val modalReplaceWorkflow: LocalEventHandler = new ModalComponent(ModalType.ReplaceWorkflow)
-  private val modalConfirm: LocalEventHandler         = new ModalComponent(ModalType.Confirm)
-  private val modalListPicker: LocalEventHandler      = new ModalComponent(ModalType.ListPicker)
+  private val modalTextPrompt: LocalEventHandler       = new ModalComponent(ModalType.TextPrompt)
+  private val modalFind: LocalEventHandler             = new ModalComponent(ModalType.Find)
+  private val modalFileWorkflow: LocalEventHandler     = new ModalComponent(ModalType.FileWorkflow)
+  private val modalReplaceWorkflow: LocalEventHandler  = new ModalComponent(ModalType.ReplaceWorkflow)
+  private val modalConfirm: LocalEventHandler          = new ModalComponent(ModalType.Confirm)
+  private val modalListPicker: LocalEventHandler       = new ModalComponent(ModalType.ListPicker)
+  private val modalPanelArrangement: LocalEventHandler = new ModalComponent(ModalType.PanelArrangement)
 
   private val pinnedLeft: LocalEventHandler   = new PinnedPanelComponent(PanelPosition.Left)
   private val pinnedRight: LocalEventHandler  = new PinnedPanelComponent(PanelPosition.Right)
@@ -58,12 +59,13 @@ private[manager] object FocusHandlerRouting:
 
   private[manager] def forModalType(modalType: ModalType): LocalEventHandler =
     modalType match
-      case ModalType.TextPrompt      => modalTextPrompt
-      case ModalType.Find            => modalFind
-      case ModalType.FileWorkflow    => modalFileWorkflow
-      case ModalType.ReplaceWorkflow => modalReplaceWorkflow
-      case ModalType.Confirm         => modalConfirm
-      case ModalType.ListPicker      => modalListPicker
+      case ModalType.TextPrompt       => modalTextPrompt
+      case ModalType.Find             => modalFind
+      case ModalType.FileWorkflow     => modalFileWorkflow
+      case ModalType.ReplaceWorkflow  => modalReplaceWorkflow
+      case ModalType.Confirm          => modalConfirm
+      case ModalType.ListPicker       => modalListPicker
+      case ModalType.PanelArrangement => modalPanelArrangement
 
   /** The handler for a Floating-presented surface, keyed purely by its content. Blocking dialogs (#814) are no longer
     * `UiSurface`s at all -- they live on `runtime.modalStack` and focus as `Focus.Modal`, routed by
