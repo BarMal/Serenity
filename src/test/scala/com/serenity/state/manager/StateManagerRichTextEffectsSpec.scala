@@ -238,7 +238,9 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
 
     fixture.richText.interpret(RichTextIntent.ToggleRichTextMark(InlineMark.Bold)).unsafeRunSync()
 
-    fixture.stateRef.get.unsafeRunSync().topModal.map(_.modal) should matchPattern { case Some(Modal.Confirm(_)) => }
+    fixture.stateRef.get.unsafeRunSync().runtime.uiSurfaces.map(_.content) should matchPattern {
+      case List(SurfaceContent.ModalWorkflow(Modal.Confirm(_))) =>
+    }
     fixture.currentBuffer.richText.richTextDocument shouldBe None
     fixture.currentBuffer.document.isDirty shouldBe false
   }
@@ -250,7 +252,7 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.richText.interpret(RichTextIntent.ToggleRichTextMark(InlineMark.Bold)).unsafeRunSync()
 
     fixture.currentBuffer shouldBe code
-    fixture.stateRef.get.unsafeRunSync().topModal shouldBe None
+    fixture.stateRef.get.unsafeRunSync().runtime.uiSurfaces shouldBe empty
     fixture.notices.get.unsafeRunSync() shouldBe List(
       PeekContent.QuickInfo("Formatting isn't available in code files.")
     )
