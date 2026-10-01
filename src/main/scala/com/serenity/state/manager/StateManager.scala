@@ -256,7 +256,7 @@ object StateManager:
       if runner.searchTerm.isEmpty then "mode=browse" else "mode=search"
     val selectedPart =
       runner.selectedItem match
-        case Some(CommandSurfaceItem.CommandItem(command))    => s"selected=command:${command.name}"
+        case Some(CommandSurfaceItem.CommandItem(command, _)) => s"selected=command:${command.name}"
         case Some(option: CommandSurfaceItem.OptionItem)      => s"selected=option:${option.id}"
         case Some(toggle: CommandSurfaceItem.ToggleItem)      => s"selected=toggle:${toggle.id}"
         case Some(item: CommandSurfaceItem.InputItem)         => s"selected=input:${item.id}"

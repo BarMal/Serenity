@@ -76,11 +76,11 @@ private[layout] object CommandPaletteContentResolver:
           case (item, index) =>
             val selected = index == adjustedSelectedIndex
             val row = item match
-              case CommandSurfaceItem.CommandItem(command) =>
+              case CommandSurfaceItem.CommandItem(command, disabledReason) =>
                 val prefix =
                   if runner.searchTerm.isEmpty then ""
                   else s"[${categoryLabel(command.category)}] "
-                commandRow(command, selected, prefix, runner.bindingFor(command))
+                commandRow(command, selected, prefix, runner.bindingFor(command), disabledReason)
               case option: CommandSurfaceItem.OptionItem =>
                 optionRow(option, selected)
               case toggle: CommandSurfaceItem.ToggleItem =>
@@ -161,10 +161,10 @@ private[layout] object CommandPaletteContentResolver:
       case (item, index) =>
         val selected = index == adjustedSelectedIndex
         item match
-          case CommandSurfaceItem.CommandItem(command) => commandRow(command, selected, binding = None)
-          case toggle: CommandSurfaceItem.ToggleItem   => toggleRow(toggle, runner.effectiveChecked(toggle), selected)
-          case option: CommandSurfaceItem.OptionItem   => optionRow(option, selected)
-          case item: CommandSurfaceItem.InputItem      => inputRow(item, selected, None)
+          case CommandSurfaceItem.CommandItem(command, _) => commandRow(command, selected, binding = None)
+          case toggle: CommandSurfaceItem.ToggleItem => toggleRow(toggle, runner.effectiveChecked(toggle), selected)
+          case option: CommandSurfaceItem.OptionItem => optionRow(option, selected)
+          case item: CommandSurfaceItem.InputItem    => inputRow(item, selected, None)
           case item: CommandSurfaceItem.SettingSearchItem => settingSearchRow(item, selected)
           case group: CommandSurfaceItem.GroupItem        => groupRow(group.label, group.hint, selected)
     }
@@ -212,8 +212,8 @@ private[layout] object CommandPaletteContentResolver:
       case (item, index) =>
         val selected = index == adjustedSelectedIndex
         val row = item match
-          case CommandSurfaceItem.CommandItem(command) =>
-            commandRow(command, selected, binding = runner.bindingFor(command))
+          case CommandSurfaceItem.CommandItem(command, disabledReason) =>
+            commandRow(command, selected, binding = runner.bindingFor(command), disabledReason = disabledReason)
           case option: CommandSurfaceItem.OptionItem =>
             optionRow(option, selected)
           case toggle: CommandSurfaceItem.ToggleItem =>
@@ -358,15 +358,18 @@ private[layout] object CommandPaletteContentResolver:
     command: com.serenity.command.Command,
     selected: Boolean,
     prefix: String = "",
-    binding: Option[String]
+    binding: Option[String],
+    disabledReason: Option[String] = None
   ): OverlayRow =
-    val label = s"$prefix${command.label}"
+    val label       = s"$prefix${command.label}"
+    val description = disabledReason.getOrElse(command.description)
+    val labelTone   = if disabledReason.isDefined then OverlayTone.Muted else OverlayTone.Normal
     OverlayRow(
-      plainText = (List(label) ++ binding.toList :+ command.description).mkString(" - "),
+      plainText = (List(label) ++ binding.toList :+ description).mkString(" - "),
       selected = selected,
-      segments = OverlaySegment(label, fontFamily = fontFamilyForCommand(command)) ::
-        OverlaySegment(command.description, tone = OverlayTone.Muted) ::
-        binding.map(value => OverlaySegment(value, tone = OverlayTone.Normal)).toList,
+      segments = OverlaySegment(label, tone = labelTone, fontFamily = fontFamilyForCommand(command)) ::
+        OverlaySegment(description, tone = OverlayTone.Muted) ::
+        binding.map(value => OverlaySegment(value, tone = labelTone)).toList,
       layout = OverlayRowLayout.Columns
     )
 

@@ -57,14 +57,14 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
 
     runner.visibleItems should not be empty
     runner.visibleItems.collect {
-      case CommandSurfaceItem.CommandItem(command) => command.category
+      case CommandSurfaceItem.CommandItem(command, _) => command.category
     }.distinct should contain(CommandCategory.Settings)
 
     val searched = runner.updateSearchTerm("theme")
     searched.searchTerm shouldBe "theme"
     searched.visibleItems.exists {
-      case CommandSurfaceItem.CommandItem(command) => command.name == "toggle-theme"
-      case _                                       => false
+      case CommandSurfaceItem.CommandItem(command, _) => command.name == "toggle-theme"
+      case _                                          => false
     } shouldBe true
   }
 

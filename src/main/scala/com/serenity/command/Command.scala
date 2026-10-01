@@ -390,7 +390,7 @@ sealed trait CommandSurfaceItem:
 
 object CommandSurfaceItem:
 
-  final case class CommandItem(command: Command) extends CommandSurfaceItem:
+  final case class CommandItem(command: Command, disabledReason: Option[String] = None) extends CommandSurfaceItem:
     override def id: String                = command.name
     override def category: CommandCategory = command.category
     override lazy val searchText: String   = s"${command.name} ${command.label} ${command.description}"

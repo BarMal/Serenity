@@ -149,7 +149,7 @@ class CommandRunnerReducerLifecycleSpec extends AnyFlatSpec with Matchers:
 
     typedRunner.searchTerm shouldBe "t"
     typedRunner.visibleItems.exists {
-      case CommandSurfaceItem.CommandItem(command) => command.name == "toggle-theme"
-      case _                                       => false
+      case CommandSurfaceItem.CommandItem(command, _) => command.name == "toggle-theme"
+      case _                                          => false
     } shouldBe true
   }

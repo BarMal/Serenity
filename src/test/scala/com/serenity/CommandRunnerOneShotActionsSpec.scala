@@ -73,7 +73,7 @@ class CommandRunnerOneShotActionsSpec extends AnyFlatSpec with Matchers:
 
   "the buffer language picker" should "offer every language with a SetBufferLanguage intent for it" in {
     val picker  = languagePicker(Some(LanguageId.Scala))
-    val entries = picker.children.collect { case CommandSurfaceItem.CommandItem(command) => command }
+    val entries = picker.children.collect { case CommandSurfaceItem.CommandItem(command, _) => command }
 
     picker.hint shouldBe Some("Scala")
     entries.map(_.name) should contain("lang-plain-text")

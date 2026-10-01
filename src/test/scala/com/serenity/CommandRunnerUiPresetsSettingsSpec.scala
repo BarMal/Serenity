@@ -145,7 +145,7 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
       CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Explorer, Some(PanelPosition.Left))),
       CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom)))
     )
-    workspaceItems.collect { case CommandSurfaceItem.CommandItem(command) => command.intent } shouldBe Nil
+    workspaceItems.collect { case CommandSurfaceItem.CommandItem(command, _) => command.intent } shouldBe Nil
     val animation = groupByIdRecursive(List(editPreset), "settings-preset-animation")
     animation.label shouldBe "Motion"
     descendants(animation).map(_.id) should contain allOf (

@@ -486,7 +486,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       .collectFirst { case item: CommandSurfaceItem.GroupItem if item.id == "rich-text-font-family" => item }
       .getOrElse(fail("missing rich text font family picker"))
     fontFamilyGroup.label shouldBe "Selection Font Family"
-    fontFamilyGroup.children.collect { case CommandSurfaceItem.CommandItem(command) => command.intent } should
+    fontFamilyGroup.children.collect { case CommandSurfaceItem.CommandItem(command, _) => command.intent } should
       contain(CommandIntent.RichText(RichTextIntent.SetRichTextFontFamily("Serif")))
 
     val inputs = richTextGroup.children.collect { case item: CommandSurfaceItem.InputItem => item }

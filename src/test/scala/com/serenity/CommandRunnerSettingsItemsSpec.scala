@@ -123,7 +123,7 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     val panelOrder = sameEdge
       .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-panel-order" => group }
       .getOrElse(fail("missing panel order group"))
-    panelOrder.children.collect { case CommandSurfaceItem.CommandItem(command) => command.name } shouldBe List(
+    panelOrder.children.collect { case CommandSurfaceItem.CommandItem(command, _) => command.name } shouldBe List(
       "move-outline-panel-earlier",
       "move-outline-panel-later",
       "move-diagnostics-panel-earlier",
@@ -133,7 +133,9 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
     val separatePanelOrder = sameEdgeWithSeparatePanel
       .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-panel-order" => group }
       .getOrElse(fail("missing panel order group"))
-    separatePanelOrder.children.collect { case CommandSurfaceItem.CommandItem(command) => command.name } shouldBe List(
+    separatePanelOrder.children.collect {
+      case CommandSurfaceItem.CommandItem(command, _) => command.name
+    } shouldBe List(
       "move-outline-panel-earlier",
       "move-outline-panel-later",
       "move-diagnostics-panel-earlier",

@@ -102,7 +102,7 @@ final case class CommandRunner(
       case CommandRunnerSurface.Palette(state) =>
         val commandItems = state.filteredCommands
           .filter(CommandRelevance.isAvailable(_, context.editingContext))
-          .map(CommandSurfaceItem.CommandItem(_))
+          .map(command => CommandSurfaceItem.CommandItem(command, CommandPrerequisites.unmetReason(command, context)))
         // Category tabs are retired (issue #931): an empty query is just every command, no category to default to.
         // Settings are still reachable here -- via search, below -- exactly as issue #931's "fold into text search"
         // intends; there is just no longer a separate navigation mode for it.
@@ -178,7 +178,7 @@ final case class CommandRunner(
       withRootSelectedIndex(wrappedIndex).syncEditMode
 
   def selectedCommand: Option[Command] =
-    selectedItem.collect { case CommandSurfaceItem.CommandItem(command) => command }
+    selectedItem.collect { case CommandSurfaceItem.CommandItem(command, _) => command }
 
   /** issue #1048: record a command's execution for MRU ranking -- the new generation is always one past every
     * generation recorded so far, so the command just run is always the most recent regardless of how many others have

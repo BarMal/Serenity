@@ -271,7 +271,7 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     val entered =
       CommandRunnerReducer.reduce(RunnerSubmit, settingsStateOnItem("settings-ui-font", "ui-font"), registry).state
     val allFamilies = runnerFrom(entered).focusedSubmenuItems.collect {
-      case CommandSurfaceItem.CommandItem(command) => command
+      case CommandSurfaceItem.CommandItem(command, _) => command
     }
     val firstFamily = allFamilies.headOption.getOrElse(fail("no UI font families available"))
     val needle      = firstFamily.label.take(2)
@@ -281,7 +281,7 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     val runner = runnerFrom(searched)
 
     runner.activeSubmenuSearchTerm shouldBe Some(needle)
-    val filtered = runner.focusedSubmenuItems.collect { case CommandSurfaceItem.CommandItem(command) => command }
+    val filtered = runner.focusedSubmenuItems.collect { case CommandSurfaceItem.CommandItem(command, _) => command }
     filtered should not be empty
     filtered.foreach(_.label.toLowerCase should include(needle.toLowerCase))
     filtered.head shouldBe firstFamily
@@ -317,7 +317,7 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     val entered = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
     val runner  = runnerFrom(entered.state)
     val firstUiFontIntent =
-      runner.submenuItems("ui-font").collectFirst { case CommandSurfaceItem.CommandItem(command) => command.intent }
+      runner.submenuItems("ui-font").collectFirst { case CommandSurfaceItem.CommandItem(command, _) => command.intent }
 
     runner.activeSubmenuGroupId shouldBe Some("ui-font")
     runner.activeSubmenuParentGroupId shouldBe Some("settings-ui-font")
