@@ -3,6 +3,7 @@ package com.serenity
 import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.rope.Balance
+import com.serenity.state.models.PanelId
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -140,10 +141,10 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
     workspaceItems.collect {
       case option: CommandSurfaceItem.OptionItem => option.options.map(_.intent)
     }.flatten should contain allOf (
-      CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right))),
-      CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.MarkdownPreview, Some(PanelPosition.Right))),
-      CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Explorer, Some(PanelPosition.Left))),
-      CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Bottom)))
+      CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Outline, Some(PanelPosition.Right))),
+      CommandIntent.View(ViewIntent.SetPanelPin(PanelId.MarkdownPreview, Some(PanelPosition.Right))),
+      CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Explorer, Some(PanelPosition.Left))),
+      CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Diagnostics, Some(PanelPosition.Bottom)))
     )
     workspaceItems.collect { case CommandSurfaceItem.CommandItem(command, _) => command.intent } shouldBe Nil
     val animation = groupByIdRecursive(List(editPreset), "settings-preset-animation")

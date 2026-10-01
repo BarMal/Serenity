@@ -1,6 +1,5 @@
 package com.serenity.state.manager
 
-import com.serenity.command.PanelKind
 import com.serenity.config.CommentDisplayMode
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
@@ -8,7 +7,7 @@ import com.serenity.state.reducers.CommandRunnerPanelSelections
 import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.{PanelPosition, WorkspaceTree}
 
-/** What pinning a panel kind comes to, decided from the current state. */
+/** What pinning a panel comes to, decided from the current state. */
 private[manager] enum PanelPinPlan:
   case Commit(update: AppState => AppState)
 
@@ -21,29 +20,27 @@ private[manager] enum PanelPinPlan:
   /** Nothing is pinned; `debugLog` is what the shell logs about it. */
   case Ignore(debugLog: String)
 
-/** Pinned-panel changes by [[PanelKind]] as pure functions of the state -- what `StateManagerPanelEffects` commits. */
+/** Pinned-panel changes by [[PanelId]] as pure functions of the state -- what `StateManagerPanelEffects` commits. */
 private[manager] object PanelTransitions:
 
-  def pinPlan(kind: PanelKind, position: PanelPosition, state: AppState): PanelPinPlan =
-    val size = defaultPanelSize(kind, position)
+  def pinPlan(id: PanelId, position: PanelPosition, state: AppState): PanelPinPlan =
+    val size = PanelRegistry.registrationFor(id).defaultSize(position)
     def upsert(content: SurfaceContent): PanelPinPlan =
-      PanelPinPlan.Commit(upsertPanelKind(kind, content, position, size))
-    kind match
-      case PanelKind.Explorer =>
-        newestPanelKindSurface(kind, state).fold(PanelPinPlan.LoadExplorerRoot(size))(surface =>
-          upsert(surface.content)
-        )
-      case PanelKind.Outline =>
+      PanelPinPlan.Commit(upsertPanel(id, content, position, size))
+    id match
+      case PanelId.Explorer =>
+        newestPanelSurface(id, state).fold(PanelPinPlan.LoadExplorerRoot(size))(surface => upsert(surface.content))
+      case PanelId.Outline =>
         upsert(PanelContentSync.outlineContent(state.activeBuffer))
-      case PanelKind.Comments =>
+      case PanelId.Comments =>
         // #1551: the pin-to-side command and the `CommentDisplayMode` setting used to disagree about whether comments
         // are visible -- pinning always showed live comment content regardless of the setting.
         if state.persisted.config.surfaceConfig.commentDisplayMode == CommentDisplayMode.Off then
           PanelPinPlan.Report("Comments are hidden -- comment display is turned off in Settings.")
         else upsert(PanelContentSync.commentsContent(state.activeBuffer))
-      case PanelKind.Diagnostics =>
+      case PanelId.Diagnostics =>
         upsert(PanelContentSync.diagnosticsContent(state, state.activeBuffer))
-      case PanelKind.MarkdownPreview =>
+      case PanelId.MarkdownPreview =>
         markdownPreviewContent(state).fold(
           PanelPinPlan.Ignore("[CMD] Markdown preview requested without an active Markdown buffer")
         )(upsert)
@@ -59,9 +56,9 @@ private[manager] object PanelTransitions:
       else UndoRecording.recorded(model.undo, HistoryEntry.PanelChange.capture(model.app), groupable = false)
     model.copy(app = if refreshSelections then withCommandRunnerPanelSelections(updated) else updated, undo = undo)
 
-  def removePanelKind(kind: PanelKind)(state: AppState): AppState =
+  def removePanel(id: PanelId)(state: AppState): AppState =
     val removedIds = state.runtime.uiSurfaces.collect {
-      case surface if panelKindOf(surface.content).contains(kind) => surface.id
+      case surface if PanelId.forContent(surface.content).contains(id) => surface.id
     }.toSet
     val nextFocus = state.persisted.focus match
       case Focus.Surface(surfaceId) if removedIds.contains(surfaceId) =>
@@ -86,17 +83,17 @@ private[manager] object PanelTransitions:
         state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(surface => removedIds.contains(surface.id)))
     )
 
-  def upsertPanelKind(
-    kind: PanelKind,
+  def upsertPanel(
+    id: PanelId,
     content: SurfaceContent,
     position: PanelPosition,
     size: Int
   )(state: AppState): AppState =
-    val matchingSurfaces = state.runtime.uiSurfaces.filter(surface => panelKindOf(surface.content).contains(kind))
+    val matchingSurfaces = state.runtime.uiSurfaces.filter(surface => PanelId.forContent(surface.content).contains(id))
     val retainedSurface  = matchingSurfaces.reverse.headOption
-    val stateWithoutKind = state.copy(runtime =
+    val stateWithoutPanel = state.copy(runtime =
       state.runtime.copy(uiSurfaces =
-        state.runtime.uiSurfaces.filterNot(surface => panelKindOf(surface.content).contains(kind))
+        state.runtime.uiSurfaces.filterNot(surface => PanelId.forContent(surface.content).contains(id))
       )
     )
     val droppedIds = matchingSurfaces.filterNot(surface => retainedSurface.exists(_.id == surface.id)).map(_.id).toSet
@@ -106,13 +103,12 @@ private[manager] object PanelTransitions:
     val (stateWithId, surface, isNewlyDocked) = retainedSurface match
       case Some(existing) =>
         (
-          stateWithoutKind,
+          stateWithoutPanel,
           existing.copy(content = content, presentation = SurfacePresentation.Docked, dismissOnMove = false),
           false
         )
       case None =>
-        val (allocatedState, surfaceId) = stateWithoutKind.allocateSurfaceId
-        (allocatedState, UiSurface(surfaceId, content, SurfacePresentation.Docked, dismissOnMove = false), true)
+        (stateWithoutPanel, UiSurface(id.surfaceId, content, SurfacePresentation.Docked, dismissOnMove = false), true)
     val placedTree =
       treeWithoutDropped
         .orElse(stateWithId.persisted.layout.workspaceTree)
@@ -162,15 +158,15 @@ private[manager] object PanelTransitions:
     * nesting for that edge (issue #817: the tree is the sole record of same-edge order, via `WorkspaceTree.dock`'s
     * insertion-order nesting), rather than splicing `uiSurfaces` and leaving a later reconciliation pass to notice.
     */
-  def reorderPanelKind(kind: PanelKind, delta: Int)(state: AppState): AppState =
+  def reorderPanel(id: PanelId, delta: Int)(state: AppState): AppState =
     if delta == 0 then state
     else
       state.persisted.layout.workspaceTree match
         case None => state
         case Some(tree) =>
-          def kindOf(surfaceId: SurfaceId): Option[PanelKind] =
-            state.runtime.uiSurfaces.find(_.id == surfaceId).flatMap(surface => panelKindOf(surface.content))
-          tree.dockedSurfaceIds.find(id => kindOf(id).contains(kind)) match
+          def panelOf(surfaceId: SurfaceId): Option[PanelId] =
+            state.runtime.uiSurfaces.find(_.id == surfaceId).flatMap(surface => PanelId.forContent(surface.content))
+          tree.dockedSurfaceIds.find(surfaceId => panelOf(surfaceId).contains(id)) match
             case None => state
             case Some(targetId) =>
               tree.positionForSurface(targetId) match
@@ -221,26 +217,5 @@ private[manager] object PanelTransitions:
     state.activeBuffer
       .filter(_.document.language.contains(LanguageId.Markdown))
 
-  private def newestPanelKindSurface(kind: PanelKind, state: AppState): Option[UiSurface] =
-    state.runtime.uiSurfaces.reverse.find(surface => panelKindOf(surface.content).contains(kind))
-
-  def panelKindOf(content: SurfaceContent): Option[PanelKind] =
-    content match
-      case SurfaceContent.DirectoryTree(_, _)   => Some(PanelKind.Explorer)
-      case SurfaceContent.Outline(_, _)         => Some(PanelKind.Outline)
-      case SurfaceContent.Comments(_, _)        => Some(PanelKind.Comments)
-      case SurfaceContent.Diagnostics(_, _)     => Some(PanelKind.Diagnostics)
-      case SurfaceContent.MarkdownPreview(_, _) => Some(PanelKind.MarkdownPreview)
-      case _                                    => None
-
-  def defaultPanelSize(kind: PanelKind, position: PanelPosition): Int =
-    kind match
-      case PanelKind.MarkdownPreview => 40
-      case PanelKind.Diagnostics =>
-        position match
-          case PanelPosition.Top | PanelPosition.Bottom => 10
-          case PanelPosition.Left | PanelPosition.Right => 30
-      case PanelKind.Explorer | PanelKind.Outline | PanelKind.Comments =>
-        position match
-          case PanelPosition.Top | PanelPosition.Bottom => 10
-          case PanelPosition.Left | PanelPosition.Right => 30
+  private def newestPanelSurface(id: PanelId, state: AppState): Option[UiSurface] =
+    state.runtime.uiSurfaces.reverse.find(surface => PanelId.forContent(surface.content).contains(id))

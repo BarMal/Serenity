@@ -15,7 +15,6 @@ import com.serenity.command.{
   CommandIntent,
   FileIntent,
   MotionIntent,
-  PanelKind,
   SessionIntent,
   SettingsIntent,
   ViewIntent
@@ -297,7 +296,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
   }
 
   "Unpinning a panel" should "commit the removal and its undo boundary in one write" in {
-    val unpin = ViewIntent.SetPanelPin(PanelKind.Diagnostics, None)
+    val unpin = ViewIntent.SetPanelPin(PanelId.Diagnostics, None)
     val program =
       for
         recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))

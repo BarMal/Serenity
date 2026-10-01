@@ -45,7 +45,7 @@ final case class Runtime(
     // into the pure core.
     capabilities: FrontendCapabilities = FrontendCapabilities.gui,
     // The buffer whose Markdown preview is showing in the TUI's spawned Swing window (issue #1113), or `None` when
-    // that window is closed. Unused in GUI mode, where the in-app pinned panel (`PanelKind.MarkdownPreview`) is the
+    // that window is closed. Unused in GUI mode, where the in-app pinned panel (`PanelId.MarkdownPreview`) is the
     // preview surface instead.
     markdownPreviewWindowBuffer: Option[BufferId] = None,
     // Pointer/gesture state (issue #1693): the editor position under the mouse, the in-progress tab-drag gesture, and

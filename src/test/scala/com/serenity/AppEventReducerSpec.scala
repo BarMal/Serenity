@@ -463,23 +463,22 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     result.state.shortcutsHelpSurface shouldBe None
   }
 
-  private def paletteRegistration(id: String): PanelRegistration =
-    PanelRegistration(
-      id = PanelId(id),
-      label = id,
-      description = s"$id panel",
-      buildContent = _ => SurfaceContent.QuickInfo(id),
-      supportedModes = Set(PanelDisplayMode.Palette)
-    )
+  private def paletteRegistration(id: PanelId): PanelRegistration =
+    PanelRegistry
+      .registrationFor(id)
+      .copy(
+        supportedModes = Set(PanelDisplayMode.Palette),
+        paletteContent = Some(_ => SurfaceContent.QuickInfo(id.key))
+      )
 
   it should "open a registered panel below the cursor without stealing editor focus" in {
     val initialState =
       AppState.initial.copy(persisted = AppState.initial.persisted.copy(focus = Focus.EditorPane(PaneId(0))))
-    val panelRegistry = PanelRegistry(List(paletteRegistration("outline")))
+    val panelRegistry = PanelRegistry(List(paletteRegistration(PanelId.Outline)))
 
-    val result = AppEventReducer.reduce(TogglePanel(PanelId("outline")), initialState, registry, panelRegistry)
+    val result = AppEventReducer.reduce(TogglePanel(PanelId.Outline), initialState, registry, panelRegistry)
 
-    val surface = result.state.surfaceById(SurfaceId("panel-outline")).getOrElse(fail("Expected a panel surface"))
+    val surface = result.state.surfaceById(SurfaceId("palette-outline")).getOrElse(fail("Expected a panel surface"))
     surface.content shouldBe SurfaceContent.QuickInfo("outline")
     surface.presentation shouldBe SurfacePresentation.Floating(
       initialState.activeCursorPosition,
@@ -490,39 +489,42 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
 
   it should "close a registered panel on a second toggle" in {
     val initialState  = AppState.initial
-    val panelRegistry = PanelRegistry(List(paletteRegistration("outline")))
+    val panelRegistry = PanelRegistry(List(paletteRegistration(PanelId.Outline)))
 
-    val opened = AppEventReducer.reduce(TogglePanel(PanelId("outline")), initialState, registry, panelRegistry).state
-    opened.surfaceById(SurfaceId("panel-outline")) shouldBe defined
+    val opened = AppEventReducer.reduce(TogglePanel(PanelId.Outline), initialState, registry, panelRegistry).state
+    opened.surfaceById(SurfaceId("palette-outline")) shouldBe defined
 
-    val closed = AppEventReducer.reduce(TogglePanel(PanelId("outline")), opened, registry, panelRegistry).state
+    val closed = AppEventReducer.reduce(TogglePanel(PanelId.Outline), opened, registry, panelRegistry).state
 
-    closed.surfaceById(SurfaceId("panel-outline")) shouldBe None
+    closed.surfaceById(SurfaceId("palette-outline")) shouldBe None
   }
 
   it should "no-op for a panel id with no registration" in {
     val initialState = AppState.initial
 
-    val result = AppEventReducer.reduce(TogglePanel(PanelId("missing")), initialState, registry)
+    val result = AppEventReducer.reduce(TogglePanel(PanelId.Outline), initialState, registry, PanelRegistry.empty)
 
     result.state shouldBe initialState
+  }
+
+  it should "no-op through the default registry, which docks every panel but offers none through the palette" in {
+    AppEventReducer.reduce(TogglePanel(PanelId.Outline), AppState.initial, registry).state shouldBe AppState.initial
   }
 
   it should "no-op for a registration that does not declare palette support" in {
     val initialState = AppState.initial
     val panelRegistry = PanelRegistry(
       List(
-        PanelRegistration(
-          id = PanelId("corner-only"),
-          label = "corner-only",
-          description = "corner-only panel",
-          buildContent = _ => SurfaceContent.QuickInfo("corner-only"),
-          supportedModes = Set(PanelDisplayMode.Corner)
-        )
+        PanelRegistry
+          .registrationFor(PanelId.Outline)
+          .copy(
+            supportedModes = Set(PanelDisplayMode.Corner),
+            paletteContent = Some(_ => SurfaceContent.QuickInfo("corner-only"))
+          )
       )
     )
 
-    val result = AppEventReducer.reduce(TogglePanel(PanelId("corner-only")), initialState, registry, panelRegistry)
+    val result = AppEventReducer.reduce(TogglePanel(PanelId.Outline), initialState, registry, panelRegistry)
 
     result.state shouldBe initialState
   }
@@ -536,9 +538,9 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
       presentation = SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     val initialState  = withId.copy(runtime = withId.runtime.copy(uiSurfaces = List(startPageSurface)))
-    val panelRegistry = PanelRegistry(List(paletteRegistration("outline")))
+    val panelRegistry = PanelRegistry(List(paletteRegistration(PanelId.Outline)))
 
-    val result = AppEventReducer.reduce(TogglePanel(PanelId("outline")), initialState, registry, panelRegistry)
+    val result = AppEventReducer.reduce(TogglePanel(PanelId.Outline), initialState, registry, panelRegistry)
 
-    result.state.surfaceById(SurfaceId("panel-outline")) shouldBe None
+    result.state.surfaceById(SurfaceId("palette-outline")) shouldBe None
   }

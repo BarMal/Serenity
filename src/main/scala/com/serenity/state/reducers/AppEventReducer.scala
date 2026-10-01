@@ -15,7 +15,7 @@ object AppEventReducer:
     event: GlobalAppEvent,
     state: AppState,
     registry: CommandRegistry,
-    panelRegistry: PanelRegistry = PanelRegistry.empty
+    panelRegistry: PanelRegistry = PanelRegistry.default
   )(using com.serenity.rope.Balance): ReducerResult =
     event match
       case Quit =>
@@ -342,19 +342,25 @@ object AppEventReducer:
   /** Opens or closes a registered panel's floating (command-palette) presentation at a stable per-panel surface id
     * (issue #1310), mirroring `toggleTabList`/`toggleShortcutsHelp`'s single-instance toggle exactly. A panel id with
     * no registration, or one that doesn't declare `PanelDisplayMode.Palette` support, is a no-op -- the same "target
-    * doesn't apply, ignore the request" policy `StateManagerSurfaceCapability`'s panel operations already use.
+    * doesn't apply, ignore the request" policy `StateManagerSurfaceCapability`'s panel operations already use. The id
+    * is distinct from `PanelId.surfaceId`, which the same panel's docked presentation owns.
     */
   private def togglePanel(state: AppState, panelRegistry: PanelRegistry, id: PanelId): AppState =
-    val surfaceId = SurfaceId(s"panel-${id.value}")
+    val surfaceId = SurfaceId(s"palette-${id.key}")
     state.surfaceById(surfaceId) match
       case Some(surface) =>
         state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id)))
       case None =>
-        panelRegistry.get(id).filter(_.supportedModes.contains(PanelDisplayMode.Palette)) match
-          case Some(registration) =>
+        val content = panelRegistry
+          .get(id)
+          .filter(_.supportedModes.contains(PanelDisplayMode.Palette))
+          .flatMap(_.paletteContent)
+          .map(_(state))
+        content match
+          case Some(paletteContent) =>
             val surface = UiSurface(
               id = surfaceId,
-              content = registration.buildContent(state),
+              content = paletteContent,
               presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
             )
             state.copy(runtime = state.runtime.copy(uiSurfaces = upsertSurface(state.runtime.uiSurfaces, surface)))

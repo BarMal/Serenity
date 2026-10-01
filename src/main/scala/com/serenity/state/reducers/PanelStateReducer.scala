@@ -19,7 +19,7 @@ object PanelStateReducer:
     */
   def pin(content: PanelContent, position: PanelPosition, size: Int, state: AppState): ReducerResult =
     val undoEntry                = HistoryEntry.PanelChange.capture(state)
-    val (stateWithId, surfaceId) = state.allocateSurfaceId
+    val (stateWithId, surfaceId) = dockingSurfaceId(content, state)
     val panel                    = UiSurface.fromPanelContent(surfaceId, content)
     val workspaceTree = stateWithId.persisted.layout.workspaceTree.flatMap { tree =>
       val (splitId, leafId) = tree.nextDockIds(surfaceId)
@@ -35,6 +35,34 @@ object PanelStateReducer:
       ),
       AppEffect.Undo(UndoEffect.RecordBoundary(undoEntry, groupable = false))
     )
+
+  /** A registered panel docks under its fixed id, replacing any instance of it already docked (keeping focus on it);
+    * any other content gets a freshly allocated id.
+    */
+  private def dockingSurfaceId(content: PanelContent, state: AppState): (AppState, SurfaceId) =
+    PanelId.forContent(content.asSurfaceContent) match
+      case None => state.allocateSurfaceId
+      case Some(id) =>
+        val replaced = state.runtime.uiSurfaces.collect {
+          case surface if PanelId.forContent(surface.content).contains(id) => surface.id
+        }.toSet
+        val tree = replaced.foldLeft(state.persisted.layout.workspaceTree)((tree, surfaceId) =>
+          tree.flatMap(_.removeSurface(surfaceId)).orElse(tree)
+        )
+        val focus = state.persisted.focus match
+          case Focus.Surface(focused) if replaced.contains(focused) => Focus.Surface(id.surfaceId)
+          case other                                                => other
+        val maximized = state.persisted.layout.maximizedWorkspaceNodeId.filterNot(nodeId =>
+          state.persisted.layout.workspaceTree.flatMap(_.surfaceIdForNode(nodeId)).exists(replaced.contains)
+        )
+        val withoutPanel = state.copy(
+          persisted = state.persisted.copy(
+            focus = focus,
+            layout = state.persisted.layout.copy(workspaceTree = tree, maximizedWorkspaceNodeId = maximized)
+          ),
+          runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(s => replaced.contains(s.id)))
+        )
+        (withoutPanel, id.surfaceId)
 
   def focus(surfaceId: SurfaceId, state: AppState): ReducerResult =
     state.surfaceById(surfaceId).filter(isPinned) match

@@ -119,9 +119,15 @@ class SessionStateLayoutSpec extends AnyFlatSpec with Matchers:
     val pane0     = PaneId(0)
     val pane1     = PaneId(1)
     val positions = List(PanelPosition.Left, PanelPosition.Right, PanelPosition.Top, PanelPosition.Bottom)
-    val panels = positions.zipWithIndex.map { (_, index) =>
-      UiSurface.fromPanelContent(SurfaceId(s"surface-$index"), PanelContent.Diagnostics(Nil))
-    }
+    // One of each panel: a panel docks at most once, under its own fixed id.
+    val panels = List(
+      PanelId.Explorer -> PanelContent.DirectoryTree(
+        com.serenity.ui.layout.DirectoryTreeData(java.nio.file.Path.of("/repo"))
+      ),
+      PanelId.Outline     -> PanelContent.Outline(Nil),
+      PanelId.Comments    -> PanelContent.Comments(Nil),
+      PanelId.Diagnostics -> PanelContent.Diagnostics(Nil)
+    ).map((id, content) => UiSurface.fromPanelContent(id.surfaceId, content))
     val editorTree = WorkspaceTree(
       WorkspaceNode.Split(
         WorkspaceNodeId("editors"),
@@ -157,7 +163,7 @@ class SessionStateLayoutSpec extends AnyFlatSpec with Matchers:
       runtime = AppState.initial.runtime.copy(
         uiSurfaces = panels,
         nextPaneId = PaneId(2),
-        nextSurfaceId = SurfaceIdSupply(panels.size)
+        nextSurfaceId = SurfaceIdSupply(0)
       )
     )
 
@@ -171,7 +177,8 @@ class SessionStateLayoutSpec extends AnyFlatSpec with Matchers:
     restored.persisted.layout.maximizedWorkspaceNodeId shouldBe workspaceTree.nodeIdForSurface(panels(2).id)
     restored.pinnedSurfaces.map(_.id) shouldBe state.pinnedSurfaces.map(_.id)
     restored.pinnedSurfaces.map(_.presentation) shouldBe state.pinnedSurfaces.map(_.presentation)
-    restored.runtime.nextSurfaceId shouldBe SurfaceIdSupply(panels.size)
+    // Fixed panel ids take nothing from the allocator, so it restores where it was.
+    restored.runtime.nextSurfaceId shouldBe SurfaceIdSupply(0)
     restored.isValid shouldBe true
     encoded.hcursor.downField("schemaVersion").as[Int] shouldBe Right(SessionState.CurrentSchemaVersion)
   }

@@ -142,7 +142,7 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
       .asJson
     val configObject =
       originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
-    val jsonWithoutPanelKinds =
+    val jsonWithoutPanelIds =
       originalJson.mapObject(
         _.add(
           "config",
@@ -155,7 +155,7 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
         )
       )
 
-    val decoded = jsonWithoutPanelKinds.as[SessionState]
+    val decoded = jsonWithoutPanelIds.as[SessionState]
 
     decoded.isRight shouldBe true
     decoded.toOption.get.config.surfaceConfig.panelOpenTransitionKind shouldBe None

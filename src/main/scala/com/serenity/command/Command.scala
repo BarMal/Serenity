@@ -16,13 +16,6 @@ enum CommandCategory:
   case Project
   case Settings
 
-enum PanelKind:
-  case Explorer
-  case Outline
-  case Comments
-  case Diagnostics
-  case MarkdownPreview
-
 enum LifecycleIntent:
   case QuitApp
 
@@ -94,13 +87,13 @@ enum ViewIntent:
   case UnpinPanel(position: PanelPosition)
   case ExpandPanel(position: PanelPosition)
   case CollapseExpandedPanel
-  case MovePanelEarlier(kind: PanelKind)
-  case MovePanelLater(kind: PanelKind)
+  case MovePanelEarlier(id: PanelId)
+  case MovePanelLater(id: PanelId)
   case PinExplorerPanel
   case PinOutlinePanel
   case PinCommentsPanel
   case PinDiagnosticsPanel
-  case SetPanelPin(kind: PanelKind, position: Option[PanelPosition])
+  case SetPanelPin(id: PanelId, position: Option[PanelPosition])
   case OpenMarkdownPreview
   case SetMarkdownViewMode(mode: MarkdownViewMode)
   case SetDefaultDocumentMode(mode: DefaultDocumentMode)

@@ -129,6 +129,36 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     unpinned.state.persisted.focus shouldBe Focus.EditorPane(paneId)
   }
 
+  it should "dock a registered panel under its fixed surface id" in {
+    val pinned = PanelStateReducer.pin(PanelContent.Outline(Nil), PanelPosition.Right, 24, baseState).state
+
+    pinned.pinnedSurfaces.map(_.id) shouldBe List(PanelId.Outline.surfaceId)
+    pinned.persisted.layout.workspaceTree.flatMap(_.positionForSurface(PanelId.Outline.surfaceId)) shouldBe
+      Some(PanelPosition.Right)
+  }
+
+  it should "replace a registered panel that is already docked rather than docking a second one" in {
+    val first  = PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/tmp")), None)
+    val second = PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/srv")), None)
+    val once   = PanelStateReducer.pin(first, PanelPosition.Left, 24, baseState).state
+    val focusedOnce =
+      once.copy(persisted = once.persisted.copy(focus = Focus.Surface(PanelId.Explorer.surfaceId)))
+
+    val twice = PanelStateReducer.pin(second, PanelPosition.Right, 24, focusedOnce).state
+
+    AppStateValidation.validationErrors(twice) shouldBe Nil
+    twice.pinnedSurfaces.map(_.content) shouldBe List(second.asSurfaceContent)
+    twice.persisted.layout.workspaceTree.flatMap(_.positionForSurface(PanelId.Explorer.surfaceId)) shouldBe
+      Some(PanelPosition.Right)
+    twice.persisted.focus shouldBe Focus.Surface(PanelId.Explorer.surfaceId)
+  }
+
+  it should "give content that is not a registered panel a freshly allocated surface id" in {
+    val pinned = PanelStateReducer.pin(PanelContent.Terminal("done", 0), PanelPosition.Bottom, 12, baseState).state
+
+    pinned.pinnedSurfaces.map(_.id.value).forall(_.startsWith("surface-")) shouldBe true
+  }
+
   it should "declare an undo boundary for pin and unpin (#1016 PR4), capturing the pre-change state" in {
     val content = PanelContent.DirectoryTree(DirectoryTreeData(Paths.get("/tmp")), None)
 

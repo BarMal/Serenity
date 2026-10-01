@@ -299,7 +299,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "pin-outline",
         "Pin outline",
-        CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right))),
+        CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Outline, Some(PanelPosition.Right))),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -338,7 +338,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "pin-drafting-outline-right",
         "Pin drafting outline right",
-        CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Outline, Some(PanelPosition.Right))),
+        CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Outline, Some(PanelPosition.Right))),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -346,7 +346,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
       Command.typed(
         "pin-drafting-diagnostics-right",
         "Pin drafting diagnostics right",
-        CommandIntent.View(ViewIntent.SetPanelPin(PanelKind.Diagnostics, Some(PanelPosition.Right))),
+        CommandIntent.View(ViewIntent.SetPanelPin(PanelId.Diagnostics, Some(PanelPosition.Right))),
         CommandCategory.Settings
       )
     ).unsafeRunSync()
@@ -367,14 +367,14 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     }
 
     commands should contain(
-      "Move Outline Earlier" -> CommandIntent.View(ViewIntent.MovePanelEarlier(PanelKind.Outline))
+      "Move Outline Earlier" -> CommandIntent.View(ViewIntent.MovePanelEarlier(PanelId.Outline))
     )
-    commands should contain("Move Outline Later" -> CommandIntent.View(ViewIntent.MovePanelLater(PanelKind.Outline)))
+    commands should contain("Move Outline Later" -> CommandIntent.View(ViewIntent.MovePanelLater(PanelId.Outline)))
     commands should contain(
-      "Move Diagnostics Earlier" -> CommandIntent.View(ViewIntent.MovePanelEarlier(PanelKind.Diagnostics))
+      "Move Diagnostics Earlier" -> CommandIntent.View(ViewIntent.MovePanelEarlier(PanelId.Diagnostics))
     )
     commands should contain(
-      "Move Diagnostics Later" -> CommandIntent.View(ViewIntent.MovePanelLater(PanelKind.Diagnostics))
+      "Move Diagnostics Later" -> CommandIntent.View(ViewIntent.MovePanelLater(PanelId.Diagnostics))
     )
   }
 

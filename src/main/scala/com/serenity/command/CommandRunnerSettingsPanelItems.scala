@@ -1,5 +1,6 @@
 package com.serenity.command
 
+import com.serenity.state.models.{PanelId, PanelRegistry}
 import com.serenity.ui.layout.PanelPosition
 
 /** Pinned-panel placement and reordering settings items. Split out of `CommandRunnerSettingsItems` to keep both under
@@ -8,20 +9,15 @@ import com.serenity.ui.layout.PanelPosition
 private[command] object CommandRunnerSettingsPanelItems:
 
   private[command] def workspaceLayoutItems(optionSelections: Map[String, Int]): List[CommandSurfaceItem] =
-    val panelDefinitions = List(
-      ("Explorer", PanelKind.Explorer, "panel-explorer-pin"),
-      ("Outline", PanelKind.Outline, "panel-outline-pin"),
-      ("Comments", PanelKind.Comments, "panel-comments-pin"),
-      ("Diagnostics", PanelKind.Diagnostics, "panel-diagnostics-pin"),
-      ("Markdown Preview", PanelKind.MarkdownPreview, "panel-markdown-preview-pin")
-    )
+    val panelDefinitions =
+      PanelId.values.toList.map(id => (PanelRegistry.registrationFor(id).label, id, s"panel-${id.key}-pin"))
     val panelPinItems = panelDefinitions.map {
-      case (label, kind, optionId) =>
-        panelPinOptionItem(optionId, label, kind, optionSelections)
+      case (label, id, optionId) =>
+        panelPinOptionItem(optionId, label, id, optionSelections)
     }
     val pinnedPanels = panelDefinitions.flatMap {
-      case (label, kind, optionId) =>
-        selectedPanelPosition(optionSelections, optionId).map(PinnedPanelRow(label, kind, _))
+      case (label, id, optionId) =>
+        selectedPanelPosition(optionSelections, optionId).map(PinnedPanelRow(label, id, _))
     }
     val reorderablePositions = pinnedPanels
       .groupBy(_.position)
@@ -34,7 +30,7 @@ private[command] object CommandRunnerSettingsPanelItems:
             Command.typed(
               s"move-${commandId(panel.label)}-panel-earlier",
               s"Move the ${panel.label} panel earlier within its pinned edge.",
-              CommandIntent.View(ViewIntent.MovePanelEarlier(panel.kind)),
+              CommandIntent.View(ViewIntent.MovePanelEarlier(panel.id)),
               CommandCategory.Settings,
               label = s"Move ${panel.label} Earlier"
             )
@@ -43,7 +39,7 @@ private[command] object CommandRunnerSettingsPanelItems:
             Command.typed(
               s"move-${commandId(panel.label)}-panel-later",
               s"Move the ${panel.label} panel later within its pinned edge.",
-              CommandIntent.View(ViewIntent.MovePanelLater(panel.kind)),
+              CommandIntent.View(ViewIntent.MovePanelLater(panel.id)),
               CommandCategory.Settings,
               label = s"Move ${panel.label} Later"
             )
@@ -74,7 +70,7 @@ private[command] object CommandRunnerSettingsPanelItems:
   private def commandId(label: String): String =
     label.toLowerCase.replaceAll("[^a-z0-9]+", "-").stripPrefix("-").stripSuffix("-")
 
-  final private case class PinnedPanelRow(label: String, kind: PanelKind, position: PanelPosition)
+  final private case class PinnedPanelRow(label: String, id: PanelId, position: PanelPosition)
 
   private def selectedPanelPosition(optionSelections: Map[String, Int], optionId: String): Option[PanelPosition] =
     List(None, Some(PanelPosition.Top), Some(PanelPosition.Right), Some(PanelPosition.Bottom), Some(PanelPosition.Left))
@@ -84,15 +80,15 @@ private[command] object CommandRunnerSettingsPanelItems:
   private[command] def panelPinOptionItem(
     id: String,
     label: String,
-    kind: PanelKind,
+    panel: PanelId,
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =
     val options = List(
-      CommandOption("Off", CommandIntent.View(ViewIntent.SetPanelPin(kind, None)), hint = Some(s"Hide $label")),
-      CommandOption("Top", CommandIntent.View(ViewIntent.SetPanelPin(kind, Some(PanelPosition.Top)))),
-      CommandOption("Right", CommandIntent.View(ViewIntent.SetPanelPin(kind, Some(PanelPosition.Right)))),
-      CommandOption("Bottom", CommandIntent.View(ViewIntent.SetPanelPin(kind, Some(PanelPosition.Bottom)))),
-      CommandOption("Left", CommandIntent.View(ViewIntent.SetPanelPin(kind, Some(PanelPosition.Left))))
+      CommandOption("Off", CommandIntent.View(ViewIntent.SetPanelPin(panel, None)), hint = Some(s"Hide $label")),
+      CommandOption("Top", CommandIntent.View(ViewIntent.SetPanelPin(panel, Some(PanelPosition.Top)))),
+      CommandOption("Right", CommandIntent.View(ViewIntent.SetPanelPin(panel, Some(PanelPosition.Right)))),
+      CommandOption("Bottom", CommandIntent.View(ViewIntent.SetPanelPin(panel, Some(PanelPosition.Bottom)))),
+      CommandOption("Left", CommandIntent.View(ViewIntent.SetPanelPin(panel, Some(PanelPosition.Left))))
     )
     CommandSurfaceItem.OptionItem(
       id = id,
