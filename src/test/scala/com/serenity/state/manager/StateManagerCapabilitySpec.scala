@@ -416,6 +416,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
         CommandEffectInterpreter.Dependencies(
           lifecycle = observed.update(_ :+ "lifecycle"),
           command = _ => observed.update(_ :+ "command"),
+          unrecordedCommand = _ => observed.update(_ :+ "unrecordedCommand"),
           theme = _ => observed.update(_ :+ "theme"),
           surface = _ => observed.update(_ :+ "surface"),
           file = _ => IO.raiseError(new IllegalStateException("file failed")),

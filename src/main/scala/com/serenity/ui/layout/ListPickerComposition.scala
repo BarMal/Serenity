@@ -1,10 +1,10 @@
 package com.serenity.ui.layout
 
 import com.serenity.state.models.{ListChoice, ListPicker}
-import com.serenity.ui.widget.Loadable
+import com.serenity.ui.widget.{Loadable, TextField}
 
-/** The one composition every [[ListPicker]] is drawn with: its title -- or what it is waiting on -- then its choices,
-  * or a row saying they are loading, there are none, or why they couldn't be read.
+/** The one composition every [[ListPicker]] is drawn with: its title -- or what it is waiting on -- then its query if
+  * it has one, then its choices, or a row saying they are loading, there are none, or why they couldn't be read.
   */
 object ListPickerComposition:
 
@@ -26,8 +26,10 @@ object ListPickerComposition:
       picker.pending.flatMap(_.waitingLabel).getOrElse(picker.title),
       ModalSurfaceComposition.rowRect(bounds, 0)
     )
+    val queryRow       = picker.query.map(field => queryBox(field, ModalSurfaceComposition.rowRect(bounds, 1))).toList
+    val firstChoiceRow = 1 + queryRow.size
     def messageRow(text: String, tone: OverlayTone) = List(
-      ModalSurfaceComposition.textBox(text, ModalSurfaceComposition.rowRect(bounds, 1), tone = tone)
+      ModalSurfaceComposition.textBox(text, ModalSurfaceComposition.rowRect(bounds, firstChoiceRow), tone = tone)
     )
     val rows = picker.items match
       case Loadable.Loading(_)   => messageRow("Loading…", OverlayTone.Muted)
@@ -38,19 +40,29 @@ object ListPickerComposition:
           case ((choice, index), row) =>
             ModalSurfaceComposition.textBox(
               rowText(choice),
-              ModalSurfaceComposition.rowRect(bounds, row + 1),
+              ModalSurfaceComposition.rowRect(bounds, row + firstChoiceRow),
               selected = choices.selected.contains(index),
               focusId = Some(SurfaceFocusId(choiceActionId(index).value)),
               actionId = Some(choiceActionId(index))
             )
         }
-    ModalSurfaceComposition.plan(bounds, header :: rows)
+    ModalSurfaceComposition.plan(bounds, header :: queryRow ++ rows)
 
   def frameHeight(picker: ListPicker): Int =
     val rows = picker.items match
       case Loadable.Ready(choices) => choices.items.size.min(VisibleRows)
       case _                       => 1
-    SurfaceFrameLayout.DefaultBorderCells * 2 + 1 + rows
+    SurfaceFrameLayout.DefaultBorderCells * 2 + 1 + picker.query.size + rows
+
+  /** Label-less, and outside the hit regions: a click anywhere in the picker already leaves typing going here. */
+  private def queryBox(field: TextField, rect: LogicalPixelRect): SurfacePaintBox =
+    SurfacePaintBox(
+      SurfacePaintKind.TextInput,
+      rect,
+      text = Some(field.text),
+      semanticLabel = Some(field.text),
+      cursorOffset = Some(field.caret)
+    )
 
   private def rowText(choice: ListChoice): String =
     choice.detail.fold(choice.label)(detail => s"${choice.label}  $detail")

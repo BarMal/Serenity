@@ -152,6 +152,7 @@ final private[manager] class StateManagerEffectHandlers(
     CommandEffectInterpreter.Dependencies(
       interpretLifecycleEffect,
       interpretCommandEffect,
+      interpretUnrecordedCommandEffect,
       interpretThemeEffect,
       interpretSurfaceEffect,
       interpretFileEffect,
@@ -180,6 +181,9 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def interpretCommandEffect(command: Command): IO[Unit] =
     currentState.flatMap(state => interpretCommand(command, state))
+
+  private def interpretUnrecordedCommandEffect(command: Command): IO[Unit] =
+    currentState.flatMap(state => scopeCheckedCommand(command, state, recordUsage = false))
 
   private def interpretThemeEffect(effect: ThemeEffect): IO[Unit] =
     surfacePopupEffects.interpretThemeEffect(effect)
@@ -226,15 +230,18 @@ final private[manager] class StateManagerEffectHandlers(
   // how it was triggered -- rather than only on the effect path, which used to leave palette/mouse-driven commands
   // silent.
   private[manager] def interpretCommand(command: Command, state: AppState): IO[Unit] =
+    scopeCheckedCommand(command, state, recordUsage = true)
+
+  private def scopeCheckedCommand(command: Command, state: AppState, recordUsage: Boolean): IO[Unit] =
     // Every entry path lands here, so this one check also covers hotkeys, menus and the toolbar -- which is what
     // keeps a command hidden from the palette in this mode/frontend from still running by another route.
     command.scope.unavailableReason(state.editingContext) match
       case Some(reason) =>
         logger.info(s"[COMMAND] refused ${command.name}: $reason") >>
           showPeek(PeekContent.QuickInfo(reason), state.activeCursorPosition.getOrElse(CursorPosition(0, 0)))
-      case None => dispatchCommand(command, state)
+      case None => dispatchCommand(command, state, recordUsage)
 
-  private def dispatchCommand(command: Command, state: AppState): IO[Unit] =
+  private def dispatchCommand(command: Command, state: AppState, recordUsage: Boolean): IO[Unit] =
     val dispatch = command.intent match
       case CommandIntent.Lifecycle(intent)    => interpretLifecycleIntent(intent, state)
       case CommandIntent.File(intent)         => interpretFileIntent(intent, state)
@@ -254,11 +261,12 @@ final private[manager] class StateManagerEffectHandlers(
       case CommandIntent.Settings(intent)     => configEffects.interpret(intent, state)
     // issue #1048: MRU tracking -- every executed command counts toward its recency, regardless of what triggered
     // it (palette, mouse click, contextual toolbar, ...), living on `persisted` since `CommandRunner` itself is
-    // reconstructed fresh each time the palette opens (`CommandRunner.recordCommandUsage`'s own doc).
+    // reconstructed fresh each time the palette opens (`CommandRunner.recordCommandUsage`'s own doc). Only commands
+    // the user did not choose (`AppEffect.ExecuteCommandUnrecorded`: picker previews and restores) are left out.
     logger.info(s"[COMMAND] ${StateManager.describeCommandExecution(command)}") >>
       updateModelValidated(model =>
         Some(model.copy(app = StateManagerEffectHandlers.withCommandUsageRecorded(model.app, command.name)))
-      ) >> dispatch
+      ).whenA(recordUsage) >> dispatch
 
   private def interpretLifecycleIntent(intent: LifecycleIntent, state: AppState): IO[Unit] =
     intent match
