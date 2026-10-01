@@ -1,11 +1,13 @@
 package com.serenity.state.manager
 
+import com.serenity.command.SessionCommands
 import com.serenity.rope.Balance
 import com.serenity.session.SessionMetadata
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
 import com.serenity.ui.layout.{LayoutEngine, SplitAxis}
+import com.serenity.ui.widget.Loadable
 
 /** Session restore and the named-session prompts (#1390) as pure functions of the state; the session reads and writes
   * themselves run on the Session lane.
@@ -43,15 +45,38 @@ private[manager] object SessionWorkflowTransitions:
     val switched = EditorTransitions.paneSwitched(withPane, paneId).getOrElse(withPane)
     switched.copy(runtime = switched.runtime.copy(uiSurfaces = List.empty))
 
-  def withSessionPicker(state: AppState, purpose: SessionListPurpose, sessions: List[SessionMetadata]): AppState =
-    ModalStateReducer.show(Modal.SessionList(sessions, 0, purpose), state).state
-
-  /** Applies a session loaded from the picker `pickerId` only while that picker is still open: dismissing it first
-    * abandons the load. A session that could not be read just closes the picker.
+  /** The session picker for `purpose`, opened still loading, and its surface id -- none while a blocking modal holds
+    * the screen.
     */
-  def withNamedSessionLoaded(state: AppState, pickerId: SurfaceId, restored: Option[AppState]): AppState =
-    if sessionPicker(state, pickerId).isEmpty then state
-    else restored.fold(WorkflowSurfaces.dismissedToEditor(state, pickerId))(restoredIntoViewport(_, state))
+  def withSessionPickerOpened(state: AppState, purpose: SessionListPurpose): Option[(AppState, SurfaceId)] =
+    val opened = ModalStateReducer.show(Modal.ListPicker(ListPicker.loading(pickerTitle(purpose))), state).state
+    opened.runtime.uiSurfaces.map(_.id).find(id => !state.runtime.uiSurfaces.exists(_.id == id)).map(opened -> _)
+
+  /** Fills the picker `pickerId` with one choice per listed session, while it is still open. */
+  def withSessionsListed(
+    state: AppState,
+    pickerId: SurfaceId,
+    purpose: SessionListPurpose,
+    listing: Either[String, List[SessionMetadata]]
+  ): AppState =
+    sessionPicker(state, pickerId).fold(state) { picker =>
+      val filled = listing.fold(
+        reason => picker.copy(items = Loadable.Failed(reason)),
+        sessions => picker.withChoices(sessions.map(sessionChoice(purpose, _)), "No saved sessions")
+      )
+      WorkflowSurfaces.withModal(state, pickerId, Modal.ListPicker(filled))
+    }
+
+  /** Applies a loaded session -- if it was picked from the picker `pickerId`, only while that picker still waits on it,
+    * so dismissing the picker abandons the load. A session that could not be read just closes the picker.
+    */
+  def withNamedSessionLoaded(state: AppState, pickerId: Option[SurfaceId], restored: Option[AppState]): AppState =
+    pickerId match
+      case Some(id) if !sessionPicker(state, id).exists(_.pending.isDefined) => state
+      case _ =>
+        restored.fold(pickerId.fold(state)(WorkflowSurfaces.dismissedToEditor(state, _)))(
+          restoredIntoViewport(_, state)
+        )
 
   def sessionNamePrompt(state: AppState, surfaceId: SurfaceId): Option[(SessionNamePromptMode, String)] =
     state.runtime.uiSurfaces
@@ -64,11 +89,24 @@ private[manager] object SessionWorkflowTransitions:
       }
       .flatten
 
-  def sessionPicker(
-    state: AppState,
-    surfaceId: SurfaceId
-  ): Option[(List[SessionMetadata], Int, SessionListPurpose)] =
+  private def sessionPicker(state: AppState, surfaceId: SurfaceId): Option[ListPicker] =
     state.runtime.uiSurfaces.find(_.id == surfaceId).collect {
-      case UiSurface(_, SurfaceContent.ModalWorkflow(Modal.SessionList(sessions, index, purpose)), _, _) =>
-        (sessions, index, purpose)
+      case UiSurface(_, SurfaceContent.ModalWorkflow(Modal.ListPicker(picker)), _, _) => picker
     }
+
+  private def pickerTitle(purpose: SessionListPurpose): String =
+    purpose match
+      case SessionListPurpose.Open   => "Open session"
+      case SessionListPurpose.Rename => "Rename session"
+
+  private def sessionChoice(purpose: SessionListPurpose, session: SessionMetadata): ListChoice =
+    purpose match
+      case SessionListPurpose.Open =>
+        ListChoice(
+          session.displayName,
+          None,
+          SessionCommands.openNamedSession(session.id),
+          waitingLabel = Some(s"Opening ${session.displayName}…")
+        )
+      case SessionListPurpose.Rename =>
+        ListChoice(session.displayName, None, SessionCommands.renameNamedSession(session.id, session.displayName))

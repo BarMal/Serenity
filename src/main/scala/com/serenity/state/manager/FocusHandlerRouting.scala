@@ -45,7 +45,7 @@ private[manager] object FocusHandlerRouting:
   private val modalReplaceWorkflow: LocalEventHandler = new ModalComponent(ModalType.ReplaceWorkflow)
   private val modalCloseWorkflow: LocalEventHandler   = new ModalComponent(ModalType.CloseWorkflow)
   private val modalConfirm: LocalEventHandler         = new ModalComponent(ModalType.Confirm)
-  private val modalSessionList: LocalEventHandler     = new ModalComponent(ModalType.SessionList)
+  private val modalListPicker: LocalEventHandler      = new ModalComponent(ModalType.ListPicker)
 
   private val pinnedLeft: LocalEventHandler   = new PinnedPanelComponent(PanelPosition.Left)
   private val pinnedRight: LocalEventHandler  = new PinnedPanelComponent(PanelPosition.Right)
@@ -67,7 +67,7 @@ private[manager] object FocusHandlerRouting:
       case ModalType.ReplaceWorkflow => modalReplaceWorkflow
       case ModalType.CloseWorkflow   => modalCloseWorkflow
       case ModalType.Confirm         => modalConfirm
-      case ModalType.SessionList     => modalSessionList
+      case ModalType.ListPicker      => modalListPicker
       case custom: ModalType.Custom  => new ModalComponent(custom)
 
   /** The handler for a Floating-presented surface, keyed purely by its content. Blocking dialogs (#814) are no longer

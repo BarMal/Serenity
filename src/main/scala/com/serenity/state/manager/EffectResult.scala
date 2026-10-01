@@ -84,10 +84,11 @@ private[manager] enum EffectResult:
       isDirectory: Boolean
   )
 
-  // Named sessions (#1390, #1697 Wave 3): posted by StateManagerWorkflowCapability's Session-lane jobs. A loaded session
-  // applies only while the picker it was chosen from is open. See SessionWorkflowTransitions.
-  case SessionsListed(purpose: SessionListPurpose, sessions: List[SessionMetadata])
-  case NamedSessionLoaded(pickerId: SurfaceId, restored: Option[AppState])
+  // Named sessions (#1390, #1697 Wave 3): posted by StateManagerWorkflowCapability's Session-lane jobs. A listing fills
+  // the picker it was taken for, and a session picked from a picker loads only while that picker still waits on it.
+  // See SessionWorkflowTransitions.
+  case SessionsListed(pickerId: SurfaceId, purpose: SessionListPurpose, listing: Either[String, List[SessionMetadata]])
+  case NamedSessionLoaded(pickerId: Option[SurfaceId], restored: Option[AppState])
 
   // Project tasks (#1697 Wave 3): posted by `LaneKey.Project` jobs; see ProjectTaskTransitions.
   /** Output the task wrote since its previous batch. */
@@ -151,8 +152,8 @@ private[manager] object EffectResult:
       case FileWorkflowProjectRootResolved(surfaceId, requested, target, isDirectory) =>
         FileWorkflowTransitions.withProjectRootResolved(state, surfaceId, requested, target, isDirectory)
 
-      case SessionsListed(purpose, sessions) =>
-        SessionWorkflowTransitions.withSessionPicker(state, purpose, sessions)
+      case SessionsListed(pickerId, purpose, listing) =>
+        SessionWorkflowTransitions.withSessionsListed(state, pickerId, purpose, listing)
       case NamedSessionLoaded(pickerId, restored) =>
         SessionWorkflowTransitions.withNamedSessionLoaded(state, pickerId, restored)
 

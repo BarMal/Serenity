@@ -3,11 +3,15 @@ package com.serenity.state.manager
 import java.nio.file.Paths
 
 import com.serenity.DockedPanelFixtures
+import com.serenity.command.SessionCommands
+import com.serenity.keystroke.events.ModalSubmit
 import com.serenity.rope.Balance
+import com.serenity.session.{SessionId, SessionMetadata}
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
-import com.serenity.state.reducers.ModalStateReducer
+import com.serenity.state.reducers.{ModalEventReducer, ModalStateReducer}
 import com.serenity.ui.layout.PanelPosition
+import com.serenity.ui.widget.Loadable
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -143,23 +147,73 @@ class WorkflowTransitionsSpec extends AnyFlatSpec with Matchers:
     close.resolved(last.getOrElse(fail("no workflow")), next.state).completed shouldBe Some(CloseScope.Quit)
   }
 
-  private def withPicker(state: AppState): (AppState, SurfaceId) =
-    val shown = SessionWorkflowTransitions.withSessionPicker(state, SessionListPurpose.Open, Nil)
-    (shown, shown.runtime.uiSurfaces.lastOption.map(_.id).getOrElse(fail("no picker")))
+  private val draft = SessionMetadata(SessionId("draft"), "Draft", "draft.json", 0L, 0L)
 
-  "A named session loaded from the picker" should "replace the current session while the picker is open" in {
-    val (state, pickerId) = withPicker(AppState.initial)
-    val saved             = EditorTransitions.bufferCreated(AppState.initial, "saved", None).created
+  private def withPicker(state: AppState, purpose: SessionListPurpose): (AppState, SurfaceId) =
+    SessionWorkflowTransitions.withSessionPickerOpened(state, purpose).getOrElse(fail("no picker"))
 
-    val restored = SessionWorkflowTransitions.withNamedSessionLoaded(state, pickerId, Some(saved))
+  private def picker(state: AppState, id: SurfaceId): Option[ListPicker] =
+    state.runtime.uiSurfaces.find(_.id == id).collect {
+      case UiSurface(_, SurfaceContent.ModalWorkflow(Modal.ListPicker(picker)), _, _) => picker
+    }
+
+  /** The picker listed with `draft`, and `draft` picked: the picker now waits on its load. */
+  private def pickedDraft: (AppState, SurfaceId) =
+    val (opened, id) = withPicker(AppState.initial, SessionListPurpose.Open)
+    val listed = SessionWorkflowTransitions.withSessionsListed(opened, id, SessionListPurpose.Open, Right(List(draft)))
+    (ModalEventReducer.reduce(ModalType.ListPicker, ModalSubmit, listed).state, id)
+
+  "A session listing" should "fill the picker it was taken for, one choice per session" in {
+    val (opened, id) = withPicker(AppState.initial, SessionListPurpose.Open)
+    picker(opened, id).map(_.items) shouldBe Some(Loadable.Loading())
+
+    val listed = SessionWorkflowTransitions.withSessionsListed(opened, id, SessionListPurpose.Open, Right(List(draft)))
+
+    picker(listed, id).flatMap(_.selectedChoice).map(_.action) shouldBe
+      Some(SessionCommands.openNamedSession(draft.id))
+  }
+
+  it should "offer each session for renaming without waiting, for the Rename picker" in {
+    val (opened, id) = withPicker(AppState.initial, SessionListPurpose.Rename)
+
+    val listed =
+      SessionWorkflowTransitions.withSessionsListed(opened, id, SessionListPurpose.Rename, Right(List(draft)))
+
+    picker(listed, id).flatMap(_.selectedChoice).map(choice => (choice.action, choice.waitingLabel)) shouldBe
+      Some((SessionCommands.renameNamedSession(draft.id, "Draft"), None))
+  }
+
+  it should "say there are none, or why they couldn't be read" in {
+    val (opened, id) = withPicker(AppState.initial, SessionListPurpose.Open)
+
+    picker(SessionWorkflowTransitions.withSessionsListed(opened, id, SessionListPurpose.Open, Right(Nil)), id)
+      .map(_.items) shouldBe Some(Loadable.Empty("No saved sessions"))
+    picker(SessionWorkflowTransitions.withSessionsListed(opened, id, SessionListPurpose.Open, Left("disk full")), id)
+      .map(_.items) shouldBe Some(Loadable.Failed("disk full"))
+  }
+
+  it should "be dropped once the picker has closed" in {
+    val (opened, id) = withPicker(AppState.initial, SessionListPurpose.Open)
+    val dismissed    = WorkflowSurfaces.dismissedToEditor(opened, id)
+
+    SessionWorkflowTransitions.withSessionsListed(dismissed, id, SessionListPurpose.Open, Right(List(draft))) shouldBe
+      dismissed
+  }
+
+  "A named session loaded from the picker" should "replace the current session while the picker waits on it" in {
+    val (picked, id) = pickedDraft
+    val saved        = EditorTransitions.bufferCreated(AppState.initial, "saved", None).created
+    picker(picked, id).flatMap(_.pending).map(_.action) shouldBe Some(SessionCommands.openNamedSession(draft.id))
+
+    val restored = SessionWorkflowTransitions.withNamedSessionLoaded(picked, Some(id), Some(saved))
 
     restored.persisted.buffers.keySet shouldBe saved.persisted.buffers.keySet
     restored.runtime.uiSurfaces shouldBe empty
   }
 
   it should "keep the session's docked panels, so the restored workspace tree still validates" in {
-    val (state, pickerId) = withPicker(AppState.initial)
-    val outlineId         = SurfaceId("outline")
+    val (picked, id) = pickedDraft
+    val outlineId    = SurfaceId("outline")
     val saved = DockedPanelFixtures.dock(
       EditorTransitions.bufferCreated(AppState.initial, "saved", None).created,
       outlineId,
@@ -168,26 +222,36 @@ class WorkflowTransitionsSpec extends AnyFlatSpec with Matchers:
       30
     )
 
-    val restored = SessionWorkflowTransitions.withNamedSessionLoaded(state, pickerId, Some(saved))
+    val restored = SessionWorkflowTransitions.withNamedSessionLoaded(picked, Some(id), Some(saved))
 
     restored.runtime.uiSurfaces.map(_.id) shouldBe List(outlineId)
     AppStateValidation.validationErrors(restored) shouldBe Nil
   }
 
   it should "be dropped once the picker was dismissed" in {
-    val (state, pickerId) = withPicker(AppState.initial)
-    val dismissed         = WorkflowSurfaces.dismissedToEditor(state, pickerId)
-    val saved             = EditorTransitions.bufferCreated(AppState.initial, "saved", None).created
+    val (picked, id) = pickedDraft
+    val dismissed    = WorkflowSurfaces.dismissedToEditor(picked, id)
+    val saved        = EditorTransitions.bufferCreated(AppState.initial, "saved", None).created
 
-    SessionWorkflowTransitions.withNamedSessionLoaded(dismissed, pickerId, Some(saved)) shouldBe dismissed
+    SessionWorkflowTransitions.withNamedSessionLoaded(dismissed, Some(id), Some(saved)) shouldBe dismissed
+  }
+
+  it should "apply when no picker asked for it" in {
+    val saved = EditorTransitions.bufferCreated(AppState.initial, "saved", None).created
+
+    SessionWorkflowTransitions
+      .withNamedSessionLoaded(AppState.initial, None, Some(saved))
+      .persisted
+      .buffers
+      .keySet shouldBe saved.persisted.buffers.keySet
   }
 
   it should "just close the picker when the session could not be read" in {
-    val (state, pickerId) = withPicker(AppState.initial)
+    val (picked, id) = pickedDraft
 
-    val closed = SessionWorkflowTransitions.withNamedSessionLoaded(state, pickerId, None)
+    val closed = SessionWorkflowTransitions.withNamedSessionLoaded(picked, Some(id), None)
 
-    closed.runtime.uiSurfaces.exists(_.id == pickerId) shouldBe false
-    closed.persisted.buffers shouldBe state.persisted.buffers
+    closed.runtime.uiSurfaces.exists(_.id == id) shouldBe false
+    closed.persisted.buffers shouldBe picked.persisted.buffers
   }
 end WorkflowTransitionsSpec

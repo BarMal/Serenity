@@ -9,7 +9,7 @@ import com.serenity.frontend.MarkdownPreviewWindowAvailability
 import com.serenity.io.{FileDialog, FileManager}
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
-import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
+import com.serenity.session.{SessionId, SessionManager, SessionPersistence, SessionSaveTrigger}
 import com.serenity.state.effects.Lane
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
@@ -195,8 +195,10 @@ private[manager] trait StateManagerEffectHandlersHarness:
         callsVar.update(_ :+ s"openSessionPicker:$purpose")
       def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit] =
         callsVar.update(_ :+ s"submitSessionNamePromptEffect:$surfaceId")
-      def submitSessionListEffect(surfaceId: SurfaceId): IO[Unit] =
-        callsVar.update(_ :+ s"submitSessionListEffect:$surfaceId")
+      def openNamedSession(sessionId: SessionId, state: AppState): IO[Unit] =
+        callsVar.update(_ :+ s"openNamedSession:${sessionId.value}")
+      def openRenameSessionPrompt(sessionId: SessionId, currentName: String): IO[Unit] =
+        callsVar.update(_ :+ s"openRenameSessionPrompt:${sessionId.value}:$currentName")
 
     new Harness(
       stateRefVar,

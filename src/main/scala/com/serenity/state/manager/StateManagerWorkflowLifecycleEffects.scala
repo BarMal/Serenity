@@ -17,7 +17,6 @@ private[manager] trait WorkflowEffectPort:
   def submitClose(surfaceId: SurfaceId): IO[Unit]
   def createDirectories(surfaceId: SurfaceId): IO[Unit]
   def submitSessionNamePrompt(surfaceId: SurfaceId): IO[Unit]
-  def submitSessionList(surfaceId: SurfaceId): IO[Unit]
 
 /** Interprets workflow effects without editor, theme, file, or runtime dependencies. */
 final private[manager] class WorkflowEffectHandler(port: WorkflowEffectPort):
@@ -35,7 +34,6 @@ final private[manager] class WorkflowEffectHandler(port: WorkflowEffectPort):
       case WorkflowEffect.SubmitCloseWorkflow(id)           => port.submitClose(id)
       case WorkflowEffect.CreateFileWorkflowDirectories(id) => port.createDirectories(id)
       case WorkflowEffect.SubmitSessionNamePrompt(id)       => port.submitSessionNamePrompt(id)
-      case WorkflowEffect.SubmitSessionList(id)             => port.submitSessionList(id)
 
 /** Lifecycle operation required by lifecycle effects. */
 private[manager] trait LifecycleEffectPort:

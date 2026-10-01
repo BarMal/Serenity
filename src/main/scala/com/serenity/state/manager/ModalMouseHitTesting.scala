@@ -24,16 +24,16 @@ private[manager] object ModalMouseHitTesting:
 
   def modalType(modal: Modal): ModalType =
     modal match
-      case Modal.TextPrompt(_)        => ModalType.TextPrompt
-      case Modal.Find(_, _, _)        => ModalType.Find
-      case Modal.FileWorkflow(_)      => ModalType.FileWorkflow
-      case Modal.ReplaceWorkflow(_)   => ModalType.ReplaceWorkflow
-      case Modal.CloseWorkflow(_)     => ModalType.CloseWorkflow
-      case Modal.Confirm(_)           => ModalType.Confirm
-      case Modal.SessionList(_, _, _) => ModalType.SessionList
-      case Modal.Custom(name, _)      => ModalType.Custom(name)
+      case Modal.TextPrompt(_)      => ModalType.TextPrompt
+      case Modal.Find(_, _, _)      => ModalType.Find
+      case Modal.FileWorkflow(_)    => ModalType.FileWorkflow
+      case Modal.ReplaceWorkflow(_) => ModalType.ReplaceWorkflow
+      case Modal.CloseWorkflow(_)   => ModalType.CloseWorkflow
+      case Modal.Confirm(_)         => ModalType.Confirm
+      case Modal.ListPicker(_)      => ModalType.ListPicker
+      case Modal.Custom(name, _)    => ModalType.Custom(name)
 
-  /** A click on an action button of the close prompt or a confirm prompt also submits it: those prompts have no
+  /** A click on an action button of the close prompt, a confirm prompt or a list picker also submits it: those have no
     * separate confirm step, so picking a choice is the decision itself.
     */
   def input(event: MouseInputEvent, state: AppState): Transition[Unit] =
@@ -42,7 +42,7 @@ private[manager] object ModalMouseHitTesting:
         modalHitAt(click, state).fold(Transition.unit) { (modal, hit) =>
           val clickedType = modalType(modal)
           val submits =
-            (clickedType == ModalType.CloseWorkflow || clickedType == ModalType.Confirm) &&
+            Set(ModalType.CloseWorkflow, ModalType.Confirm, ModalType.ListPicker).contains(clickedType) &&
               hit.actionId.nonEmpty
           reduce(clickedType, ModalClick(hit.focusId.value, hit.actionId.map(_.value))) *>
             (if submits then reduce(clickedType, ModalSubmit) else Transition.unit)
