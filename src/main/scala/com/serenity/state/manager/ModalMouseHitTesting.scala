@@ -28,12 +28,11 @@ private[manager] object ModalMouseHitTesting:
       case Modal.Find(_, _, _)      => ModalType.Find
       case Modal.FileWorkflow(_)    => ModalType.FileWorkflow
       case Modal.ReplaceWorkflow(_) => ModalType.ReplaceWorkflow
-      case Modal.CloseWorkflow(_)   => ModalType.CloseWorkflow
       case Modal.Confirm(_)         => ModalType.Confirm
       case Modal.ListPicker(_)      => ModalType.ListPicker
 
-  /** A click on an action button of the close prompt, a confirm prompt or a list picker also submits it: those have no
-    * separate confirm step, so picking a choice is the decision itself.
+  /** A click on an action button of a confirm prompt or a list picker also submits it: those have no separate confirm
+    * step, so picking a choice is the decision itself.
     */
   def input(event: MouseInputEvent, state: AppState): Transition[Unit] =
     event match
@@ -41,7 +40,7 @@ private[manager] object ModalMouseHitTesting:
         modalHitAt(click, state).fold(Transition.unit) { (modal, hit) =>
           val clickedType = modalType(modal)
           val submits =
-            Set(ModalType.CloseWorkflow, ModalType.Confirm, ModalType.ListPicker).contains(clickedType) &&
+            Set(ModalType.Confirm, ModalType.ListPicker).contains(clickedType) &&
               hit.actionId.nonEmpty
           reduce(clickedType, ModalClick(hit.focusId.value, hit.actionId.map(_.value))) *>
             (if submits then reduce(clickedType, ModalSubmit) else Transition.unit)

@@ -179,8 +179,8 @@ private[manager] trait StateManagerEffectHandlersHarness:
         callsVar.update(_ :+ s"openFileWorkflowAsProjectRootEffect:$surfaceId")
       def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
         callsVar.update(_ :+ s"submitReplaceWorkflowEffect:$surfaceId")
-      def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
-        callsVar.update(_ :+ s"submitCloseWorkflowEffect:$surfaceId")
+      def resolveClose(choice: CloseWorkflowChoice): IO[Unit] =
+        callsVar.update(_ :+ s"resolveClose:$choice")
       def openReloadConflictModal(state: AppState, bufferId: BufferId, bufferLabel: String): IO[Unit] =
         callsVar.update(_ :+ s"openReloadConflictModal:$bufferId:$bufferLabel")
       def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit] =

@@ -13,7 +13,7 @@ private[reducers] object ModalFileWorkflowReducer:
 
   def reduce(event: ModalInputEvent, currentState: AppState): ReducerResult =
     event match
-      case ModalDismiss                  => ReducerResult.noEffects(dismissToPane(currentState))
+      case ModalDismiss                  => ReducerResult.noEffects(dismissedBackToClose(currentState))
       case ModalInsertChar(char)         => handleInsertChar(currentState, char)
       case ModalDeleteBackward           => handleDeleteBackward(currentState)
       case ModalDeleteForward            => handleDeleteForward(currentState)
@@ -28,6 +28,13 @@ private[reducers] object ModalFileWorkflowReducer:
       case ModalOpenAsProjectRoot        => handleOpenAsProjectRoot(currentState)
       case ModalClick(focusId, actionId) => handleClick(currentState, focusId, actionId)
       case _                             => ReducerResult.noEffects(currentState)
+
+  /** A Save As opened by a close's Save hands back to that close's prompt when dismissed, rather than stranding it. */
+  private def dismissedBackToClose(state: AppState): AppState =
+    val dismissed = dismissToPane(state)
+    dismissed.runtime.actionStack
+      .collectFirst { case AppAction.CloseWorkflow(workflow) => workflow }
+      .fold(dismissed)(workflow => ModalStateReducer.show(Modal.Confirm(workflow.prompt), dismissed).state)
 
   /** The common shape shared by every field-editing branch: apply `f` to the active workflow and request a refresh. */
   private def withFieldEdit(currentState: AppState)(f: FileWorkflowState => FileWorkflowState): ReducerResult =

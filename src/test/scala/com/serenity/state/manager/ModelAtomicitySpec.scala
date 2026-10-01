@@ -317,10 +317,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
   }
 
   private def closePromptFor(model: Model): Option[BufferId] =
-    model.app.runtime.modalStack.map(_.modal).collectFirst {
-      case Modal.CloseWorkflow(workflow) =>
-        workflow.currentBufferId
-    }
+    com.serenity.ClosePromptFixtures.closePromptShown(model.app).map(_.currentBufferId)
 
   "Discarding one buffer of a close-all" should "close it and prompt for the next in one write" in {
     val closeAll =

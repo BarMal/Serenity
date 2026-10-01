@@ -42,7 +42,6 @@ enum WorkflowEffect:
   case SubmitReplaceWorkflow(surfaceId: SurfaceId)
   // Starts the close workflow (`beginCloseAction`) for `scope`: closes clean buffers, prompts for dirty ones.
   case BeginClose(scope: CloseScope)
-  case SubmitCloseWorkflow(surfaceId: SurfaceId)
   case CreateFileWorkflowDirectories(surfaceId: SurfaceId)
   // Named sessions (issue #1390): submitting the name prompt (save-as or rename) needs IO (SessionManager calls),
   // unlike GotoLine's pure jump-to-line submit.

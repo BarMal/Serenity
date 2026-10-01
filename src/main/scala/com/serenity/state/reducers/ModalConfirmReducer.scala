@@ -6,7 +6,7 @@ import com.serenity.ui.layout.ConfirmComposition
 import com.serenity.ui.widget.WidgetInput
 
 /** Input for a [[Modal.Confirm]] prompt: the arrows and Tab move between its choices, Enter takes the highlighted one,
-  * Escape dismisses it, and a click highlights the clicked choice (the mouse layer then submits it).
+  * Escape takes the prompt's `onDismiss`, and a click highlights the clicked choice (the mouse layer then submits it).
   */
 private[reducers] object ModalConfirmReducer:
   import ModalEventReducer.{currentModal, dismissToPane, updateModal}
@@ -15,8 +15,8 @@ private[reducers] object ModalConfirmReducer:
     currentModal(currentState) match
       case Some((id, Modal.Confirm(prompt))) =>
         event match
-          case ModalDismiss => ReducerResult.noEffects(dismissToPane(currentState))
-          case ModalSubmit  => submitted(prompt, currentState)
+          case ModalDismiss => answered(prompt.onDismiss, currentState)
+          case ModalSubmit  => answered(prompt.selectedChoice.fold(ConfirmAction.Dismiss)(_.action), currentState)
           case ModalClick(_, actionId) =>
             actionId
               .flatMap(ConfirmComposition.choiceIndex)
@@ -37,8 +37,8 @@ private[reducers] object ModalConfirmReducer:
     val (choices, _) = prompt.choices.update(input, prompt.choices.items.size)
     ReducerResult.noEffects(updateModal(state, id, Modal.Confirm(prompt.copy(choices = choices))))
 
-  private def submitted(prompt: ConfirmPrompt, state: AppState): ReducerResult =
+  private def answered(action: ConfirmAction, state: AppState): ReducerResult =
     val dismissed = dismissToPane(state)
-    prompt.selectedChoice.map(_.action) match
-      case Some(ConfirmAction.Run(command))   => ReducerResult.withEffect(dismissed, AppEffect.ExecuteCommand(command))
-      case Some(ConfirmAction.Dismiss) | None => ReducerResult.noEffects(dismissed)
+    action match
+      case ConfirmAction.Run(command) => ReducerResult.withEffect(dismissed, AppEffect.ExecuteCommand(command))
+      case ConfirmAction.Dismiss      => ReducerResult.noEffects(dismissed)

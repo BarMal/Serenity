@@ -118,7 +118,7 @@ class SurfaceOperationReducersSpec extends AnyFlatSpec with Matchers:
   }
 
   "ModalStateReducer.show and dismiss" should "open and close a modal with focus following it" in {
-    val modal = Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala"))
+    val modal = Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala"))
 
     val shown     = ModalStateReducer.show(modal, AppState.initial).state
     val dismissed = ModalStateReducer.dismiss(shown).state

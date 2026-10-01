@@ -116,7 +116,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
         Files.deleteIfExists(tempRoot)
     }
 
-  /** #1183 item 1: the close-workflow family (`beginCloseAction`, `promptCloseWorkflow`, `submitCloseWorkflowEffect`,
+  /** #1183 item 1: the close-workflow family (`beginCloseAction`, `promptCloseWorkflow`, `resolveClose`,
     * `continueCloseWorkflow`) commits every step via direct `stateRef.set`, bypassing `validateAndUpdateState`
     * entirely. A close-all/close-others/quit sequence queues each dirty buffer's id in `CloseWorkflowState
     * .remainingBufferIds`, captured once when the sequence begins; if a queued buffer is no longer live by the time
@@ -146,11 +146,7 @@ class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
       stateManager.executeCommand(closeAllCommand).unsafeRunSync()
 
       val afterFirstPrompt = stateManager.getCurrentState.unsafeRunSync()
-      afterFirstPrompt.topModal.flatMap {
-        _.modal match
-          case Modal.CloseWorkflow(workflow) => Some(workflow)
-          case _                             => None
-      } match
+      ClosePromptFixtures.closePromptShown(afterFirstPrompt) match
         case Some(workflow) =>
           workflow.currentBufferId shouldBe BufferId(0)
           workflow.remainingBufferIds shouldBe List(secondBufferId)

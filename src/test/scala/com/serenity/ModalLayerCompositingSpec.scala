@@ -25,7 +25,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
   private def modalDialog: ModalDialog =
     ModalDialog(
       modalId,
-      Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")),
+      Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")),
       ModalPlacement.Centered
     )
 
@@ -115,7 +115,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
     surface.newLayerSurfaceCalls.get() shouldBe 1
 
     val changedModal =
-      modalDialog.copy(modal = Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "renamed.scala")))
+      modalDialog.copy(modal = Modal.Confirm(ConfirmPrompt.closeUnsaved("renamed.scala")))
     val after = before.copy(runtime = before.runtime.copy(modalStack = List(changedModal)))
 
     val transitionDamage = DamageProducer.forTransition(before, after)
@@ -160,7 +160,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
 
     // Only the bottom (parent) dialog's content changes; the top (child) is untouched.
     val changedParent =
-      parent.copy(modal = Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "renamed.scala")))
+      parent.copy(modal = Modal.Confirm(ConfirmPrompt.closeUnsaved("renamed.scala")))
     val after = beforeWithStack.copy(runtime = beforeWithStack.runtime.copy(modalStack = List(changedParent, child)))
 
     val transitionDamage = DamageProducer.forTransition(beforeWithStack, after)

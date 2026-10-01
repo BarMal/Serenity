@@ -33,7 +33,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     val close = ModalDialog(
       SurfaceId("close-confirmation"),
-      Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")),
+      Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")),
       ModalPlacement.Centered
     )
     sm.updateState(state =>
@@ -66,7 +66,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     val close = ModalDialog(
       SurfaceId("close-confirmation"),
-      Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")),
+      Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")),
       ModalPlacement.Centered
     )
     sm.updateState(state =>
@@ -85,13 +85,13 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
     val targetRows = SurfaceFrameLayout.minimumTargetRows(before.persisted.config.interfaceDensity)
     val cancel = ModalSurfaceComposition
       .forModal(
-        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")),
+        Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")),
         modal.frameRect,
         targetRows
       )
       .getOrElse(fail("Expected close confirmation composition"))
       .hitRegions
-      .find(_.actionId.contains(SurfaceActionId("close-cancel")))
+      .find(_.actionId.contains(ClosePromptFixtures.CancelChoice))
       .getOrElse(fail("Expected cancel action"))
     val cancelX  = cancel.rect.x.toInt
     val choicesY = cancel.rect.y.toInt
@@ -110,7 +110,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
     val viewport = ViewportSize(40, 4)
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
     val workflow = CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")
-    val close    = ModalDialog(SurfaceId("close-constrained"), Modal.CloseWorkflow(workflow), ModalPlacement.Centered)
+    val close    = ModalDialog(SurfaceId("close-constrained"), Modal.Confirm(workflow.prompt), ModalPlacement.Centered)
     sm.updateState(state =>
       state.copy(
         persisted = state.persisted.copy(focus = Focus.Modal),
@@ -126,13 +126,13 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected constrained close modal"))
     val cancel = ModalSurfaceComposition
       .forModal(
-        Modal.CloseWorkflow(workflow),
+        Modal.Confirm(workflow.prompt),
         modal.frameRect,
         SurfaceFrameLayout.minimumTargetRows(before.persisted.config.interfaceDensity)
       )
       .getOrElse(fail("Expected close confirmation composition"))
       .hitRegions
-      .find(_.actionId.contains(SurfaceActionId("close-cancel")))
+      .find(_.actionId.contains(ClosePromptFixtures.CancelChoice))
       .getOrElse(fail("Expected reflowed cancel action"))
 
     sm.applyEvent(MouseClick(cancel.rect.x.toInt, cancel.rect.y.toInt)).unsafeRunSync()

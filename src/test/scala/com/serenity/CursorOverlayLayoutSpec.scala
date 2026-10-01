@@ -488,22 +488,15 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     layout.belowCursorOverlayRect.map(_.height) shouldBe Some(6)
   }
 
-  it should "size a close workflow overlay to fit its text and density-aware action targets" in {
-    val base = baseState()
+  it should "size a close prompt overlay to fit its text and density-aware action targets" in {
+    val base   = baseState()
+    val prompt = Modal.Confirm(ConfirmPrompt.closeUnsaved("Buffer 0 - unsaved"))
     val state = base.copy(
       runtime = base.runtime.copy(uiSurfaces =
         List(
           UiSurface(
             SurfaceId("close"),
-            SurfaceContent.ModalWorkflow(
-              Modal.CloseWorkflow(
-                CloseWorkflowState(
-                  scope = CloseScope.Current,
-                  currentBufferId = BufferId(0),
-                  currentBufferLabel = "Buffer 0 - unsaved"
-                )
-              )
-            ),
+            SurfaceContent.ModalWorkflow(prompt),
             SurfacePresentation.Floating(Some(CursorPosition(6, 18)), SurfacePlacement.BelowCursor)
           )
         )
@@ -513,7 +506,8 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
 
     layout.belowCursorOverlayRect.map(_.height) shouldBe Some(
-      ModalSurfaceComposition.closeFrameHeight(
+      ModalSurfaceComposition.frameHeight(
+        prompt,
         SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
       )
     )

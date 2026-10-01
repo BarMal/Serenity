@@ -86,7 +86,7 @@ class CloseSaveFailureSpec extends AnyFlatSpec with Matchers:
     Files.writeString(directory.resolve(name), content)
 
   private def closePrompt(state: AppState): Option[CloseWorkflowState] =
-    state.runtime.modalStack.lastOption.map(_.modal).collect { case Modal.CloseWorkflow(workflow) => workflow }
+    com.serenity.ClosePromptFixtures.closePromptShown(state)
 
   private def hasCloseAction(state: AppState): Boolean =
     state.runtime.actionStack.exists { case AppAction.CloseWorkflow(_) => true }
@@ -98,7 +98,7 @@ class CloseSaveFailureSpec extends AnyFlatSpec with Matchers:
     f.send(InsertChar('a'))
 
     f.send(CloseTab)
-    closePrompt(f.state).map(_.selectedChoice) shouldBe Some(CloseWorkflowChoice.Save)
+    com.serenity.ClosePromptFixtures.closePromptHighlight(f.state) shouldBe Some("Save")
     f.send(Enter)
 
     f.buffer(id).map(_.document.content.collect()) shouldBe Some("adraft")

@@ -1,6 +1,6 @@
 package com.serenity.ui.tui
 
-import com.serenity.state.models.{AppState, BufferId, CloseWorkflowState, Modal, SurfaceContent}
+import com.serenity.state.models.{AppState, BufferId, CloseWorkflowState, SurfaceContent}
 import com.serenity.ui.layout.{LayoutEngine, TabBarSurfaceComposition}
 
 import TuiScenarios.*
@@ -37,11 +37,7 @@ class TuiTabCloseClickSpec extends TuiSpec:
   private def activeBufferId(current: AppState): Option[BufferId] = current.activeBuffer.map(_.id)
 
   private def closeWorkflow(current: AppState): Option[CloseWorkflowState] =
-    current.topModal.flatMap {
-      _.modal match
-        case Modal.CloseWorkflow(workflow) => Some(workflow)
-        case _                             => None
-    }
+    com.serenity.ClosePromptFixtures.closePromptShown(current)
 
   /** The file tab and a new tab after it, with the file tab active again; returns (file, new tab). */
   private val fileTabActiveWithNewTabBehind: TuiScript[(BufferId, BufferId)] =

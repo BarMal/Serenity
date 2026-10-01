@@ -62,7 +62,6 @@ final private[manager] class StateManagerEffectHandlers(
       )
     def submitReplace(surfaceId: SurfaceId): IO[Unit]           = submitReplaceWorkflowEffect(surfaceId)
     def beginClose(scope: CloseScope): IO[Unit]                 = currentState.flatMap(beginCloseAction(scope, _))
-    def submitClose(surfaceId: SurfaceId): IO[Unit]             = submitCloseWorkflowEffect(surfaceId)
     def createDirectories(surfaceId: SurfaceId): IO[Unit]       = createFileWorkflowDirectoriesEffect(surfaceId)
     def submitSessionNamePrompt(surfaceId: SurfaceId): IO[Unit] = submitSessionNamePromptEffect(surfaceId))
 
@@ -263,7 +262,8 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def interpretLifecycleIntent(intent: LifecycleIntent, state: AppState): IO[Unit] =
     intent match
-      case LifecycleIntent.QuitApp => beginCloseAction(CloseScope.Quit, state)
+      case LifecycleIntent.QuitApp              => beginCloseAction(CloseScope.Quit, state)
+      case LifecycleIntent.ResolveClose(choice) => resolveClose(choice)
 
   private def interpretFileIntent(intent: FileIntent, state: AppState): IO[Unit] =
     intent match

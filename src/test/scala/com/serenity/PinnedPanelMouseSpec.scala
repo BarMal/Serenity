@@ -144,7 +144,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val panelId = SurfaceId("explorer")
     val close = ModalDialog(
       SurfaceId("close-confirmation"),
-      Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")),
+      Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")),
       ModalPlacement.Centered
     )
     val sm = makeStateManager()

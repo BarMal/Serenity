@@ -210,8 +210,8 @@ private[manager] class StateManagerComposition(
       workflow.openFileWorkflowAsProjectRootEffect(surfaceId, openProjectRoot)
     def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
       workflow.submitReplaceWorkflowEffect(surfaceId)
-    def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
-      workflow.submitCloseWorkflowEffect(surfaceId)
+    def resolveClose(choice: CloseWorkflowChoice): IO[Unit] =
+      workflow.resolveClose(choice)
     def openReloadConflictModal(state: AppState, bufferId: BufferId, bufferLabel: String): IO[Unit] =
       workflow.openReloadConflictModal(state, bufferId, bufferLabel)
     def createFileWorkflowDirectoriesEffect(surfaceId: SurfaceId): IO[Unit] =
@@ -345,8 +345,8 @@ private[manager] class StateManagerComposition(
     workflow.submitFileWorkflowEffect(surfaceId)
   def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
     workflow.submitReplaceWorkflowEffect(surfaceId)
-  def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
-    workflow.submitCloseWorkflowEffect(surfaceId)
+  def resolveClose(choice: CloseWorkflowChoice): IO[Unit] =
+    workflow.resolveClose(choice)
   def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
     workflow.restoreSessionIntoCurrentViewport(restoredState, currentState)
   def createStartupSession(): IO[Unit]                        = workflow.createStartupSession()

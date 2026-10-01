@@ -128,9 +128,7 @@ class MultiFileTabSpec extends AnyFlatSpec with Matchers:
 
     // Then: A close workflow should intercept the hotkey and keep the buffer open
     stateAfterClose.persisted.buffers should contain key bufferId
-    stateAfterClose.topModal.flatMap(_.modal match
-      case Modal.CloseWorkflow(workflow) => Some(workflow.currentBufferId)
-      case _                             => None) shouldBe Some(bufferId)
+    ClosePromptFixtures.closePromptShown(stateAfterClose).map(_.currentBufferId) shouldBe Some(bufferId)
 
   it should "maintain tab order when adding and removing tabs" in new MultiFileFixture:
     // Given: Create multiple buffers in sequence

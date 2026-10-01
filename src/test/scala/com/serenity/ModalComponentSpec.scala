@@ -92,23 +92,15 @@ class ModalComponentSpec extends AnyFlatSpec with Matchers:
         fail(s"Expected reducer update, got $other")
   }
 
-  it should "route close workflow modals through the reducer path" in {
-    val component = ModalComponent(ModalType.CloseWorkflow)
-    val initial = modalState(
-      Modal.CloseWorkflow(
-        CloseWorkflowState(
-          scope = CloseScope.Current,
-          currentBufferId = BufferId(0),
-          currentBufferLabel = "notes.scala"
-        )
-      )
-    )
+  it should "route the close prompt through the reducer path" in {
+    val component = ModalComponent(ModalType.Confirm)
+    val initial   = modalState(Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")))
 
     component.processEvent(TabKey, initial) match
       case ComponentResult.ReducerUpdate(result) =>
         result.state.modalSurface.flatMap(_.content match
-          case SurfaceContent.ModalWorkflow(Modal.CloseWorkflow(workflow)) => Some(workflow.selectedChoice)
-          case _ => None) shouldBe Some(CloseWorkflowChoice.Discard)
+          case SurfaceContent.ModalWorkflow(Modal.Confirm(prompt)) => prompt.selectedChoice.map(_.label)
+          case _                                                   => None) shouldBe Some("Close Anyway")
         result.effects shouldBe Nil
       case other =>
         fail(s"Expected reducer update, got $other")

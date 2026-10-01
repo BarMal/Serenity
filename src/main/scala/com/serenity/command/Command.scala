@@ -6,7 +6,7 @@ import com.serenity.keystroke.events.Direction
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
 import com.serenity.session.SessionId
-import com.serenity.state.models.{PanelId, SurfaceId}
+import com.serenity.state.models.{CloseWorkflowChoice, PanelId, SurfaceId}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.serenity.ui.layout.PanelPosition
 
@@ -20,6 +20,8 @@ enum CommandCategory:
 
 enum LifecycleIntent:
   case QuitApp
+  // What the "save changes before closing?" prompt's answers run; see CloseCommands.
+  case ResolveClose(choice: CloseWorkflowChoice)
 
 enum EditIntent:
   case FindInCurrentFile

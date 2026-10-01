@@ -175,7 +175,7 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
   it should "place blocking close workflows above the workspace with a backdrop" in {
     val close = ModalDialog(
       SurfaceId("close-confirmation"),
-      Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")),
+      Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")),
       ModalPlacement.Centered
     )
     val state = AppState.initial.copy(
@@ -200,7 +200,7 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
     )
     val close = ModalDialog(
       SurfaceId("close-confirmation"),
-      Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")),
+      Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")),
       ModalPlacement.Centered
     )
     val state = AppState.initial.copy(
@@ -217,7 +217,7 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
     val close = UiSurface(
       SurfaceId("close-confirmation"),
       SurfaceContent.ModalWorkflow(
-        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala"))
+        Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala"))
       ),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )

@@ -44,14 +44,8 @@ class ReturnToStartPageStateManagerSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("expected a start-page surface"))
 
   private def currentCloseWorkflow(stateManager: StateManager): CloseWorkflowState =
-    stateManager.getCurrentState
-      .unsafeRunSync()
-      .topModal
-      .flatMap {
-        _.modal match
-          case Modal.CloseWorkflow(workflow) => Some(workflow)
-          case _                             => None
-      }
+    ClosePromptFixtures
+      .closePromptShown(stateManager.getCurrentState.unsafeRunSync())
       .getOrElse(fail("expected an active close-workflow modal"))
 
   private def markBufferDirty(stateManager: StateManager, bufferId: BufferId, content: String): Unit =
