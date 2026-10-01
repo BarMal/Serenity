@@ -1,6 +1,9 @@
 package com.serenity.state.reducers
 
-import com.serenity.command.RichTextIntent
+import java.nio.file.Paths
+
+import com.serenity.command.{RichTextCommands, RichTextIntent}
+import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -153,4 +156,55 @@ class RichTextReducerSpec extends AnyFlatSpec with Matchers:
     RichTextReducer.reduce(RichTextIntent.ToggleRichTextMark(InlineMark.Bold), state) shouldBe ReducerResult(state, Nil)
     RichTextReducer.reduce(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Body), state) shouldBe
       ReducerResult(state, Nil)
+  }
+
+  private val bold = RichTextIntent.ToggleRichTextMark(InlineMark.Bold)
+
+  private def savedAs(buffer: Buffer, fileName: String, language: Option[LanguageId] = None): Buffer =
+    buffer.copy(document = buffer.document.copy(filePath = Some(Paths.get(fileName)), language = language))
+
+  "Routing a rich-text command" should "apply it to a rich-text buffer, or an untitled one that has no format yet" in {
+    val untitled = selected("hello world", 0, 0, 0, 5)
+    val richText = validReduce(bold, stateWith(untitled))
+
+    RichTextReducer.route(bold, stateWith(untitled)) shouldBe RichTextRoute.Apply
+    RichTextReducer.route(bold, stateWith(richText)) shouldBe RichTextRoute.Apply
+  }
+
+  it should "ask before converting a plain-text file, offering Save As, converting, or cancelling" in {
+    val state = stateWith(savedAs(selected("hello world", 0, 0, 0, 5), "notes.txt"))
+
+    RichTextReducer.route(bold, state) match
+      case RichTextRoute.AskToConvert(prompt) =>
+        prompt.message.mkString(" ") should include("notes.txt")
+        prompt.choices.items.map(_.action) shouldBe Vector(
+          ConfirmAction.Run(RichTextCommands.saveAsRichDocument),
+          ConfirmAction.Run(RichTextCommands.convertToRichText(Some(bold))),
+          ConfirmAction.Dismiss
+        )
+      case other => fail(s"expected a conversion prompt, got $other")
+  }
+
+  it should "refuse formatting in a code file" in {
+    val state = stateWith(savedAs(selected("val x = 1", 0, 0, 0, 3), "A.scala", Some(LanguageId.Scala)))
+
+    RichTextReducer.route(bold, state) shouldBe RichTextRoute.Refuse("Formatting isn't available in code files.")
+  }
+
+  it should "convert a plain-text file without asking when conversion is what was asked for" in {
+    val state = stateWith(savedAs(selected("hello world", 0, 0, 0, 5), "notes.txt"))
+
+    RichTextReducer.route(RichTextIntent.ConvertToRichText(Some(bold)), state) shouldBe RichTextRoute.Apply
+  }
+
+  "Converting to rich text" should "give the buffer an unformatted document without dirtying it, then run the follow-up" in {
+    val state = stateWith(savedAs(selected("hello world", 0, 0, 0, 5), "notes.txt"))
+
+    val converted = validReduce(RichTextIntent.ConvertToRichText(None), state)
+    val formatted = validReduce(RichTextIntent.ConvertToRichText(Some(bold)), state)
+
+    documentOf(converted) shouldBe RichTextDocument.fromPlainText("hello world")
+    converted.document.isDirty shouldBe false
+    EditingContext.bufferKind(converted) shouldBe BufferKind.RichText
+    documentOf(formatted) shouldBe RichTextDocument.fromPlainText("hello world").toggleMark(range0to5, InlineMark.Bold)
   }

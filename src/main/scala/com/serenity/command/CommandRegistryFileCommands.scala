@@ -5,6 +5,15 @@ package com.serenity.command
   */
 private[command] object CommandRegistryFileCommands:
 
+  private[command] val saveAs: Command =
+    Command.typed(
+      "save-as",
+      "Save the current file under a new name.",
+      CommandIntent.File(FileIntent.SaveCurrentFileAs),
+      CommandCategory.File,
+      label = "Save As"
+    )
+
   private[command] def fileCommands: List[Command] = List(
     Command.typed(
       "open-settings",
@@ -20,13 +29,7 @@ private[command] object CommandRegistryFileCommands:
       CommandCategory.File,
       label = "Save"
     ),
-    Command.typed(
-      "save-as",
-      "Save the current file under a new name.",
-      CommandIntent.File(FileIntent.SaveCurrentFileAs),
-      CommandCategory.File,
-      label = "Save As"
-    ),
+    saveAs,
     Command.typed(
       "save-config",
       "Write the current settings using the latest config format.",

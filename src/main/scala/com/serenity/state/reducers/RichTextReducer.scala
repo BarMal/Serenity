@@ -4,6 +4,12 @@ import com.serenity.command.RichTextIntent
 import com.serenity.richtext.*
 import com.serenity.state.models.*
 
+/** What a rich-text command does, given the kind of buffer it would format. */
+enum RichTextRoute:
+  case Apply
+  case AskToConvert(prompt: ConfirmPrompt)
+  case Refuse(reason: String)
+
 /** Rich-text formatting commands (marks, font, color, paragraph role/alignment) applied to the active editor selection,
   * materializing a plain-text buffer's `RichTextDocument` on first use.
   */
@@ -13,8 +19,32 @@ object RichTextReducer:
     */
   val DefaultBodyFontSize: Float = 12.0f
 
+  /** An untitled buffer has no format yet, so it takes formatting without asking; Save As warns if its chosen format
+    * would drop it. A plain-text file can't store formatting, so converting one is asked first.
+    */
+  def route(intent: RichTextIntent, state: AppState): RichTextRoute =
+    activeEditorBuffer(state).fold(RichTextRoute.Apply) { buffer =>
+      EditingContext.bufferKind(buffer) match
+        case BufferKind.Code(_) => RichTextRoute.Refuse("Formatting isn't available in code files.")
+        case BufferKind.PlainText =>
+          (intent, buffer.document.filePath) match
+            case (RichTextIntent.ConvertToRichText(_), _) | (_, None) => RichTextRoute.Apply
+            case (_, Some(path)) =>
+              val label = Option(path.getFileName).fold(path.toString)(_.toString)
+              RichTextRoute.AskToConvert(ConfirmPrompt.convertToRichText(label, intent))
+        case BufferKind.Markdown =>
+          intent match
+            case RichTextIntent.ConvertToRichText(_) =>
+              RichTextRoute.Refuse("Markdown files keep their formatting as Markdown syntax.")
+            case _ => RichTextRoute.Apply
+        case BufferKind.RichText => RichTextRoute.Apply
+    }
+
   def reduce(intent: RichTextIntent, state: AppState): ReducerResult =
     ReducerResult.noEffects(intent match
+      case RichTextIntent.ConvertToRichText(andThen) =>
+        val converted = convert(state)
+        andThen.fold(converted)(reduce(_, converted).state)
       case RichTextIntent.ToggleRichTextMark(mark) =>
         toggleMark(state, mark)
       case RichTextIntent.SetRichTextFontFamily(family) =>
@@ -29,6 +59,15 @@ object RichTextReducer:
         updateParagraphs(state)((document, range) => document.setParagraphRole(range, role))
       case RichTextIntent.SetRichTextParagraphAlignment(alignment) =>
         updateParagraphs(state)((document, range) => document.setParagraphAlignment(range, alignment)))
+
+  private def convert(state: AppState): AppState =
+    activeEditorBuffer(state).fold(state) { buffer =>
+      val converted =
+        buffer.richText.withSyncedDocument(Some(currentDocument(buffer)), buffer.document.contentVersion)
+      state.copy(persisted =
+        state.persisted.copy(buffers = state.persisted.buffers.updated(buffer.id, buffer.copy(richText = converted)))
+      )
+    }
 
   private def toggleMark(state: AppState, mark: InlineMark): AppState =
     activeEditorBuffer(state) match

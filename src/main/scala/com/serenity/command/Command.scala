@@ -47,6 +47,7 @@ enum RichTextIntent:
   case SetRichTextColor(color: String)
   case SetRichTextParagraphRole(role: ParagraphRole)
   case SetRichTextParagraphAlignment(alignment: ParagraphAlignment)
+  case ConvertToRichText(andThen: Option[RichTextIntent])
 
 enum CommentsIntent:
   case ToggleCommentLens

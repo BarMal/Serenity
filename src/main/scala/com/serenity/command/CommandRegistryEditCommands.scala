@@ -102,6 +102,7 @@ private[command] object CommandRegistryEditCommands:
   )
 
   private[command] def richTextCommands: List[Command] = List(
+    RichTextCommands.convertToRichText(andThen = None),
     Command.typed(
       "italic",
       "Toggle italic formatting on the active selection.",
