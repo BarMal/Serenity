@@ -93,10 +93,11 @@ object CommandScope:
       case ViewIntent.SetPanelPin(id, Some(_)) => panelScope(id)
       case ViewIntent.SetPanelPin(_, None)     => core
       case ViewIntent.NextTab | ViewIntent.PreviousTab | ViewIntent.SplitPaneHorizontal | ViewIntent.SplitPaneVertical |
-          ViewIntent.ClosePane | ViewIntent.ToggleMaximisePanel | ViewIntent.OpenMarkdownPreview |
-          ViewIntent.SetMarkdownViewMode(_) | ViewIntent.SetDefaultDocumentMode(_) | ViewIntent.SetAppMode(_) |
-          ViewIntent.SetShowAllSettingsRegardlessOfMode(_) | ViewIntent.ToggleShortcutsHelp | ViewIntent.ToggleTabList |
-          ViewIntent.ToggleRecentFilesInMode | ViewIntent.TogglePanel(_) | ViewIntent.SetPanelSize(_, _) =>
+          ViewIntent.ClosePane | ViewIntent.ToggleMaximisePanel | ViewIntent.FocusInDirection(_) |
+          ViewIntent.OpenMarkdownPreview | ViewIntent.SetMarkdownViewMode(_) | ViewIntent.SetDefaultDocumentMode(_) |
+          ViewIntent.SetAppMode(_) | ViewIntent.SetShowAllSettingsRegardlessOfMode(_) | ViewIntent.ToggleShortcutsHelp |
+          ViewIntent.ToggleTabList | ViewIntent.ToggleRecentFilesInMode | ViewIntent.TogglePanel(_) |
+          ViewIntent.SetPanelSize(_, _) =>
         core
 
   private def panelScope(id: PanelId): CommandScope =

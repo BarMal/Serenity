@@ -37,31 +37,11 @@ object EditorPaneLayoutEngine:
     direction: Direction
   ): Option[PaneId] =
     val paneRects = calculatePaneLayouts(state, calculatedLayout)
-    paneRects.get(paneId).flatMap { current =>
-      val order = state.persisted.layout.orderedPaneIds.zipWithIndex.toMap
-      paneRects.iterator
-        .filter { case (candidateId, rect) => candidateId != paneId && rect.width > 0 && rect.height > 0 }
-        .flatMap { (candidateId, candidate) =>
-          val rank =
-            direction match
-              case Direction.Left if candidate.right <= current.x =>
-                Some((current.x - candidate.right, math.abs(candidate.centerY - current.centerY)))
-              case Direction.Right if candidate.x >= current.right =>
-                Some((candidate.x - current.right, math.abs(candidate.centerY - current.centerY)))
-              case Direction.Up if candidate.bottom <= current.y =>
-                Some((current.y - candidate.bottom, math.abs(candidate.centerX - current.centerX)))
-              case Direction.Down if candidate.y >= current.bottom =>
-                Some((candidate.y - current.bottom, math.abs(candidate.centerX - current.centerX)))
-              case _ =>
-                None
-          rank.map { (primaryDistance, perpendicularDistance) =>
-            (candidateId, primaryDistance, perpendicularDistance, order.getOrElse(candidateId, Int.MaxValue))
-          }
-        }
-        .toList
-        .sortBy { case (_, primary, perpendicular, orderIndex) => (primary, perpendicular, orderIndex) }
-        .headOption
-        .map(_._1)
+    val candidates = state.persisted.layout.orderedPaneIds
+      .filter(_ != paneId)
+      .flatMap(id => paneRects.get(id).filter(rect => rect.width > 0 && rect.height > 0).map(FocusTarget.Pane(id) -> _))
+    paneRects.get(paneId).flatMap(DirectionalFocusLayout.neighbour(_, candidates, direction)).collect {
+      case FocusTarget.Pane(id) => id
     }
 
   def calculateEditorWorkspaceLayout(state: AppState, calculatedLayout: CalculatedLayout): EditorWorkspaceLayout =

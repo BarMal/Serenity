@@ -477,7 +477,11 @@ object CommandRunner:
       "select-all"            -> HotkeyAction.SelectAll,
       "undo"                  -> HotkeyAction.Undo,
       "redo"                  -> HotkeyAction.Redo,
-      "goto-line"             -> HotkeyAction.GoToLine
+      "goto-line"             -> HotkeyAction.GoToLine,
+      "focus-left"            -> HotkeyAction.FocusLeft,
+      "focus-right"           -> HotkeyAction.FocusRight,
+      "focus-up"              -> HotkeyAction.FocusUp,
+      "focus-down"            -> HotkeyAction.FocusDown
     ).flatMap {
       case (commandName, action) =>
         config.inputConfig.hotkeyConfig.bindingsFor(action).headOption.map(trigger => commandName -> trigger.render)

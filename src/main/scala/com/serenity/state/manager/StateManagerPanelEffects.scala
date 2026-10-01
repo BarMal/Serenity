@@ -10,7 +10,7 @@ import com.serenity.frontend.MarkdownPreviewWindowAvailability
 import com.serenity.io.FileUtils
 import com.serenity.keystroke.events.Event
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{PanelStateReducer, PinnedPanelContentReducer}
+import com.serenity.state.reducers.{DirectionalFocus, PanelStateReducer, PinnedPanelContentReducer}
 import com.serenity.ui.layout.{PanelPosition, PanelTarget, SplitAxis}
 
 /** Pinned-panel management: pinning/unpinning/moving/resizing the explorer, outline, comments, diagnostics, and
@@ -63,6 +63,8 @@ final private[manager] class StateManagerPanelEffects(
           switchToPinnedPanel(PanelTarget.ById(id.surfaceId))
       case ViewIntent.ToggleMaximisePanel =>
         toggleMaximisePanel(state)
+      case ViewIntent.FocusInDirection(direction) =>
+        commitApp(DirectionalFocus.moved(_, direction))
       case ViewIntent.OpenMarkdownPreview =>
         // In-pane preview is structurally unavailable on a fixed-cell surface (cell surfaces cannot `drawImage`) --
         // toggle the spawned Swing window there instead of pinning the GUI-only panel (issue #1113).

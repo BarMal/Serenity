@@ -74,6 +74,9 @@ object AppEventReducer:
       case FileSearch =>
         ReducerResult.withEffect(state, AppEffect.Surface(SurfaceEffect.OpenFileSearch))
 
+      case FocusInDirection(direction) =>
+        ReducerResult.noEffects(DirectionalFocus.moved(state, direction))
+
       case CursorPeekModifierPressed(modifier, atMillis) =>
         ReducerResult.noEffects(handleCursorPeekModifierPressed(state, registry, modifier, atMillis))
 

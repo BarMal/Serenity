@@ -33,6 +33,10 @@ enum HotkeyAction:
   case GoToLine
   case SaveAs
   case ToggleShortcutsHelp
+  case FocusLeft
+  case FocusRight
+  case FocusUp
+  case FocusDown
 
   def configKey: String =
     this match
@@ -63,6 +67,10 @@ enum HotkeyAction:
       case GoToLine                 => "go_to_line"
       case SaveAs                   => "save_as"
       case ToggleShortcutsHelp      => "toggle_shortcuts_help"
+      case FocusLeft                => "focus_left"
+      case FocusRight               => "focus_right"
+      case FocusUp                  => "focus_up"
+      case FocusDown                => "focus_down"
 
 final case class HotkeyTrigger(
     keyType: InputKey,
@@ -289,6 +297,16 @@ object HotkeyConfig:
   def terminalDefaultBindings: Map[HotkeyAction, List[HotkeyTrigger]] =
     validatedBindings(defaultBindingsFor("linux"))
 
+  // Plain Alt rather than the primary modifier, so it is the same on every platform with no terminal rewrite. Nothing
+  // else binds Alt+Arrow, and the editor's word moves stay on Ctrl+Arrow.
+  private def directionalFocusBindings: Map[HotkeyAction, List[HotkeyTrigger]] =
+    Map(
+      HotkeyAction.FocusLeft  -> InputKey.ArrowLeft,
+      HotkeyAction.FocusRight -> InputKey.ArrowRight,
+      HotkeyAction.FocusUp    -> InputKey.ArrowUp,
+      HotkeyAction.FocusDown  -> InputKey.ArrowDown
+    ).view.mapValues(key => List(HotkeyTrigger(key, None, Set(Modifier.Alt)))).toMap
+
   def defaultBindingsFor(osName: String): Map[HotkeyAction, List[HotkeyTrigger]] =
     val isMac           = osName.toLowerCase(java.util.Locale.ROOT).contains("mac")
     val primaryModifier = if isMac then Modifier.Meta else Modifier.Ctrl
@@ -367,7 +385,7 @@ object HotkeyConfig:
       // every terminal and by AWT regardless of platform, so it needs none of `forTerminalUse`'s Mac-Cmd rewriting
       // (issue #1213) and no per-OS branching here.
       HotkeyAction.ToggleShortcutsHelp -> List(HotkeyTrigger(InputKey.F1, None, Set.empty))
-    )
+    ) ++ directionalFocusBindings
 
   def validate(bindings: Map[HotkeyAction, List[HotkeyTrigger]]): Either[String, Unit] =
     bindings.toList
