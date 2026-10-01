@@ -1,6 +1,6 @@
 package com.serenity.state.undo
 
-import com.serenity.rope.{Balance, Rope}
+import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
