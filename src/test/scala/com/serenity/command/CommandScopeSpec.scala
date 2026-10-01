@@ -39,6 +39,7 @@ class CommandScopeSpec extends AnyFlatSpec with Matchers:
     "align-left",
     "align-right",
     "bold",
+    "convert-to-rich-text",
     "cut-to-darlings",
     "decrease-text-size",
     "delete-placeholder",

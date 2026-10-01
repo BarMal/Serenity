@@ -1,6 +1,6 @@
 package com.serenity.state.models
 
-import com.serenity.command.{Command, ExternalChangeCommands}
+import com.serenity.command.{Command, ExternalChangeCommands, RichTextCommands, RichTextIntent}
 import com.serenity.ui.widget.{ButtonEmphasis, EndBehaviour, SelectableList}
 
 /** What choosing an option in a [[ConfirmPrompt]] does once the prompt closes. */
@@ -47,4 +47,22 @@ object ConfirmPrompt:
         ConfirmChoice("Cancel", ConfirmAction.Dismiss)
       ),
       blocking = true
+    )
+
+  /** A formatting command on a file whose format can't store formatting. Not blocking: nothing is lost by ignoring it.
+    */
+  def convertToRichText(bufferLabel: String, requested: RichTextIntent): ConfirmPrompt =
+    of(
+      title = "Plain-text file",
+      message = List(s"$bufferLabel is plain text and can't store formatting."),
+      choices = List(
+        ConfirmChoice(
+          "Save as rich document…",
+          ConfirmAction.Run(RichTextCommands.saveAsRichDocument),
+          ButtonEmphasis.Primary
+        ),
+        ConfirmChoice("Format anyway", ConfirmAction.Run(RichTextCommands.convertToRichText(Some(requested)))),
+        ConfirmChoice("Cancel", ConfirmAction.Dismiss)
+      ),
+      blocking = false
     )

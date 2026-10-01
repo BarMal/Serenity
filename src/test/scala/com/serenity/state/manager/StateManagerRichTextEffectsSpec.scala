@@ -1,14 +1,17 @@
 package com.serenity.state.manager
 
+import java.nio.file.Paths
+
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.RichTextIntent
+import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.AppEffect
 import com.serenity.testkit.EditingStateFixtures
-import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.ui.layout.{PeekContent, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -23,7 +26,11 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
   private val bufferId = BufferId(1)
   private val paneId   = PaneId(0)
 
-  final private class Harness(val stateRef: Ref[IO, AppState], val richText: StateManagerRichTextEffects):
+  final private class Harness(
+      val stateRef: Ref[IO, AppState],
+      val notices: Ref[IO, List[PeekContent]],
+      val richText: StateManagerRichTextEffects
+  ):
     def currentBuffer: Buffer = stateRef.get.unsafeRunSync().persisted.buffers(bufferId)
 
   private def validatingCommit(stateRef: Ref[IO, AppState]): (AppState, AppState) => IO[Unit] =
@@ -47,7 +54,16 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
       runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
     )
     val stateRef = Ref.of[IO, AppState](state).unsafeRunSync()
-    new Harness(stateRef, new StateManagerRichTextEffects(stateRef.get, validatingCommit(stateRef), noEffectsExpected))
+    val notices  = Ref.of[IO, List[PeekContent]](Nil).unsafeRunSync()
+    new Harness(stateRef, notices, effectsOver(stateRef, notices))
+
+  private def effectsOver(stateRef: Ref[IO, AppState], notices: Ref[IO, List[PeekContent]]) =
+    new StateManagerRichTextEffects(
+      stateRef.get,
+      validatingCommit(stateRef),
+      noEffectsExpected,
+      (notice, _) => notices.update(_ :+ notice)
+    )
 
   private def bufferWithSelection(text: String, selection: Selection): Buffer =
     Buffer
@@ -114,7 +130,7 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
         .copy(layout = AppState.initial.persisted.layout.copy(editorPanes = Map.empty, activeEditorPaneId = None))
     )
     val stateRef = Ref.of[IO, AppState](noActivePane).unsafeRunSync()
-    val richText = new StateManagerRichTextEffects(stateRef.get, validatingCommit(stateRef), noEffectsExpected)
+    val richText = effectsOver(stateRef, Ref.of[IO, List[PeekContent]](Nil).unsafeRunSync())
 
     richText.interpret(RichTextIntent.ToggleRichTextMark(InlineMark.Bold)).unsafeRunSync()
 
@@ -212,4 +228,32 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
 
     fixture.currentBuffer.richText.richTextDocument shouldBe None
     fixture.currentBuffer.document.isDirty shouldBe false
+  }
+
+  private def savedAs(buffer: Buffer, fileName: String, language: Option[LanguageId] = None): Buffer =
+    buffer.copy(document = buffer.document.copy(filePath = Some(Paths.get(fileName)), language = language))
+
+  it should "ask before formatting a plain-text file, leaving it unformatted until answered" in {
+    val fixture = harness(savedAs(bufferWithSelection("hello world", selection(0, 0, 0, 5)), "notes.txt"))
+
+    fixture.richText.interpret(RichTextIntent.ToggleRichTextMark(InlineMark.Bold)).unsafeRunSync()
+
+    fixture.stateRef.get.unsafeRunSync().runtime.uiSurfaces.map(_.content) should matchPattern {
+      case List(SurfaceContent.ModalWorkflow(Modal.Confirm(_))) =>
+    }
+    fixture.currentBuffer.richText.richTextDocument shouldBe None
+    fixture.currentBuffer.document.isDirty shouldBe false
+  }
+
+  it should "refuse formatting in a code file with a notice, leaving it untouched" in {
+    val code    = savedAs(bufferWithSelection("val x = 1", selection(0, 0, 0, 3)), "A.scala", Some(LanguageId.Scala))
+    val fixture = harness(code)
+
+    fixture.richText.interpret(RichTextIntent.ToggleRichTextMark(InlineMark.Bold)).unsafeRunSync()
+
+    fixture.currentBuffer shouldBe code
+    fixture.stateRef.get.unsafeRunSync().runtime.uiSurfaces shouldBe empty
+    fixture.notices.get.unsafeRunSync() shouldBe List(
+      PeekContent.QuickInfo("Formatting isn't available in code files.")
+    )
   }
