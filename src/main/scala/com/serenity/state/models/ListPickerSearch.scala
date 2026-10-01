@@ -16,6 +16,8 @@ object ListPickerSearch:
         picker.withChoices(containing(choices, picker.queryText), ListPicker.NoMatches)
       case source: PickerSource.BufferText =>
         searchedBufferText(picker, source, state)
+      case PickerSource.ProjectFiles(root, listing) =>
+        FileFinder.refreshed(picker, root, listing, state.persisted.recentFiles)
     }
 
   /** The picker with its source's next batch of choices appended to its items, the highlight left where it is;

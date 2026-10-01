@@ -1,6 +1,9 @@
 package com.serenity.state.models
 
+import java.nio.file.Path
+
 import com.serenity.command.Command
+import com.serenity.io.ProjectFileListing
 import com.serenity.ui.widget.{EndBehaviour, Loadable, SelectableList, TextField}
 
 /** One entry of a [[ListPicker]]: what it shows, and the command picking it runs. A choice with a `waitingLabel` starts
@@ -28,11 +31,15 @@ enum PickerSource:
     */
   case BufferText(batchSize: Int = BufferTextSearch.BatchSize, resumeAt: Option[BufferLine] = None)
 
+  /** The files under `root`, ranked against the query by [[FileFinder]] once their listing lands. */
+  case ProjectFiles(root: Path, listing: Loadable[ProjectFileListing])
+
   /** Whether more choices than the picker holds can still be loaded, by [[ListPickerSearch.extended]]. */
   def hasMore: Boolean =
     this match
       case Fixed(_)                => false
       case BufferText(_, resumeAt) => resumeAt.isDefined
+      case ProjectFiles(_, _)      => false
 
 /** A titled list to pick one entry from, as data -- so a new picker needs only a value of this. Its choices may still
   * be loading when it opens. While it is `pending` on a picked choice, that choice's work applies only if the picker is

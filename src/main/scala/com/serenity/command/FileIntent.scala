@@ -11,6 +11,7 @@ enum FileIntent:
   case OpenFile
   case OpenRecentFile(path: Path)
   case OpenFileSearch
+  case GoToFile
   case CloseAll
   case CloseOthers
   case CloseCurrentFile

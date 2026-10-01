@@ -24,6 +24,7 @@ enum HotkeyAction:
   case SplitPaneVertical
   case ClosePane
   case FileSearch
+  case GoToFile
   case NextTab
   case PreviousTab
   case MoveTabLeft
@@ -58,6 +59,7 @@ enum HotkeyAction:
       case SplitPaneVertical        => "split_pane_vertical"
       case ClosePane                => "close_pane"
       case FileSearch               => "file_search"
+      case GoToFile                 => "go_to_file"
       case NextTab                  => "next_tab"
       case PreviousTab              => "previous_tab"
       case MoveTabLeft              => "move_tab_left"
@@ -307,6 +309,10 @@ object HotkeyConfig:
       HotkeyAction.FocusDown  -> InputKey.ArrowDown
     ).view.mapValues(key => List(HotkeyTrigger(key, None, Set(Modifier.Alt)))).toMap
 
+  // VS Code's alternative Quick Open key: its main one, the primary modifier with P, is the command runner here.
+  private def goToFileBindings(primaryModifier: Modifier): Map[HotkeyAction, List[HotkeyTrigger]] =
+    Map(HotkeyAction.GoToFile -> List(HotkeyTrigger(InputKey.Character, Some('e'), Set(primaryModifier))))
+
   def defaultBindingsFor(osName: String): Map[HotkeyAction, List[HotkeyTrigger]] =
     val isMac           = osName.toLowerCase(java.util.Locale.ROOT).contains("mac")
     val primaryModifier = if isMac then Modifier.Meta else Modifier.Ctrl
@@ -385,7 +391,7 @@ object HotkeyConfig:
       // every terminal and by AWT regardless of platform, so it needs none of `forTerminalUse`'s Mac-Cmd rewriting
       // (issue #1213) and no per-OS branching here.
       HotkeyAction.ToggleShortcutsHelp -> List(HotkeyTrigger(InputKey.F1, None, Set.empty))
-    ) ++ directionalFocusBindings
+    ) ++ directionalFocusBindings ++ goToFileBindings(primaryModifier)
 
   def validate(bindings: Map[HotkeyAction, List[HotkeyTrigger]]): Either[String, Unit] =
     bindings.toList

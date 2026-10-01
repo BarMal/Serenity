@@ -1,6 +1,6 @@
 package com.serenity.state.reducers
 
-import com.serenity.command.{CommandRegistry, CommandRunner}
+import com.serenity.command.{CommandRegistry, CommandRunner, FileFinderCommands}
 import com.serenity.input.{CursorPeekDetector, CursorPeekState}
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
@@ -73,6 +73,9 @@ object AppEventReducer:
 
       case FileSearch =>
         ReducerResult.withEffect(state, AppEffect.Surface(SurfaceEffect.OpenFileSearch))
+
+      case GoToFile =>
+        ReducerResult.withEffect(state, AppEffect.ExecuteCommand(FileFinderCommands.goToFile))
 
       case FocusInDirection(direction) =>
         ReducerResult.noEffects(DirectionalFocus.moved(state, direction))

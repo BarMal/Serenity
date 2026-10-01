@@ -25,6 +25,7 @@ object TextHotkeyConverters:
     HotkeyAction.SplitPaneVertical        -> SplitPaneVertical,
     HotkeyAction.ClosePane                -> ClosePane,
     HotkeyAction.FileSearch               -> FileSearch,
+    HotkeyAction.GoToFile                 -> GoToFile,
     HotkeyAction.PreviousTab              -> PreviousTab,
     HotkeyAction.NextTab                  -> NextTab,
     HotkeyAction.MoveTabLeft              -> MoveTabLeft,
