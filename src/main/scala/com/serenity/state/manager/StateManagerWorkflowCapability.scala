@@ -138,9 +138,10 @@ final private[manager] class StateManagerWorkflowCapability(
             commitClose(state, close.resolved(workflow, state))
           case CloseWorkflowChoice.Save =>
             state.persisted.buffers.get(workflow.currentBufferId) match
-              case Some(buffer) if buffer.document.filePath.isDefined =>
+              case Some(buffer) if buffer.document.filePath.isDefined && !buffer.formattingLostOnSave =>
                 saveBeforeClose(workflow)
               case Some(_) =>
+                // Untitled, or a format that can't store its formatting: Save As keeps it, and cancelling asks again.
                 requestSaveAsFileDialog(state, Some(workflow.currentBufferId))
               case None =>
                 modelCommit.commitState(close.clearCloseActions(close.dismissModalSurface(state)), state)

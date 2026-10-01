@@ -299,6 +299,9 @@ final private[manager] class StateManagerEffectHandlers(
         reloadBuffer(bufferId)
       case FileIntent.OverwriteOnDisk(bufferId) =>
         forceSaveExistingBuffer(bufferId)
+      case FileIntent.SaveWithoutFormatting(bufferId) =>
+        currentState.flatMap(current => commitState(RichTextReducer.withoutFormatting(bufferId, current), current)) >>
+          saveBufferEffect(bufferId)
 
   private def setBufferLanguage(state: AppState, language: Option[LanguageId]): IO[Unit] =
     (state.focusedBufferId, state.focusedBufferId.flatMap(state.persisted.buffers.get)) match
@@ -476,6 +479,9 @@ final private[manager] class StateManagerEffectHandlers(
   private[manager] def saveBufferEffect(bufferId: BufferId): IO[Unit] =
     currentState.flatMap { state =>
       state.persisted.buffers.get(bufferId) match
+        case Some(buffer) if buffer.formattingLostOnSave =>
+          val prompt = ConfirmPrompt.formattingWouldBeLost(bufferId, bufferLabelFor(buffer))
+          commitState(ModalStateReducer.show(Modal.Confirm(prompt), state).state, state)
         case Some(buffer) if buffer.document.filePath.isDefined =>
           submitSave(bufferId, saveFailed(bufferId))
         case Some(_) =>
