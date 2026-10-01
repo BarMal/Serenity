@@ -19,7 +19,6 @@ import com.serenity.state.models.{AppState, BufferId, SurfaceContent}
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -215,9 +214,9 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
       stateWithPanel   <- composition.getCurrentState
       _ <- composition.interpretCommand(
         Command.typed(
-          "unpin-bottom-panel",
-          "Unpin the bottom panel.",
-          CommandIntent.View(ViewIntent.UnpinPanel(PanelPosition.Bottom)),
+          "toggle-project-output-panel",
+          "Show or hide project output.",
+          CommandIntent.View(ViewIntent.TogglePanelShown(com.serenity.state.models.PanelId.ProjectOutput)),
           CommandCategory.View
         ),
         stateWithPanel

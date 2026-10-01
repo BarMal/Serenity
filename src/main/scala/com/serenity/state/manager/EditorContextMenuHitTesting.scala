@@ -77,7 +77,7 @@ private[manager] object EditorContextMenuHitTesting:
       "next-document-symbol",
       "previous-document-symbol",
       "markdown-preview",
-      "pin-outline",
+      "toggle-outline-panel",
       // #1531: a no-op when the cursor isn't on a flagged word, same as e.g. "delete-document-comment" above
       // when there is no comment at the cursor.
       "add-word-to-dictionary"

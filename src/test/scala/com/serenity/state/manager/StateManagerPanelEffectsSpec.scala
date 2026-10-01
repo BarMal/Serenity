@@ -108,7 +108,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
   it should "pin the diagnostics panel at its default edge and size" in {
     val fixture = harness()
 
-    fixture.panels.interpret(ViewIntent.PinDiagnosticsPanel, AppState.initial).unsafeRunSync()
+    fixture.panels.interpret(ViewIntent.TogglePanelShown(PanelId.Diagnostics), AppState.initial).unsafeRunSync()
 
     val currentState = fixture.stateRef.get.unsafeRunSync()
     val pinned       = fixture.currentSurfaces.filter(_.content == SurfaceContent.Diagnostics(Nil))
@@ -125,7 +125,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
   it should "replace rather than duplicate a panel kind that is already pinned" in {
     val fixture = harness()
 
-    fixture.panels.interpret(ViewIntent.PinDiagnosticsPanel, AppState.initial).unsafeRunSync()
+    fixture.panels.interpret(ViewIntent.TogglePanelShown(PanelId.Diagnostics), AppState.initial).unsafeRunSync()
     fixture.panels
       .interpret(
         ViewIntent.SetPanelPin(PanelId.Diagnostics, Some(PanelPosition.Right)),
@@ -148,7 +148,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
   it should "declare a pin as an undo boundary in the same commit as the pinned panel" in {
     val fixture = harness()
 
-    fixture.panels.interpret(ViewIntent.PinDiagnosticsPanel, AppState.initial).unsafeRunSync()
+    fixture.panels.interpret(ViewIntent.TogglePanelShown(PanelId.Diagnostics), AppState.initial).unsafeRunSync()
 
     fixture.committedStates.get.unsafeRunSync() should have size 1
     fixture.modelRef.get.unsafeRunSync().undo.undoStack shouldBe Vector(
@@ -159,7 +159,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
   it should "remove a pinned panel kind when its position is cleared" in {
     val fixture = harness()
 
-    fixture.panels.interpret(ViewIntent.PinDiagnosticsPanel, AppState.initial).unsafeRunSync()
+    fixture.panels.interpret(ViewIntent.TogglePanelShown(PanelId.Diagnostics), AppState.initial).unsafeRunSync()
     fixture.panels
       .interpret(ViewIntent.SetPanelPin(PanelId.Diagnostics, None), fixture.stateRef.get.unsafeRunSync())
       .unsafeRunSync()
@@ -172,9 +172,10 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
       pinnedState(PanelId.ProjectOutput.surfaceId, SurfaceContent.Terminal("building", 0), PanelPosition.Bottom, 10)
     val fixture = harness(state)
 
-    fixture.panels.interpret(ViewIntent.UnpinPanel(PanelPosition.Bottom), state).unsafeRunSync()
+    fixture.panels.interpret(ViewIntent.TogglePanelShown(PanelId.ProjectOutput), state).unsafeRunSync()
 
-    fixture.calls.get.unsafeRunSync() shouldBe List(s"unpin:${PanelTarget.ByPosition(PanelPosition.Bottom)}")
+    fixture.calls.get.unsafeRunSync() shouldBe List(s"unpin:${PanelTarget.ById(PanelId.ProjectOutput.surfaceId)}")
+    fixture.stateRef.get.unsafeRunSync().runtime.projectTasks shouldBe state.runtime.projectTasks
   }
 
   it should "turn the companion on and dock it at the chosen edge when it is pinned" in {
@@ -200,16 +201,14 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.currentSurfaces.map(_.id) should not contain PanelId.Companion.surfaceId
   }
 
-  it should "turn the companion off when its edge is unpinned" in {
+  it should "turn the companion off when it is toggled hidden" in {
     val state   = pinnedState(PanelId.Companion.surfaceId, SurfaceContent.CompanionSprite, PanelPosition.Right, 10)
     val fixture = harness(state)
 
-    fixture.panels.interpret(ViewIntent.UnpinPanel(PanelPosition.Right), state).unsafeRunSync()
+    fixture.panels.interpret(ViewIntent.TogglePanelShown(PanelId.Companion), state).unsafeRunSync()
 
-    fixture.calls.get.unsafeRunSync() shouldBe List(
-      s"unpin:${PanelTarget.ByPosition(PanelPosition.Right)}",
-      "companion-enabled:false"
-    )
+    fixture.calls.get.unsafeRunSync() shouldBe
+      List(s"unpin:${PanelTarget.ById(PanelId.Companion.surfaceId)}", "companion-enabled:false")
   }
 
   it should "not show the companion while visual flair is off" in {
@@ -229,28 +228,88 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "leave the project task alone when a non-terminal panel is closed" in {
-    val id      = SurfaceId("diagnostics")
-    val state   = pinnedState(id, SurfaceContent.Diagnostics(Nil), PanelPosition.Bottom, 10)
-    val fixture = harness(state)
-
-    fixture.panels.interpret(ViewIntent.UnpinPanel(PanelPosition.Bottom), state).unsafeRunSync()
-
-    fixture.calls.get.unsafeRunSync() shouldBe List(s"unpin:${PanelTarget.ByPosition(PanelPosition.Bottom)}")
-  }
-
-  it should "route focus, expand, and collapse intents to their owning capabilities" in {
+  it should "show a hidden panel at its default edge when it is toggled" in {
     val fixture = harness()
 
-    fixture.panels.interpret(ViewIntent.FocusPanel(PanelPosition.Left), AppState.initial).unsafeRunSync()
-    fixture.panels.interpret(ViewIntent.ExpandPanel(PanelPosition.Right), AppState.initial).unsafeRunSync()
-    fixture.panels.interpret(ViewIntent.CollapseExpandedPanel, AppState.initial).unsafeRunSync()
+    fixture.panels.interpret(ViewIntent.TogglePanelShown(PanelId.Outline), AppState.initial).unsafeRunSync()
+
+    fixture.stateRef.get
+      .unsafeRunSync()
+      .persisted
+      .layout
+      .workspaceTree
+      .flatMap(
+        _.positionForSurface(PanelId.Outline.surfaceId)
+      ) shouldBe Some(PanelRegistry.registrationFor(PanelId.Outline).defaultPosition)
+  }
+
+  it should "hide a shown panel, wherever it is docked, when it is toggled" in {
+    val state   = pinnedState(PanelId.Outline.surfaceId, SurfaceContent.Outline(Nil), PanelPosition.Top, 10)
+    val fixture = harness(state)
+
+    fixture.panels.interpret(ViewIntent.TogglePanelShown(PanelId.Outline), state).unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe List(s"unpin:${PanelTarget.ById(PanelId.Outline.surfaceId)}")
+  }
+
+  it should "focus a shown panel by its own id, whichever edge it is on" in {
+    val state   = pinnedState(PanelId.Outline.surfaceId, SurfaceContent.Outline(Nil), PanelPosition.Top, 10)
+    val fixture = harness(state)
+
+    fixture.panels.interpret(ViewIntent.FocusPanel(PanelId.Outline), state).unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe List(s"switch:${PanelTarget.ById(PanelId.Outline.surfaceId)}")
+  }
+
+  it should "show a hidden panel before focusing it" in {
+    val fixture = harness()
+
+    fixture.panels.interpret(ViewIntent.FocusPanel(PanelId.Outline), AppState.initial).unsafeRunSync()
+
+    fixture.currentSurfaces.map(_.id) should contain(PanelId.Outline.surfaceId)
+    fixture.calls.get.unsafeRunSync() shouldBe List(s"switch:${PanelTarget.ById(PanelId.Outline.surfaceId)}")
+  }
+
+  it should "maximise the focused panel, and restore it when one is maximised" in {
+    val docked  = pinnedState(PanelId.Outline.surfaceId, SurfaceContent.Outline(Nil), PanelPosition.Right, 30)
+    val focused = docked.copy(persisted = docked.persisted.copy(focus = Focus.Surface(PanelId.Outline.surfaceId)))
+    val fixture = harness(focused)
+
+    fixture.panels.interpret(ViewIntent.ToggleMaximisePanel, focused).unsafeRunSync()
+    val maximised = com.serenity.DockedPanelFixtures.expand(focused, PanelId.Outline.surfaceId)
+    fixture.panels.interpret(ViewIntent.ToggleMaximisePanel, maximised).unsafeRunSync()
 
     fixture.calls.get.unsafeRunSync() shouldBe List(
-      s"switch:${PanelTarget.ByPosition(PanelPosition.Left)}",
-      s"expand:${PanelTarget.ByPosition(PanelPosition.Right)}",
+      s"expand:${PanelTarget.ById(PanelId.Outline.surfaceId)}",
       "collapse"
     )
+  }
+
+  it should "explain that maximising needs a focused panel when an editor has focus" in {
+    val fixture = harness()
+
+    fixture.panels.interpret(ViewIntent.ToggleMaximisePanel, AppState.initial).unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe Nil
+    fixture.peeks.get.unsafeRunSync() shouldBe List(PeekContent.QuickInfo("Focus a panel to maximise it."))
+  }
+
+  it should "hide panels whose family doesn't fit the mode being switched to" in {
+    val withPanels =
+      pinnedState(PanelId.Diagnostics.surfaceId, SurfaceContent.Diagnostics(Nil), PanelPosition.Bottom, 10)
+    val state =
+      com.serenity.DockedPanelFixtures.dock(
+        withPanels,
+        PanelId.Outline.surfaceId,
+        SurfaceContent.Outline(Nil),
+        PanelPosition.Right,
+        30
+      )
+    val fixture = harness(state)
+
+    fixture.panels.interpret(ViewIntent.SetAppMode(com.serenity.config.AppMode.Prose), state).unsafeRunSync()
+
+    fixture.currentSurfaces.map(_.id) shouldBe List(PanelId.Outline.surfaceId)
   }
 
   it should "raise the tab list as an event rather than mutating state directly" in {
@@ -277,7 +336,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
   it should "pin the comments panel when comment display is not turned off" in {
     val fixture = harness()
 
-    fixture.panels.interpret(ViewIntent.PinCommentsPanel, AppState.initial).unsafeRunSync()
+    fixture.panels.interpret(ViewIntent.TogglePanelShown(PanelId.Comments), AppState.initial).unsafeRunSync()
 
     fixture.currentSurfaces.map(_.content) shouldBe List(SurfaceContent.Comments(Nil, None))
     fixture.peeks.get.unsafeRunSync() shouldBe Nil
@@ -291,7 +350,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     )
     val fixture = harness(offState)
 
-    fixture.panels.interpret(ViewIntent.PinCommentsPanel, offState).unsafeRunSync()
+    fixture.panels.interpret(ViewIntent.TogglePanelShown(PanelId.Comments), offState).unsafeRunSync()
 
     fixture.currentSurfaces shouldBe Nil
     fixture.peeks.get.unsafeRunSync() shouldBe List(

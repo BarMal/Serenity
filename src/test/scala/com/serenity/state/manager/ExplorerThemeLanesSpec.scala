@@ -226,7 +226,8 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
             com.serenity.command.Command.typed(
               "open-root",
               "Opens a project root.",
-              com.serenity.command.CommandIntent.View(com.serenity.command.ViewIntent.PinExplorerPanel),
+              com.serenity.command.CommandIntent
+                .View(com.serenity.command.ViewIntent.TogglePanelShown(com.serenity.state.models.PanelId.Explorer)),
               com.serenity.command.CommandCategory.View
             )
           )

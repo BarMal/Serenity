@@ -350,7 +350,9 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers:
       .executeCommand(CommandRegistry.withToggleUI.findCommand("heading-1").getOrElse(fail("missing heading-1")))
       .unsafeRunSync()
     stateManager
-      .executeCommand(CommandRegistry.withToggleUI.findCommand("pin-outline").getOrElse(fail("missing pin-outline")))
+      .executeCommand(
+        CommandRegistry.withToggleUI.findCommand("toggle-outline-panel").getOrElse(fail("missing toggle-outline-panel"))
+      )
       .unsafeRunSync()
 
     val outlineSymbols = stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.collectFirst {

@@ -70,7 +70,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
     val stateManager     = createStateManager()
     val currentDirectory = FileUtils.getCurrentDirectory.unsafeRunSync()
 
-    executeCommandThroughRunner(stateManager, "pin-explorer", "pin-explorer")
+    executeCommandThroughRunner(stateManager, "toggle-explorer-panel", "toggle-explorer-panel")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.commandRunnerSurface shouldBe None
@@ -88,7 +88,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
   it should "pin the outline panel from the command runner" in {
     val stateManager = createStateManager()
 
-    executeCommandThroughRunner(stateManager, "pin-outline", "pin-outline")
+    executeCommandThroughRunner(stateManager, "toggle-outline-panel", "toggle-outline-panel")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.pinnedSurfaces.exists(isPinnedAt(updatedState, _, PanelPosition.Right)) shouldBe true
@@ -101,7 +101,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
       .updateState(state => state.copy(runtime = state.runtime.copy(viewportSize = Some(ViewportSize(80, 3000)))))
       .unsafeRunSync()
 
-    executeCommandThroughRunner(stateManager, "pin-outline", "pin-outline")
+    executeCommandThroughRunner(stateManager, "toggle-outline-panel", "toggle-outline-panel")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     val surfaceId    = updatedState.pinnedSurfaces.find(_.content == SurfaceContent.Outline(Nil)).get.id
@@ -134,7 +134,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
       }
       .unsafeRunSync()
 
-    executeCommandThroughRunner(stateManager, "pin-comments", "pin-comments")
+    executeCommandThroughRunner(stateManager, "toggle-comments-panel", "toggle-comments-panel")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.pinnedSurfaces.exists(isPinnedAt(updatedState, _, PanelPosition.Right)) shouldBe true
@@ -169,7 +169,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
       }
       .unsafeRunSync()
 
-    executeCommandThroughRunner(stateManager, "pin-outline", "pin-outline")
+    executeCommandThroughRunner(stateManager, "toggle-outline-panel", "toggle-outline-panel")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     val outlineSymbols = updatedState.pinnedSurfaces.collectFirst {
@@ -215,7 +215,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
       }
       .unsafeRunSync()
 
-    executeCommandThroughRunner(stateManager, "pin-outline", "pin-outline")
+    executeCommandThroughRunner(stateManager, "toggle-outline-panel", "toggle-outline-panel")
 
     val currentState = stateManager.getCurrentState.unsafeRunSync()
     val outlineSymbols = currentState.pinnedSurfaces.collectFirst {
@@ -236,7 +236,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
   it should "pin the diagnostics panel from the command runner" in {
     val stateManager = createStateManager()
 
-    executeCommandThroughRunner(stateManager, "pin-diagnostics", "pin-diagnostics")
+    executeCommandThroughRunner(stateManager, "toggle-diagnostics-panel", "toggle-diagnostics-panel")
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.pinnedSurfaces.exists(isPinnedAt(updatedState, _, PanelPosition.Bottom)) shouldBe true
@@ -373,11 +373,11 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.pinnedSurfaces.exists(_.content.isInstanceOf[SurfaceContent.Diagnostics]) shouldBe true
   }
 
-  it should "focus the left panel from the command runner" in {
+  it should "focus the explorer panel from the command runner" in {
     val sm = createStateManager()
     sm.loadDirectoryTree(FileUtils.getCurrentDirectory.unsafeRunSync(), List("src")).unsafeRunSync()
 
-    executeCommandThroughRunner(sm, "focus-left-panel", "focus-left-panel")
+    executeCommandThroughRunner(sm, "focus-explorer-panel", "focus-explorer-panel")
 
     val updatedState = sm.getCurrentState.unsafeRunSync()
     updatedState.persisted.focus shouldBe a[Focus.Surface]
@@ -387,11 +387,11 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.pinnedSurfaces.map(_.id) should contain(focusedId)
   }
 
-  it should "unpin the left panel from the command runner" in {
+  it should "hide a shown explorer panel from the command runner" in {
     val sm = createStateManager()
     sm.loadDirectoryTree(FileUtils.getCurrentDirectory.unsafeRunSync(), List("src")).unsafeRunSync()
 
-    executeCommandThroughRunner(sm, "unpin-left-panel", "unpin-left-panel")
+    executeCommandThroughRunner(sm, "toggle-explorer-panel", "toggle-explorer-panel")
 
     val updatedState = sm.getCurrentState.unsafeRunSync()
     updatedState.pinnedSurfaces.exists(isPinnedAt(updatedState, _, PanelPosition.Left)) shouldBe false

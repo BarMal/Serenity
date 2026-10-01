@@ -54,34 +54,6 @@ private[command] object CommandRegistryViewSettingsCommands:
       CommandIntent.Edit(EditIntent.FormatCurrentFile),
       CommandCategory.Edit,
       label = "Format File"
-    ),
-    Command.typed(
-      "pin-explorer",
-      "Pin the explorer panel on the left.",
-      CommandIntent.View(ViewIntent.PinExplorerPanel),
-      CommandCategory.View,
-      label = "Pin Explorer Panel"
-    ),
-    Command.typed(
-      "pin-outline",
-      "Pin the outline panel on the right.",
-      CommandIntent.View(ViewIntent.PinOutlinePanel),
-      CommandCategory.View,
-      label = "Pin Outline Panel"
-    ),
-    Command.typed(
-      "pin-comments",
-      "Pin the comments panel on the right.",
-      CommandIntent.View(ViewIntent.PinCommentsPanel),
-      CommandCategory.View,
-      label = "Pin Comments Panel"
-    ),
-    Command.typed(
-      "pin-diagnostics",
-      "Pin the diagnostics panel at the bottom.",
-      CommandIntent.View(ViewIntent.PinDiagnosticsPanel),
-      CommandCategory.View,
-      label = "Pin Diagnostics Panel"
     )
   )
 

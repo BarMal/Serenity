@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, CommandRegistry, ViewIntent}
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, MotionPreset}
 import com.serenity.keystroke.events.*
@@ -24,6 +24,9 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
   private def viewCommand(intent: ViewIntent): Command =
     Command.typed("test-view-command", "A test view command.", CommandIntent.View(intent), CommandCategory.View)
+
+  private def registeredCommand(name: String): Command =
+    CommandRegistry.default.findCommand(name).getOrElse(fail(s"missing command $name"))
 
   // ── Command palette (Ctrl+P → ToggleCommandRunner) ────────────────────────
 
@@ -167,21 +170,14 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.getCurrentState.unsafeRunSync().runtime.motion.surfaceAnimations shouldBe empty
 
-  it should "unpin one same-side panel at a time starting with the focused panel" in new UIFixture:
+  it should "hide only the toggled panel, leaving another panel on the same edge" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
     stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 30).unsafeRunSync()
-    stateManager.executeCommand(viewCommand(ViewIntent.FocusPanel(PanelPosition.Right))).unsafeRunSync()
 
-    val before = stateManager.getCurrentState.unsafeRunSync()
-    val focusedSurfaceId = before.persisted.focus match
-      case Focus.Surface(id) => id
-      case other             => fail(s"Expected focus on pinned surface, got $other")
-
-    stateManager.executeCommand(viewCommand(ViewIntent.UnpinPanel(PanelPosition.Right))).unsafeRunSync()
+    stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Diagnostics))).unsafeRunSync()
 
     val after = stateManager.getCurrentState.unsafeRunSync()
     after.pinnedSurfaces should have size 1
-    after.pinnedSurfaces.map(_.id) should not contain focusedSurfaceId
     after.pinnedSurfaces.map(_.content).foreach {
       case SurfaceContent.Outline(_, _) => ()
       case other                        => fail(s"Unexpected pinned content: $other")
@@ -215,7 +211,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
     advanceAnimations(80)
 
-    stateManager.executeCommand(viewCommand(ViewIntent.UnpinPanel(PanelPosition.Right))).unsafeRunSync()
+    stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Outline))).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     val ghost = state.runtime.uiSurfaces.collectFirst {
@@ -229,7 +225,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
   it should "remove a panel ghost overlay when its close animation completes" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
     advanceAnimations(80)
-    stateManager.executeCommand(viewCommand(ViewIntent.UnpinPanel(PanelPosition.Right))).unsafeRunSync()
+    stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Outline))).unsafeRunSync()
 
     advanceAnimations(120)
 
@@ -247,7 +243,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
 
-    stateManager.executeCommand(viewCommand(ViewIntent.UnpinPanel(PanelPosition.Right))).unsafeRunSync()
+    stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Outline))).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.runtime.motion.surfaceAnimations shouldBe empty
@@ -351,7 +347,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
     advanceAnimations(80)
 
-    stateManager.executeCommand(viewCommand(ViewIntent.UnpinPanel(PanelPosition.Left))).unsafeRunSync()
+    stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Outline))).unsafeRunSync()
 
     val afterClose = stateManager.getCurrentState.unsafeRunSync()
     val ghost = afterClose.runtime.uiSurfaces
@@ -381,7 +377,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       .unsafeRunSync()
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
     advanceAnimations(80)
-    stateManager.executeCommand(viewCommand(ViewIntent.UnpinPanel(PanelPosition.Left))).unsafeRunSync()
+    stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Outline))).unsafeRunSync()
 
     advanceAnimations(200)
 
@@ -413,7 +409,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
   it should "move focus to a pinned panel on switchToPinnedPanel" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
-    stateManager.executeCommand(viewCommand(ViewIntent.FocusPanel(PanelPosition.Right))).unsafeRunSync()
+    stateManager.executeCommand(viewCommand(ViewIntent.FocusPanel(PanelId.Outline))).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.persisted.focus match
@@ -422,7 +418,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
   it should "do nothing on switchToPinnedPanel when no panel is at that position" in new UIFixture:
     val focusBefore = stateManager.getCurrentState.unsafeRunSync().persisted.focus
-    stateManager.executeCommand(viewCommand(ViewIntent.FocusPanel(PanelPosition.Right))).unsafeRunSync()
+    stateManager.switchToPinnedPanel(PanelTarget.ByPosition(PanelPosition.Right)).unsafeRunSync()
     stateManager.getCurrentState.unsafeRunSync().persisted.focus shouldBe focusBefore
 
   it should "do nothing on switchToPinnedPanel when the surface ID isn't a pinned panel" in new UIFixture:
@@ -447,7 +443,8 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
   it should "expand and collapse a pinned panel through the panel facade" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
-    stateManager.executeCommand(viewCommand(ViewIntent.ExpandPanel(PanelPosition.Right))).unsafeRunSync()
+    stateManager.executeCommand(viewCommand(ViewIntent.FocusPanel(PanelId.Outline))).unsafeRunSync()
+    stateManager.executeCommand(viewCommand(ViewIntent.ToggleMaximisePanel)).unsafeRunSync()
 
     val expanded = stateManager.getCurrentState.unsafeRunSync()
     expanded.expandedPanelSurface.map(_.presentation) shouldBe Some(SurfacePresentation.Docked)
@@ -459,7 +456,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     expanded.pinnedSurfaces should have size 1
     expanded.persisted.layout.maximizedWorkspaceNodeId shouldBe defined
 
-    stateManager.executeCommand(viewCommand(ViewIntent.CollapseExpandedPanel)).unsafeRunSync()
+    stateManager.executeCommand(viewCommand(ViewIntent.ToggleMaximisePanel)).unsafeRunSync()
 
     val collapsed = stateManager.getCurrentState.unsafeRunSync()
     collapsed.expandedPanelSurface shouldBe None
@@ -486,33 +483,16 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.getCurrentState.unsafeRunSync() shouldBe before
 
-  it should "expand and collapse a pinned panel through commands" in new UIFixture:
+  it should "maximise and restore a focused panel through commands" in new UIFixture:
     stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Bottom, 10).unsafeRunSync()
-    stateManager
-      .executeCommand(
-        Command.typed(
-          "expand-bottom-panel",
-          "Expand bottom panel",
-          CommandIntent.View(ViewIntent.ExpandPanel(PanelPosition.Bottom)),
-          CommandCategory.View
-        )
-      )
-      .unsafeRunSync()
+    stateManager.executeCommand(registeredCommand("focus-diagnostics-panel")).unsafeRunSync()
+    stateManager.executeCommand(registeredCommand("toggle-maximise-panel")).unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().expandedPanelSurface.map(_.presentation) shouldBe Some(
       SurfacePresentation.Docked
     )
 
-    stateManager
-      .executeCommand(
-        Command.typed(
-          "collapse-expanded-panel",
-          "Collapse expanded panel",
-          CommandIntent.View(ViewIntent.CollapseExpandedPanel),
-          CommandCategory.View
-        )
-      )
-      .unsafeRunSync()
+    stateManager.executeCommand(registeredCommand("toggle-maximise-panel")).unsafeRunSync()
 
     stateManager.getCurrentState.unsafeRunSync().pinnedSurfaces.map(_.presentation) shouldBe List(
       SurfacePresentation.Docked

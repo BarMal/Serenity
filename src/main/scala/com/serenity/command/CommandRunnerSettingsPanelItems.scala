@@ -8,20 +8,22 @@ import com.serenity.ui.layout.PanelPosition
   */
 private[command] object CommandRunnerSettingsPanelItems:
 
-  /** `offered` decides which panels are listed -- the settings tree passes whether each one's family fits the app mode.
+  /** `offer` decides whether, and how, each panel's pin row is listed -- the settings tree drops a panel whose family
+    * doesn't fit the app mode and passes the rest through its frontend filter.
     */
   private[command] def workspaceLayoutItems(
     optionSelections: Map[String, Int],
-    offered: PanelId => Boolean = _ => true
+    offer: (PanelId, CommandSurfaceItem.OptionItem) => Option[CommandSurfaceItem.OptionItem] = (_, row) => Some(row)
   ): List[CommandSurfaceItem] =
-    val panelDefinitions =
-      PanelId.values.toList
-        .filter(offered)
-        .map(id => (PanelRegistry.registrationFor(id).label, id, s"panel-${id.key}-pin"))
-    val panelPinItems = panelDefinitions.map {
+    val allPanels =
+      PanelId.values.toList.map(id => (PanelRegistry.registrationFor(id).label, id, s"panel-${id.key}-pin"))
+    val offeredRows = allPanels.flatMap {
       case (label, id, optionId) =>
-        panelPinOptionItem(optionId, label, id, optionSelections)
+        offer(id, panelPinOptionItem(optionId, label, id, optionSelections)).map(id -> _)
     }
+    val offeredIds       = offeredRows.map(_._1).toSet
+    val panelPinItems    = offeredRows.map(_._2)
+    val panelDefinitions = allPanels.filter((_, id, _) => offeredIds.contains(id))
     val pinnedPanels = panelDefinitions.flatMap {
       case (label, id, optionId) =>
         selectedPanelPosition(optionSelections, optionId).map(PinnedPanelRow(label, id, _))
@@ -71,7 +73,7 @@ private[command] object CommandRunnerSettingsPanelItems:
     )
     // issue #1057: this used to also build a "Panel Actions" group here (Focus/Expand/Unpin per pinned edge, plus
     // Collapse Expanded Panel) -- those are one-shot actions with no persisted value, already duplicated verbatim as
-    // ordinary CommandRegistry commands (`focus-left-panel` etc.), so they are reachable only via the palette now.
+    // ordinary CommandRegistry commands (now per panel: `focus-explorer-panel` etc.), so they live only in the palette.
     panelPinsGroup :: panelOrderGroup.toList
 
   private def commandId(label: String): String =

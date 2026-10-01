@@ -5,7 +5,7 @@ import java.nio.file.Path
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.ViewIntent
-import com.serenity.config.{AppConfig, MarkdownViewMode, VisualFlairLevel}
+import com.serenity.config.{AppConfig, AppMode, MarkdownViewMode, VisualFlairLevel}
 import com.serenity.frontend.MarkdownPreviewWindowAvailability
 import com.serenity.io.FileUtils
 import com.serenity.keystroke.events.Event
@@ -56,14 +56,13 @@ final private[manager] class StateManagerPanelEffects(
         commitApp(com.serenity.state.core.EditorState.splitFocusedPane(_, SplitAxis.Vertical))
       case ViewIntent.ClosePane =>
         commitApp(com.serenity.state.core.EditorState.removeFocusedPane)
-      case ViewIntent.PinExplorerPanel =>
-        pinAtDefaultEdge(PanelId.Explorer)
-      case ViewIntent.PinOutlinePanel =>
-        pinAtDefaultEdge(PanelId.Outline)
-      case ViewIntent.PinCommentsPanel =>
-        pinAtDefaultEdge(PanelId.Comments)
-      case ViewIntent.PinDiagnosticsPanel =>
-        pinAtDefaultEdge(PanelId.Diagnostics)
+      case ViewIntent.TogglePanelShown(id) =>
+        if isShown(id, state) then hidePanel(id, state) else pinAtDefaultEdge(id)
+      case ViewIntent.FocusPanel(id) =>
+        pinAtDefaultEdge(id).unlessA(isShown(id, state)) >>
+          switchToPinnedPanel(PanelTarget.ById(id.surfaceId))
+      case ViewIntent.ToggleMaximisePanel =>
+        toggleMaximisePanel(state)
       case ViewIntent.OpenMarkdownPreview =>
         // In-pane preview is structurally unavailable on a fixed-cell surface (cell surfaces cannot `drawImage`) --
         // toggle the spawned Swing window there instead of pinning the GUI-only panel (issue #1113).
@@ -80,17 +79,9 @@ final private[manager] class StateManagerPanelEffects(
       case ViewIntent.SetDefaultDocumentMode(mode) =>
         updateConfig(_.withDefaultDocumentMode(mode)).void
       case ViewIntent.SetAppMode(mode) =>
-        updateConfig(_.withAppMode(mode)).void
+        updateConfig(_.withAppMode(mode)) >> hidePanelsOutside(mode, state)
       case ViewIntent.SetShowAllSettingsRegardlessOfMode(value) =>
         updateConfig(_.withShowAllSettingsRegardlessOfMode(value)).void
-      case ViewIntent.FocusPanel(position) =>
-        switchToPinnedPanel(PanelTarget.ByPosition(position))
-      case ViewIntent.UnpinPanel(position) =>
-        unpinViewPanel(state, position)
-      case ViewIntent.ExpandPanel(position) =>
-        expandPinnedPanel(PanelTarget.ByPosition(position))
-      case ViewIntent.CollapseExpandedPanel =>
-        collapseExpandedPanel()
       case ViewIntent.ToggleShortcutsHelp =>
         enqueueEvent(com.serenity.keystroke.events.ToggleShortcutsHelp)
       case ViewIntent.ToggleTabList =>
@@ -110,12 +101,31 @@ final private[manager] class StateManagerPanelEffects(
       case MarkdownViewMode.Source | MarkdownViewMode.InlineLens =>
         updateConfigEffect >> commitApp(PanelTransitions.removePanel(PanelId.MarkdownPreview))
 
-  // The companion's visibility is the `ui.companion_sprite.enabled` setting, so closing it turns that off too --
-  // otherwise it would come back at the next start.
-  private def unpinViewPanel(state: AppState, position: PanelPosition): IO[Unit] =
-    val closingCompanion =
-      state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(PanelId.Companion.surfaceId)).contains(position)
-    unpinPanel(PanelTarget.ByPosition(position)) >> setCompanionSpriteEnabled(false).whenA(closingCompanion)
+  // Hidden through the same animated, undoable unpin a drag-off uses. The companion's visibility is the
+  // `ui.companion_sprite.enabled` setting, so hiding it turns that off too -- otherwise it would return at next start.
+  private def hidePanel(id: PanelId, state: AppState): IO[Unit] =
+    state.pinnedSurfaces
+      .find(surface => PanelId.forContent(surface.content).contains(id))
+      .traverse_(surface => unpinPanel(PanelTarget.ById(surface.id))) >>
+      setCompanionSpriteEnabled(false).whenA(id == PanelId.Companion)
+
+  private def isShown(id: PanelId, state: AppState): Boolean =
+    state.pinnedSurfaces.exists(surface => PanelId.forContent(surface.content).contains(id))
+
+  private def toggleMaximisePanel(state: AppState): IO[Unit] =
+    if state.persisted.layout.maximizedWorkspaceNodeId.isDefined then collapseExpandedPanel()
+    else
+      state.persisted.focus match
+        case Focus.Surface(surfaceId) if state.pinnedSurfaces.exists(_.id == surfaceId) =>
+          expandPinnedPanel(PanelTarget.ById(surfaceId))
+        case _ =>
+          showQuickInfo(state, "Focus a panel to maximise it.")
+
+  /** Switching mode puts away the panels that belong to the other mode, as their commands go with it. */
+  private def hidePanelsOutside(mode: AppMode, state: AppState): IO[Unit] =
+    PanelId.values.toList
+      .filter(id => isShown(id, state) && !PanelRegistry.registrationFor(id).family.modes.contains(mode))
+      .traverse_(setPanelPin(_, None))
 
   private[manager] def openMarkdownPreview: IO[Unit] =
     pinPanel(

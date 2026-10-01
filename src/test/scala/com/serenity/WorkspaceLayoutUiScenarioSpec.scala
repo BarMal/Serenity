@@ -160,9 +160,19 @@ class WorkspaceLayoutUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver.stateManager
       .executeCommand(
         Command.typed(
-          "expand-bottom-panel",
-          "Expand bottom panel",
-          CommandIntent.View(ViewIntent.ExpandPanel(PanelPosition.Bottom)),
+          "focus-diagnostics-panel",
+          "Focus the diagnostics panel",
+          CommandIntent.View(ViewIntent.FocusPanel(com.serenity.state.models.PanelId.Diagnostics)),
+          CommandCategory.View
+        )
+      )
+      .unsafeRunSync()
+    driver.stateManager
+      .executeCommand(
+        Command.typed(
+          "toggle-maximise-panel",
+          "Maximise the focused panel",
+          CommandIntent.View(ViewIntent.ToggleMaximisePanel),
           CommandCategory.View
         )
       )
@@ -182,9 +192,9 @@ class WorkspaceLayoutUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver.stateManager
       .executeCommand(
         Command.typed(
-          "collapse-expanded-panel",
-          "Collapse expanded panel",
-          CommandIntent.View(ViewIntent.CollapseExpandedPanel),
+          "toggle-maximise-panel",
+          "Restore the maximised panel",
+          CommandIntent.View(ViewIntent.ToggleMaximisePanel),
           CommandCategory.View
         )
       )

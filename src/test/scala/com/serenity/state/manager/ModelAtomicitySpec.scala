@@ -265,7 +265,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
       for
         recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
         stateManager <- stateManagerOver(recorded.modelRef)
-        _            <- stateManager.executeCommand(viewCommand(ViewIntent.PinDiagnosticsPanel))
+        _            <- stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Diagnostics)))
         writes       <- recorded.recordedWrites
         after        <- stateManager.getModel
       yield (writes, after)
@@ -301,7 +301,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
       for
         recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
         stateManager <- stateManagerOver(recorded.modelRef)
-        _            <- stateManager.executeCommand(viewCommand(ViewIntent.PinDiagnosticsPanel))
+        _            <- stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Diagnostics)))
         _            <- recorded.clear
         _            <- stateManager.executeCommand(viewCommand(unpin))
         writes       <- recorded.recordedWrites

@@ -55,10 +55,14 @@ object CommandRunnerSettingsGroups:
     val workspaceLayoutGroup = group(
       "settings-workspace-layout",
       "Panels",
-      "Pin, focus, expand, and unpin panels",
+      "Which edge each panel is pinned to",
       CommandRunnerSettingsPanelItems.workspaceLayoutItems(
         optionSelections,
-        id => showAllSettingsRegardlessOfMode || PanelRegistry.registrationFor(id).family.modes.contains(appMode)
+        (id, row) =>
+          val registration = PanelRegistry.registrationFor(id)
+          Option
+            .when(showAllSettingsRegardlessOfMode || registration.family.modes.contains(appMode))(row)
+            .flatMap(onFrontend.row(registration.frontend, _))
       )
     )
     val textDisplayGroup = group(

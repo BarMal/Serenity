@@ -116,9 +116,9 @@ class FileExplorerSpec extends AnyFlatSpec with Matchers:
       sm.selectFileInExplorer(childDir).unsafeRunSync()
       sm.executeCommand(
         Command.typed(
-          "focus-left-panel",
-          "Focus left panel",
-          CommandIntent.View(ViewIntent.FocusPanel(PanelPosition.Left)),
+          "focus-explorer-panel",
+          "Focus the explorer panel",
+          CommandIntent.View(ViewIntent.FocusPanel(com.serenity.state.models.PanelId.Explorer)),
           CommandCategory.View
         )
       ).unsafeRunSync()
