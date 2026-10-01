@@ -62,16 +62,16 @@ object TextOverlayRenderer:
     val statusForegroundOverride: Option[Color] = Option.when(isStatusLine)(statusColors.foreground).flatten
     val statusBackgroundOverride: Option[Color] = Option.when(isStatusLine)(statusColors.background).flatten
 
+    // A status line's configured background is an explicit choice and wins over the material, as it does in the GUI.
+    val backdrop = SurfaceMaterials
+      .backdropShowingThrough(config, theme, surface)
+      .filterNot(_ => statusBackgroundOverride.isDefined || statusBackgroundAlphaOverride.isDefined)
+
     def rowColors(rowOffset: Int): (Color, Color) =
-      val (defaultFg, defaultBg) = overlay.animationState
-        .getCell(0, rowOffset)
-        .map(cell =>
-          (
-            cell.currentForeground.getOrElse(theme.panel.foreground),
-            cell.currentBackground.getOrElse(theme.panel.background)
-          )
-        )
-        .getOrElse((theme.panel.foreground, theme.panel.background))
+      val animatedCell = overlay.animationState.getCell(0, rowOffset)
+      val defaultFg    = animatedCell.flatMap(_.currentForeground).getOrElse(theme.panel.foreground)
+      val defaultBg =
+        backdrop.getOrElse(animatedCell.flatMap(_.currentBackground).getOrElse(theme.panel.background))
       val fg = statusForegroundOverride.getOrElse(defaultFg)
       val bg = statusBackgroundOverride.getOrElse(defaultBg)
       (fg, statusBackgroundAlphaOverride.fold(bg)(bg.withAlpha))
@@ -85,7 +85,7 @@ object TextOverlayRenderer:
         surface.setBackgroundColor(bg)
         surface.putString(rect.x, y, " " * rect.width)
 
-      applyGlassSheen(surface, overlay, theme, config)
+      if backdrop.isEmpty then applyGlassSheen(surface, overlay, theme, config)
       val textInsetPx = SurfaceTextInset.px(config)
       // `composition` is `overlay`'s only content representation (issue #1683) -- a surface with genuinely nothing to
       // paint (no bespoke composition and no rows/header/footer/key-hint given at construction) simply has none, and

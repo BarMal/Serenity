@@ -18,9 +18,9 @@ class TransparentThemeTuiIntegrationSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   "Renderer" should "emit SGR 49 for the editor body when the Transparent theme is active" in {
-    // Chrome rows (the buffer tab bar, status bar) intentionally keep their own opaque `panel`/`menuItem`
-    // backgrounds -- see `ThemeConfig.transparent`'s doc comment -- so this only asserts that SGR 49 (the
-    // alpha-0 sentinel) appears somewhere in the output, not that every cell avoids an explicit truecolor fill.
+    // Some chrome (the gutter, `menuItem` rows) keeps its own opaque background -- see `ThemeConfig.transparent`'s
+    // doc comment -- so this only asserts that SGR 49 (the alpha-0 sentinel) appears somewhere in the output, not
+    // that every cell avoids an explicit truecolor fill.
     val writer  = new java.io.StringWriter()
     val metrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 13)
     val surface = new TerminalRenderSurface(20, 5, writer, metrics)
