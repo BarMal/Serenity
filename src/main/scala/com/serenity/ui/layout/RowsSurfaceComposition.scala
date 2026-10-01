@@ -10,14 +10,14 @@ package com.serenity.ui.layout
   * `ContextualToolbarSurfaceComposition`), or state this adapter has no way to reach (`ModalSurfaceComposition`,
   * `CommentLensSurfaceComposition`, `CommandRunnerSurfaceComposition`) -- has its own bespoke `*SurfaceComposition`
   * object instead of going through here. What is left (`QuickInfo`, `FilePreview`, `SymbolDefinition`, `StatusLine`,
-  * `DirectoryListing`, `ThemeCreator`, `FileSearch`, `Terminal`, `ShortcutsHelp`, `TabList`, `RecentFilesInMode`,
-  * `MarkdownPreview`, ...) has no such need: each one's row *content* is already fully resolved by its own dedicated
-  * `*ContentResolver` function (`PanelContentResolver`/`PickerContentResolver`/ `SurfaceContentResolver` itself) --
-  * this object only ever turns that already-per-kind-resolved header/rows/footer/keyHint into paint boxes, so giving
-  * each of these a same-shaped wrapper class here would just be this adapter renamed fourteen times over, not real
-  * bespoke composition logic. `TextPanelView`/`TextOverlayView` need no second, independently-settable
-  * rows/header/footer representation alongside `composition` either way -- every surface's content, composed via a
-  * bespoke object or via this generic one, is exactly one `ResolvedSurfaceComposition`.
+  * `DirectoryListing`, `ThemeCreator`, `Terminal`, `ShortcutsHelp`, `TabList`, `RecentFilesInMode`, `MarkdownPreview`,
+  * ...) has no such need: each one's row *content* is already fully resolved by its own dedicated `*ContentResolver`
+  * function (`PanelContentResolver`/`PickerContentResolver`/ `SurfaceContentResolver` itself) -- this object only ever
+  * turns that already-per-kind-resolved header/rows/footer/keyHint into paint boxes, so giving each of these a
+  * same-shaped wrapper class here would just be this adapter renamed fourteen times over, not real bespoke composition
+  * logic. `TextPanelView`/`TextOverlayView` need no second, independently-settable rows/header/footer representation
+  * alongside `composition` either way -- every surface's content, composed via a bespoke object or via this generic
+  * one, is exactly one `ResolvedSurfaceComposition`.
   *
   * Positions rows via the same `SurfaceFrameLayout.contentRowSlotsFor` geometry the pre-migration rows-only renderers
   * used, so this is a pure re-shaping of already-resolved content, not a second, independently-derived layout.
@@ -25,14 +25,14 @@ package com.serenity.ui.layout
   * through their composition today, so `hitRegions`/`focusOrder` are always empty here -- unlike a bespoke composition
   * (e.g. `ContextMenuSurfaceComposition`), which builds real hit regions for its selectable rows.
   *
-  * A named seam within that "no such need" set: `FileSearch` and `ThemeCreator` already share `ContextMenu`'s exact
-  * windowed-single-selection shape -- `PickerContentResolver` builds each of their rows from the same
+  * A named seam within that "no such need" set: `ThemeCreator` already shares `ContextMenu`'s exact
+  * windowed-single-selection shape -- `PickerContentResolver` builds its rows from the same
   * `SurfaceFrameLayout.itemWindow`/`adjustedSelectedIndex` pair `ContextMenuSurfaceComposition` uses, with the same
-  * header+footer framing. They go through this generic adapter today only because they're keyboard-driven;
-  * `ContextMenu` earned its own bespoke composition purely because it's mouse-invoked (right-click) and needs real
-  * `ActionItem` paint boxes and hit regions. If either of these ever needs mouse-click selection, give it its own
-  * `*SurfaceComposition` mirroring `ContextMenuSurfaceComposition` -- the composition boundary is already there in the
-  * shared windowed-selection shape -- rather than growing a kind-specific hit-testing branch inside this adapter.
+  * header+footer framing. It goes through this generic adapter today only because it's keyboard-driven; `ContextMenu`
+  * earned its own bespoke composition purely because it's mouse-invoked (right-click) and needs real `ActionItem` paint
+  * boxes and hit regions. If it ever needs mouse-click selection, give it its own `*SurfaceComposition` mirroring
+  * `ContextMenuSurfaceComposition` -- the composition boundary is already there in the shared windowed-selection shape
+  * -- rather than growing a kind-specific hit-testing branch inside this adapter.
   */
 object RowsSurfaceComposition:
 

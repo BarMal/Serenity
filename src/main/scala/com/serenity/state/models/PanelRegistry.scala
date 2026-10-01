@@ -49,7 +49,6 @@ object PanelId:
       case SurfaceContent.CommandPalette(_)         => None
       case SurfaceContent.CommandRunnerPeek(_)      => None
       case SurfaceContent.ThemeCreator(_)           => None
-      case SurfaceContent.FileSearch(_)             => None
       case SurfaceContent.ContextualToolbar(_)      => None
       case SurfaceContent.ContextMenu(_)            => None
       case SurfaceContent.CommentLens(_)            => None

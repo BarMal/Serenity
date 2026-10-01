@@ -8,8 +8,9 @@ import com.serenity.ui.widget.{Loadable, TextField, TextFieldOutcome, WidgetInpu
 /** Input for a [[Modal.ListPicker]]: arrows and Tab move the highlight, Enter runs the highlighted choice's command,
   * Escape closes it (then runs its `onDismiss`), and a click highlights the clicked choice (the mouse layer then
   * submits it). A picker with a query takes typing, deletes, paste and Left/Right as edits to it, and recomputes its
-  * items after each change. Each move of the highlight runs the newly highlighted choice's preview. A choice that waits
-  * on slow work keeps the picker open and pending on it; nothing else can be picked or typed meanwhile.
+  * items after each change. Each move of the highlight runs the newly highlighted choice's preview. Moving down off the
+  * last choice of a picker whose source has more loads the next batch instead of wrapping. A choice that waits on slow
+  * work keeps the picker open and pending on it; nothing else can be picked or typed meanwhile.
   */
 private[reducers] object ModalListPickerReducer:
   import ModalEventReducer.{currentModal, dismissToPane, updateModal}
@@ -29,7 +30,7 @@ private[reducers] object ModalListPickerReducer:
             ListPickerComposition
               .choiceIndex(actionId)
               .fold(ReducerResult.noEffects(currentState))(index =>
-                shown(id, picker, moved(picker, WidgetInput.Click(index, 1)), currentState)
+                shown(id, picker, moved(picker, WidgetInput.Click(index, 1), currentState), currentState)
               )
           case other =>
             updated(other, picker, currentState)
@@ -41,7 +42,7 @@ private[reducers] object ModalListPickerReducer:
       field <- picker.query
       input <- queryEditing(event, state)
     yield edited(picker, field, input, state)
-    edit.orElse(navigation(event).map(moved(picker, _)))
+    edit.orElse(navigation(event).map(moved(picker, _, state)))
 
   private def queryEditing(event: ModalInputEvent, state: AppState): Option[WidgetInput] =
     event match
@@ -67,12 +68,18 @@ private[reducers] object ModalListPickerReducer:
         ListPickerSearch.refreshed(picker.copy(query = Some(next)), state)
       case (next, _) => picker.copy(query = Some(next))
 
-  private def moved(picker: ListPicker, input: WidgetInput): ListPicker =
-    picker.items match
+  private def moved(picker: ListPicker, input: WidgetInput, state: AppState): ListPicker =
+    val grown = input match
+      case WidgetInput.Down if picker.hasMore && isOnLastChoice(picker) => ListPickerSearch.extended(picker, state)
+      case _                                                            => picker
+    grown.items match
       case Loadable.Ready(choices) =>
         val (updated, _) = choices.update(input, ListPickerComposition.VisibleRows)
-        picker.copy(items = Loadable.Ready(updated))
-      case _ => picker
+        grown.copy(items = Loadable.Ready(updated))
+      case _ => grown
+
+  private def isOnLastChoice(picker: ListPicker): Boolean =
+    picker.items.toOption.exists(choices => choices.selected.contains(choices.items.size - 1))
 
   /** Shows `after` in place of `before`, previewing its highlighted choice if the highlight changed. */
   private def shown(id: SurfaceId, before: ListPicker, after: ListPicker, state: AppState): ReducerResult =

@@ -19,7 +19,7 @@ import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.noop.NoOpLogger
 
 /** Exercises [[StateManagerSurfacePopupEffects]] on its own: the theme picker/creator, theme switching/reload, theme
-  * export, and the file-search overlay, each asserted through the state it lands (or the collaborator it calls) rather
+  * export, and Search in Open Files, each asserted through the state it lands (or the collaborator it calls) rather
   * than through a fully composed `StateManager`.
   */
 class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
@@ -156,18 +156,16 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
     } shouldBe 1
   }
 
-  it should "open the file-search overlay and focus it" in {
+  it should "open Search in Open Files, with an empty query, and focus it" in {
     val fixture = harness()
 
     fixture.popups.interpretThemeIntent(ThemeIntent.ReloadThemes, AppState.initial).unsafeRunSync()
     fixture.popups.openFileSearchEffect(AppState.initial).unsafeRunSync()
 
     val after = fixture.stateRef.get.unsafeRunSync()
-    after.runtime.uiSurfaces.map(_.content) match
-      case List(SurfaceContent.FileSearch(searchState)) =>
-        searchState.query shouldBe ""
-        after.persisted.focus shouldBe Focus.Surface(after.runtime.uiSurfaces.head.id)
-      case other => fail(s"Expected a single FileSearch surface, got $other")
+    after.runtime.uiSurfaces.map(_.content) shouldBe
+      List(SurfaceContent.ModalWorkflow(Modal.ListPicker(BufferTextSearch.picker)))
+    after.persisted.focus shouldBe Focus.Surface(after.runtime.uiSurfaces.head.id)
   }
 
   it should "load and store the available theme names on ReloadThemes" in {

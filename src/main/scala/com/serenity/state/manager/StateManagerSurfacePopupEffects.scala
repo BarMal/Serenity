@@ -8,6 +8,7 @@ import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{
   AppEffect,
+  ModalStateReducer,
   PopupSurfaceReducer,
   ReducerResult,
   SurfaceEffect,
@@ -18,7 +19,7 @@ import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.{AppThemeManager, ThemeConfig, ThemeConfigWriter}
 
 /** Floating popup surfaces triggered by commands or effects: the theme picker/creator, theme switching, theme export,
-  * and the file-search overlay.
+  * and Search in Open Files.
   */
 final private[manager] class StateManagerSurfacePopupEffects(
     currentState: IO[AppState],
@@ -134,4 +135,4 @@ final private[manager] class StateManagerSurfacePopupEffects(
         IO.unit
 
   private[manager] def openFileSearchEffect(state: AppState): IO[Unit] =
-    commitState(PopupSurfaceReducer.openFileSearch(state).state, state)
+    commitState(ModalStateReducer.show(Modal.ListPicker(BufferTextSearch.picker), state).state, state)

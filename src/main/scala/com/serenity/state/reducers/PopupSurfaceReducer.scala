@@ -6,7 +6,7 @@ import com.serenity.ui.layout.ListPickerComposition
 import com.serenity.ui.theme.config.ThemeCreatorState
 import com.serenity.ui.widget.Loadable
 
-/** Floating popups opened below the cursor by commands: the theme picker, the theme creator and file search. */
+/** Floating popups opened below the cursor by commands: the theme picker and the theme creator. */
 object PopupSurfaceReducer:
 
   /** A filterable list of `themeNames` that previews each theme as it is highlighted, opened on the current theme and
@@ -47,19 +47,6 @@ object PopupSurfaceReducer:
       stateWithId
         .copy(runtime = stateWithId.runtime.copy(uiSurfaces = withoutCreator :+ creator))
         .pushFocus(Focus.Surface(surfaceId))
-    )
-
-  def openFileSearch(state: AppState): ReducerResult =
-    openFocused(SurfaceContent.FileSearch(FileSearchState("", Nil, 0)), state)
-
-  private def openFocused(content: SurfaceContent, state: AppState): ReducerResult =
-    val (stateWithId, surfaceId) = state.allocateSurfaceId
-    val popup                    = belowCursor(surfaceId, content, state)
-    ReducerResult.noEffects(
-      stateWithId.copy(
-        persisted = stateWithId.persisted.copy(focus = Focus.Surface(surfaceId)),
-        runtime = stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces :+ popup)
-      )
     )
 
   private def belowCursor(surfaceId: SurfaceId, content: SurfaceContent, state: AppState): UiSurface =

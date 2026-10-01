@@ -6,7 +6,7 @@ import com.serenity.keystroke.events.Direction
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
 import com.serenity.session.SessionId
-import com.serenity.state.models.{CloseWorkflowChoice, PanelId, SurfaceId}
+import com.serenity.state.models.{BufferId, CloseWorkflowChoice, PanelId, SurfaceId}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.serenity.ui.layout.PanelPosition
 
@@ -62,6 +62,7 @@ enum NavigationIntent:
   case PreviousDocumentSymbol
   case NavigateBack
   case NavigateForward
+  case GoToBufferLine(bufferId: BufferId, line: Int)
 
 enum LspIntent:
   case RequestLspHover

@@ -4,7 +4,8 @@ import com.serenity.state.models.{ListChoice, ListPicker}
 import com.serenity.ui.widget.{Loadable, TextField}
 
 /** The one composition every [[ListPicker]] is drawn with: its title -- or what it is waiting on -- then its query if
-  * it has one, then its choices, or a row saying they are loading, there are none, or why they couldn't be read.
+  * it has one, then its choices, or a row saying they are loading, there are none, or why they couldn't be read. Under
+  * choices its source can still add to, a muted row counts what is loaded.
   */
 object ListPickerComposition:
 
@@ -36,7 +37,7 @@ object ListPickerComposition:
       case Loadable.Empty(text)  => messageRow(text, OverlayTone.Muted)
       case Loadable.Failed(text) => messageRow(text, OverlayTone.Error)
       case Loadable.Ready(choices) =>
-        choices.visible(VisibleRows).toList.zipWithIndex.map {
+        val choiceRows = choices.visible(VisibleRows).toList.zipWithIndex.map {
           case ((choice, index), row) =>
             ModalSurfaceComposition.textBox(
               rowText(choice),
@@ -46,11 +47,19 @@ object ListPickerComposition:
               actionId = Some(choiceActionId(index))
             )
         }
+        val moreRow = Option.when(picker.hasMore)(
+          ModalSurfaceComposition.textBox(
+            s"${choices.items.size} loaded, more available",
+            ModalSurfaceComposition.rowRect(bounds, firstChoiceRow + choiceRows.size),
+            tone = OverlayTone.Muted
+          )
+        )
+        choiceRows ++ moreRow
     ModalSurfaceComposition.plan(bounds, header :: queryRow ++ rows)
 
   def frameHeight(picker: ListPicker): Int =
     val rows = picker.items match
-      case Loadable.Ready(choices) => choices.items.size.min(VisibleRows)
+      case Loadable.Ready(choices) => choices.items.size.min(VisibleRows) + (if picker.hasMore then 1 else 0)
       case _                       => 1
     SurfaceFrameLayout.DefaultBorderCells * 2 + 1 + picker.query.size + rows
 

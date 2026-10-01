@@ -21,7 +21,6 @@ private[manager] object FocusHandlerRouting:
 
   private val commandRunner: LocalEventHandler     = new CommandRunnerComponent(registry)
   private val themeCreator: LocalEventHandler      = new ThemeCreatorComponent()
-  private val fileSearch: LocalEventHandler        = new FileSearchComponent()
   private val contextualToolbar: LocalEventHandler = new ContextualToolbarComponent
   private val commentLens: LocalEventHandler       = new CommentLensComponent()
   private val startupPage: LocalEventHandler       = new StartupPageComponent()
@@ -75,7 +74,6 @@ private[manager] object FocusHandlerRouting:
       case SurfaceContent.CommandPalette(_) =>
         commandRunner
       case SurfaceContent.ThemeCreator(_)      => themeCreator
-      case SurfaceContent.FileSearch(_)        => fileSearch
       case SurfaceContent.ContextualToolbar(_) => contextualToolbar
       case SurfaceContent.CommentLens(_)       => commentLens
       case SurfaceContent.StartPage(_)         => startupPage

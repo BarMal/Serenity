@@ -542,7 +542,6 @@ object AccessibilitySnapshot:
       case SurfaceContent.DirectoryListing(path, _, _) => s"Directory: ${path.getFileName}"
       case SurfaceContent.DirectoryTree(_, _)          => "Directory tree"
       case SurfaceContent.ThemeCreator(_)              => "Theme creator"
-      case SurfaceContent.FileSearch(_)                => "File search"
       case SurfaceContent.ContextualToolbar(_)         => "Contextual toolbar"
       case SurfaceContent.ContextMenu(menu)            => menu.title
       case SurfaceContent.CommentLens(_)               => "Comment"

@@ -119,9 +119,11 @@ class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTes
     val sm = createStateManager("CommandUsageMruFileSearch")
     sm.executeCommand(earlierCommand).unsafeRunSync()
 
-    runFromPalette(sm, "File Search", "file-search")
+    runFromPalette(sm, "Search in Open Files", "file-search")
 
     val state = sm.getCurrentState.unsafeRunSync()
     mostRecentCommand(state) shouldBe Some("file-search")
-    state.fileSearchSurface shouldBe defined
+    state.runtime.uiSurfaces.map(_.content).collect {
+      case SurfaceContent.ModalWorkflow(Modal.ListPicker(picker)) => picker.title
+    } shouldBe List("Search in Open Files")
   }

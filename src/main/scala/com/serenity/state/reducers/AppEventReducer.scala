@@ -127,9 +127,7 @@ object AppEventReducer:
       presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
     )
     val clearedSurfaces =
-      stateWithId.runtime.uiSurfaces.filterNot(current =>
-        isFileSearch(current.content) || isModalWorkflow(current.content)
-      )
+      stateWithId.runtime.uiSurfaces.filterNot(current => isModalWorkflow(current.content))
     stateWithId
       .copy(
         runtime = stateWithId.runtime.copy(
@@ -399,11 +397,6 @@ object AppEventReducer:
     surface.content match
       case SurfaceContent.CommandPalette(runner) => Some((surface, runner))
       case _                                     => None
-
-  private def isFileSearch(content: SurfaceContent): Boolean =
-    content match
-      case SurfaceContent.FileSearch(_) => true
-      case _                            => false
 
   private def isModalWorkflow(content: SurfaceContent): Boolean =
     content match

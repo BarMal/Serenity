@@ -270,12 +270,11 @@ object PanelStateReducer:
           SurfaceContent.Diagnostics(_, _) | SurfaceContent.MarkdownPreview(_, _) =>
         Some(surface.copy(presentation = SurfacePresentation.Docked, dismissOnMove = false))
       case SurfaceContent.StartPage(_) | SurfaceContent.CommandPalette(_) | SurfaceContent.CommandRunnerPeek(_) |
-          SurfaceContent.ThemeCreator(_) | SurfaceContent.FileSearch(_) | SurfaceContent.ContextualToolbar(_) |
-          SurfaceContent.ContextMenu(_) | SurfaceContent.CommentLens(_) | SurfaceContent.ModalWorkflow(_) |
-          SurfaceContent.QuickInfo(_) | SurfaceContent.FilePreview(_, _) | SurfaceContent.SymbolDefinition(_, _) |
-          SurfaceContent.StatusLine(_) | SurfaceContent.GhostOverlay(_, _) | SurfaceContent.ShortcutsHelp(_) |
-          SurfaceContent.TabList(_, _) | SurfaceContent.RecentFilesInMode(_, _) | SurfaceContent.TabBar(_, _) |
-          SurfaceContent.CompanionSprite =>
+          SurfaceContent.ThemeCreator(_) | SurfaceContent.ContextualToolbar(_) | SurfaceContent.ContextMenu(_) |
+          SurfaceContent.CommentLens(_) | SurfaceContent.ModalWorkflow(_) | SurfaceContent.QuickInfo(_) |
+          SurfaceContent.FilePreview(_, _) | SurfaceContent.SymbolDefinition(_, _) | SurfaceContent.StatusLine(_) |
+          SurfaceContent.GhostOverlay(_, _) | SurfaceContent.ShortcutsHelp(_) | SurfaceContent.TabList(_, _) |
+          SurfaceContent.RecentFilesInMode(_, _) | SurfaceContent.TabBar(_, _) | SurfaceContent.CompanionSprite =>
         None
 
   private def replaceSurface(surfaces: List[UiSurface], updated: UiSurface): List[UiSurface] =

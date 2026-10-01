@@ -494,14 +494,13 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
     received shouldBe List(effect)
   }
 
-  it should "open the file-search surface from a Surface effect" in {
+  it should "open Search in Open Files from a Surface effect" in {
     val fixture = harness()
 
     fixture.handlers.interpretEffect(AppEffect.Surface(SurfaceEffect.OpenFileSearch)).unsafeRunSync()
 
-    fixture.currentState.runtime.uiSurfaces.map(_.content) match
-      case List(SurfaceContent.FileSearch(_)) => succeed
-      case other                              => fail(s"Expected a single FileSearch surface, got $other")
+    fixture.currentState.runtime.uiSurfaces.map(_.content) shouldBe
+      List(SurfaceContent.ModalWorkflow(Modal.ListPicker(BufferTextSearch.picker)))
   }
 
   it should "persist a config update through to state and report the resulting config" in {

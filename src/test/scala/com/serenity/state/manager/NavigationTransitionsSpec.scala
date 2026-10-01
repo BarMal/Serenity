@@ -7,6 +7,7 @@ import com.serenity.config.MotionPreset
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AnimationEffect, AppEffect, ReducerResult}
+import com.serenity.ui.layout.SplitAxis
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -243,6 +244,81 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
     )
 
     NavigationTransitions.navigation(NavigationIntent.NavigateBack, state) shouldBe NavigationOutcome.Ignored(None)
+  }
+
+  // --- Go to a line of an open buffer ----------------------------------------------------------------------------
+
+  /** Buffer 0 in the active pane 0, cursor on its line 1; buffer 1 open in pane 1, or in no pane at all. */
+  private def twoBuffers(secondShown: Boolean): AppState =
+    val first  = stateWithBuffer(lines, cursor = CursorPosition(1, 0))
+    val second = Buffer.fromString(BufferId(1), "one\ntwo\nthree\nfour")
+    val opened = first.copy(
+      persisted = first.persisted.copy(
+        buffers = first.persisted.buffers + (BufferId(1) -> second),
+        bufferOrder = List(BufferId(0), BufferId(1))
+      ),
+      runtime = first.runtime.copy(nextBufferId = BufferId(2))
+    )
+    val split =
+      if secondShown then
+        EditorTransitions.paneInserted(opened, Some(PaneId(0)), Some(BufferId(1)), SplitAxis.Vertical)._1
+      else opened
+    split.copy(persisted =
+      split.persisted.copy(
+        layout = split.persisted.layout.copy(activeEditorPaneId = Some(PaneId(0))),
+        focus = Focus.EditorPane(PaneId(0))
+      )
+    )
+
+  private def goTo(bufferId: Int, line: Int): NavigationIntent =
+    NavigationIntent.GoToBufferLine(BufferId(bufferId), line)
+
+  it should "go to the line in the pane showing its buffer, focusing that pane and recording where it came from" in {
+    val result = validApplied(NavigationTransitions.navigation(goTo(1, 2), twoBuffers(secondShown = true)))
+
+    result.state.persisted.focus shouldBe Focus.EditorPane(PaneId(1))
+    result.state.persisted.layout.activeEditorPaneId shouldBe Some(PaneId(1))
+    result.state.activeCursorPosition shouldBe Some(CursorPosition(2, 0))
+    result.state.persisted.layout.editorPanes.get(PaneId(0)).flatMap(_.bufferId) shouldBe Some(BufferId(0))
+    result.state.runtime.navigation shouldBe NavigationHistory(
+      backStack = List(NavigationPoint(PaneId(0), BufferId(0), CursorPosition(1, 0))),
+      forwardStack = Nil
+    )
+  }
+
+  it should "show a buffer no pane shows in the active pane, at the line" in {
+    val result = validApplied(NavigationTransitions.navigation(goTo(1, 3), twoBuffers(secondShown = false)))
+
+    result.state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+    result.state.persisted.layout.editorPanes.get(PaneId(0)).flatMap(_.bufferId) shouldBe Some(BufferId(1))
+    result.state.activeCursorPosition shouldBe Some(CursorPosition(3, 0))
+  }
+
+  it should "go to a line of the active buffer, replacing every cursor with one at the line's start" in {
+    val multiCursor = stateWithBuffer(lines)
+    val state = multiCursor.copy(persisted =
+      multiCursor.persisted.copy(buffers =
+        multiCursor.persisted.buffers.updated(
+          BufferId(0),
+          buffer0(multiCursor).copy(editing = EditingState(List(CursorPosition(0, 2), CursorPosition(1, 3))))
+        )
+      )
+    )
+
+    val result = validApplied(NavigationTransitions.navigation(goTo(0, 2), state))
+
+    buffer0(result.state).editing.cursorPositions shouldBe List(CursorPosition(2, 0))
+  }
+
+  it should "land on the last line when the line is past the end of the buffer" in {
+    val result = validApplied(NavigationTransitions.navigation(goTo(1, 40), twoBuffers(secondShown = true)))
+
+    result.state.activeCursorPosition shouldBe Some(CursorPosition(3, 0))
+  }
+
+  it should "ignore a line of a buffer that is no longer open" in {
+    NavigationTransitions.navigation(goTo(7, 0), twoBuffers(secondShown = true)) shouldBe
+      NavigationOutcome.Ignored(Some("[CMD] Go to line requested for a buffer that is no longer open"))
   }
 
   // --- Comment lens ----------------------------------------------------------------------------------------------
