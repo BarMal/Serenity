@@ -8,9 +8,16 @@ import com.serenity.ui.layout.PanelPosition
   */
 private[command] object CommandRunnerSettingsPanelItems:
 
-  private[command] def workspaceLayoutItems(optionSelections: Map[String, Int]): List[CommandSurfaceItem] =
+  /** `offered` decides which panels are listed -- the settings tree passes whether each one's family fits the app mode.
+    */
+  private[command] def workspaceLayoutItems(
+    optionSelections: Map[String, Int],
+    offered: PanelId => Boolean = _ => true
+  ): List[CommandSurfaceItem] =
     val panelDefinitions =
-      PanelId.values.toList.map(id => (PanelRegistry.registrationFor(id).label, id, s"panel-${id.key}-pin"))
+      PanelId.values.toList
+        .filter(offered)
+        .map(id => (PanelRegistry.registrationFor(id).label, id, s"panel-${id.key}-pin"))
     val panelPinItems = panelDefinitions.map {
       case (label, id, optionId) =>
         panelPinOptionItem(optionId, label, id, optionSelections)

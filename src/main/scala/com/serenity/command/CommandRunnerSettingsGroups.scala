@@ -2,7 +2,7 @@ package com.serenity.command
 
 import com.serenity.config.{AppMode, StatusSegment}
 import com.serenity.frontend.FrontendCapabilities
-import com.serenity.state.models.Shell
+import com.serenity.state.models.{PanelRegistry, Shell}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.UiPreset
 
@@ -56,7 +56,10 @@ object CommandRunnerSettingsGroups:
       "settings-workspace-layout",
       "Panels",
       "Pin, focus, expand, and unpin panels",
-      CommandRunnerSettingsPanelItems.workspaceLayoutItems(optionSelections)
+      CommandRunnerSettingsPanelItems.workspaceLayoutItems(
+        optionSelections,
+        id => showAllSettingsRegardlessOfMode || PanelRegistry.registrationFor(id).family.modes.contains(appMode)
+      )
     )
     val textDisplayGroup = group(
       "settings-text-display",

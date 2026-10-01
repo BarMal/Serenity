@@ -93,7 +93,9 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
       "panel-outline-pin",
       "panel-comments-pin",
       "panel-diagnostics-pin",
-      "panel-markdown-preview-pin"
+      "panel-markdown-preview-pin",
+      "panel-project-output-pin",
+      "panel-companion-pin"
     )
     outline.selectedOption shouldBe "Right"
     outline.selectedIntent shouldBe Some(

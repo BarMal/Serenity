@@ -9,10 +9,10 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.{Diagnostic, DiagnosticSeverity, DirectoryTreeData, Location, Symbol}
 
 /** Keeps docked panels that derive from the active document -- outline, comments, diagnostics, markdown preview -- in
-  * step with it, and marks every directory a docked explorer shows but hasn't listed as loading, whatever docked it (a
-  * pin, a restored session, a UI preset) or expanded it. Runs on every commit, so no event source has to remember to
-  * refresh them, and recomputes a panel only when something it derives from actually changed: a panel's stored content
-  * is otherwise left exactly as it was.
+  * step with it, and project output in step with the latest task output, and marks every directory a docked explorer
+  * shows but hasn't listed as loading, whatever docked it (a pin, a restored session, a UI preset) or expanded it. Runs
+  * on every commit, so no event source has to remember to refresh them, and recomputes a panel only when something it
+  * derives from actually changed: a panel's stored content is otherwise left exactly as it was.
   *
   * Follows the active editor pane rather than the focused one, so focusing a panel doesn't empty it. An outline is
   * re-parsed synchronously only when the active document switches; an edit instead makes [[outlineRefreshDue]] ask for
@@ -107,6 +107,9 @@ private[manager] object PanelContentSync:
         Some(diagnosticsContent(state, source))
       case SurfaceContent.DirectoryTree(tree, selectedPath) if tree.awaitingListing.nonEmpty =>
         Some(SurfaceContent.DirectoryTree(tree.listingRequested(tree.awaitingListing), selectedPath))
+      case SurfaceContent.Terminal(_, _)
+          if state.runtime.projectTasks.terminalText != previous.runtime.projectTasks.terminalText =>
+        Some(ProjectTaskTransitions.terminalContent(state))
       case SurfaceContent.MarkdownPreview(bufferId, _) =>
         source
           .filter(buffer => buffer.id != bufferId && buffer.document.language.contains(LanguageId.Markdown))

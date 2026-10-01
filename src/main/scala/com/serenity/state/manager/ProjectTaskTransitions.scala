@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import com.serenity.project.{ProjectTaskCommand, ProjectTaskResult, ProjectTaskRunner, ProjectTaskTerminal}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{PinnedPanelContentReducer, ReducerResult}
+import com.serenity.state.reducers.ReducerResult
 import com.serenity.ui.layout.PanelPosition
 
 /** The pure state side of project tasks (#1697): which task owns the terminal panel, and how its output and its finish
@@ -10,8 +10,11 @@ import com.serenity.ui.layout.PanelPosition
   */
 private[manager] object ProjectTaskTransitions:
 
-  val TerminalPosition: PanelPosition = PanelPosition.Bottom
-  val TerminalSize: Int               = 14
+  val TerminalPosition: PanelPosition = PanelRegistry.registrationFor(PanelId.ProjectOutput).defaultPosition
+  val TerminalSize: Int = PanelRegistry.registrationFor(PanelId.ProjectOutput).defaultSize(TerminalPosition)
+
+  /** What the project output panel shows before any task has run. */
+  val NoOutputYet: String = "No project task has run yet."
 
   /** Records `command` as the running task under `id`, unless a task is already running or `id` is no longer the next
     * one -- another start won the race.
@@ -31,32 +34,35 @@ private[manager] object ProjectTaskTransitions:
   def acrossRestore(current: AppState): ProjectTasks =
     ProjectTasks(nextId = current.runtime.projectTasks.nextId)
 
+  /** Output and a finish only record the latest text: the project output panel follows it while docked
+    * (`PanelContentSync`), but a background result never re-shows a panel that was hidden.
+    */
   def outputArrived(state: AppState, id: Long, chunk: String): ReducerResult =
     current(state, id).fold(ReducerResult.noEffects(state)) { task =>
       val updated = task.copy(output = ProjectTaskRunner.appendOutputTail(task.output, chunk))
-      showTerminal(
-        withTasks(state, state.runtime.projectTasks.copy(running = Some(updated))),
-        ProjectTaskTerminal.running(task.command, updated.output)
+      ReducerResult.noEffects(
+        withTasks(
+          state,
+          state.runtime.projectTasks
+            .copy(running = Some(updated), terminalText = ProjectTaskTerminal.running(task.command, updated.output))
+        )
       )
     }
 
   def finished(state: AppState, id: Long, outcome: Either[Throwable, ProjectTaskResult]): ReducerResult =
     current(state, id).fold(ReducerResult.noEffects(state)) { task =>
-      val text = outcome.fold(ProjectTaskTerminal.failedToStart(task.command, _), ProjectTaskTerminal.completed)
-      showTerminal(released(state), text)
+      val text         = outcome.fold(ProjectTaskTerminal.failedToStart(task.command, _), ProjectTaskTerminal.completed)
+      val afterRelease = released(state)
+      ReducerResult.noEffects(withTasks(afterRelease, afterRelease.runtime.projectTasks.copy(terminalText = text)))
     }
+
+  /** The project output panel's content: the latest task output, or a note that no task has run. */
+  def terminalContent(state: AppState): SurfaceContent =
+    val text = Option(state.runtime.projectTasks.terminalText).filter(_.nonEmpty).getOrElse(NoOutputYet)
+    SurfaceContent.Terminal(text, text.length)
 
   private def current(state: AppState, id: Long): Option[RunningProjectTask] =
     state.runtime.projectTasks.running.filter(_.id == id)
-
-  // A result can re-pin a terminal panel closed some other way than unpinning it, so it animates like any other pin.
-  private def showTerminal(state: AppState, text: String): ReducerResult =
-    val pinned = PinnedPanelContentReducer.pinOrUpdateTerminal(text, TerminalPosition, TerminalSize, state)
-    val animated =
-      if AnimationChoreography.shouldApplySurfaceAnimationHooks(state) then
-        AnimationChoreography.animateSurfaceTransitions(state, pinned.state).getOrElse(pinned.state)
-      else pinned.state
-    pinned.copy(state = animated)
 
   private def withTasks(state: AppState, tasks: ProjectTasks): AppState =
     state.copy(runtime = state.runtime.copy(projectTasks = tasks))

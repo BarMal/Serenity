@@ -3,8 +3,9 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.IO
+import cats.syntax.all.*
 import com.serenity.command.ViewIntent
-import com.serenity.config.{AppConfig, MarkdownViewMode}
+import com.serenity.config.{AppConfig, MarkdownViewMode, VisualFlairLevel}
 import com.serenity.frontend.MarkdownPreviewWindowAvailability
 import com.serenity.io.FileUtils
 import com.serenity.keystroke.events.Event
@@ -29,7 +30,7 @@ final private[manager] class StateManagerPanelEffects(
     collapseExpandedPanel: () => IO[Unit],
     switchToPinnedPanel: PanelTarget => IO[Unit],
     resizePinnedPanel: (PanelTarget, Int) => IO[Unit],
-    cancelProjectTaskSilently: IO[Unit]
+    setCompanionSpriteEnabled: Boolean => IO[Unit]
 ):
 
   /** Floor for command/keyboard panel resize (issue #1310) -- prevents a panel from shrinking to zero or negative
@@ -109,17 +110,12 @@ final private[manager] class StateManagerPanelEffects(
       case MarkdownViewMode.Source | MarkdownViewMode.InlineLens =>
         updateConfigEffect >> commitApp(PanelTransitions.removePanel(PanelId.MarkdownPreview))
 
-  // Closing the project-task output panel while its task is still running must stop it -- otherwise the task's next
-  // output batch (`ProjectTaskTransitions`) re-pins the panel (issue #1294).
+  // The companion's visibility is the `ui.companion_sprite.enabled` setting, so closing it turns that off too --
+  // otherwise it would come back at the next start.
   private def unpinViewPanel(state: AppState, position: PanelPosition): IO[Unit] =
-    val closingRunningTaskPanel = state.pinnedSurfaces.exists { surface =>
-      surface.content match
-        case SurfaceContent.Terminal(_, _) =>
-          state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(position)
-        case _ => false
-    }
-    unpinPanel(PanelTarget.ByPosition(position)) >>
-      (if closingRunningTaskPanel then cancelProjectTaskSilently else IO.unit)
+    val closingCompanion =
+      state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(PanelId.Companion.surfaceId)).contains(position)
+    unpinPanel(PanelTarget.ByPosition(position)) >> setCompanionSpriteEnabled(false).whenA(closingCompanion)
 
   private[manager] def openMarkdownPreview: IO[Unit] =
     pinPanel(
@@ -134,9 +130,15 @@ final private[manager] class StateManagerPanelEffects(
   private def setPanelPin(id: PanelId, position: Option[PanelPosition]): IO[Unit] =
     position match
       case None =>
-        commitModel(PanelTransitions.panelChange(_, PanelTransitions.removePanel(id), refreshSelections = true))
+        commitModel(PanelTransitions.panelChange(_, PanelTransitions.removePanel(id), refreshSelections = true)) >>
+          setCompanionSpriteEnabled(false).whenA(id == PanelId.Companion)
       case Some(targetPosition) =>
-        pinPanel(id, targetPosition, refreshSelections = true)
+        currentState.flatMap { state =>
+          val showsCompanion =
+            id == PanelId.Companion && state.persisted.config.visualFlairLevel != VisualFlairLevel.Off
+          setCompanionSpriteEnabled(true)
+            .whenA(showsCompanion) >> pinPanel(id, targetPosition, refreshSelections = true)
+        }
 
   /** The command/keyboard resize entry point (issue #1310) onto the same `resizePinnedPanel` -- and, through it,
     * `PanelStateReducer.resize` -- the existing mouse-drag path already uses: one shared resize state fed by all three
