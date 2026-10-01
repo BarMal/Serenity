@@ -88,7 +88,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         uiSurfaces = List(
           UiSurface(
             SurfaceId("modal"),
-            SurfaceContent.ModalWorkflow(Modal.Custom("replace", "needle")),
+            SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine("42"))),
             SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
           )
         )
@@ -102,9 +102,9 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
 
     val overlay = overlays.belowCursor.get
     // Content is painted entirely from `ModalSurfaceComposition` (issue #819); `ModalSurfaceCompositionSpec` covers
-    // `Modal.Custom`'s actual paint content in detail.
+    // the text prompt's actual paint content in detail.
     overlay.composition shouldBe defined
-    overlay.composition.get.paintBoxes.flatMap(_.text) should contain("replace needle")
+    overlay.composition.get.paintBoxes.flatMap(_.text) should contain("Go to line 42")
     overlay.rect shouldBe layout.belowCursorOverlayRect.get
   }
 

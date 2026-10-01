@@ -26,7 +26,6 @@ object ModalSurfaceComposition:
       case Modal.TextPrompt(prompt)      => Some(textPromptPlan(prompt, frameRect))
       case Modal.Find(query, results, currentIndex) =>
         Some(findPlan(query, results, currentIndex, frameRect))
-      case Modal.Custom(name, input)       => Some(inputPlan(name, input, "custom-input", frameRect))
       case Modal.FileWorkflow(workflow)    => Some(filePlan(workflow, frameRect, modalBindings))
       case Modal.ReplaceWorkflow(workflow) => Some(replacePlan(workflow, frameRect, targetRows))
       case Modal.ListPicker(picker)        => Some(ListPickerComposition.forPicker(picker, frameRect))
@@ -37,7 +36,6 @@ object ModalSurfaceComposition:
     modal match
       case Modal.TextPrompt(_)      => 3
       case Modal.Find(_, Nil, _)    => 5
-      case Modal.Custom(_, _)       => 4
       case Modal.Find(_, _, _)      => 6
       case Modal.ListPicker(picker) => ListPickerComposition.frameHeight(picker)
       case Modal.ReplaceWorkflow(workflow) =>
@@ -67,7 +65,7 @@ object ModalSurfaceComposition:
     value: String,
     focusId: String,
     frameRect: LayoutRect,
-    caret: Option[Int] = None
+    caret: Int
   ): ResolvedSurfaceComposition =
     val content = SurfaceFrameLayout(frameRect).contentRect
     val bounds  = logicalRect(content.x, content.y, content.width, content.height)
@@ -76,7 +74,7 @@ object ModalSurfaceComposition:
       value,
       SurfaceFocusId(focusId),
       bounds.copy(height = math.min(1.0, bounds.height)),
-      caret = caret
+      caret = Some(caret)
     )
     plan(bounds, List(row))
 
@@ -85,7 +83,7 @@ object ModalSurfaceComposition:
       case TextPromptPurpose.GotoLine        => "goto-line"
       case TextPromptPurpose.SessionName(_)  => "session-name"
       case TextPromptPurpose.RenameSymbol(_) => "rename-symbol"
-    inputPlan(prompt.label, prompt.input, focusId, frameRect, Some(prompt.field.caret))
+    inputPlan(prompt.label, prompt.input, focusId, frameRect, prompt.field.caret)
 
   private def findPlan(
     query: String,

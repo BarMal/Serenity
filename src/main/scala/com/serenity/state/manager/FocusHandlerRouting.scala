@@ -13,9 +13,7 @@ import com.serenity.ui.layout.PanelPosition
   *
   * Components are stateless apart from their constructor arguments (verified by inspection: none of the
   * `state.components` classes hold a `var` or mutable field), so every handler built from fixed, constructor-time data
-  * is a `val`, built once and reused across every dispatch. The one exception is `ModalType.Custom`, whose `name` is
-  * open-ended, plugin/extension-defined data -- the same kind of per-instance identity that `Focus.EditorPane`'s
-  * `paneId` already carries -- so that branch alone builds a `ModalComponent` per dispatch.
+  * is a `val`, built once and reused across every dispatch.
   */
 private[manager] object FocusHandlerRouting:
 
@@ -68,7 +66,6 @@ private[manager] object FocusHandlerRouting:
       case ModalType.CloseWorkflow   => modalCloseWorkflow
       case ModalType.Confirm         => modalConfirm
       case ModalType.ListPicker      => modalListPicker
-      case custom: ModalType.Custom  => new ModalComponent(custom)
 
   /** The handler for a Floating-presented surface, keyed purely by its content. Blocking dialogs (#814) are no longer
     * `UiSurface`s at all -- they live on `runtime.modalStack` and focus as `Focus.Modal`, routed by

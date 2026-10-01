@@ -13,4 +13,3 @@ enum ModalType:
   case CloseWorkflow
   case Confirm
   case ListPicker
-  case Custom(name: String)

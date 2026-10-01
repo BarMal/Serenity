@@ -31,7 +31,6 @@ private[manager] object ModalMouseHitTesting:
       case Modal.CloseWorkflow(_)   => ModalType.CloseWorkflow
       case Modal.Confirm(_)         => ModalType.Confirm
       case Modal.ListPicker(_)      => ModalType.ListPicker
-      case Modal.Custom(name, _)    => ModalType.Custom(name)
 
   /** A click on an action button of the close prompt, a confirm prompt or a list picker also submits it: those have no
     * separate confirm step, so picking a choice is the decision itself.

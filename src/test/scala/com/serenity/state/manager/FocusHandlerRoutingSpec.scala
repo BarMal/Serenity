@@ -36,8 +36,6 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
 
   private val markdownPreview: SurfaceContent = SurfaceContent.MarkdownPreview(BufferId(1), "title")
   private val modalGotoLine: SurfaceContent   = SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine("")))
-  private val modalCustomA: SurfaceContent    = SurfaceContent.ModalWorkflow(Modal.Custom("plugin-a", ""))
-  private val modalCustomB: SurfaceContent    = SurfaceContent.ModalWorkflow(Modal.Custom("plugin-b", ""))
   private val terminal: SurfaceContent        = SurfaceContent.Terminal("buffer", 0)
   private val outline: SurfaceContent         = SurfaceContent.Outline(Nil, None)
   private val comments: SurfaceContent        = SurfaceContent.Comments(Nil, None)
@@ -120,12 +118,6 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
     first should be theSameInstanceAs second
   }
 
-  it should "build a fresh ModalComponent per Custom modal name, since the name space is open-ended" in {
-    val handler = FocusHandlerRouting.forSurfaceContent(modalCustomA)
-    handler.getClass.getSimpleName shouldBe "ModalComponent"
-    handler should not be theSameInstanceAs(FocusHandlerRouting.forSurfaceContent(modalCustomB))
-  }
-
   it should "route peek-style overlay content (info popups, previews, panel-only content, ghost overlays) to the pooled PeekOverlayComponent" in {
     val peekCases = List(
       quickInfo,
@@ -151,7 +143,7 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not allocate a new component on repeated dispatches for the same content case" in
-    allContent.filterNot(c => c == modalCustomA || c == modalCustomB).foreach { content =>
+    allContent.foreach { content =>
       withClue(s"content = $content: ") {
         val first  = FocusHandlerRouting.forSurfaceContent(content)
         val second = FocusHandlerRouting.forSurfaceContent(content)

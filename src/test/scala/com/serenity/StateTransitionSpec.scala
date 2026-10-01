@@ -65,7 +65,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       paneId = initialState.persisted.layout.editorPanes.keys.head
 
       // When: Show modal
-      modal = Modal.Custom("test-modal", "test")
+      modal = Modal.TextPrompt(TextPrompt.gotoLine("test"))
       _ <- stateManager.updateStateValidated(state => ModalStateReducer.show(modal, state).state)
 
       // Then: Focus should be on the modal surface
@@ -152,7 +152,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
     val pane1   = stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
     val pane2   = stateManager.createPane(Some(buffer2)).unsafeRunSync()
 
-    val modal = Modal.Custom("search-panel", "*.scala")
+    val modal = Modal.TextPrompt(TextPrompt.gotoLine("12"))
     val peekContent = PeekContent.DirectoryListing(
       java.nio.file.Paths.get("/src"),
       List(
