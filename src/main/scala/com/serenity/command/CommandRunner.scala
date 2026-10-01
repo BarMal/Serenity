@@ -461,6 +461,7 @@ object CommandRunner:
       "save-as"               -> HotkeyAction.SaveAs,
       "open"                  -> HotkeyAction.OpenFile,
       "file-search"           -> HotkeyAction.FileSearch,
+      "go-to-file"            -> HotkeyAction.GoToFile,
       "quit"                  -> HotkeyAction.Quit,
       "new"                   -> HotkeyAction.NewTab,
       "next-tab"              -> HotkeyAction.NextTab,

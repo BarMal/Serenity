@@ -193,6 +193,7 @@ private[manager] trait StateManagerEffectHandlersHarness:
       def openSaveSessionAsPrompt(state: AppState): IO[Unit]      = callsVar.update(_ :+ "openSaveSessionAsPrompt")
       def openSessionPicker(state: AppState, purpose: SessionListPurpose): IO[Unit] =
         callsVar.update(_ :+ s"openSessionPicker:$purpose")
+      def openFileFinder: IO[Unit] = callsVar.update(_ :+ "openFileFinder")
       def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit] =
         callsVar.update(_ :+ s"submitSessionNamePromptEffect:$surfaceId")
       def openNamedSession(sessionId: SessionId, state: AppState): IO[Unit] =

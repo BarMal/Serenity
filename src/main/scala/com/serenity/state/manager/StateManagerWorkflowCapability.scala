@@ -4,7 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.effect.{Deferred, IO}
 import com.serenity.command.SessionCommands
-import com.serenity.io.FileManager
+import com.serenity.io.{FileManager, FileUtils, ProjectFileWalker}
 import com.serenity.session.{SessionId, SessionManager, SessionPersistence}
 import com.serenity.state.core.EditorState
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
@@ -27,7 +27,7 @@ final private[manager] class StateManagerWorkflowCapability(
     lanes: EffectLanePort,
     filePersistence: StateManagerFilePersistence
 )(using balance: com.serenity.rope.Balance):
-  import StateManagerWorkflowCapability.SessionLane
+  import StateManagerWorkflowCapability.{ProjectFilesLane, SessionLane}
 
   private val close = new CloseWorkflowTransitions(operations.ensureCommandRunnerSurface)
 
@@ -350,6 +350,35 @@ final private[manager] class StateManagerWorkflowCapability(
         .state
     )
 
+  /** Opens the "Go to File" finder at once, still loading, over the docked explorer's root -- the project root "Open as
+    * root" sets -- or the working directory when no explorer is docked, and walks that root into it on the ProjectFiles
+    * lane.
+    */
+  private[manager] def openFileFinder: IO[Unit] =
+    modelCommit.currentState.flatMap { state =>
+      FileFinder.explorerRoot(state).fold(FileUtils.getCurrentDirectory)(IO.pure).flatMap { root =>
+        FileFinderTransitions.withFinderOpened(state, root).fold(IO.unit) { (opened, pickerId) =>
+          modelCommit.commitState(opened, state) >>
+            lanes.submitEffect(
+              ProjectFilesLane,
+              ProjectFileWalker
+                .list(root, FileFinder.MaxListedFiles)
+                .attempt
+                .flatMap(listing =>
+                  lanes.dispatchEffectResult(
+                    EffectResult.FilesListed(
+                      pickerId,
+                      root,
+                      listing.left.map(error => s"Couldn't list $root: ${error.getClass.getSimpleName}")
+                    ),
+                    _ => IO.unit
+                  )
+                )
+            )
+        }
+      }
+    }
+
   private[manager] def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
     SessionWorkflowTransitions.restoredIntoViewport(restoredState, currentState)
 
@@ -357,3 +386,5 @@ private[manager] object StateManagerWorkflowCapability:
 
   /** Named-session reads and writes, one at a time: a rename never overtakes the save it renames. */
   val SessionLane: Lane.Keyed = Lane.Keyed(LaneKey.Session, LanePolicy.Sequential)
+
+  val ProjectFilesLane: Lane.Keyed = Lane.Keyed(LaneKey.ProjectFiles, LanePolicy.SwitchLatest)

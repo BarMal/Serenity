@@ -289,8 +289,8 @@ final private[manager] class StateManagerEventPipeline(
       case NextTab     => tabCycled(SweepDirection.Backward)
       case PreviousTab => tabCycled(SweepDirection.Forward)
       case ToggleContextualToolbar | ToggleShortcutsHelp | ToggleTabList | ToggleRecentFilesInMode | NewTab |
-          FileSearch | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane | _: CloseTabById |
-          MoveTabLeft | MoveTabRight | _: FocusInDirection =>
+          FileSearch | GoToFile | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane |
+          _: CloseTabById | MoveTabLeft | MoveTabRight | _: FocusInDirection =>
         reduced
       case _: CursorPeekModifierPressed | _: CursorPeekModifierReleased | CursorPeekOtherKeyPressed =>
         applyReducerResult(EventPipelineTransitions.withCursorPeekAnchorResolved(result), prevState)

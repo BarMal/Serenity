@@ -287,6 +287,8 @@ final private[manager] class StateManagerEffectHandlers(
         loadFile(path)
       case FileIntent.OpenFileSearch =>
         interpretSurfaceEffect(SurfaceEffect.OpenFileSearch)
+      case FileIntent.GoToFile =>
+        openFileFinder
       case FileIntent.CloseAll =>
         beginCloseAction(CloseScope.All, state)
       case FileIntent.CloseOthers =>

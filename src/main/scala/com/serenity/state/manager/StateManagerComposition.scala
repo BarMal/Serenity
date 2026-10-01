@@ -230,6 +230,7 @@ private[manager] class StateManagerComposition(
       workflow.openNamedSession(sessionId, state)
     def openRenameSessionPrompt(sessionId: SessionId, currentName: String): IO[Unit] =
       workflow.openRenameSessionPrompt(sessionId, currentName)
+    def openFileFinder: IO[Unit] = workflow.openFileFinder
 
   private val effects = new StateManagerEffectHandlers(
     effectRuntimePort,

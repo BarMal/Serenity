@@ -92,7 +92,8 @@ private[command] object CommandRegistryFileCommands:
       CommandIntent.File(FileIntent.OpenFile),
       CommandCategory.File,
       label = "Open File"
-    )
+    ),
+    FileFinderCommands.goToFile
   )
 
   private[command] def sessionAndTabCommands: List[Command] = List(
