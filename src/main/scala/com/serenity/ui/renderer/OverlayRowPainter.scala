@@ -70,8 +70,11 @@ private[renderer] object OverlayRowPainter:
     val baseBg  = defaultBackground.getOrElse(theme.panel.background)
     val rowBackground =
       rowView.row.backgroundColor
-        .map(_.withAlpha(baseBg.getAlpha))
-        .getOrElse(if rowView.row.selected then theme.highlighted.background.withAlpha(baseBg.getAlpha) else baseBg)
+        .map(SurfaceMaterials.fadedWith(_, baseBg, theme))
+        .getOrElse(
+          if rowView.row.selected then SurfaceMaterials.fadedWith(theme.highlighted.background, baseBg, theme)
+          else baseBg
+        )
     val rowForeground =
       rowView.row.foregroundColor
         .map(_.withAlpha(baseFg.getAlpha))

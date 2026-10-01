@@ -57,7 +57,7 @@ object RendererGutter:
     val railRect = LayoutRect(railX, contentRect.y, placement.gutterWidthCells, contentRect.height)
     val snapshot = placement.snapshot
 
-    surface.setBackgroundColor(state.persisted.theme.panel.background)
+    surface.setBackgroundColor(gutterBackground(state, surface))
     surface.setForegroundColor(state.persisted.theme.muted)
     surface.fillRect(railRect.x, railRect.y, railRect.width, railRect.height, ' ')
 
@@ -92,9 +92,10 @@ object RendererGutter:
     lineRect: LayoutRect,
     dividerOnLeft: Boolean
   ): Unit =
-    val surface = context.surface
+    val surface    = context.surface
+    val background = gutterBackground(state, surface)
 
-    surface.setBackgroundColor(state.persisted.theme.panel.background)
+    surface.setBackgroundColor(background)
     surface.setForegroundColor(state.persisted.theme.muted)
 
     surface.fillRect(lineRect.x, lineRect.y, lineRect.width, lineRect.height, ' ')
@@ -112,7 +113,7 @@ object RendererGutter:
     val dividerX = if dividerOnLeft then lineRect.x else lineRect.x + lineRect.width - 1
     surface.setBackgroundColor(state.persisted.theme.panelBorder)
     surface.fillRect(dividerX, lineRect.y, 1, lineRect.height, ' ')
-    surface.setBackgroundColor(state.persisted.theme.panel.background)
+    surface.setBackgroundColor(background)
 
     diagnosticRows.foreach {
       case (rowY, diagnostics) =>
@@ -251,9 +252,12 @@ object RendererGutter:
         case Some(2) => state.persisted.theme.warning.foreground
         case _       => state.persisted.theme.muted
       surface.setForegroundColor(color)
-      surface.setBackgroundColor(state.persisted.theme.panel.background)
+      surface.setBackgroundColor(gutterBackground(state, surface))
       val markerX = if dividerOnLeft then lineRect.x else lineRect.x + lineRect.width - 1
       surface.putString(markerX, screenY, "!")
+
+  private def gutterBackground(state: AppState, surface: RenderSurface): java.awt.Color =
+    SurfaceMaterials.panelBackground(state.persisted.config, state.persisted.theme, surface)
 
   def renderGutter(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =
     contract.gutterRect.foreach { gutterRect =>
@@ -261,7 +265,7 @@ object RendererGutter:
       val surface = context.surface
       val colors  = state.persisted.config.statusLine.colors
 
-      surface.setBackgroundColor(colors.backgroundOr(state.persisted.theme.panel.background))
+      surface.setBackgroundColor(colors.backgroundOr(gutterBackground(state, surface)))
       surface.setForegroundColor(colors.foregroundOr(state.persisted.theme.panel.foreground))
       surface.fillRect(gutterRect.x, gutterRect.y, gutterRect.width, gutterRect.height, ' ')
 

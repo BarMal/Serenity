@@ -163,7 +163,8 @@ object ThemeConfig:
     * light or dark, the foreground and accent colors below lean brighter and more saturated than
     * `defaultDark`/`defaultLight` -- there is no guaranteed contrast baseline to rely on. Chrome surfaces that need
     * their own reliable contrast (panel, menu, highlighted, error, warning) keep ordinary opaque backgrounds, so they
-    * stay legible regardless of what shows through behind the editor.
+    * stay legible regardless of what shows through behind the editor. A terminal, which cannot paint the panel's
+    * translucent material, shows its own background there instead (`SurfaceMaterials.backdropShowingThrough`).
     */
   val transparent: ThemeConfig =
     ThemeConfig(

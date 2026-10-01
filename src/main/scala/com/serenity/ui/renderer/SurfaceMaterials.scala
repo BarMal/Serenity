@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Color
 
 import com.serenity.config.{AppConfig, BackgroundStyle, MaterialPreset, VisualFlairLevel}
+import com.serenity.ui.theme.ColorFormat.withAlpha
 import com.serenity.ui.theme.Theme
 
 object SurfaceMaterials:
@@ -30,6 +31,28 @@ object SurfaceMaterials:
       case VisualFlairLevel.Full    => presetRadius
       case VisualFlairLevel.Reduced => presetRadius / 2.0f
       case VisualFlairLevel.Off     => 0.0f
+
+  /** The theme's alpha-0 backdrop, when a panel on `surface` should show it rather than its own colour. A surface with
+    * no [[Effects]] (the terminal's cell grid) cannot paint translucently, so a translucent material over a theme
+    * background that is the terminal's own would otherwise paint as a solid block; the nearest it can express is that
+    * backdrop itself. A `Solid` material, or an opaque theme background, keeps the panel colour.
+    */
+  def backdropShowingThrough(config: AppConfig, theme: Theme, surface: RenderSurface): Option[Color] =
+    Option.when(surface.effects.isEmpty && theme.background.getAlpha == 0 && panelAlpha(config, theme) < 1.0f)(
+      theme.background
+    )
+
+  /** The colour a panel-material fill paints with on `surface`: the panel colour, or the backdrop showing through it.
+    */
+  def panelBackground(config: AppConfig, theme: Theme, surface: RenderSurface): Color =
+    backdropShowingThrough(config, theme, surface).getOrElse(theme.panel.background)
+
+  /** `color` faded to the alpha of the background it sits on, so a panel's highlights and tones fade with the panel.
+    * The theme's alpha-0 backdrop is not a fade but the terminal showing through (see [[backdropShowingThrough]]), so a
+    * colour over it keeps its own alpha.
+    */
+  def fadedWith(color: Color, base: Color, theme: Theme): Color =
+    if base.getAlpha == 0 && base == theme.background then color else color.withAlpha(base.getAlpha)
 
   def glassSheenBackground(config: AppConfig, theme: Theme): Option[Color] =
     Option.when(config.surfaceConfig.materialPreset == MaterialPreset.Crystal || isCustomGlass(config)) {
