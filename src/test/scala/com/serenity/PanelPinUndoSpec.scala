@@ -36,7 +36,8 @@ class PanelPinUndoSpec extends AnyFlatSpec with Matchers:
   behavior of "Undoing a panel pin/unpin via the kind-based entry point (ViewIntent)"
 
   it should "restore the previous (unpinned) state after undoing a pin" in new PanelFixture:
-    sm.executeCommand(viewCommand(ViewIntent.PinDiagnosticsPanel)).unsafeRunSync()
+    sm.executeCommand(viewCommand(ViewIntent.TogglePanelShown(com.serenity.state.models.PanelId.Diagnostics)))
+      .unsafeRunSync()
     sm.getCurrentState.unsafeRunSync().pinnedSurfaces.map(_.content) shouldBe List(SurfaceContent.Diagnostics(Nil))
 
     sm.applyEvent(Undo).unsafeRunSync()
@@ -44,7 +45,8 @@ class PanelPinUndoSpec extends AnyFlatSpec with Matchers:
     sm.getCurrentState.unsafeRunSync().pinnedSurfaces shouldBe Nil
 
   it should "redo back to the pinned state" in new PanelFixture:
-    sm.executeCommand(viewCommand(ViewIntent.PinDiagnosticsPanel)).unsafeRunSync()
+    sm.executeCommand(viewCommand(ViewIntent.TogglePanelShown(com.serenity.state.models.PanelId.Diagnostics)))
+      .unsafeRunSync()
     val afterPin = sm.getCurrentState.unsafeRunSync()
 
     sm.applyEvent(Undo).unsafeRunSync()
@@ -55,7 +57,8 @@ class PanelPinUndoSpec extends AnyFlatSpec with Matchers:
       afterPin.pinnedSurfaces.map(_.content)
 
   it should "restore the previously pinned surface after undoing an unpin" in new PanelFixture:
-    sm.executeCommand(viewCommand(ViewIntent.PinOutlinePanel)).unsafeRunSync()
+    sm.executeCommand(viewCommand(ViewIntent.TogglePanelShown(com.serenity.state.models.PanelId.Outline)))
+      .unsafeRunSync()
     val afterPin = sm.getCurrentState.unsafeRunSync()
 
     sm.executeCommand(viewCommand(ViewIntent.SetPanelPin(com.serenity.state.models.PanelId.Outline, None)))

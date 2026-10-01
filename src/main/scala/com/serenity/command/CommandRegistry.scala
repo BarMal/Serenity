@@ -173,7 +173,7 @@ object CommandRegistry:
       CommandRegistryNavigationCommands.navigationAndLspCommands ++
       CommandRegistryViewSettingsCommands.themeAndViewCommands ++
       CommandRegistryViewSettingsCommands.markdownAndModeCommands ++
-      CommandRegistryPanelProjectCommands.panelFocusCommands ++
+      CommandRegistryPanelProjectCommands.panelCommands ++
       CommandRegistryPanelProjectCommands.paneCommands ++
       CommandRegistryPanelProjectCommands.projectCommands ++
       builtInPresetCommands

@@ -1,7 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.animation.sprite.CompanionSpriteConfig
-import com.serenity.command.CommandFamily
+import com.serenity.command.{CommandFamily, FrontendSupport}
 import com.serenity.ui.layout.{PanelContent, PanelPosition}
 
 /** Every panel the workspace can show, registered once with [[PanelRegistry]] (issue #1310). An enum rather than an
@@ -72,9 +72,10 @@ enum PanelDisplayMode:
   case Corner
   case Dock
 
-/** One panel's identity, label, default placement, and the mode family it belongs to (it is offered only where that
-  * family's commands are). `paletteContent` builds the panel's floating presentation for [[PanelDisplayMode.Palette]];
-  * docked content is derived from state by the panel itself (`PanelContentSync`), so a dock-only panel has none.
+/** One panel's identity, label, default placement, and where it is offered: the mode family and frontends its commands
+  * belong to, and whether it can take keyboard focus. `paletteContent` builds the panel's floating presentation for
+  * [[PanelDisplayMode.Palette]]; docked content is derived from state by the panel itself (`PanelContentSync`), so a
+  * dock-only panel has none.
   */
 final case class PanelRegistration(
     id: PanelId,
@@ -83,6 +84,8 @@ final case class PanelRegistration(
     defaultPosition: PanelPosition,
     defaultSize: PanelPosition => Int,
     family: CommandFamily,
+    frontend: FrontendSupport,
+    focusable: Boolean,
     supportedModes: Set[PanelDisplayMode],
     paletteContent: Option[AppState => SurfaceContent] = None
 )
@@ -118,18 +121,30 @@ object PanelRegistry:
       case PanelId.Diagnostics =>
         docked(id, "Diagnostics", "Language-server and spelling issues in the active document.", PanelPosition.Bottom)
           .copy(family = CommandFamily.Code)
+      // Docked only in the GUI: a cell surface can't draw the rendered preview, so the terminal opens it in a window
+      // of its own instead (`ViewIntent.OpenMarkdownPreview`).
       case PanelId.MarkdownPreview =>
         docked(id, "Markdown Preview", "A rendered preview of the active Markdown document.", PanelPosition.Right)
-          .copy(defaultSize = _ => 40)
+          .copy(defaultSize = _ => 40, frontend = FrontendSupport.GuiOnly)
       case PanelId.ProjectOutput =>
         docked(id, "Project Output", "Output from the latest build, test or run task.", PanelPosition.Bottom)
           .copy(defaultSize = _ => 14, family = CommandFamily.Code)
       case PanelId.Companion =>
         docked(id, "Companion", "A small pixel-art companion that reacts to your typing.", PanelPosition.Right)
-          .copy(defaultSize = _ => CompanionSpriteConfig.DefaultSize)
+          .copy(defaultSize = _ => CompanionSpriteConfig.DefaultSize, focusable = false)
 
   private def docked(id: PanelId, label: String, description: String, position: PanelPosition): PanelRegistration =
-    PanelRegistration(id, label, description, position, sideOrEdgeSize, CommandFamily.Core, Set(PanelDisplayMode.Dock))
+    PanelRegistration(
+      id,
+      label,
+      description,
+      position,
+      sideOrEdgeSize,
+      CommandFamily.Core,
+      FrontendSupport.Both,
+      focusable = true,
+      Set(PanelDisplayMode.Dock)
+    )
 
   private def sideOrEdgeSize(position: PanelPosition): Int =
     position match

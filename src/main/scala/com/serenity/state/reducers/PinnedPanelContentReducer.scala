@@ -16,7 +16,7 @@ object PinnedPanelContentReducer:
   def pinOrUpdateTerminal(text: String, position: PanelPosition, size: Int, state: AppState): ReducerResult =
     val recorded =
       state.copy(runtime = state.runtime.copy(projectTasks = state.runtime.projectTasks.copy(terminalText = text)))
-    newestPinned(recorded)(isTerminal) match
+    newestPinned(recorded)(isPanel(PanelId.ProjectOutput)) match
       case Some(surface) =>
         val refreshed = surface.copy(content = SurfaceContent.Terminal(text, text.length))
         ReducerResult.noEffects(replaceSurface(recorded, refreshed))
@@ -26,7 +26,7 @@ object PinnedPanelContentReducer:
   def loadDirectoryTree(rootPath: Path, files: List[String], state: AppState): ReducerResult =
     val entries = files.map(name => DirEntry(rootPath.resolve(name), name, isDirectory = name.endsWith("/")))
     val tree    = DirectoryTreeData(rootPath, entries = Map(rootPath -> entries))
-    newestPinned(state)(isDirectoryTree) match
+    newestPinned(state)(isPanel(PanelId.Explorer)) match
       case Some(surface) =>
         ReducerResult.noEffects(replaceSurface(state, surface.copy(content = SurfaceContent.DirectoryTree(tree, None))))
       case None =>
@@ -69,7 +69,7 @@ object PinnedPanelContentReducer:
     }
 
   def selectFileInExplorer(targetPath: Path, state: AppState): ReducerResult =
-    val selected = newestPinned(state)(isDirectoryTree).flatMap { surface =>
+    val selected = newestPinned(state)(isPanel(PanelId.Explorer)).flatMap { surface =>
       surface.content match
         case SurfaceContent.DirectoryTree(tree, _) =>
           Some(replaceSurface(state, surface.copy(content = SurfaceContent.DirectoryTree(tree, Some(targetPath)))))
@@ -95,15 +95,8 @@ object PinnedPanelContentReducer:
   private def newestPinned(state: AppState)(matches: SurfaceContent => Boolean): Option[UiSurface] =
     state.pinnedSurfaces.reverse.find(surface => matches(surface.content))
 
-  private def isTerminal(content: SurfaceContent): Boolean =
-    content match
-      case SurfaceContent.Terminal(_, _) => true
-      case _                             => false
-
-  private def isDirectoryTree(content: SurfaceContent): Boolean =
-    content match
-      case SurfaceContent.DirectoryTree(_, _) => true
-      case _                                  => false
+  private def isPanel(id: PanelId)(content: SurfaceContent): Boolean =
+    PanelId.forContent(content).contains(id)
 
   private def replaceSurface(state: AppState, surface: UiSurface): AppState =
     state.copy(runtime =

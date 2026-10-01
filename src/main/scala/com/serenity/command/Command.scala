@@ -84,16 +84,17 @@ enum ViewIntent:
   case SplitPaneHorizontal
   case SplitPaneVertical
   case ClosePane
-  case FocusPanel(position: PanelPosition)
-  case UnpinPanel(position: PanelPosition)
-  case ExpandPanel(position: PanelPosition)
-  case CollapseExpandedPanel
+
+  /** Shows a hidden panel at its default edge, or hides a shown one wherever it is docked. */
+  case TogglePanelShown(id: PanelId)
+
+  /** Focuses a panel, showing it at its default edge first if it is hidden. */
+  case FocusPanel(id: PanelId)
+
+  /** Maximises the focused panel into the workspace, or restores the maximised one. */
+  case ToggleMaximisePanel
   case MovePanelEarlier(id: PanelId)
   case MovePanelLater(id: PanelId)
-  case PinExplorerPanel
-  case PinOutlinePanel
-  case PinCommentsPanel
-  case PinDiagnosticsPanel
   case SetPanelPin(id: PanelId, position: Option[PanelPosition])
   case OpenMarkdownPreview
   case SetMarkdownViewMode(mode: MarkdownViewMode)

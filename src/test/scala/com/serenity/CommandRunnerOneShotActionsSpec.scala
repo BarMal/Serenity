@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.command.*
 import com.serenity.lsp.config.LanguageId
+import com.serenity.state.models.{PanelId, PanelRegistry}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -46,12 +47,12 @@ class CommandRunnerOneShotActionsSpec extends AnyFlatSpec with Matchers:
     themeCommandNames.diff(commandNames) shouldBe empty
   }
 
-  // CommandRunnerSettingsItems.scala: the "Panel Actions" group's one-shot commands (per pinned edge).
+  // The former "Panel Actions" group's one-shot commands (focus, expand, unpin), now per panel rather than per edge.
   it should "already register every Panel Actions one-shot action (issue #1057)" in {
-    val panelActionCommandNames = for
-      position <- Set("left", "right", "bottom")
-      verb     <- Set("focus", "expand", "unpin")
-    yield s"$verb-$position-panel"
+    val panelActionCommandNames =
+      Set("toggle-maximise-panel") ++
+        PanelId.values.map(id => s"toggle-${id.key}-panel") ++
+        PanelId.values.filter(PanelRegistry.registrationFor(_).focusable).map(id => s"focus-${id.key}-panel")
     panelActionCommandNames.diff(commandNames) shouldBe empty
   }
 

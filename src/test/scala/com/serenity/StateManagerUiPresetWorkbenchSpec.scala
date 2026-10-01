@@ -258,7 +258,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
         SettingsIntent.General(GeneralSettingsIntent.SetBackgroundStyle(BackgroundStyle.GlassLike))
       ),
       CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextFontSize(18.0f))),
-      CommandIntent.View(ViewIntent.PinOutlinePanel)
+      CommandIntent.View(ViewIntent.TogglePanelShown(com.serenity.state.models.PanelId.Outline))
     ).zipWithIndex.foreach { (intent, index) =>
       sm.executeCommand(Command.typed(s"change-$index", "Change setting", intent, CommandCategory.Settings))
         .unsafeRunSync()

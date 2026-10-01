@@ -1,85 +1,43 @@
 package com.serenity.command
 
 import com.serenity.project.ProjectTaskKind
-import com.serenity.ui.layout.PanelPosition
+import com.serenity.state.models.{PanelId, PanelRegistry}
 
-/** Pinned-panel focus/expand/unpin commands and project-task commands. Split out of `CommandRegistry.defaultCommands`
-  * to keep both under the architecture size targets -- see that method's doc.
+/** Panel, pane and project-task commands. Split out of `CommandRegistry.defaultCommands` to keep both under the
+  * architecture size targets -- see that method's doc.
   */
 private[command] object CommandRegistryPanelProjectCommands:
 
-  private[command] def panelFocusCommands: List[Command] = List(
-    Command.typed(
-      "focus-left-panel",
-      "Focus the left pinned panel.",
-      CommandIntent.View(ViewIntent.FocusPanel(PanelPosition.Left)),
+  /** One show/hide and one focus command per registered panel (none to focus a panel that can't take focus), plus one
+    * to maximise or restore the focused panel -- generated from the registry, so a new panel gets them by registering.
+    */
+  private[command] def panelCommands: List[Command] =
+    PanelId.values.toList.flatMap { id =>
+      val registration = PanelRegistry.registrationFor(id)
+      Command.typed(
+        s"toggle-${id.key}-panel",
+        s"Show or hide the ${registration.label} panel. ${registration.description}",
+        CommandIntent.View(ViewIntent.TogglePanelShown(id)),
+        CommandCategory.View,
+        label = s"Show/Hide ${registration.label}"
+      ) :: Option
+        .when(registration.focusable)(
+          Command.typed(
+            s"focus-${id.key}-panel",
+            s"Focus the ${registration.label} panel, showing it if it is hidden.",
+            CommandIntent.View(ViewIntent.FocusPanel(id)),
+            CommandCategory.View,
+            label = s"Focus ${registration.label}"
+          )
+        )
+        .toList
+    } :+ Command.typed(
+      "toggle-maximise-panel",
+      "Maximise the focused panel into the workspace, or restore the maximised panel.",
+      CommandIntent.View(ViewIntent.ToggleMaximisePanel),
       CommandCategory.View,
-      label = "Focus Left Panel"
-    ),
-    Command.typed(
-      "focus-right-panel",
-      "Focus the right pinned panel.",
-      CommandIntent.View(ViewIntent.FocusPanel(PanelPosition.Right)),
-      CommandCategory.View,
-      label = "Focus Right Panel"
-    ),
-    Command.typed(
-      "focus-bottom-panel",
-      "Focus the bottom pinned panel.",
-      CommandIntent.View(ViewIntent.FocusPanel(PanelPosition.Bottom)),
-      CommandCategory.View,
-      label = "Focus Bottom Panel"
-    ),
-    Command.typed(
-      "unpin-left-panel",
-      "Unpin the left panel.",
-      CommandIntent.View(ViewIntent.UnpinPanel(PanelPosition.Left)),
-      CommandCategory.View,
-      label = "Unpin Left Panel"
-    ),
-    Command.typed(
-      "unpin-right-panel",
-      "Unpin the right panel.",
-      CommandIntent.View(ViewIntent.UnpinPanel(PanelPosition.Right)),
-      CommandCategory.View,
-      label = "Unpin Right Panel"
-    ),
-    Command.typed(
-      "unpin-bottom-panel",
-      "Unpin the bottom panel.",
-      CommandIntent.View(ViewIntent.UnpinPanel(PanelPosition.Bottom)),
-      CommandCategory.View,
-      label = "Unpin Bottom Panel"
-    ),
-    Command.typed(
-      "expand-left-panel",
-      "Expand the left pinned panel into the editor workspace.",
-      CommandIntent.View(ViewIntent.ExpandPanel(PanelPosition.Left)),
-      CommandCategory.View,
-      label = "Expand Left Panel"
-    ),
-    Command.typed(
-      "expand-right-panel",
-      "Expand the right pinned panel into the editor workspace.",
-      CommandIntent.View(ViewIntent.ExpandPanel(PanelPosition.Right)),
-      CommandCategory.View,
-      label = "Expand Right Panel"
-    ),
-    Command.typed(
-      "expand-bottom-panel",
-      "Expand the bottom pinned panel into the editor workspace.",
-      CommandIntent.View(ViewIntent.ExpandPanel(PanelPosition.Bottom)),
-      CommandCategory.View,
-      label = "Expand Bottom Panel"
-    ),
-    Command.typed(
-      "collapse-expanded-panel",
-      "Collapse the expanded panel back to its pinned position.",
-      CommandIntent.View(ViewIntent.CollapseExpandedPanel),
-      CommandCategory.View,
-      label = "Collapse Expanded Panel"
+      label = "Maximise/Restore Panel"
     )
-  )
 
   private[command] def paneCommands: List[Command] = List(
     Command.typed(

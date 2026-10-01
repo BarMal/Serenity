@@ -1,7 +1,7 @@
 package com.serenity.command
 
 import com.serenity.config.AppMode
-import com.serenity.state.models.{EditingContext, Shell}
+import com.serenity.state.models.{EditingContext, PanelId, PanelRegistry, Shell}
 
 /** Which workspace mode a command belongs to. */
 enum CommandFamily(val modes: Set[AppMode]):
@@ -51,7 +51,9 @@ object CommandScope:
     * stay possible from anywhere -- a GUI-only setting edited from the terminal, or switching the app mode itself.
     */
   def of(intent: CommandIntent): CommandScope =
-    CommandScope(familyOf(intent), FrontendSupport.Both)
+    intent match
+      case CommandIntent.View(view) => viewScope(view)
+      case other                    => CommandScope(familyOf(other), FrontendSupport.Both)
 
   def bufferRequirementOf(intent: CommandIntent): BufferRequirement =
     intent match
@@ -65,7 +67,7 @@ object CommandScope:
       case CommandIntent.RichText(_) | CommandIntent.Darlings(_) | CommandIntent.Placeholders(_) =>
         CommandFamily.Prose
       case CommandIntent.Edit(edit) => editFamily(edit)
-      case CommandIntent.View(view) => viewFamily(view)
+      case CommandIntent.View(view) => viewScope(view).family
       case CommandIntent.Lifecycle(_) | CommandIntent.File(_) | CommandIntent.Comments(_) |
           CommandIntent.Navigation(_) | CommandIntent.Theme(_) | CommandIntent.Session(_) |
           CommandIntent.Keybindings(_) | CommandIntent.UiPresets(_) | CommandIntent.Settings(_) =>
@@ -79,15 +81,24 @@ object CommandScope:
           EditIntent.SelectAll | EditIntent.Undo | EditIntent.Redo =>
         CommandFamily.Core
 
-  private def viewFamily(intent: ViewIntent): CommandFamily =
+  /** A panel command is offered where its panel is (the panel's registration); hiding one never is refused, so a panel
+    * left docked in a mode it doesn't belong to can always be put away.
+    */
+  private def viewScope(intent: ViewIntent): CommandScope =
     intent match
-      case ViewIntent.PinDiagnosticsPanel => CommandFamily.Code
+      case ViewIntent.TogglePanelShown(id)     => panelScope(id)
+      case ViewIntent.FocusPanel(id)           => panelScope(id)
+      case ViewIntent.MovePanelEarlier(id)     => panelScope(id)
+      case ViewIntent.MovePanelLater(id)       => panelScope(id)
+      case ViewIntent.SetPanelPin(id, Some(_)) => panelScope(id)
+      case ViewIntent.SetPanelPin(_, None)     => core
       case ViewIntent.NextTab | ViewIntent.PreviousTab | ViewIntent.SplitPaneHorizontal | ViewIntent.SplitPaneVertical |
-          ViewIntent.ClosePane | ViewIntent.FocusPanel(_) | ViewIntent.UnpinPanel(_) | ViewIntent.ExpandPanel(_) |
-          ViewIntent.CollapseExpandedPanel | ViewIntent.MovePanelEarlier(_) | ViewIntent.MovePanelLater(_) |
-          ViewIntent.PinExplorerPanel | ViewIntent.PinOutlinePanel | ViewIntent.PinCommentsPanel |
-          ViewIntent.SetPanelPin(_, _) | ViewIntent.OpenMarkdownPreview | ViewIntent.SetMarkdownViewMode(_) |
-          ViewIntent.SetDefaultDocumentMode(_) | ViewIntent.SetAppMode(_) |
+          ViewIntent.ClosePane | ViewIntent.ToggleMaximisePanel | ViewIntent.OpenMarkdownPreview |
+          ViewIntent.SetMarkdownViewMode(_) | ViewIntent.SetDefaultDocumentMode(_) | ViewIntent.SetAppMode(_) |
           ViewIntent.SetShowAllSettingsRegardlessOfMode(_) | ViewIntent.ToggleShortcutsHelp | ViewIntent.ToggleTabList |
           ViewIntent.ToggleRecentFilesInMode | ViewIntent.TogglePanel(_) | ViewIntent.SetPanelSize(_, _) =>
-        CommandFamily.Core
+        core
+
+  private def panelScope(id: PanelId): CommandScope =
+    val registration = PanelRegistry.registrationFor(id)
+    CommandScope(registration.family, registration.frontend)
