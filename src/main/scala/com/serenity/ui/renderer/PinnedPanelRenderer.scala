@@ -80,7 +80,8 @@ object PinnedPanelRenderer:
     textInsetPx: Double
   ): Unit =
     val titleRect = panel.titleRect
-    val title     = panel.title.take(titleRect.width).padTo(titleRect.width, ' ')
+    // The title sits on the frame's top edge, so it is not padded out: padding would blank the rest of that edge.
+    val title = panel.title.take(titleRect.width)
     if titleRect.width > 0 then
       surface.pixels.withPixelTranslation(textInsetPx, 0.0) {
         renderAnimatedText(surface, titleRect.x, titleRect.y, title, 0, theme.panel.foreground, animationState)
@@ -107,7 +108,11 @@ object PinnedPanelRenderer:
         val padded = text.take(width).padTo(width, ' ')
         val (foreground, background) =
           if box.selected then (theme.highlighted.foreground, theme.highlighted.background)
-          else (theme.panel.foreground, theme.panel.background)
+          else
+            (
+              OverlaySegmentRowRenderer.toneForeground(box.tone, theme).getOrElse(theme.panel.foreground),
+              OverlaySegmentRowRenderer.toneBackground(box.tone, theme).getOrElse(theme.panel.background)
+            )
         surface.setForegroundColor(foreground)
         surface.setBackgroundColor(background)
         if box.selected then

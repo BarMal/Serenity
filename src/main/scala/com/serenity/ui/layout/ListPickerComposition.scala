@@ -26,13 +26,13 @@ object ListPickerComposition:
       picker.pending.flatMap(_.waitingLabel).getOrElse(picker.title),
       ModalSurfaceComposition.rowRect(bounds, 0)
     )
-    def messageRow(text: String) = List(
-      ModalSurfaceComposition.textBox(text, ModalSurfaceComposition.rowRect(bounds, 1))
+    def messageRow(text: String, tone: OverlayTone) = List(
+      ModalSurfaceComposition.textBox(text, ModalSurfaceComposition.rowRect(bounds, 1), tone = tone)
     )
     val rows = picker.items match
-      case Loadable.Loading(_)   => messageRow("Loading…")
-      case Loadable.Empty(text)  => messageRow(text)
-      case Loadable.Failed(text) => messageRow(text)
+      case Loadable.Loading(_)   => messageRow("Loading…", OverlayTone.Muted)
+      case Loadable.Empty(text)  => messageRow(text, OverlayTone.Muted)
+      case Loadable.Failed(text) => messageRow(text, OverlayTone.Error)
       case Loadable.Ready(choices) =>
         choices.visible(VisibleRows).toList.zipWithIndex.map {
           case ((choice, index), row) =>

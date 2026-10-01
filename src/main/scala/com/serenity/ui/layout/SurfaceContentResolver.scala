@@ -16,6 +16,7 @@ enum OverlayTone:
   case Normal
   case Muted
   case Error
+  case Accent
 
 enum OverlayRowLayout:
   case Plain

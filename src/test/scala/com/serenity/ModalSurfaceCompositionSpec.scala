@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import com.serenity.ui.widget.Loadable
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -432,4 +433,42 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     val picker = ListPicker.of("Open session", List(slow), "None").copy(pending = Some(slow))
 
     planFor(Modal.ListPicker(picker)).paintBoxes.flatMap(_.text).headOption shouldBe Some("Opening Draft…")
+  }
+
+  it should "mute its loading and empty rows, and paint a failure row in the error tone" in {
+    def messageTone(picker: ListPicker): Option[OverlayTone] =
+      planFor(Modal.ListPicker(picker)).paintBoxes.lift(1).map(_.tone)
+
+    messageTone(ListPicker.loading("Open session")) shouldBe Some(OverlayTone.Muted)
+    messageTone(ListPicker.of("Open session", Nil, "No sessions")) shouldBe Some(OverlayTone.Muted)
+    messageTone(ListPicker("Open session", Loadable.Failed("unreadable"))) shouldBe Some(OverlayTone.Error)
+  }
+
+  it should "leave its title and its choices in the normal tone" in {
+    val picker = ListPicker.of("Open session", List(pickerChoice("Draft"), pickerChoice("Notes")), "None")
+
+    planFor(Modal.ListPicker(picker)).paintBoxes.map(_.tone).distinct shouldBe List(OverlayTone.Normal)
+  }
+
+  "A confirm prompt" should "tone each choice by its emphasis: primary as accent, danger as error" in {
+    def choiceTones(prompt: ConfirmPrompt): List[(String, OverlayTone)] =
+      planFor(Modal.Confirm(prompt)).paintBoxes.filter(_.actionId.nonEmpty).flatMap(box => box.text.map(_ -> box.tone))
+
+    choiceTones(ConfirmPrompt.closeUnsaved("notes.scala")) shouldBe List(
+      "Save"         -> OverlayTone.Accent,
+      "Close Anyway" -> OverlayTone.Error,
+      "Cancel"       -> OverlayTone.Normal
+    )
+    choiceTones(ConfirmPrompt.reloadConflict(BufferId(7), "notes.md")) shouldBe List(
+      "Reload from disk" -> OverlayTone.Normal,
+      "Overwrite"        -> OverlayTone.Error,
+      "Cancel"           -> OverlayTone.Normal
+    )
+  }
+
+  it should "leave its title and message in the normal tone" in {
+    planFor(Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala"))).paintBoxes
+      .filter(_.actionId.isEmpty)
+      .map(_.tone)
+      .distinct shouldBe List(OverlayTone.Normal)
   }

@@ -12,6 +12,20 @@ import com.serenity.ui.theme.Theme
   */
 object OverlaySegmentRowRenderer:
 
+  /** The foreground a tone paints in, or `None` for the surface's own default. */
+  def toneForeground(tone: OverlayTone, theme: Theme): Option[Color] =
+    tone match
+      case OverlayTone.Normal => None
+      case OverlayTone.Muted  => Some(theme.muted)
+      case OverlayTone.Error  => Some(theme.error.foreground)
+      case OverlayTone.Accent => Some(theme.accent)
+
+  /** The background a tone paints in, or `None` for the surface's own default. */
+  def toneBackground(tone: OverlayTone, theme: Theme): Option[Color] =
+    tone match
+      case OverlayTone.Error                                           => Some(theme.error.background)
+      case OverlayTone.Normal | OverlayTone.Muted | OverlayTone.Accent => None
+
   def renderDistributedRow(
     surface: RenderSurface,
     x: Int,
@@ -282,17 +296,14 @@ object OverlaySegmentRowRenderer:
           .map(_.withAlpha(defaultBackground.getAlpha))
           .getOrElse(
             if segment.selected then theme.highlighted.background.withAlpha(defaultBackground.getAlpha)
-            else if segment.tone == OverlayTone.Error then theme.error.background.withAlpha(defaultBackground.getAlpha)
-            else defaultBackground
+            else toneBackground(segment.tone, theme).fold(defaultBackground)(_.withAlpha(defaultBackground.getAlpha))
           )
       val segmentForeground =
         segment.foregroundColor
           .map(_.withAlpha(defaultForeground.getAlpha))
           .getOrElse(
             if segment.selected then theme.highlighted.foreground.withAlpha(defaultForeground.getAlpha)
-            else if segment.tone == OverlayTone.Muted then theme.muted.withAlpha(defaultForeground.getAlpha)
-            else if segment.tone == OverlayTone.Error then theme.error.foreground.withAlpha(defaultForeground.getAlpha)
-            else defaultForeground
+            else toneForeground(segment.tone, theme).fold(defaultForeground)(_.withAlpha(defaultForeground.getAlpha))
           )
       surface.setForegroundColor(segmentForeground)
       surface.setBackgroundColor(segmentBackground)

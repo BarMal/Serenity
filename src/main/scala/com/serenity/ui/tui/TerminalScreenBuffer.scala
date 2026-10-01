@@ -76,6 +76,8 @@ final class TerminalScreenBuffer(val width: Int, val height: Int):
         TerminalCell(char.toInt, fgColorRef.get(), bgColorRef.get(), activeStyleRef.get(), CellSpan.Narrow)
       )
 
+  def backgroundAt(x: Int, y: Int): Option[Color] = Option.when(inBounds(x, y))(grid(y)(x).bg)
+
   def snapshot: TerminalFrame = TerminalFrame(width, height, grid.map(_.toVector).toVector)
 
   /** Rows written with a value different from what they already held, since the last call to this method -- then reset

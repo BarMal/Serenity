@@ -209,8 +209,10 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
 
   // -- RoundedRectDrawing -----------------------------------------------------------------------------------------
 
-  // Borders and drop shadows are pixel-only chrome with no sub-cell geometry to draw them with; genuinely optional
-  // decoration per RenderSurface's own doc on `roundedRects`, so panels/overlays still read correctly without them.
+  /** Draws the frame in the rect's outermost cells -- the border cell `SurfaceFrameLayout` reserves -- with rounded
+    * box-drawing corners standing in for the arc. Only the foreground changes: each cell keeps the background already
+    * painted under it, so the frame sits on the panel's own material.
+    */
   override def strokeRoundRect(
     x: Int,
     y: Int,
@@ -219,8 +221,19 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
     arcPx: Int,
     color: Color,
     strokeWidth: Float = 1.5f
-  ): Unit = ()
+  ): Unit =
+    if width >= 2 && height >= 2 then
+      val previousForeground = screenBuffer.getForegroundColor
+      val previousBackground = screenBuffer.getBackgroundColor
+      screenBuffer.setForegroundColor(color)
+      TerminalRenderSurface.frameGlyphs(x, y, width, height).foreach { glyph =>
+        screenBuffer.setBackgroundColor(screenBuffer.backgroundAt(glyph.x, glyph.y).getOrElse(previousBackground))
+        screenBuffer.putString(glyph.x, glyph.y, glyph.char.toString)
+      }
+      screenBuffer.setForegroundColor(previousForeground)
+      screenBuffer.setBackgroundColor(previousBackground)
 
+  // A drop shadow needs sub-cell blur a cell grid cannot express; optional decoration per `roundedRects`'s doc.
   override def drawRoundRectShadow(x: Int, y: Int, width: Int, height: Int, arcPx: Int, color: Color): Unit = ()
 
   /** The one piece of rounded-rect chrome a cell grid *can* express: a rectangular clip. The arc radius is ignored --
@@ -234,6 +247,22 @@ object TerminalRenderSurface:
     def contains(col: Int, row: Int): Boolean = col >= x0 && col < x1 && row >= y0 && row < y1
 
   final private case class Caret(cellX: Int, cellY: Int, style: HardwareCursorStyle)
+
+  final private case class FrameGlyph(x: Int, y: Int, char: Char)
+
+  private def frameGlyphs(x: Int, y: Int, width: Int, height: Int): List[FrameGlyph] =
+    val right       = x + width - 1
+    val bottom      = y + height - 1
+    val edgeColumns = (x + 1 until right).toList
+    val sideRows    = (y + 1 until bottom).toList
+    List(
+      FrameGlyph(x, y, '╭'),
+      FrameGlyph(right, y, '╮'),
+      FrameGlyph(x, bottom, '╰'),
+      FrameGlyph(right, bottom, '╯')
+    ) ++
+      edgeColumns.flatMap(col => List(FrameGlyph(col, y, '─'), FrameGlyph(col, bottom, '─'))) ++
+      sideRows.flatMap(row => List(FrameGlyph(x, row, '│'), FrameGlyph(right, row, '│')))
 
   private val Esc: Char = 0x1b.toChar
 
