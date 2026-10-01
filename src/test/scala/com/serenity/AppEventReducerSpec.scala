@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.command.{CommandRegistry, CommandSurfaceItem}
+import com.serenity.command.{CommandIntent, CommandRegistry, CommandSurfaceItem, ViewIntent}
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
@@ -117,7 +117,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     editorEntries shouldBe 1
   }
 
-  it should "hydrate workspace panel pin options from current pinned surfaces" in {
+  it should "show where panels are pinned when the Panels settings open their arrangement" in {
     val base = DockedPanelFixtures.dock(
       AppState.initial.copy(persisted = AppState.initial.persisted.copy(focus = Focus.EditorPane(PaneId(0)))),
       SurfaceId("outline-panel"),
@@ -139,11 +139,9 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
       .flatMap(group => group :: descendants(group))
       .collectFirst { case group: CommandSurfaceItem.GroupItem if group.id == "settings-workspace-layout" => group }
       .getOrElse(fail("Expected workspace layout group"))
-    val outlineOption = descendants(workspace)
-      .collectFirst { case option: CommandSurfaceItem.OptionItem if option.id == "panel-outline-pin" => option }
-      .getOrElse(fail("Expected outline pin option"))
-
-    outlineOption.selectedOption shouldBe "Right"
+    descendants(workspace).collect { case CommandSurfaceItem.CommandItem(command, _) => command.intent } shouldBe
+      List(CommandIntent.View(ViewIntent.ArrangePanels))
+    PanelArrangement.of(opened).panelsIn(ArrangementSection.Right) shouldBe Vector(PanelId.Outline)
   }
 
   it should "create a new buffer and focus it on new tab" in {

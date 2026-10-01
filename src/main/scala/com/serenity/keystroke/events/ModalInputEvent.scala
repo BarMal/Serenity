@@ -8,11 +8,14 @@ case object ModalDeleteForward                       extends ModalInputEvent
 case object ModalDeleteWordBackward                  extends ModalInputEvent
 case object ModalDeleteWordForward                   extends ModalInputEvent
 final case class ModalNavigate(direction: Direction) extends ModalInputEvent
-case object ModalNextField                           extends ModalInputEvent
-case object ModalPreviousField                       extends ModalInputEvent
-case object ModalSubmit                              extends ModalInputEvent
-case object ModalFindNext                            extends ModalInputEvent
-case object ModalDismiss                             extends ModalInputEvent
+
+/** Moves the selected item of a reorderable list, rather than the selection (Alt+Up/Down by default). */
+final case class ModalMove(direction: Direction) extends ModalInputEvent
+case object ModalNextField                       extends ModalInputEvent
+case object ModalPreviousField                   extends ModalInputEvent
+case object ModalSubmit                          extends ModalInputEvent
+case object ModalFindNext                        extends ModalInputEvent
+case object ModalDismiss                         extends ModalInputEvent
 
 /** Creates a file workflow's missing directories immediately, in one step (issue #1253) -- the explicit counterpart to
   * submitting twice (`missingPathSegments` flagged, then `confirmCreateDirectories` on a second submit). Modal-only:

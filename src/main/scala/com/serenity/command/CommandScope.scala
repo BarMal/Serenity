@@ -86,18 +86,18 @@ object CommandScope:
     */
   private def viewScope(intent: ViewIntent): CommandScope =
     intent match
-      case ViewIntent.TogglePanelShown(id)     => panelScope(id)
-      case ViewIntent.FocusPanel(id)           => panelScope(id)
-      case ViewIntent.MovePanelEarlier(id)     => panelScope(id)
-      case ViewIntent.MovePanelLater(id)       => panelScope(id)
-      case ViewIntent.SetPanelPin(id, Some(_)) => panelScope(id)
-      case ViewIntent.SetPanelPin(_, None)     => core
+      case ViewIntent.TogglePanelShown(id)       => panelScope(id)
+      case ViewIntent.FocusPanel(id)             => panelScope(id)
+      case ViewIntent.PlacePanel(id, Some(_), _) => panelScope(id)
+      case ViewIntent.PlacePanel(_, None, _)     => core
+      case ViewIntent.SetPanelPin(id, Some(_))   => panelScope(id)
+      case ViewIntent.SetPanelPin(_, None)       => core
       case ViewIntent.NextTab | ViewIntent.PreviousTab | ViewIntent.SplitPaneHorizontal | ViewIntent.SplitPaneVertical |
           ViewIntent.ClosePane | ViewIntent.ToggleMaximisePanel | ViewIntent.FocusInDirection(_) |
-          ViewIntent.OpenMarkdownPreview | ViewIntent.SetMarkdownViewMode(_) | ViewIntent.SetDefaultDocumentMode(_) |
-          ViewIntent.SetAppMode(_) | ViewIntent.SetShowAllSettingsRegardlessOfMode(_) | ViewIntent.ToggleShortcutsHelp |
-          ViewIntent.ToggleTabList | ViewIntent.ToggleRecentFilesInMode | ViewIntent.TogglePanel(_) |
-          ViewIntent.SetPanelSize(_, _) =>
+          ViewIntent.ArrangePanels | ViewIntent.OpenMarkdownPreview | ViewIntent.SetMarkdownViewMode(_) |
+          ViewIntent.SetDefaultDocumentMode(_) | ViewIntent.SetAppMode(_) |
+          ViewIntent.SetShowAllSettingsRegardlessOfMode(_) | ViewIntent.ToggleShortcutsHelp | ViewIntent.ToggleTabList |
+          ViewIntent.ToggleRecentFilesInMode | ViewIntent.TogglePanel(_) | ViewIntent.SetPanelSize(_, _) =>
         core
 
   private def panelScope(id: PanelId): CommandScope =
