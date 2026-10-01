@@ -341,14 +341,18 @@ object CursorViewport:
     currentState: AppState,
     cursor: CursorPosition
   ): Viewport =
-    val isTui               = currentState.runtime.capabilities.isCellGrid
-    val viewport            = buffer.viewport
-    val fontConfig          = currentState.persisted.config.editorConfig.fontConfig
-    val font                = previewFontForBuffer(buffer, fontConfig)
-    val gridWidthPx         = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, fontConfig)
+    val isTui      = currentState.runtime.capabilities.isCellGrid
+    val viewport   = buffer.viewport
+    val fontConfig = currentState.persisted.config.editorConfig.fontConfig
+    val font       = previewFontForBuffer(buffer, fontConfig)
+    // Each column's text wraps inside its band minus the line-number rail, exactly as `RendererPaneSetup` and
+    // `EditorGeometryProducer` wrap it; measuring the full band folds fewer rows than are drawn, and the page anchor
+    // drifts away from what is on screen.
+    val textColumns         = math.max(1, viewport.visibleColumns - LayoutEngine.perColumnGutterWidth(currentState))
+    val gridWidthPx         = TextLayoutSnapshot.gridWrapWidthPx(textColumns, fontConfig)
     val cellMetricsOverride = if isTui then Some(CellMetrics.cellUnit) else None
     val forceCellLayout     = isTui
-    val wrapWidthPx         = if isTui then viewport.visibleColumns * CellMetrics.cellUnit.charWidth else gridWidthPx
+    val wrapWidthPx         = if isTui then textColumns * CellMetrics.cellUnit.charWidth else gridWidthPx
     val lineCount           = buffer.document.content.lineCount
     val visibleLines        = math.max(1, viewport.visibleLines)
 
