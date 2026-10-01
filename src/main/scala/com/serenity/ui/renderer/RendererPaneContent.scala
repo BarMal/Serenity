@@ -77,7 +77,7 @@ object RendererPaneContent:
                 context,
                 placement.snapshot,
                 state.runtime.capabilities.pixelMotion,
-                paintsCursor = position => owningColumn(columnPlacements, position).exists(_ eq placement)
+                paintsCursor = RendererCursorGlyphs.owningColumn(columnPlacements, _).exists(_ eq placement)
               )
             }.toList
           else
@@ -97,21 +97,6 @@ object RendererPaneContent:
               .getOrElse(Nil)
         ).getOrElse(Nil)
     }
-
-  /** The column a caret belongs to. A wrapped line that continues into the next column leaves a cursor on the boundary
-    * column matching both: the end of the earlier column's last row and the start of the later column's first. The
-    * cursor's [[RowAffinity]] settles it exactly as it does between two rows of one snapshot -- downstream (the
-    * default) is the later column, upstream the earlier -- so only one column paints it, and a terminal's single
-    * hardware cursor is never placed from the wrong one.
-    */
-  private def owningColumn(
-    columnPlacements: Vector[ColumnSnapshotPlacement],
-    position: CursorPosition
-  ): Option[ColumnSnapshotPlacement] =
-    val holding = columnPlacements.filter(_.snapshot.navigationGeometry.visualRowIndexFor(position).isDefined)
-    position.rowAffinity match
-      case RowAffinity.Upstream   => holding.headOption
-      case RowAffinity.Downstream => holding.lastOption
 
   private def renderEditorPane(
     pane: EditorPane,
