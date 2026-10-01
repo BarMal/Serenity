@@ -471,6 +471,20 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       ListPickerComposition.frameHeight(ListPicker.of("Open session", choices, "None")) + 1
   }
 
+  it should "end with a muted, unclickable row counting its choices while its source has more to load" in {
+    val picker = ListPicker
+      .filterable("Search", Vector(pickerChoice("a.txt:1"), pickerChoice("a.txt:2")))
+      .copy(source = Some(PickerSource.BufferText(resumeAt = Some(BufferLine(BufferId(0), 2)))))
+    val plan = planFor(Modal.ListPicker(picker))
+
+    plan.paintBoxes.flatMap(_.text) shouldBe List("Search", "", "a.txt:1", "a.txt:2", "2 loaded, more available")
+    plan.paintBoxes.lastOption.map(_.tone) shouldBe Some(OverlayTone.Muted)
+    plan.paintBoxes.map(_.rect.y).distinct.size shouldBe 5
+    plan.hitRegions.flatMap(_.actionId) shouldBe List(0, 1).map(ListPickerComposition.choiceActionId)
+    ListPickerComposition.frameHeight(picker) shouldBe
+      ListPickerComposition.frameHeight(picker.copy(source = Some(PickerSource.BufferText()))) + 1
+  }
+
   "A confirm prompt" should "tone each choice by its emphasis: primary as accent, danger as error" in {
     def choiceTones(prompt: ConfirmPrompt): List[(String, OverlayTone)] =
       planFor(Modal.Confirm(prompt)).paintBoxes.filter(_.actionId.nonEmpty).flatMap(box => box.text.map(_ -> box.tone))

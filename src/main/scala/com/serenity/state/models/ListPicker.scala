@@ -23,6 +23,17 @@ enum PickerSource:
   /** These choices, narrowed to the ones whose label or detail contains the query. */
   case Fixed(choices: Vector[ListChoice])
 
+  /** The lines of every open buffer containing the query, `batchSize` at a time -- see [[BufferTextSearch]]. `resumeAt`
+    * is where the next batch starts, while one is left.
+    */
+  case BufferText(batchSize: Int = BufferTextSearch.BatchSize, resumeAt: Option[BufferLine] = None)
+
+  /** Whether more choices than the picker holds can still be loaded, by [[ListPickerSearch.extended]]. */
+  def hasMore: Boolean =
+    this match
+      case Fixed(_)                => false
+      case BufferText(_, resumeAt) => resumeAt.isDefined
+
 /** A titled list to pick one entry from, as data -- so a new picker needs only a value of this. Its choices may still
   * be loading when it opens. While it is `pending` on a picked choice, that choice's work applies only if the picker is
   * still open and pending on it when the work lands, so Escape abandons it.
@@ -43,6 +54,8 @@ final case class ListPicker(
   def isPendingOn(command: Command): Boolean = pending.exists(_.action == command)
 
   def queryText: String = query.fold("")(_.text)
+
+  def hasMore: Boolean = source.exists(_.hasMore)
 
   def withChoices(choices: Seq[ListChoice], emptyMessage: String): ListPicker =
     copy(items = ListPicker.loaded(choices, emptyMessage))

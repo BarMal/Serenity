@@ -8,7 +8,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Dedicated unit coverage for `PickerContentResolver` (issue #1421). `SurfaceContentResolverReferencePanelsSpec`
-  * covers file search and the context menu behavior indirectly through `SurfaceContentResolver.resolve`; this adds
+  * covers the context menu behavior indirectly through `SurfaceContentResolver.resolve`; this adds
   * `resolveThemeCreator` coverage, entirely absent elsewhere, and pins each of the others by directly naming this
   * object. Lives in this package because the resolver is `private[layout]`.
   */
@@ -58,23 +58,6 @@ class PickerContentResolverSpec extends AnyFlatSpec with Matchers:
       PickerContentResolver.resolveThemeCreator(state, LayoutRect(0, 0, 60, 20), SurfaceRenderMode.Floating)
 
     resolved.footer shouldBe None
-  }
-
-  // ── resolveFileSearch ────────────────────────────────────────────────────────
-
-  "resolveFileSearch" should "show a single space as header text for an empty query" in {
-    val state    = FileSearchState("", Nil, selectedIndex = 0)
-    val resolved = PickerContentResolver.resolveFileSearch(state, LayoutRect(0, 0, 60, 10), SurfaceRenderMode.Floating)
-
-    resolved.header.map(_.plainText) shouldBe Some(" ")
-    resolved.rows shouldBe Nil
-  }
-
-  it should "position the header cursor at the end of a non-empty query" in {
-    val state    = FileSearchState("def", Nil, selectedIndex = 0)
-    val resolved = PickerContentResolver.resolveFileSearch(state, LayoutRect(0, 0, 60, 10), SurfaceRenderMode.Floating)
-
-    resolved.header.flatMap(_.cursorColumn) shouldBe Some(3)
   }
 
   // ── resolveContextMenu ───────────────────────────────────────────────────────

@@ -7,76 +7,7 @@ import org.scalatest.matchers.should.Matchers
 
 class SurfaceContentResolverReferencePanelsSpec extends AnyFlatSpec with Matchers:
 
-  // ── FileSearch resolver ───────────────────────────────────────────────────
-
-  "SurfaceContentResolver" should "resolve FileSearch with query as header and result rows" in {
-    val results = List(
-      FileSearchResult(BufferId(0), "main.scala", 5, "def foo(x: Int)"),
-      FileSearchResult(BufferId(1), "util.scala", 12, "def helper()")
-    )
-    val search = FileSearchState("def", results, selectedIndex = 0)
-
-    val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.FileSearch(search),
-      LayoutRect(0, 0, 60, 10),
-      SurfaceRenderMode.Floating
-    )
-
-    resolved.header.map(_.plainText) shouldBe Some("def")
-    resolved.header.flatMap(_.cursorColumn) shouldBe Some(3)
-    resolved.rows should have size 2
-    resolved.rows.head.selected shouldBe true
-    resolved.rows(1).selected shouldBe false
-    resolved.rows.head.plainText should include("main.scala")
-    resolved.rows.head.plainText should include("6") // line + 1
-  }
-
-  it should "resolve FileSearch with empty query as header with space" in {
-    val search = FileSearchState("", Nil, 0)
-    val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.FileSearch(search),
-      LayoutRect(0, 0, 60, 10),
-      SurfaceRenderMode.Floating
-    )
-    resolved.header.map(_.plainText) shouldBe Some(" ")
-    resolved.rows shouldBe Nil
-  }
-
-  it should "show when FileSearch has more batches available" in {
-    val results = List(FileSearchResult(BufferId(0), "main.scala", 5, "def foo(x: Int)"))
-    val search  = FileSearchState("def", results, selectedIndex = 0, hasMoreResults = true)
-
-    val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.FileSearch(search),
-      LayoutRect(0, 0, 60, 10),
-      SurfaceRenderMode.Floating
-    )
-
-    resolved.footer.map(_.plainText) shouldBe Some("1 loaded, more available")
-  }
-
-  it should "window FileSearch results against the shared frame contract when header and footer leave one item row" in {
-    val results = List(
-      FileSearchResult(BufferId(0), "main.scala", 5, "def foo(x: Int)"),
-      FileSearchResult(BufferId(1), "util.scala", 12, "def helper()"),
-      FileSearchResult(BufferId(2), "notes.md", 8, "def summary"),
-      FileSearchResult(BufferId(3), "tail.scala", 21, "def selected()")
-    )
-    val search = FileSearchState("def", results, selectedIndex = 3, hasMoreResults = true)
-
-    val resolved = SurfaceContentResolver.resolve(
-      SurfaceContent.FileSearch(search),
-      LayoutRect(0, 0, 60, 5),
-      SurfaceRenderMode.Floating
-    )
-
-    resolved.header.map(_.plainText) shouldBe Some("def")
-    resolved.rows.map(_.plainText) shouldBe List("tail.scala:22  def selected()")
-    resolved.rows.map(_.selected) shouldBe List(true)
-    resolved.footer.map(_.plainText) shouldBe Some("4 loaded, more available")
-  }
-
-  it should "resolve Markdown previews as rendered pinned preview shells" in {
+  "SurfaceContentResolver" should "resolve Markdown previews as rendered pinned preview shells" in {
     val resolved = SurfaceContentResolver.resolveMarkdownPreview(
       title = "notes.md",
       content = """# Notes

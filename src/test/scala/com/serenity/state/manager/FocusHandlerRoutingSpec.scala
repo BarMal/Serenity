@@ -24,7 +24,6 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
   private val commandPalette: SurfaceContent = SurfaceContent.CommandPalette(CommandRunner.empty)
   private val themeCreator: SurfaceContent =
     SurfaceContent.ThemeCreator(ThemeCreatorState.fromTheme(DefaultThemes.defaultDark))
-  private val fileSearch: SurfaceContent        = SurfaceContent.FileSearch(FileSearchState("q", Nil, 0))
   private val contextualToolbar: SurfaceContent = SurfaceContent.ContextualToolbar(ContextualToolbarState())
   private val contextMenu: SurfaceContent =
     SurfaceContent.ContextMenu(ContextMenu("menu", Focus.EditorPane(PaneId(0)), Nil))
@@ -55,7 +54,6 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
     directoryTree,
     commandPalette,
     themeCreator,
-    fileSearch,
     contextualToolbar,
     contextMenu,
     commentLens,
@@ -78,10 +76,6 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
 
   it should "route theme creator content to a ThemeCreatorComponent" in {
     FocusHandlerRouting.forSurfaceContent(themeCreator).getClass.getSimpleName shouldBe "ThemeCreatorComponent"
-  }
-
-  it should "route file search content to a FileSearchComponent" in {
-    FocusHandlerRouting.forSurfaceContent(fileSearch).getClass.getSimpleName shouldBe "FileSearchComponent"
   }
 
   it should "route contextual toolbar content to a ContextualToolbarComponent" in {

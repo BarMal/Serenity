@@ -1,380 +1,174 @@
 package com.serenity
 
+import java.nio.file.Path
+
+import com.serenity.command.{CommandRegistry, NavigationCommands}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.{Balance, Leaf, Rope}
-import com.serenity.state.components.{ComponentResult, FileSearchComponent}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, AppEventReducer, SurfaceEffect}
+import com.serenity.state.reducers.{AppEffect, AppEventReducer, ModalEventReducer, ModalStateReducer, SurfaceEffect}
+import com.serenity.ui.widget.{Loadable, TextField}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+/** "Search in Open Files": a [[ListPicker]] over the lines of every open buffer that contain its query, loaded a batch
+  * at a time, each picking the command that goes to that line.
+  */
 class FileSearchSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  // ── FileSearchState ───────────────────────────────────────────────────────
+  private def withBuffers(buffers: (BufferId, Option[String], Rope)*): AppState =
+    val base = AppState.initial
+    val opened = buffers.map {
+      case (id, name, content) =>
+        val buffer = Buffer.newEmpty(id)
+        id -> buffer.copy(document = buffer.document.copy(content = content, filePath = name.map(Path.of(_))))
+    }
+    base.copy(persisted = base.persisted.copy(buffers = opened.toMap, bufferOrder = opened.map(_._1).toList))
 
-  "FileSearchState" should "return None as selectedResult when results are empty" in {
-    val state = FileSearchState("hello", Nil, 0)
-    state.selectedResult shouldBe None
-  }
+  private def opened(state: AppState): AppState =
+    ModalStateReducer.show(Modal.ListPicker(BufferTextSearch.picker), state).state
 
-  it should "return the correct selected result by index" in {
-    val r0    = FileSearchResult(BufferId(0), "foo.txt", 3, "hello world")
-    val r1    = FileSearchResult(BufferId(1), "bar.txt", 7, "hello there")
-    val state = FileSearchState("hello", List(r0, r1), 1)
-    state.selectedResult shouldBe Some(r1)
-  }
+  private def after(state: AppState, events: Seq[Event]): (AppState, List[AppEffect]) =
+    events.foldLeft((state, List.empty[AppEffect])) {
+      case ((current, effects), event) =>
+        val result = ModalEventReducer.reduce(ModalType.ListPicker, event, current)
+        (result.state, effects ++ result.effects)
+    }
 
-  it should "move selection forward and wrap around" in {
-    val results = List(
-      FileSearchResult(BufferId(0), "a.txt", 0, "x"),
-      FileSearchResult(BufferId(0), "a.txt", 1, "y"),
-      FileSearchResult(BufferId(0), "a.txt", 2, "z")
-    )
-    val state = FileSearchState("x", results, selectedIndex = 2)
-    state.moveSelection(1).selectedIndex shouldBe 0
-  }
+  private def typed(text: String): Seq[Event] = text.map(InsertChar(_))
 
-  it should "move selection backward and wrap around" in {
-    val results = List(
-      FileSearchResult(BufferId(0), "a.txt", 0, "x"),
-      FileSearchResult(BufferId(0), "a.txt", 1, "y")
-    )
-    val state = FileSearchState("x", results, selectedIndex = 0)
-    state.moveSelection(-1).selectedIndex shouldBe 1
-  }
+  private def shown(state: AppState): ListPicker =
+    state.modalSurface
+      .map(_.content)
+      .collect { case SurfaceContent.ModalWorkflow(Modal.ListPicker(picker)) => picker }
+      .getOrElse(fail("Expected an open list picker"))
 
-  it should "not change index when results are empty" in {
-    val state = FileSearchState("hello", Nil, 0)
-    state.moveSelection(1).selectedIndex shouldBe 0
-  }
+  private def choices(state: AppState): Vector[ListChoice] =
+    shown(state).items.toOption.map(_.items).getOrElse(fail(s"Expected loaded choices, got ${shown(state).items}"))
 
-  it should "withQuery resets selectedIndex to 0" in {
-    val state = FileSearchState("hello", Nil, selectedIndex = 2)
-    state.withQuery("new").selectedIndex shouldBe 0
-    state.withQuery("new").query shouldBe "new"
-  }
+  private def goTo(bufferId: Int, line: Int) = NavigationCommands.goToBufferLine(BufferId(bufferId), line)
 
-  // ── AppEventReducer ───────────────────────────────────────────────────────
+  private def numbered(count: Int): Rope = Rope((0 until count).map(line => s"needle result $line").mkString("\n"))
 
-  "AppEventReducer" should "emit OpenFileSearch for FileSearch event" in {
-    import com.serenity.command.CommandRegistry
+  "The FileSearch hotkey" should "ask the effect layer to open file search" in {
     val result = AppEventReducer.reduce(FileSearch, AppState.initial, CommandRegistry.default)
+
     result.effects shouldBe List(AppEffect.Surface(SurfaceEffect.OpenFileSearch))
   }
 
-  // ── FileSearchComponent ───────────────────────────────────────────────────
-
-  private def stateWithSearchSurface(
-    query: String = "",
-    results: List[FileSearchResult] = Nil
-  ): (AppState, SurfaceId) =
-    val base            = AppState.initial
-    val (s1, surfaceId) = base.allocateSurfaceId
-    val searchState     = FileSearchState(query, results, 0)
-    val surface = UiSurface(
-      surfaceId,
-      SurfaceContent.FileSearch(searchState),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-    )
-    val finalState = s1.copy(
-      runtime = s1.runtime.copy(uiSurfaces = List(surface)),
-      persisted = s1.persisted.copy(focus = Focus.Surface(surfaceId))
-    )
-    (finalState, surfaceId)
-
-  private def stateWithSearchAndBuffer(query: String, bufferContent: String): (AppState, SurfaceId, BufferId) =
-    val base     = AppState.initial
-    val bufferId = BufferId(0)
-    val updatedBuffers = base.persisted.buffers.get(bufferId).fold(base.persisted.buffers) { buf =>
-      import com.serenity.rope.Rope
-      base.persisted.buffers + (bufferId -> buf.copy(document = buf.document.copy(content = Rope(bufferContent))))
-    }
-    val withContent     = base.copy(persisted = base.persisted.copy(buffers = updatedBuffers))
-    val (s1, surfaceId) = withContent.allocateSurfaceId
-    val searchState     = FileSearchState(query, Nil, 0)
-    val surface = UiSurface(
-      surfaceId,
-      SurfaceContent.FileSearch(searchState),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-    )
-    val finalState = s1.copy(
-      runtime = s1.runtime.copy(uiSurfaces = List(surface)),
-      persisted = s1.persisted.copy(focus = Focus.Surface(surfaceId))
-    )
-    (finalState, surfaceId, bufferId)
-
-  private val component = new FileSearchComponent()
-
-  "FileSearchComponent" should "append a char to query and update results on InsertChar" in {
-    val (state, _) = stateWithSearchSurface("hel")
-    val result     = component.processEvent(InsertChar('p'), state)
-    result match
-      case ComponentResult.StateChange(f) =>
-        val newState = f(state)
-        newState.fileSearchSurface.map(_.content) match
-          case Some(SurfaceContent.FileSearch(fs)) =>
-            fs.query shouldBe "help"
-          case other => fail(s"Expected FileSearch surface, got $other")
-      case other => fail(s"Expected StateChange, got $other")
+  "Search in Open Files" should "open with an empty query, inviting the user to type" in {
+    BufferTextSearch.picker.title shouldBe "Search in Open Files"
+    BufferTextSearch.picker.query shouldBe Some(TextField())
+    BufferTextSearch.picker.items shouldBe Loadable.Empty("Type to search open files")
+    BufferTextSearch.picker.hasMore shouldBe false
   }
 
-  it should "remove the last char on DeleteBackward" in {
-    val (state, _) = stateWithSearchSurface("hello")
-    val result     = component.processEvent(DeleteBackward, state)
-    result match
-      case ComponentResult.StateChange(f) =>
-        f(state).fileSearchSurface.map(_.content) match
-          case Some(SurfaceContent.FileSearch(fs)) => fs.query shouldBe "hell"
-          case other                               => fail(s"Expected FileSearch surface, got $other")
-      case other => fail(s"Expected StateChange, got $other")
+  it should "list every matching line of every open buffer, in buffer order, ignoring case" in {
+    val state = withBuffers(
+      (BufferId(2), Some("/tmp/util.scala"), Rope("  def Helper()\nval x = 1")),
+      (BufferId(1), Some("/tmp/main.scala"), Rope("object Main\n\tdef foo(x: Int)"))
+    )
+
+    val (searched, effects) = after(opened(state), typed("DEF"))
+
+    choices(searched) shouldBe Vector(
+      ListChoice("main.scala:2", Some("def foo(x: Int)"), goTo(1, 1)),
+      ListChoice("util.scala:1", Some("def Helper()"), goTo(2, 0))
+    )
+    shown(searched).selectedChoice.map(_.label) shouldBe Some("main.scala:2")
+    effects shouldBe Nil
   }
 
-  it should "not change query on DeleteBackward when query is empty" in {
-    val (state, _) = stateWithSearchSurface("")
-    val result     = component.processEvent(DeleteBackward, state)
-    result match
-      case ComponentResult.StateChange(f) =>
-        f(state).fileSearchSurface.map(_.content) match
-          case Some(SurfaceContent.FileSearch(fs)) => fs.query shouldBe ""
-          case other                               => fail(s"Expected FileSearch surface, got $other")
-      case other => fail(s"Expected StateChange, got $other")
+  it should "name an unsaved buffer by its id" in {
+    val (searched, _) = after(opened(withBuffers((BufferId(4), None, Rope("draft line")))), typed("draft"))
+
+    choices(searched).map(_.label) shouldBe Vector("buffer-4:1")
   }
 
-  it should "remove the previous word on DeleteWordBackward" in {
-    val (state, _) = stateWithSearchSurface("alpha beta")
-    val result     = component.processEvent(DeleteWordBackward, state)
-    result match
-      case ComponentResult.StateChange(f) =>
-        f(state).fileSearchSurface.map(_.content) match
-          case Some(SurfaceContent.FileSearch(fs)) => fs.query shouldBe "alpha "
-          case other                               => fail(s"Expected FileSearch surface, got $other")
-      case other => fail(s"Expected StateChange, got $other")
+  it should "say there are no matches, and invite typing again once the query is cleared" in {
+    val (unmatched, _) = after(opened(withBuffers((BufferId(0), None, Rope("alpha")))), typed("zz"))
+    shown(unmatched).items shouldBe Loadable.Empty("No matches")
+
+    val (cleared, _) = after(unmatched, List(DeleteBackward, DeleteBackward))
+    shown(cleared).items shouldBe Loadable.Empty("Type to search open files")
   }
 
-  it should "navigate selection down on MoveDown" in {
-    val results = List(
-      FileSearchResult(BufferId(0), "a.txt", 0, "x"),
-      FileSearchResult(BufferId(0), "a.txt", 1, "y")
-    )
-    val (state, _) = stateWithSearchSurface("x", results)
-    val result     = component.processEvent(MoveDown, state)
-    result match
-      case ComponentResult.StateChange(f) =>
-        f(state).fileSearchSurface.map(_.content) match
-          case Some(SurfaceContent.FileSearch(fs)) => fs.selectedIndex shouldBe 1
-          case other                               => fail(s"Expected FileSearch surface, got $other")
-      case other => fail(s"Expected StateChange, got $other")
+  it should "go to the picked line, closing itself, when Enter is pressed" in {
+    val state             = withBuffers((BufferId(0), Some("/tmp/a.txt"), Rope("one\ntwo\nthree")))
+    val (picked, effects) = after(opened(state), typed("t") ++ List(MoveDown, Enter))
+
+    picked.modalSurface shouldBe None
+    effects shouldBe List(AppEffect.ExecuteCommand(goTo(0, 2)))
   }
 
-  it should "navigate selection up on MoveUp" in {
-    val results = List(
-      FileSearchResult(BufferId(0), "a.txt", 0, "x"),
-      FileSearchResult(BufferId(0), "a.txt", 1, "y")
-    )
-    val (base, surfaceId) = stateWithSearchSurface("x", results)
-    val stateAtIdx1 = base.copy(
-      runtime = base.runtime.copy(uiSurfaces = base.runtime.uiSurfaces.map { s =>
-        if s.id == surfaceId then s.copy(content = SurfaceContent.FileSearch(FileSearchState("x", results, 1)))
-        else s
-      })
-    )
-    val result = component.processEvent(MoveUp, stateAtIdx1)
-    result match
-      case ComponentResult.StateChange(f) =>
-        f(stateAtIdx1).fileSearchSurface.map(_.content) match
-          case Some(SurfaceContent.FileSearch(fs)) => fs.selectedIndex shouldBe 0
-          case other                               => fail(s"Expected FileSearch surface, got $other")
-      case other => fail(s"Expected StateChange, got $other")
+  it should "load only the first batch of matches, without reading the whole buffer, and say more are available" in {
+    val state = withBuffers((BufferId(0), Some("/tmp/many.txt"), GuardedRope(numbered(200))))
+
+    val (searched, _) = after(opened(state), typed("needle"))
+
+    choices(searched).size shouldBe 100
+    choices(searched).lastOption.map(_.label) shouldBe Some("many.txt:100")
+    shown(searched).hasMore shouldBe true
   }
 
-  it should "dismiss without navigation on Escape" in {
-    val (state, _) = stateWithSearchSurface("hello")
-    val result     = component.processEvent(Escape, state)
-    result match
-      case ComponentResult.StateChange(f) =>
-        val newState = f(state)
-        newState.fileSearchSurface shouldBe None
-        newState.persisted.focus shouldBe a[Focus.EditorPane]
-      case other => fail(s"Expected StateChange, got $other")
+  it should "load the next batch on Down at the last loaded match, highlighting its first match" in {
+    val state          = withBuffers((BufferId(0), Some("/tmp/many.txt"), GuardedRope(numbered(250))))
+    val (searched, _)  = after(opened(state), typed("needle") :+ MoveUp)
+    val (extended, _)  = after(searched, List(MoveDown))
+    val (exhausted, _) = after(extended, List.fill(101)(MoveUp) :+ MoveDown)
+
+    shown(searched).selectedChoice.map(_.label) shouldBe Some("many.txt:100")
+    choices(extended).size shouldBe 200
+    shown(extended).selectedChoice.map(_.label) shouldBe Some("many.txt:101")
+    shown(extended).hasMore shouldBe true
+
+    choices(exhausted).size shouldBe 250
+    shown(exhausted).selectedChoice.map(_.label) shouldBe Some("many.txt:201")
+    shown(exhausted).hasMore shouldBe false
   }
 
-  it should "navigate to the selected result and dismiss on Enter" in {
-    val bufferId   = BufferId(0)
-    val results    = List(FileSearchResult(bufferId, "main.txt", 5, "selected line"))
-    val (state, _) = stateWithSearchSurface("sel", results)
-    val result     = component.processEvent(Enter, state)
-    result match
-      case ComponentResult.StateChange(f) =>
-        val newState = f(state)
-        newState.fileSearchSurface shouldBe None
-        newState.persisted.focus shouldBe a[Focus.EditorPane]
-        newState.persisted.buffers
-          .get(bufferId)
-          .flatMap(_.editing.cursorPositions.headOption)
-          .map(_.line) shouldBe Some(5)
-      case other => fail(s"Expected StateChange, got $other")
+  it should "wrap from the last match to the first once every match is loaded" in {
+    val state        = withBuffers((BufferId(0), None, numbered(3)))
+    val (last, _)    = after(opened(state), typed("needle") :+ MoveUp)
+    val (wrapped, _) = after(last, List(MoveDown))
+
+    shown(last).selectedChoice.map(_.label) shouldBe Some("buffer-0:3")
+    shown(wrapped).selectedChoice.map(_.label) shouldBe Some("buffer-0:1")
   }
 
-  it should "just dismiss on Enter when no result is selected" in {
-    val (state, _) = stateWithSearchSurface("")
-    val result     = component.processEvent(Enter, state)
-    result match
-      case ComponentResult.StateChange(f) =>
-        val newState = f(state)
-        newState.fileSearchSurface shouldBe None
-      case other => fail(s"Expected StateChange, got $other")
+  it should "resume a batch mid-buffer and carry on into the next buffer" in {
+    val state = withBuffers((BufferId(0), None, numbered(3)), (BufferId(1), None, numbered(2)))
+    val small = BufferTextSearch.picker.copy(source = Some(PickerSource.BufferText(batchSize = 2)))
+    val open  = ModalStateReducer.show(Modal.ListPicker(small), state).state
+
+    val (first, _) = after(open, typed("needle"))
+    choices(first).map(_.label) shouldBe Vector("buffer-0:1", "buffer-0:2")
+
+    val (second, _) = after(first, List(MoveDown, MoveDown))
+    choices(second).map(_.label) shouldBe Vector("buffer-0:1", "buffer-0:2", "buffer-0:3", "buffer-1:1")
+    shown(second).selectedChoice.map(_.label) shouldBe Some("buffer-0:3")
+
+    val (third, _) = after(second, List(MoveDown, MoveDown))
+    choices(third).map(_.label) shouldBe
+      Vector("buffer-0:1", "buffer-0:2", "buffer-0:3", "buffer-1:1", "buffer-1:2")
+    shown(third).hasMore shouldBe false
   }
 
-  it should "search buffer content and populate results on typing" in {
-    val (state, _) = stateWithSearchAndBuffer("hello", "line one\nhello world\nline three")._1 match
-      case s => (s, ())
-    // Type 'h' — searches all buffers
-    val typed                       = stateWithSearchAndBuffer("h", "hello world\nno match\nhello there")
-    val (searchState, surfaceId, _) = typed
-    val result                      = component.processEvent(InsertChar('i'), searchState)
-    result match
-      case ComponentResult.StateChange(f) =>
-        val newState = f(searchState)
-        newState.fileSearchSurface.map(_.content) match
-          case Some(SurfaceContent.FileSearch(fs)) =>
-            fs.query shouldBe "hi"
-          case other => fail(s"Expected FileSearch, got $other")
-      case other => fail(s"Expected StateChange, got $other")
+  it should "restart from the first match when the query changes after paging" in {
+    val state         = withBuffers((BufferId(0), None, numbered(250)))
+    val (paged, _)    = after(opened(state), typed("needle") ++ List(MoveUp, MoveDown))
+    val (narrowed, _) = after(paged, typed(" result 1"))
+
+    choices(narrowed).map(_.label).take(3) shouldBe Vector("buffer-0:2", "buffer-0:11", "buffer-0:12")
+    shown(narrowed).selectedChoice.map(_.label) shouldBe Some("buffer-0:2")
+    shown(narrowed).hasMore shouldBe true
   }
 
-  it should "load the first result batch and record when more matches are available" in {
-    val bufferId = BufferId(0)
-    val content  = (0 until 200).map(line => s"needle result $line").mkString("\n")
-    val guardedContent = GuardedGetLineRope(
-      delegate = Rope(content),
-      allowedLines = (0 to 100).toSet
-    )
-    val base       = AppState.initial
-    val baseBuffer = base.persisted.buffers(bufferId)
-    val buffer = baseBuffer.copy(document =
-      baseBuffer.document.copy(content = guardedContent, filePath = Some(java.nio.file.Path.of("many.txt")))
-    )
-    val withBuffer =
-      base.copy(persisted = base.persisted.copy(buffers = base.persisted.buffers.updated(bufferId, buffer)))
-    val (withId, search) = withBuffer.allocateSurfaceId
-    val surface = UiSurface(
-      search,
-      SurfaceContent.FileSearch(FileSearchState("needl", Nil, 0)),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-    )
-    val state = withId.copy(
-      runtime = withId.runtime.copy(uiSurfaces = List(surface)),
-      persisted = withId.persisted.copy(focus = Focus.Surface(search))
-    )
-
-    val result = component.processEvent(InsertChar('e'), state)
-
-    result match
-      case ComponentResult.StateChange(f) =>
-        f(state).fileSearchSurface.map(_.content) match
-          case Some(SurfaceContent.FileSearch(fs)) =>
-            fs.results.length shouldBe 100
-            fs.results.lastOption.map(_.line) shouldBe Some(99)
-            fs.hasMoreResults shouldBe true
-          case other => fail(s"Expected FileSearch surface, got $other")
-      case other => fail(s"Expected StateChange, got $other")
-  }
-
-  it should "append the next search batch when navigating beyond loaded results" in {
-    val bufferId = BufferId(0)
-    val content  = (0 until 250).map(line => s"needle result $line").mkString("\n")
-    val guardedContent = GuardedGetLineRope(
-      delegate = Rope(content),
-      allowedLines = (0 to 200).toSet
-    )
-    val base       = AppState.initial
-    val baseBuffer = base.persisted.buffers(bufferId)
-    val buffer = baseBuffer.copy(document =
-      baseBuffer.document.copy(content = guardedContent, filePath = Some(java.nio.file.Path.of("many.txt")))
-    )
-    val withBuffer =
-      base.copy(persisted = base.persisted.copy(buffers = base.persisted.buffers.updated(bufferId, buffer)))
-    val (withId, search) = withBuffer.allocateSurfaceId
-    val surface = UiSurface(
-      search,
-      SurfaceContent.FileSearch(FileSearchState("needl", Nil, 0)),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-    )
-    val state = withId.copy(
-      runtime = withId.runtime.copy(uiSurfaces = List(surface)),
-      persisted = withId.persisted.copy(focus = Focus.Surface(search))
-    )
-    val typed = component.processEvent(InsertChar('e'), state) match
-      case ComponentResult.StateChange(f) => f(state)
-      case other                          => fail(s"Expected StateChange, got $other")
-    val selectedAtEnd = typed.copy(
-      runtime = typed.runtime.copy(uiSurfaces = typed.runtime.uiSurfaces.map {
-        case searchSurface if searchSurface.id == search =>
-          searchSurface.content match
-            case SurfaceContent.FileSearch(fs) =>
-              searchSurface.copy(content = SurfaceContent.FileSearch(fs.copy(selectedIndex = 99)))
-            case _ => searchSurface
-        case other => other
-      })
-    )
-
-    val result = component.processEvent(MoveDown, selectedAtEnd)
-
-    result match
-      case ComponentResult.StateChange(f) =>
-        f(selectedAtEnd).fileSearchSurface.map(_.content) match
-          case Some(SurfaceContent.FileSearch(fs)) =>
-            fs.results.length shouldBe 200
-            fs.selectedIndex shouldBe 100
-            fs.results(100).line shouldBe 100
-            fs.hasMoreResults shouldBe true
-          case other => fail(s"Expected FileSearch surface, got $other")
-      case other => fail(s"Expected StateChange, got $other")
-  }
-
-  // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Node` tree
-  // while itself extending the still-open `Leaf` purely to satisfy the type system -- every method that matters for
-  // this test forwards to `delegate` rather than using anything inherited from `Leaf`.
-  final class GuardedGetLineRope(delegate: Rope, allowedLines: Set[Int]) extends Leaf(delegate.collect()):
-    override def weight: Int =
-      delegate.weight
-
-    override def height: Int =
-      delegate.height
-
-    override val newlineCount: Int =
-      delegate.newlineCount
-
-    override val lastLineLength: Int =
-      delegate.lastLineLength
-
-    override val endsWithNewline: Boolean =
-      delegate.endsWithNewline
-
-    override def isWeightBalanced: Boolean =
-      delegate.isWeightBalanced
-
-    override def isHeightBalanced: Boolean =
-      delegate.isHeightBalanced
-
-    override def rebalance: Rope =
-      this
-
-    override def index(i: Int): Option[Char] =
-      delegate.index(i)
-
-    override def splitAt(index: Int): Option[(Rope, Rope)] =
-      delegate.splitAt(index)
-
-    override def getLine(lineIndex: Int): Option[String] =
-      if allowedLines.contains(lineIndex) then delegate.getLine(lineIndex)
-      else throw AssertionError(s"file search should stop before reading line $lineIndex")
-
-    override def collect(): String =
-      throw AssertionError("file search should not materialise the whole buffer")
-
-  object GuardedGetLineRope:
-    def apply(delegate: Rope, allowedLines: Set[Int]): GuardedGetLineRope =
-      new GuardedGetLineRope(delegate, allowedLines)
+  /** A rope whose whole text can't be read: the search must stream lines rather than materialise a buffer. `Rope` is
+    * sealed, so this extends the still-open `Leaf`, built from the real text, and only refuses `collect`.
+    */
+  final private class GuardedRope(delegate: Rope) extends Leaf(delegate.collect()):
+    override def collect(): String = throw AssertionError("file search should not materialise the whole buffer")
+end FileSearchSpec

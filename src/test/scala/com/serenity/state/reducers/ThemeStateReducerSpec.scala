@@ -103,11 +103,3 @@ class ThemeStateReducerSpec extends AnyFlatSpec with Matchers:
     twice.state.persisted.focus shouldBe Focus.Surface(creators.head.id)
     valid(twice) shouldBe true
   }
-
-  "PopupSurfaceReducer.openFileSearch" should "open a focused, empty file-search overlay" in {
-    val result = PopupSurfaceReducer.openFileSearch(AppState.initial)
-
-    result.state.runtime.uiSurfaces.map(_.content) shouldBe List(SurfaceContent.FileSearch(FileSearchState("", Nil, 0)))
-    result.state.persisted.focus shouldBe Focus.Surface(result.state.runtime.uiSurfaces.head.id)
-    valid(result) shouldBe true
-  }

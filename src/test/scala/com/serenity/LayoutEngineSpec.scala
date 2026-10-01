@@ -624,7 +624,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(1)
     val surface = UiSurface(
       SurfaceId("file-search"),
-      SurfaceContent.FileSearch(FileSearchState("", Nil, selectedIndex = 0)),
+      SurfaceContent.ModalWorkflow(Modal.ListPicker(BufferTextSearch.picker)),
       SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.BelowCursor)
     )
     val state = AppState.initial.copy(

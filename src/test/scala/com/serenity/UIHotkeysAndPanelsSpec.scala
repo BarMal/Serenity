@@ -28,6 +28,13 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
   private def registeredCommand(name: String): Command =
     CommandRegistry.default.findCommand(name).getOrElse(fail(s"missing command $name"))
 
+  extension (state: AppState)
+
+    private def searchInOpenFilesSurface: Option[UiSurface] =
+      state.runtime.uiSurfaces.find(
+        _.content == SurfaceContent.ModalWorkflow(Modal.ListPicker(BufferTextSearch.picker))
+      )
+
   // ── Command palette (Ctrl+P → ToggleCommandRunner) ────────────────────────
 
   it should "open command palette on ToggleCommandRunner" in new UIFixture:
@@ -39,14 +46,14 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       case Focus.Surface(id) => state.commandRunnerSurface.map(_.id) shouldBe Some(id)
       case _                 => fail("Expected focus on command runner surface")
 
-  it should "dismiss file search when opening command palette" in new UIFixture:
+  it should "dismiss Search in Open Files when opening command palette" in new UIFixture:
     stateManager.applyEvent(FileSearch).unsafeRunSync()
-    stateManager.getCurrentState.unsafeRunSync().fileSearchSurface shouldBe defined
+    stateManager.getCurrentState.unsafeRunSync().searchInOpenFilesSurface shouldBe defined
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.fileSearchSurface shouldBe None
+    state.searchInOpenFilesSurface shouldBe None
     state.commandRunnerSurface shouldBe defined
     state.persisted.focus match
       case Focus.Surface(id) => state.commandRunnerSurface.map(_.id) shouldBe Some(id)
@@ -194,8 +201,8 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(FileSearch).unsafeRunSync()
     val floatingSurfaceId = stateManager.getCurrentState
       .unsafeRunSync()
-      .fileSearchSurface
-      .getOrElse(fail("Expected a floating file-search surface"))
+      .searchInOpenFilesSurface
+      .getOrElse(fail("Expected a floating Search in Open Files picker"))
       .id
     val before = stateManager.getCurrentState.unsafeRunSync()
 
@@ -203,7 +210,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     val after = stateManager.getCurrentState.unsafeRunSync()
     after shouldBe before
-    after.fileSearchSurface.map(_.id) shouldBe Some(floatingSurfaceId)
+    after.searchInOpenFilesSurface.map(_.id) shouldBe Some(floatingSurfaceId)
 
   // ── Panel resize ─────────────────────────────────────────────────────────
 
@@ -442,8 +449,8 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(FileSearch).unsafeRunSync()
     val floatingSurfaceId = stateManager.getCurrentState
       .unsafeRunSync()
-      .fileSearchSurface
-      .getOrElse(fail("Expected a floating file-search surface"))
+      .searchInOpenFilesSurface
+      .getOrElse(fail("Expected a floating Search in Open Files picker"))
       .id
     val before = stateManager.getCurrentState.unsafeRunSync()
 
@@ -484,8 +491,8 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(FileSearch).unsafeRunSync()
     val floatingSurfaceId = stateManager.getCurrentState
       .unsafeRunSync()
-      .fileSearchSurface
-      .getOrElse(fail("Expected a floating file-search surface"))
+      .searchInOpenFilesSurface
+      .getOrElse(fail("Expected a floating Search in Open Files picker"))
       .id
     val before = stateManager.getCurrentState.unsafeRunSync()
 
@@ -510,14 +517,14 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
   // ── Backlog ───────────────────────────────────────────────────────────────
 
-  it should "open file search with Ctrl+Shift+F" in new UIFixture:
+  it should "open Search in Open Files with Ctrl+Shift+F" in new UIFixture:
     stateManager.applyEvent(FileSearch).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.fileSearchSurface shouldBe defined
+    state.searchInOpenFilesSurface shouldBe defined
     state.persisted.focus match
-      case Focus.Surface(id) => state.fileSearchSurface.map(_.id) shouldBe Some(id)
-      case _                 => fail("Expected focus on file search surface")
+      case Focus.Surface(id) => state.searchInOpenFilesSurface.map(_.id) shouldBe Some(id)
+      case _                 => fail("Expected focus on the Search in Open Files picker")
 
   trait UIFixture:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]

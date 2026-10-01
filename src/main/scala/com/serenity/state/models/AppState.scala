@@ -304,12 +304,6 @@ final case class AppState(
       case _                              => false
     }
 
-  def fileSearchSurface: Option[UiSurface] =
-    findSurface {
-      case SurfaceContent.FileSearch(_) => true
-      case _                            => false
-    }
-
   def contextualToolbarSurface: Option[UiSurface] =
     findSurface {
       case SurfaceContent.ContextualToolbar(_) => true

@@ -3,9 +3,8 @@ package com.serenity.ui.layout
 import com.serenity.state.models.*
 import com.serenity.ui.theme.Theme
 
-/** Resolves the windowed single-selection pickers -- the theme creator, fuzzy file search, and the generic context menu
-  * -- into overlay rows. Split out of `SurfaceContentResolver` to keep that file's dispatcher readable -- see the doc
-  * comment there.
+/** Resolves the windowed single-selection pickers -- the theme creator and the generic context menu -- into overlay
+  * rows. Split out of `SurfaceContentResolver` to keep that file's dispatcher readable -- see the doc comment there.
   */
 private[layout] object PickerContentResolver:
 
@@ -54,35 +53,6 @@ private[layout] object PickerContentResolver:
   private def contrastColor(color: java.awt.Color): java.awt.Color =
     if Theme.luminance(color) > Theme.EqualContrastLuminanceThreshold then java.awt.Color.BLACK
     else java.awt.Color.WHITE
-
-  def resolveFileSearch(
-    state: FileSearchState,
-    rect: LayoutRect,
-    mode: SurfaceRenderMode
-  ): ResolvedSurfaceContent =
-    val headerRow = OverlayRow(
-      plainText = if state.query.isEmpty then " " else state.query,
-      cursorColumn = Some(state.query.length)
-    )
-    val itemWindow = SurfaceFrameLayout(rect).itemWindow(
-      itemCount = state.results.size,
-      selectedIndex = state.selectedIndex,
-      hasHeader = true,
-      hasFooter = state.hasMoreResults
-    )
-    val adjustedSelectedIndex = itemWindow.adjustedSelectedIndex(state.selectedIndex)
-    val resultRows = itemWindow.slice(state.results).zipWithIndex.map { (result, idx) =>
-      OverlayRow(
-        plainText = s"${result.bufferName}:${result.line + 1}  ${result.lineContent}",
-        selected = idx == adjustedSelectedIndex
-      )
-    }
-    ResolvedSurfaceContent(
-      title = SurfaceContentResolver.titleFor(mode, "Search"),
-      header = Some(headerRow),
-      rows = resultRows,
-      footer = Option.when(state.hasMoreResults)(OverlayRow(s"${state.results.length} loaded, more available"))
-    )
 
   def resolveContextMenu(
     menu: ContextMenu,

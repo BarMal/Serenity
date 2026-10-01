@@ -149,3 +149,12 @@ class CommandRegistrySpec extends AnyFlatSpec with Matchers:
       CommandIntent.Settings(SettingsIntent.SpellCheck(SpellCheckIntent.AddWordAtCursorToDictionary))
     )
   }
+
+  // Keeps its `file-search` name so existing keybindings and recorded usage still find it.
+  it should "register file-search as Search in Open Files, opening the search over open buffers' text" in {
+    val command = CommandRegistry.default.findCommand("file-search")
+
+    command.map(_.label) shouldBe Some("Search in Open Files")
+    command.map(_.description) shouldBe Some("Search the text of every open file.")
+    command.map(_.intent) shouldBe Some(CommandIntent.File(FileIntent.OpenFileSearch))
+  }

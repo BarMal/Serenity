@@ -270,7 +270,7 @@ object PanelStateReducer:
           SurfaceContent.Diagnostics(_, _) | SurfaceContent.MarkdownPreview(_, _) =>
         Some(surface.copy(presentation = SurfacePresentation.Docked, dismissOnMove = false))
       case SurfaceContent.StartPage(_) | SurfaceContent.CommandPalette(_) | SurfaceContent.CommandRunnerPeek(_) |
-          SurfaceContent.ThemeCreator(_) | SurfaceContent.FileSearch(_) | SurfaceContent.ContextualToolbar(_) |
+          SurfaceContent.ThemeCreator(_) | SurfaceContent.ContextualToolbar(_) |
           SurfaceContent.ContextMenu(_) | SurfaceContent.CommentLens(_) | SurfaceContent.ModalWorkflow(_) |
           SurfaceContent.QuickInfo(_) | SurfaceContent.FilePreview(_, _) | SurfaceContent.SymbolDefinition(_, _) |
           SurfaceContent.StatusLine(_) | SurfaceContent.GhostOverlay(_, _) | SurfaceContent.ShortcutsHelp(_) |
