@@ -89,3 +89,20 @@ object ConfirmPrompt:
       ),
       blocking = false
     )
+
+  /** A plain Save of a formatted buffer whose file can't store formatting. Not blocking: ignoring it saves nothing. */
+  def formattingWouldBeLost(bufferId: BufferId, bufferLabel: String): ConfirmPrompt =
+    of(
+      title = "Plain-text file",
+      message = List(s"$bufferLabel can't store formatting."),
+      choices = List(
+        ConfirmChoice(
+          "Save as rich document…",
+          ConfirmAction.Run(RichTextCommands.saveAsRichDocument),
+          ButtonEmphasis.Primary
+        ),
+        ConfirmChoice("Save without formatting", ConfirmAction.Run(RichTextCommands.saveWithoutFormatting(bufferId))),
+        ConfirmChoice("Cancel", ConfirmAction.Dismiss)
+      ),
+      blocking = false
+    )

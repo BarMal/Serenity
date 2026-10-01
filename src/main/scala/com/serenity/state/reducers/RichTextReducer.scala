@@ -45,6 +45,17 @@ object RichTextReducer:
       case Some((paneId, buffer)) => MarkdownFormattingReducer.reduce(intent, state, paneId, buffer)
       case None                   => ReducerResult.noEffects(reduceRichText(intent, state))
 
+  /** Drops the buffer's rich-text document, so it goes back to plain text and what is on screen is what a plain-text
+    * save writes.
+    */
+  def withoutFormatting(bufferId: BufferId, state: AppState): AppState =
+    state.persisted.buffers.get(bufferId).fold(state) { buffer =>
+      state.copy(persisted =
+        state.persisted
+          .copy(buffers = state.persisted.buffers.updated(bufferId, buffer.copy(richText = RichTextState())))
+      )
+    }
+
   private def activeMarkdownBuffer(state: AppState): Option[(PaneId, Buffer)] =
     for
       paneId <- state.persisted.layout.activeEditorPaneId

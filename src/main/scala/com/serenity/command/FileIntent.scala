@@ -19,3 +19,4 @@ enum FileIntent:
   // #1623: the ways out of a file changed on disk under unsaved edits -- see ExternalChangeCommands.
   case ReloadFromDisk(bufferId: BufferId)
   case OverwriteOnDisk(bufferId: BufferId)
+  case SaveWithoutFormatting(bufferId: BufferId)

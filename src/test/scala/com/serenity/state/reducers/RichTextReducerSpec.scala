@@ -208,3 +208,30 @@ class RichTextReducerSpec extends AnyFlatSpec with Matchers:
     EditingContext.bufferKind(converted) shouldBe BufferKind.RichText
     documentOf(formatted) shouldBe RichTextDocument.fromPlainText("hello world").toggleMark(range0to5, InlineMark.Bold)
   }
+
+  "Dropping formatting" should "leave the buffer plain text with no rich-text document, its text untouched" in {
+    val formatted = validReduce(bold, stateWith(savedAs(selected("hello world", 0, 0, 0, 5), "notes.txt")))
+
+    val dropped = RichTextReducer.withoutFormatting(bufferId, stateWith(formatted))
+    val buffer  = dropped.persisted.buffers.getOrElse(bufferId, fail("expected the buffer"))
+
+    AppStateValidation.validationErrors(dropped) shouldBe Nil
+    buffer.richText.richTextDocument shouldBe None
+    EditingContext.bufferKind(buffer) shouldBe BufferKind.PlainText
+    buffer.document.content.collect() shouldBe "hello world"
+  }
+
+  it should "leave the state untouched for an unknown buffer" in {
+    val state = stateWith(selected("hello world", 0, 0, 0, 5))
+
+    RichTextReducer.withoutFormatting(BufferId(99), state) shouldBe state
+  }
+
+  "A buffer's save" should "lose formatting only when it carries formatting its file's format can't store" in {
+    val formatted = validReduce(bold, stateWith(selected("hello world", 0, 0, 0, 5)))
+
+    savedAs(formatted, "notes.txt").formattingLostOnSave shouldBe true
+    savedAs(formatted, "notes.odt").formattingLostOnSave shouldBe false
+    savedAs(selected("hello world", 0, 0, 0, 5), "notes.txt").formattingLostOnSave shouldBe false
+    formatted.formattingLostOnSave shouldBe false
+  }

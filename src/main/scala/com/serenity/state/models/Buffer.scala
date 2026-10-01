@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import cats.Order
 import cats.data.NonEmptyList
-import com.serenity.io.DocumentRevision
+import com.serenity.io.{DocumentFormat, DocumentRevision, FileType}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{RichTextDocument, RichTextFidelity, RichTextStyle}
 import com.serenity.rope.Rope
@@ -224,6 +224,14 @@ final case class Buffer(
   /** True when closing this buffer may lose user-authored content. */
   def hasUnsavedChanges: Boolean =
     document.isDirty || (document.filePath.isEmpty && !document.isNewEmpty)
+
+  /** True when saving to this buffer's own file would silently drop its formatting. An untitled buffer has no format
+    * yet, so its save (always a Save As) is judged against the path chosen then instead.
+    */
+  def formattingLostOnSave: Boolean =
+    document.filePath.exists(path =>
+      DocumentFormat.wouldLoseFormatting(richText.richTextDocument.exists(_.hasFormatting), FileType.fromPath(path))
+    )
 
   /** The buffer state after an edit lands: swaps in the new content, marks the document dirty, and replaces the cursor
     * list with bare positions, clearing every cursor's selection and preferred-column/x state. `documentComments` and

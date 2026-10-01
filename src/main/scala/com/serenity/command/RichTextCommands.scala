@@ -1,6 +1,9 @@
 package com.serenity.command
 
-/** The commands a plain-text file's "convert to rich text?" prompt can run. */
+import com.serenity.state.models.BufferId
+
+/** The commands a plain-text file's formatting prompts can run: "convert to rich text?" and "save without formatting?".
+  */
 object RichTextCommands:
 
   def convertToRichText(andThen: Option[RichTextIntent]): Command =
@@ -13,3 +16,11 @@ object RichTextCommands:
     )
 
   val saveAsRichDocument: Command = CommandRegistryFileCommands.saveAs
+
+  def saveWithoutFormatting(bufferId: BufferId): Command =
+    Command.typed(
+      "save-without-formatting",
+      "Drop the file's formatting and save it as plain text",
+      CommandIntent.File(FileIntent.SaveWithoutFormatting(bufferId)),
+      CommandCategory.File
+    )
