@@ -18,7 +18,7 @@ private[reducers] object EditorFindEventReducer:
 
     event match
       case OpenGotoLine =>
-        ModalStateReducer.show(Modal.GotoLine(""), currentState)
+        ModalStateReducer.show(Modal.TextPrompt(TextPrompt.gotoLine()), currentState)
 
       case OpenFind =>
         ModalStateReducer.show(findModalForBuffer(buffer), currentState)

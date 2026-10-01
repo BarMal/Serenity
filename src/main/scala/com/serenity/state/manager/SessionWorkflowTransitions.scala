@@ -54,9 +54,15 @@ private[manager] object SessionWorkflowTransitions:
     else restored.fold(WorkflowSurfaces.dismissedToEditor(state, pickerId))(restoredIntoViewport(_, state))
 
   def sessionNamePrompt(state: AppState, surfaceId: SurfaceId): Option[(SessionNamePromptMode, String)] =
-    state.runtime.uiSurfaces.find(_.id == surfaceId).collect {
-      case UiSurface(_, SurfaceContent.ModalWorkflow(Modal.SessionNamePrompt(mode, input)), _, _) => (mode, input)
-    }
+    state.runtime.uiSurfaces
+      .find(_.id == surfaceId)
+      .collect {
+        case UiSurface(_, SurfaceContent.ModalWorkflow(Modal.TextPrompt(prompt)), _, _) =>
+          prompt.purpose match
+            case TextPromptPurpose.SessionName(mode) => Some((mode, prompt.input))
+            case _                                   => None
+      }
+      .flatten
 
   def sessionPicker(
     state: AppState,

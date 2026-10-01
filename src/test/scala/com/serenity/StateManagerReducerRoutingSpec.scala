@@ -191,7 +191,9 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
     stateManager.applyEvent(InsertChar('7')).unsafeRunSync()
     val modalState = stateManager.getCurrentState.unsafeRunSync()
     val modalSurface =
-      modalState.runtime.uiSurfaces.find(_.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("7")))
+      modalState.runtime.uiSurfaces.find(
+        _.content == SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine("7")))
+      )
     modalSurface shouldBe defined
     modalState.persisted.focus shouldBe Focus.Surface(modalSurface.get.id)
 
@@ -199,7 +201,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
     val afterDismiss = stateManager.getCurrentState.unsafeRunSync()
     afterDismiss.persisted.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
     afterDismiss.runtime.uiSurfaces.exists(
-      _.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("7"))
+      _.content == SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine("7")))
     ) shouldBe false
 
     stateManager

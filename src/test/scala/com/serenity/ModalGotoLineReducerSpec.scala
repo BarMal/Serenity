@@ -20,16 +20,18 @@ class ModalGotoLineReducerSpec extends AnyFlatSpec with Matchers:
         uiSurfaces = List(
           UiSurface(
             SurfaceId("goto-line"),
-            SurfaceContent.ModalWorkflow(Modal.GotoLine("1")),
+            SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine("1"))),
             SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
         )
       )
     )
 
-    val updatedState = ModalEventReducer.reduce(ModalType.GotoLine, InsertChar('2'), initialState).state
+    val updatedState = ModalEventReducer.reduce(ModalType.TextPrompt, InsertChar('2'), initialState).state
 
-    updatedState.modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.GotoLine("12")))
+    updatedState.modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine("12")))
+    )
   }
 
   it should "jump to the requested line and dismiss the goto line modal" in {
@@ -51,14 +53,14 @@ class ModalGotoLineReducerSpec extends AnyFlatSpec with Matchers:
         uiSurfaces = List(
           UiSurface(
             SurfaceId("goto-line"),
-            SurfaceContent.ModalWorkflow(Modal.GotoLine("3")),
+            SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine("3"))),
             SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
         )
       )
     )
 
-    val updatedState = ModalEventReducer.reduce(ModalType.GotoLine, Enter, initialState).state
+    val updatedState = ModalEventReducer.reduce(ModalType.TextPrompt, Enter, initialState).state
 
     updatedState.modalSurface shouldBe None
     updatedState.persisted.focus shouldBe Focus.EditorPane(paneId)

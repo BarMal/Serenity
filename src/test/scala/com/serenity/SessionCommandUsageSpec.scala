@@ -46,7 +46,9 @@ class SessionCommandUsageSpec extends AnyFlatSpec with Matchers:
     val after = runFromPalette(createStateManager(), "save-session-as")
 
     mostRecentCommand(after) shouldBe Some("save-session-as")
-    openModal(after) should matchPattern { case Some(Modal.SessionNamePrompt(SessionNamePromptMode.SaveAs, _)) => }
+    openModal(after) should matchPattern {
+      case Some(Modal.TextPrompt(TextPrompt(_, _, TextPromptPurpose.SessionName(SessionNamePromptMode.SaveAs)))) =>
+    }
   }
 
   "Open Session from the palette" should "be the most recent command and show the session picker" in {

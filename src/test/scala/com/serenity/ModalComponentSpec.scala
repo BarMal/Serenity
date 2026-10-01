@@ -34,12 +34,12 @@ class ModalComponentSpec extends AnyFlatSpec with Matchers:
     )
 
   "ModalComponent" should "update goto line modals through the reducer path" in {
-    val component = ModalComponent(ModalType.GotoLine)
+    val component = ModalComponent(ModalType.TextPrompt)
 
-    component.processEvent(InsertChar('4'), modalState(Modal.GotoLine("1"))) match
+    component.processEvent(InsertChar('4'), modalState(Modal.TextPrompt(TextPrompt.gotoLine("1")))) match
       case ComponentResult.ReducerUpdate(result) =>
         result.state.modalSurface.map(_.content) shouldBe
-          Some(SurfaceContent.ModalWorkflow(Modal.GotoLine("14")))
+          Some(SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine("14"))))
         result.effects shouldBe Nil
       case other =>
         fail(s"Expected reducer update, got $other")

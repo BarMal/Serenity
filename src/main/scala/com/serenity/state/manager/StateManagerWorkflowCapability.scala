@@ -274,7 +274,7 @@ final private[manager] class StateManagerWorkflowCapability(
     * command that opened it is kept.
     */
   private[manager] def openSaveSessionAsPrompt(): IO[Unit] =
-    commit(ModalStateReducer.show(Modal.SessionNamePrompt(SessionNamePromptMode.SaveAs, ""), _).state)
+    commit(ModalStateReducer.show(Modal.TextPrompt(TextPrompt.sessionName(SessionNamePromptMode.SaveAs)), _).state)
 
   /** Lists the saved sessions on the Session lane, then opens the picker (issue #1390) for either purpose: `Open` loads
     * the selected session directly on Enter, `Rename` hands it off to the name prompt.

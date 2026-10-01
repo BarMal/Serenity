@@ -35,16 +35,17 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     )
 
   "ModalStateReducer" should "show and dismiss modals while preserving editor focus fallback" in {
-    val shown = ModalStateReducer.show(Modal.GotoLine("12"), baseState)
+    val shown = ModalStateReducer.show(Modal.TextPrompt(TextPrompt.gotoLine("12")), baseState)
     val modalSurface =
-      shown.state.runtime.uiSurfaces.find(_.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("12")))
+      shown.state.runtime.uiSurfaces
+        .find(_.content == SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine("12"))))
 
     modalSurface shouldBe defined
     shown.state.persisted.focus shouldBe Focus.Surface(modalSurface.get.id)
 
     val dismissed = ModalStateReducer.dismiss(shown.state)
     dismissed.state.runtime.uiSurfaces
-      .exists(_.content == SurfaceContent.ModalWorkflow(Modal.GotoLine("12"))) shouldBe false
+      .exists(_.content == SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine("12")))) shouldBe false
     dismissed.state.persisted.focus shouldBe Focus.EditorPane(paneId)
   }
 

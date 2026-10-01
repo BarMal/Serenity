@@ -144,7 +144,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
 
   it should "derive every modal control from its resolved composition" in {
     val cases = List(
-      SurfaceId("goto")   -> Modal.GotoLine("42"),
+      SurfaceId("goto")   -> Modal.TextPrompt(TextPrompt.gotoLine("42")),
       SurfaceId("custom") -> Modal.Custom("Rename", "draft"),
       SurfaceId("find")   -> Modal.Find("needle", List(FindResult(1, 2), FindResult(4, 5)), currentIndex = 1),
       SurfaceId("file") -> Modal.FileWorkflow(

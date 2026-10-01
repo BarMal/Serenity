@@ -2,48 +2,12 @@ package com.serenity.state.reducers
 
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
-import com.serenity.text.TextEditing
 
-/** Named-session modal input (issue #1390): the single-field save-as/rename name prompt (`SessionNamePrompt`, styled
-  * and driven exactly like `ModalGotoLineReducer`'s `GotoLine`), and the session-list picker (`SessionList`, navigated
-  * and submitted like `ModalFindReducer`'s results list minus the query field). Split out of `ModalEventReducer`'s
-  * per-modal-type dispatch, the same way every other modal type is.
+/** The named-session picker (issue #1390, `SessionList`), navigated and submitted like `ModalFindReducer`'s results
+  * list minus the query field. Picking a session to rename hands over to a session-name [[TextPrompt]].
   */
 private[reducers] object ModalSessionReducer:
   import ModalEventReducer.{currentModal, dismissToPane, updateModal}
-
-  def reduceNamePrompt(event: ModalInputEvent, currentState: AppState): ReducerResult =
-    event match
-      case ModalDismiss => ReducerResult.noEffects(dismissToPane(currentState))
-      case ModalInsertChar(char) =>
-        withNamePromptInput(currentState)(_ + char)
-      case ModalDeleteBackward =>
-        withNamePromptInput(currentState)(_.dropRight(1))
-      case ModalDeleteForward =>
-        ReducerResult.noEffects(currentState)
-      case ModalDeleteWordBackward =>
-        withNamePromptInput(currentState)(TextEditing.deleteWordBackward)
-      case ModalDeleteWordForward =>
-        withNamePromptInput(currentState)(TextEditing.deleteWordForward)
-      case ModalSubmit =>
-        currentModal(currentState) match
-          case Some((id, Modal.SessionNamePrompt(_, input))) if input.trim.nonEmpty =>
-            ReducerResult.withEffect(currentState, AppEffect.Workflow(WorkflowEffect.SubmitSessionNamePrompt(id)))
-          case Some((_, Modal.SessionNamePrompt(_, _))) =>
-            ReducerResult.noEffects(dismissToPane(currentState))
-          case _ =>
-            ReducerResult.noEffects(currentState)
-      case ModalClick(_, _) =>
-        ReducerResult.noEffects(currentState)
-      case _ =>
-        ReducerResult.noEffects(currentState)
-
-  private def withNamePromptInput(state: AppState)(f: String => String): ReducerResult =
-    currentModal(state) match
-      case Some((id, Modal.SessionNamePrompt(mode, input))) =>
-        ReducerResult.noEffects(updateModal(state, id, Modal.SessionNamePrompt(mode, f(input))))
-      case _ =>
-        ReducerResult.noEffects(state)
 
   def reduceList(event: ModalInputEvent, currentState: AppState): ReducerResult =
     event match
@@ -68,7 +32,8 @@ private[reducers] object ModalSessionReducer:
       case Some((id, Modal.SessionList(sessions, index, SessionListPurpose.Rename))) =>
         sessions.lift(index) match
           case Some(session) =>
-            val prompt = Modal.SessionNamePrompt(SessionNamePromptMode.Rename(session.id), session.displayName)
+            val prompt =
+              Modal.TextPrompt(TextPrompt.sessionName(SessionNamePromptMode.Rename(session.id), session.displayName))
             ReducerResult.noEffects(updateModal(state, id, prompt))
           case None =>
             ReducerResult.noEffects(dismissToPane(state))
