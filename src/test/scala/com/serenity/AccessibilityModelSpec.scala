@@ -1,8 +1,9 @@
 package com.serenity
 
-import com.serenity.command.{CommandRunner, FileIntent}
+import com.serenity.command.{CommandRunner, FileIntent, SessionCommands}
 import com.serenity.config.{AppConfig, AppMode, InterfaceDensity}
 import com.serenity.rope.Balance
+import com.serenity.session.SessionId
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.ui.accessibility.{AccessibilityRole, AccessibilitySnapshot}
@@ -144,9 +145,17 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
 
   it should "derive every modal control from its resolved composition" in {
     val cases = List(
-      SurfaceId("goto")   -> Modal.TextPrompt(TextPrompt.gotoLine("42")),
-      SurfaceId("custom") -> Modal.Custom("Rename", "draft"),
-      SurfaceId("find")   -> Modal.Find("needle", List(FindResult(1, 2), FindResult(4, 5)), currentIndex = 1),
+      SurfaceId("goto") -> Modal.TextPrompt(TextPrompt.gotoLine("42")),
+      SurfaceId("picker") -> Modal.ListPicker(
+        ListPicker.of(
+          "Open session",
+          List(
+            ListChoice("Draft", None, SessionCommands.openNamedSession(SessionId("draft")))
+          ),
+          "No saved sessions"
+        )
+      ),
+      SurfaceId("find") -> Modal.Find("needle", List(FindResult(1, 2), FindResult(4, 5)), currentIndex = 1),
       SurfaceId("file") -> Modal.FileWorkflow(
         FileWorkflowState(
           mode = FileWorkflowMode.SaveAs,

@@ -79,11 +79,12 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "track custom modal names through focus typing" in {
-    val shown = ModalStateReducer.show(Modal.Custom("signature-help", "map("), baseState)
+  it should "focus a modeless modal workflow once it is shown" in {
+    val prompt = Modal.TextPrompt(TextPrompt.gotoLine("12"))
+    val shown  = ModalStateReducer.show(prompt, baseState)
     val modalSurface =
       shown.state.runtime.uiSurfaces
-        .find(_.content == SurfaceContent.ModalWorkflow(Modal.Custom("signature-help", "map(")))
+        .find(_.content == SurfaceContent.ModalWorkflow(prompt))
 
     modalSurface shouldBe defined
     shown.state.persisted.focus shouldBe Focus.Surface(modalSurface.get.id)

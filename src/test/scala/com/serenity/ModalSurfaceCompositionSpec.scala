@@ -115,16 +115,12 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     plan.focusOrder shouldBe plan.hitRegions.map(_.focusId)
   }
 
-  it should "compose goto and custom workflows as labelled text inputs" in {
-    val goto   = planFor(Modal.TextPrompt(TextPrompt.gotoLine("42")))
-    val custom = planFor(Modal.Custom("rename", "draft"))
+  it should "compose a text prompt as a labelled text input" in {
+    val goto = planFor(Modal.TextPrompt(TextPrompt.gotoLine("42")))
 
     goto.hitRegions.map(_.semanticLabel) shouldBe List("Go to line")
     goto.paintBoxes.flatMap(_.cursorOffset) shouldBe List("Go to line 42".length)
-    custom.hitRegions.map(_.semanticLabel) shouldBe List("rename")
-    custom.paintBoxes.flatMap(_.cursorOffset) shouldBe List("rename draft".length)
     goto.focusOrder shouldBe goto.hitRegions.map(_.focusId)
-    custom.focusOrder shouldBe custom.hitRegions.map(_.focusId)
   }
 
   it should "draw a text prompt's caret where the field's caret is" in {
@@ -386,7 +382,6 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
 
   it should "derive preferred frame height from each workflow composition" in {
     ModalSurfaceComposition.frameHeight(Modal.TextPrompt(TextPrompt.gotoLine("")), targetRows = 1) shouldBe 3
-    ModalSurfaceComposition.frameHeight(Modal.Custom("rename", ""), targetRows = 1) shouldBe 4
     ModalSurfaceComposition.frameHeight(Modal.Find("needle", Nil, 0), targetRows = 1) shouldBe 5
     ModalSurfaceComposition.frameHeight(Modal.Find("needle", List(FindResult(0, 0)), 0), targetRows = 1) shouldBe 6
     ModalSurfaceComposition.frameHeight(

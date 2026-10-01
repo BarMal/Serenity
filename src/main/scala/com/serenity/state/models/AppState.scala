@@ -374,8 +374,8 @@ final case class AppState(
   def topModal: Option[ModalDialog] =
     runtime.modalStack.lastOption
 
-  /** The active *modeless* modal workflow surface (GotoLine/Find/ReplaceWorkflow/Custom) -- blocking dialogs live on
-    * `runtime.modalStack` instead, see `topModal`.
+  /** The active *modeless* modal workflow surface (TextPrompt/Find/ReplaceWorkflow/ListPicker) -- blocking dialogs live
+    * on `runtime.modalStack` instead, see `topModal`.
     */
   def modalSurface: Option[UiSurface] =
     runtime.uiSurfaces.reverse.find(isModalWorkflow)

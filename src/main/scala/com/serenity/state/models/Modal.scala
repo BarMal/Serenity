@@ -463,11 +463,6 @@ enum Modal:
       currentIndex: Int
   )
 
-  case Custom(
-      name: String,
-      input: String = ""
-  )
-
   case FileWorkflow(
       workflow: FileWorkflowState
   )

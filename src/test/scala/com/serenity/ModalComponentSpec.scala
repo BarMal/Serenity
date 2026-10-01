@@ -1,8 +1,6 @@
 package com.serenity
 
-import com.serenity.keystroke.events.{InsertChar, TabKey, UnhandledEvent}
-import com.serenity.keystroke.translators.Translator
-import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
+import com.serenity.keystroke.events.{InsertChar, TabKey}
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, ModalComponent}
 import com.serenity.state.models.*
@@ -13,9 +11,6 @@ import org.scalatest.matchers.should.Matchers
 class ModalComponentSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
-
-  private object NoopTranslator extends Translator[com.serenity.keystroke.events.Event]:
-    val converters = List.empty
 
   private def modalState(modal: Modal): AppState =
     AppState.initial.copy(
@@ -43,21 +38,6 @@ class ModalComponentSpec extends AnyFlatSpec with Matchers:
         result.effects shouldBe Nil
       case other =>
         fail(s"Expected reducer update, got $other")
-  }
-
-  it should "dismiss custom modals on enter and escape" in {
-    val component   = ModalComponent(ModalType.Custom("signature-help"))
-    val enterEvent  = UnhandledEvent(KeyStrokeInfo(InputKey.Enter, None, Set.empty), NoopTranslator)
-    val escapeEvent = UnhandledEvent(KeyStrokeInfo(InputKey.Escape, None, Set.empty), NoopTranslator)
-
-    component.processEvent(
-      enterEvent,
-      modalState(Modal.Custom("signature-help", "map("))
-    ) shouldBe ComponentResult.Dismiss
-    component.processEvent(
-      escapeEvent,
-      modalState(Modal.Custom("signature-help", "map("))
-    ) shouldBe ComponentResult.Dismiss
   }
 
   it should "route file workflow modals through the reducer path" in {
