@@ -42,6 +42,11 @@ object SurfaceMaterials:
       theme.background
     )
 
+  /** The colour a panel-material fill paints with on `surface`: the panel colour, or the backdrop showing through it.
+    */
+  def panelBackground(config: AppConfig, theme: Theme, surface: RenderSurface): Color =
+    backdropShowingThrough(config, theme, surface).getOrElse(theme.panel.background)
+
   /** `color` faded to the alpha of the background it sits on, so a panel's highlights and tones fade with the panel.
     * The theme's alpha-0 backdrop is not a fade but the terminal showing through (see [[backdropShowingThrough]]), so a
     * colour over it keeps its own alpha.

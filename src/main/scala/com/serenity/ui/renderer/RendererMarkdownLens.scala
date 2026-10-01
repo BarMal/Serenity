@@ -223,6 +223,9 @@ object RendererMarkdownLens:
   ): Unit =
     val lines         = frame.lines
     val previewWindow = frame.previewWindow
+    val lensBackground =
+      SurfaceMaterials.panelBackground(state.persisted.config, state.persisted.theme, context.surface)
+    val lensTheme = state.persisted.theme.copy(background = lensBackground)
     frame.activeSourceRanges.foreach { blockRange =>
       val absoluteBlockRange = (blockRange.start + frame.firstSourceLine) to (blockRange.end + frame.firstSourceLine)
       val blockVisualLines   = snapshot.visualLines.filter(line => absoluteBlockRange.contains(line.bufferLine))
@@ -239,7 +242,7 @@ object RendererMarkdownLens:
           )
         )
         val lensY = rect.y + placement.top
-        context.surface.setBackgroundColor(state.persisted.theme.panel.background)
+        context.surface.setBackgroundColor(lensBackground)
         context.surface.fillRect(rect.x, lensY, rect.width, placement.height, ' ')
         blockVisualLines.zipWithIndex.foreach {
           case (visualLine, index) =>
@@ -247,7 +250,7 @@ object RendererMarkdownLens:
             if screenY >= rect.y && screenY < rect.bottom && screenY >= 0 && screenY < context.surface.viewportHeight
             then
               context.surface.setForegroundColor(state.persisted.theme.foreground)
-              context.surface.setBackgroundColor(state.persisted.theme.panel.background)
+              context.surface.setBackgroundColor(lensBackground)
               if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
                 CharacterRenderer.renderMeasuredLineWithAnimation(
                   context.surface,
@@ -256,7 +259,7 @@ object RendererMarkdownLens:
                   snapshot.lineHeightPx,
                   snapshot.ascentPx,
                   visualLine,
-                  state.persisted.theme.copy(background = state.persisted.theme.panel.background),
+                  lensTheme,
                   context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                   syntaxHighlightingEnabled = false,
                   language = None,
@@ -270,7 +273,7 @@ object RendererMarkdownLens:
                   rect.x,
                   screenY,
                   visualLine.text,
-                  state.persisted.theme.copy(background = state.persisted.theme.panel.background),
+                  lensTheme,
                   context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                   syntaxHighlightingEnabled = false,
                   language = None,

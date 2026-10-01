@@ -251,7 +251,9 @@ object RendererPaneContent:
         surface.setBackgroundColor(state.persisted.theme.highlighted.background)
         surface.setForegroundColor(state.persisted.theme.highlighted.foreground)
       else
-        surface.setBackgroundColor(state.persisted.theme.panel.background)
+        surface.setBackgroundColor(
+          SurfaceMaterials.panelBackground(state.persisted.config, state.persisted.theme, surface)
+        )
         surface.setForegroundColor(state.persisted.theme.panel.foreground)
 
       val bufferTitleBase = buffer match
