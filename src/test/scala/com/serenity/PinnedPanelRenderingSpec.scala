@@ -98,6 +98,43 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getBg(panel.rect.x + 1, panel.rect.y + 1) shouldBe Theme.light.panel.background
   }
 
+  it should "paint a box's tone as its foreground, unless the box is selected" in {
+    val surface = new MockRenderSurface(40, 12)
+    val rect    = LayoutRect(2, 2, 20, 6)
+    val bounds  = LogicalPixelRect(3, 3, 18, 4)
+    def box(text: String, row: Int, tone: OverlayTone, selected: Boolean = false) =
+      SurfacePaintBox(
+        SurfacePaintKind.Text,
+        bounds.copy(y = bounds.y + row, height = 1),
+        Some(text),
+        selected = selected,
+        tone = tone
+      )
+    val composition = ResolvedSurfaceComposition(
+      bounds = bounds,
+      intrinsicSize = SurfaceIntrinsicSize(bounds.width, bounds.height),
+      paintBoxes = List(
+        box("failed", 0, OverlayTone.Error),
+        box("primary", 1, OverlayTone.Accent),
+        box("picked", 2, OverlayTone.Accent, selected = true),
+        box("quiet", 3, OverlayTone.Muted)
+      ),
+      hitRegions = Nil,
+      focusOrder = Nil
+    )
+    val theme = Theme.light
+    val panel = TextPanelView(rect = rect, title = "panel", composition = Some(composition))
+
+    PinnedPanelRenderer.render(surface, panel, theme, AppConfig.default, cellMetrics)
+
+    surface.getFg(3, 3) shouldBe theme.error.foreground
+    surface.getBg(3, 3) shouldBe theme.error.background
+    surface.getFg(3, 4) shouldBe theme.accent
+    surface.getFg(3, 5) shouldBe theme.highlighted.foreground
+    surface.getBg(3, 5) shouldBe theme.highlighted.background
+    surface.getFg(3, 6) shouldBe theme.muted
+  }
+
   it should "render rows inside the shared framed content rectangle" in {
     val surface = new MockRenderSurface(20, 8)
     val panel = TextPanelView(

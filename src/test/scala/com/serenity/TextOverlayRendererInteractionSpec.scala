@@ -8,12 +8,17 @@ import com.serenity.state.models.{ConfirmPrompt, Modal}
 import com.serenity.ui.layout.{
   CellMetrics,
   LayoutRect,
+  LogicalPixelRect,
   ModalSurfaceComposition,
   OverlayRow,
   OverlayRowLayout,
   OverlaySegment,
+  OverlayTone,
   ResolvedSurfaceComposition,
-  SurfaceFrameLayout
+  SurfaceFrameLayout,
+  SurfaceIntrinsicSize,
+  SurfacePaintBox,
+  SurfacePaintKind
 }
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
@@ -51,6 +56,46 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
     surface.getRow(frame.y + 2) should include("notes.scala")
     surface.getRow(frame.y + 5) should include("Close Anyway")
     surface.getBg(frame.x + 1, frame.y + 5) shouldBe Theme.light.highlighted.background
+  }
+
+  it should "paint a box's tone as its foreground, unless the box is selected" in {
+    val surface = new MockRenderSurface(30, 8)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)
+    val frame   = LayoutRect(0, 0, 20, 6)
+    val bounds  = LogicalPixelRect(1, 1, 18, 4)
+    def box(text: String, row: Int, tone: OverlayTone, selected: Boolean = false) =
+      SurfacePaintBox(
+        SurfacePaintKind.ActionItem,
+        bounds.copy(y = 1.0 + row, height = 1),
+        Some(text),
+        selected = selected,
+        tone = tone
+      )
+    val composition = ResolvedSurfaceComposition(
+      bounds = bounds,
+      intrinsicSize = SurfaceIntrinsicSize(bounds.width, bounds.height),
+      paintBoxes = List(
+        box("Danger", 0, OverlayTone.Error),
+        box("Primary", 1, OverlayTone.Accent),
+        box("Picked", 2, OverlayTone.Error, selected = true),
+        box("Plain", 3, OverlayTone.Normal)
+      ),
+      hitRegions = Nil,
+      focusOrder = Nil
+    )
+    val theme                           = Theme.light
+    val overlay                         = TextOverlayView(rect = frame, composition = Some(composition))
+    def rgb(color: java.awt.Color): Int = color.getRGB & 0xffffff
+
+    TextOverlayRenderer.render(surface, overlay, theme, AppConfig.default, cursorVisible = false, font, metrics)
+
+    surface.getRow(1).slice(1, 7) shouldBe "Danger"
+    rgb(surface.getFg(1, 1)) shouldBe rgb(theme.error.foreground)
+    rgb(surface.getFg(1, 2)) shouldBe rgb(theme.accent)
+    rgb(surface.getFg(1, 3)) shouldBe rgb(theme.highlighted.foreground)
+    rgb(surface.getBg(1, 3)) shouldBe rgb(theme.highlighted.background)
+    rgb(surface.getFg(1, 4)) shouldBe rgb(theme.panel.foreground)
   }
 
   it should "keep reflowed close prompt controls inside a constrained frame" in {

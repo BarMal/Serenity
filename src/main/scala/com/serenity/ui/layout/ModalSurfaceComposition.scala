@@ -330,7 +330,8 @@ object ModalSurfaceComposition:
     segments: List[OverlaySegment] = Nil,
     layout: SurfacePaintLayout = SurfacePaintLayout.Plain,
     focusId: Option[SurfaceFocusId] = None,
-    actionId: Option[SurfaceActionId] = None
+    actionId: Option[SurfaceActionId] = None,
+    tone: OverlayTone = OverlayTone.Normal
   ): SurfacePaintBox =
     SurfacePaintBox(
       SurfacePaintKind.Text,
@@ -341,7 +342,8 @@ object ModalSurfaceComposition:
       semanticLabel = Some(text),
       selected = selected,
       segments = segments,
-      layout = layout
+      layout = layout,
+      tone = tone
     )
 
   private def headingBox(text: String, rect: LogicalPixelRect): SurfacePaintBox =
@@ -375,7 +377,8 @@ object ModalSurfaceComposition:
     actionId: SurfaceActionId,
     focusId: SurfaceFocusId,
     selected: Boolean,
-    rect: LogicalPixelRect
+    rect: LogicalPixelRect,
+    tone: OverlayTone = OverlayTone.Normal
   ): SurfacePaintBox =
     SurfacePaintBox(
       kind = SurfacePaintKind.ActionItem,
@@ -384,7 +387,8 @@ object ModalSurfaceComposition:
       focusId = Some(focusId),
       actionId = Some(actionId),
       semanticLabel = Some(label),
-      selected = selected
+      selected = selected,
+      tone = tone
     )
 
   private def horizontalBoxes(

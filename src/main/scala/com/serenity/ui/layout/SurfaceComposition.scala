@@ -64,7 +64,8 @@ final case class SurfacePaintBox(
     selected: Boolean = false,
     cursorOffset: Option[Int] = None,
     segments: List[OverlaySegment] = Nil,
-    layout: SurfacePaintLayout = SurfacePaintLayout.Plain
+    layout: SurfacePaintLayout = SurfacePaintLayout.Plain,
+    tone: OverlayTone = OverlayTone.Normal
 )
 
 /** One semantic pointer target emitted from the same box used for painting. */

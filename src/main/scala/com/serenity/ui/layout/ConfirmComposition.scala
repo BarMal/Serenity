@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
 import com.serenity.state.models.ConfirmPrompt
+import com.serenity.ui.widget.ButtonEmphasis
 
 /** The one composition every [[ConfirmPrompt]] is drawn with: its title, its message lines, then one action row per
   * choice, the highlighted choice selected.
@@ -52,7 +53,8 @@ object ConfirmComposition:
           choiceActionId(index),
           SurfaceFocusId(choiceActionId(index).value),
           selected = prompt.choices.selected.contains(index),
-          rect
+          rect,
+          toneFor(choice.emphasis)
         )
     }
     val clippedTextBoxes   = textBoxes.flatMap(ModalSurfaceComposition.clipBox(_, bounds))
@@ -92,3 +94,9 @@ object ConfirmComposition:
       prompt.choices.items.size * math.max(1, targetRows)
 
   private def textLines(prompt: ConfirmPrompt): List[String] = prompt.title :: prompt.message
+
+  private def toneFor(emphasis: ButtonEmphasis): OverlayTone =
+    emphasis match
+      case ButtonEmphasis.Primary   => OverlayTone.Accent
+      case ButtonEmphasis.Secondary => OverlayTone.Normal
+      case ButtonEmphasis.Danger    => OverlayTone.Error

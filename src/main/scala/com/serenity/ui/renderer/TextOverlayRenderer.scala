@@ -36,11 +36,10 @@ object TextOverlayRenderer:
     val rect = overlay.rect
 
     val isStatusLine = overlay.surfaceId.contains(UiSurface.StatusLineSurfaceId)
-    val isTabBar     = overlay.surfaceId.contains(UiSurface.TabBarSurfaceId)
+    val isQuietLine  = isStatusLine || overlay.surfaceId.contains(UiSurface.TabBarSurfaceId)
 
-    // The status row and the tab strip are both quiet single lines, not floating panels: no shadow, and (via
-    // SurfaceFrameLayout) no border.
-    if config.surfaceConfig.uiShadowsEnabled && !isStatusLine && !isTabBar then
+    // The status row and the tab strip are both quiet single lines, not floating panels: no shadow and no border.
+    if config.surfaceConfig.uiShadowsEnabled && !isQuietLine then
       surface.roundedRects.foreach(
         _.drawRoundRectShadow(
           rect.x,
@@ -95,7 +94,7 @@ object TextOverlayRenderer:
         drawComposition(surface, _, theme, cursorVisible, rowColors, font, cellMetrics, textInsetPx, overlay.rect.y)
       )
     }
-    drawBorder(surface, overlay, theme, config)
+    if !isQuietLine then drawBorder(surface, overlay, theme, config)
 
     surface.effects.foreach(_.setAlpha(1.0f))
     surface.setForegroundColor(theme.foreground)
@@ -108,7 +107,10 @@ object TextOverlayRenderer:
     config: AppConfig
   ): Unit =
     val rect = overlay.rect
-    if rect.width >= 2 && rect.height >= 2 then
+    // A surface with no reserved border cell has content running to its edge, which a frame would draw over. The tab
+    // bar is kept out by its caller instead: it paints edge to edge although `borderCellsFor` gives its content kind
+    // the default border.
+    if overlay.borderCells > 0 && rect.width >= 2 && rect.height >= 2 then
       surface.roundedRects.foreach(
         _.strokeRoundRect(
           rect.x,
@@ -155,18 +157,7 @@ object TextOverlayRenderer:
         val width     = math.round(rect.width).toInt
         val rowOffset = y - frameY
         val (fg, bg)  = rowColors(rowOffset)
-        val row = OverlayRow(
-          plainText = text,
-          selected = box.selected,
-          cursorColumn = box.cursorOffset,
-          segments = box.segments,
-          layout = box.layout match
-            case SurfacePaintLayout.Plain       => OverlayRowLayout.Plain
-            case SurfacePaintLayout.Split       => OverlayRowLayout.Split
-            case SurfacePaintLayout.Inline      => OverlayRowLayout.Plain
-            case SurfacePaintLayout.Columns     => OverlayRowLayout.Columns
-            case SurfacePaintLayout.Distributed => OverlayRowLayout.Distributed
-        )
+        val row       = overlayRowFor(box, text)
         OverlayRowPainter.renderRow(
           surface,
           x,
@@ -188,6 +179,28 @@ object TextOverlayRenderer:
         )
       }
     }
+
+  /** A box with a tone but no segments of its own paints as one implicit segment carrying that tone, so the tone goes
+    * through the same selected-wins colour rules as any segment's. Explicit segments keep their own tones.
+    */
+  private def overlayRowFor(box: SurfacePaintBox, text: String): OverlayRow =
+    val tonedWhole = box.segments.isEmpty && box.tone != OverlayTone.Normal
+    OverlayRow(
+      plainText = text,
+      selected = box.selected,
+      cursorColumn = box.cursorOffset,
+      segments =
+        if tonedWhole then List(OverlaySegment(text, selected = box.selected, tone = box.tone)) else box.segments,
+      layout =
+        if tonedWhole then OverlayRowLayout.Plain
+        else
+          box.layout match
+            case SurfacePaintLayout.Plain       => OverlayRowLayout.Plain
+            case SurfacePaintLayout.Split       => OverlayRowLayout.Split
+            case SurfacePaintLayout.Inline      => OverlayRowLayout.Plain
+            case SurfacePaintLayout.Columns     => OverlayRowLayout.Columns
+            case SurfacePaintLayout.Distributed => OverlayRowLayout.Distributed
+    )
 
   private def applyGlassSheen(
     surface: RenderSurface,

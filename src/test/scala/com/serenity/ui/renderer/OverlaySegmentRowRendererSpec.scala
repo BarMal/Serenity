@@ -161,6 +161,16 @@ class OverlaySegmentRowRendererSpec extends AnyFlatSpec with Matchers:
     s.getBg(0, 0) shouldBe bg
   }
 
+  it should "use the theme's accent foreground for an unselected Accent-tone segment, but the default background" in {
+    val s       = surface()
+    val segment = OverlaySegment("acc", tone = OverlayTone.Accent)
+
+    OverlaySegmentRowRenderer.renderSegmentText(s, x = 0, y = 0, width = 3, "acc", segment, theme, fg, bg, font)
+
+    s.getFg(0, 0) shouldBe withAlphaOf(theme.accent, fg)
+    s.getBg(0, 0) shouldBe bg
+  }
+
   it should "prefer an explicit per-segment foreground/background colour over every tone rule" in {
     val s        = surface()
     val customFg = new Color(10, 20, 30)
