@@ -271,7 +271,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
         modalStack = List(
           ModalDialog(
             SurfaceId("close-confirmation"),
-            Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")),
+            Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")),
             ModalPlacement.Centered
           )
         )

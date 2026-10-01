@@ -45,15 +45,25 @@ final private[manager] class CloseWorkflowTransitions(ensureCommandRunnerSurface
       else closeForScope(workflow.scope, dismissed, workflow.currentBufferId)
     continued(workflow, next)
 
-  /** What cancelling the prompt leaves: the prompt gone, no close pending, and a tab close's original tab active. */
-  def abandoned(surfaceId: SurfaceId, workflow: CloseWorkflowState, state: AppState): AppState =
-    restoreActiveTab(workflow.scope, clearCloseActions(WorkflowSurfaces.dismissedToEditor(state, surfaceId)))
+  /** What cancelling the close leaves: no close pending, and a tab close's original tab active. The prompt has already
+    * closed by the time its answer runs.
+    */
+  def abandoned(workflow: CloseWorkflowState, state: AppState): AppState =
+    restoreActiveTab(workflow.scope, clearCloseActions(state))
 
   /** The save found the file changed on disk: abandon the close and ask how to resolve the conflict. */
-  def conflicted(surfaceId: SurfaceId, workflow: CloseWorkflowState, state: AppState): AppState =
+  def conflicted(workflow: CloseWorkflowState, state: AppState): AppState =
     val bufferId = workflow.currentBufferId
     val conflict = ConfirmPrompt.reloadConflict(bufferId, closeBufferLabel(state, bufferId))
-    ModalStateReducer.show(Modal.Confirm(conflict), abandoned(surfaceId, workflow, state)).state
+    ModalStateReducer.show(Modal.Confirm(conflict), abandoned(workflow, state)).state
+
+  /** The prompt again for the close still waiting, after the Save As its Save opened was cancelled. */
+  def reprompted(workflow: CloseWorkflowState, state: AppState): AppState =
+    ModalStateReducer.show(Modal.Confirm(workflow.prompt), state).state
+
+  /** The close waiting on an answer, if any. */
+  def pending(state: AppState): Option[CloseWorkflowState] =
+    state.runtime.actionStack.collectFirst { case AppAction.CloseWorkflow(closeWorkflow) => closeWorkflow }
 
   /** The close workflow waiting on a save of `bufferId`, if any. */
   def pendingOn(state: AppState, bufferId: BufferId): Option[CloseWorkflowState] =
@@ -72,11 +82,6 @@ final private[manager] class CloseWorkflowTransitions(ensureCommandRunnerSurface
       case CloseScope.Quit              => state.persisted.bufferOrder
       case CloseScope.ReturnToStartPage => state.persisted.bufferOrder
       case CloseScope.Tab(bufferId, _)  => List(bufferId).filter(state.persisted.buffers.contains)
-
-  def closePrompt(state: AppState, surfaceId: SurfaceId): Option[CloseWorkflowState] =
-    state.runtime.modalStack.find(_.id == surfaceId).collect {
-      case ModalDialog(_, Modal.CloseWorkflow(workflow), _) => workflow
-    }
 
   def clearCloseActions(state: AppState): AppState =
     state.copy(runtime = state.runtime.copy(actionStack = Nil))
@@ -104,7 +109,7 @@ final private[manager] class CloseWorkflowTransitions(ensureCommandRunnerSurface
     val workflow   = CloseWorkflowState(scope, bufferId, closeBufferLabel(state, bufferId), remaining)
     val focused    = focusBufferForWorkflow(state, bufferId)
     val withAction = focused.copy(runtime = focused.runtime.copy(actionStack = List(AppAction.CloseWorkflow(workflow))))
-    ModalStateReducer.show(Modal.CloseWorkflow(workflow), withAction).state
+    ModalStateReducer.show(Modal.Confirm(workflow.prompt), withAction).state
 
   /** Scopes that leave clean buffers open rather than closing them as they go: Quit (state is discarded on exit anyway)
     * and ReturnToStartPage (the whole session is snapshotted, then replaced by the start page).

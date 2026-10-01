@@ -232,7 +232,7 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
   it should "dim the workspace behind a blocking modal without depending on motion settings" in {
     val close = ModalDialog(
       SurfaceId("close-confirmation"),
-      Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")),
+      Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")),
       ModalPlacement.Centered
     )
     val state = AppState.initial.copy(

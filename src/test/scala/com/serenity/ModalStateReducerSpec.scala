@@ -11,7 +11,7 @@ class ModalStateReducerSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private val closeWorkflow =
-    Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala"))
+    Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala"))
 
   "ModalStateReducer" should "keep a blocking confirmation above its parent on an explicit modal layer, outside uiSurfaces" in {
     val parentShown = ModalStateReducer.show(closeWorkflow, AppState.initial).state

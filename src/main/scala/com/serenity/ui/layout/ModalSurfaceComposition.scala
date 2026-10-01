@@ -3,9 +3,9 @@ package com.serenity.ui.layout
 import com.serenity.config.{HotkeyTrigger, ModalKeyAction}
 import com.serenity.state.models.*
 
-/** Declarative composition plans for blocking workflow surfaces. The close-confirmation composition lives in
-  * `ModalConfirmationComposition`, every [[ConfirmPrompt]] in `ConfirmComposition` and every [[ListPicker]] in
-  * `ListPickerComposition`, split out to keep this file under the architecture-ratchet file-length limit.
+/** Declarative composition plans for blocking workflow surfaces. Every [[ConfirmPrompt]] is composed in
+  * `ConfirmComposition` and every [[ListPicker]] in `ListPickerComposition`, split out to keep this file under the
+  * architecture-ratchet file-length limit.
   */
 object ModalSurfaceComposition:
 
@@ -21,9 +21,8 @@ object ModalSurfaceComposition:
     modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]] = ModalKeyAction.defaultBindings
   ): Option[ResolvedSurfaceComposition] =
     modal match
-      case Modal.CloseWorkflow(workflow) => Some(close(workflow, frameRect, targetRows))
-      case Modal.Confirm(prompt)         => Some(ConfirmComposition.forPrompt(prompt, frameRect, targetRows))
-      case Modal.TextPrompt(prompt)      => Some(textPromptPlan(prompt, frameRect))
+      case Modal.Confirm(prompt)    => Some(ConfirmComposition.forPrompt(prompt, frameRect, targetRows))
+      case Modal.TextPrompt(prompt) => Some(textPromptPlan(prompt, frameRect))
       case Modal.Find(query, results, currentIndex) =>
         Some(findPlan(query, results, currentIndex, frameRect))
       case Modal.FileWorkflow(workflow)    => Some(filePlan(workflow, frameRect, modalBindings))
@@ -45,20 +44,7 @@ object ModalSurfaceComposition:
         // header + filename + path + format rows, plus up to 4 suggestions, plus a status/create-dir footer and the
         // keybinding-hints footer (issue #1253).
         math.max(9, math.min(14, workflow.suggestions.take(4).size + 8))
-      case Modal.CloseWorkflow(_) => closeFrameHeight(actionRows)
-      case Modal.Confirm(prompt)  => ConfirmComposition.frameHeight(prompt, actionRows)
-
-  /** Resolve close-confirmation paint, focus, and hit geometry in the shared layout grid. */
-  def close(workflow: CloseWorkflowState, frameRect: LayoutRect, targetRows: Int): ResolvedSurfaceComposition =
-    ModalConfirmationComposition.close(workflow, frameRect, targetRows)
-
-  /** Frame height required by the close-confirmation composition. */
-  def closeFrameHeight(targetRows: Int): Int =
-    ModalConfirmationComposition.closeFrameHeight(targetRows)
-
-  /** Translate a declared close action identity into its reducer choice. */
-  def closeChoice(actionId: SurfaceActionId): Option[CloseWorkflowChoice] =
-    ModalConfirmationComposition.closeChoice(actionId)
+      case Modal.Confirm(prompt) => ConfirmComposition.frameHeight(prompt, actionRows)
 
   private def inputPlan(
     label: String,

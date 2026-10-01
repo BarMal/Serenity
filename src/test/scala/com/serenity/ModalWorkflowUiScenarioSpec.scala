@@ -20,7 +20,7 @@ class ModalWorkflowUiScenarioSpec extends AnyFlatSpec with Matchers:
 
     val parent = ModalDialog(
       SurfaceId("close-confirmation"),
-      Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")),
+      Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")),
       ModalPlacement.Centered
     )
     val child = ModalDialog(

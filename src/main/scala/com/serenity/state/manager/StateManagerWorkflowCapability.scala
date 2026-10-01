@@ -127,47 +127,46 @@ final private[manager] class StateManagerWorkflowCapability(
       )
     )
 
-  private[manager] def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit] =
+  /** Answers the close waiting on the action stack -- what the close prompt's choices run. */
+  private[manager] def resolveClose(choice: CloseWorkflowChoice): IO[Unit] =
     modelCommit.currentState.flatMap { state =>
-      close.closePrompt(state, surfaceId) match
-        case Some(workflow) =>
-          workflow.selectedChoice match
-            case CloseWorkflowChoice.Cancel =>
-              modelCommit.commitState(close.abandoned(surfaceId, workflow, state), state)
-            case CloseWorkflowChoice.Discard =>
-              commitClose(state, close.resolved(workflow, state))
-            case CloseWorkflowChoice.Save =>
-              state.persisted.buffers.get(workflow.currentBufferId) match
-                case Some(buffer) if buffer.document.filePath.isDefined =>
-                  saveBeforeClose(surfaceId, workflow)
-                case Some(_) =>
-                  requestSaveAsFileDialog(state, Some(workflow.currentBufferId))
-                case None =>
-                  modelCommit.commitState(close.clearCloseActions(close.dismissModalSurface(state)), state)
-        case None =>
-          IO.unit
+      close.pending(state).fold(IO.unit) { workflow =>
+        choice match
+          case CloseWorkflowChoice.Cancel =>
+            modelCommit.commitState(close.abandoned(workflow, state), state)
+          case CloseWorkflowChoice.Discard =>
+            commitClose(state, close.resolved(workflow, state))
+          case CloseWorkflowChoice.Save =>
+            state.persisted.buffers.get(workflow.currentBufferId) match
+              case Some(buffer) if buffer.document.filePath.isDefined =>
+                saveBeforeClose(workflow)
+              case Some(_) =>
+                requestSaveAsFileDialog(state, Some(workflow.currentBufferId))
+              case None =>
+                modelCommit.commitState(close.clearCloseActions(close.dismissModalSurface(state)), state)
+      }
     }
 
   /** Closes the buffer only once its save has landed and left it clean (#1708). A failed or conflicting save abandons
     * the whole close -- a quit or close-all stops at this buffer -- rather than dropping the edits it could not write.
     */
-  private def saveBeforeClose(surfaceId: SurfaceId, workflow: CloseWorkflowState): IO[Unit] =
+  private def saveBeforeClose(workflow: CloseWorkflowState): IO[Unit] =
     val bufferId = workflow.currentBufferId
     filePersistence.saveExistingBuffer(bufferId).attempt.flatMap {
       case Right(()) =>
         modelCommit.currentState.flatMap { saved =>
           if saved.persisted.buffers.get(bufferId).exists(!_.hasUnsavedChanges) then
             commitClose(saved, close.resolved(workflow, saved))
-          else modelCommit.commitState(close.abandoned(surfaceId, workflow, saved), saved)
+          else modelCommit.commitState(close.abandoned(workflow, saved), saved)
         }
       case Left(error: com.serenity.richtext.LossyRichTextOverwriteException) =>
-        // The Save-As form opens over the prompt and resumes this close once it saves (continueCloseAfterFormSaveAs).
+        // The Save-As form resumes this close once it saves (continueCloseAfterFormSaveAs); dismissing it asks again.
         modelCommit.currentState.flatMap(current => showSaveAsWorkflow(current, bufferId, error.getMessage))
       case Left(_: com.serenity.io.FileManagerError.ExternalConflict) =>
-        commit(close.conflicted(surfaceId, workflow, _))
+        commit(close.conflicted(workflow, _))
       case Left(error) =>
         logger.error(error)(s"[FILE] Failed to save buffer $bufferId before closing it") >>
-          commit(close.abandoned(surfaceId, workflow, _))
+          commit(close.abandoned(workflow, _))
     }
 
   private[manager] def clearCloseActions(state: AppState): AppState = close.clearCloseActions(state)
@@ -227,15 +226,25 @@ final private[manager] class StateManagerWorkflowCapability(
                 case Some(path) =>
                   filePersistence.saveBufferAs(bufferId, path) >> continueCloseAfterNativeSaveAs(bufferId)
                 case None =>
-                  IO.unit
+                  repromptCloseOn(bufferId)
               }
-              .handleErrorWith(ex => logger.error(ex)(s"[FILE] Native save-as dialog failed for buffer $bufferId"))
+              .handleErrorWith(ex =>
+                logger.error(ex)(s"[FILE] Native save-as dialog failed for buffer $bufferId") >> repromptCloseOn(
+                  bufferId
+                )
+              )
           case None =>
             // No native dialog to show at all -- the in-app form is the only way to collect a path, not a fallback
             // for a dialog the user might have cancelled (that case stays a no-op above, via chooseSaveFile's None).
             openFileWorkflowModal(FileWorkflowMode.SaveAs, state, Some(bufferId))
       case None =>
         logger.debug("[FILE] Save As requested without a focused buffer")
+
+  /** A Save As that a close's Save opened, cancelled or failed: ask about that buffer again rather than strand the
+    * close with no prompt.
+    */
+  private def repromptCloseOn(bufferId: BufferId): IO[Unit] =
+    commit(current => close.pendingOn(current, bufferId).fold(current)(close.reprompted(_, current)))
 
   private def continueCloseAfterNativeSaveAs(bufferId: BufferId): IO[Unit] =
     modelCommit.currentState.flatMap(saved =>

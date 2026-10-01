@@ -73,11 +73,7 @@ class TabCloseClickSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MouseClick(col, row)).unsafeRunSync()
 
   private def closeWorkflow(state: AppState): Option[CloseWorkflowState] =
-    state.topModal.flatMap {
-      _.modal match
-        case Modal.CloseWorkflow(workflow) => Some(workflow)
-        case _                             => None
-    }
+    ClosePromptFixtures.closePromptShown(state)
 
   private def clickPromptChoice(sm: StateManager, actionId: String): Unit =
     val prompted = sm.getCurrentState.unsafeRunSync()
@@ -85,7 +81,7 @@ class TabCloseClickSpec extends AnyFlatSpec with Matchers:
     val modal    = UiSceneSnapshot.from(prompted, viewport).modal.lastOption.getOrElse(fail("Expected a modal node"))
     val choice = ModalSurfaceComposition
       .forModal(
-        Modal.CloseWorkflow(workflow),
+        Modal.Confirm(workflow.prompt),
         modal.frameRect,
         SurfaceFrameLayout.minimumTargetRows(prompted.persisted.config.interfaceDensity)
       )
@@ -130,7 +126,7 @@ class TabCloseClickSpec extends AnyFlatSpec with Matchers:
     markDirty(sm, second)
     clickClose(sm, second)
 
-    clickPromptChoice(sm, "close-cancel")
+    clickPromptChoice(sm, ClosePromptFixtures.CancelChoice.value)
 
     val after = sm.getCurrentState.unsafeRunSync()
     after.topModal shouldBe None
@@ -145,7 +141,7 @@ class TabCloseClickSpec extends AnyFlatSpec with Matchers:
     markDirty(sm, second)
     clickClose(sm, second)
 
-    clickPromptChoice(sm, "close-discard")
+    clickPromptChoice(sm, ClosePromptFixtures.DiscardChoice.value)
 
     val after = sm.getCurrentState.unsafeRunSync()
     after.topModal shouldBe None
@@ -159,7 +155,7 @@ class TabCloseClickSpec extends AnyFlatSpec with Matchers:
     markDirty(sm, second)
     clickClose(sm, second)
 
-    clickPromptChoice(sm, "close-save")
+    clickPromptChoice(sm, ClosePromptFixtures.SaveChoice.value)
 
     val after = sm.getCurrentState.unsafeRunSync()
     after.topModal shouldBe None
@@ -179,7 +175,7 @@ class TabCloseClickSpec extends AnyFlatSpec with Matchers:
     markDirty(sm, second)
     clickClose(sm, second)
 
-    clickPromptChoice(sm, "close-save")
+    clickPromptChoice(sm, ClosePromptFixtures.SaveChoice.value)
 
     val after = sm.getCurrentState.unsafeRunSync()
     after.topModal shouldBe None
@@ -208,7 +204,7 @@ class TabCloseClickSpec extends AnyFlatSpec with Matchers:
 
     clickClose(sm, first)
     closeWorkflow(sm.getCurrentState.unsafeRunSync()).map(_.currentBufferId) shouldBe Some(first)
-    clickPromptChoice(sm, "close-cancel")
+    clickPromptChoice(sm, ClosePromptFixtures.CancelChoice.value)
 
     val after = sm.getCurrentState.unsafeRunSync()
     after.topModal shouldBe None

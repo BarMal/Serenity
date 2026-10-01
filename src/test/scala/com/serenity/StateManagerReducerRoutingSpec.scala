@@ -98,7 +98,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
 
       val modal = ModalDialog(
         SurfaceId("close-confirmation"),
-        Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")),
+        Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")),
         ModalPlacement.Centered
       )
       stateManager
@@ -128,7 +128,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
     stateManager
       .updateState(state =>
         ModalStateReducer
-          .show(Modal.CloseWorkflow(CloseWorkflowState(CloseScope.Current, bufferId, "notes.scala")), state)
+          .show(Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")), state)
           .state
       )
       .unsafeRunSync()
@@ -137,10 +137,8 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.topModal.map(_.modal match
-      case Modal.CloseWorkflow(workflow) => workflow.selectedChoice
-      case other                         => fail(s"Expected close workflow, got $other")) shouldBe Some(
-      CloseWorkflowChoice.Discard
-    )
+      case Modal.Confirm(prompt) => prompt.selectedChoice.map(_.label)
+      case other                 => fail(s"Expected the close prompt, got $other")) shouldBe Some(Some("Close Anyway"))
     updatedState.runtime.viewportSize shouldBe Some(ViewportSize(120, 40))
   }
 

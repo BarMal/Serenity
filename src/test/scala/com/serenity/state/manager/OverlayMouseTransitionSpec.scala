@@ -301,26 +301,26 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
     val state = base.copy(
       persisted = base.persisted.copy(focus = Focus.Modal),
       runtime = base.runtime.copy(modalStack =
-        base.runtime.modalStack :+ ModalDialog(dialogId, Modal.CloseWorkflow(workflow), ModalPlacement.Centered)
+        base.runtime.modalStack :+ ModalDialog(dialogId, Modal.Confirm(workflow.prompt), ModalPlacement.Centered)
       )
     )
     val cancel = ModalSurfaceComposition
       .forModal(
-        Modal.CloseWorkflow(workflow),
+        Modal.Confirm(workflow.prompt),
         surfaceFrame(state, dialogId),
         SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
       )
       .getOrElse(fail("Expected the close prompt composition"))
       .hitRegions
-      .find(_.actionId.contains(SurfaceActionId("close-cancel")))
+      .find(_.actionId.contains(com.serenity.ClosePromptFixtures.CancelChoice))
       .getOrElse(fail("Expected a cancel action"))
 
     val (result, _) = run(state)(ModalMouseHitTesting.input(clickAt(cancel), state))
 
-    result.state.topModal.map(_.modal) shouldBe Some(
-      Modal.CloseWorkflow(workflow.copy(selectedChoice = CloseWorkflowChoice.Cancel))
+    result.state.topModal shouldBe None
+    result.effects shouldBe List(
+      AppEffect.ExecuteCommand(com.serenity.command.CloseCommands.resolve(CloseWorkflowChoice.Cancel))
     )
-    result.effects shouldBe List(AppEffect.Workflow(WorkflowEffect.SubmitCloseWorkflow(dialogId)))
   }
 
   it should "ignore anything but a primary click" in {

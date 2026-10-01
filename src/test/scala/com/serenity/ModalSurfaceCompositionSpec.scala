@@ -14,39 +14,40 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       .forModal(modal, frame, targetRows)
       .getOrElse(fail(s"expected composition for $modal"))
 
-  "ModalSurfaceComposition" should "derive close workflow paint, focus, and hit geometry from one plan" in {
-    val workflow = CloseWorkflowState(
-      CloseScope.Current,
-      BufferId(7),
-      "notes.scala",
-      selectedChoice = CloseWorkflowChoice.Discard
-    )
+  private def closePrompt(highlighted: Int = 0): Modal =
+    val prompt = ConfirmPrompt.closeUnsaved("notes.scala")
+    Modal.Confirm(prompt.copy(choices = prompt.choices.select(highlighted, prompt.choices.items.size)))
 
-    val plan = ModalSurfaceComposition.close(workflow, LayoutRect(10, 4, 60, 10), targetRows = 2)
+  private def closePlan(frame: LayoutRect, targetRows: Int, highlighted: Int = 0): ResolvedSurfaceComposition =
+    ModalSurfaceComposition
+      .forModal(closePrompt(highlighted), frame, targetRows)
+      .getOrElse(fail("expected the close prompt's composition"))
+
+  "ModalSurfaceComposition" should "derive close prompt paint, focus, and hit geometry from one plan" in {
+    val plan = closePlan(LayoutRect(10, 4, 60, 10), targetRows = 2, highlighted = 1)
 
     plan.focusOrder shouldBe List(
-      SurfaceFocusId("close-save"),
-      SurfaceFocusId("close-discard"),
-      SurfaceFocusId("close-cancel")
+      SurfaceFocusId(ClosePromptFixtures.SaveChoice.value),
+      SurfaceFocusId(ClosePromptFixtures.DiscardChoice.value),
+      SurfaceFocusId(ClosePromptFixtures.CancelChoice.value)
     )
     plan.hitRegions.map(_.semanticLabel) shouldBe List("Save", "Close Anyway", "Cancel")
     plan.hitRegions.map(_.rect.height).distinct shouldBe List(2.0)
     plan.paintBoxes.filter(_.actionId.nonEmpty).map(_.rect) shouldBe plan.hitRegions.map(_.rect)
-    plan.paintBoxes.find(_.actionId.contains(SurfaceActionId("close-discard"))).exists(_.selected) shouldBe true
+    plan.paintBoxes.find(_.actionId.contains(ClosePromptFixtures.DiscardChoice)).exists(_.selected) shouldBe true
   }
 
   it should "scale close action targets with interface density without changing action identity" in {
-    val workflow = CloseWorkflowState(CloseScope.Current, BufferId(7), "notes.scala")
-    val frame    = LayoutRect(0, 0, 40, 12)
+    val frame = LayoutRect(0, 0, 40, 12)
 
-    val compact     = ModalSurfaceComposition.close(workflow, frame, targetRows = 1)
-    val comfortable = ModalSurfaceComposition.close(workflow, frame, targetRows = 2)
+    val compact     = closePlan(frame, targetRows = 1)
+    val comfortable = closePlan(frame, targetRows = 2)
 
     compact.hitRegions.map(_.actionId) shouldBe comfortable.hitRegions.map(_.actionId)
     compact.hitRegions.map(_.rect.height).distinct shouldBe List(1.0)
     comfortable.hitRegions.map(_.rect.height).distinct shouldBe List(2.0)
-    ModalSurfaceComposition.closeFrameHeight(targetRows = 1) shouldBe 7
-    ModalSurfaceComposition.closeFrameHeight(targetRows = 2) shouldBe 10
+    ModalSurfaceComposition.frameHeight(closePrompt(), targetRows = 1) shouldBe 7
+    ModalSurfaceComposition.frameHeight(closePrompt(), targetRows = 2) shouldBe 10
   }
 
   it should "scale confirm action targets with interface density without changing action identity" in {
@@ -63,11 +64,13 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     ModalSurfaceComposition.frameHeight(Modal.Confirm(prompt), targetRows = 2) shouldBe 10
   }
 
-  it should "map only declared close action identities back to workflow choices" in {
-    ModalSurfaceComposition.closeChoice(SurfaceActionId("close-save")) shouldBe Some(CloseWorkflowChoice.Save)
-    ModalSurfaceComposition.closeChoice(SurfaceActionId("close-discard")) shouldBe Some(CloseWorkflowChoice.Discard)
-    ModalSurfaceComposition.closeChoice(SurfaceActionId("close-cancel")) shouldBe Some(CloseWorkflowChoice.Cancel)
-    ModalSurfaceComposition.closeChoice(SurfaceActionId("unsupported")) shouldBe None
+  it should "map the close prompt's action identities back to its Save, Close Anyway and Cancel choices" in {
+    val plan = closePlan(LayoutRect(0, 0, 40, 12), targetRows = 1)
+
+    plan.hitRegions.map(hit => hit.actionId.flatMap(id => ConfirmComposition.choiceIndex(id.value))) shouldBe
+      List(Some(0), Some(1), Some(2))
+    plan.hitRegions.map(_.semanticLabel) shouldBe List("Save", "Close Anyway", "Cancel")
+    ConfirmComposition.choiceIndex("unsupported") shouldBe None
   }
 
   it should "derive a confirm prompt's paint, focus, and hit geometry from one plan" in {
@@ -84,16 +87,15 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
 
   it should "map only its own confirm action identities back to choice indices" in {
     ConfirmComposition.choiceIndex(ConfirmComposition.choiceActionId(2).value) shouldBe Some(2)
-    ConfirmComposition.choiceIndex("close-save") shouldBe None
+    ConfirmComposition.choiceIndex(ListPickerComposition.choiceActionId(0).value) shouldBe None
     ConfirmComposition.choiceIndex("confirm-choice-x") shouldBe None
   }
 
-  it should "reflow every close action inside a height-constrained frame" in {
-    val workflow = CloseWorkflowState(CloseScope.Current, BufferId(7), "notes.scala")
-    val frame    = LayoutRect(5, 2, 30, 4)
-    val content  = SurfaceFrameLayout(frame).contentRect
+  it should "lay a confirm prompt's choices side by side when its frame is too short to stack them" in {
+    val frame   = LayoutRect(5, 2, 30, 4)
+    val content = SurfaceFrameLayout(frame).contentRect
 
-    val plan = ModalSurfaceComposition.close(workflow, frame, targetRows = 2)
+    val plan = closePlan(frame, targetRows = 2)
 
     plan.paintBoxes.foreach(box => plan.bounds.containsRect(box.rect) shouldBe true)
     plan.hitRegions.foreach(hit => plan.bounds.containsRect(hit.rect) shouldBe true)
@@ -103,8 +105,7 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "omit clipped controls from paint, hit, and focus output in a tiny frame" in {
-    val workflow = CloseWorkflowState(CloseScope.Current, BufferId(7), "notes.scala")
-    val plan     = ModalSurfaceComposition.close(workflow, LayoutRect(0, 0, 3, 3), targetRows = 2)
+    val plan = closePlan(LayoutRect(0, 0, 3, 3), targetRows = 2)
 
     plan.paintBoxes.foreach { box =>
       plan.bounds.containsRect(box.rect) shouldBe true

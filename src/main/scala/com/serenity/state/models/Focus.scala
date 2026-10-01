@@ -10,6 +10,5 @@ enum ModalType:
   case Find
   case FileWorkflow
   case ReplaceWorkflow
-  case CloseWorkflow
   case Confirm
   case ListPicker

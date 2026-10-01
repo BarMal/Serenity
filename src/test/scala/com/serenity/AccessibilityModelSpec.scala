@@ -143,6 +143,11 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  /** The close prompt with "Close Anyway" highlighted. */
+  private val closeOnDiscard: ConfirmPrompt =
+    val prompt = ConfirmPrompt.closeUnsaved("notes.scala")
+    prompt.copy(choices = prompt.choices.select(1, prompt.choices.items.size))
+
   it should "derive every modal control from its resolved composition" in {
     val cases = List(
       SurfaceId("goto") -> Modal.TextPrompt(TextPrompt.gotoLine("42")),
@@ -175,19 +180,13 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
           selectedScope = ReplaceWorkflowScope.Selection
         )
       ),
-      SurfaceId("close") -> Modal.CloseWorkflow(
-        CloseWorkflowState(
-          CloseScope.Current,
-          BufferId(0),
-          "notes.scala",
-          selectedChoice = CloseWorkflowChoice.Discard
-        )
-      )
+      SurfaceId("close") -> Modal.Confirm(closeOnDiscard)
     )
 
     def isBlockingModal(modal: Modal): Boolean = modal match
-      case _: Modal.CloseWorkflow | _: Modal.FileWorkflow => true
-      case _                                              => false
+      case Modal.Confirm(prompt) => prompt.blocking
+      case _: Modal.FileWorkflow => true
+      case _                     => false
 
     cases.foreach {
       case (surfaceId, modal) =>
@@ -293,19 +292,13 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     nodes.exists(_.id.startsWith(s"surface:${floatingId.value}")) shouldBe false
   }
 
-  it should "expose close workflow actions with rendered bounds and selection" in {
-    val surfaceId = SurfaceId("close")
-    val workflow = CloseWorkflowState(
-      CloseScope.Current,
-      BufferId(0),
-      "notes.scala",
-      selectedChoice = CloseWorkflowChoice.Discard
-    )
+  it should "expose the close prompt's actions with rendered bounds and selection" in {
+    val surfaceId    = SurfaceId("close")
     val initialState = AppState.initial
     val state = initialState.copy(
       persisted = initialState.persisted.copy(focus = Focus.Modal),
       runtime = initialState.runtime.copy(
-        modalStack = List(ModalDialog(surfaceId, Modal.CloseWorkflow(workflow), ModalPlacement.Centered)),
+        modalStack = List(ModalDialog(surfaceId, Modal.Confirm(closeOnDiscard), ModalPlacement.Centered)),
         viewportSize = Some(viewport)
       )
     )
@@ -313,11 +306,13 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val snapshot      = AccessibilitySnapshot.from(state, viewport)
     val controls      = snapshot.nodes.filter(_.id.startsWith(s"surface:${surfaceId.value}/control:"))
     val surfaceBounds = snapshot.nodes.find(_.id == s"surface:${surfaceId.value}").map(_.bounds).get
-    val plan = ModalSurfaceComposition.close(
-      workflow,
-      surfaceBounds,
-      SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
-    )
+    val plan = ModalSurfaceComposition
+      .forModal(
+        Modal.Confirm(closeOnDiscard),
+        surfaceBounds,
+        SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
+      )
+      .getOrElse(fail("Expected the close prompt composition"))
 
     controls.map(node => node.name -> node.role) shouldBe List(
       "Save"         -> AccessibilityRole.Button,
@@ -331,7 +326,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     }
   }
 
-  it should "keep close workflow accessibility controls inside a constrained modal" in {
+  it should "keep the close prompt's accessibility controls inside a constrained modal" in {
     val surfaceId           = SurfaceId("close-constrained")
     val workflow            = CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")
     val constrainedViewport = ViewportSize(40, 4)
@@ -339,7 +334,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val state = initialState.copy(
       persisted = initialState.persisted.copy(focus = Focus.Modal),
       runtime = initialState.runtime.copy(
-        modalStack = List(ModalDialog(surfaceId, Modal.CloseWorkflow(workflow), ModalPlacement.Centered)),
+        modalStack = List(ModalDialog(surfaceId, Modal.Confirm(workflow.prompt), ModalPlacement.Centered)),
         viewportSize = Some(constrainedViewport)
       )
     )

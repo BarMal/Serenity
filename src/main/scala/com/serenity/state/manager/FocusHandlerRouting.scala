@@ -41,7 +41,6 @@ private[manager] object FocusHandlerRouting:
   private val modalFind: LocalEventHandler            = new ModalComponent(ModalType.Find)
   private val modalFileWorkflow: LocalEventHandler    = new ModalComponent(ModalType.FileWorkflow)
   private val modalReplaceWorkflow: LocalEventHandler = new ModalComponent(ModalType.ReplaceWorkflow)
-  private val modalCloseWorkflow: LocalEventHandler   = new ModalComponent(ModalType.CloseWorkflow)
   private val modalConfirm: LocalEventHandler         = new ModalComponent(ModalType.Confirm)
   private val modalListPicker: LocalEventHandler      = new ModalComponent(ModalType.ListPicker)
 
@@ -63,7 +62,6 @@ private[manager] object FocusHandlerRouting:
       case ModalType.Find            => modalFind
       case ModalType.FileWorkflow    => modalFileWorkflow
       case ModalType.ReplaceWorkflow => modalReplaceWorkflow
-      case ModalType.CloseWorkflow   => modalCloseWorkflow
       case ModalType.Confirm         => modalConfirm
       case ModalType.ListPicker      => modalListPicker
 

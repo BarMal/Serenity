@@ -1,6 +1,6 @@
 package com.serenity.state.models
 
-import com.serenity.command.{Command, ExternalChangeCommands, RichTextCommands, RichTextIntent}
+import com.serenity.command.{CloseCommands, Command, ExternalChangeCommands, RichTextCommands, RichTextIntent}
 import com.serenity.ui.widget.{ButtonEmphasis, EndBehaviour, SelectableList}
 
 /** What choosing an option in a [[ConfirmPrompt]] does once the prompt closes. */
@@ -17,13 +17,14 @@ final case class ConfirmChoice(
 
 /** A question with a few answers, each carrying what it does as data -- so a new confirmation needs only a value of
   * this, not its own modal case, reducer, composition and routing. A `blocking` prompt is centred and holds every other
-  * input until answered; a non-blocking one floats by the cursor.
+  * input until answered; a non-blocking one floats by the cursor. `onDismiss` is what Escape does.
   */
 final case class ConfirmPrompt(
     title: String,
     message: List[String],
     choices: SelectableList[ConfirmChoice],
-    blocking: Boolean
+    blocking: Boolean,
+    onDismiss: ConfirmAction = ConfirmAction.Dismiss
 ):
   def selectedChoice: Option[ConfirmChoice] = choices.selectedItem
 
@@ -31,6 +32,28 @@ object ConfirmPrompt:
 
   def of(title: String, message: List[String], choices: Seq[ConfirmChoice], blocking: Boolean): ConfirmPrompt =
     ConfirmPrompt(title, message, SelectableList.of(choices, EndBehaviour.Wrap), blocking)
+
+  /** "Save changes before closing?" for the buffer a close is waiting on. Escape cancels the close, as Cancel does. */
+  def closeUnsaved(bufferLabel: String): ConfirmPrompt =
+    val cancel = ConfirmAction.Run(CloseCommands.resolve(CloseWorkflowChoice.Cancel))
+    of(
+      title = "unsaved changes",
+      message = List(bufferLabel),
+      choices = List(
+        ConfirmChoice(
+          "Save",
+          ConfirmAction.Run(CloseCommands.resolve(CloseWorkflowChoice.Save)),
+          ButtonEmphasis.Primary
+        ),
+        ConfirmChoice(
+          "Close Anyway",
+          ConfirmAction.Run(CloseCommands.resolve(CloseWorkflowChoice.Discard)),
+          ButtonEmphasis.Danger
+        ),
+        ConfirmChoice("Cancel", cancel)
+      ),
+      blocking = true
+    ).copy(onDismiss = cancel)
 
   /** A save that found the file changed on disk since it was read (#1623). A data-loss decision, so it blocks. */
   def reloadConflict(bufferId: BufferId, bufferLabel: String): ConfirmPrompt =

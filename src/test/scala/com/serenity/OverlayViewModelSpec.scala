@@ -419,7 +419,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         focus = Focus.Modal
       ),
       runtime = AppState.initial.runtime.copy(
-        modalStack = List(ModalDialog(surfaceId, Modal.CloseWorkflow(workflow), ModalPlacement.Centered))
+        modalStack = List(ModalDialog(surfaceId, Modal.Confirm(workflow.prompt), ModalPlacement.Centered))
       )
     )
     val scene   = UiSceneSnapshot.from(state, ViewportSize(80, 24))
@@ -427,9 +427,9 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
 
     overlay.composition.map(_.focusOrder) shouldBe Some(
       List(
-        SurfaceFocusId("close-save"),
-        SurfaceFocusId("close-discard"),
-        SurfaceFocusId("close-cancel")
+        SurfaceFocusId(ClosePromptFixtures.SaveChoice.value),
+        SurfaceFocusId(ClosePromptFixtures.DiscardChoice.value),
+        SurfaceFocusId(ClosePromptFixtures.CancelChoice.value)
       )
     )
   }

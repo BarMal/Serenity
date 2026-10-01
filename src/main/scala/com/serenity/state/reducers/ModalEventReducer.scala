@@ -11,9 +11,6 @@ import com.serenity.state.models.*
   */
 object ModalEventReducer:
 
-  def selectCloseWorkflowChoice(choice: CloseWorkflowChoice, currentState: AppState): ReducerResult =
-    ModalCloseWorkflowReducer.selectCloseWorkflowChoice(choice, currentState)
-
   def reducer(modalType: ModalType): Reducer[ModalInputEvent] =
     Reducer.instance((event, state) => reduce(modalType, event, state))
 
@@ -29,7 +26,6 @@ object ModalEventReducer:
       case ModalType.Find            => ModalFindReducer.reduce(event, currentState)
       case ModalType.FileWorkflow    => ModalFileWorkflowReducer.reduce(event, currentState)
       case ModalType.ReplaceWorkflow => ModalReplaceWorkflowReducer.reduce(event, currentState)
-      case ModalType.CloseWorkflow   => ModalCloseWorkflowReducer.reduce(event, currentState)
       case ModalType.Confirm         => ModalConfirmReducer.reduce(event, currentState)
       case ModalType.ListPicker      => ModalListPickerReducer.reduce(event, currentState)
 

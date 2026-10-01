@@ -65,29 +65,22 @@ enum CloseScope:
   // began -- is made active again once `bufferId` is closed or the prompt is cancelled.
   case Tab(bufferId: BufferId, returnTo: Option[BufferId])
 
+/** The answers to "save changes before closing?". */
 enum CloseWorkflowChoice:
   case Save
   case Discard
   case Cancel
 
+/** A close in progress, held on `runtime.actionStack` while it asks about `currentBufferId`: the prompt it shows is a
+  * [[ConfirmPrompt.closeUnsaved]] whose answers resolve this state.
+  */
 final case class CloseWorkflowState(
     scope: CloseScope,
     currentBufferId: BufferId,
     currentBufferLabel: String,
-    remainingBufferIds: List[BufferId] = Nil,
-    selectedChoice: CloseWorkflowChoice = CloseWorkflowChoice.Save
+    remainingBufferIds: List[BufferId] = Nil
 ):
-
-  def moveChoice(delta: Int): CloseWorkflowState =
-    val choices = List(
-      CloseWorkflowChoice.Save,
-      CloseWorkflowChoice.Discard,
-      CloseWorkflowChoice.Cancel
-    )
-    val currentIndex = choices.indexOf(selectedChoice)
-    val rawIndex     = (currentIndex + delta) % choices.length
-    val wrappedIndex = if rawIndex < 0 then choices.length + rawIndex else rawIndex
-    copy(selectedChoice = choices(wrappedIndex))
+  def prompt: ConfirmPrompt = ConfirmPrompt.closeUnsaved(currentBufferLabel)
 
 final case class ReplaceWorkflowState(
     findText: String = "",
@@ -469,10 +462,6 @@ enum Modal:
 
   case ReplaceWorkflow(
       workflow: ReplaceWorkflowState
-  )
-
-  case CloseWorkflow(
-      workflow: CloseWorkflowState
   )
 
   /** A question with typed answers -- see [[ConfirmPrompt]]. */

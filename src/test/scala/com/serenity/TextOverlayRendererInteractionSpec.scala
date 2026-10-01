@@ -4,7 +4,7 @@ import java.awt.Font
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
-import com.serenity.state.models.{BufferId, CloseScope, CloseWorkflowChoice, CloseWorkflowState}
+import com.serenity.state.models.{ConfirmPrompt, Modal}
 import com.serenity.ui.layout.{
   CellMetrics,
   LayoutRect,
@@ -12,6 +12,7 @@ import com.serenity.ui.layout.{
   OverlayRow,
   OverlayRowLayout,
   OverlaySegment,
+  ResolvedSurfaceComposition,
   SurfaceFrameLayout
 }
 import com.serenity.ui.renderer.*
@@ -23,21 +24,25 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  "TextOverlayRenderer" should "paint close workflow controls from shared composition boxes" in {
+  private def closePrompt(frame: LayoutRect, highlighted: Int = 0): Option[ResolvedSurfaceComposition] =
+    val prompt = ConfirmPrompt.closeUnsaved("notes.scala")
+    val modal  = Modal.Confirm(prompt.copy(choices = prompt.choices.select(highlighted, prompt.choices.items.size)))
+    ModalSurfaceComposition.forModal(modal, frame, targetRows = 2)
+
+  "TextOverlayRenderer" should "paint close prompt controls from shared composition boxes" in {
     val surface = new MockRenderSurface(50, 14)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val metrics = CellMetrics.fromFont(font)
-    val workflow = CloseWorkflowState(
-      CloseScope.Current,
-      BufferId(0),
-      "notes.scala",
-      selectedChoice = CloseWorkflowChoice.Discard
+    val frame = LayoutRect(
+      2,
+      1,
+      40,
+      ModalSurfaceComposition.frameHeight(Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")), targetRows = 2)
     )
-    val frame = LayoutRect(2, 1, 40, ModalSurfaceComposition.closeFrameHeight(targetRows = 2))
     val overlay = TextOverlayView(
       rect = frame,
       contentRect = Some(SurfaceFrameLayout(frame).contentRect),
-      composition = Some(ModalSurfaceComposition.close(workflow, frame, targetRows = 2))
+      composition = closePrompt(frame, highlighted = 1)
     )
 
     TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
@@ -48,16 +53,15 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
     surface.getBg(frame.x + 1, frame.y + 5) shouldBe Theme.light.highlighted.background
   }
 
-  it should "keep reflowed close workflow controls inside a constrained frame" in {
-    val surface  = new MockRenderSurface(40, 8)
-    val font     = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics  = CellMetrics.fromFont(font)
-    val workflow = CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")
-    val frame    = LayoutRect(2, 2, 30, 4)
+  it should "keep reflowed close prompt controls inside a constrained frame" in {
+    val surface = new MockRenderSurface(40, 8)
+    val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val metrics = CellMetrics.fromFont(font)
+    val frame   = LayoutRect(2, 2, 30, 4)
     val overlay = TextOverlayView(
       rect = frame,
       contentRect = Some(SurfaceFrameLayout(frame).contentRect),
-      composition = Some(ModalSurfaceComposition.close(workflow, frame, targetRows = 2))
+      composition = closePrompt(frame)
     )
 
     TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)

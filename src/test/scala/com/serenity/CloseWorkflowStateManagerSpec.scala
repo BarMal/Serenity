@@ -58,14 +58,8 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(Enter).unsafeRunSync()
 
   private def currentCloseWorkflow(stateManager: StateManager) =
-    stateManager.getCurrentState
-      .unsafeRunSync()
-      .topModal
-      .flatMap {
-        _.modal match
-          case Modal.CloseWorkflow(workflow) => Some(workflow)
-          case _                             => None
-      }
+    ClosePromptFixtures
+      .closePromptShown(stateManager.getCurrentState.unsafeRunSync())
       .getOrElse(fail("Expected active close workflow modal"))
 
   "Close workflow" should "discard and close the current dirty buffer" in {

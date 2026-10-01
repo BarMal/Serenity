@@ -216,7 +216,7 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
     quit.joinWithNever.timeout(20.seconds).unsafeRunSync()
 
     f.buffer(id).map(_.document.isDirty) shouldBe Some(true)
-    f.state.runtime.modalStack.map(_.modal) should matchPattern { case List(_: Modal.CloseWorkflow) => }
+    f.state.runtime.modalStack.map(_.modal).map(com.serenity.ClosePromptFixtures.isClosePrompt) shouldBe List(true)
     Files.readString(path) shouldBe "changed elsewhere"
     quitCompleted(f) shouldBe false
   }

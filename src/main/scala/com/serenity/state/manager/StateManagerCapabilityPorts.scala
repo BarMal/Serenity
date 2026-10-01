@@ -101,7 +101,7 @@ private[manager] trait EffectModalWorkflowPort:
   def submitFileWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
   def openFileWorkflowAsProjectRootEffect(surfaceId: SurfaceId, openProjectRoot: Path => IO[Unit]): IO[Unit]
   def submitReplaceWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
-  def submitCloseWorkflowEffect(surfaceId: SurfaceId): IO[Unit]
+  def resolveClose(choice: CloseWorkflowChoice): IO[Unit]
   // #1623: opens the reload/overwrite/cancel prompt for a buffer whose save was rejected as stale, or whose focus-in
   // re-check found the on-disk file changed underneath it.
   def openReloadConflictModal(state: AppState, bufferId: BufferId, bufferLabel: String): IO[Unit]

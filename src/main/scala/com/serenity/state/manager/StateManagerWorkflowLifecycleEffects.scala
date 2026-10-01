@@ -14,7 +14,6 @@ private[manager] trait WorkflowEffectPort:
   def openAsProjectRoot(surfaceId: SurfaceId): IO[Unit]
   def submitReplace(surfaceId: SurfaceId): IO[Unit]
   def beginClose(scope: CloseScope): IO[Unit]
-  def submitClose(surfaceId: SurfaceId): IO[Unit]
   def createDirectories(surfaceId: SurfaceId): IO[Unit]
   def submitSessionNamePrompt(surfaceId: SurfaceId): IO[Unit]
 
@@ -31,7 +30,6 @@ final private[manager] class WorkflowEffectHandler(port: WorkflowEffectPort):
       case WorkflowEffect.OpenFileWorkflowAsProjectRoot(id) => port.openAsProjectRoot(id)
       case WorkflowEffect.SubmitReplaceWorkflow(id)         => port.submitReplace(id)
       case WorkflowEffect.BeginClose(scope)                 => port.beginClose(scope)
-      case WorkflowEffect.SubmitCloseWorkflow(id)           => port.submitClose(id)
       case WorkflowEffect.CreateFileWorkflowDirectories(id) => port.createDirectories(id)
       case WorkflowEffect.SubmitSessionNamePrompt(id)       => port.submitSessionNamePrompt(id)
 

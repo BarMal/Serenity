@@ -104,10 +104,10 @@ class WorkflowTransitionsSpec extends AnyFlatSpec with Matchers:
   "Closing a background tab" should "hand the active tab back when the close is abandoned" in {
     val (state, second) = twoUnsavedBuffers
     val begun           = close.begun(CloseScope.Tab(BufferId(0), returnTo = Some(second)), state)
-    val prompt          = begun.state.topModal.getOrElse(fail("no prompt"))
-    val workflow        = close.closePrompt(begun.state, prompt.id).getOrElse(fail("not a close prompt"))
+    val workflow        = close.pending(begun.state).getOrElse(fail("no close pending"))
+    val answered        = begun.state.dismissTopModal
 
-    val abandoned = close.abandoned(prompt.id, workflow, begun.state)
+    val abandoned = close.abandoned(workflow, answered)
 
     begun.completed shouldBe None
     begun.state.activeBuffer.map(_.id) shouldBe Some(BufferId(0))
@@ -119,10 +119,9 @@ class WorkflowTransitionsSpec extends AnyFlatSpec with Matchers:
   "A save that conflicts during a quit" should "stop the quit and ask about the conflict" in {
     val (state, _) = twoUnsavedBuffers
     val begun      = close.begun(CloseScope.Quit, state)
-    val prompt     = begun.state.topModal.getOrElse(fail("no prompt"))
-    val workflow   = close.closePrompt(begun.state, prompt.id).getOrElse(fail("not a close prompt"))
+    val workflow   = close.pending(begun.state).getOrElse(fail("no close pending"))
 
-    val conflicted = close.conflicted(prompt.id, workflow, begun.state)
+    val conflicted = close.conflicted(workflow, begun.state.dismissTopModal)
 
     conflicted.runtime.actionStack shouldBe empty
     conflicted.runtime.modalStack.map(_.modal) should matchPattern {
@@ -138,9 +137,9 @@ class WorkflowTransitionsSpec extends AnyFlatSpec with Matchers:
   "Resolving the last unsaved buffer of a quit" should "complete the quit" in {
     val (state, second) = twoUnsavedBuffers
     val begun           = close.begun(CloseScope.Quit, state)
-    val first           = close.closePrompt(begun.state, begun.state.topModal.map(_.id).getOrElse(fail("no prompt")))
+    val first           = close.pending(begun.state)
     val next            = close.resolved(first.getOrElse(fail("no workflow")), begun.state)
-    val last = close.closePrompt(next.state, next.state.topModal.map(_.id).getOrElse(fail("no second prompt")))
+    val last            = close.pending(next.state)
 
     last.map(_.currentBufferId) shouldBe Some(second)
     next.completed shouldBe None
