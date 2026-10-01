@@ -1,5 +1,6 @@
 package com.serenity.command
 
+import com.serenity.keystroke.events.Direction
 import com.serenity.project.ProjectTaskKind
 import com.serenity.state.models.{PanelId, PanelRegistry}
 
@@ -37,7 +38,15 @@ private[command] object CommandRegistryPanelProjectCommands:
       CommandIntent.View(ViewIntent.ToggleMaximisePanel),
       CommandCategory.View,
       label = "Maximise/Restore Panel"
-    )
+    ) :++ Direction.values.map { direction =>
+      Command.typed(
+        s"focus-${direction.toString.toLowerCase}",
+        s"Move focus to the editor pane or panel ${direction.toString.toLowerCase} of the focused one.",
+        CommandIntent.View(ViewIntent.FocusInDirection(direction)),
+        CommandCategory.View,
+        label = s"Focus $direction"
+      )
+    }
 
   private[command] def paneCommands: List[Command] = List(
     Command.typed(

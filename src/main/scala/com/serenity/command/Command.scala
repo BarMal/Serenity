@@ -2,6 +2,7 @@ package com.serenity.command
 
 import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.*
+import com.serenity.keystroke.events.Direction
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
 import com.serenity.state.models.{PanelId, SurfaceId}
@@ -93,6 +94,9 @@ enum ViewIntent:
 
   /** Maximises the focused panel into the workspace, or restores the maximised one. */
   case ToggleMaximisePanel
+
+  /** Moves focus to the nearest editor pane or docked panel in `direction`. */
+  case FocusInDirection(direction: Direction)
   case MovePanelEarlier(id: PanelId)
   case MovePanelLater(id: PanelId)
   case SetPanelPin(id: PanelId, position: Option[PanelPosition])

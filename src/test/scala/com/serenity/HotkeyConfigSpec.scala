@@ -233,6 +233,33 @@ class HotkeyConfigSpec extends AnyFlatSpec with Matchers:
       bindings(HotkeyAction.ClosePane).map(_.render) shouldBe List(s"$modifier+shift+w")
     }
 
+  private val directionalFocusActions = List(
+    HotkeyAction.FocusLeft,
+    HotkeyAction.FocusRight,
+    HotkeyAction.FocusUp,
+    HotkeyAction.FocusDown
+  )
+
+  it should "bind directional focus to Alt+Arrow on every platform, without a conflict" in
+    List("Linux", "Windows 11", "Mac OS X").foreach { os =>
+      val bindings = HotkeyConfig.defaultBindingsFor(os)
+      directionalFocusActions.map(action => bindings(action).map(_.render)) shouldBe
+        List(List("alt+left"), List("alt+right"), List("alt+up"), List("alt+down"))
+      HotkeyConfig.validate(bindings) shouldBe Right(())
+    }
+
+  it should "round-trip a rebound directional focus key" in {
+    val configFile = Files.createTempFile("serenity-focus-left", ".conf")
+    Files.writeString(configFile, "hotkey.focus_left = ctrl+alt+h\n")
+
+    val loaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+    ConfigManagerTestSupport.saveConfig(loaded, configFile) shouldBe true
+    val reloaded = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    reloaded.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.FocusLeft).map(_.render) shouldBe List("ctrl+alt+h")
+    reloaded.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.FocusRight).map(_.render) shouldBe List("alt+right")
+  }
+
   it should "round-trip the toggle_shortcuts_help config key" in {
     val configFile = Files.createTempFile("serenity-toggle-shortcuts-help", ".conf")
     Files.writeString(configFile, "hotkey.toggle_shortcuts_help = ctrl+alt+k\n")

@@ -416,6 +416,16 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
       case Focus.Surface(id) => state.pinnedSurfaces.map(_.id) should contain(id)
       case other             => fail(s"Expected focus on pinned surface, got $other")
 
+  it should "move focus to a docked panel and back with the directional focus keys" in new UIFixture:
+    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
+    val editorFocus = stateManager.getCurrentState.unsafeRunSync().persisted.focus
+
+    stateManager.applyEvent(FocusInDirection(com.serenity.keystroke.events.Direction.Left)).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().persisted.focus shouldBe Focus.Surface(PanelId.Outline.surfaceId)
+
+    stateManager.applyEvent(FocusInDirection(com.serenity.keystroke.events.Direction.Right)).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().persisted.focus shouldBe editorFocus
+
   it should "do nothing on switchToPinnedPanel when no panel is at that position" in new UIFixture:
     val focusBefore = stateManager.getCurrentState.unsafeRunSync().persisted.focus
     stateManager.switchToPinnedPanel(PanelTarget.ByPosition(PanelPosition.Right)).unsafeRunSync()

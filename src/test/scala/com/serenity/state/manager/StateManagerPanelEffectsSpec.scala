@@ -6,7 +6,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.ViewIntent
 import com.serenity.frontend.{FrontendCapabilities, MarkdownPreviewWindowAvailability}
-import com.serenity.keystroke.events.Event
+import com.serenity.keystroke.events.{Direction, Event}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.undo.{HistoryEntry, UndoState}
@@ -259,6 +259,15 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.panels.interpret(ViewIntent.FocusPanel(PanelId.Outline), state).unsafeRunSync()
 
     fixture.calls.get.unsafeRunSync() shouldBe List(s"switch:${PanelTarget.ById(PanelId.Outline.surfaceId)}")
+  }
+
+  it should "move focus from the editor to the panel docked beside it" in {
+    val state   = pinnedState(PanelId.Outline.surfaceId, SurfaceContent.Outline(Nil), PanelPosition.Left, 20)
+    val fixture = harness(state)
+
+    fixture.panels.interpret(ViewIntent.FocusInDirection(Direction.Left), state).unsafeRunSync()
+
+    fixture.stateRef.get.unsafeRunSync().persisted.focus shouldBe Focus.Surface(PanelId.Outline.surfaceId)
   }
 
   it should "show a hidden panel before focusing it" in {

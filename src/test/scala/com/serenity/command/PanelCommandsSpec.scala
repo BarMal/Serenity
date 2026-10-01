@@ -1,6 +1,7 @@
 package com.serenity.command
 
-import com.serenity.config.AppMode
+import com.serenity.config.{AppConfig, AppMode, HotkeyConfig}
+import com.serenity.keystroke.events.Direction
 import com.serenity.state.models.{EditingContext, Focus, PaneId, PanelId, PanelRegistry, Shell}
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
@@ -62,4 +63,16 @@ class PanelCommandsSpec extends AnyFlatSpec with Matchers:
     ) shouldBe
       CommandScope(CommandFamily.Code, FrontendSupport.Both)
     CommandScope.of(CommandIntent.View(ViewIntent.SetPanelPin(PanelId.ProjectOutput, None))) shouldBe CommandScope.core
+  }
+
+  "The command registry" should "offer a focus command for each direction, showing its hotkey" in {
+    val bindings = CommandRunner.commandBindings(AppConfig.default.withHotkeyConfig(HotkeyConfig.forOs("Linux")))
+
+    Direction.values.foreach { direction =>
+      val name = s"focus-${direction.toString.toLowerCase}"
+      command(name).intent shouldBe CommandIntent.View(ViewIntent.FocusInDirection(direction))
+      command(name).label shouldBe s"Focus $direction"
+      command(name).scope shouldBe CommandScope.core
+      bindings.get(name) shouldBe Some(s"alt+${direction.toString.toLowerCase}")
+    }
   }

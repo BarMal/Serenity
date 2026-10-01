@@ -45,3 +45,13 @@ class GlobalHotkeyTranslatorSpec extends AnyFlatSpec with Matchers:
       .translate(KeyStrokeInfo(InputKey.F2, None, Set.empty))
       .isInstanceOf[UnhandledEvent[?]] shouldBe true
   }
+
+  it should "turn Alt+Arrow into a directional focus move" in
+    List(
+      InputKey.ArrowLeft  -> Direction.Left,
+      InputKey.ArrowRight -> Direction.Right,
+      InputKey.ArrowUp    -> Direction.Up,
+      InputKey.ArrowDown  -> Direction.Down
+    ).foreach { (key, direction) =>
+      translator.translate(KeyStrokeInfo(key, None, Set(Modifier.Alt))) shouldBe FocusInDirection(direction)
+    }

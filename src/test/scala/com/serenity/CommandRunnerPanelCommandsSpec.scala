@@ -396,3 +396,12 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
     val updatedState = sm.getCurrentState.unsafeRunSync()
     updatedState.pinnedSurfaces.exists(isPinnedAt(updatedState, _, PanelPosition.Left)) shouldBe false
   }
+
+  it should "move focus to the panel left of the editor from the command runner" in {
+    val sm = createStateManager()
+    sm.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
+
+    executeCommandThroughRunner(sm, "focus-left", "focus-left")
+
+    sm.getCurrentState.unsafeRunSync().persisted.focus shouldBe Focus.Surface(PanelId.Outline.surfaceId)
+  }

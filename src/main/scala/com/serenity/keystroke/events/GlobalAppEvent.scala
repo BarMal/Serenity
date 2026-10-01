@@ -31,6 +31,9 @@ case object MoveTabLeft                   extends GlobalAppEvent // Ctrl+Shift+P
 case object MoveTabRight                  extends GlobalAppEvent // Ctrl+Shift+PageDown (issue #1610)
 case object FileSearch                    extends GlobalAppEvent // Ctrl+Shift+F
 
+/** Moves focus to the editor pane or docked panel next to the focused one on screen (Alt+Arrow by default). */
+final case class FocusInDirection(direction: Direction) extends GlobalAppEvent
+
 /** Close-by-id (issue #1078): a tab-bar close-affordance click closing a specific tab, whether or not it is focused --
   * `CloseTab`'s mouse counterpart, sharing `EditorState.closeBuffer` with it rather than requiring a focus switch
   * first.

@@ -33,7 +33,11 @@ object TextHotkeyConverters:
     HotkeyAction.Replace                  -> OpenReplace,
     HotkeyAction.GoToLine                 -> OpenGotoLine,
     HotkeyAction.SaveAs                   -> SaveAsFile,
-    HotkeyAction.ToggleShortcutsHelp      -> ToggleShortcutsHelp
+    HotkeyAction.ToggleShortcutsHelp      -> ToggleShortcutsHelp,
+    HotkeyAction.FocusLeft                -> FocusInDirection(Direction.Left),
+    HotkeyAction.FocusRight               -> FocusInDirection(Direction.Right),
+    HotkeyAction.FocusUp                  -> FocusInDirection(Direction.Up),
+    HotkeyAction.FocusDown                -> FocusInDirection(Direction.Down)
   )
 
   def hotkeyConverter(config: AppConfig = AppConfig.default): PartialFunction[KeyStrokeInfo, Event] =
