@@ -216,7 +216,8 @@ object ContextualToolbar:
     state.activeBuffer.toList.flatMap { buffer =>
       context.buffer match
         case Some(BufferKind.Markdown) =>
-          applyMarkdownSelections(markdownItems, state.persisted.config.markdownViewMode)
+          val formatting = if proseScope.admits(context) then markdownFormattingItems(buffer) else Nil
+          formatting ++ applyMarkdownSelections(markdownItems, state.persisted.config.markdownViewMode)
         // Prose workspaces have no project to build/test/run/debug (issue #1294), so the buttons that would launch one
         // are never offered there, even for a buffer whose own language happens to read as code.
         case Some(BufferKind.Code(_)) if context.hasCodeTooling => codeItems
@@ -333,29 +334,7 @@ object ContextualToolbar:
     val currentColorText = currentColor.getOrElse("#202020")
     val paragraphRole    = paragraph.map(_.role).getOrElse(ParagraphRole.Body)
 
-    List(
-      ContextualToolbarItem.Button(
-        "bold",
-        "Bold",
-        CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(InlineMark.Bold)),
-        "\ue238",
-        selected = style.marks.contains(InlineMark.Bold)
-      ),
-      ContextualToolbarItem.Button(
-        "italic",
-        "Italic",
-        CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(InlineMark.Italic)),
-        "\ue23f",
-        selected = style.marks.contains(InlineMark.Italic)
-      ),
-      ContextualToolbarItem.Button(
-        "underline",
-        "Underline",
-        CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(InlineMark.Underline)),
-        "\ue765",
-        selected = style.marks.contains(InlineMark.Underline)
-      )
-    ) ++ fontFamilyItems(currentFamily, currentFontSize)
+    markButtons(style.marks) ++ fontFamilyItems(currentFamily, currentFontSize)
       ++ colorItems(currentColor, currentColorText)
       ++ paragraphRoleItems(paragraphRole)
       ++ List(
@@ -388,6 +367,38 @@ object ContextualToolbar:
           selected = paragraph.exists(_.alignment == ParagraphAlignment.Justify)
         )
       )
+
+  /** Bold, italic, underline and the heading level, read from the Markdown source -- the formatting Markdown can spell.
+    */
+  private def markdownFormattingItems(buffer: Buffer): List[ContextualToolbarItem] =
+    val level = MarkdownSelection.headingLevelAt(buffer)
+    markButtons(MarkdownSelection.marksAt(buffer)) ++
+      paragraphRoleItems(if level == 0 then ParagraphRole.Body else ParagraphRole.Heading(level), withDropCap = false)
+
+  private def markButtons(marks: Set[InlineMark]): List[ContextualToolbarItem] =
+    List(
+      ContextualToolbarItem.Button(
+        "bold",
+        "Bold",
+        CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(InlineMark.Bold)),
+        "\ue238",
+        selected = marks.contains(InlineMark.Bold)
+      ),
+      ContextualToolbarItem.Button(
+        "italic",
+        "Italic",
+        CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(InlineMark.Italic)),
+        "\ue23f",
+        selected = marks.contains(InlineMark.Italic)
+      ),
+      ContextualToolbarItem.Button(
+        "underline",
+        "Underline",
+        CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(InlineMark.Underline)),
+        "\ue765",
+        selected = marks.contains(InlineMark.Underline)
+      )
+    )
 
   private def fontFamilyItems(currentFamily: String, currentFontSize: Float): List[ContextualToolbarItem] =
     val familyOptions = normalizedFontFamilies(currentFamily).map(family =>
@@ -484,22 +495,27 @@ object ContextualToolbar:
       )
     )
 
-  private def paragraphRoleItems(paragraphRole: ParagraphRole): List[ContextualToolbarItem] =
-    val paragraphRoleOptions =
-      (CommandOption("Body", CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Body))) ::
+  private def paragraphRoleItems(
+    paragraphRole: ParagraphRole,
+    withDropCap: Boolean = true
+  ): List[ContextualToolbarItem] =
+    val headingOptions =
+      CommandOption("Body", CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Body))) ::
         (1 to 6).toList.map(level =>
           CommandOption(
             s"H$level",
             CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Heading(level)))
           )
-        )) :+
-        CommandOption(
-          "Drop Cap",
-          CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.dropCap()))
         )
+    val dropCapOption =
+      CommandOption(
+        "Drop Cap",
+        CommandIntent.RichText(RichTextIntent.SetRichTextParagraphRole(ParagraphRole.dropCap()))
+      )
+    val paragraphRoleOptions = if withDropCap then headingOptions :+ dropCapOption else headingOptions
     val paragraphRoleIndex = paragraphRole match
       case ParagraphRole.Body           => 0
-      case ParagraphRole.Heading(level) => level.max(1).min(paragraphRoleOptions.length - 2)
+      case ParagraphRole.Heading(level) => level.max(1).min(6)
       case ParagraphRole.DropCap(_)     => paragraphRoleOptions.length - 1
 
     List(
