@@ -437,3 +437,36 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(ModalDismiss).unsafeRunSync()
     arrangement(sm.getCurrentState.unsafeRunSync()) shouldBe None
   }
+
+  it should "move through the outline with the keyboard and open a heading with Enter" in {
+    val sm       = createStateManager()
+    val bufferId = BufferId(0)
+    sm.updateState { state =>
+      val buffer = state.persisted
+        .buffers(bufferId)
+        .copy(document =
+          state.persisted
+            .buffers(bufferId)
+            .document
+            .copy(
+              content = com.serenity.rope.Rope("# One\n\nBody\n\n## Two\n\nMore\n\n## Three"),
+              language = Some(LanguageId.Markdown)
+            )
+        )
+      state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
+    }.unsafeRunSync()
+
+    executeCommandThroughRunner(sm, "focus-outline-panel", "focus-outline-panel")
+    sm.applyEvent(PanelInputEvent.Navigate(Direction.Down)).unsafeRunSync()
+    sm.applyEvent(PanelInputEvent.Navigate(Direction.Down)).unsafeRunSync()
+
+    val highlighted = sm.getCurrentState.unsafeRunSync()
+    highlighted.surfaceById(PanelId.Outline.surfaceId).map(_.content).collect {
+      case SurfaceContent.Outline(_, location) => location
+    } shouldBe Some(Some(Location(8, 0)))
+
+    sm.applyEvent(PanelInputEvent.Activate).unsafeRunSync()
+    val opened = sm.getCurrentState.unsafeRunSync()
+    opened.persisted.focus shouldBe a[Focus.EditorPane]
+    opened.activeCursorPosition shouldBe Some(CursorPosition(8, 0))
+  }

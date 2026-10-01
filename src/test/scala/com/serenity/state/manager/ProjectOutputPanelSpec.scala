@@ -85,3 +85,24 @@ class ProjectOutputPanelSpec extends AnyFlatSpec with Matchers:
     val withOutput = ProjectTaskTransitions.outputArrived(running, 0L, "compiling").state
     outputPanelText(pinned(withOutput)) shouldBe Some(ProjectTaskTerminal.running(command, "compiling"))
   }
+
+  "Output arriving while the panel is scrolled back" should "leave it where it was, and a following panel at the end" in {
+    val text     = ProjectTaskTerminal.running(command, "line 1\nline 2")
+    val scrolled = withOutputPanel(ProjectTaskTransitions.outputArrived(running, 0L, "line 1\nline 2").state, text)
+    val scrolledBack = scrolled.copy(runtime = scrolled.runtime.copy(uiSurfaces = scrolled.runtime.uiSurfaces.map {
+      case surface if surface.id == PanelId.ProjectOutput.surfaceId =>
+        surface.copy(content = SurfaceContent.Terminal(text, 3))
+      case surface => surface
+    }))
+
+    val next = committed(scrolledBack)(ProjectTaskTransitions.outputArrived(_, 0L, "\nline 3").state)
+
+    next.surfaceById(PanelId.ProjectOutput.surfaceId).map(_.content).collect {
+      case SurfaceContent.Terminal(_, cursor) => cursor
+    } shouldBe Some(3)
+
+    val following = committed(scrolled)(ProjectTaskTransitions.outputArrived(_, 0L, "\nline 3").state)
+    following.surfaceById(PanelId.ProjectOutput.surfaceId).map(_.content).collect {
+      case SurfaceContent.Terminal(latest, cursor) => cursor == latest.length
+    } shouldBe Some(true)
+  }

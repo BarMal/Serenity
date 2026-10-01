@@ -44,7 +44,7 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
 
   private val terminalPanel = UiSurface(
     id = SurfaceId("terminal"),
-    content = SurfaceContent.Terminal("sbt test\ncompile\nrun", cursor = 7),
+    content = SurfaceContent.Terminal("sbt test\ncompile\nrun", cursor = "sbt test\ncompile\nrun".length),
     presentation = SurfacePresentation.Docked
   )
 
@@ -146,7 +146,7 @@ class PinnedPanelViewModelSpec extends AnyFlatSpec with Matchers:
     wide.rows.map(_.plainText) shouldBe List("sbt test", "compile", "run")
 
     compact.title shouldBe "terminal"
-    compact.rows.map(_.plainText) shouldBe List("3 lines", "cursor 7")
+    compact.rows.map(_.plainText) shouldBe List("3 lines", "line 3")
   }
 
   it should "derive non-empty content row slots for a panel composed via the generic RowsSurfaceComposition adapter" in {

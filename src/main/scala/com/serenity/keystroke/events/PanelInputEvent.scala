@@ -7,6 +7,11 @@ object PanelInputEvent:
   case object ReturnFocus                         extends PanelInputEvent
   case object Activate                            extends PanelInputEvent
   case object NoOp                                extends PanelInputEvent
+  case object First                               extends PanelInputEvent
+  case object Last                                extends PanelInputEvent
+
+  /** A page down (positive `delta`) or up (negative). */
+  final case class Page(delta: Int) extends PanelInputEvent
 
   /** Grows (positive `delta`) or shrinks (negative) the focused panel (issue #1310) -- the keyboard leg of the
     * command/keyboard/drag resize trio, all of which end up at the same `PanelStateReducer.resize`.
