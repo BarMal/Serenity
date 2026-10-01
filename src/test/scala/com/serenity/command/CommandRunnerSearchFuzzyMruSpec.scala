@@ -127,7 +127,7 @@ class CommandRunnerSearchFuzzyMruSpec extends AnyFlatSpec with Matchers:
       .activate(registry, com.serenity.config.AppConfig.default)
       .recordCommandUsage(commandB.name)
 
-    runner.visibleItems.collect { case CommandSurfaceItem.CommandItem(command) => command.name } shouldBe
+    runner.visibleItems.collect { case CommandSurfaceItem.CommandItem(command, _) => command.name } shouldBe
       List(commandB.name, commandA.name)
   }
 
@@ -138,6 +138,6 @@ class CommandRunnerSearchFuzzyMruSpec extends AnyFlatSpec with Matchers:
 
     val runner = CommandRunner.empty.activate(registry, com.serenity.config.AppConfig.default)
 
-    runner.visibleItems.collect { case CommandSurfaceItem.CommandItem(command) => command.name } shouldBe
+    runner.visibleItems.collect { case CommandSurfaceItem.CommandItem(command, _) => command.name } shouldBe
       List(commandA.name, commandB.name)
   }

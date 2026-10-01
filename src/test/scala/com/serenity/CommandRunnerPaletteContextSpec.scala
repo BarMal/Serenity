@@ -24,14 +24,14 @@ class CommandRunnerPaletteContextSpec extends AnyFlatSpec with Matchers:
     CommandRunner.empty
       .activate(registry, AppConfig.default, context = CommandRunnerContext(editingContext = editing))
       .visibleItems
-      .collect { case CommandSurfaceItem.CommandItem(command) => command.name }
+      .collect { case CommandSurfaceItem.CommandItem(command, _) => command.name }
 
   private def searchedCommands(editing: EditingContext, term: String): List[String] =
     CommandRunner.empty
       .activate(registry, AppConfig.default, context = CommandRunnerContext(editingContext = Some(editing)))
       .updateSearchTerm(term)(using registry)
       .visibleItems
-      .collect { case CommandSurfaceItem.CommandItem(command) => command.name }
+      .collect { case CommandSurfaceItem.CommandItem(command, _) => command.name }
 
   "the opening palette" should "keep Settings as its first row even when other commands were used more recently" in {
     val runner = CommandRunner.empty

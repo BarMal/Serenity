@@ -28,7 +28,7 @@ class CommandRunnerPresetDiffReviewSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty.openPresetDiffReview("Code", changes)
 
     runner.visibleItems.last match
-      case CommandSurfaceItem.CommandItem(command) =>
+      case CommandSurfaceItem.CommandItem(command, _) =>
         command.intent shouldBe CommandIntent.UiPresets(
           UiPresetsIntent.ConfirmUiPresetDiffApply("Code", List("editor.line_numbers", "theme"))
         )
@@ -40,7 +40,7 @@ class CommandRunnerPresetDiffReviewSpec extends AnyFlatSpec with Matchers:
     val toggled = opened.copy(toggleSelections = Map("theme" -> false))
 
     toggled.visibleItems.last match
-      case CommandSurfaceItem.CommandItem(command) =>
+      case CommandSurfaceItem.CommandItem(command, _) =>
         command.intent shouldBe CommandIntent.UiPresets(
           UiPresetsIntent.ConfirmUiPresetDiffApply("Code", List("editor.line_numbers"))
         )

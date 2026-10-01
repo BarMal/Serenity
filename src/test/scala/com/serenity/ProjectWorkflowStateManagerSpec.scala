@@ -6,11 +6,12 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.AppMode
-import com.serenity.project.ProjectTaskKind
+import com.serenity.keystroke.events.ToggleCommandRunner
+import com.serenity.project.{ProjectPresence, ProjectTaskKind}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
-import com.serenity.state.models.{BufferId, SurfaceContent}
+import com.serenity.state.models.{AppState, BufferId, SurfaceContent}
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -125,6 +126,49 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     bottomTerminalText(state) shouldBe None
     state.peekSurface.map(_.content) shouldBe Some(SurfaceContent.QuickInfo("Only available in code mode."))
   }
+
+  private def withTempRoot[A](prefix: String)(use: Path => A): A =
+    val root = Files.createTempDirectory(prefix)
+    try use(root)
+    finally
+      val stream = Files.walk(root)
+      try stream.toArray.toList.map(_.asInstanceOf[Path]).sortBy(_.getNameCount).reverse.foreach(Files.deleteIfExists)
+      finally stream.close()
+
+  private def paletteOpenedOn(bufferPath: Path): AppState =
+    val stateManager = createStateManager()
+    stateManager.setBufferFilePath(BufferId(0), bufferPath).unsafeRunSync()
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync()
+
+  private def projectBuildItem(state: AppState): CommandSurfaceItem.CommandItem =
+    state.commandRunnerSurface
+      .map(_.content)
+      .collect { case SurfaceContent.CommandPalette(runner) => runner.visibleItems }
+      .getOrElse(fail("expected the command palette to be open"))
+      .collectFirst { case item: CommandSurfaceItem.CommandItem if item.command.name == "project-build" => item }
+      .getOrElse(fail("expected project-build to stay listed"))
+
+  it should "detect, on opening the palette, that no project encloses the file being edited" in
+    withTempRoot("no-project-palette") { root =>
+      val bufferPath = Files.writeString(root.resolve("notes.txt"), "notes")
+
+      val state = paletteOpenedOn(bufferPath)
+
+      state.runtime.projectPresence shouldBe ProjectPresence.NotDetected
+      projectBuildItem(state).disabledReason shouldBe Some("No project detected.")
+    }
+
+  it should "detect, on opening the palette, the project enclosing the file being edited" in
+    withTempRoot("project-palette") { root =>
+      Files.writeString(root.resolve("build.sbt"), "scalaVersion := \"3.5.0\"")
+      val bufferPath = Files.writeString(root.resolve("Main.scala"), "object Main")
+
+      val state = paletteOpenedOn(bufferPath)
+
+      state.runtime.projectPresence shouldBe ProjectPresence.Detected
+      projectBuildItem(state).disabledReason shouldBe None
+    }
 
   it should "update the project terminal panel in place rather than pinning a new surface each refresh" in {
     val stateManager = createStateManager()

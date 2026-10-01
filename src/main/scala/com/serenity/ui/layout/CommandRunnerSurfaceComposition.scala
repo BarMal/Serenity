@@ -185,11 +185,11 @@ object CommandRunnerSurfaceComposition:
 
   private def paletteRow(runner: CommandRunner, item: CommandSurfaceItem, selected: Boolean): OverlayRow =
     item match
-      case CommandSurfaceItem.CommandItem(command) =>
+      case CommandSurfaceItem.CommandItem(command, disabledReason) =>
         val prefix =
           if runner.searchTerm.isEmpty then ""
           else s"[${CommandPaletteContentResolver.categoryLabel(command.category)}] "
-        CommandPaletteContentResolver.commandRow(command, selected, prefix, runner.bindingFor(command))
+        CommandPaletteContentResolver.commandRow(command, selected, prefix, runner.bindingFor(command), disabledReason)
       case option: CommandSurfaceItem.OptionItem =>
         CommandPaletteContentResolver.optionRow(option, selected)
       case toggle: CommandSurfaceItem.ToggleItem =>
@@ -207,8 +207,13 @@ object CommandRunnerSurfaceComposition:
 
   private def settingsRow(runner: CommandRunner, item: CommandSurfaceItem, selected: Boolean): OverlayRow =
     item match
-      case CommandSurfaceItem.CommandItem(command) =>
-        CommandPaletteContentResolver.commandRow(command, selected, binding = runner.bindingFor(command))
+      case CommandSurfaceItem.CommandItem(command, disabledReason) =>
+        CommandPaletteContentResolver.commandRow(
+          command,
+          selected,
+          binding = runner.bindingFor(command),
+          disabledReason = disabledReason
+        )
       case option: CommandSurfaceItem.OptionItem =>
         CommandPaletteContentResolver.optionRow(option, selected)
       case toggle: CommandSurfaceItem.ToggleItem =>

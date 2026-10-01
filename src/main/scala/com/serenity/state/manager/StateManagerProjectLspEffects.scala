@@ -1,13 +1,10 @@
 package com.serenity.state.manager
 
-import java.nio.file.Path
-
 import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.{LspIntent, ProjectIntent}
-import com.serenity.io.FileUtils
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
 import com.serenity.project.*
@@ -57,7 +54,7 @@ final private[manager] class StateManagerProjectLspEffects(
   private def runProjectTask(state: AppState, kind: ProjectTaskKind): IO[Unit] =
     if !state.editingContext.hasCodeTooling then pinProjectTerminal(ProjectTaskTerminal.notAvailableInProseMode(kind))
     else
-      projectTaskStartPath(state).flatMap { start =>
+      ProjectTaskStart.path(state).flatMap { start =>
         ProjectTaskDetector.detect(start, kind) match
           case None =>
             pinProjectTerminal(ProjectTaskTerminal.noTask(kind, start))
@@ -97,12 +94,6 @@ final private[manager] class StateManagerProjectLspEffects(
         )
         .flatMap(outcome => lanes.dispatchEffectResult(EffectResult.ProjectTaskFinished(id, outcome), _ => IO.unit))
     }
-
-  private def projectTaskStartPath(state: AppState): IO[Path] =
-    state.focusedBufferId
-      .flatMap(state.persisted.buffers.get)
-      .flatMap(_.document.filePath)
-      .fold(FileUtils.getCurrentDirectory)(path => IO.pure(path))
 
   private def pinProjectTerminal(text: String): IO[Unit] =
     pinOrUpdateTerminalPanel(text, ProjectTaskTransitions.TerminalPosition, ProjectTaskTransitions.TerminalSize)

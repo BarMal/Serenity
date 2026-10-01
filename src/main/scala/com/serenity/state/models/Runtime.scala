@@ -3,6 +3,7 @@ package com.serenity.state.models
 import com.serenity.animation.sprite.CompanionSpriteState
 import com.serenity.config.{AppConfig, MotionFamily}
 import com.serenity.frontend.FrontendCapabilities
+import com.serenity.project.ProjectPresence
 import com.serenity.ui.layout.ViewportSize
 
 /** State that is never persisted -- reset to defaults (or recomputed) on every session restore. */
@@ -55,7 +56,9 @@ final case class Runtime(
     // The UI-preset apply whose preset is still being loaded off the dispatcher (#1697), so its result can be dropped
     // once a later apply has been requested. Cleared when that request resolves.
     pendingUiPresetApply: Option[Long] = None,
-    projectTasks: ProjectTasks = ProjectTasks()
+    projectTasks: ProjectTasks = ProjectTasks(),
+    // Refreshed each time the command palette opens, which is where project commands are offered.
+    projectPresence: ProjectPresence = ProjectPresence.Unchecked
 ):
 
   /** A typed character: the quiet window for cursor-adjacent surfaces always restarts; the companion sprite panel

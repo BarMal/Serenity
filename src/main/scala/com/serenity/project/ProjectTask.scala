@@ -36,6 +36,12 @@ final case class ProjectTaskResult(
     output: String
 )
 
+/** Whether a supported project encloses the file being worked on, as of the last check. */
+enum ProjectPresence:
+  case Unchecked
+  case Detected
+  case NotDetected
+
 /** Detects project roots and maps them to conventional build/test/run/debug/dependency commands. */
 object ProjectTaskDetector:
 
@@ -140,6 +146,14 @@ object ProjectTaskDetector:
 
   def detect(start: Path, kind: ProjectTaskKind): Option[ProjectTaskCommand] =
     startingDirectory(start).flatMap(dir => walkUp(dir, kind))
+
+  def presence(start: Path): ProjectPresence =
+    if startingDirectory(start).exists(enclosingProviderExists) then ProjectPresence.Detected
+    else ProjectPresence.NotDetected
+
+  private def enclosingProviderExists(directory: Path): Boolean =
+    providers.exists(_.matches(directory)) ||
+      Option(directory.getParent).filter(_ != directory).exists(enclosingProviderExists)
 
   private def startingDirectory(start: Path): Option[Path] =
     val absolute = start.toAbsolutePath.normalize()

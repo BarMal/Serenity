@@ -276,13 +276,16 @@ final private[manager] class StateManagerEventPipeline(
       case CloseTab => beginCloseAction(CloseScope.Current, prevState)
       case Quit     => beginCloseAction(CloseScope.Quit, prevState)
       case ToggleCommandRunner =>
-        uiPresetPreviews.flatMap(previews =>
-          commitReducerResult(
-            result,
+        for
+          previews <- uiPresetPreviews
+          presence <- ProjectTaskStart.presence(prevState)
+          detected = prevState.copy(runtime = prevState.runtime.copy(projectPresence = presence))
+          _ <- commitReducerResult(
+            AppEventReducer.reduce(event, detected, registry)(using balance),
             prevState,
             EventPipelineTransitions.withCommandRunnerUiPresetPreviews(_, previews)
           )
-        )
+        yield ()
       case NextTab     => tabCycled(SweepDirection.Backward)
       case PreviousTab => tabCycled(SweepDirection.Forward)
       case ToggleContextualToolbar | ToggleShortcutsHelp | ToggleTabList | ToggleRecentFilesInMode | NewTab |

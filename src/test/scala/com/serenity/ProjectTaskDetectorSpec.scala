@@ -2,7 +2,13 @@ package com.serenity
 
 import java.nio.file.{Files, Path, Paths}
 
-import com.serenity.project.{ProjectTaskCommand, ProjectTaskDetector, ProjectTaskKind, ProjectTaskTerminal}
+import com.serenity.project.{
+  ProjectPresence,
+  ProjectTaskCommand,
+  ProjectTaskDetector,
+  ProjectTaskKind,
+  ProjectTaskTerminal
+}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -32,6 +38,18 @@ class ProjectTaskDetectorSpec extends AnyFlatSpec with Matchers:
       task.map(_.workingDirectory) shouldBe Some(root)
       task.map(_.commandLine) shouldBe Some(List("sbt", "test"))
       task.map(_.ecosystemLabel) shouldBe Some("sbt")
+  }
+
+  it should "report a project present for a file anywhere under a supported marker" in withTempDirectory("presence") {
+    root =>
+      val nested = Files.createDirectories(root.resolve("src"))
+      Files.writeString(root.resolve("go.mod"), "module example")
+
+      ProjectTaskDetector.presence(nested.resolve("main.go")) shouldBe ProjectPresence.Detected
+  }
+
+  it should "report no project for a file with no supported marker above it" in withTempDirectory("no-presence") { root =>
+    ProjectTaskDetector.presence(root.resolve("notes.txt")) shouldBe ProjectPresence.NotDetected
   }
 
   it should "prefer the nearest supported marker when projects are nested" in withTempDirectory("nested-project") {

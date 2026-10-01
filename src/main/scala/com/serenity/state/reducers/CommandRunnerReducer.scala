@@ -117,10 +117,12 @@ object CommandRunnerReducer:
     runner.selectedItem match
       case Some(_: CommandSurfaceItem.InputItem) =>
         ReducerResult.noEffects(state)
-      case Some(CommandSurfaceItem.CommandItem(command))
+      case Some(CommandSurfaceItem.CommandItem(_, Some(reason))) =>
+        ReducerResult.noEffects(replaceRunner(state, _.copy(statusMessage = Some(reason))))
+      case Some(CommandSurfaceItem.CommandItem(command, _))
           if command.intent == CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.OpenSettings)) =>
         ReducerResult.noEffects(replaceRunner(state, _.openSettings))
-      case Some(CommandSurfaceItem.CommandItem(command)) =>
+      case Some(CommandSurfaceItem.CommandItem(command, _)) =>
         ReducerResult(state = deactivate(state), effects = List(AppEffect.ExecuteCommand(command)))
       case Some(option: CommandSurfaceItem.OptionItem) =>
         option.selectedIntent match
@@ -471,7 +473,7 @@ object CommandRunnerReducer:
                 submitSubmenuOption(state, option)
               case Some(toggle: CommandSurfaceItem.ToggleItem) =>
                 submitToggle(state, toggle)
-              case Some(CommandSurfaceItem.CommandItem(command)) =>
+              case Some(CommandSurfaceItem.CommandItem(command, _)) =>
                 submitSubmenuCommand(state, command)
               case Some(_: CommandSurfaceItem.GroupItem) =>
                 ReducerResult.noEffects(replaceRunner(state, _.enterSelectedSubmenuGroup))

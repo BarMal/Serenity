@@ -194,7 +194,8 @@ final case class AppState(
       bufferLanguage = activeBuffer.flatMap(_.document.language),
       themeNames = runtime.themeDiscovery.availableThemeNames,
       currentThemeName = Some(persisted.theme.name),
-      editingContext = Some(editingContext)
+      editingContext = Some(editingContext),
+      projectPresence = runtime.projectPresence
     )
 
   /** The active editor pane's buffer, if any. */

@@ -111,12 +111,12 @@ private[command] trait CommandRunnerLifecycle:
   def visibleCommands: List[Command] =
     val visibleCount = 5
     val items        = visibleItems
-    if items.length <= visibleCount then items.collect { case CommandSurfaceItem.CommandItem(command) => command }
+    if items.length <= visibleCount then items.collect { case CommandSurfaceItem.CommandItem(command, _) => command }
     else
       val halfVisible  = visibleCount / 2
       val targetOffset = selectedIndex - halfVisible
       val offset       = math.max(0, math.min(targetOffset, items.length - visibleCount))
-      items.slice(offset, offset + visibleCount).collect { case CommandSurfaceItem.CommandItem(command) => command }
+      items.slice(offset, offset + visibleCount).collect { case CommandSurfaceItem.CommandItem(command, _) => command }
 
   /** Check if there are more commands beyond visible ones */
   def hasMoreCommands: Boolean = visibleItems.length > 5

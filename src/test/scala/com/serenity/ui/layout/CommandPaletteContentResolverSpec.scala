@@ -2,6 +2,7 @@ package com.serenity.ui.layout
 
 import com.serenity.command.*
 import com.serenity.config.AppConfig
+import com.serenity.project.ProjectPresence
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -302,4 +303,28 @@ class CommandPaletteContentResolverSpec extends AnyFlatSpec with Matchers:
     val row = CommandPaletteContentResolver.inputRow(item, selected = false, editingText = None)
 
     row.segments.map(_.text) shouldBe List("Selection Font Size", "Points (8.0-48.0)", "")
+  }
+
+  "the palette" should "draw a disabled command greyed out, with its reason in place of its description" in {
+    val runner = CommandRunner.empty
+      .activate(
+        CommandRegistry.default,
+        AppConfig.default,
+        context = CommandRunnerContext(projectPresence = ProjectPresence.NotDetected)
+      )
+      .updateSearchTerm("project build")(using CommandRegistry.default)
+
+    val resolved = CommandPaletteContentResolver.resolveCommandPalette(
+      runner,
+      LayoutRect(0, 0, 120, 40),
+      SurfaceRenderMode.Floating,
+      itemGapRows = 0.0,
+      itemTargetRows = 1,
+      showKeyHints = false
+    )
+    val row = resolved.rows.find(_.plainText.contains("Build Project")).getOrElse(fail("missing the build row"))
+
+    row.segments.map(_.tone).distinct shouldBe List(OverlayTone.Muted)
+    row.plainText should include("No project detected.")
+    row.plainText should not include "Build the detected project."
   }
