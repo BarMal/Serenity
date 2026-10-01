@@ -2,9 +2,9 @@ package com.serenity
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
+import com.serenity.keystroke.events.{Enter, InsertChar, MoveDown, ToggleCommandRunner}
 import com.serenity.state.manager.StateManagerTestFacade.*
-import com.serenity.state.models.{AppState, SurfaceContent}
+import com.serenity.state.models.{AppState, ListPicker, Modal, SurfaceContent}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -74,6 +74,11 @@ class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTes
   private def mostRecentCommand(state: AppState): Option[String] =
     state.persisted.commandUsage.maxByOption(_._2).map(_._1.value)
 
+  private def themeChooser(state: AppState): Option[ListPicker] =
+    state.runtime.uiSurfaces.map(_.content).collectFirst {
+      case SurfaceContent.ModalWorkflow(Modal.ListPicker(picker)) if picker.title == "Theme" => picker
+    }
+
   "running a surface-opening command from the palette" should "leave the theme chooser open and most recent" in {
     val sm = createStateManager("CommandUsageMruThemeChooser")
     sm.executeCommand(earlierCommand).unsafeRunSync()
@@ -82,8 +87,20 @@ class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTes
 
     val state = sm.getCurrentState.unsafeRunSync()
     mostRecentCommand(state) shouldBe Some("theme-chooser")
-    state.runtime.uiSurfaces.map(_.content).collect { case picker: SurfaceContent.ThemePicker => picker } should
-      have size 1
+    themeChooser(state) shouldBe defined
+  }
+
+  "the theme chooser" should "leave command usage untouched while previewing, and record the theme picked" in {
+    val sm = createStateManager("CommandUsageMruThemePreview")
+    runFromPalette(sm, "Open Theme Chooser", "theme-chooser")
+
+    sm.applyEvent(MoveDown).unsafeRunSync()
+    val previewing = sm.getCurrentState.unsafeRunSync()
+    mostRecentCommand(previewing) shouldBe Some("theme-chooser")
+
+    val highlighted = themeChooser(previewing).flatMap(_.selectedChoice).getOrElse(fail("expected a highlighted theme"))
+    sm.applyEvent(Enter).unsafeRunSync()
+    mostRecentCommand(sm.getCurrentState.unsafeRunSync()) shouldBe Some(highlighted.action.name)
   }
 
   it should "leave the theme creator open and most recent" in {

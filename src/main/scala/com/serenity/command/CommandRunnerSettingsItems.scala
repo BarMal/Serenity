@@ -376,17 +376,7 @@ object CommandRunnerSettingsItems:
     CommandSurfaceItem.GroupItem(
       id = "theme",
       label = "Theme",
-      children = themeNames.map { name =>
-        CommandSurfaceItem.CommandItem(
-          Command.typed(
-            s"theme-${name.toLowerCase.replaceAll("[^a-z0-9]+", "-")}",
-            s"Switch to the $name theme.",
-            CommandIntent.Theme(ThemeIntent.ApplyTheme(name)),
-            CommandCategory.Settings,
-            label = name
-          )
-        )
-      },
+      children = themeNames.map(name => CommandSurfaceItem.CommandItem(ThemeCommands.applyTheme(name))),
       category = CommandCategory.Settings,
       hint = current.orElse(Some("Pick a theme"))
     )

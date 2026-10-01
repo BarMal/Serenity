@@ -6,7 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
-import com.serenity.command.ThemeIntent
+import com.serenity.command.{ThemeCommands, ThemeIntent}
 import com.serenity.io.FileDialog
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -110,17 +110,18 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.stateRef.get.unsafeRunSync().persisted.theme.name shouldBe AppState.initial.persisted.theme.name
   }
 
-  it should "open the theme picker seeded with the current theme's index when theme names are loaded" in {
+  it should "open the theme chooser over the loaded theme names, restoring the current theme on dismiss" in {
     val fixture = harness(themeNames = List("default-light", "default-dark", "dracula"))
 
     fixture.popups.interpretThemeIntent(ThemeIntent.OpenThemeChooser, AppState.initial).unsafeRunSync()
 
     val after = fixture.stateRef.get.unsafeRunSync()
     after.runtime.uiSurfaces.map(_.content) match
-      case List(SurfaceContent.ThemePicker(pickerState)) =>
-        pickerState.themes shouldBe List("default-light", "default-dark", "dracula")
-        pickerState.originalTheme shouldBe AppState.initial.persisted.theme.name
-      case other => fail(s"Expected a single ThemePicker surface, got $other")
+      case List(SurfaceContent.ModalWorkflow(Modal.ListPicker(picker))) =>
+        picker.items.toOption.toList.flatMap(_.items.map(_.label)) shouldBe
+          List("default-light", "default-dark", "dracula")
+        picker.onDismiss shouldBe Some(ThemeCommands.applyTheme(AppState.initial.persisted.theme.name))
+      case other => fail(s"Expected a single theme chooser surface, got $other")
   }
 
   it should "do nothing when opening the theme picker before any theme names have loaded" in {

@@ -157,8 +157,6 @@ object SurfaceContentResolver:
         PanelContentResolver.resolveTabList(rect, mode, entries, activeBufferId)
       case SurfaceContent.RecentFilesInMode(recentMode, paths) =>
         PanelContentResolver.resolveRecentFilesInMode(rect, mode, recentMode, paths)
-      case SurfaceContent.ThemePicker(state) =>
-        PickerContentResolver.resolveThemePicker(state, rect, mode)
       case SurfaceContent.ThemeCreator(state) =>
         PickerContentResolver.resolveThemeCreator(state, rect, mode)
       case SurfaceContent.FileSearch(state) =>

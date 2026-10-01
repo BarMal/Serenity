@@ -20,7 +20,6 @@ private[manager] object FocusHandlerRouting:
   private val registry = CommandRegistry.withToggleUI
 
   private val commandRunner: LocalEventHandler     = new CommandRunnerComponent(registry)
-  private val themePicker: LocalEventHandler       = new ThemePickerComponent()
   private val themeCreator: LocalEventHandler      = new ThemeCreatorComponent()
   private val fileSearch: LocalEventHandler        = new FileSearchComponent()
   private val contextualToolbar: LocalEventHandler = new ContextualToolbarComponent
@@ -75,7 +74,6 @@ private[manager] object FocusHandlerRouting:
     content match
       case SurfaceContent.CommandPalette(_) =>
         commandRunner
-      case SurfaceContent.ThemePicker(_)       => themePicker
       case SurfaceContent.ThemeCreator(_)      => themeCreator
       case SurfaceContent.FileSearch(_)        => fileSearch
       case SurfaceContent.ContextualToolbar(_) => contextualToolbar
