@@ -1,6 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.config.AppMode
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.lsp.config.LanguageId
 
 /** What kind of text the active buffer holds, as far as the interface needs to distinguish. */
@@ -19,6 +20,10 @@ enum BufferKind:
 enum Shell:
   case Gui
   case Tui
+
+object Shell:
+  def of(capabilities: FrontendCapabilities): Shell =
+    if capabilities.isCellGrid then Shell.Tui else Shell.Gui
 
 /** Everything mode-aware in the interface reads from here rather than consulting `config.appMode`, the active buffer's
   * language and `runtime.capabilities` separately: one derivation per frame, so the toolbar, the status line, the
@@ -54,7 +59,7 @@ object EditingContext:
     EditingContext(
       mode = state.persisted.config.appMode,
       buffer = state.activeBuffer.map(bufferKind),
-      shell = if state.runtime.capabilities.isCellGrid then Shell.Tui else Shell.Gui,
+      shell = Shell.of(state.runtime.capabilities),
       focus = state.persisted.focus
     )
 

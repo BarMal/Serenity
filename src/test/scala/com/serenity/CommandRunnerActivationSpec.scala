@@ -395,10 +395,10 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     settingsGroup(defaultRunner, "settings-typography").flatMap(_.hint) shouldBe
       Some("Typefaces for prose, code, and interface")
 
+    // Every typography row a code workspace shows is GUI-only, so on a terminal the group has nothing left to offer.
     val tuiRunner = CommandRunner.empty.activate(registry, AppConfig.default, capabilities = FrontendCapabilities.tui())
     tuiRunner.capabilities.isCellGrid shouldBe true
-    settingsGroup(tuiRunner, "settings-typography").flatMap(_.hint) shouldBe
-      Some("Inert in TUI mode -- Typefaces for prose, code, and interface")
+    settingsGroup(tuiRunner, "settings-typography") shouldBe None
   }
 
   "CommandRunner.activate with keyboardFidelityTier" should "default to Full and carry the negotiated tier through (issue #1194)" in {

@@ -2,6 +2,7 @@ package com.serenity.command
 
 import com.serenity.config.{AppMode, StatusSegment}
 import com.serenity.frontend.FrontendCapabilities
+import com.serenity.state.models.Shell
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.UiPreset
 
@@ -14,10 +15,10 @@ import com.serenity.ui.presets.UiPreset
   */
 object CommandRunnerSettingsGroups:
 
-  /** `capabilities` hides no controls -- every setting still applies its intent identically regardless of frontend, so
-    * hiding one would make it impossible to prepare a config while running headless. Instead the groups epic #1103
-    * called out as inert in cell space (post-processing effects, typography) get their hint annotated to say so, per
-    * [[FrontendCapabilities.postProcessing]]/[[FrontendCapabilities.typography]].
+  /** Rows with no visible effect on the running frontend (`capabilities`) are hidden, the same way the app mode hides
+    * the other mode's rows; Show All Settings brings both back. Which rows are [[FrontendSupport.GuiOnly]] follows epic
+    * #1103's accepted cell-space degradations: fonts, text scale, and pixel effects (blur, alpha, shadows, rounded
+    * corners, outlines, post-processing, window chrome).
     */
   def build(
     optionSelections: Map[String, Int],
@@ -44,6 +45,8 @@ object CommandRunnerSettingsGroups:
     val showAllSettingsRegardlessOfMode = optionSelections.getOrElse("settings-show-all", 1) == 0
     val showProseSettings               = showAllSettingsRegardlessOfMode || appMode == AppMode.Prose
     val showCodeSettings                = showAllSettingsRegardlessOfMode || appMode == AppMode.Code
+    val onFrontend = SettingsFrontendFilter(Shell.of(capabilities), showAllSettingsRegardlessOfMode)
+    val guiOnly    = FrontendSupport.GuiOnly
     def input(ids: String*): List[CommandSurfaceItem.InputItem] =
       ids.toList.flatMap(id => inputItems.find(_.id == id))
     def group(id: String, label: String, hint: String, children: List[CommandSurfaceItem]) =
@@ -99,7 +102,7 @@ object CommandRunnerSettingsGroups:
     // issue #1057: the one-shot navigation commands that used to sit here are ordinary palette commands. The one item
     // that stays is authoring a document comment's text, a real input rather than an action.
     val commentsGroup = group("settings-navigation", "Comments", "Author a document comment", input("document-comment"))
-    val fontHint      = inertInTuiHint("Family, size, ligatures", inert = !capabilities.typography)
+    val fontHint      = "Family, size, ligatures"
     val proseFontGroup = group(
       "settings-prose-font",
       "Prose Font",
@@ -138,8 +141,9 @@ object CommandRunnerSettingsGroups:
       "settings-rich-text",
       "Rich Text",
       "Selection family, size, colour",
-      CommandRunnerSettingsItems.richTextFontGroupItem(optionSelections, fontFamilies.text) ::
-        inputItems.filter(_.id.startsWith("rich-text-"))
+      onFrontend
+        .row(guiOnly, CommandRunnerSettingsItems.richTextFontGroupItem(optionSelections, fontFamilies.text))
+        .toList ++ onFrontend.rows(guiOnly, input("rich-text-font-size")) ++ input("rich-text-color")
     )
     val themeGroup = CommandRunnerSettingsItems.themeGroupItem(context.themeNames, context.currentThemeName)
     val surfaceAppearanceGroup = group(
@@ -147,14 +151,11 @@ object CommandRunnerSettingsGroups:
       "Surface Appearance",
       "Background, material, and effects",
       List(
-        CommandRunnerSettingsAppearanceItems.backgroundStyleOptionItem(optionSelections),
-        CommandRunnerSettingsAppearanceItems.materialPresetOptionItem(optionSelections),
-        annotateInertInTui(
-          CommandRunnerSettingsAppearanceItems.postProcessingOptionItem(optionSelections),
-          inert = !capabilities.postProcessing
-        ),
-        CommandRunnerSettingsAppearanceItems.uiShadowsOptionItem(optionSelections)
-      )
+        onFrontend.row(guiOnly, CommandRunnerSettingsAppearanceItems.backgroundStyleOptionItem(optionSelections)),
+        Some(CommandRunnerSettingsAppearanceItems.materialPresetOptionItem(optionSelections)),
+        onFrontend.row(guiOnly, CommandRunnerSettingsAppearanceItems.postProcessingOptionItem(optionSelections)),
+        onFrontend.row(guiOnly, CommandRunnerSettingsAppearanceItems.uiShadowsOptionItem(optionSelections))
+      ).flatten
     )
     // issue #1046: command-runner row count/spacing (visible rows, item gap, cursor gap) is not editable here as
     // three separate knobs -- Interface Density is the one control that governs all three; the underlying config
@@ -167,10 +168,10 @@ object CommandRunnerSettingsGroups:
       "Interface Layout",
       "Density, window chrome, key hints, and how many command runner/palette items are visible",
       List(
-        CommandRunnerSettingsAppearanceItems.interfaceDensityOptionItem(optionSelections),
-        CommandRunnerSettingsAppearanceItems.windowChromeOptionItem(optionSelections),
-        CommandRunnerSettingsTextDisplayItems.commandRunnerKeyHintsOptionItem(optionSelections)
-      )
+        Some(CommandRunnerSettingsAppearanceItems.interfaceDensityOptionItem(optionSelections)),
+        onFrontend.row(guiOnly, CommandRunnerSettingsAppearanceItems.windowChromeOptionItem(optionSelections)),
+        Some(CommandRunnerSettingsTextDisplayItems.commandRunnerKeyHintsOptionItem(optionSelections))
+      ).flatten
     )
     val cursorGroup = group(
       "settings-cursor",
@@ -182,13 +183,14 @@ object CommandRunnerSettingsGroups:
       "settings-look-advanced",
       "Advanced",
       "Blur, spacing, corners, outlines, render cadence, decorative extras",
-      input("blur-radius", "ui-element-gap", "ui-corner-radius", "ui-outline-thickness") ++ List(
-        CommandRunnerSettingsMotionItems.renderFpsOptionItem(optionSelections),
-        CommandRunnerSettingsMotionItems.renderDamageGranularityOptionItem(optionSelections),
-        CommandRunnerSettingsAppearanceItems.visualFlairLevelOptionItem(optionSelections),
-        CommandRunnerSettingsAppearanceItems.companionSpriteEnabledOptionItem(optionSelections),
-        CommandRunnerSettingsAppearanceItems.companionSpriteTypingCycleOptionItem(optionSelections)
-      )
+      onFrontend.rows(guiOnly, input("blur-radius")) ++ input("ui-element-gap") ++
+        onFrontend.rows(guiOnly, input("ui-corner-radius", "ui-outline-thickness")) ++ List(
+          CommandRunnerSettingsMotionItems.renderFpsOptionItem(optionSelections),
+          CommandRunnerSettingsMotionItems.renderDamageGranularityOptionItem(optionSelections),
+          CommandRunnerSettingsAppearanceItems.visualFlairLevelOptionItem(optionSelections),
+          CommandRunnerSettingsAppearanceItems.companionSpriteEnabledOptionItem(optionSelections),
+          CommandRunnerSettingsAppearanceItems.companionSpriteTypingCycleOptionItem(optionSelections)
+        )
     )
     val customMotionInputIds =
       if optionSelections.get("motion-preset").contains(4) then List("animation-duration", "animation-steps") else Nil
@@ -215,9 +217,14 @@ object CommandRunnerSettingsGroups:
       List(
         CommandRunnerSettingsMotionItems.motionAccessibilityOptionItem(optionSelections),
         CommandRunnerSettingsMotionItems.motionPresetOptionItem(optionSelections),
-        CommandRunnerSettingsMotionItems.editorTextTransitionOptionItem(optionSelections),
-        CommandRunnerSettingsMotionItems.panelOpenTransitionOptionItem(optionSelections),
-        CommandRunnerSettingsMotionItems.panelCloseTransitionOptionItem(optionSelections),
+        CommandRunnerSettingsMotionItems.editorTextTransitionOptionItem(optionSelections)
+      ) ++ onFrontend.rows(
+        guiOnly,
+        List(
+          CommandRunnerSettingsMotionItems.panelOpenTransitionOptionItem(optionSelections),
+          CommandRunnerSettingsMotionItems.panelCloseTransitionOptionItem(optionSelections)
+        )
+      ) ++ List(
         CommandRunnerSettingsMotionItems.commandRunnerTransitionOptionItem(optionSelections),
         CommandRunnerSettingsMotionItems.commandRunnerFadeOptionItem(optionSelections),
         CommandRunnerSettingsMotionItems.uiAnimationOptionItem(optionSelections),
@@ -245,10 +252,15 @@ object CommandRunnerSettingsGroups:
       workspaceLayoutGroup.copy(id = "settings-preset-workspace-layout"),
       surfaceAppearanceGroup.copy(id = "settings-preset-surface-appearance"),
       cursorGroup.copy(id = "settings-preset-cursor"),
-      motionGroup.copy(id = "settings-preset-animation"),
-      proseFontGroup.copy(id = "settings-preset-prose-font"),
-      codeFontGroup.copy(id = "settings-preset-code-font"),
-      uiFontGroup.copy(id = "settings-preset-ui-font"),
+      motionGroup.copy(id = "settings-preset-animation")
+    ) ++ onFrontend.rows(
+      guiOnly,
+      List(
+        proseFontGroup.copy(id = "settings-preset-prose-font"),
+        codeFontGroup.copy(id = "settings-preset-code-font"),
+        uiFontGroup.copy(id = "settings-preset-ui-font")
+      )
+    ) ++ List(
       documentDefaultsGroup.copy(id = "settings-preset-document-defaults"),
       spellCheckGroup.copy(id = "settings-preset-spellcheck")
     )
@@ -281,14 +293,16 @@ object CommandRunnerSettingsGroups:
     val typographyGroup = group(
       "settings-typography",
       "Typography",
-      inertInTuiHint("Typefaces for prose, code, and interface", inert = !capabilities.typography),
-      List(
-        Option.when(showProseSettings)(proseFontGroup),
-        Option.when(showCodeSettings)(codeFontGroup),
-        Some(uiFontGroup),
-        Some(textScaleGroup),
-        Option.when(showProseSettings)(richTextGroup)
-      ).flatten
+      "Typefaces for prose, code, and interface",
+      onFrontend.rows(
+        guiOnly,
+        List(
+          Option.when(showProseSettings)(proseFontGroup),
+          Option.when(showCodeSettings)(codeFontGroup),
+          Some(uiFontGroup),
+          Some(textScaleGroup)
+        ).flatten
+      ) ++ Option.when(showProseSettings && richTextGroup.children.nonEmpty)(richTextGroup)
     )
     val lookGroup = group(
       "settings-look",
@@ -302,21 +316,6 @@ object CommandRunnerSettingsGroups:
       "Buffer language and spelling",
       bufferLanguageGroup :: Option.when(showProseSettings)(spellCheckGroup).toList
     )
-    List(workspaceGroup, editorGroup, typographyGroup, lookGroup, motionGroup, languageToolsGroup, keysGroup)
-
-  /** Lead a hint with the note that the control it describes has no visible effect on a fixed-cell terminal surface --
-    * the setting still applies and persists identically, it just paints nothing different in TUI mode (see epic #1103's
-    * accepted degradations).
-    *
-    * The note leads rather than trails because the settings surface's hint column is a fixed share of the panel width
-    * and elides from the right (`TextOverlayRenderer.fitCellText`): appended to a hint as long as Post-processing's,
-    * the annotation was cut off before it could ever be read, at any terminal width.
-    */
-  private def inertInTuiHint(hint: String, inert: Boolean): String =
-    if inert then s"Inert in TUI mode -- $hint" else hint
-
-  private def annotateInertInTui(
-    item: CommandSurfaceItem.OptionItem,
-    inert: Boolean
-  ): CommandSurfaceItem.OptionItem =
-    item.copy(hint = Some(inertInTuiHint(item.hint.getOrElse(item.label), inert)))
+    // A code workspace on a terminal has no typography row left to show.
+    List(workspaceGroup, editorGroup) ++ Option.when(typographyGroup.children.nonEmpty)(typographyGroup) ++
+      List(lookGroup, motionGroup, languageToolsGroup, keysGroup)

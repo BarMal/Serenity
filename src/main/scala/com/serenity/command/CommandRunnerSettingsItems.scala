@@ -157,7 +157,7 @@ object CommandRunnerSettingsItems:
       selectedIndex = optionSelections.getOrElse("settings-show-all", 1),
       enabledIntent = CommandIntent.View(ViewIntent.SetShowAllSettingsRegardlessOfMode(true)),
       disabledIntent = CommandIntent.View(ViewIntent.SetShowAllSettingsRegardlessOfMode(false)),
-      hint = "Show settings hidden by the app mode filter above"
+      hint = "Show settings hidden by the app mode above, or with no effect in this frontend"
     )
 
   // issue #1044: same normalization as `showAllSettingsOptionItem` above -- was ordered Off/On.
