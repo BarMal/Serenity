@@ -2,10 +2,12 @@ package com.serenity.state.components
 
 import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
 import com.serenity.keystroke.events.*
-import com.serenity.state.models.{AppState, Focus, SurfacePresentation, movedToEndWhere}
-import com.serenity.state.reducers.{AppEffect, FileEffect, ReducerResult}
-import com.serenity.ui.layout.{DirectoryTreeData, PanelPosition}
+import com.serenity.state.models.{AppState, Focus, SurfaceContent, SurfacePresentation, UiSurface}
+import com.serenity.ui.layout.{LayoutEngine, PanelPosition, ViewportSize}
 
+/** Keys for the panel focused at one edge: Escape and friends return to the editor and Ctrl+Up/Down resize it, while
+  * moving within it depends on what it shows -- see [[ExplorerPanelKeys]], [[ListPanelKeys]] and [[OutputPanelKeys]].
+  */
 class PinnedPanelComponent(
     position: PanelPosition
 ) extends TypedFocusedComponent[PanelInputEvent]:
@@ -14,17 +16,12 @@ class PinnedPanelComponent(
     PanelInputEvent.fromEvent(event)
 
   protected def processTypedEvent(event: PanelInputEvent, currentState: AppState): ComponentResult =
-    currentState.runtime.uiSurfaces.find(isPinnedAtPosition(_, currentState)) match
-      case Some(_) =>
-        processPanelEvent(event, currentState)
-      case None => ComponentResult.noChange
+    activeSurface(currentState) match
+      case Some(surface) => processPanelEvent(event, surface, currentState)
+      case None          => ComponentResult.noChange
 
-  private def processPanelEvent(event: PanelInputEvent, currentState: AppState): ComponentResult =
+  private def processPanelEvent(event: PanelInputEvent, surface: UiSurface, currentState: AppState): ComponentResult =
     event match
-      case PanelInputEvent.Navigate(direction) =>
-        navigateDirectoryPanel(direction, currentState).getOrElse(ComponentResult.noChange)
-      case PanelInputEvent.Activate =>
-        activateDirectorySelection(currentState).getOrElse(ComponentResult.noChange)
       case PanelInputEvent.NoOp =>
         ComponentResult.noChange
       case PanelInputEvent.ReturnFocus =>
@@ -32,146 +29,53 @@ class PinnedPanelComponent(
           case Some(paneId) => ComponentResult.transferFocus(Focus.EditorPane(paneId))
           case None         => ComponentResult.noChange
       case PanelInputEvent.Resize(delta) =>
-        resizeActivePanel(delta, currentState).getOrElse(ComponentResult.noChange)
+        resized(surface, delta)
+      case movement =>
+        val rows = visibleRows(surface, currentState)
+        val handled = surface.content match
+          case SurfaceContent.DirectoryTree(tree, selectedPath) =>
+            ExplorerPanelKeys.handle(movement, surface, tree, selectedPath, currentState, rows)
+          case SurfaceContent.Outline(_, _) | SurfaceContent.Comments(_, _) | SurfaceContent.Diagnostics(_, _) =>
+            ListPanelKeys.handle(movement, surface, currentState, rows)
+          case SurfaceContent.Terminal(text, cursor) =>
+            OutputPanelKeys.handle(movement, surface, text, cursor, rows)
+          case _ => None
+        handled.getOrElse(ComponentResult.noChange)
 
-  /** Resizes whichever panel at this component's position is active (issue #1310), through the same generic
-    * `Command`/`CommandIntent` path the palette already uses -- not a bespoke keyboard-only mechanism.
+  /** Resizes the panel (issue #1310) through the same generic `Command`/`CommandIntent` path the palette already uses
+    * -- not a bespoke keyboard-only mechanism.
     */
-  private def resizeActivePanel(delta: Int, currentState: AppState): Option[ComponentResult] =
-    activeDirectorySurface(currentState).map { surface =>
-      ComponentResult.executeCommand(
-        Command.typed(
-          "resize-focused-panel",
-          "Resize the focused panel.",
-          CommandIntent.View(ViewIntent.SetPanelSize(surface.id, delta)),
-          CommandCategory.View
-        )
+  private def resized(surface: UiSurface, delta: Int): ComponentResult =
+    ComponentResult.executeCommand(
+      Command.typed(
+        "resize-focused-panel",
+        "Resize the focused panel.",
+        CommandIntent.View(ViewIntent.SetPanelSize(surface.id, delta)),
+        CommandCategory.View
       )
-    }
+    )
 
-  private def navigateDirectoryPanel(direction: Direction, currentState: AppState): Option[ComponentResult] =
-    direction match
-      case Direction.Up | Direction.Down =>
-        moveDirectorySelection(direction, currentState)
-      case Direction.Left =>
-        activeDirectorySurface(currentState).flatMap(parentDirectoryNavigation)
-      case Direction.Right =>
-        activateDirectorySelection(currentState)
+  /** How many rows the panel shows -- what a page is. */
+  private def visibleRows(surface: UiSurface, state: AppState): Int =
+    val layout = LayoutEngine.calculateLayoutWithUI(state, state.runtime.viewportSize.getOrElse(ViewportSize(80, 24)))
+    layout.pinnedSurfaceRects.get(surface.id).map(rect => math.max(1, rect.height - 2)).getOrElse(1)
 
-  private def moveDirectorySelection(direction: Direction, currentState: AppState): Option[ComponentResult] =
-    activeDirectorySurface(currentState).flatMap { surface =>
-      surface.content match
-        case com.serenity.state.models.SurfaceContent.DirectoryTree(tree, selectedPath) =>
-          val visibleRows   = DirectoryTreeData.visibleRows(tree)
-          val selectedIndex = selectedIndexFor(visibleRows, selectedPath)
-          val delta = direction match
-            case Direction.Up   => -1
-            case Direction.Down => 1
-            case _              => 0
-          val nextIndex = (selectedIndex + delta).max(0).min(visibleRows.length - 1)
-          if visibleRows.isEmpty || nextIndex == selectedIndex then None
-          else
-            val updated = surface.copy(
-              content = com.serenity.state.models.SurfaceContent.DirectoryTree(tree, Some(visibleRows(nextIndex).path))
-            )
-            Some(ComponentResult.updateState(replaceSurface(_, updated)))
-        case _ =>
-          None
-    }
-
-  private def activateDirectorySelection(currentState: AppState): Option[ComponentResult] =
-    activeDirectorySurface(currentState).flatMap { surface =>
-      surface.content match
-        case com.serenity.state.models.SurfaceContent.DirectoryTree(tree, selectedPath) =>
-          val visibleRows = DirectoryTreeData.visibleRows(tree)
-          selectedPath
-            .flatMap(path => visibleRows.find(_.path == path))
-            .map { row =>
-              if row.isDirectory then
-                if row.isExpanded && row.failure.isEmpty then ComponentResult.noChange
-                else
-                  val updated = surface.copy(
-                    content = com.serenity.state.models.SurfaceContent.DirectoryTree(
-                      tree.copy(expandedPaths = tree.expandedPaths + row.path).retried(row.path),
-                      Some(row.path)
-                    )
-                  )
-                  ComponentResult.updateState(replaceSurface(_, updated))
-              else
-                ComponentResult.reducerResult(
-                  ReducerResult.withEffect(currentState, AppEffect.File(FileEffect.DirectLoadFile(row.path)))
-                )
-            }
-        case _ =>
-          None
-    }
-
-  private def parentDirectoryNavigation(
-    surface: com.serenity.state.models.UiSurface
-  ): Option[ComponentResult] =
-    surface.content match
-      case com.serenity.state.models.SurfaceContent.DirectoryTree(tree, selectedPath) =>
-        selectedPath.flatMap(path => collapseOrSelectParent(surface, tree, path))
-      case _ =>
-        None
-
-  private def collapseOrSelectParent(
-    surface: com.serenity.state.models.UiSurface,
-    tree: DirectoryTreeData,
-    selectedPath: java.nio.file.Path
-  ): Option[ComponentResult] =
-    if tree.expandedPaths.contains(selectedPath) then
-      val updated = surface.copy(
-        content = com.serenity.state.models.SurfaceContent.DirectoryTree(
-          tree.copy(expandedPaths = tree.expandedPaths - selectedPath),
-          Some(selectedPath)
-        )
-      )
-      Some(ComponentResult.updateState(replaceSurface(_, updated)))
-    else
-      Option(selectedPath.getParent)
-        .filter(parent => parent != tree.rootPath)
-        .map(parent =>
-          val updated = surface.copy(
-            content = com.serenity.state.models.SurfaceContent.DirectoryTree(tree, Some(parent))
-          )
-          ComponentResult.updateState(replaceSurface(_, updated))
-        )
-
-  private def selectedIndexFor(
-    rows: List[com.serenity.ui.layout.DirectoryTreeRow],
-    selectedPath: Option[java.nio.file.Path]
-  ): Int =
-    selectedPath
-      .flatMap(path =>
-        rows.indexWhere(_.path == path) match
-          case -1  => None
-          case idx => Some(idx)
-      )
-      .getOrElse(0)
-
-  private def activeDirectorySurface(currentState: AppState) =
+  /** The focused panel at this edge, or failing that the one most recently used there. */
+  private def activeSurface(currentState: AppState): Option[UiSurface] =
     focusedPinnedSurface(currentState).orElse(
       currentState.runtime.uiSurfaces.reverse.find(isPinnedAtPosition(_, currentState))
     )
 
-  private def focusedPinnedSurface(currentState: AppState) =
+  private def focusedPinnedSurface(currentState: AppState): Option[UiSurface] =
     currentState.persisted.focus match
       case Focus.Surface(surfaceId) =>
         currentState.surfaceById(surfaceId).filter(isPinnedAtPosition(_, currentState))
       case _ =>
         None
 
-  private def isPinnedAtPosition(surface: com.serenity.state.models.UiSurface, currentState: AppState): Boolean =
+  private def isPinnedAtPosition(surface: UiSurface, currentState: AppState): Boolean =
     surface.presentation match
       case SurfacePresentation.Docked =>
         currentState.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(position)
       case _ =>
         false
-
-  private def replaceSurface(currentState: AppState, updated: com.serenity.state.models.UiSurface): AppState =
-    currentState.copy(runtime =
-      currentState.runtime.copy(uiSurfaces =
-        currentState.runtime.uiSurfaces.movedToEndWhere(_.id == updated.id)(updated)
-      )
-    )

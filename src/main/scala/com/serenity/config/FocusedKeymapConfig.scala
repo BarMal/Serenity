@@ -367,6 +367,10 @@ enum PanelKeyAction extends KeymapEventAction[PanelInputEvent]:
   case Activate
   case GrowPanel
   case ShrinkPanel
+  case First
+  case Last
+  case PageUp
+  case PageDown
 
   def event: PanelInputEvent =
     this match
@@ -378,6 +382,10 @@ enum PanelKeyAction extends KeymapEventAction[PanelInputEvent]:
       case Activate      => PanelInputEvent.Activate
       case GrowPanel     => PanelInputEvent.Resize(1)
       case ShrinkPanel   => PanelInputEvent.Resize(-1)
+      case First         => PanelInputEvent.First
+      case Last          => PanelInputEvent.Last
+      case PageUp        => PanelInputEvent.Page(-1)
+      case PageDown      => PanelInputEvent.Page(1)
 
 object PanelKeyAction:
 
@@ -399,7 +407,11 @@ object PanelKeyAction:
     ),
     PanelKeyAction.ShrinkPanel -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set(com.serenity.keystroke.Modifier.Ctrl))
-    )
+    ),
+    PanelKeyAction.First    -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Home, None, Set.empty)),
+    PanelKeyAction.Last     -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.End, None, Set.empty)),
+    PanelKeyAction.PageUp   -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.PageUp, None, Set.empty)),
+    PanelKeyAction.PageDown -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.PageDown, None, Set.empty))
   )
 
   given KeymapActionCodec[PanelKeyAction] with

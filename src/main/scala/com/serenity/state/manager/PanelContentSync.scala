@@ -25,7 +25,10 @@ private[manager] object PanelContentSync:
     val previousSource = previous.activeBuffer
     val updated = state.runtime.uiSurfaces.map {
       case surface @ UiSurface(_, content, SurfacePresentation.Docked, _) =>
-        refreshed(content, state, source, previous, previousSource).fold(surface)(next => surface.copy(content = next))
+        refreshed(content, state, source, previous, previousSource).fold(surface) { next =>
+          val kept = if sourceSwitched(source, previousSource) then next else withHighlightKept(content, next)
+          surface.copy(content = kept)
+        }
       case surface => surface
     }
     if updated.corresponds(state.runtime.uiSurfaces)(_ eq _) then state
@@ -68,9 +71,9 @@ private[manager] object PanelContentSync:
     if !current then state
     else
       val updated = state.runtime.uiSurfaces.map {
-        case surface @ UiSurface(_, SurfaceContent.Outline(existing, _), SurfacePresentation.Docked, _)
+        case surface @ UiSurface(_, outline @ SurfaceContent.Outline(existing, _), SurfacePresentation.Docked, _)
             if existing != symbols =>
-          surface.copy(content = SurfaceContent.Outline(symbols))
+          surface.copy(content = withHighlightKept(outline, SurfaceContent.Outline(symbols)))
         case surface => surface
       }
       if updated.corresponds(state.runtime.uiSurfaces)(_ eq _) then state
@@ -107,14 +110,29 @@ private[manager] object PanelContentSync:
         Some(diagnosticsContent(state, source))
       case SurfaceContent.DirectoryTree(tree, selectedPath) if tree.awaitingListing.nonEmpty =>
         Some(SurfaceContent.DirectoryTree(tree.listingRequested(tree.awaitingListing), selectedPath))
-      case SurfaceContent.Terminal(_, _)
+      case SurfaceContent.Terminal(shown, cursor)
           if state.runtime.projectTasks.terminalText != previous.runtime.projectTasks.terminalText =>
-        Some(ProjectTaskTransitions.terminalContent(state))
+        // Scrolled back (the cursor short of the end), the panel stays where it is; otherwise it follows the output.
+        ProjectTaskTransitions.terminalContent(state) match
+          case SurfaceContent.Terminal(latest, _) if cursor < shown.length =>
+            Some(SurfaceContent.Terminal(latest, cursor.min(latest.length)))
+          case latest => Some(latest)
       case SurfaceContent.MarkdownPreview(bufferId, _) =>
         source
           .filter(buffer => buffer.id != bufferId && buffer.document.language.contains(LanguageId.Markdown))
           .map(markdownPreviewContent)
       case _ => None
+
+  /** `next` still highlighting the row `previous` had highlighted, when that row is still listed. */
+  def withHighlightKept(previous: SurfaceContent, next: SurfaceContent): SurfaceContent =
+    (previous, next) match
+      case (SurfaceContent.Outline(_, Some(at)), SurfaceContent.Outline(symbols, _)) =>
+        SurfaceContent.Outline(symbols, Option.when(symbols.exists(_.location == at))(at))
+      case (SurfaceContent.Comments(_, Some(at)), SurfaceContent.Comments(symbols, _)) =>
+        SurfaceContent.Comments(symbols, Option.when(symbols.exists(_.location == at))(at))
+      case (SurfaceContent.Diagnostics(_, Some(at)), SurfaceContent.Diagnostics(issues, _)) =>
+        SurfaceContent.Diagnostics(issues, Option.when(issues.exists(_.location == at))(at))
+      case _ => next
 
   private def sourceSwitched(source: Option[Buffer], previousSource: Option[Buffer]): Boolean =
     source.map(_.id) != previousSource.map(_.id)

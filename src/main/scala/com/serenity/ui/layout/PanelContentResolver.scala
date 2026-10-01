@@ -93,15 +93,18 @@ private[layout] object PanelContentResolver:
     cursor: Int
   ): ResolvedSurfaceContent =
     val lines = buffer.linesIterator.toList
+    // `cursor` is the scroll position: the panel ends at the line it is in, so a cursor at the end shows the newest.
+    val lastShown = buffer.take(cursor.max(0)).count(_ == '\n').min(lines.size - 1).max(0)
+    def tail(rows: Int) =
+      val shown = lines.take(lastShown + 1)
+      shown.zipWithIndex.drop(math.max(0, shown.size - math.max(1, rows)))
     val shaped = SurfaceLayoutKind.classify(rect) match
-      case SurfaceLayoutKind.Horizontal =>
-        lines.take(math.max(1, rect.height - 2))
+      case SurfaceLayoutKind.Horizontal | SurfaceLayoutKind.Square =>
+        tail(rect.height - 2).map(_._1)
       case SurfaceLayoutKind.Vertical =>
-        lines.take(math.max(1, rect.height - 2)).zipWithIndex.map { case (line, index) => s"${index + 1}: $line" }
-      case SurfaceLayoutKind.Square =>
-        s"cursor: $cursor" :: lines.take(math.max(0, rect.height - 3))
+        tail(rect.height - 2).map { case (line, index) => s"${index + 1}: $line" }
       case SurfaceLayoutKind.Compact =>
-        List(s"${lines.length} lines", s"cursor $cursor")
+        List(s"${lines.length} lines", s"line ${lastShown + 1}")
 
     ResolvedSurfaceContent(SurfaceContentResolver.titleFor(mode, "terminal"), rows = shaped.map(OverlayRow(_)))
 
@@ -132,14 +135,14 @@ private[layout] object PanelContentResolver:
       case SurfaceLayoutKind.Vertical | SurfaceLayoutKind.Square if symbols.isEmpty =>
         List(OutlineRowView(emptyStateRow("No headings in this document"), None))
       case SurfaceLayoutKind.Vertical =>
-        symbols.take(math.max(1, rect.height - 2)).zipWithIndex.map {
+        windowed(symbols, rect.height - 2, activeLocation)(_.location).map {
           case (symbol, index) =>
             val active = activeLocation.contains(symbol.location)
             val prefix = if active then "> " else ""
             OutlineRowView(OverlayRow(s"$prefix${symbol.kind} ${symbol.name}", selected = active), Some(index))
         }
       case SurfaceLayoutKind.Square =>
-        symbols.take(math.max(1, rect.height - 2)).zipWithIndex.map {
+        windowed(symbols, rect.height - 2, activeLocation)(_.location).map {
           case (symbol, index) =>
             val active = activeLocation.contains(symbol.location)
             val prefix = if active then "> " else ""
@@ -194,7 +197,7 @@ private[layout] object PanelContentResolver:
       case SurfaceLayoutKind.Vertical | SurfaceLayoutKind.Square if symbols.isEmpty =>
         List(CommentsRowView(emptyStateRow("No comments in this document"), None))
       case SurfaceLayoutKind.Vertical | SurfaceLayoutKind.Square =>
-        symbols.take(math.max(1, rect.height - 2)).zipWithIndex.map {
+        windowed(symbols, rect.height - 2, activeLocation)(_.location).map {
           case (symbol, index) =>
             val active = activeLocation.contains(symbol.location)
             val prefix = if active then "> " else ""
@@ -248,7 +251,7 @@ private[layout] object PanelContentResolver:
       case SurfaceLayoutKind.Vertical if issues.isEmpty =>
         List(DiagnosticsRowView(emptyStateRow("No problems in this document"), None))
       case SurfaceLayoutKind.Vertical =>
-        issues.take(math.max(1, rect.height - 2)).zipWithIndex.map {
+        windowed(issues, rect.height - 2, activeLocation)(_.location).map {
           case (issue, index) =>
             DiagnosticsRowView(
               OverlayRow(s"${issue.severity}: ${issue.message}", selected = activeLocation.contains(issue.location)),
@@ -259,7 +262,7 @@ private[layout] object PanelContentResolver:
         List(DiagnosticsRowView(emptyStateRow("No problems in this document"), None))
       case SurfaceLayoutKind.Square =>
         DiagnosticsRowView(OverlayRow(s"$errorCount error, $warningCount warning"), None) ::
-          issues.take(math.max(0, rect.height - 3)).zipWithIndex.map {
+          windowed(issues, rect.height - 3, activeLocation)(_.location).map {
             case (issue, index) =>
               DiagnosticsRowView(
                 OverlayRow(issue.message, selected = activeLocation.contains(issue.location)),
@@ -282,6 +285,17 @@ private[layout] object PanelContentResolver:
       SurfaceContentResolver.titleFor(mode, "diagnostics"),
       rows = diagnosticsRowViews(rect, issues, activeLocation).map(_.row)
     )
+
+  /** The `rows` items of `items` (each with its index) shown when `active` is highlighted: the first page, or, once the
+    * highlight is further down, the page ending on it -- so the highlighted row is always in view.
+    */
+  private def windowed[A](items: List[A], rows: Int, active: Option[Location])(
+    location: A => Location
+  ): List[(A, Int)] =
+    val visible  = math.max(1, rows)
+    val selected = active.map(target => items.indexWhere(location(_) == target)).filter(_ >= 0)
+    val offset   = selected.fold(0)(index => (index - visible + 1).max(0))
+    items.zipWithIndex.slice(offset, offset + visible)
 
   /** A muted, unselectable row standing in for a list with nothing in it. */
   private def emptyStateRow(message: String): OverlayRow =
