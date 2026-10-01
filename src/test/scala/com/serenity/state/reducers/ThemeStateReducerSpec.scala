@@ -64,20 +64,26 @@ class ThemeStateReducerSpec extends AnyFlatSpec with Matchers:
     valid(result) shouldBe true
   }
 
-  "PopupSurfaceReducer.openThemePicker" should "open a focused picker seeded at the current theme" in {
+  private def chooser(result: ReducerResult): Option[ListPicker] =
+    result.state.modalSurface.map(_.content).collect {
+      case SurfaceContent.ModalWorkflow(Modal.ListPicker(picker)) =>
+        picker
+    }
+
+  "PopupSurfaceReducer.openThemePicker" should "open a focused theme list highlighting the current theme" in {
     val result = PopupSurfaceReducer.openThemePicker(List("light", "dark"), withTheme(Theme.dark))
 
-    result.map(_.state.runtime.uiSurfaces.map(_.content)) shouldBe
-      Some(List(SurfaceContent.ThemePicker(ThemePickerState(List("light", "dark"), 1, "dark"))))
-    result.map(r => r.state.persisted.focus) shouldBe result.map(r => Focus.Surface(r.state.runtime.uiSurfaces.head.id))
+    result.flatMap(chooser).flatMap(_.selectedChoice).map(_.label) shouldBe Some("dark")
+    result.map(r => r.state.persisted.focus) shouldBe result.flatMap(_.state.modalSurface.map(s => Focus.Surface(s.id)))
     result.map(valid) shouldBe Some(true)
   }
 
   it should "select the first theme when the current one isn't listed" in {
     PopupSurfaceReducer
       .openThemePicker(List("a", "b"), withTheme(Theme.dark))
-      .map(_.state.runtime.uiSurfaces.map(_.content)) shouldBe
-      Some(List(SurfaceContent.ThemePicker(ThemePickerState(List("a", "b"), 0, "dark"))))
+      .flatMap(chooser)
+      .flatMap(_.selectedChoice)
+      .map(_.label) shouldBe Some("a")
   }
 
   it should "decline to open before any theme names are known" in {

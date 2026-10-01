@@ -48,7 +48,6 @@ object PanelId:
       case SurfaceContent.DirectoryListing(_, _, _) => None
       case SurfaceContent.CommandPalette(_)         => None
       case SurfaceContent.CommandRunnerPeek(_)      => None
-      case SurfaceContent.ThemePicker(_)            => None
       case SurfaceContent.ThemeCreator(_)           => None
       case SurfaceContent.FileSearch(_)             => None
       case SurfaceContent.ContextualToolbar(_)      => None

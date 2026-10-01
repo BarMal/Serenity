@@ -541,7 +541,6 @@ object AccessibilitySnapshot:
       case SurfaceContent.SymbolDefinition(symbol, _)  => s"Symbol: $symbol"
       case SurfaceContent.DirectoryListing(path, _, _) => s"Directory: ${path.getFileName}"
       case SurfaceContent.DirectoryTree(_, _)          => "Directory tree"
-      case SurfaceContent.ThemePicker(_)               => "Theme picker"
       case SurfaceContent.ThemeCreator(_)              => "Theme creator"
       case SurfaceContent.FileSearch(_)                => "File search"
       case SurfaceContent.ContextualToolbar(_)         => "Contextual toolbar"

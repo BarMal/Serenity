@@ -298,12 +298,6 @@ final case class AppState(
   def preferredCommandRunnerFocus: Option[Focus] =
     commandRunnerSurface.map(surface => Focus.Surface(surface.id))
 
-  def themePickerSurface: Option[UiSurface] =
-    findSurface {
-      case SurfaceContent.ThemePicker(_) => true
-      case _                             => false
-    }
-
   def themeCreatorSurface: Option[UiSurface] =
     findSurface {
       case SurfaceContent.ThemeCreator(_) => true

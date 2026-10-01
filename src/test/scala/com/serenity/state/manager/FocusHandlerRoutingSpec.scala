@@ -22,7 +22,6 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
   private val directoryTree: SurfaceContent =
     SurfaceContent.DirectoryTree(DirectoryTreeData(Path.of("root")), None)
   private val commandPalette: SurfaceContent = SurfaceContent.CommandPalette(CommandRunner.empty)
-  private val themePicker: SurfaceContent    = SurfaceContent.ThemePicker(ThemePickerState(List("dark"), 0, "dark"))
   private val themeCreator: SurfaceContent =
     SurfaceContent.ThemeCreator(ThemeCreatorState.fromTheme(DefaultThemes.defaultDark))
   private val fileSearch: SurfaceContent        = SurfaceContent.FileSearch(FileSearchState("q", Nil, 0))
@@ -55,7 +54,6 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
     directoryListing,
     directoryTree,
     commandPalette,
-    themePicker,
     themeCreator,
     fileSearch,
     contextualToolbar,
@@ -77,10 +75,6 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
         FocusHandlerRouting.forSurfaceContent(content) should not be null
       }
     }
-
-  it should "route theme picker content to a ThemePickerComponent" in {
-    FocusHandlerRouting.forSurfaceContent(themePicker).getClass.getSimpleName shouldBe "ThemePickerComponent"
-  }
 
   it should "route theme creator content to a ThemeCreatorComponent" in {
     FocusHandlerRouting.forSurfaceContent(themeCreator).getClass.getSimpleName shouldBe "ThemeCreatorComponent"
