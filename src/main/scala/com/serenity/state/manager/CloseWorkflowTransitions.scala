@@ -140,6 +140,14 @@ final private[manager] class CloseWorkflowTransitions(ensureCommandRunnerSurface
 /** Surface lookups and dismissals the file, close and session workflows share. */
 private[manager] object WorkflowSurfaces:
 
+  /** `modal` in place of the floating modal surface `surfaceId` shows; unchanged if that surface has gone. */
+  def withModal(state: AppState, surfaceId: SurfaceId, modal: Modal): AppState =
+    state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
+      case surface @ UiSurface(id, SurfaceContent.ModalWorkflow(_), _, _) if id == surfaceId =>
+        surface.copy(content = SurfaceContent.ModalWorkflow(modal))
+      case surface => surface
+    }))
+
   def activeEditorBufferId(state: AppState): Option[BufferId] =
     state.persisted.layout.activeEditorPaneId
       .flatMap(state.persisted.layout.editorPanes.get)

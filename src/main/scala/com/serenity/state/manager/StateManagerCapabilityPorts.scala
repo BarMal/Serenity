@@ -7,7 +7,7 @@ import com.serenity.animation.AnimationState
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
-import com.serenity.session.SessionPersistence
+import com.serenity.session.{SessionId, SessionPersistence}
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -111,12 +111,13 @@ private[manager] trait EffectModalWorkflowPort:
   def restoreStartupSession(): IO[Unit]
   def activeEditorBufferId(state: AppState): Option[BufferId]
   // Named sessions (issue #1390): `openSaveSessionAsPrompt`/`openSessionPicker` show the modal, called directly from
-  // command interpretation; the `submit*` pair complete it once the modal's Enter routes back through
+  // command interpretation, as are the commands the picker's entries run. The name prompt's Enter routes back through
   // `WorkflowEffect`, exactly like `submitFileWorkflowEffect` does for `FileWorkflow`.
   def openSaveSessionAsPrompt(state: AppState): IO[Unit]
   def openSessionPicker(state: AppState, purpose: SessionListPurpose): IO[Unit]
   def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit]
-  def submitSessionListEffect(surfaceId: SurfaceId): IO[Unit]
+  def openNamedSession(sessionId: SessionId, state: AppState): IO[Unit]
+  def openRenameSessionPrompt(sessionId: SessionId, currentName: String): IO[Unit]
 
 /** What event routing needs besides the model, which it reaches through `StateManagerOperationBoundary.modelCommit`. */
 private[manager] trait EventStatePort:

@@ -3,8 +3,9 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import cats.effect.{Deferred, IO}
+import com.serenity.command.SessionCommands
 import com.serenity.io.FileManager
-import com.serenity.session.{SessionManager, SessionPersistence}
+import com.serenity.session.{SessionId, SessionManager, SessionPersistence}
 import com.serenity.state.core.EditorState
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
@@ -276,16 +277,27 @@ final private[manager] class StateManagerWorkflowCapability(
   private[manager] def openSaveSessionAsPrompt(): IO[Unit] =
     commit(ModalStateReducer.show(Modal.TextPrompt(TextPrompt.sessionName(SessionNamePromptMode.SaveAs)), _).state)
 
-  /** Lists the saved sessions on the Session lane, then opens the picker (issue #1390) for either purpose: `Open` loads
-    * the selected session directly on Enter, `Rename` hands it off to the name prompt.
+  /** Opens the session picker (issue #1390) at once, still loading, and lists the saved sessions into it on the Session
+    * lane. `Open` loads the picked session; `Rename` hands it to the name prompt.
     */
   private[manager] def openSessionPicker(purpose: SessionListPurpose): IO[Unit] =
-    lanes.submitEffect(
-      SessionLane,
-      sessionManager
-        .listSessions()
-        .flatMap(sessions => lanes.dispatchEffectResult(EffectResult.SessionsListed(purpose, sessions), _ => IO.unit))
-    )
+    modelCommit.currentState.flatMap { state =>
+      SessionWorkflowTransitions.withSessionPickerOpened(state, purpose).fold(IO.unit) { (opened, pickerId) =>
+        modelCommit.commitState(opened, state) >>
+          lanes.submitEffect(
+            SessionLane,
+            sessionManager
+              .listSessions()
+              .attempt
+              .flatMap(listing =>
+                lanes.dispatchEffectResult(
+                  EffectResult.SessionsListed(pickerId, purpose, listing.left.map(_.getMessage)),
+                  _ => IO.unit
+                )
+              )
+          )
+      }
+    }
 
   /** Completes the name prompt: `saveSessionAs` for a brand-new named session, `renameSession` for one already picked
     * from the list. The prompt closes at once; the write runs on the Session lane. A blank (post-trim) name is treated
@@ -304,27 +316,29 @@ final private[manager] class StateManagerWorkflowCapability(
       modelCommit.commitState(dismissed, state) >> write.fold(IO.unit)(lanes.submitEffect(SessionLane, _))
     }
 
-  /** Completes an `Open`-purpose `SessionList` selection: the picked session loads on the Session lane and replaces the
-    * current one, as `SessionIntent.RestoreSession` does, if the picker is still open when it arrives.
+  /** Loads a saved session on the Session lane and replaces the current one with it, as `SessionIntent.RestoreSession`
+    * does. Picked from a session picker, it applies only while that picker is still open and waiting on it.
     */
-  private[manager] def submitSessionListEffect(surfaceId: SurfaceId): IO[Unit] =
-    modelCommit.currentState.flatMap { state =>
-      SessionWorkflowTransitions
-        .sessionPicker(state, surfaceId)
-        .collect { case (sessions, selectedIndex, SessionListPurpose.Open) => sessions.lift(selectedIndex) }
-        .flatten match
-        case Some(session) =>
-          lanes.submitEffect(
-            SessionLane,
-            sessionManager
-              .loadSession(session.id)
-              .flatMap(restored =>
-                lanes.dispatchEffectResult(EffectResult.NamedSessionLoaded(surfaceId, restored), _ => IO.unit)
-              )
-          )
-        case None =>
-          modelCommit.commitState(WorkflowSurfaces.dismissedToEditor(state, surfaceId), state)
-    }
+  private[manager] def openNamedSession(sessionId: SessionId, state: AppState): IO[Unit] =
+    val pickerId = ListPicker.pendingOn(state, SessionCommands.openNamedSession(sessionId))
+    lanes.submitEffect(
+      SessionLane,
+      sessionManager
+        .loadSession(sessionId)
+        .flatMap(restored =>
+          lanes.dispatchEffectResult(EffectResult.NamedSessionLoaded(pickerId, restored), _ => IO.unit)
+        )
+    )
+
+  private[manager] def openRenameSessionPrompt(sessionId: SessionId, currentName: String): IO[Unit] =
+    commit(
+      ModalStateReducer
+        .show(
+          Modal.TextPrompt(TextPrompt.sessionName(SessionNamePromptMode.Rename(sessionId), currentName)),
+          _
+        )
+        .state
+    )
 
   private[manager] def restoreSessionIntoCurrentViewport(restoredState: AppState, currentState: AppState): AppState =
     SessionWorkflowTransitions.restoredIntoViewport(restoredState, currentState)

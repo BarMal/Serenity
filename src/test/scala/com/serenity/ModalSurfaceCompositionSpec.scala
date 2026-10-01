@@ -408,3 +408,32 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       targetRows = 1
     ) shouldBe 10
   }
+
+  private def pickerChoice(label: String, detail: Option[String] = None, waiting: Option[String] = None): ListChoice =
+    ListChoice(
+      label,
+      detail,
+      com.serenity.command.SessionCommands.openNamedSession(com.serenity.session.SessionId(label)),
+      waitingLabel = waiting
+    )
+
+  "A list picker" should "show its title and a loading row until its choices arrive" in {
+    planFor(Modal.ListPicker(ListPicker.loading("Open session"))).paintBoxes.flatMap(_.text) shouldBe
+      List("Open session", "Loading…")
+  }
+
+  it should "list its choices with their details, the highlighted one selected and each one clickable" in {
+    val picker =
+      ListPicker.of("Open session", List(pickerChoice("Draft", Some("today")), pickerChoice("Notes")), "None")
+    val plan = planFor(Modal.ListPicker(picker))
+
+    plan.paintBoxes.flatMap(_.text) shouldBe List("Open session", "Draft  today", "Notes")
+    plan.hitRegions.flatMap(_.actionId) shouldBe List(0, 1).map(ListPickerComposition.choiceActionId)
+  }
+
+  it should "show what it is waiting on in place of its title" in {
+    val slow   = pickerChoice("Draft", waiting = Some("Opening Draft…"))
+    val picker = ListPicker.of("Open session", List(slow), "None").copy(pending = Some(slow))
+
+    planFor(Modal.ListPicker(picker)).paintBoxes.flatMap(_.text).headOption shouldBe Some("Opening Draft…")
+  }

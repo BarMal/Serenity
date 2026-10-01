@@ -5,6 +5,7 @@ import com.serenity.config.*
 import com.serenity.keystroke.events.Direction
 import com.serenity.project.ProjectTaskKind
 import com.serenity.richtext.{InlineMark, ParagraphAlignment, ParagraphRole}
+import com.serenity.session.SessionId
 import com.serenity.state.models.{PanelId, SurfaceId}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.serenity.ui.layout.PanelPosition
@@ -133,6 +134,9 @@ enum SessionIntent:
   case OpenSaveSessionAsPrompt
   case OpenSessionPicker
   case OpenRenameSessionPicker
+  // What the session pickers' entries run; see SessionCommands.
+  case OpenNamedSession(sessionId: SessionId)
+  case RenameNamedSession(sessionId: SessionId, currentName: String)
 
 enum KeybindingsIntent:
   case SetGlobalHotkey(action: HotkeyAction, binding: String)

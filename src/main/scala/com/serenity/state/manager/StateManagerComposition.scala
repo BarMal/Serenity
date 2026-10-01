@@ -10,7 +10,7 @@ import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.LspEffect
 import com.serenity.rope.Balance
-import com.serenity.session.{SessionManager, SessionPersistence}
+import com.serenity.session.{SessionId, SessionManager, SessionPersistence}
 import com.serenity.state.effects.Lane
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
@@ -226,8 +226,10 @@ private[manager] class StateManagerComposition(
       workflow.openSessionPicker(purpose)
     def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit] =
       workflow.submitSessionNamePromptEffect(surfaceId)
-    def submitSessionListEffect(surfaceId: SurfaceId): IO[Unit] =
-      workflow.submitSessionListEffect(surfaceId)
+    def openNamedSession(sessionId: SessionId, state: AppState): IO[Unit] =
+      workflow.openNamedSession(sessionId, state)
+    def openRenameSessionPrompt(sessionId: SessionId, currentName: String): IO[Unit] =
+      workflow.openRenameSessionPrompt(sessionId, currentName)
 
   private val effects = new StateManagerEffectHandlers(
     effectRuntimePort,

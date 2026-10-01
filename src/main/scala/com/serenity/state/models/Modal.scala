@@ -1,7 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.io.{DocumentFormat, FileType, SaveFormat}
-import com.serenity.session.{SessionId, SessionMetadata}
+import com.serenity.session.SessionId
 import com.serenity.text.TextEditing
 
 final case class FileWorkflowSuggestion(
@@ -438,9 +438,8 @@ enum SessionNamePromptMode:
   case SaveAs
   case Rename(sessionId: SessionId)
 
-/** What selecting an entry in a [[Modal.SessionList]] does -- load it (`SessionManager.loadSession`) or hand it off to
-  * a session-name [[TextPrompt]] to collect its new name (`SessionManager.renameSession` needs both the id and the new
-  * name, so renaming a listed session is a two-step pick-then-name flow).
+/** Which session picker to open: picking a session either loads it or asks for its new name (`renameSession` needs both
+  * the id and the new name, so renaming is a pick-then-name flow).
   */
 enum SessionListPurpose:
   case Open
@@ -453,13 +452,9 @@ enum Modal:
       prompt: com.serenity.state.models.TextPrompt
   )
 
-  /** The `SessionManager.listSessions()` picker (issue #1390) -- structurally the same query-less list-with-selection
-    * shape as [[Find]]'s results, minus the query field this list is never filtered by.
-    */
-  case SessionList(
-      sessions: List[SessionMetadata],
-      selectedIndex: Int,
-      purpose: SessionListPurpose
+  /** A list to pick one entry from -- the session pickers, among others; see [[ListPicker]]. */
+  case ListPicker(
+      picker: com.serenity.state.models.ListPicker
   )
 
   case Find(

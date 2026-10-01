@@ -64,8 +64,7 @@ final private[manager] class StateManagerEffectHandlers(
     def beginClose(scope: CloseScope): IO[Unit]                 = currentState.flatMap(beginCloseAction(scope, _))
     def submitClose(surfaceId: SurfaceId): IO[Unit]             = submitCloseWorkflowEffect(surfaceId)
     def createDirectories(surfaceId: SurfaceId): IO[Unit]       = createFileWorkflowDirectoriesEffect(surfaceId)
-    def submitSessionNamePrompt(surfaceId: SurfaceId): IO[Unit] = submitSessionNamePromptEffect(surfaceId)
-    def submitSessionList(surfaceId: SurfaceId): IO[Unit]       = submitSessionListEffect(surfaceId))
+    def submitSessionNamePrompt(surfaceId: SurfaceId): IO[Unit] = submitSessionNamePromptEffect(surfaceId))
 
   private val lifecycleEffects = new LifecycleEffectHandler(
     new LifecycleEffectPort:
@@ -399,6 +398,10 @@ final private[manager] class StateManagerEffectHandlers(
         openSessionPicker(state, SessionListPurpose.Open)
       case SessionIntent.OpenRenameSessionPicker =>
         openSessionPicker(state, SessionListPurpose.Rename)
+      case SessionIntent.OpenNamedSession(sessionId) =>
+        openNamedSession(sessionId, state)
+      case SessionIntent.RenameNamedSession(sessionId, currentName) =>
+        openRenameSessionPrompt(sessionId, currentName)
 
   /** Reads the focused buffer's on-disk revision (#1623), for the window focus-gain re-check. Runs off the dispatcher;
     * the decision is `resolveExternalRevisionEffect`'s.

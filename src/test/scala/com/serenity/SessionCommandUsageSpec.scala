@@ -55,13 +55,13 @@ class SessionCommandUsageSpec extends AnyFlatSpec with Matchers:
     val after = runFromPalette(createStateManager(), "open-session")
 
     mostRecentCommand(after) shouldBe Some("open-session")
-    openModal(after) should matchPattern { case Some(Modal.SessionList(_, _, SessionListPurpose.Open)) => }
+    openModal(after) should matchPattern { case Some(Modal.ListPicker(picker)) if picker.title == "Open session" => }
   }
 
   "Rename Session from the palette" should "be the most recent command and show the session picker" in {
     val after = runFromPalette(createStateManager(), "rename-session")
 
     mostRecentCommand(after) shouldBe Some("rename-session")
-    openModal(after) should matchPattern { case Some(Modal.SessionList(_, _, SessionListPurpose.Rename)) => }
+    openModal(after) should matchPattern { case Some(Modal.ListPicker(picker)) if picker.title == "Rename session" => }
   }
 end SessionCommandUsageSpec

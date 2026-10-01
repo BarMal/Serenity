@@ -31,7 +31,7 @@ object ModalEventReducer:
       case ModalType.ReplaceWorkflow => ModalReplaceWorkflowReducer.reduce(event, currentState)
       case ModalType.CloseWorkflow   => ModalCloseWorkflowReducer.reduce(event, currentState)
       case ModalType.Confirm         => ModalConfirmReducer.reduce(event, currentState)
-      case ModalType.SessionList     => ModalSessionReducer.reduceList(event, currentState)
+      case ModalType.ListPicker      => ModalListPickerReducer.reduce(event, currentState)
       case ModalType.Custom(_)       => ReducerResult.noEffects(currentState)
 
   def applyFindSearchResults(

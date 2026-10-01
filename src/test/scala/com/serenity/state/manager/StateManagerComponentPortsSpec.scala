@@ -65,8 +65,7 @@ class StateManagerComponentPortsSpec extends AnyFlatSpec with Matchers:
         def submitClose(surfaceId: SurfaceId): IO[Unit]       = calls.update(_ :+ s"close:$surfaceId")
         def createDirectories(surfaceId: SurfaceId): IO[Unit] = calls.update(_ :+ s"create-dirs:$surfaceId")
         def submitSessionNamePrompt(surfaceId: SurfaceId): IO[Unit] =
-          calls.update(_ :+ s"session-name-prompt:$surfaceId")
-        def submitSessionList(surfaceId: SurfaceId): IO[Unit] = calls.update(_ :+ s"session-list:$surfaceId"))
+          calls.update(_ :+ s"session-name-prompt:$surfaceId"))
       _       <- handler.interpret(WorkflowEffect.RequestOpenFile)
       failure <- handler.interpret(WorkflowEffect.RequestSaveAs).attempt
       seen    <- calls.get
