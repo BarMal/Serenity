@@ -3,9 +3,8 @@ package com.serenity.ui.tui
 import TuiScenarios.*
 
 /** Changing settings from the terminal: navigating the surface, toggling an option and seeing the editor change shape
-  * underneath it, and the annotations that exist specifically because this is a terminal -- the controls epic #1103
-  * accepted as inert in cell space are labelled rather than hidden, so a config file can still be prepared while
-  * running headless.
+  * underneath it. The controls epic #1103 accepted as inert in cell space are hidden here, and come back -- labelled as
+  * inert -- with Show All Settings, so a config file can still be prepared while running headless.
   */
 class TuiSettingsSpec extends TuiSpec:
 
@@ -23,15 +22,15 @@ class TuiSettingsSpec extends TuiSpec:
   it should "search within settings and open the matching group" in runTui() {
     for
       _ <- openSettings
-      _ <- typeText("post")
+      _ <- typeText("material")
       _ <- verify("searched") { screen =>
-        screen.containsText("Settings search: post") shouldBe true
+        screen.containsText("Settings search: material") shouldBe true
         screen.containsText("Surface Appearance") shouldBe true
       }
       _ <- enter
       _ <- verify("opened group") { screen =>
         screen.containsText("Settings > Look > Surface Appearance") shouldBe true
-        screen.containsText("Post-processing") shouldBe true
+        screen.containsText("Material Preset") shouldBe true
       }
     yield ()
   }
@@ -67,7 +66,17 @@ class TuiSettingsSpec extends TuiSpec:
       yield after.rowText(1).stripTrailing shouldBe " 1 body text"
     }
 
-  "typography settings" should "be annotated as inert in TUI mode rather than hidden" in runTui(
+  "typography settings" should "be hidden in TUI mode, where no font setting changes a terminal cell" in runTui() {
+    for
+      _ <- openSettings
+      _ <- verify("root groups") { screen =>
+        screen.containsText("Look") shouldBe true
+        screen.containsText("Typography") shouldBe false
+      }
+    yield ()
+  }
+
+  it should "come back annotated as inert in TUI mode when Show All Settings is on" in runTui(
     // Prose Font is filtered out of the default code-mode settings tree (issue #1297); show everything so this
     // scenario can still exercise it.
     TuiEnvironment.default.withConfig(_.withShowAllSettingsRegardlessOfMode(true))
@@ -89,8 +98,10 @@ class TuiSettingsSpec extends TuiSpec:
     * width and does not grow with the terminal -- at 240 columns just as at 200. The annotation therefore has to lead
     * the hint to be legible at all: elision takes the description's tail instead.
     */
-  "the post-processing option" should "be reachable and show its value and its annotation, elided description aside" in
-    runTui(TuiEnvironment.default.withViewport(TuiViewport.Wide)) {
+  "the post-processing option" should "be reachable with Show All Settings, showing its value and its annotation" in
+    runTui(
+      TuiEnvironment.default.withViewport(TuiViewport.Wide).withConfig(_.withShowAllSettingsRegardlessOfMode(true))
+    ) {
       for
         _ <- openSettings
         _ <- typeText("post")
