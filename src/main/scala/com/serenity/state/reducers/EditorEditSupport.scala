@@ -272,8 +272,8 @@ private[state] object EditorEditSupport:
 
   /** For a whole-content swap that carries no edit list -- undo and redo restore a snapshot's text outright. The
     * difference is treated as one replaced region (common prefix and suffix trimmed), so annotations keep their place
-    * relative to the text around the change. Inside a run of identical characters the region is ambiguous, and a
-    * marker there may land anywhere within the run.
+    * relative to the text around the change. Inside a run of identical characters the region is ambiguous, and a marker
+    * there may land anywhere within the run.
     */
   def adjustAnnotationsAcrossReplacement(annotations: Annotations, before: Rope, after: Rope): Annotations =
     if annotations.documentComments.isEmpty && annotations.placeholders.isEmpty then annotations
