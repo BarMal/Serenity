@@ -2,10 +2,10 @@ package com.serenity
 
 import com.serenity.command.*
 import com.serenity.config.{AppConfig, AppMode}
+import com.serenity.keystroke.events.RunnerSubmit
 import com.serenity.project.ProjectPresence
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.keystroke.events.RunnerSubmit
 import com.serenity.state.reducers.CommandRunnerReducer
 import com.serenity.ui.layout.Layout
 import org.scalatest.flatspec.AnyFlatSpec
