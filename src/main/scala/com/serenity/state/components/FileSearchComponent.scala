@@ -133,7 +133,7 @@ class FileSearchComponent extends TypedFocusedComponent[ModalInputEvent]:
     if query.isEmpty || maxResults <= 0 then FileSearchBatch(Nil, None)
     else
       val lowerQuery = query.toLowerCase
-      val buffers    = state.persisted.buffers.values.toList.sortBy(_.id.value)
+      val buffers    = state.persisted.buffers.values.filterNot(_.hidden).toList.sortBy(_.id.value)
       val matchedBuffers = startCursor match
         case None         => buffers
         case Some(cursor) => buffers.dropWhile(_.id.value < cursor.bufferId.value)

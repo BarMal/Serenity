@@ -114,6 +114,7 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     darlings         <- cursor.getOrElse[List[SessionDarling]]("darlings")(Nil)
     lineEnding       <- cursor.getOrElse[Option[String]]("lineEnding")(None)
     revision         <- cursor.getOrElse[Option[String]]("revision")(None)
+    hidden           <- cursor.getOrElse[Boolean]("hidden")(false)
   yield SessionBuffer(
     id,
     filePath,
@@ -131,7 +132,8 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     placeholders,
     darlings,
     lineEnding,
-    revision
+    revision,
+    hidden
   )
 }
 

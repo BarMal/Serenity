@@ -29,7 +29,8 @@ final case class SessionBuffer(
     lineEnding: Option[String] = None,
     // The on-disk revision the buffer's content was based on (#1670), so a dirty buffer restored from the session
     // still detects a file changed since.
-    revision: Option[String] = None
+    revision: Option[String] = None,
+    hidden: Boolean = false
 )
 
 final case class SessionCursorPosition(
@@ -88,7 +89,7 @@ object SessionBuffer:
       // Clean, file-backed buffers rely on the on-disk file (see toBufferIO's disk-read fallback) --
       // only a buffer with actual unsaved content needs its text re-serialized into session JSON.
       unsavedContent =
-        if persistUnsaved || buffer.hasUnsavedChanges then Some(text)
+        if persistUnsaved || buffer.hidden || buffer.hasUnsavedChanges then Some(text)
         else None,
       richTextDocument = buffer.richText.richTextDocument.filter(_.matchesPlainText(text)),
       richTextFidelity = buffer.richText.richTextFidelity,
@@ -97,7 +98,8 @@ object SessionBuffer:
       documentComments = buffer.annotations.documentComments.map(SessionDocumentComment.fromDocumentComment),
       placeholders = buffer.annotations.placeholders.map(SessionPlaceholder.fromPlaceholder),
       darlings = buffer.annotations.darlings.map(SessionDarling.fromDarling),
-      revision = buffer.document.revision.map(_.value)
+      revision = buffer.document.revision.map(_.value),
+      hidden = buffer.hidden
     )
 
   def toBuffer(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): Buffer =
@@ -131,7 +133,8 @@ object SessionBuffer:
       // restored document is, by construction, in sync with this fresh buffer at that version (#1663).
       richText = RichTextState()
         .withSyncedDocument(sessionBuffer.richTextDocument, contentVersion = 0L)
-        .copy(richTextFidelity = sessionBuffer.richTextFidelity)
+        .copy(richTextFidelity = sessionBuffer.richTextFidelity),
+      hidden = sessionBuffer.hidden
     )
 
   /** A clean file-backed buffer is read from disk through `FileManager` (#1670): the disk is the truth for it, and the

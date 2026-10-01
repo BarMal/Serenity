@@ -111,7 +111,10 @@ object SessionState:
       )
     val requestedBufferOrder = sessionState.bufferOrder.map(BufferId.apply).filter(bufferMap.contains).distinct
     val bufferOrder =
-      requestedBufferOrder ++ bufferMap.keys.toList.filterNot(requestedBufferOrder.contains).sortBy(_.value)
+      requestedBufferOrder ++ bufferMap
+        .collect { case (id, buffer) if !buffer.hidden && !requestedBufferOrder.contains(id) => id }
+        .toList
+        .sortBy(_.value)
 
     AppState(
       persisted = Persisted(
