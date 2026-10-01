@@ -138,8 +138,12 @@ private[reducers] object EditorEditSupport:
       val baseBuffer = buffer.withEditedContent(
         content = updatedContent,
         cursors = finalCursors,
-        documentComments =
-          adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits),
+        adjustedAnnotations = adjustAnnotations(
+          buffer.annotations,
+          buffer.document.content,
+          updatedContent,
+          edits
+        ),
         richTextDocument = updatedRichTextDocument
       )
       (baseBuffer, edits)
@@ -176,8 +180,8 @@ private[reducers] object EditorEditSupport:
       val baseBuffer = buffer.withEditedContent(
         content = updatedContent,
         cursors = finalCursors,
-        documentComments = adjustDocumentComments(
-          buffer.annotations.documentComments,
+        adjustedAnnotations = adjustAnnotations(
+          buffer.annotations,
           buffer.document.content,
           updatedContent,
           mergedEdits
@@ -233,6 +237,38 @@ private[reducers] object EditorEditSupport:
           comment.text
         )
       }
+
+  /** A placeholder stays put when text is typed exactly at its position: it marks where writing is still owed, so an
+    * Enter at the end of a heading must leave it on the heading line rather than carrying it into the new paragraph.
+    */
+  def adjustPlaceholders(
+    placeholders: List[Placeholder],
+    initialContent: Rope,
+    updatedContent: Rope,
+    edits: List[MultiCursorEdit]
+  ): List[Placeholder] =
+    if placeholders.isEmpty || edits.isEmpty then placeholders
+    else
+      val sortedEdits = edits.sortBy(edit => (edit.start, edit.end))
+      placeholders.map { placeholder =>
+        val offset = initialContent.lineColumnToOffset(placeholder.position.line, placeholder.position.column)
+        val moved  = remapEditBoundary(offset, sortedEdits, insertionAtBoundaryMoves = false)
+        placeholder.copy(position = updatedContent.offsetToCursorPosition(moved))
+      }
+
+  /** The one place an edit's effect on user-authored annotations is decided, so a new annotation kind cannot be added
+    * to `Annotations` and then forgotten by one of the edit paths.
+    */
+  def adjustAnnotations(
+    annotations: Annotations,
+    initialContent: Rope,
+    updatedContent: Rope,
+    edits: List[MultiCursorEdit]
+  ): Annotations =
+    annotations.copy(
+      documentComments = adjustDocumentComments(annotations.documentComments, initialContent, updatedContent, edits),
+      placeholders = adjustPlaceholders(annotations.placeholders, initialContent, updatedContent, edits)
+    )
 
   private def remapCommentStart(offset: Int, edits: List[MultiCursorEdit]): Int =
     remapEditBoundary(offset, edits, insertionAtBoundaryMoves = true)
@@ -305,13 +341,11 @@ private[reducers] object EditorEditSupport:
       buffer.copy(
         document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
         editing = buffer.editing.withPrimary(Cursor(newCursor)),
-        annotations = buffer.annotations.copy(
-          documentComments = adjustDocumentComments(
-            buffer.annotations.documentComments,
-            buffer.document.content,
-            newContent,
-            List(replacementEdit)
-          )
+        annotations = adjustAnnotations(
+          buffer.annotations,
+          buffer.document.content,
+          newContent,
+          List(replacementEdit)
         ),
         // `document` above and `richTextDocument` below both leave `contentVersion`/`richTextSyncedVersion` at
         // whatever `buffer` already had, rather than updating either: as long as the two only ever move together
@@ -352,13 +386,11 @@ private[reducers] object EditorEditSupport:
     val baseBuffer = buffer.copy(
       document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
       editing = buffer.editing.withPrimary(Cursor(newCursor)),
-      annotations = buffer.annotations.copy(
-        documentComments = adjustDocumentComments(
-          buffer.annotations.documentComments,
-          buffer.document.content,
-          newContent,
-          List(MultiCursorEdit(0, startOffset, endOffset, ""))
-        )
+      annotations = adjustAnnotations(
+        buffer.annotations,
+        buffer.document.content,
+        newContent,
+        List(MultiCursorEdit(0, startOffset, endOffset, ""))
       ),
       richText = buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""))
     )

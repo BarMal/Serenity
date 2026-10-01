@@ -58,8 +58,12 @@ private[reducers] object MarkdownFormattingReducer:
       .withEditedContent(
         content = content,
         cursors = cursors.map(_.position),
-        documentComments =
-          adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, content, edits),
+        adjustedAnnotations = adjustAnnotations(
+          buffer.annotations,
+          buffer.document.content,
+          content,
+          edits
+        ),
         richTextDocument = richTextDocument
       )
       .copy(editing = EditingState.fromCursors(cursors))

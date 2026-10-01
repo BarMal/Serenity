@@ -127,13 +127,11 @@ private[reducers] object EditorTextEditReducer:
         val updated = buffer.copy(
           document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
           editing = buffer.editing.withPrimary(Cursor(newCursor)),
-          annotations = buffer.annotations.copy(
-            documentComments = adjustDocumentComments(
-              buffer.annotations.documentComments,
-              buffer.document.content,
-              newContent,
-              List(MultiCursorEdit(0, start, end, ""))
-            )
+          annotations = adjustAnnotations(
+            buffer.annotations,
+            buffer.document.content,
+            newContent,
+            List(MultiCursorEdit(0, start, end, ""))
           ),
           richText = buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, start, end, ""))
         )
@@ -150,13 +148,11 @@ private[reducers] object EditorTextEditReducer:
         val updated = buffer.copy(
           document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
           editing = buffer.editing.withPrimary(Cursor(newCursor)),
-          annotations = buffer.annotations.copy(
-            documentComments = adjustDocumentComments(
-              buffer.annotations.documentComments,
-              buffer.document.content,
-              newContent,
-              List(MultiCursorEdit(0, start, end, ""))
-            )
+          annotations = adjustAnnotations(
+            buffer.annotations,
+            buffer.document.content,
+            newContent,
+            List(MultiCursorEdit(0, start, end, ""))
           ),
           richText = buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, start, end, ""))
         )
@@ -184,13 +180,11 @@ private[reducers] object EditorTextEditReducer:
     val baseBuffer = buffer.copy(
       document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
       editing = buffer.editing.withPrimary(Cursor(newCursor)),
-      annotations = buffer.annotations.copy(
-        documentComments = adjustDocumentComments(
-          buffer.annotations.documentComments,
-          buffer.document.content,
-          newContent,
-          List(MultiCursorEdit(0, startOffset, endOffset, ""))
-        )
+      annotations = adjustAnnotations(
+        buffer.annotations,
+        buffer.document.content,
+        newContent,
+        List(MultiCursorEdit(0, startOffset, endOffset, ""))
       ),
       richText = buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""))
     )
@@ -240,13 +234,11 @@ private[reducers] object EditorTextEditReducer:
         val replaced = current.copy(
           document = current.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
           editing = current.editing.withPrimary(Cursor(newCursor)),
-          annotations = current.annotations.copy(
-            documentComments = adjustDocumentComments(
-              current.annotations.documentComments,
-              current.document.content,
-              newContent,
-              List(edit)
-            )
+          annotations = adjustAnnotations(
+            current.annotations,
+            current.document.content,
+            newContent,
+            List(edit)
           ),
           richText = current.richText.copy(richTextDocument =
             richTextDocumentAfterEdit(current, startOffset, endOffset, insertedText)
@@ -413,8 +405,12 @@ private[reducers] object EditorTextEditReducer:
       val baseBuffer = buffer.withEditedContent(
         content = updatedContent,
         cursors = finalCursors,
-        documentComments =
-          adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits),
+        adjustedAnnotations = adjustAnnotations(
+          buffer.annotations,
+          buffer.document.content,
+          updatedContent,
+          edits
+        ),
         richTextDocument = updatedRichTextDocument
       )
       val (animatedBuffer, delta) = addInsertionAnimations(baseBuffer, currentState, edits)
@@ -447,8 +443,12 @@ private[reducers] object EditorTextEditReducer:
       val baseBuffer = buffer.withEditedContent(
         content = updatedContent,
         cursors = finalCursors,
-        documentComments =
-          adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits),
+        adjustedAnnotations = adjustAnnotations(
+          buffer.annotations,
+          buffer.document.content,
+          updatedContent,
+          edits
+        ),
         richTextDocument = updatedRichTextDocument
       )
       (baseBuffer, edits)

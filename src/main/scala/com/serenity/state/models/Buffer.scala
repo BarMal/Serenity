@@ -234,9 +234,9 @@ final case class Buffer(
     )
 
   /** The buffer state after an edit lands: swaps in the new content, marks the document dirty, and replaces the cursor
-    * list with bare positions, clearing every cursor's selection and preferred-column/x state. `documentComments` and
-    * `richTextDocument` default to their current, unadjusted values -- pass the caller's remapped ones when the edit
-    * needs to carry them forward. Every real caller does pass an explicit `richTextDocument` (`None` when there is
+    * list with bare positions, clearing every cursor's selection and preferred-column/x state. `adjustedAnnotations`
+    * and `richTextDocument` default to their current, unadjusted values -- pass the caller's remapped ones when the
+    * edit needs to carry them forward. Every real caller does pass an explicit `richTextDocument` (`None` when there is
     * none, or the result of re-deriving it against the new `content`); the default exists for a caller with no rich
     * text to carry, so it stamps whatever `richTextDocument` it ends up with as synced to the *new* content version --
     * a caller relying on the default while genuinely changing content on a buffer that has a `richTextDocument` would
@@ -250,14 +250,14 @@ final case class Buffer(
   def withEditedContent(
     content: Rope,
     cursors: List[CursorPosition],
-    documentComments: List[DocumentComment] = annotations.documentComments,
+    adjustedAnnotations: Annotations = annotations,
     richTextDocument: Option[RichTextDocument] = richText.richTextDocument
   ): Buffer =
     val updatedDocument = document.withContent(content)
     copy(
       document = updatedDocument,
       editing = EditingState(cursors),
-      annotations = annotations.copy(documentComments = documentComments),
+      annotations = adjustedAnnotations,
       richText = richText.withSyncedDocument(richTextDocument, updatedDocument.contentVersion)
     )
 

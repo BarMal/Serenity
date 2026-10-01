@@ -75,17 +75,20 @@ class BufferWithEditedContentSpec extends AnyFlatSpec with Matchers:
     ) shouldBe true
   }
 
-  it should "leave documentComments and richTextDocument unchanged when the caller doesn't supply them" in {
+  it should "leave annotations and richTextDocument unchanged when the caller doesn't supply them" in {
     val edited = original.withEditedContent(Rope("gamma delta"), List(CursorPosition(0, 1)))
-    edited.annotations.documentComments shouldBe original.annotations.documentComments
+    edited.annotations shouldBe original.annotations
     edited.richText.richTextDocument shouldBe original.richText.richTextDocument
   }
 
-  it should "adopt the caller's remapped documentComments when supplied" in {
-    val remapped = List(DocumentComment(CursorPosition(0, 0), CursorPosition(0, 5), "remapped"))
+  it should "adopt the caller's adjusted annotations when supplied" in {
+    val adjusted = Annotations(
+      documentComments = List(DocumentComment(CursorPosition(0, 0), CursorPosition(0, 5), "remapped")),
+      placeholders = List(Placeholder(CursorPosition(0, 2), "moved"))
+    )
     val edited =
-      original.withEditedContent(Rope("gamma delta"), List(CursorPosition(0, 1)), documentComments = remapped)
-    edited.annotations.documentComments shouldBe remapped
+      original.withEditedContent(Rope("gamma delta"), List(CursorPosition(0, 1)), adjustedAnnotations = adjusted)
+    edited.annotations shouldBe adjusted
   }
 
   it should "adopt the caller's recomputed richTextDocument when supplied" in {

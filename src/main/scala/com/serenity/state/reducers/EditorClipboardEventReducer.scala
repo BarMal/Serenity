@@ -230,8 +230,12 @@ private[reducers] object EditorClipboardEventReducer:
       val baseBuffer = buffer.withEditedContent(
         content = updatedContent,
         cursors = finalCursors,
-        documentComments =
-          adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits),
+        adjustedAnnotations = adjustAnnotations(
+          buffer.annotations,
+          buffer.document.content,
+          updatedContent,
+          edits
+        ),
         richTextDocument = updatedRichTextDocument
       )
       (baseBuffer, edits)
