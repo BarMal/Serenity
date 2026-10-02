@@ -47,6 +47,13 @@ class BufferSnapshotAnnotationTrackingSpec extends AnyFlatSpec with Matchers:
     snapshot.restoreInto(undone).annotations shouldBe placeholderAt(1, 4)
   }
 
+  it should "move a bookmark back when an insertion before it is undone" in {
+    val snapshot = BufferSnapshot.fromBuffer(buffer("abc def", Annotations(bookmarks = List(CursorPosition(0, 4)))))
+    val edited   = buffer("Xabc def", Annotations(bookmarks = List(CursorPosition(0, 5))))
+
+    snapshot.restoreInto(edited).annotations.bookmarks shouldBe List(CursorPosition(0, 4))
+  }
+
   it should "move a comment range back when an insertion before it is undone" in {
     val comment  = DocumentComment(CursorPosition(0, 4), CursorPosition(0, 7), "note")
     val snapshot = BufferSnapshot.fromBuffer(buffer("abc def", Annotations(documentComments = List(comment))))

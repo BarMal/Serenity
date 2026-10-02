@@ -250,11 +250,30 @@ private[state] object EditorEditSupport:
     if placeholders.isEmpty || edits.isEmpty then placeholders
     else
       val sortedEdits = edits.sortBy(edit => (edit.start, edit.end))
-      placeholders.map { placeholder =>
-        val offset = initialContent.lineColumnToOffset(placeholder.position.line, placeholder.position.column)
-        val moved  = remapEditBoundary(offset, sortedEdits, insertionAtBoundaryMoves = false)
-        placeholder.copy(position = updatedContent.offsetToCursorPosition(moved))
-      }
+      placeholders.map(placeholder =>
+        placeholder.copy(position = remapPoint(placeholder.position, initialContent, updatedContent, sortedEdits))
+      )
+
+  /** Bookmarks follow edits the way placeholders do, and two that a deletion collapses onto one spot become one. */
+  def adjustBookmarks(
+    bookmarks: List[CursorPosition],
+    initialContent: Rope,
+    updatedContent: Rope,
+    edits: List[MultiCursorEdit]
+  ): List[CursorPosition] =
+    if bookmarks.isEmpty || edits.isEmpty then bookmarks
+    else
+      val sortedEdits = edits.sortBy(edit => (edit.start, edit.end))
+      bookmarks.map(remapPoint(_, initialContent, updatedContent, sortedEdits)).distinct
+
+  private def remapPoint(
+    position: CursorPosition,
+    initialContent: Rope,
+    updatedContent: Rope,
+    sortedEdits: List[MultiCursorEdit]
+  ): CursorPosition =
+    val offset = initialContent.lineColumnToOffset(position.line, position.column)
+    updatedContent.offsetToCursorPosition(remapEditBoundary(offset, sortedEdits, insertionAtBoundaryMoves = false))
 
   /** The one place an edit's effect on user-authored annotations is decided, so a new annotation kind cannot be added
     * to `Annotations` and then forgotten by one of the edit paths.
@@ -266,6 +285,7 @@ private[state] object EditorEditSupport:
     edits: List[MultiCursorEdit]
   ): Annotations =
     annotations.copy(
+      bookmarks = adjustBookmarks(annotations.bookmarks, initialContent, updatedContent, edits),
       documentComments = adjustDocumentComments(annotations.documentComments, initialContent, updatedContent, edits),
       placeholders = adjustPlaceholders(annotations.placeholders, initialContent, updatedContent, edits)
     )
@@ -276,7 +296,8 @@ private[state] object EditorEditSupport:
     * there may land anywhere within the run.
     */
   def adjustAnnotationsAcrossReplacement(annotations: Annotations, before: Rope, after: Rope): Annotations =
-    if annotations.documentComments.isEmpty && annotations.placeholders.isEmpty then annotations
+    if annotations.bookmarks.isEmpty && annotations.documentComments.isEmpty && annotations.placeholders.isEmpty then
+      annotations
     else
       val beforeText = before.collect()
       val afterText  = after.collect()

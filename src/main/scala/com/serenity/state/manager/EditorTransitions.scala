@@ -5,6 +5,7 @@ import java.nio.file.Path
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
+import com.serenity.state.reducers.EditorEditSupport
 import com.serenity.ui.layout.*
 
 /** A new buffer, and the state to fall back to if committing it is rejected. */
@@ -110,8 +111,14 @@ private[manager] object EditorTransitions:
       // richTextDocument's formatting onto entirely new text, so it's dropped here rather than left to be caught,
       // lazily, the next time something checks `richTextInSync` (#1663) -- there is no "old content" here for a
       // paragraph-by-paragraph diff to apply against.
+      val replacement = Rope(content)
       val updatedBuffer = buffer.copy(
-        document = buffer.document.withContent(Rope(content)),
+        document = buffer.document.withContent(replacement),
+        annotations = EditorEditSupport.adjustAnnotationsAcrossReplacement(
+          buffer.annotations,
+          buffer.document.content,
+          replacement
+        ),
         richText = RichTextState()
       )
       val documentChange =
