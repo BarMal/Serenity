@@ -1,6 +1,7 @@
 package com.serenity.state.manager
 
 import cats.data.NonEmptyList
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.core.ChapterNoteTransitions
 import com.serenity.state.models.*
@@ -28,7 +29,7 @@ class KeywordNoteTransitionsSpec extends AnyFlatSpec with Matchers:
         initial.persisted.buffers.updated(
           manuscriptId,
           buffer.copy(
-            document = buffer.document.copy(content = Rope(text)),
+            document = buffer.document.copy(content = Rope(text), language = Some(LanguageId.Markdown)),
             editing = EditingState(NonEmptyList.one(Cursor(CursorPosition(line, column), anchor)))
           )
         )
