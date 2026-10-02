@@ -60,10 +60,10 @@ object AppEventReducer:
         closePaneResult(state)
 
       case NextTab =>
-        ReducerResult.noEffects(EditorState.navigateToNextBuffer(state))
+        tabCycled(state, EditorState.navigateToNextBuffer)
 
       case PreviousTab =>
-        ReducerResult.noEffects(EditorState.navigateToPreviousBuffer(state))
+        tabCycled(state, EditorState.navigateToPreviousBuffer)
 
       case MoveTabLeft =>
         ReducerResult.noEffects(EditorState.moveFocusedTabLeft(state))
@@ -95,6 +95,13 @@ object AppEventReducer:
 
   def rebalancePanes(state: AppState, focusedBufferId: Option[BufferId] = None): AppState =
     EditorState.rebalancePanes(state, focusedBufferId)
+
+  /** A focused modeless modal is dismissed first, as Escape would, rather than left open behind the switched-to pane.
+    */
+  private def tabCycled(state: AppState, navigate: AppState => AppState): ReducerResult =
+    ModalEventReducer.dismissFocusedFloatingModalWorkflow(state) match
+      case Some(dismissed) => dismissed.copy(state = navigate(dismissed.state))
+      case None            => ReducerResult.noEffects(navigate(state))
 
   private def toggleCommandRunner(state: AppState, registry: CommandRegistry): AppState =
     state.commandRunnerSurface.flatMap(asCommandRunner) match

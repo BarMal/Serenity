@@ -22,16 +22,6 @@ final private[manager] case class ModalMouseHitTestingPort(
   */
 private[manager] object ModalMouseHitTesting:
 
-  def modalType(modal: Modal): ModalType =
-    modal match
-      case Modal.TextPrompt(_)       => ModalType.TextPrompt
-      case Modal.Find(_, _, _)       => ModalType.Find
-      case Modal.FileWorkflow(_)     => ModalType.FileWorkflow
-      case Modal.ReplaceWorkflow(_)  => ModalType.ReplaceWorkflow
-      case Modal.Confirm(_)          => ModalType.Confirm
-      case Modal.ListPicker(_)       => ModalType.ListPicker
-      case Modal.PanelArrangement(_) => ModalType.PanelArrangement
-
   /** A click on an action button of a confirm prompt or a list picker also submits it: those have no separate confirm
     * step, so picking a choice is the decision itself.
     */
@@ -39,7 +29,7 @@ private[manager] object ModalMouseHitTesting:
     event match
       case click: MouseClick if click.button == MouseButton.Primary =>
         modalHitAt(click, state).fold(Transition.unit) { (modal, hit) =>
-          val clickedType = modalType(modal)
+          val clickedType = ModalEventReducer.modalType(modal)
           val submits =
             Set(ModalType.Confirm, ModalType.ListPicker).contains(clickedType) &&
               hit.actionId.nonEmpty
@@ -58,11 +48,13 @@ private[manager] object ModalMouseHitTesting:
       (id, modal) <- state.topModal
         .map(dialog => (dialog.id, dialog.modal))
         .orElse(
-          focusedFloatingModalWorkflow(state).flatMap(surface =>
-            surface.content match
-              case SurfaceContent.ModalWorkflow(modal) => Some((surface.id, modal))
-              case _                                   => None
-          )
+          ModalEventReducer
+            .focusedFloatingModalWorkflow(state)
+            .flatMap(surface =>
+              surface.content match
+                case SurfaceContent.ModalWorkflow(modal) => Some((surface.id, modal))
+                case _                                   => None
+            )
         )
       node <- UiSceneSnapshot
         .from(state, viewportSize)
@@ -75,35 +67,18 @@ private[manager] object ModalMouseHitTesting:
         .flatMap(_.hitAt(click.col.toDouble, click.row.toDouble))
     yield (modal, hit)
 
-  /** The focused floating modal workflow closed exactly as Escape closes it -- its `onDismiss` included -- when a
-    * primary press or click lands outside it (`inside` says whether it landed inside), so the input can go on to what
-    * it was aimed at instead of leaving the modal open but unfocused.
+  /** A primary press or click outside the focused floating modal workflow (`inside` says whether it landed inside)
+    * dismisses it, so the input can go on to what it was aimed at.
     */
   def dismissedByOutsideInput(
     event: MouseInputEvent,
     state: AppState,
     inside: UiSurface => Boolean
   ): Option[ReducerResult] =
-    focusedFloatingModalWorkflow(state)
+    ModalEventReducer
+      .focusedFloatingModalWorkflow(state)
       .filter(surface => event.button == MouseButton.Primary && !inside(surface))
-      .collect {
-        case UiSurface(_, SurfaceContent.ModalWorkflow(modal), _, _) =>
-          ModalEventReducer.reduce(modalType(modal), ModalDismiss, state)
-      }
-
-  def focusedFloatingModalWorkflow(state: AppState): Option[UiSurface] =
-    for
-      surfaceId <- state.persisted.focus match
-        case Focus.Surface(id) => Some(id)
-        case _                 => None
-      surface <- state.runtime.uiSurfaces.find(_.id == surfaceId)
-      _ <- surface.presentation match
-        case SurfacePresentation.Floating(_, _) => Some(())
-        case _                                  => None
-      _ <- surface.content match
-        case SurfaceContent.ModalWorkflow(_) => Some(())
-        case _                               => None
-    yield surface
+      .flatMap(_ => ModalEventReducer.dismissFocusedFloatingModalWorkflow(state))
 
 final private[manager] class ModalMouseHitTesting(port: ModalMouseHitTestingPort):
 
@@ -114,4 +89,4 @@ final private[manager] class ModalMouseHitTesting(port: ModalMouseHitTestingPort
     ModalMouseHitTesting.modalHitAt(click, state)
 
   def focusedFloatingModalWorkflow(state: AppState): Option[UiSurface] =
-    ModalMouseHitTesting.focusedFloatingModalWorkflow(state)
+    ModalEventReducer.focusedFloatingModalWorkflow(state)

@@ -362,7 +362,7 @@ final private[manager] class StateManagerEventPipeline(
       case Focus.Modal =>
         state.topModal match
           case None         => NoOpLocalEventHandler
-          case Some(dialog) => FocusHandlerRouting.forModalType(ModalMouseHitTesting.modalType(dialog.modal))
+          case Some(dialog) => FocusHandlerRouting.forModalType(ModalEventReducer.modalType(dialog.modal))
       case Focus.Surface(surfaceId) =>
         state.surfaceById(surfaceId) match
           case None =>

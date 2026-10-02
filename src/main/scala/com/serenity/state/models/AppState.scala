@@ -436,6 +436,15 @@ final case class AppState(
         persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId)
       case _ => None
 
+  /** The buffer the user is working in: the focused pane's, or -- while a panel or other surface has focus -- the
+    * active pane's, where a buffer switch will land.
+    */
+  def currentEditorBufferId: Option[BufferId] =
+    persisted.focus match
+      case Focus.EditorPane(_) => focusedBufferId
+      case _ =>
+        persisted.layout.activeEditorPaneId.flatMap(persisted.layout.editorPanes.get).flatMap(_.bufferId)
+
   def nextBufferInOrder(currentBufferId: BufferId): Option[BufferId] =
     if persisted.bufferOrder.isEmpty then None
     else

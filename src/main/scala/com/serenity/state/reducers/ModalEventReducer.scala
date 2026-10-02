@@ -30,6 +30,39 @@ object ModalEventReducer:
       case ModalType.ListPicker       => ModalListPickerReducer.reduce(event, currentState)
       case ModalType.PanelArrangement => ModalPanelArrangementReducer.reduce(event, currentState)
 
+  def modalType(modal: Modal): ModalType =
+    modal match
+      case Modal.TextPrompt(_)       => ModalType.TextPrompt
+      case Modal.Find(_, _, _)       => ModalType.Find
+      case Modal.FileWorkflow(_)     => ModalType.FileWorkflow
+      case Modal.ReplaceWorkflow(_)  => ModalType.ReplaceWorkflow
+      case Modal.Confirm(_)          => ModalType.Confirm
+      case Modal.ListPicker(_)       => ModalType.ListPicker
+      case Modal.PanelArrangement(_) => ModalType.PanelArrangement
+
+  def focusedFloatingModalWorkflow(state: AppState): Option[UiSurface] =
+    for
+      surfaceId <- state.persisted.focus match
+        case Focus.Surface(id) => Some(id)
+        case _                 => None
+      surface <- state.runtime.uiSurfaces.find(_.id == surfaceId)
+      _ <- surface.presentation match
+        case SurfacePresentation.Floating(_, _) => Some(())
+        case _                                  => None
+      _ <- surface.content match
+        case SurfaceContent.ModalWorkflow(_) => Some(())
+        case _                               => None
+    yield surface
+
+  /** The focused modeless modal closed exactly as Escape closes it -- its `onDismiss` included -- so input aimed past
+    * it (an outside click, a tab switch) does not leave it open but unfocused.
+    */
+  def dismissFocusedFloatingModalWorkflow(state: AppState): Option[ReducerResult] =
+    focusedFloatingModalWorkflow(state).collect {
+      case UiSurface(_, SurfaceContent.ModalWorkflow(modal), _, _) =>
+        reduce(modalType(modal), ModalDismiss, state)
+    }
+
   def applyFindSearchResults(
     state: AppState,
     request: FindSearchRequest,
