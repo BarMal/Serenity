@@ -26,6 +26,9 @@ object ChapterNoteTransitions:
         showInPane(withNote, noteId, axis)
     opened.getOrElse(state)
 
+  def toggleGhosts(state: AppState): AppState =
+    state.copy(runtime = state.runtime.copy(chapterGhostsVisible = !state.runtime.chapterGhostsVisible))
+
   private def chapterKey(buffer: Buffer, cursor: CursorPosition): Option[NoteKey] =
     val headings = HeadingIdentity.forHeadings(DocumentOutline.forBuffer(buffer))
     DocumentNavigation

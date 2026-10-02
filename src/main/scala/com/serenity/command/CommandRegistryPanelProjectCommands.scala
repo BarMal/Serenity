@@ -71,6 +71,13 @@ private[command] object CommandRegistryPanelProjectCommands:
       label = "Open Chapter Note"
     ),
     Command.typed(
+      "toggle-chapter-ghosts",
+      "Show or hide the faded overview under empty chapters. The notes themselves are untouched.",
+      CommandIntent.View(ViewIntent.ToggleChapterGhosts),
+      CommandCategory.View,
+      label = "Show/Hide Chapter Ghosts"
+    ),
+    Command.typed(
       "close-pane",
       "Close the focused editor pane.",
       CommandIntent.View(ViewIntent.ClosePane),

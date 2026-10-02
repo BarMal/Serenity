@@ -101,6 +101,9 @@ enum ViewIntent:
   /** Shows the note for the chapter the cursor is in beside the manuscript, creating it the first time. */
   case OpenChapterNote
 
+  /** Shows or hides the faded overview under empty chapters; the notes themselves are untouched. */
+  case ToggleChapterGhosts
+
   /** Moves focus to the nearest editor pane or docked panel in `direction`. */
   case FocusInDirection(direction: Direction)
   case MovePanelEarlier(id: PanelId)

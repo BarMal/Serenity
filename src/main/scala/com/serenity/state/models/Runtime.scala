@@ -58,7 +58,10 @@ final case class Runtime(
     pendingUiPresetApply: Option[Long] = None,
     projectTasks: ProjectTasks = ProjectTasks(),
     // Refreshed each time the command palette opens, which is where project commands are offered.
-    projectPresence: ProjectPresence = ProjectPresence.Unchecked
+    projectPresence: ProjectPresence = ProjectPresence.Unchecked,
+    // Never persisted: whether a chapter note's overview is painted, faded, under an empty chapter. The notes themselves
+    // are untouched by hiding the ghosts.
+    chapterGhostsVisible: Boolean = true
 ):
 
   /** A typed character: the quiet window for cursor-adjacent surfaces always restarts; the companion sprite panel

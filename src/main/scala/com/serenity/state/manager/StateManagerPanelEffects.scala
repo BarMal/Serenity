@@ -58,6 +58,8 @@ final private[manager] class StateManagerPanelEffects(
         commitApp(com.serenity.state.core.EditorState.removeFocusedPane)
       case ViewIntent.OpenChapterNote =>
         commitApp(ChapterNoteTransitions.openCurrentChapterNote(_, SplitAxis.Horizontal))
+      case ViewIntent.ToggleChapterGhosts =>
+        commitApp(ChapterNoteTransitions.toggleGhosts)
       case ViewIntent.TogglePanelShown(id) =>
         if isShown(id, state) then hidePanel(id, state) else pinAtDefaultEdge(id)
       case ViewIntent.FocusPanel(id) =>
