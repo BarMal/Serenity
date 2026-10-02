@@ -468,6 +468,7 @@ object CommandRunner:
       "close"                 -> HotkeyAction.CloseTab,
       "split-pane-horizontal" -> HotkeyAction.SplitPaneHorizontal,
       "split-pane-vertical"   -> HotkeyAction.SplitPaneVertical,
+      "toggle-chapter-ghosts" -> HotkeyAction.ToggleChapterGhosts,
       "close-pane"            -> HotkeyAction.ClosePane,
       "find"                  -> HotkeyAction.Find,
       "replace"               -> HotkeyAction.Replace,

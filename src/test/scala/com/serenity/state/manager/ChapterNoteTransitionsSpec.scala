@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import com.serenity.command.{CommandIntent, CommandRegistry, ViewIntent}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
+import com.serenity.state.core.ChapterNoteTransitions
 import com.serenity.state.models.*
 import com.serenity.ui.layout.SplitAxis
 import org.scalatest.flatspec.AnyFlatSpec

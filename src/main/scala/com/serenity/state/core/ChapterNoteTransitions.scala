@@ -1,8 +1,7 @@
-package com.serenity.state.manager
+package com.serenity.state.core
 
 import com.serenity.document.{DocumentNavigation, DocumentOutline}
 import com.serenity.rope.Balance
-import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.ui.layout.SplitAxis
 

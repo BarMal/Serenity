@@ -9,6 +9,7 @@ import com.serenity.config.{AppConfig, AppMode, MarkdownViewMode, VisualFlairLev
 import com.serenity.frontend.MarkdownPreviewWindowAvailability
 import com.serenity.io.FileUtils
 import com.serenity.keystroke.events.Event
+import com.serenity.state.core.ChapterNoteTransitions
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{DirectionalFocus, PanelStateReducer, PinnedPanelContentReducer}
 import com.serenity.ui.layout.{PanelPosition, PanelTarget, SplitAxis}

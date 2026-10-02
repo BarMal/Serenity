@@ -13,6 +13,7 @@ case object ToggleCommandRunner     extends GlobalAppEvent
 case object ToggleContextualToolbar extends GlobalAppEvent
 case object ToggleShortcutsHelp     extends GlobalAppEvent // F1 (issue #1247)
 case object ToggleTabList           extends GlobalAppEvent // issue #1307
+case object ToggleChapterGhosts     extends GlobalAppEvent // Ctrl+Shift+G
 case object ToggleRecentFilesInMode extends GlobalAppEvent // issue #1307
 
 /** Toggles a registered panel's floating (command-palette) presentation open or closed (issue #1310) -- the parametric

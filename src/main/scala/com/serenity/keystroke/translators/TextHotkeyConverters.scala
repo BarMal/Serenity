@@ -37,7 +37,8 @@ object TextHotkeyConverters:
     HotkeyAction.FocusLeft                -> FocusInDirection(Direction.Left),
     HotkeyAction.FocusRight               -> FocusInDirection(Direction.Right),
     HotkeyAction.FocusUp                  -> FocusInDirection(Direction.Up),
-    HotkeyAction.FocusDown                -> FocusInDirection(Direction.Down)
+    HotkeyAction.FocusDown                -> FocusInDirection(Direction.Down),
+    HotkeyAction.ToggleChapterGhosts      -> ToggleChapterGhosts
   )
 
   def hotkeyConverter(config: AppConfig = AppConfig.default): PartialFunction[KeyStrokeInfo, Event] =

@@ -37,6 +37,7 @@ enum HotkeyAction:
   case FocusRight
   case FocusUp
   case FocusDown
+  case ToggleChapterGhosts
 
   def configKey: String =
     this match
@@ -71,6 +72,7 @@ enum HotkeyAction:
       case FocusRight               => "focus_right"
       case FocusUp                  => "focus_up"
       case FocusDown                => "focus_down"
+      case ToggleChapterGhosts      => "toggle_chapter_ghosts"
 
 final case class HotkeyTrigger(
     keyType: InputKey,
@@ -381,6 +383,8 @@ object HotkeyConfig:
       HotkeyAction.Replace      -> List(if isMac then primary('f', alt = true) else primary('h')),
       HotkeyAction.GoToLine     -> List(primary('g')),
       HotkeyAction.SaveAs       -> List(primary('s', shift = true)),
+      // Shifted Go to Line, the same shift-for-the-related-action pattern as FileSearch over Find.
+      HotkeyAction.ToggleChapterGhosts -> List(primary('g', shift = true)),
       // Plain F1, not primary-modifier-gated: unlike the Cmd/Ctrl bindings above, F1 is delivered identically by
       // every terminal and by AWT regardless of platform, so it needs none of `forTerminalUse`'s Mac-Cmd rewriting
       // (issue #1213) and no per-OS branching here.

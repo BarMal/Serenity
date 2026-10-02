@@ -2,7 +2,8 @@ package com.serenity
 
 import com.serenity.command.{CommandIntent, CommandRegistry, ViewIntent}
 import com.serenity.rope.Balance
-import com.serenity.state.manager.{ChapterNoteTransitions, DamageProducer}
+import com.serenity.state.core.ChapterNoteTransitions
+import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
