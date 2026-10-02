@@ -309,6 +309,11 @@ object HotkeyConfig:
       HotkeyAction.FocusDown  -> InputKey.ArrowDown
     ).view.mapValues(key => List(HotkeyTrigger(key, None, Set(Modifier.Alt)))).toMap
 
+  // Shifted Go to Line, the same shift-for-the-related-action pattern as FileSearch over Find.
+  private def chapterGhostBindings(primaryModifier: Modifier): Map[HotkeyAction, List[HotkeyTrigger]] =
+    val trigger = HotkeyTrigger(InputKey.Character, Some('g'), Set(primaryModifier, Modifier.Shift))
+    Map(HotkeyAction.ToggleChapterGhosts -> List(trigger))
+
   def defaultBindingsFor(osName: String): Map[HotkeyAction, List[HotkeyTrigger]] =
     val isMac           = osName.toLowerCase(java.util.Locale.ROOT).contains("mac")
     val primaryModifier = if isMac then Modifier.Meta else Modifier.Ctrl
@@ -383,13 +388,11 @@ object HotkeyConfig:
       HotkeyAction.Replace      -> List(if isMac then primary('f', alt = true) else primary('h')),
       HotkeyAction.GoToLine     -> List(primary('g')),
       HotkeyAction.SaveAs       -> List(primary('s', shift = true)),
-      // Shifted Go to Line, the same shift-for-the-related-action pattern as FileSearch over Find.
-      HotkeyAction.ToggleChapterGhosts -> List(primary('g', shift = true)),
       // Plain F1, not primary-modifier-gated: unlike the Cmd/Ctrl bindings above, F1 is delivered identically by
       // every terminal and by AWT regardless of platform, so it needs none of `forTerminalUse`'s Mac-Cmd rewriting
       // (issue #1213) and no per-OS branching here.
       HotkeyAction.ToggleShortcutsHelp -> List(HotkeyTrigger(InputKey.F1, None, Set.empty))
-    ) ++ directionalFocusBindings
+    ) ++ directionalFocusBindings ++ chapterGhostBindings(primaryModifier)
 
   def validate(bindings: Map[HotkeyAction, List[HotkeyTrigger]]): Either[String, Unit] =
     bindings.toList
