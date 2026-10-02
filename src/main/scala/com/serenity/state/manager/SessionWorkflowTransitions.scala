@@ -74,7 +74,7 @@ private[manager] object SessionWorkflowTransitions:
     pickerId match
       case Some(id) if !sessionPicker(state, id).exists(_.pending.isDefined) => state
       case _ =>
-        restored.fold(pickerId.fold(state)(WorkflowSurfaces.dismissedToEditor(state, _)))(
+        restored.fold(pickerId.fold(state)(WorkflowSurfaces.dismissedToShownBuffer(state, _)))(
           restoredIntoViewport(_, state)
         )
 

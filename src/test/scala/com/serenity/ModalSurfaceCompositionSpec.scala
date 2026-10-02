@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.widget.Loadable
+import com.serenity.ui.widget.{Loadable, TextField}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -448,6 +448,41 @@ class ModalSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     val picker = ListPicker.of("Open session", List(pickerChoice("Draft"), pickerChoice("Notes")), "None")
 
     planFor(Modal.ListPicker(picker)).paintBoxes.map(_.tone).distinct shouldBe List(OverlayTone.Normal)
+  }
+
+  it should "show its query under the title, with the caret where the query's caret is" in {
+    val picker = ListPicker
+      .filterable("Open session", Vector(pickerChoice("Draft", Some("today")), pickerChoice("Notes")))
+      .copy(query = Some(TextField("dr", 1)))
+    val plan  = planFor(Modal.ListPicker(picker))
+    val query = plan.paintBoxes.lift(1)
+
+    plan.paintBoxes.flatMap(_.text) shouldBe List("Open session", "dr", "Draft  today", "Notes")
+    query.map(_.kind) shouldBe Some(SurfacePaintKind.TextInput)
+    query.flatMap(_.cursorOffset) shouldBe Some(1)
+    plan.paintBoxes.map(_.rect.y).distinct.size shouldBe 4
+    plan.hitRegions.flatMap(_.actionId) shouldBe List(0, 1).map(ListPickerComposition.choiceActionId)
+  }
+
+  it should "grow by one row for its query" in {
+    val choices = Vector(pickerChoice("Draft"), pickerChoice("Notes"))
+
+    ListPickerComposition.frameHeight(ListPicker.filterable("Open session", choices)) shouldBe
+      ListPickerComposition.frameHeight(ListPicker.of("Open session", choices, "None")) + 1
+  }
+
+  it should "end with a muted, unclickable row counting its choices while its source has more to load" in {
+    val picker = ListPicker
+      .filterable("Search", Vector(pickerChoice("a.txt:1"), pickerChoice("a.txt:2")))
+      .copy(source = Some(PickerSource.BufferText(resumeAt = Some(BufferLine(BufferId(0), 2)))))
+    val plan = planFor(Modal.ListPicker(picker))
+
+    plan.paintBoxes.flatMap(_.text) shouldBe List("Search", "", "a.txt:1", "a.txt:2", "2 loaded, more available")
+    plan.paintBoxes.lastOption.map(_.tone) shouldBe Some(OverlayTone.Muted)
+    plan.paintBoxes.map(_.rect.y).distinct.size shouldBe 5
+    plan.hitRegions.flatMap(_.actionId) shouldBe List(0, 1).map(ListPickerComposition.choiceActionId)
+    ListPickerComposition.frameHeight(picker) shouldBe
+      ListPickerComposition.frameHeight(picker.copy(source = Some(PickerSource.BufferText()))) + 1
   }
 
   "A confirm prompt" should "tone each choice by its emphasis: primary as accent, danger as error" in {

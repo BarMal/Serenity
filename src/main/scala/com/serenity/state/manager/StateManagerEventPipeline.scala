@@ -226,9 +226,9 @@ final private[manager] class StateManagerEventPipeline(
             modalMouseHitTesting.modalHitAt(click, prevState).nonEmpty =>
         modalMouseHitTesting.handleModalMouseInput(click, prevState)
       case click: MouseClick =>
-        mouseHitTesting.handleMouseClick(click, prevState)
+        afterOutsideModalDismissed(click, prevState)(mouseHitTesting.handleMouseClick(click, _))
       case press: MousePress =>
-        mouseHitTesting.handleMousePress(press, prevState)
+        afterOutsideModalDismissed(press, prevState)(mouseHitTesting.handleMousePress(press, _))
       case drag: MouseDrag =>
         mouseHitTesting.handleMouseDrag(drag, prevState)
       case move: MouseMove =>
@@ -250,6 +250,17 @@ final private[manager] class StateManagerEventPipeline(
 
       case _: (TextEntryEvent | SurfaceEvent) =>
         dispatchToFocusedHandler(event, prevState)
+
+  private def afterOutsideModalDismissed(event: MouseInputEvent, prevState: AppState)(
+    handle: AppState => cats.effect.IO[Unit]
+  ): cats.effect.IO[Unit] =
+    def inside(surface: UiSurface): Boolean =
+      prevState.runtime.viewportSize.forall(
+        MouseHitTestGeometry.insideFloatingSurface(event, prevState, _, surface, authoritativeScene)
+      )
+    ModalMouseHitTesting.dismissedByOutsideInput(event, prevState, inside) match
+      case Some(dismissed) => applyReducerResult(dismissed, prevState) >> modelCommit.currentState.flatMap(handle)
+      case None            => handle(prevState)
 
   private def dispatchToFocusedHandler(event: Event, prevState: AppState): cats.effect.IO[Unit] =
     val logCommandRunnerEvent =
@@ -289,8 +300,9 @@ final private[manager] class StateManagerEventPipeline(
       case NextTab     => tabCycled(SweepDirection.Backward)
       case PreviousTab => tabCycled(SweepDirection.Forward)
       case ToggleContextualToolbar | ToggleShortcutsHelp | ToggleTabList | ToggleRecentFilesInMode | NewTab |
-          FileSearch | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane | _: CloseTabById |
-          MoveTabLeft | MoveTabRight | _: FocusInDirection | ToggleChapterGhosts | OpenChapterNote | ToggleNotesPin =>
+          FileSearch | GoToFile | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane |
+          _: CloseTabById | MoveTabLeft | MoveTabRight | _: FocusInDirection | ToggleChapterGhosts | OpenChapterNote |
+          ToggleNotesPin =>
         reduced
       case _: CursorPeekModifierPressed | _: CursorPeekModifierReleased | CursorPeekOtherKeyPressed =>
         applyReducerResult(EventPipelineTransitions.withCursorPeekAnchorResolved(result), prevState)
@@ -408,7 +420,7 @@ final private[manager] class StateManagerEventPipeline(
       case ComponentResult.FocusTransfer(newFocus) =>
         cats.effect.IO.pure(state.copy(persisted = state.persisted.copy(focus = newFocus)))
       case ComponentResult.Dismiss =>
-        cats.effect.IO.pure(EventPipelineTransitions.dismissedToEditor(dismissCurrentFocus(state)))
+        cats.effect.IO.pure(EventPipelineTransitions.dismissedToPriorFocus(dismissCurrentFocus(state)))
       case ComponentResult.ExecuteCommand(command) =>
         // The command reads the committed state, so the one built so far commits (validated) first.
         for

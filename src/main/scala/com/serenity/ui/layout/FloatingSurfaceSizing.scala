@@ -68,7 +68,7 @@ private[layout] object FloatingSurfaceSizing:
           commandMaxHeight,
           math.max(densityMetrics.commandSurfaceMinHeight, maxHeight - 1)
         )
-      case SurfaceContent.ThemePicker(_) | SurfaceContent.ThemeCreator(_) | SurfaceContent.FileSearch(_) =>
+      case SurfaceContent.ThemeCreator(_) =>
         math.min(
           densityMetrics.commandSurfaceMaxHeight,
           math.max(densityMetrics.commandSurfaceMinHeight, maxHeight - 1)

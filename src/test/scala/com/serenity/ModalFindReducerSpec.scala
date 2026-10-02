@@ -191,6 +191,18 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers:
     updatedState.persisted.buffers(bufferId).editing.cursorPositions.head shouldBe CursorPosition(1, 0)
   }
 
+  it should "jump to the last and first hit with Ctrl+End and Ctrl+Home" in {
+    val found = completeFind(stateWithFindModal("needle", "needle\nx\nneedle\nneedle"))
+    val hits  = List(matchAt(0, 0), matchAt(2, 0), matchAt(3, 0))
+
+    val atLast = ModalEventReducer.reduce(ModalType.Find, ModalLast, found).state
+    activeFindModal(atLast) shouldBe Some(Modal.Find("needle", hits, 2))
+    atLast.persisted.buffers(BufferId(0)).editing.cursorPositions shouldBe List(CursorPosition(3, 0))
+
+    val atFirst = ModalEventReducer.reduce(ModalType.Find, ModalFirst, atLast).state
+    activeFindModal(atFirst) shouldBe Some(Modal.Find("needle", hits, 0))
+  }
+
   it should "leave buffer find state unchanged when an empty find query is submitted" in {
     val bufferId     = BufferId(0)
     val initialState = stateWithFindModal("", "alpha beta", CursorPosition(0, 5))

@@ -22,6 +22,9 @@ enum LaneKey:
 
   /** Docked outline panels' re-parse after an edit burst: a newer edit supersedes the pending one. */
   case OutlineRefresh
+
+  /** The "Go to File" finder's walk of the project: reopening the finder supersedes a walk still running. */
+  case ProjectFiles
   case Search, Analysis, Theme, Config, Presets, Keybindings, Session, Project, Dialog, Timer
 
 enum LanePolicy:

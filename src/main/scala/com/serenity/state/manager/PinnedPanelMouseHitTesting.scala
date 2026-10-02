@@ -3,11 +3,10 @@ package com.serenity.state.manager
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.config.AppConfig
-import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
 import com.serenity.state.components.*
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{Focused, ReducerResult, Transition}
+import com.serenity.state.reducers.{ReducerResult, Transition}
 import com.serenity.ui.layout.*
 
 /** State the event pipeline exposes for selecting, activating, navigating, and resizing pinned/expanded panels, as a
@@ -151,11 +150,11 @@ private[manager] object PinnedPanelMouseHitTesting:
       pinnedCommentsMouseHitAt(click, state, authoritativeScene) match
         case Some((_, _, location)) =>
           Transition
-            .modify(current => CommentRendering.openLensAtCursor(navigateActiveEditorToLocation(current, location)))
+            .modify(PanelLocationNavigation.commentAt(_, location))
             .as(true)
         case None =>
           pinnedLocationMouseHitAt(click, state, authoritativeScene) match
-            case Some(location) => Transition.modify(navigateActiveEditorToLocation(_, location)).as(true)
+            case Some(location) => Transition.modify(PanelLocationNavigation.editorAt(_, location)).as(true)
             case None           => Transition.pure(false)
 
   def panelResizeFromDrag(drag: MouseDrag, state: AppState): Option[LayoutEngine.PinnedPanelDragResize] =
@@ -339,33 +338,6 @@ private[manager] object PinnedPanelMouseHitTesting:
     pinnedOutlineMouseHitAt(event, state, authoritativeScene)
       .map(_._3)
       .orElse(pinnedDiagnosticsMouseHitAt(event, state, authoritativeScene).map(_._3))
-
-  private def navigateActiveEditorToLocation(state: AppState, location: Location): AppState =
-    state.persisted.layout.activeEditorPaneId match
-      case Some(paneId) =>
-        Focused.bufferOf(state, paneId) match
-          case Some(buffer) =>
-            val line =
-              math.max(0, math.min(location.line, math.max(0, buffer.document.content.lineCount - 1)))
-            val column =
-              math.max(0, math.min(location.column, buffer.document.content.getLine(line).getOrElse("").length))
-            val cursor   = CursorPosition(line, column)
-            val viewport = CursorViewport.adjustForCursor(buffer, state, cursor)
-            val updatedBuffer = buffer.copy(
-              editing = EditingState(List(cursor)),
-              viewport = viewport
-            )
-            state.copy(persisted =
-              state.persisted.copy(
-                buffers = state.persisted.buffers.updated(buffer.id, updatedBuffer),
-                focus = Focus.EditorPane(paneId),
-                layout = state.persisted.layout.copy(activeEditorPaneId = Some(paneId))
-              )
-            )
-          case None =>
-            state
-      case None =>
-        state
 
   private def panelPosition(surface: UiSurface, state: AppState): Option[PanelPosition] =
     surface.presentation match

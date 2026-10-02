@@ -298,6 +298,14 @@ enum ModalKeyAction extends KeymapEventAction[ModalInputEvent]:
   case Dismiss
   case CreateDirectory
   case OpenAsProjectRoot
+  case MoveItemUp
+  case MoveItemDown
+  case LineStart
+  case LineEnd
+  case First
+  case Last
+  case PageUp
+  case PageDown
 
   def event: ModalInputEvent =
     this match
@@ -315,6 +323,14 @@ enum ModalKeyAction extends KeymapEventAction[ModalInputEvent]:
       case Dismiss            => ModalDismiss
       case CreateDirectory    => ModalCreateDirectory
       case OpenAsProjectRoot  => ModalOpenAsProjectRoot
+      case MoveItemUp         => ModalMove(Direction.Up)
+      case MoveItemDown       => ModalMove(Direction.Down)
+      case LineStart          => ModalLineStart
+      case LineEnd            => ModalLineEnd
+      case First              => ModalFirst
+      case Last               => ModalLast
+      case PageUp             => ModalPage(-1)
+      case PageDown           => ModalPage(1)
 
 object ModalKeyAction:
 
@@ -341,7 +357,23 @@ object ModalKeyAction:
     ),
     ModalKeyAction.OpenAsProjectRoot -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.Character, Some('r'), Set(com.serenity.keystroke.Modifier.Ctrl))
-    )
+    ),
+    ModalKeyAction.MoveItemUp -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowUp, None, Set(com.serenity.keystroke.Modifier.Alt))
+    ),
+    ModalKeyAction.MoveItemDown -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set(com.serenity.keystroke.Modifier.Alt))
+    ),
+    ModalKeyAction.LineStart -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Home, None, Set.empty)),
+    ModalKeyAction.LineEnd   -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.End, None, Set.empty)),
+    ModalKeyAction.First -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.Home, None, Set(com.serenity.keystroke.Modifier.Ctrl))
+    ),
+    ModalKeyAction.Last -> List(
+      HotkeyTrigger(com.serenity.keystroke.InputKey.End, None, Set(com.serenity.keystroke.Modifier.Ctrl))
+    ),
+    ModalKeyAction.PageUp   -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.PageUp, None, Set.empty)),
+    ModalKeyAction.PageDown -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.PageDown, None, Set.empty))
   )
 
   given KeymapActionCodec[ModalKeyAction] with
@@ -357,6 +389,10 @@ enum PanelKeyAction extends KeymapEventAction[PanelInputEvent]:
   case Activate
   case GrowPanel
   case ShrinkPanel
+  case First
+  case Last
+  case PageUp
+  case PageDown
 
   def event: PanelInputEvent =
     this match
@@ -368,6 +404,10 @@ enum PanelKeyAction extends KeymapEventAction[PanelInputEvent]:
       case Activate      => PanelInputEvent.Activate
       case GrowPanel     => PanelInputEvent.Resize(1)
       case ShrinkPanel   => PanelInputEvent.Resize(-1)
+      case First         => PanelInputEvent.First
+      case Last          => PanelInputEvent.Last
+      case PageUp        => PanelInputEvent.Page(-1)
+      case PageDown      => PanelInputEvent.Page(1)
 
 object PanelKeyAction:
 
@@ -389,7 +429,11 @@ object PanelKeyAction:
     ),
     PanelKeyAction.ShrinkPanel -> List(
       HotkeyTrigger(com.serenity.keystroke.InputKey.ArrowDown, None, Set(com.serenity.keystroke.Modifier.Ctrl))
-    )
+    ),
+    PanelKeyAction.First    -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.Home, None, Set.empty)),
+    PanelKeyAction.Last     -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.End, None, Set.empty)),
+    PanelKeyAction.PageUp   -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.PageUp, None, Set.empty)),
+    PanelKeyAction.PageDown -> List(HotkeyTrigger(com.serenity.keystroke.InputKey.PageDown, None, Set.empty))
   )
 
   given KeymapActionCodec[PanelKeyAction] with

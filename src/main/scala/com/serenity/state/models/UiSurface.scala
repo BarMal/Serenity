@@ -280,9 +280,7 @@ enum SurfaceContent:
     * ...) mistakes it for the real, interactive command runner.
     */
   case CommandRunnerPeek(runner: CommandRunner)
-  case ThemePicker(state: ThemePickerState)
   case ThemeCreator(state: ThemeCreatorState)
-  case FileSearch(state: FileSearchState)
   case ContextualToolbar(state: ContextualToolbarState)
   case ContextMenu(menu: com.serenity.state.models.ContextMenu)
   case CommentLens(state: CommentLensState)

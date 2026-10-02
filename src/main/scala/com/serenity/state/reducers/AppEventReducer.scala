@@ -1,6 +1,6 @@
 package com.serenity.state.reducers
 
-import com.serenity.command.{CommandRegistry, CommandRunner}
+import com.serenity.command.{CommandRegistry, CommandRunner, FileFinderCommands}
 import com.serenity.input.{CursorPeekDetector, CursorPeekState}
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
@@ -83,6 +83,9 @@ object AppEventReducer:
       case FileSearch =>
         ReducerResult.withEffect(state, AppEffect.Surface(SurfaceEffect.OpenFileSearch))
 
+      case GoToFile =>
+        ReducerResult.withEffect(state, AppEffect.ExecuteCommand(FileFinderCommands.goToFile))
+
       case FocusInDirection(direction) =>
         ReducerResult.noEffects(DirectionalFocus.moved(state, direction))
 
@@ -136,9 +139,7 @@ object AppEventReducer:
       presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
     )
     val clearedSurfaces =
-      stateWithId.runtime.uiSurfaces.filterNot(current =>
-        isFileSearch(current.content) || isModalWorkflow(current.content)
-      )
+      stateWithId.runtime.uiSurfaces.filterNot(current => isModalWorkflow(current.content))
     stateWithId
       .copy(
         runtime = stateWithId.runtime.copy(
@@ -408,11 +409,6 @@ object AppEventReducer:
     surface.content match
       case SurfaceContent.CommandPalette(runner) => Some((surface, runner))
       case _                                     => None
-
-  private def isFileSearch(content: SurfaceContent): Boolean =
-    content match
-      case SurfaceContent.FileSearch(_) => true
-      case _                            => false
 
   private def isModalWorkflow(content: SurfaceContent): Boolean =
     content match

@@ -193,7 +193,7 @@ class WorkflowTransitionsSpec extends AnyFlatSpec with Matchers:
 
   it should "be dropped once the picker has closed" in {
     val (opened, id) = withPicker(AppState.initial, SessionListPurpose.Open)
-    val dismissed    = WorkflowSurfaces.dismissedToEditor(opened, id)
+    val dismissed    = WorkflowSurfaces.dismissedToPriorFocus(opened, id)
 
     SessionWorkflowTransitions.withSessionsListed(dismissed, id, SessionListPurpose.Open, Right(List(draft))) shouldBe
       dismissed
@@ -229,7 +229,7 @@ class WorkflowTransitionsSpec extends AnyFlatSpec with Matchers:
 
   it should "be dropped once the picker was dismissed" in {
     val (picked, id) = pickedDraft
-    val dismissed    = WorkflowSurfaces.dismissedToEditor(picked, id)
+    val dismissed    = WorkflowSurfaces.dismissedToPriorFocus(picked, id)
     val saved        = EditorTransitions.bufferCreated(AppState.initial, "saved", None).created
 
     SessionWorkflowTransitions.withNamedSessionLoaded(dismissed, Some(id), Some(saved)) shouldBe dismissed

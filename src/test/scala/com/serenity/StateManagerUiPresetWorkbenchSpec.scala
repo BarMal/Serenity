@@ -320,7 +320,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     saved.pinnedPanels.map(_.position) shouldBe List(PanelPosition.Right)
   }
 
-  it should "expose panel reorder commands in the preset active panels group" in {
+  it should "offer the Arrange Panels list in the preset active panels group" in {
     val path  = Files.createTempDirectory("state-manager-ui-preset-edit-panel-order-menu").resolve("ui-presets.json")
     val store = UiPresetStore(path)
     val sm    = managerWithStore(store)
@@ -366,16 +366,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
         item.command.label -> item.command.intent
     }
 
-    commands should contain(
-      "Move Outline Earlier" -> CommandIntent.View(ViewIntent.MovePanelEarlier(PanelId.Outline))
-    )
-    commands should contain("Move Outline Later" -> CommandIntent.View(ViewIntent.MovePanelLater(PanelId.Outline)))
-    commands should contain(
-      "Move Diagnostics Earlier" -> CommandIntent.View(ViewIntent.MovePanelEarlier(PanelId.Diagnostics))
-    )
-    commands should contain(
-      "Move Diagnostics Later" -> CommandIntent.View(ViewIntent.MovePanelLater(PanelId.Diagnostics))
-    )
+    commands shouldBe List("Arrange Panels…" -> CommandIntent.View(ViewIntent.ArrangePanels))
   }
 
   it should "save the live workspace under a second name without touching the first preset" in {

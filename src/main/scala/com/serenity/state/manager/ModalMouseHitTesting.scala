@@ -24,12 +24,13 @@ private[manager] object ModalMouseHitTesting:
 
   def modalType(modal: Modal): ModalType =
     modal match
-      case Modal.TextPrompt(_)      => ModalType.TextPrompt
-      case Modal.Find(_, _, _)      => ModalType.Find
-      case Modal.FileWorkflow(_)    => ModalType.FileWorkflow
-      case Modal.ReplaceWorkflow(_) => ModalType.ReplaceWorkflow
-      case Modal.Confirm(_)         => ModalType.Confirm
-      case Modal.ListPicker(_)      => ModalType.ListPicker
+      case Modal.TextPrompt(_)       => ModalType.TextPrompt
+      case Modal.Find(_, _, _)       => ModalType.Find
+      case Modal.FileWorkflow(_)     => ModalType.FileWorkflow
+      case Modal.ReplaceWorkflow(_)  => ModalType.ReplaceWorkflow
+      case Modal.Confirm(_)          => ModalType.Confirm
+      case Modal.ListPicker(_)       => ModalType.ListPicker
+      case Modal.PanelArrangement(_) => ModalType.PanelArrangement
 
   /** A click on an action button of a confirm prompt or a list picker also submits it: those have no separate confirm
     * step, so picking a choice is the decision itself.
@@ -73,6 +74,22 @@ private[manager] object ModalMouseHitTesting:
         .forModal(modal, node.frameRect, targetRows)
         .flatMap(_.hitAt(click.col.toDouble, click.row.toDouble))
     yield (modal, hit)
+
+  /** The focused floating modal workflow closed exactly as Escape closes it -- its `onDismiss` included -- when a
+    * primary press or click lands outside it (`inside` says whether it landed inside), so the input can go on to what
+    * it was aimed at instead of leaving the modal open but unfocused.
+    */
+  def dismissedByOutsideInput(
+    event: MouseInputEvent,
+    state: AppState,
+    inside: UiSurface => Boolean
+  ): Option[ReducerResult] =
+    focusedFloatingModalWorkflow(state)
+      .filter(surface => event.button == MouseButton.Primary && !inside(surface))
+      .collect {
+        case UiSurface(_, SurfaceContent.ModalWorkflow(modal), _, _) =>
+          ModalEventReducer.reduce(modalType(modal), ModalDismiss, state)
+      }
 
   def focusedFloatingModalWorkflow(state: AppState): Option[UiSurface] =
     for

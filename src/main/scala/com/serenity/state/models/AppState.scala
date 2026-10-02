@@ -298,22 +298,10 @@ final case class AppState(
   def preferredCommandRunnerFocus: Option[Focus] =
     commandRunnerSurface.map(surface => Focus.Surface(surface.id))
 
-  def themePickerSurface: Option[UiSurface] =
-    findSurface {
-      case SurfaceContent.ThemePicker(_) => true
-      case _                             => false
-    }
-
   def themeCreatorSurface: Option[UiSurface] =
     findSurface {
       case SurfaceContent.ThemeCreator(_) => true
       case _                              => false
-    }
-
-  def fileSearchSurface: Option[UiSurface] =
-    findSurface {
-      case SurfaceContent.FileSearch(_) => true
-      case _                            => false
     }
 
   def contextualToolbarSurface: Option[UiSurface] =
@@ -382,6 +370,10 @@ final case class AppState(
 
   def hasBlockingModal: Boolean =
     runtime.modalStack.nonEmpty
+
+  /** A blocking dialog is up, or a modeless modal workflow has focus: either one owns input until it closes. */
+  def isModalFocus: Boolean =
+    hasBlockingModal || activeSurface.exists(isModalWorkflow)
 
   /** Remove the topmost modal dialog (or, absent one, the focused modeless modal workflow surface) and restore the
     * focus that opened it.

@@ -6,7 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
-import com.serenity.command.ThemeIntent
+import com.serenity.command.{ThemeCommands, ThemeIntent}
 import com.serenity.io.FileDialog
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -19,7 +19,7 @@ import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.noop.NoOpLogger
 
 /** Exercises [[StateManagerSurfacePopupEffects]] on its own: the theme picker/creator, theme switching/reload, theme
-  * export, and the file-search overlay, each asserted through the state it lands (or the collaborator it calls) rather
+  * export, and Search in Open Files, each asserted through the state it lands (or the collaborator it calls) rather
   * than through a fully composed `StateManager`.
   */
 class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
@@ -110,17 +110,18 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.stateRef.get.unsafeRunSync().persisted.theme.name shouldBe AppState.initial.persisted.theme.name
   }
 
-  it should "open the theme picker seeded with the current theme's index when theme names are loaded" in {
+  it should "open the theme chooser over the loaded theme names, restoring the current theme on dismiss" in {
     val fixture = harness(themeNames = List("default-light", "default-dark", "dracula"))
 
     fixture.popups.interpretThemeIntent(ThemeIntent.OpenThemeChooser, AppState.initial).unsafeRunSync()
 
     val after = fixture.stateRef.get.unsafeRunSync()
     after.runtime.uiSurfaces.map(_.content) match
-      case List(SurfaceContent.ThemePicker(pickerState)) =>
-        pickerState.themes shouldBe List("default-light", "default-dark", "dracula")
-        pickerState.originalTheme shouldBe AppState.initial.persisted.theme.name
-      case other => fail(s"Expected a single ThemePicker surface, got $other")
+      case List(SurfaceContent.ModalWorkflow(Modal.ListPicker(picker))) =>
+        picker.items.toOption.toList.flatMap(_.items.map(_.label)) shouldBe
+          List("default-light", "default-dark", "dracula")
+        picker.onDismiss shouldBe Some(ThemeCommands.applyTheme(AppState.initial.persisted.theme.name))
+      case other => fail(s"Expected a single theme chooser surface, got $other")
   }
 
   it should "do nothing when opening the theme picker before any theme names have loaded" in {
@@ -155,18 +156,16 @@ class StateManagerSurfacePopupEffectsSpec extends AnyFlatSpec with Matchers:
     } shouldBe 1
   }
 
-  it should "open the file-search overlay and focus it" in {
+  it should "open Search in Open Files, with an empty query, and focus it" in {
     val fixture = harness()
 
     fixture.popups.interpretThemeIntent(ThemeIntent.ReloadThemes, AppState.initial).unsafeRunSync()
     fixture.popups.openFileSearchEffect(AppState.initial).unsafeRunSync()
 
     val after = fixture.stateRef.get.unsafeRunSync()
-    after.runtime.uiSurfaces.map(_.content) match
-      case List(SurfaceContent.FileSearch(searchState)) =>
-        searchState.query shouldBe ""
-        after.persisted.focus shouldBe Focus.Surface(after.runtime.uiSurfaces.head.id)
-      case other => fail(s"Expected a single FileSearch surface, got $other")
+    after.runtime.uiSurfaces.map(_.content) shouldBe
+      List(SurfaceContent.ModalWorkflow(Modal.ListPicker(BufferTextSearch.picker)))
+    after.persisted.focus shouldBe Focus.Surface(after.runtime.uiSurfaces.head.id)
   }
 
   it should "load and store the available theme names on ReloadThemes" in {

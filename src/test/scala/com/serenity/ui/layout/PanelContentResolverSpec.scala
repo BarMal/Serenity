@@ -73,43 +73,44 @@ class PanelContentResolverSpec extends AnyFlatSpec with Matchers:
       LayoutRect(0, 0, 20, 50),
       SurfaceRenderMode.Floating,
       buffer = "alpha\nbeta\ngamma",
-      cursor = 3
+      cursor = "alpha\nbeta\ngamma".length
     )
 
     resolved.rows.map(_.plainText) shouldBe List("1: alpha", "2: beta", "3: gamma")
   }
 
-  it should "prefix a square layout with the cursor position" in {
+  it should "show a square layout's lines up to its scroll position" in {
     val resolved = PanelContentResolver.resolveTerminal(
       LayoutRect(0, 0, 20, 20),
       SurfaceRenderMode.Floating,
       buffer = "alpha\nbeta",
-      cursor = 7
+      cursor = "alpha\nbeta".length
     )
 
-    resolved.rows.map(_.plainText) shouldBe List("cursor: 7", "alpha", "beta")
+    resolved.rows.map(_.plainText) shouldBe List("alpha", "beta")
   }
 
-  it should "summarize a compact layout as line count and cursor" in {
+  it should "summarize a compact layout as line count and the line it is scrolled to" in {
     val resolved = PanelContentResolver.resolveTerminal(
       LayoutRect(0, 0, 10, 3),
       SurfaceRenderMode.Floating,
       buffer = "alpha\nbeta\ngamma",
-      cursor = 2
+      cursor = "alpha\nbeta\ngamma".length
     )
 
-    resolved.rows.map(_.plainText) shouldBe List("3 lines", "cursor 2")
+    resolved.rows.map(_.plainText) shouldBe List("3 lines", "line 3")
   }
 
-  it should "clip horizontal terminal output to the available rows" in {
+  it should "clip horizontal terminal output to the newest rows that fit" in {
+    val buffer = (1 to 10).map(n => s"line$n").mkString("\n")
     val resolved = PanelContentResolver.resolveTerminal(
       LayoutRect(0, 0, 40, 5),
       SurfaceRenderMode.Floating,
-      buffer = (1 to 10).map(n => s"line$n").mkString("\n"),
-      cursor = 0
+      buffer = buffer,
+      cursor = buffer.length
     )
 
-    resolved.rows.map(_.plainText) shouldBe List("line1", "line2", "line3")
+    resolved.rows.map(_.plainText) shouldBe List("line8", "line9", "line10")
   }
 
   // ── resolveOutline ──────────────────────────────────────────────────────────

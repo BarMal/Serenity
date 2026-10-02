@@ -48,6 +48,7 @@ private[manager] object NavigationTransitions:
       case NavigationIntent.PreviousDocumentSymbol => navigateDocumentSymbol(state, DocumentNavigation.previousSymbol)
       case NavigationIntent.NavigateBack           => navigateHistoryBack(state)
       case NavigationIntent.NavigateForward        => navigateHistoryForward(state)
+      case NavigationIntent.GoToBufferLine(bufferId, line) => goToBufferLine(state, bufferId, line)
 
   private def applied(state: AppState): NavigationOutcome =
     NavigationOutcome.Applied(ReducerResult.noEffects(state))
@@ -156,6 +157,29 @@ private[manager] object NavigationTransitions:
           forwardStack = remaining
         )
       case _ => NavigationOutcome.Ignored(None)
+
+  /** Puts the cursor at the start of `line` (the last line, if past the end) in the pane already showing the buffer,
+    * else in the active pane, and focuses that pane. Where it came from goes on the back stack, as for any other jump.
+    */
+  private def goToBufferLine(state: AppState, bufferId: BufferId, line: Int): NavigationOutcome =
+    val layout = state.persisted.layout
+    val showing = (layout.activeEditorPaneId.toList ++ layout.orderedPaneIds)
+      .find(paneId => layout.editorPanes.get(paneId).exists(_.bufferId.contains(bufferId)))
+    (state.persisted.buffers.get(bufferId), showing.orElse(layout.activeEditorPaneId)) match
+      case (None, _) => ignored("[CMD] Go to line requested for a buffer that is no longer open")
+      case (_, None) => ignored("[CMD] Go to line requested without an editor pane")
+      case (Some(buffer), Some(paneId)) =>
+        val target =
+          NavigationPoint(paneId, bufferId, CursorPosition(line.max(0).min(buffer.document.content.newlineCount), 0))
+        val moved = moveToNavigationPoint(state, target)
+        currentNavigationPoint(state).filter(_ != target) match
+          case Some(origin) =>
+            val recorded =
+              withHistory(moved, pushNavigationPoint(origin, state.runtime.navigation.backStack), forwardStack = Nil)
+            NavigationOutcome.Applied(
+              ReducerResult(recorded, uiTransitionSweep(recorded, target, sweep(origin, target)))
+            )
+          case None => applied(moved)
 
   private def jumpThroughHistory(
     state: AppState,

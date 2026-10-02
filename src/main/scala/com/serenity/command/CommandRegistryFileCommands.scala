@@ -92,16 +92,17 @@ private[command] object CommandRegistryFileCommands:
       CommandIntent.File(FileIntent.OpenFile),
       CommandCategory.File,
       label = "Open File"
-    )
+    ),
+    FileFinderCommands.goToFile
   )
 
   private[command] def sessionAndTabCommands: List[Command] = List(
     Command.typed(
       "file-search",
-      "Search for a file to open.",
+      "Search the text of every open file.",
       CommandIntent.File(FileIntent.OpenFileSearch),
       CommandCategory.File,
-      label = "File Search"
+      label = "Search in Open Files"
     ),
     Command.typed(
       "quit",

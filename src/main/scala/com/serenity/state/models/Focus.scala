@@ -12,3 +12,4 @@ enum ModalType:
   case ReplaceWorkflow
   case Confirm
   case ListPicker
+  case PanelArrangement

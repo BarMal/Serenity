@@ -118,6 +118,7 @@ private[manager] trait EffectModalWorkflowPort:
   def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit]
   def openNamedSession(sessionId: SessionId, state: AppState): IO[Unit]
   def openRenameSessionPrompt(sessionId: SessionId, currentName: String): IO[Unit]
+  def openFileFinder: IO[Unit]
 
 /** What event routing needs besides the model, which it reaches through `StateManagerOperationBoundary.modelCommit`. */
 private[manager] trait EventStatePort:

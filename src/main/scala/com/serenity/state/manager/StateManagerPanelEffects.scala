@@ -11,7 +11,7 @@ import com.serenity.io.FileUtils
 import com.serenity.keystroke.events.Event
 import com.serenity.state.core.ChapterNoteTransitions
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{DirectionalFocus, PanelStateReducer, PinnedPanelContentReducer}
+import com.serenity.state.reducers.{DirectionalFocus, ModalStateReducer, PanelStateReducer, PinnedPanelContentReducer}
 import com.serenity.ui.layout.{PanelPosition, PanelTarget, SplitAxis}
 
 /** Pinned-panel management: pinning/unpinning/moving/resizing the explorer, outline, comments, diagnostics, and
@@ -79,10 +79,10 @@ final private[manager] class StateManagerPanelEffects(
         else pinAtDefaultEdge(PanelId.MarkdownPreview)
       case ViewIntent.SetPanelPin(id, position) =>
         setPanelPin(id, position)
-      case ViewIntent.MovePanelEarlier(id) =>
-        commitApp(PanelTransitions.reorderPanel(id, delta = -1))
-      case ViewIntent.MovePanelLater(id) =>
-        commitApp(PanelTransitions.reorderPanel(id, delta = 1))
+      case ViewIntent.PlacePanel(id, position, index) =>
+        placePanel(id, position, index)
+      case ViewIntent.ArrangePanels =>
+        commitApp(state => ModalStateReducer.show(Modal.PanelArrangement(PanelArrangement.of(state)), state).state)
       case ViewIntent.SetMarkdownViewMode(mode) =>
         setMarkdownViewMode(mode)
       case ViewIntent.SetDefaultDocumentMode(mode) =>
@@ -143,6 +143,15 @@ final private[manager] class StateManagerPanelEffects(
       refreshSelections = false
     )
 
+  private def placePanel(id: PanelId, position: Option[PanelPosition], index: Int): IO[Unit] =
+    position match
+      case None => setPanelPin(id, None)
+      case Some(edge) =>
+        currentState.flatMap { state =>
+          val onEdge = state.persisted.layout.workspaceTree.exists(_.positionForSurface(id.surfaceId).contains(edge))
+          setPanelPin(id, Some(edge)).unlessA(onEdge) >> commitApp(PanelTransitions.movePanelTo(id, index))
+        }
+
   private def pinAtDefaultEdge(id: PanelId): IO[Unit] =
     setPanelPin(id, Some(PanelRegistry.registrationFor(id).defaultPosition))
 
@@ -173,8 +182,8 @@ final private[manager] class StateManagerPanelEffects(
           IO.unit
     }
 
-  /** Only the per-panel pin/unpin mutations declare an undo boundary (#1016 PR4) -- not `MovePanelEarlier`/`Later`'s
-    * same-edge reordering, which adjusts an already-pinned panel rather than pinning or unpinning one.
+  /** Only the per-panel pin/unpin mutations declare an undo boundary (#1016 PR4) -- not `PlacePanel`'s same-edge
+    * reordering, which adjusts an already-pinned panel rather than pinning or unpinning one.
     */
   private def pinPanel(id: PanelId, position: PanelPosition, refreshSelections: Boolean): IO[Unit] =
     currentState.flatMap { state =>

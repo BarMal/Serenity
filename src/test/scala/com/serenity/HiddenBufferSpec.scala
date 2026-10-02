@@ -1,10 +1,8 @@
 package com.serenity
 
-import com.serenity.keystroke.events.InsertChar
 import com.serenity.rope.Balance
 import com.serenity.session.given
 import com.serenity.session.{SessionBuffer, SessionState}
-import com.serenity.state.components.{ComponentResult, FileSearchComponent}
 import com.serenity.state.models.*
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -61,31 +59,18 @@ class HiddenBufferSpec extends AnyFlatSpec with Matchers:
     TabListContent.build(stateWithHiddenNote("an outline")).entries.map(_.bufferId) shouldBe List(visibleId)
   }
 
-  it should "not be searched by project file search" in {
+  it should "not be searched by Search in Open Files" in {
     val withNeedle = stateWithHiddenNote("needle in the note")
     val withVisible = withNeedle.copy(persisted =
       withNeedle.persisted.copy(buffers =
         withNeedle.persisted.buffers.updated(visibleId, Buffer.fromString(visibleId, "needle in the manuscript"))
       )
     )
-    val (s1, surfaceId) = withVisible.allocateSurfaceId
-    val surface = UiSurface(
-      surfaceId,
-      SurfaceContent.FileSearch(FileSearchState("needl", Nil, 0)),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-    )
-    val searching = s1.copy(
-      runtime = s1.runtime.copy(uiSurfaces = List(surface)),
-      persisted = s1.persisted.copy(focus = Focus.Surface(surfaceId))
-    )
 
-    new FileSearchComponent().processEvent(InsertChar('e'), searching) match
-      case ComponentResult.StateChange(update) =>
-        update(searching).fileSearchSurface.map(_.content) match
-          case Some(SurfaceContent.FileSearch(search)) =>
-            search.results.map(_.bufferId).distinct shouldBe List(visibleId)
-          case other => fail(s"Expected FileSearch, got $other")
-      case other => fail(s"Expected StateChange, got $other")
+    val (found, next) = BufferTextSearch.batch(withVisible, "needle", batchSize = 10, from = None)
+
+    found.map(_.label) shouldBe Vector("buffer-0:1")
+    next shouldBe None
   }
 
   "A session buffer written before hidden buffers existed" should "decode as an ordinary buffer" in {

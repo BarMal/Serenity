@@ -320,6 +320,7 @@ class StateManagerRuntimeSpec extends AnyFlatSpec with Matchers:
         CommandEffectInterpreter.Dependencies(
           lifecycle = IO.unit,
           command = _ => IO.unit,
+          unrecordedCommand = _ => IO.unit,
           theme = _ => IO.unit,
           surface = _ => IO.unit,
           file = _ => IO.unit,

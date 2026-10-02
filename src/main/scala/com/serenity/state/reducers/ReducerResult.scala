@@ -82,6 +82,11 @@ enum UndoEffect:
 enum AppEffect:
   case CompleteQuit
   case ExecuteCommand(command: Command)
+
+  /** Runs `command` as [[ExecuteCommand]] does, but leaves it out of the recently-used ranking: for commands the user
+    * did not choose, such as a picker's preview of its highlighted choice or its restore on dismiss.
+    */
+  case ExecuteCommandUnrecorded(command: Command)
   case ScheduleCommandRunnerBindingExpiry(recordedAtMillis: Long)
   case Theme(effect: ThemeEffect)
   case Surface(effect: SurfaceEffect)

@@ -275,6 +275,33 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
     fixture.currentState.persisted.commandUsage shouldBe empty
   }
 
+  it should "run an unrecorded command without counting it towards recency, unlike a recorded one" in {
+    val closeAll = command(CommandIntent.File(FileIntent.CloseAll))
+    val fixture  = harness()
+
+    fixture.handlers.interpretEffect(AppEffect.ExecuteCommandUnrecorded(closeAll)).unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe List(s"beginCloseAction:${CloseScope.All}")
+    fixture.currentState.persisted.commandUsage shouldBe empty
+
+    fixture.handlers.interpretEffect(AppEffect.ExecuteCommand(closeAll)).unsafeRunSync()
+
+    fixture.currentState.persisted.commandUsage shouldBe Map(CommandId(closeAll.name) -> 1)
+  }
+
+  it should "refuse an unrecorded command out of its scope just as a recorded one is refused" in {
+    val state   = inMode(AppMode.Code)
+    val fixture = harness(state)
+
+    fixture.handlers
+      .interpretEffect(AppEffect.ExecuteCommandUnrecorded(command(CommandIntent.Darlings(DarlingIntent.CutToDarlings))))
+      .unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe List(
+      s"showPeek:${com.serenity.ui.layout.PeekContent.QuickInfo("Only available in prose mode.")}"
+    )
+  }
+
   // ---------------------------------------------------------------------------------------------------------------
   // Edit intents
   // ---------------------------------------------------------------------------------------------------------------
@@ -467,14 +494,13 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
     received shouldBe List(effect)
   }
 
-  it should "open the file-search surface from a Surface effect" in {
+  it should "open Search in Open Files from a Surface effect" in {
     val fixture = harness()
 
     fixture.handlers.interpretEffect(AppEffect.Surface(SurfaceEffect.OpenFileSearch)).unsafeRunSync()
 
-    fixture.currentState.runtime.uiSurfaces.map(_.content) match
-      case List(SurfaceContent.FileSearch(_)) => succeed
-      case other                              => fail(s"Expected a single FileSearch surface, got $other")
+    fixture.currentState.runtime.uiSurfaces.map(_.content) shouldBe
+      List(SurfaceContent.ModalWorkflow(Modal.ListPicker(BufferTextSearch.picker)))
   }
 
   it should "persist a config update through to state and report the resulting config" in {

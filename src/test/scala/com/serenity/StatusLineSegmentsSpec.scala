@@ -13,7 +13,7 @@ import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** The status line's segment list is ordered and independently toggleable: the include/exclude toggle and the discrete
-  * reorder intents (mirroring `MovePanelEarlier`/`Later`'s own settings-menu shape), plus the rendered text.
+  * reorder intents, plus the rendered text.
   */
 class StatusLineSegmentsSpec extends AnyFlatSpec with Matchers:
 

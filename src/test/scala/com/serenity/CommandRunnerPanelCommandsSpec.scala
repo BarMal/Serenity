@@ -405,3 +405,68 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
 
     sm.getCurrentState.unsafeRunSync().persisted.focus shouldBe Focus.Surface(PanelId.Outline.surfaceId)
   }
+
+  it should "arrange panels from the command runner: move one down its edge, hide it, then close the list" in {
+    val sm = createStateManager()
+    sm.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 28).unsafeRunSync()
+    sm.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 28).unsafeRunSync()
+    def rightEdge(state: AppState) =
+      state.persisted.layout.workspaceTree.toList.flatMap(tree =>
+        tree.dockedSurfaceIds.filter(tree.positionForSurface(_).contains(PanelPosition.Right))
+      )
+    def arrangement(state: AppState) =
+      state.modalSurface.map(_.content).collect {
+        case SurfaceContent.ModalWorkflow(Modal.PanelArrangement(arrangement)) => arrangement
+      }
+
+    executeCommandThroughRunner(sm, "arrange-panels", "arrange-panels")
+    arrangement(sm.getCurrentState.unsafeRunSync()).flatMap(_.selected) shouldBe Some(PanelId.Outline)
+
+    sm.applyEvent(ModalMove(Direction.Down)).unsafeRunSync()
+    val moved = sm.getCurrentState.unsafeRunSync()
+    rightEdge(moved) shouldBe List(PanelId.Diagnostics.surfaceId, PanelId.Outline.surfaceId)
+    arrangement(moved).map(_.panelsIn(ArrangementSection.Right)) shouldBe
+      Some(Vector(PanelId.Diagnostics, PanelId.Outline))
+    arrangement(moved).flatMap(_.selected) shouldBe Some(PanelId.Outline)
+
+    sm.applyEvent(ModalSubmit).unsafeRunSync()
+    val hidden = sm.getCurrentState.unsafeRunSync()
+    rightEdge(hidden) shouldBe List(PanelId.Diagnostics.surfaceId)
+    arrangement(hidden).map(_.panelsIn(ArrangementSection.Hidden).contains(PanelId.Outline)) shouldBe Some(true)
+
+    sm.applyEvent(ModalDismiss).unsafeRunSync()
+    arrangement(sm.getCurrentState.unsafeRunSync()) shouldBe None
+  }
+
+  it should "move through the outline with the keyboard and open a heading with Enter" in {
+    val sm       = createStateManager()
+    val bufferId = BufferId(0)
+    sm.updateState { state =>
+      val buffer = state.persisted
+        .buffers(bufferId)
+        .copy(document =
+          state.persisted
+            .buffers(bufferId)
+            .document
+            .copy(
+              content = com.serenity.rope.Rope("# One\n\nBody\n\n## Two\n\nMore\n\n## Three"),
+              language = Some(LanguageId.Markdown)
+            )
+        )
+      state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> buffer)))
+    }.unsafeRunSync()
+
+    executeCommandThroughRunner(sm, "focus-outline-panel", "focus-outline-panel")
+    sm.applyEvent(PanelInputEvent.Navigate(Direction.Down)).unsafeRunSync()
+    sm.applyEvent(PanelInputEvent.Navigate(Direction.Down)).unsafeRunSync()
+
+    val highlighted = sm.getCurrentState.unsafeRunSync()
+    highlighted.surfaceById(PanelId.Outline.surfaceId).map(_.content).collect {
+      case SurfaceContent.Outline(_, location) => location
+    } shouldBe Some(Some(Location(8, 0)))
+
+    sm.applyEvent(PanelInputEvent.Activate).unsafeRunSync()
+    val opened = sm.getCurrentState.unsafeRunSync()
+    opened.persisted.focus shouldBe a[Focus.EditorPane]
+    opened.activeCursorPosition shouldBe Some(CursorPosition(8, 0))
+  }

@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import com.serenity.command.CommandRegistry
 import com.serenity.config.SpellCheckDictionaryFingerprint
+import com.serenity.io.ProjectFileListing
 import com.serenity.keystroke.events.RunnerBindingRecordingExpired
 import com.serenity.lsp.client.DocumentUri
 import com.serenity.project.ProjectTaskResult
@@ -90,6 +91,11 @@ private[manager] enum EffectResult:
   case SessionsListed(pickerId: SurfaceId, purpose: SessionListPurpose, listing: Either[String, List[SessionMetadata]])
   case NamedSessionLoaded(pickerId: Option[SurfaceId], restored: Option[AppState])
 
+  /** The "Go to File" finder `pickerId`'s walk of `root`, or why it failed; dropped once that finder has closed. See
+    * FileFinderTransitions.
+    */
+  case FilesListed(pickerId: SurfaceId, root: Path, listing: Either[String, ProjectFileListing])
+
   // Project tasks (#1697 Wave 3): posted by `LaneKey.Project` jobs; see ProjectTaskTransitions.
   /** Output the task wrote since its previous batch. */
   case ProjectTaskOutput(taskId: Long, chunk: String)
@@ -156,6 +162,8 @@ private[manager] object EffectResult:
         SessionWorkflowTransitions.withSessionsListed(state, pickerId, purpose, listing)
       case NamedSessionLoaded(pickerId, restored) =>
         SessionWorkflowTransitions.withNamedSessionLoaded(state, pickerId, restored)
+      case FilesListed(pickerId, root, listing) =>
+        FileFinderTransitions.withFilesListed(state, pickerId, root, listing)
 
       case projectTask @ (ProjectTaskOutput(_, _) | ProjectTaskFinished(_, _)) => reduce(state, projectTask).state
       case expired: CommandRunnerBindingExpired                                => reduce(state, expired).state

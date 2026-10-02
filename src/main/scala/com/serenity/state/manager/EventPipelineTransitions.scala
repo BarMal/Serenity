@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import com.serenity.animation.SweepDirection
 import com.serenity.keystroke.events.ResizeEvent
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, BufferId, Focus, PaneId, SurfaceContent, replacedWhere}
+import com.serenity.state.models.{AppState, BufferId, Focus, SurfaceContent, replacedWhere}
 import com.serenity.state.reducers.{AppEventReducer, ReducerResult, SystemEventReducer}
 import com.serenity.ui.layout.SplitAxis
 import com.serenity.ui.presets.UiPreset
@@ -29,8 +29,11 @@ private[manager] object EventPipelineTransitions:
   def withPaneFlow(model: Model, sweep: SweepDirection): Model =
     model.copy(bufferAnimations = AnimationChoreography.withPaneFlowAnimation(model.app, sweep)(model.bufferAnimations))
 
+  /** Focus handed back to an open command runner that lost it -- unless a modal raised over the runner holds it, in
+    * which case the runner gets it back once that modal closes.
+    */
   def commandRunnerFocusNormalized(state: AppState): AppState =
-    if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() then
+    if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() && !state.isModalFocus then
       state.preferredCommandRunnerFocus.fold(state)(focus =>
         state.copy(persisted = state.persisted.copy(focus = focus))
       )
@@ -58,12 +61,12 @@ private[manager] object EventPipelineTransitions:
     )
     state.copy(persisted = state.persisted.copy(buffers = buffers))
 
-  /** Focus after a dismissed surface: the active editor pane, or -- when none is left -- a fresh empty buffer in a new
-    * pane, all in the dismissal's own commit.
+  /** Focus after a dismissed surface: whatever held it before the surface took it -- the active editor pane if nothing
+    * did -- or, when no pane is left, a fresh empty buffer in a new pane, all in the dismissal's own commit.
     */
-  def dismissedToEditor(state: AppState)(using Balance): AppState =
+  def dismissedToPriorFocus(state: AppState)(using Balance): AppState =
     state.persisted.layout.activeEditorPaneId match
-      case Some(paneId) => focused(state, paneId)
+      case Some(_) => state.popFocus
       case None =>
         val creation = EditorTransitions.bufferCreated(state, "", None)
         val (withPane, paneId) = EditorTransitions.paneInserted(
@@ -72,7 +75,4 @@ private[manager] object EventPipelineTransitions:
           Some(creation.bufferId),
           SplitAxis.Horizontal
         )
-        focused(withPane, paneId)
-
-  private def focused(state: AppState, paneId: PaneId): AppState =
-    state.copy(persisted = state.persisted.copy(focus = Focus.EditorPane(paneId)))
+        withPane.copy(persisted = withPane.persisted.copy(focus = Focus.EditorPane(paneId)))

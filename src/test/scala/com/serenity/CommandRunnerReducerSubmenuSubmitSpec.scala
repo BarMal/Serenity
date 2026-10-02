@@ -199,7 +199,7 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
 
   it should "edit keymap binding text and emit a focused keymap update intent" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-keymap", "keymap-command-runner-submit")
+    val state    = settingsStateOnItem("settings-keymap-command-runner", "keymap-command-runner-submit")
 
     val typed =
       "ctrl+enter".foldLeft(state)((s, char) => CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state)
@@ -217,7 +217,7 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
     val registry = CommandRegistry.default
     val config = AppConfig.default
       .withKeymapBinding(KeymapGroup.CommandRunner)(CommandRunnerKeyAction.Submit, "ctrl+enter")
-    val state = settingsStateOnItem("settings-keymap", "keymap-command-runner-submit", config)
+    val state = settingsStateOnItem("settings-keymap-command-runner", "keymap-command-runner-submit", config)
 
     val typed =
       "reset".foldLeft(state)((s, char) => CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state)
@@ -231,7 +231,7 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
 
   it should "keep keymap edit mode open with a status message for invalid binding text" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-keymap", "keymap-command-runner-submit")
+    val state    = settingsStateOnItem("settings-keymap-command-runner", "keymap-command-runner-submit")
 
     val typed =
       "ctrl".foldLeft(state)((s, char) => CommandRunnerReducer.reduce(RunnerInsertChar(char), s, registry).state)

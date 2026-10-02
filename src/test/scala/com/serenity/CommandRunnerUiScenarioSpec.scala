@@ -135,7 +135,7 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
           val runner = activated.withDrilledSettingsSurface(
             SettingsSurfaceState(
               SettingsPage.Editing(
-                groupId = "settings-keymap",
+                groupId = "settings-keymap-global-editing",
                 itemId = "keymap-global-find",
                 draftText = "",
                 recording = Some(RecordingState("keymap-global-find"))

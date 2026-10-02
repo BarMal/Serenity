@@ -33,6 +33,7 @@ case object PreviousTab                   extends GlobalAppEvent // Ctrl+Shift+T
 case object MoveTabLeft                   extends GlobalAppEvent // Ctrl+Shift+PageUp (issue #1610)
 case object MoveTabRight                  extends GlobalAppEvent // Ctrl+Shift+PageDown (issue #1610)
 case object FileSearch                    extends GlobalAppEvent // Ctrl+Shift+F
+case object GoToFile                      extends GlobalAppEvent // Ctrl+E
 
 /** Moves focus to the editor pane or docked panel next to the focused one on screen (Alt+Arrow by default). */
 final case class FocusInDirection(direction: Direction) extends GlobalAppEvent

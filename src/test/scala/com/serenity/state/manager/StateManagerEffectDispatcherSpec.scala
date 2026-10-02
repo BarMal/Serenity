@@ -27,6 +27,7 @@ class StateManagerEffectDispatcherSpec extends AnyFlatSpec with Matchers:
         CommandEffectInterpreter.Dependencies(
           lifecycle = calls.update(_ :+ "lifecycle"),
           command = value => calls.update(_ :+ s"command:$value"),
+          unrecordedCommand = value => calls.update(_ :+ s"unrecordedCommand:$value"),
           theme = value => calls.update(_ :+ s"theme:$value"),
           surface = value => calls.update(_ :+ s"surface:$value"),
           file = value => calls.update(_ :+ s"file:$value"),
@@ -60,6 +61,15 @@ class StateManagerEffectDispatcherSpec extends AnyFlatSpec with Matchers:
     fixture.interpreter.interpret(AppEffect.ExecuteCommand(command)).unsafeRunSync()
 
     fixture.calls.get.unsafeRunSync() shouldBe List(s"command:$command")
+  }
+
+  it should "route ExecuteCommandUnrecorded to the unrecorded-command dependency" in {
+    val fixture = harness()
+    val command = Command.typed("preview-theme", "hint", CommandIntent.View(ViewIntent.ToggleTabList))
+
+    fixture.interpreter.interpret(AppEffect.ExecuteCommandUnrecorded(command)).unsafeRunSync()
+
+    fixture.calls.get.unsafeRunSync() shouldBe List(s"unrecordedCommand:$command")
   }
 
   it should "route ScheduleCommandRunnerBindingExpiry to its own dependency, carrying the timestamp" in {

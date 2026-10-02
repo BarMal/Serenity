@@ -61,16 +61,38 @@ private[command] object CommandRunnerSettingsKeymapItems:
         CommandIntent.Keybindings(KeybindingsIntent.ResetPeekKeyBinding(action))
       )
     )
-    val primaryIds = List(
-      "keymap-global-command_palette",
-      "keymap-global-file_search",
-      "keymap-editor-page_down",
-      "keymap-command-runner-submit",
-      "keymap-modal-dismiss",
-      "keymap-panel-activate",
-      "keymap-peek-accept"
+    items
+
+  /** Settings › Keys: one section per place the keys apply, with the global hotkeys split again by what they are for.
+    * `items` are [[buildKeymapInputItems]]'s rows, whose ids name their place (`keymap-panel-…`).
+    */
+  private[command] def keymapGroups(items: List[CommandSurfaceItem.InputItem]): List[CommandSurfaceItem.GroupItem] =
+    def section(id: String, label: String, hint: String, children: List[CommandSurfaceItem]) =
+      CommandSurfaceItem.GroupItem(s"settings-keymap-$id", label, children, CommandCategory.Settings, Some(hint))
+    def rows(prefix: String) = items.filter(_.id.startsWith(s"keymap-$prefix-"))
+    val globalRows           = rows("global")
+    val global = HotkeyPurpose.values.toList.map { purpose =>
+      val actionIds = HotkeyAction.values.toList.filter(_.purpose == purpose).map(a => s"keymap-global-${a.configKey}")
+      section(
+        s"global-${purpose.label.toLowerCase}",
+        s"${purpose.label} Keys",
+        s"${purpose.label} keys that work anywhere",
+        actionIds.flatMap(id => globalRows.find(_.id == id))
+      )
+    }
+    List(
+      section("global", "Global Keys", "Keys that work anywhere in the app", global),
+      section("editor", "Editor Keys", "While typing in a document", rows("editor")),
+      section(
+        "command-runner",
+        "Command Runner Keys",
+        "Inside the command palette and settings",
+        rows("command-runner")
+      ),
+      section("dialogs", "Dialog Keys", "Inside prompts, pickers and other dialogs", rows("modal")),
+      section("panels", "Panel Keys", "While a docked panel has focus", rows("panel")),
+      section("peek", "Peek Keys", "While a peek is open", rows("peek"))
     )
-    primaryIds.flatMap(id => items.find(_.id == id)) ++ items.filterNot(item => primaryIds.contains(item.id))
 
   private def keymapLabel(configKey: String): String =
     configKey.split("_").toList.map(_.capitalize).mkString(" ")

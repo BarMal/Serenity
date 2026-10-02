@@ -5,6 +5,13 @@ import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.given
 import io.circe.{Decoder, Encoder}
 
+/** What a global hotkey is for -- the section of Settings › Keys › Global it is listed under. */
+enum HotkeyPurpose(val label: String):
+  case Navigation extends HotkeyPurpose("Navigation")
+  case Files      extends HotkeyPurpose("Files")
+  case Editing    extends HotkeyPurpose("Editing")
+  case View       extends HotkeyPurpose("View")
+
 enum HotkeyAction:
   case Save
   case Quit
@@ -24,6 +31,7 @@ enum HotkeyAction:
   case SplitPaneVertical
   case ClosePane
   case FileSearch
+  case GoToFile
   case NextTab
   case PreviousTab
   case MoveTabLeft
@@ -61,6 +69,7 @@ enum HotkeyAction:
       case SplitPaneVertical        => "split_pane_vertical"
       case ClosePane                => "close_pane"
       case FileSearch               => "file_search"
+      case GoToFile                 => "go_to_file"
       case NextTab                  => "next_tab"
       case PreviousTab              => "previous_tab"
       case MoveTabLeft              => "move_tab_left"
@@ -77,6 +86,15 @@ enum HotkeyAction:
       case ToggleChapterGhosts      => "toggle_chapter_ghosts"
       case OpenChapterNote          => "open_chapter_note"
       case ToggleNotesPin           => "toggle_notes_pin"
+
+  def purpose: HotkeyPurpose =
+    this match
+      case Save | SaveAs | OpenFile | NewTab | CloseTab | Quit                      => HotkeyPurpose.Files
+      case Undo | Redo | Copy | Paste | Cut | SelectAll | Find | Replace | GoToLine => HotkeyPurpose.Editing
+      case ToggleCommandRunner | FileSearch | GoToFile | NextTab | PreviousTab | MoveTabLeft | MoveTabRight |
+          SplitPaneHorizontal | SplitPaneVertical | ClosePane | FocusLeft | FocusRight | FocusUp | FocusDown =>
+        HotkeyPurpose.Navigation
+      case ToggleShortcutsHelp | ToggleContextualToolbar | ToggleSyntaxHighlighting => HotkeyPurpose.View
 
 final case class HotkeyTrigger(
     keyType: InputKey,
@@ -324,6 +342,10 @@ object HotkeyConfig:
       HotkeyAction.ToggleNotesPin      -> shifted('l')
     )
 
+  // VS Code's alternative Quick Open key: its main one, the primary modifier with P, is the command runner here.
+  private def goToFileBindings(primaryModifier: Modifier): Map[HotkeyAction, List[HotkeyTrigger]] =
+    Map(HotkeyAction.GoToFile -> List(HotkeyTrigger(InputKey.Character, Some('e'), Set(primaryModifier))))
+
   def defaultBindingsFor(osName: String): Map[HotkeyAction, List[HotkeyTrigger]] =
     val isMac           = osName.toLowerCase(java.util.Locale.ROOT).contains("mac")
     val primaryModifier = if isMac then Modifier.Meta else Modifier.Ctrl
@@ -402,7 +424,7 @@ object HotkeyConfig:
       // every terminal and by AWT regardless of platform, so it needs none of `forTerminalUse`'s Mac-Cmd rewriting
       // (issue #1213) and no per-OS branching here.
       HotkeyAction.ToggleShortcutsHelp -> List(HotkeyTrigger(InputKey.F1, None, Set.empty))
-    ) ++ directionalFocusBindings ++ chapterNoteBindings(primaryModifier)
+    ) ++ directionalFocusBindings ++ goToFileBindings(primaryModifier) ++ chapterNoteBindings(primaryModifier)
 
   def validate(bindings: Map[HotkeyAction, List[HotkeyTrigger]]): Either[String, Unit] =
     bindings.toList

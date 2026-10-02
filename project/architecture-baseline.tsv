@@ -56,6 +56,9 @@
 # scope to an owning instance -- the one hit that was (`MouseTargetLayoutKey`'s single-slot `AtomicReference` memo,
 # `state/manager/MouseTargetCache.scala`) has been moved onto a new instance-scoped `MouseTargetLayoutKeyCache` owned
 # by `AuthoritativeUiScene` as part of this same step, and is not baselined here.
+# paydown: StateManagerCapabilitySpec.scala grew by 1 line (638 -> 639): `CommandEffectInterpreter.Dependencies` gained
+# `unrecordedCommand` (the `AppEffect.ExecuteCommandUnrecorded` route picker previews and dismiss commands take), and
+# this spec's effect-order test builds every dependency by name.
 main/scala/com/serenity/app/RuntimeDisplayState.scala	forbidden mutable state at line 78: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	100
 main/scala/com/serenity/io/SwingFileDialog.scala	forbidden mutable state at line 35: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
@@ -87,6 +90,6 @@ test/scala/com/serenity/SpellCheckerDictionaryIoSpec.scala	file length	646
 test/scala/com/serenity/SpellCheckerSpec.scala	file length	602
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	764
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	316
-test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	638
+test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	639
 test/scala/com/serenity/ui/tui/TerminalEmulator.scala	method interpret	84
 test/scala/com/serenity/ui/tui/TerminalRenderSurfaceSpec.scala	file length	606

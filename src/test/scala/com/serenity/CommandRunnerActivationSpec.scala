@@ -82,14 +82,21 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
 
     val keymapGroup = runner.settingsGroups.find(_.id == "settings-keymap").getOrElse(fail("Expected keymap group"))
 
+    def bindingRows(item: CommandSurfaceItem): List[CommandSurfaceItem.InputItem] =
+      item match
+        case group: CommandSurfaceItem.GroupItem => group.children.flatMap(bindingRows)
+        case row: CommandSurfaceItem.InputItem   => List(row)
+        case _                                   => Nil
+    val rows = bindingRows(keymapGroup)
+
     keymapGroup.label shouldBe "Keys"
-    keymapGroup.children.collectFirst {
-      case item: CommandSurfaceItem.InputItem if item.id == "keymap-global-command_palette" => item.currentValue
+    rows.collectFirst {
+      case item if item.id == "keymap-global-command_palette" => item.currentValue
     } shouldBe Some("ctrl+k")
-    keymapGroup.children.collectFirst {
-      case item: CommandSurfaceItem.InputItem if item.id == "keymap-command-runner-submit" => item.currentValue
+    rows.collectFirst {
+      case item if item.id == "keymap-command-runner-submit" => item.currentValue
     } shouldBe Some("ctrl+enter")
-    val ids = keymapGroup.children.map(_.id).toSet
+    val ids = rows.map(_.id).toSet
     HotkeyAction.values.foreach(action => ids should contain(s"keymap-global-${action.configKey}"))
     EditorKeyAction.values.foreach(action => ids should contain(s"keymap-editor-${action.configKey}"))
     CommandRunnerKeyAction.values.foreach(action => ids should contain(s"keymap-command-runner-${action.configKey}"))

@@ -66,9 +66,8 @@ object RendererPaneContent:
           buffer     <- state.persisted.buffers.get(bufferId)
         yield
           if columnPlacements.nonEmpty then
-            // Multi-column e-reader layout (issue #1338, Phase 2 / slice 1): the caret paints against whichever page
-            // column actually holds it -- every other column's snapshot resolves it to no visual row and paints
-            // nothing -- at that column's own x-shifted rect.
+            // Multi-column e-reader layout (issue #1338, Phase 2 / slice 1): the caret paints against the one page
+            // column that holds it, at that column's own x-shifted rect.
             columnPlacements.flatMap { placement =>
               RendererCursorGlyphs.renderCursors(
                 buffer,
@@ -77,7 +76,8 @@ object RendererPaneContent:
                 state.persisted.config,
                 context,
                 placement.snapshot,
-                state.runtime.capabilities.pixelMotion
+                state.runtime.capabilities.pixelMotion,
+                paintsCursor = RendererCursorGlyphs.owningColumn(columnPlacements, _).exists(_ eq placement)
               )
             }.toList
           else
@@ -251,7 +251,9 @@ object RendererPaneContent:
         surface.setBackgroundColor(state.persisted.theme.highlighted.background)
         surface.setForegroundColor(state.persisted.theme.highlighted.foreground)
       else
-        surface.setBackgroundColor(state.persisted.theme.panel.background)
+        surface.setBackgroundColor(
+          SurfaceMaterials.panelBackground(state.persisted.config, state.persisted.theme, surface)
+        )
         surface.setForegroundColor(state.persisted.theme.panel.foreground)
 
       val bufferTitleBase = buffer match

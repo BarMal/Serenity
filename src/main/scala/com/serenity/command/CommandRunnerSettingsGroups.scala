@@ -2,7 +2,7 @@ package com.serenity.command
 
 import com.serenity.config.{AppMode, StatusSegment}
 import com.serenity.frontend.FrontendCapabilities
-import com.serenity.state.models.{PanelRegistry, Shell}
+import com.serenity.state.models.Shell
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.presets.UiPreset
 
@@ -55,15 +55,8 @@ object CommandRunnerSettingsGroups:
     val workspaceLayoutGroup = group(
       "settings-workspace-layout",
       "Panels",
-      "Which edge each panel is pinned to",
-      CommandRunnerSettingsPanelItems.workspaceLayoutItems(
-        optionSelections,
-        (id, row) =>
-          val registration = PanelRegistry.registrationFor(id)
-          Option
-            .when(showAllSettingsRegardlessOfMode || registration.family.modes.contains(appMode))(row)
-            .flatMap(onFrontend.row(registration.frontend, _))
-      )
+      "Which panels show, and where",
+      CommandRunnerSettingsPanelItems.workspaceLayoutItems
     )
     val textDisplayGroup = group(
       "settings-text-display",
@@ -250,7 +243,7 @@ object CommandRunnerSettingsGroups:
       "settings-keymap",
       "Keys",
       "Inspect and edit bindings",
-      inputItems.filter(_.id.startsWith("keymap-"))
+      CommandRunnerSettingsKeymapItems.keymapGroups(inputItems.filter(_.id.startsWith("keymap-")))
     )
 
     // issue #1058: editing a preset reuses these same canonical groups verbatim, only retagged (`settings-preset-*`)

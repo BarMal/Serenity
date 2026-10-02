@@ -46,7 +46,7 @@ private[command] object CommandRegistryPanelProjectCommands:
         CommandCategory.View,
         label = s"Focus $direction"
       )
-    }
+    } :+ CommandRunnerSettingsPanelItems.arrangePanelsCommand
 
   private[command] def paneCommands: List[Command] = List(
     Command.typed(

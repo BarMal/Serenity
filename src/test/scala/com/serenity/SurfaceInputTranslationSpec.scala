@@ -5,8 +5,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Every cell is pinned, including the misses, because the surfaces are not uniform and tidying them into uniformity
-  * would be a behaviour change. The asymmetries are deliberate: the runner takes `Paste` and the modal does not; the
-  * panel and peek overlays take the plain deletes but not the word deletes.
+  * would be a behaviour change. The asymmetries are deliberate: the panel and peek overlays take the plain deletes but
+  * not the word deletes.
   */
 class SurfaceInputTranslationSpec extends AnyFlatSpec with Matchers:
 
@@ -102,7 +102,7 @@ class SurfaceInputTranslationSpec extends AnyFlatSpec with Matchers:
     CommandRunnerEvent.fromEvent(RunnerSelectVisibleItem(2)) shouldBe Some(RunnerSelectVisibleItem(2))
   }
 
-  "ModalInputEvent.fromEvent" should "translate exactly the modal's vocabulary, which excludes paste" in
+  "ModalInputEvent.fromEvent" should "translate exactly the modal's vocabulary" in
     check(
       ModalInputEvent.fromEvent,
       Map(
@@ -113,6 +113,7 @@ class SurfaceInputTranslationSpec extends AnyFlatSpec with Matchers:
         DeleteForward      -> ModalDeleteForward,
         DeleteWordBackward -> ModalDeleteWordBackward,
         DeleteWordForward  -> ModalDeleteWordForward,
+        Paste              -> ModalPaste,
         MoveUp             -> ModalNavigate(Direction.Up),
         MoveDown           -> ModalNavigate(Direction.Down),
         MoveLeft           -> ModalNavigate(Direction.Left),

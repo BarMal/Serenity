@@ -33,17 +33,19 @@ object PinnedPanelRenderer:
           new java.awt.Color(0, 0, 0)
         )
       )
+    val backdrop        = SurfaceMaterials.backdropShowingThrough(config, theme, surface)
+    val panelBackground = backdrop.getOrElse(theme.panel.background)
     surface.effects.foreach(_.setAlpha(SurfaceMaterials.panelAlpha(config, theme)))
     surface.setForegroundColor(theme.panel.foreground)
-    surface.setBackgroundColor(theme.panel.background)
+    surface.setBackgroundColor(panelBackground)
 
     for y <- rect.y until rect.bottom do surface.putString(rect.x, y, " " * rect.width)
 
     val textInsetPx = SurfaceTextInset.px(config)
-    applyGlassSheen(surface, panel, theme, config)
+    if backdrop.isEmpty then applyGlassSheen(surface, panel, theme, config)
     drawBorder(surface, panel, theme, config, animationState)
     drawTitle(surface, panel, theme, animationState, textInsetPx)
-    drawComposition(surface, panel, panel.composition, theme, animationState, cellMetrics, textInsetPx)
+    drawComposition(surface, panel, panel.composition, theme, panelBackground, animationState, cellMetrics, textInsetPx)
 
     surface.effects.foreach(_.setAlpha(1.0f))
     surface.setForegroundColor(theme.foreground)
@@ -96,6 +98,7 @@ object PinnedPanelRenderer:
     panel: TextPanelView,
     composition: ResolvedSurfaceComposition,
     theme: Theme,
+    panelBackground: Color,
     animationState: AnimationState,
     cellMetrics: CellMetrics,
     textInsetPx: Double
@@ -111,7 +114,7 @@ object PinnedPanelRenderer:
           else
             (
               OverlaySegmentRowRenderer.toneForeground(box.tone, theme).getOrElse(theme.panel.foreground),
-              OverlaySegmentRowRenderer.toneBackground(box.tone, theme).getOrElse(theme.panel.background)
+              OverlaySegmentRowRenderer.toneBackground(box.tone, theme).getOrElse(panelBackground)
             )
         surface.setForegroundColor(foreground)
         surface.setBackgroundColor(background)

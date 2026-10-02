@@ -273,7 +273,7 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
     val surfaceId = SurfaceId("surface-7")
     val surface = UiSurface(
       surfaceId,
-      SurfaceContent.FileSearch(FileSearchState("", Nil, 0)),
+      SurfaceContent.ModalWorkflow(Modal.ListPicker(BufferTextSearch.picker)),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     AppState.empty.copy(

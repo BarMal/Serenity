@@ -2,17 +2,34 @@ package com.serenity.keystroke.events
 
 sealed trait ModalInputEvent
 
-final case class ModalInsertChar(char: Char)         extends ModalInputEvent
-case object ModalDeleteBackward                      extends ModalInputEvent
-case object ModalDeleteForward                       extends ModalInputEvent
-case object ModalDeleteWordBackward                  extends ModalInputEvent
-case object ModalDeleteWordForward                   extends ModalInputEvent
+final case class ModalInsertChar(char: Char) extends ModalInputEvent
+case object ModalDeleteBackward              extends ModalInputEvent
+case object ModalDeleteForward               extends ModalInputEvent
+case object ModalDeleteWordBackward          extends ModalInputEvent
+case object ModalDeleteWordForward           extends ModalInputEvent
+
+/** Inserts `AppState.runtime.clipboard`, which the input layer refreshes from the system clipboard before a paste. */
+case object ModalPaste                               extends ModalInputEvent
 final case class ModalNavigate(direction: Direction) extends ModalInputEvent
-case object ModalNextField                           extends ModalInputEvent
-case object ModalPreviousField                       extends ModalInputEvent
-case object ModalSubmit                              extends ModalInputEvent
-case object ModalFindNext                            extends ModalInputEvent
-case object ModalDismiss                             extends ModalInputEvent
+
+/** Home and End: the ends of the focused text, or of a list with no text to move through. */
+case object ModalLineStart extends ModalInputEvent
+case object ModalLineEnd   extends ModalInputEvent
+
+/** Ctrl+Home and Ctrl+End: the first and last item of a list, whether or not it also has text. */
+case object ModalFirst extends ModalInputEvent
+case object ModalLast  extends ModalInputEvent
+
+/** PageUp (`pages = -1`) and PageDown (`pages = 1`). */
+final case class ModalPage(pages: Int) extends ModalInputEvent
+
+/** Moves the selected item of a reorderable list, rather than the selection (Alt+Up/Down by default). */
+final case class ModalMove(direction: Direction) extends ModalInputEvent
+case object ModalNextField                       extends ModalInputEvent
+case object ModalPreviousField                   extends ModalInputEvent
+case object ModalSubmit                          extends ModalInputEvent
+case object ModalFindNext                        extends ModalInputEvent
+case object ModalDismiss                         extends ModalInputEvent
 
 /** Creates a file workflow's missing directories immediately, in one step (issue #1253) -- the explicit counterpart to
   * submitting twice (`missingPathSegments` flagged, then `confirmCreateDirectories` on a second submit). Modal-only:
@@ -44,7 +61,7 @@ object ModalInputEvent:
         case FocusIntent.PreviousGroup       => Some(ModalPreviousField)
         case FocusIntent.Submit              => Some(ModalSubmit)
         case FocusIntent.Dismiss             => Some(ModalDismiss)
-        case FocusIntent.Paste               => None
+        case FocusIntent.Paste               => Some(ModalPaste)
 
   def fromEvent(event: Event): Option[ModalInputEvent] =
     event match

@@ -90,16 +90,14 @@ class CommandRunnerFileCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.persisted.buffers(com.serenity.state.models.BufferId(1)).document.isNewEmpty shouldBe true
   }
 
-  it should "open file search through the typed file-search command" in {
+  it should "open Search in Open Files through the typed file-search command" in {
     val stateManager = createStateManager()
 
     executeCommandThroughRunner(stateManager, "file-search", "file-search")
 
-    stateManager.getCurrentState.unsafeRunSync().runtime.uiSurfaces.exists {
-      _.content match
-        case SurfaceContent.FileSearch(_) => true
-        case _                            => false
-    } shouldBe true
+    stateManager.getCurrentState.unsafeRunSync().runtime.uiSurfaces.map(_.content).collect {
+      case SurfaceContent.ModalWorkflow(Modal.ListPicker(picker)) => picker
+    } shouldBe List(BufferTextSearch.picker)
   }
 
   it should "save the focused buffer through the native save-as file dialog" in {
