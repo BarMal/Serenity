@@ -329,7 +329,7 @@ object EditorState:
   ): AppState =
     if state.persisted.bufferOrder.isEmpty then state
     else
-      state.focusedBufferId match
+      state.currentEditorBufferId match
         case Some(currentBufferId) =>
           nextBuffer(state)(currentBufferId) match
             case Some(bufferId) =>

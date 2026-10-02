@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import com.serenity.command.CommandRegistry
 import com.serenity.state.components.*
 import com.serenity.state.models.*
+import com.serenity.state.reducers.ModalEventReducer
 import com.serenity.ui.layout.PanelPosition
 
 /** The `SurfaceContent -> LocalEventHandler` and `PanelPosition -> LocalEventHandler` associations that
@@ -77,7 +78,7 @@ private[manager] object FocusHandlerRouting:
       case SurfaceContent.ContextualToolbar(_) => contextualToolbar
       case SurfaceContent.CommentLens(_)       => commentLens
       case SurfaceContent.StartPage(_)         => startupPage
-      case SurfaceContent.ModalWorkflow(modal) => forModalType(ModalMouseHitTesting.modalType(modal))
+      case SurfaceContent.ModalWorkflow(modal) => forModalType(ModalEventReducer.modalType(modal))
 
       case SurfaceContent.QuickInfo(_)              => peekOverlay
       case SurfaceContent.FilePreview(_, _)         => peekOverlay
