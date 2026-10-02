@@ -55,7 +55,8 @@ class NotesPaneSyncSpec extends AnyFlatSpec with Matchers:
     val buffer = state.persisted.buffers(manuscriptId)
     state.copy(persisted =
       state.persisted.copy(buffers =
-        state.persisted.buffers.updated(manuscriptId, buffer.copy(editing = EditingState(List(CursorPosition(line, 0)))))
+        state.persisted.buffers
+          .updated(manuscriptId, buffer.copy(editing = EditingState(List(CursorPosition(line, 0)))))
       )
     )
 
@@ -86,9 +87,8 @@ class NotesPaneSyncSpec extends AnyFlatSpec with Matchers:
 
   it should "retarget as soon as it is registered, without waiting for the cursor to move" in {
     val unregistered = stateWith(cursorLine = 2, registered = false)
-    val registered = unregistered.copy(runtime =
-      unregistered.runtime.copy(notesPane = Some(NotesPane(notesPaneId, manuscriptPane)))
-    )
+    val registered =
+      unregistered.copy(runtime = unregistered.runtime.copy(notesPane = Some(NotesPane(notesPaneId, manuscriptPane))))
 
     shown(NotesPaneSync.synced(registered, unregistered)) shouldBe Some(calmNoteId)
   }

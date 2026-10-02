@@ -4,8 +4,8 @@ import com.serenity.state.models.*
 
 /** Keeps the notes pane on the note for the chapter its source pane's cursor is in. Runs on every commit, so no event
   * source has to remember to retarget it, and does nothing unless the cursor changed line, the source buffer changed,
-  * or the notes pane or the notes themselves changed -- so a keystroke inside a chapter never re-parses the document.
-  * A heading typed or deleted under the cursor is picked up when the cursor next changes line.
+  * or the notes pane or the notes themselves changed -- so a keystroke inside a chapter never re-parses the document. A
+  * heading typed or deleted under the cursor is picked up when the cursor next changes line.
   *
   * Only the pane's buffer is swapped. Scroll position and cursor live on each note's own buffer, so a note comes back
   * exactly as it was left.
@@ -21,8 +21,8 @@ object NotesPaneSync:
     else if pane.pinned || fingerprint(state, pane) == fingerprint(previous, pane) then state
     else showing(state, pane, wantedNote(state, pane))
 
-  /** What the notes pane's target depends on. `previous` is read against the same `pane` so a newly registered or
-    * newly unpinned pane always differs from before.
+  /** What the notes pane's target depends on. `previous` is read against the same `pane` so a newly registered or newly
+    * unpinned pane always differs from before.
     */
   private def fingerprint(
     state: AppState,
