@@ -1,12 +1,15 @@
 package com.serenity.state.components
 
 import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
+import com.serenity.config.PanelEscapeTarget
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.{AppState, Focus, SurfaceContent, SurfacePresentation, UiSurface}
+import com.serenity.state.reducers.PanelFocusHistory
 import com.serenity.ui.layout.{LayoutEngine, PanelPosition, ViewportSize}
 
-/** Keys for the panel focused at one edge: Escape and friends return to the editor and Ctrl+Up/Down resize it, while
-  * moving within it depends on what it shows -- see [[ExplorerPanelKeys]], [[ListPanelKeys]] and [[OutputPanelKeys]].
+/** Keys for the panel focused at one edge: typing returns to the editor, Escape to wherever the app mode's setting
+  * says, and Ctrl+Up/Down resize it, while moving within it depends on what it shows -- see [[ExplorerPanelKeys]],
+  * [[ListPanelKeys]] and [[OutputPanelKeys]].
   */
 class PinnedPanelComponent(
     position: PanelPosition
@@ -25,9 +28,11 @@ class PinnedPanelComponent(
       case PanelInputEvent.NoOp =>
         ComponentResult.noChange
       case PanelInputEvent.ReturnFocus =>
-        currentState.persisted.layout.activeEditorPaneId match
-          case Some(paneId) => ComponentResult.transferFocus(Focus.EditorPane(paneId))
-          case None         => ComponentResult.noChange
+        returnToEditor(currentState)
+      case PanelInputEvent.Dismiss =>
+        currentState.persisted.config.panelEscapeTarget match
+          case PanelEscapeTarget.Editor   => returnToEditor(currentState)
+          case PanelEscapeTarget.Previous => ComponentResult.updateState(PanelFocusHistory.returnToPrevious)
       case PanelInputEvent.Resize(delta) =>
         resized(surface, delta)
       case movement =>
@@ -41,6 +46,11 @@ class PinnedPanelComponent(
             OutputPanelKeys.handle(movement, surface, text, cursor, rows)
           case _ => None
         handled.getOrElse(ComponentResult.noChange)
+
+  private def returnToEditor(currentState: AppState): ComponentResult =
+    currentState.persisted.layout.activeEditorPaneId match
+      case Some(paneId) => ComponentResult.transferFocus(Focus.EditorPane(paneId))
+      case None         => ComponentResult.noChange
 
   /** Resizes the panel (issue #1310) through the same generic `Command`/`CommandIntent` path the palette already uses
     * -- not a bespoke keyboard-only mechanism.

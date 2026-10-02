@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandIntent, CommandRegistry, ViewIntent}
 import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.{AppConfig, MotionPreset}
+import com.serenity.config.{AppConfig, MotionPreset, PanelEscapeTarget}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -422,6 +422,26 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     state.persisted.focus match
       case Focus.Surface(id) => state.pinnedSurfaces.map(_.id) should contain(id)
       case other             => fail(s"Expected focus on pinned surface, got $other")
+
+  it should "return Escape to the pane a panel was focused from when set to previous" in new UIFixture:
+    stateManager
+      .updateState(state =>
+        state.copy(persisted =
+          state.persisted.copy(config =
+            state.persisted.config.withPanelEscapeTarget(state.persisted.config.appMode, PanelEscapeTarget.Previous)
+          )
+        )
+      )
+      .unsafeRunSync()
+    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
+    val paneFocus = stateManager.getCurrentState.unsafeRunSync().persisted.focus
+    stateManager.executeCommand(viewCommand(ViewIntent.FocusPanel(PanelId.Outline))).unsafeRunSync()
+
+    stateManager.applyEvent(PanelInputEvent.Dismiss).unsafeRunSync()
+
+    val state = stateManager.getCurrentState.unsafeRunSync()
+    state.persisted.focus shouldBe paneFocus
+    state.persisted.layout.activeEditorPaneId.map(Focus.EditorPane(_)) shouldBe Some(paneFocus)
 
   it should "move focus to a docked panel and back with the directional focus keys" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()

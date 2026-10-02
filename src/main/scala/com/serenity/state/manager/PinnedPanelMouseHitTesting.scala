@@ -6,7 +6,7 @@ import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.state.components.*
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{ReducerResult, Transition}
+import com.serenity.state.reducers.{PanelFocusHistory, ReducerResult, Transition}
 import com.serenity.ui.layout.*
 
 /** State the event pipeline exposes for selecting, activating, navigating, and resizing pinned/expanded panels, as a
@@ -167,10 +167,8 @@ private[manager] object PinnedPanelMouseHitTesting:
     hit: PinnedDirectoryMouseHit,
     focusPanel: Boolean
   ): AppState =
-    val withRow   = replaceContent(state, hit.surface.id, SurfaceContent.DirectoryTree(hit.tree, Some(hit.row.path)))
-    val nextFocus = if focusPanel then Focus.Surface(hit.surface.id) else withRow.persisted.focus
-    if nextFocus == withRow.persisted.focus then withRow
-    else withRow.copy(persisted = withRow.persisted.copy(focus = nextFocus))
+    val withRow = replaceContent(state, hit.surface.id, SurfaceContent.DirectoryTree(hit.tree, Some(hit.row.path)))
+    if focusPanel then PanelFocusHistory.enter(withRow, hit.surface.id) else withRow
 
   /** Leaves `state` untouched (by reference) when the surface already shows `content`, so hovering along a row that is
     * already highlighted does not commit anything.

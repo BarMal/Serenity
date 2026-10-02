@@ -329,6 +329,8 @@ final private[manager] class StateManagerConfigEffects(
         updateAppearanceConfig(_.withWindowChromeMode(mode)).void
       case InterfaceChromeIntent.SetWheelScrollLines(lines) =>
         updateConfig(_.withWheelScrollLines(lines)).void
+      case InterfaceChromeIntent.SetPanelEscapeTarget(mode, target) =>
+        updateConfig(_.withPanelEscapeTarget(mode, target)).void
 
   private def interpretDecorationIntent(intent: DecorationIntent): IO[Unit] =
     intent match

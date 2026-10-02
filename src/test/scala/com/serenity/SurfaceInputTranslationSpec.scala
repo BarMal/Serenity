@@ -151,7 +151,7 @@ class SurfaceInputTranslationSpec extends AnyFlatSpec with Matchers:
     StartupPageEvent.fromEvent(StartupPageSubmit) shouldBe Some(StartupPageSubmit)
   }
 
-  "PanelInputEvent.fromEvent" should "navigate, activate, and treat other text input as returning focus" in
+  "PanelInputEvent.fromEvent" should "navigate, activate, dismiss on Escape, and treat other text input as returning focus" in
     check(
       PanelInputEvent.fromEvent,
       Map(
@@ -166,7 +166,7 @@ class SurfaceInputTranslationSpec extends AnyFlatSpec with Matchers:
         DeleteForward   -> PanelInputEvent.ReturnFocus,
         TabKey          -> PanelInputEvent.ReturnFocus,
         ReverseTabKey   -> PanelInputEvent.ReturnFocus,
-        Escape          -> PanelInputEvent.ReturnFocus,
+        Escape          -> PanelInputEvent.Dismiss,
         Enter           -> PanelInputEvent.Activate,
         NewLine         -> PanelInputEvent.Activate
       )

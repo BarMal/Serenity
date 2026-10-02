@@ -266,7 +266,9 @@ enum TextDisplayIntent:
   case SetTextAreaBottomInset(value: Double)
   case SetDropCapsEnabled(enabled: Boolean)
 
-/** How interface surfaces are sized and spaced: density, gaps, corner radius, window chrome, key hints. */
+/** How interface surfaces are sized and spaced -- density, gaps, corner radius, window chrome, key hints -- and where
+  * Escape from a focused panel returns focus.
+  */
 enum InterfaceChromeIntent:
   case SetCommandRunnerShowKeyHints(enabled: Boolean)
   case SetUiElementGap(gap: Double)
@@ -275,6 +277,7 @@ enum InterfaceChromeIntent:
   case SetInterfaceDensity(density: InterfaceDensity)
   case SetWindowChromeMode(mode: WindowChromeMode)
   case SetWheelScrollLines(lines: Int)
+  case SetPanelEscapeTarget(mode: AppMode, target: PanelEscapeTarget)
 
 /** Purely decorative extras (companion sprite, flair tier) that never change what is edited. The companion sprite panel
   * absorbed the retired window sitter's typing-reactivity (issue #934 v2), so its typing-cadence settings live here

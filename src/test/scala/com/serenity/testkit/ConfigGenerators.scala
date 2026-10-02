@@ -175,7 +175,11 @@ object ConfigGenerators:
     yield InterfaceConfig(density, gap, radius, thickness)
 
   val genInputConfig: Gen[InputConfig] =
-    Gen.choose(1, 50).map(lines => InputConfig(wheelScrollLines = lines))
+    for
+      lines       <- Gen.choose(1, 50)
+      codeEscape  <- oneOfEnum(PanelEscapeTarget.values)
+      proseEscape <- oneOfEnum(PanelEscapeTarget.values)
+    yield InputConfig(wheelScrollLines = lines, panelEscapeReturnsTo = PerMode(codeEscape, proseEscape))
 
   val genTextAreaInsets: Gen[TextAreaInsets] =
     for

@@ -61,6 +61,8 @@ object CommandRunnerOptionSelections:
       "spellcheck-enabled"            -> enabledIndex(languageToolsConfig.spellCheck.enabled),
       "app-mode"                      -> appModeIndex(config.appMode),
       "settings-show-all"             -> enabledIndex(config.showAllSettingsRegardlessOfMode),
+      "panel-escape-code"             -> panelEscapeTargetIndex(config.inputConfig.panelEscapeReturnsTo.code),
+      "panel-escape-prose"            -> panelEscapeTargetIndex(config.inputConfig.panelEscapeReturnsTo.prose),
       "line-numbers"                  -> enabledIndex(surfaceConfig.showLineNumbers),
       "line-number-side"              -> lineNumberSideIndex(surfaceConfig.lineNumberLayout.side),
       "line-wrap"                     -> enabledIndex(surfaceConfig.wordWrapEnabled),
@@ -238,6 +240,11 @@ object CommandRunnerOptionSelections:
     mode match
       case AppMode.Code  => 0
       case AppMode.Prose => 1
+
+  private def panelEscapeTargetIndex(target: PanelEscapeTarget): Int =
+    target match
+      case PanelEscapeTarget.Editor   => 0
+      case PanelEscapeTarget.Previous => 1
 
   private def enabledIndex(enabled: Boolean): Int =
     if enabled then 0 else 1

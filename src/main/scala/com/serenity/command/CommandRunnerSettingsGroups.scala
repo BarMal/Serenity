@@ -55,8 +55,15 @@ object CommandRunnerSettingsGroups:
     val workspaceLayoutGroup = group(
       "settings-workspace-layout",
       "Panels",
-      "Which panels show, and where",
-      CommandRunnerSettingsPanelItems.workspaceLayoutItems
+      "Which panels show, where, and where Escape returns focus",
+      CommandRunnerSettingsPanelItems.workspaceLayoutItems ++ List(
+        Option.when(showCodeSettings)(
+          CommandRunnerSettingsPanelItems.escapeTargetOptionItem(optionSelections, AppMode.Code)
+        ),
+        Option.when(showProseSettings)(
+          CommandRunnerSettingsPanelItems.escapeTargetOptionItem(optionSelections, AppMode.Prose)
+        )
+      ).flatten
     )
     val textDisplayGroup = group(
       "settings-text-display",
@@ -249,7 +256,10 @@ object CommandRunnerSettingsGroups:
     // issue #1058: editing a preset reuses these same canonical groups verbatim, only retagged (`settings-preset-*`)
     // so they stay addressable as distinct pages from their top-level counterparts.
     val presetScoped = List(
-      workspaceLayoutGroup.copy(id = "settings-preset-workspace-layout"),
+      workspaceLayoutGroup.copy(
+        id = "settings-preset-workspace-layout",
+        children = CommandRunnerSettingsPanelItems.workspaceLayoutItems
+      ),
       surfaceAppearanceGroup.copy(id = "settings-preset-surface-appearance"),
       cursorGroup.copy(id = "settings-preset-cursor"),
       motionGroup.copy(id = "settings-preset-animation")

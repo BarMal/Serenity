@@ -90,7 +90,8 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     )
     val workspaceLayoutGroup = nestedGroup("settings-workspace-layout")
     workspaceLayoutGroup.label shouldBe "Panels"
-    workspaceLayoutGroup.children.map(_.id) shouldBe List("arrange-panels")
+    workspaceLayoutGroup.children.map(_.id) shouldBe
+      List("arrange-panels", "panel-escape-code", "panel-escape-prose")
     nestedGroup("settings-ui-presets").children.map(_.id) shouldBe List(
       "settings-preset-select",
       "settings-preset-create",
