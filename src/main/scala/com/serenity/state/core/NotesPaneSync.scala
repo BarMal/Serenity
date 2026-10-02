@@ -2,10 +2,11 @@ package com.serenity.state.core
 
 import com.serenity.state.models.*
 
-/** Keeps the notes pane on the note for the chapter its source pane's cursor is in. Runs on every commit, so no event
-  * source has to remember to retarget it, and does nothing unless the cursor changed line, the source buffer changed,
-  * or the notes pane or the notes themselves changed -- so a keystroke inside a chapter never re-parses the document. A
-  * heading typed or deleted under the cursor is picked up when the cursor next changes line.
+/** Keeps the notes pane on the note for what its source pane's cursor is on: a keyword that has a note, else the
+  * chapter it is in. Runs on every commit, so no event source has to remember to retarget it, and does nothing unless
+  * the cursor changed line or moved onto or off a keyword, the source buffer changed, or the notes pane or the notes
+  * themselves changed -- so a keystroke inside a chapter never re-parses the document. A heading typed or deleted under
+  * the cursor is picked up when the cursor next changes line.
   *
   * Only the pane's buffer is swapped. Scroll position and cursor live on each note's own buffer, so a note comes back
   * exactly as it was left.
@@ -22,17 +23,29 @@ object NotesPaneSync:
     else showing(state, pane, wantedNote(state, pane))
 
   /** What the notes pane's target depends on. `previous` is read against the same `pane` so a newly registered or newly
-    * unpinned pane always differs from before.
+    * unpinned pane always differs from before. The keyword under the cursor is a single-line lookup that costs nothing
+    * without keyword notes, so typing along a line neither changes this nor re-parses the document.
     */
-  private def fingerprint(
-    state: AppState,
-    pane: NotesPane
-  ): (Option[NotesPane], Option[BufferId], Option[Int], Option[Map[NoteKey, Notes]]) =
+  private final case class Fingerprint(
+    pane: Option[NotesPane],
+    source: Option[BufferId],
+    line: Option[Int],
+    keyword: Option[NoteKey],
+    notes: Option[Map[NoteKey, Notes]]
+  )
+
+  private def fingerprint(state: AppState, pane: NotesPane): Fingerprint =
     val source = sourceBuffer(state, pane)
-    (
+    val cursor = source.map(_.editing.cursors.head.position)
+    Fingerprint(
       state.runtime.notesPane,
       source.map(_.id),
-      source.flatMap(_.editing.cursorPositions.headOption).map(_.line),
+      cursor.map(_.line),
+      for
+        buffer   <- source
+        position <- cursor
+        key      <- ChapterNoteTransitions.keywordKeyAt(buffer, position)
+      yield key,
       source.map(_.annotations.notes)
     )
 
@@ -47,7 +60,7 @@ object NotesPaneSync:
     for
       buffer <- sourceBuffer(state, pane)
       cursor <- buffer.editing.cursorPositions.headOption
-      key    <- ChapterNoteTransitions.chapterKeyAt(buffer, cursor)
+      key    <- ChapterNoteTransitions.noteKeyAt(buffer, cursor)
       notes  <- buffer.annotations.notes.get(key)
     yield notes.overview
 

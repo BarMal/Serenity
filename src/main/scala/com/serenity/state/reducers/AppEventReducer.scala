@@ -56,6 +56,9 @@ object AppEventReducer:
       case OpenChapterNote =>
         ReducerResult.noEffects(ChapterNoteTransitions.openCurrentChapterNote(state, SplitAxis.Horizontal))
 
+      case OpenKeywordNote =>
+        ReducerResult.noEffects(ChapterNoteTransitions.openCurrentKeywordNote(state, SplitAxis.Horizontal))
+
       case ToggleNotesPin =>
         ReducerResult.noEffects(ChapterNoteTransitions.toggleNotesPin(state))
 

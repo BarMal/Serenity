@@ -59,6 +59,8 @@ final private[manager] class StateManagerPanelEffects(
         commitApp(com.serenity.state.core.EditorState.removeFocusedPane)
       case ViewIntent.OpenChapterNote =>
         commitApp(ChapterNoteTransitions.openCurrentChapterNote(_, SplitAxis.Horizontal))
+      case ViewIntent.OpenKeywordNote =>
+        commitApp(ChapterNoteTransitions.openCurrentKeywordNote(_, SplitAxis.Horizontal))
       case ViewIntent.ToggleChapterGhosts =>
         commitApp(ChapterNoteTransitions.toggleGhosts)
       case ViewIntent.ToggleNotesPin =>
