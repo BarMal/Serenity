@@ -13,7 +13,7 @@ import com.serenity.state.models.{Buffer, BufferId, NoteKey, Notes}
   */
 final class ChapterGhostCache:
 
-  private final case class Entry(
+  final private case class Entry(
       content: Rope,
       notes: Map[NoteKey, Notes],
       noteContents: Map[BufferId, Rope],

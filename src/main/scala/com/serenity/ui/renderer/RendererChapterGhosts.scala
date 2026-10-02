@@ -34,7 +34,7 @@ object RendererChapterGhosts:
   ): Unit =
     context.surface.text.setFont(context.fontForBuffer(buffer))
     snapshot.visualLines.zipWithIndex.foreach { (visualLine, index) =>
-      val ghost   = ghosts.get(visualLine.bufferLine).filter(_ => visualLine.startColumn == 0 && visualLine.text.isBlank)
+      val ghost = ghosts.get(visualLine.bufferLine).filter(_ => visualLine.startColumn == 0 && visualLine.text.isBlank)
       val screenX = rect.x + RendererPaneContent.visualLineCellOffset(visualLine, context)
       val visible =
         RendererPaneContent.visualLineFits(rect, index, context, snapshot) &&
