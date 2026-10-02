@@ -173,6 +173,22 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
     ConfigManager.configToString(config) should include("ui.render.cache_capacity = 128")
   }
 
+  it should "default layer caching to off, then load and write it" in {
+    AppConfig.default.surfaceConfig.layerCachingEnabled shouldBe false
+
+    val configFile = Files.createTempFile("serenity-render-layer-cache-config", ".conf")
+    Files.writeString(
+      configFile,
+      """ui.render.layer_cache = true
+        |""".stripMargin
+    )
+
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    config.surfaceConfig.layerCachingEnabled shouldBe true
+    ConfigManager.configToString(config) should include("ui.render.layer_cache = true")
+  }
+
   it should "load and write the cursor info bar background alpha override" in {
     val configFile = Files.createTempFile("serenity-cursor-info-bar-alpha-config", ".conf")
     Files.writeString(

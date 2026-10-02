@@ -6,8 +6,8 @@ import java.awt.image.*
 /** Scanline and glow post-processing, operating directly on a [[Java2DRenderSurface]]'s backing `BufferedImage` via raw
   * `Graphics2D`/pixel-array operations. Split out of `Java2DRenderSurface` purely to keep that class within the
   * architecture line-count ratchet; every method here is stateless and takes the target `image` as a parameter,
-  * reaching into `Java2DRenderSurface`'s companion helpers (`defaultRenderingHints`, `compatibleDestImage`) since both
-  * live in the same `com.serenity.ui.renderer` package.
+  * reaching into `Java2DRenderSurface`'s companion helper `defaultRenderingHints` since both live in the same
+  * `com.serenity.ui.renderer` package.
   */
 private[renderer] object Java2DPostProcessingEffects:
 
@@ -47,53 +47,58 @@ private[renderer] object Java2DPostProcessingEffects:
     * `setColor`/`fillRect`/`drawImage` calls per masked source pixel, which is a well-known Java2D anti-pattern for
     * full-image compositing.
     */
-  def applyGlow(image: BufferedImage): Unit =
-    val width       = image.getWidth
-    val height      = image.getHeight
-    val background  = estimatedBackgroundColor(image)
-    val backgroundR = background.getRed
-    val backgroundG = background.getGreen
-    val backgroundB = background.getBlue
-
-    val basePixels   = image.getRGB(0, 0, width, height, new Array[Int](width * height), 0, width)
-    val sourcePixels = new Array[Int](width * height)
-    val sourceMask   = new Array[Boolean](width * height)
-
-    (0 until basePixels.length).foreach { index =>
-      val argb     = basePixels(index)
-      val r        = (argb >>> 16) & 0xff
-      val g        = (argb >>> 8) & 0xff
-      val b        = argb & 0xff
-      val contrast = math.abs(r - backgroundR) + math.abs(g - backgroundG) + math.abs(b - backgroundB)
-      if contrast >= 96 then
-        sourcePixels(index) = argb
-        sourceMask(index) = true
+  def applyGlow(image: BufferedImage, scratch: Java2DScratchBuffers): Unit =
+    val width  = image.getWidth
+    val height = image.getHeight
+    scratch.withGlowBuffers(width, height) { buffers =>
+      val _ = image.getRGB(0, 0, width, height, buffers.basePixels, 0, width)
+      maskContrastingPixels(buffers, estimatedBackgroundColor(image))
+      buffers.sourceImage.setRGB(0, 0, width, height, buffers.sourcePixels, 0, width)
+      val _ = GlowKernel.filter(buffers.sourceImage, buffers.blurredImage)
+      val _ = buffers.blurredImage.getRGB(0, 0, width, height, buffers.blurredPixels, 0, width)
+      System.arraycopy(buffers.basePixels, 0, buffers.result, 0, buffers.result.length)
+      spreadHalos(buffers)
+      compositeBlurredGlow(buffers)
+      restoreSourcePixels(buffers)
+      image.setRGB(0, 0, width, height, buffers.result, 0, width)
     }
 
-    val source = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
-    source.setRGB(0, 0, width, height, sourcePixels, 0, width)
+  private val GlowKernel = new ConvolveOp(
+    new Kernel(
+      5,
+      5,
+      Array(1f, 4f, 6f, 4f, 1f, 4f, 16f, 24f, 16f, 4f, 6f, 24f, 36f, 24f, 6f, 4f, 16f, 24f, 16f, 4f, 1f, 4f, 6f, 4f, 1f)
+        .map(_ / 128f)
+    ),
+    ConvolveOp.EDGE_NO_OP,
+    Java2DRenderSurface.defaultRenderingHints
+  )
 
-    val glowOp = new ConvolveOp(
-      new Kernel(
-        5,
-        5,
-        Array(1f, 4f, 6f, 4f, 1f, 4f, 16f, 24f, 16f, 4f, 6f, 24f, 36f, 24f, 6f, 4f, 16f, 24f, 16f, 4f, 1f, 4f, 6f, 4f,
-          1f).map(_ / 128f)
-      ),
-      ConvolveOp.EDGE_NO_OP,
-      Java2DRenderSurface.defaultRenderingHints
-    )
-    val blurred       = glowOp.filter(source, Java2DRenderSurface.compatibleDestImage(glowOp, source))
-    val blurredPixels = blurred.getRGB(0, 0, width, height, new Array[Int](width * height), 0, width)
+  /** The pixels contrasting enough with `background` to glow. Clears both arrays first: pooled buffers still hold the
+    * previous frame's mask.
+    */
+  private def maskContrastingPixels(buffers: GlowBuffers, background: Color): Unit =
+    java.util.Arrays.fill(buffers.sourcePixels, 0)
+    java.util.Arrays.fill(buffers.sourceMask, false)
+    (0 until buffers.basePixels.length).foreach { index =>
+      val argb = buffers.basePixels(index)
+      val contrast = math.abs(((argb >>> 16) & 0xff) - background.getRed) +
+        math.abs(((argb >>> 8) & 0xff) - background.getGreen) +
+        math.abs((argb & 0xff) - background.getBlue)
+      if contrast >= 96 then
+        buffers.sourcePixels(index) = argb
+        buffers.sourceMask(index) = true
+    }
 
-    val result = basePixels.clone()
-
-    // Spread each masked source pixel into a soft halo across its 5x5 neighborhood.
+  /** Spread each masked source pixel into a soft halo across its 5x5 neighborhood. */
+  private def spreadHalos(buffers: GlowBuffers): Unit =
+    val width  = buffers.width
+    val height = buffers.height
     (0 until height).foreach { y =>
       (0 until width).foreach { x =>
         val index = y * width + x
-        if sourceMask(index) then
-          val srcColor = sourcePixels(index)
+        if buffers.sourceMask(index) then
+          val srcColor = buffers.sourcePixels(index)
           val srcR     = (srcColor >>> 16) & 0xff
           val srcG     = (srcColor >>> 8) & 0xff
           val srcB     = srcColor & 0xff
@@ -105,15 +110,16 @@ private[renderer] object Java2DPostProcessingEffects:
               if distance > 0 && nx >= 0 && nx < width && ny >= 0 && ny < height then
                 val alpha       = if distance == 1 then 14 else 6
                 val targetIndex = ny * width + nx
-                result(targetIndex) = blendSrcOver(result(targetIndex), srcR, srcG, srcB, alpha)
+                buffers.result(targetIndex) = blendSrcOver(buffers.result(targetIndex), srcR, srcG, srcB, alpha)
             }
           }
       }
     }
 
-    // Composite the Gaussian-blurred glow on top, with per-pixel alpha derived from its brightest channel.
-    (0 until blurredPixels.length).foreach { index =>
-      val bc        = blurredPixels(index)
+  /** Composite the Gaussian-blurred glow on top, with per-pixel alpha derived from its brightest channel. */
+  private def compositeBlurredGlow(buffers: GlowBuffers): Unit =
+    (0 until buffers.blurredPixels.length).foreach { index =>
+      val bc        = buffers.blurredPixels(index)
       val ba        = (bc >>> 24) & 0xff
       val br        = (bc >>> 16) & 0xff
       val bg        = (bc >>> 8) & 0xff
@@ -121,21 +127,20 @@ private[renderer] object Java2DPostProcessingEffects:
       val intensity = ba.max(br).max(bg).max(bb)
       if intensity > 0 then
         val alpha = math.max(1, (intensity * 0.8f).toInt)
-        result(index) = blendSrcOver(result(index), br, bg, bb, alpha)
+        buffers.result(index) = blendSrcOver(buffers.result(index), br, bg, bb, alpha)
     }
 
-    // Restore the sharp original source pixels exactly where masked, undoing any halo/blur bleed on top of them.
-    (0 until sourcePixels.length).foreach { index =>
-      if sourceMask(index) then
-        val srcColor = sourcePixels(index)
+  /** Restore the sharp original source pixels exactly where masked, undoing any halo/blur bleed on top of them. */
+  private def restoreSourcePixels(buffers: GlowBuffers): Unit =
+    (0 until buffers.sourcePixels.length).foreach { index =>
+      if buffers.sourceMask(index) then
+        val srcColor = buffers.sourcePixels(index)
         val srcA     = (srcColor >>> 24) & 0xff
         val srcR     = (srcColor >>> 16) & 0xff
         val srcG     = (srcColor >>> 8) & 0xff
         val srcB     = srcColor & 0xff
-        result(index) = blendSrcOver(result(index), srcR, srcG, srcB, srcA)
+        buffers.result(index) = blendSrcOver(buffers.result(index), srcR, srcG, srcB, srcA)
     }
-
-    image.setRGB(0, 0, width, height, result, 0, width)
 
   private def estimatedBackgroundColor(image: BufferedImage): Color =
     val horizontalStep = (image.getWidth / 64).max(1)

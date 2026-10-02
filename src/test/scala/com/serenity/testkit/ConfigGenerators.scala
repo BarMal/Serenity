@@ -279,6 +279,7 @@ object ConfigGenerators:
         AppConfig.MinRendererFrameStateCacheCapacity,
         AppConfig.MaxRendererFrameStateCacheCapacity
       )
+      layerCaching <- Gen.oneOf(true, false)
       diagnosticBlendWeight <- double(
         AppConfig.MinDiagnosticHighlightBlendWeight,
         AppConfig.MaxDiagnosticHighlightBlendWeight
@@ -313,6 +314,7 @@ object ConfigGenerators:
       lineNumberLayout = lineNumberLayout,
       viewportSizing = ViewportSizing(width, height),
       rendererFrameStateCacheCapacity = frameStateCacheCapacity,
+      layerCachingEnabled = layerCaching,
       diagnosticHighlightBlendWeight = diagnosticBlendWeight,
       columnModeEnabled = columnMode,
       columnTargetWidthCells = columnTargetWidth,

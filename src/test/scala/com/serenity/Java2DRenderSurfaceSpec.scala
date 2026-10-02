@@ -9,7 +9,7 @@ import com.serenity.config.{AppConfig, PostProcessingEffect}
 import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{Java2DRenderSurface, RendererEntryPoints}
+import com.serenity.ui.renderer.{Java2DRenderSurface, Java2DScratchBuffers, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -78,103 +78,6 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 1024, deviceScale = 2.0) shouldBe 2048
     Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 801, deviceScale = 1.5) shouldBe 1202
     Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 0, deviceScale = 2.0) shouldBe 2
-  }
-
-  "Java2DRenderSurface.forLayer" should "build a surface at the given logical size and device scale without a JPanel" in {
-    val metrics    = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
-    val font       = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val flushedRef = new AtomicReference[Option[BufferedImage]](None)
-
-    val layer = Java2DRenderSurface.forLayer(
-      metrics,
-      font,
-      logicalWidthPx = 100,
-      logicalHeightPx = 50,
-      deviceScaleX = 2.0,
-      deviceScaleY = 2.0,
-      onFlush = image => flushedRef.set(Some(image))
-    )
-    layer.viewportWidth shouldBe 10
-    layer.viewportHeight shouldBe 5
-
-    layer.flush()
-
-    flushedRef.get().map(_.getWidth) shouldBe Some(200)
-    flushedRef.get().map(_.getHeight) shouldBe Some(100)
-  }
-
-  it should "start fully transparent" in {
-    val metrics    = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
-    val font       = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val flushedRef = new AtomicReference[Option[BufferedImage]](None)
-
-    val layer = Java2DRenderSurface.forLayer(metrics, font, 40, 40, 1.0, 1.0, image => flushedRef.set(Some(image)))
-    layer.flush()
-
-    (new Color(flushedRef.get().get.getRGB(5, 5), true)).getAlpha shouldBe 0
-  }
-
-  "Java2DRenderSurface.forLayer" should "start as a pixel copy of the given seed image instead of transparent" in {
-    val metrics      = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
-    val font         = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val seed         = new BufferedImage(20, 20, BufferedImage.TYPE_INT_ARGB)
-    val seedGraphics = seed.createGraphics()
-    seedGraphics.setColor(Color.RED)
-    seedGraphics.fillRect(0, 0, 20, 20)
-    seedGraphics.dispose()
-
-    val flushedRef = new AtomicReference[Option[BufferedImage]](None)
-    val layer = Java2DRenderSurface.forLayer(
-      metrics,
-      font,
-      logicalWidthPx = 20,
-      logicalHeightPx = 20,
-      deviceScaleX = 1.0,
-      deviceScaleY = 1.0,
-      onFlush = image => flushedRef.set(Some(image)),
-      seed = Some(seed)
-    )
-    layer.flush()
-
-    new Color(flushedRef.get().get.getRGB(5, 5), true) shouldBe Color.RED
-  }
-
-  "Java2DRenderSurface.newSeededLayerSurface" should "seed the layer from this surface's own current pixels" in {
-    val image   = new BufferedImage(20, 20, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.BLUE)
-    surface.flush()
-
-    val flushedRef = new AtomicReference[Option[BufferedImage]](None)
-    val layer = surface.layerBuffers
-      .getOrElse(fail("expected layer buffer support"))
-      .newSeededLayerSurface(image => flushedRef.set(Some(image)))
-    layer.viewportWidth shouldBe surface.viewportWidth
-    layer.viewportHeight shouldBe surface.viewportHeight
-    layer.flush()
-
-    new Color(flushedRef.get().get.getRGB(5, 5), true) shouldBe Color.BLUE
-  }
-
-  "Java2DRenderSurface.layerBuffers" should "expose a capability that builds a same-shaped layer surface" in {
-    val image   = new BufferedImage(80, 60, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    val flushedRef = new AtomicReference[Option[BufferedImage]](None)
-    val layer = surface.layerBuffers.getOrElse(fail("expected layer buffer support")).newLayerSurface { image =>
-      flushedRef.set(Some(image))
-    }
-    layer.viewportWidth shouldBe surface.viewportWidth
-    layer.viewportHeight shouldBe surface.viewportHeight
-
-    layer.flush()
-
-    flushedRef.get() shouldBe defined
   }
 
   "Java2DRenderSurface.deviceRegionFor" should "map logical pixel regions to clamped device pixels" in {
@@ -439,6 +342,29 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
     new Color(image.getRGB(5, 5), true) shouldBe Color.BLACK
     new Color(image.getRGB(3, 5), true).getRed should be > 210
+  }
+
+  it should "glow identically through recycled scratch buffers as through fresh ones" in {
+    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val scratch = Java2DScratchBuffers()
+    def glowFrame(dotX: Int, buffers: Java2DScratchBuffers): BufferedImage =
+      val image   = new BufferedImage(11, 11, BufferedImage.TYPE_INT_ARGB)
+      val surface = new Java2DRenderSurface(image, metrics, font, _ => (), scratch = buffers)
+      surface.clearViewport(Color.BLACK)
+      surface.fillPixelRect(dotX, 5, 1, 1, Color.WHITE)
+      surface.applyPostProcessing(PostProcessingEffect.Glow)
+      surface.flush()
+      image
+
+    val _        = glowFrame(dotX = 2, scratch)
+    val recycled = glowFrame(dotX = 8, scratch)
+    val fresh    = glowFrame(dotX = 8, Java2DScratchBuffers())
+
+    for
+      x <- 0 until 11
+      y <- 0 until 11
+    do recycled.getRGB(x, y) shouldBe fresh.getRGB(x, y)
   }
 
   it should "compose scanlines and glow in one post-process" in {

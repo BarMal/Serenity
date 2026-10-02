@@ -88,6 +88,9 @@ final case class SurfaceConfig(
     // conservative default for a single window; tune it up if a session with many concurrently open surfaces (or a
     // busy test run sharing these process-wide caches) sees avoidable extra redraws from eviction churn.
     rendererFrameStateCacheCapacity: Int = 64,
+    // Off by default: a cached layer holds a full-window image per modal/panel, and repainting a panel directly costs
+    // less than compositing that image back over the whole frame (#1798).
+    layerCachingEnabled: Boolean = false,
     // How strongly a misspelled-word/LSP diagnostic's severity colour shows through its highlight, versus the colour
     // it's painted over -- the current (possibly focus-mode-dimmed) foreground/background, not always the theme's own
     // full-intensity ones (#1530). Was a hardcoded literal in `RendererHighlights` (#1529); 0.45 matches that literal

@@ -42,16 +42,15 @@ trait PixelDrawing:
   def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit
 
   /** Composite a whole-surface layer image (a modal/panel layer buffer, produced by
-    * [[LayerBufferSupport.newLayerSurface]]/[[LayerBufferSupport.newSeededLayerSurface]]) back onto this surface,
-    * covering it exactly.
+    * [[LayerBufferSupport.newLayerSurface]]) back onto this surface, covering it exactly.
     *
     * Distinct from [[drawImage]] because a layer buffer is already at this surface's own backing resolution: it must be
     * blitted one-for-one, not scaled through the cell grid and device transform that [[drawImage]]'s cell-addressed
     * geometry applies. Routing it through `drawImage(image, 0, 0, viewportWidth, viewportHeight)` snaps the destination
-    * to `floor(logicalSize / cellSize) * cellSize` and then re-scales by the device factor, so a layer that was seeded
-    * from this surface's own pixels comes back very slightly smaller than it left -- imperceptible in one frame, but
-    * the command runner re-seeds and re-composites the whole frame on every navigation keystroke, so the shrink
-    * compounds into a visible "zoom out" of the editor pane behind it until a full clean repaint resets it.
+    * to `floor(logicalSize / cellSize) * cellSize` and then re-scales by the device factor, so a layer comes back very
+    * slightly smaller than it left -- imperceptible in one frame, but the command runner re-composites on every
+    * navigation keystroke, so the shrink compounds into a visible "zoom out" of the editor pane behind it until a full
+    * clean repaint resets it.
     *
     * The only real surface with a layer-buffer capability is [[Java2DRenderSurface]], which overrides this to blit 1:1
     * in device pixels; every other surface either advertises no layer buffers at all (a terminal) or is a headless test
@@ -89,21 +88,19 @@ trait LayerBufferSupport:
 
   /** A new surface painting into a blank, fully transparent buffer the same shape as the surface this capability came
     * from. `onFlush` receives the finished image once the caller's `flush()` completes -- compositing it onto the frame
-    * surface (e.g. via `RenderSurface.pixels.drawImage`) is the caller's job, not this surface's; a layer surface never
-    * publishes itself anywhere on its own.
+    * surface (e.g. via `RenderSurface.pixels.compositeFullSurfaceLayer`) is the caller's job, not this surface's; a
+    * layer surface never publishes itself anywhere on its own.
+    *
+    * `Effects.blurRegion` on the layer samples the surface this capability came from, not the layer's own (still
+    * transparent) pixels, so a translucent panel's backdrop blur comes out exactly as painting it directly would, while
+    * everything the panel didn't paint stays transparent. That is what makes compositing the whole layer back over a
+    * frame whose content has since changed correct (#1798) -- a layer seeded with a full copy of the frame would paste
+    * that stale copy back over everything.
+    *
+    * `recycled` is a previous layer image the caller is done with; it is cleared and painted into instead of
+    * allocating, when its size still matches.
     */
-  def newLayerSurface(onFlush: BufferedImage => Unit): RenderSurface
-
-  /** Like [[newLayerSurface]], but the returned buffer starts as a snapshot of this surface's own current pixels
-    * instead of fully transparent -- for a layer whose paint step reads pixels back off the surface it paints onto
-    * (`Effects.blurRegion`, sampling the background behind a translucent panel) and so cannot start transparent:
-    * blurring a fully transparent surroundings would blur nothing. Painting into the snapshot and compositing the
-    * finished buffer back at full opacity is pixel-identical to painting directly onto this surface -- everywhere the
-    * layer's own paint step didn't touch is untouched pixel-for-pixel to begin with, and everywhere `blurRegion` reads
-    * is exactly the same background it would read painting live, because the snapshot *is* this surface's live pixels
-    * at the moment it was taken (#1100 stage 3).
-    */
-  def newSeededLayerSurface(onFlush: BufferedImage => Unit): RenderSurface
+  def newLayerSurface(onFlush: BufferedImage => Unit, recycled: Option[BufferedImage] = None): RenderSurface
 
 /** A caret shape a real terminal's own cursor can be styled as via DECSCUSR (`CSI Ps SP q`). */
 enum HardwareCursorShape:

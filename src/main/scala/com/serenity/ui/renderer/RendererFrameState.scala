@@ -292,35 +292,36 @@ final class RendererFrameState(initialCapacity: Int):
   private val screenDamage  = new BoundedRefCache[ScreenIdentity, Damage](cacheCapacity)
   private val screenPaneIds = new BoundedRefCache[ScreenIdentity, Set[PaneId]](cacheCapacity)
 
-  /** Keyed by the [[RenderSurface]] a frame was painted onto, exactly like [[bufferScreen]] above and for the same
-    * reason: a single JVM-wide slot would let one surface's cached modal image leak into another surface's frame --
-    * harmless in production (there is only ever one real window) but a real hazard for any other concurrently running
-    * render session in the same process, tests included, since these caches are process-wide singletons every suite
-    * shares.
+  /** Keyed by [[RenderSurface.layerCacheOwner]] rather than the surface itself: a GUI frame is a fresh surface every
+    * time, so a surface key never hit and each frame pinned another full-window image until eviction (#1798). Still per
+    * owner, never one JVM-wide slot, so one window's cached modal image can't leak into another's frame.
     */
-  private val modalLayerBuffers = new BoundedRefCache[RenderSurface, CachedModalLayer](cacheCapacity)
+  private val modalLayerBuffers = new BoundedRefCache[ScreenIdentity, CachedModalLayer](cacheCapacity)
 
-  def cachedModalLayerFor(surface: RenderSurface): Option[CachedModalLayer] = modalLayerBuffers.get(surface)
+  def cachedModalLayerFor(surface: RenderSurface): Option[CachedModalLayer] =
+    modalLayerBuffers.get(surface.layerCacheOwner)
 
   def rememberModalLayerBuffer(surface: RenderSurface, layer: CachedModalLayer): Unit =
-    modalLayerBuffers.put(surface, layer)
+    modalLayerBuffers.put(surface.layerCacheOwner, layer)
 
-  def forgetModalLayerBuffer(surface: RenderSurface): Unit = modalLayerBuffers.remove(surface)
+  def forgetModalLayerBuffer(surface: RenderSurface): Unit = modalLayerBuffers.remove(surface.layerCacheOwner)
 
-  /** Keyed by [[RenderSurface]] first and [[SurfaceId]] second, for the same cross-surface-leak reason as
-    * [[modalLayerBuffers]] -- a bare `Map[SurfaceId, CachedPanelLayer]` shared process-wide let any two independently
-    * rendered surfaces that happen to reuse the same `SurfaceId` (unremarkable: tests across many specs all use
-    * `SurfaceId("outline")`) stomp on each other's cached panel image.
+  /** Keyed by owner first and [[SurfaceId]] second, for the same reason as [[modalLayerBuffers]] -- a bare
+    * `Map[SurfaceId, CachedPanelLayer]` shared process-wide let any two independently rendered surfaces that happen to
+    * reuse the same `SurfaceId` (unremarkable: tests across many specs all use `SurfaceId("outline")`) stomp on each
+    * other's cached panel image.
     */
-  private val panelLayerBuffers = new BoundedRefCache[RenderSurface, Map[SurfaceId, CachedPanelLayer]](cacheCapacity)
+  private val panelLayerBuffers =
+    new BoundedRefCache[ScreenIdentity, Map[SurfaceId, CachedPanelLayer]](cacheCapacity)
 
   def cachedPanelLayersFor(surface: RenderSurface): Map[SurfaceId, CachedPanelLayer] =
-    panelLayerBuffers.get(surface).getOrElse(Map.empty)
+    panelLayerBuffers.get(surface.layerCacheOwner).getOrElse(Map.empty)
 
   def rememberPanelLayer(surface: RenderSurface, surfaceId: SurfaceId, layer: CachedPanelLayer): Unit =
+    val owner = surface.layerCacheOwner
     panelLayerBuffers.replaceAll { tracked =>
-      val current = tracked.getOrElse(surface, Map.empty[SurfaceId, CachedPanelLayer])
-      tracked.updated(surface, current.updated(surfaceId, layer))
+      val current = tracked.getOrElse(owner, Map.empty[SurfaceId, CachedPanelLayer])
+      tracked.updated(owner, current.updated(surfaceId, layer))
     }
 
   /** Drop cached panel buffers for surfaces no longer on screen this frame, scoped to `surface`'s own entry -- a
@@ -328,10 +329,17 @@ final class RendererFrameState(initialCapacity: Int):
     * value, not an object this module can bound the lifetime of any other way).
     */
   def pruneStalePanelLayers(surface: RenderSurface, activeIds: Set[SurfaceId]): Unit =
+    val owner = surface.layerCacheOwner
     panelLayerBuffers.replaceAll { tracked =>
-      val current = tracked.getOrElse(surface, Map.empty[SurfaceId, CachedPanelLayer])
-      tracked.updated(surface, current.filter { case (id, _) => activeIds.contains(id) })
+      tracked.get(owner).fold(tracked) { current =>
+        tracked.updated(owner, current.filter { case (id, _) => activeIds.contains(id) })
+      }
     }
+
+  /** Releases every cached layer image `surface`'s owner holds, for when layer caching is switched off. */
+  def forgetLayerBuffers(surface: RenderSurface): Unit =
+    forgetModalLayerBuffer(surface)
+    panelLayerBuffers.remove(surface.layerCacheOwner)
 
   /** Drops every buffer-scoped cache entry for `key` -- used by [[RendererFramePlanner.forgetPreservedContent]]
     * alongside [[forgetPreviousFrameState]] when a surface's preserved pixels are no longer valid.

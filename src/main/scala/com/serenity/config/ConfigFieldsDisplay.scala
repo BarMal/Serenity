@@ -42,6 +42,10 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.rendererFrameStateCacheCapacity,
       (config, value) => config.withRendererFrameStateCacheCapacity(value)
     ),
+    field("ui.render.layer_cache", "render.layer_cache", "render_layer_cache")(boolean)(
+      _.surfaceConfig.layerCachingEnabled,
+      (config, value) => config.withLayerCaching(value)
+    ),
     named("editor.word_wrap", "wordWrapEnabled", "display.word_wrap", "display.word.wrap", "display_word_wrap")(
       boolean
     )(
