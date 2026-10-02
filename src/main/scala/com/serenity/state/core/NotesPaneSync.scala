@@ -26,12 +26,12 @@ object NotesPaneSync:
     * unpinned pane always differs from before. The keyword under the cursor is a single-line lookup that costs nothing
     * without keyword notes, so typing along a line neither changes this nor re-parses the document.
     */
-  private final case class Fingerprint(
-    pane: Option[NotesPane],
-    source: Option[BufferId],
-    line: Option[Int],
-    keyword: Option[NoteKey],
-    notes: Option[Map[NoteKey, Notes]]
+  final private case class Fingerprint(
+      pane: Option[NotesPane],
+      source: Option[BufferId],
+      line: Option[Int],
+      keyword: Option[NoteKey],
+      notes: Option[Map[NoteKey, Notes]]
   )
 
   private def fingerprint(state: AppState, pane: NotesPane): Fingerprint =

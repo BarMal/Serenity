@@ -12,7 +12,7 @@ final case class KeywordOccurrence(start: Int, end: Int):
   */
 object KeywordMatches:
 
-  private final case class Word(text: String, start: Int, end: Int)
+  final private case class Word(text: String, start: Int, end: Int)
 
   /** The form a keyword is stored in: its lower-cased words joined by single spaces. Empty when it has no letters. */
   def normalized(text: String): String = wordsOf(text).map(_.text).mkString(" ")

@@ -100,4 +100,3 @@ class NotesPaneKeywordFollowSpec extends AnyFlatSpec with Matchers:
 
     shown(after) shouldBe Some(stormNoteId)
   }
-
