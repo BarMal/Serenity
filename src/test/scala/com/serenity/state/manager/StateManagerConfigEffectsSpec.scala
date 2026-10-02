@@ -6,7 +6,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.*
 import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.{AppConfig, MotionAccessibility}
+import com.serenity.config.{AppConfig, AppMode, MotionAccessibility, PanelEscapeTarget, PerMode}
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
@@ -360,6 +360,22 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
       .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.SetDropCapsEnabled(true)), AppState.initial)
       .unsafeRunSync()
     fixture.currentConfig.documentConfig.dropCapsEnabled shouldBe true
+  }
+
+  it should "set where Escape from a focused panel returns focus for one app mode only" in {
+    val fixture = harness()
+
+    fixture.config
+      .interpret(
+        SettingsIntent.InterfaceChrome(
+          InterfaceChromeIntent.SetPanelEscapeTarget(AppMode.Prose, PanelEscapeTarget.Previous)
+        ),
+        AppState.initial
+      )
+      .unsafeRunSync()
+
+    fixture.currentConfig.inputConfig.panelEscapeReturnsTo shouldBe
+      PerMode(code = PanelEscapeTarget.Editor, prose = PanelEscapeTarget.Previous)
   }
 
   it should "write the current config to disk on an explicit save without touching the session" in {

@@ -170,6 +170,8 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withViewportHeightSizing(ViewportAxisSizing(percent = 0.9, maxCells = Some(60)))
     .withPreferredWindowSize(PreferredWindowSize(1280, 800))
     .withWheelScrollLines(5)
+    .withPanelEscapeTarget(AppMode.Code, PanelEscapeTarget.Previous)
+    .withPanelEscapeTarget(AppMode.Prose, PanelEscapeTarget.Previous)
     .withCompanionSpriteConfig(
       CompanionSpriteConfig(
         enabled = true,

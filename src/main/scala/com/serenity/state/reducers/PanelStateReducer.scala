@@ -62,9 +62,8 @@ object PanelStateReducer:
 
   def focus(surfaceId: SurfaceId, state: AppState): ReducerResult =
     state.surfaceById(surfaceId).filter(isPinned) match
-      case Some(_) =>
-        ReducerResult.noEffects(state.copy(persisted = state.persisted.copy(focus = Focus.Surface(surfaceId))))
-      case None => ReducerResult.noEffects(state)
+      case Some(_) => ReducerResult.noEffects(PanelFocusHistory.enter(state, surfaceId))
+      case None    => ReducerResult.noEffects(state)
 
   def focus(position: PanelPosition, state: AppState): ReducerResult =
     newestPinnedSurfaceAt(position, state).orElse(panelSurfaceAt(position, state)) match
@@ -187,12 +186,10 @@ object PanelStateReducer:
   def expand(surfaceId: SurfaceId, state: AppState): ReducerResult =
     state.persisted.layout.workspaceTree.flatMap(_.nodeIdForSurface(surfaceId)) match
       case Some(nodeId) =>
+        val focused = PanelFocusHistory.enter(state, surfaceId)
         ReducerResult.noEffects(
-          state.copy(
-            persisted = state.persisted.copy(
-              layout = state.persisted.layout.copy(maximizedWorkspaceNodeId = Some(nodeId)),
-              focus = Focus.Surface(surfaceId)
-            )
+          focused.copy(persisted =
+            focused.persisted.copy(layout = focused.persisted.layout.copy(maximizedWorkspaceNodeId = Some(nodeId)))
           )
         )
       case None =>

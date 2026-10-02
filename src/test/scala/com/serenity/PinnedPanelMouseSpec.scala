@@ -129,11 +129,13 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     dockExplorer(sm, surfaceId, tree, selectedPath = Some(root))
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
-    val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surfaceId, displayedItemRow = 2)
+    val before = sm.getCurrentState.unsafeRunSync()
+    val point  = panelItemPoint(before, surfaceId, displayedItemRow = 2)
     sm.applyEvent(MouseClick(point._1, point._2)).unsafeRunSync()
 
     val updated = sm.getCurrentState.unsafeRunSync()
     updated.persisted.focus shouldBe Focus.Surface(surfaceId)
+    updated.runtime.focusHistory.headOption shouldBe Some(before.persisted.focus)
     updated.surfaceById(surfaceId).map(_.content) shouldBe Some(SurfaceContent.DirectoryTree(tree, Some(test)))
   }
 

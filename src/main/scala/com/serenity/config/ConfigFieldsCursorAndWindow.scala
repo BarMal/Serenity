@@ -11,6 +11,11 @@ private[config] object ConfigFieldsCursorAndWindow:
   import ConfigFieldSyntax.*
   import FieldCodec.*
 
+  private def panelEscapeTarget(mode: AppMode): ConfigField[PanelEscapeTarget] =
+    field(s"ui.panel.escape_returns_to.${mode.configKey}")(
+      enumerated(PanelEscapeTarget.fromConfigKey, _.configKey)
+    )(_.inputConfig.panelEscapeReturnsTo.forMode(mode), (config, value) => config.withPanelEscapeTarget(mode, value))
+
   val fields: List[ConfigField[?]] = List(
     // -- Cursor ----------------------------------------------------------------------------------------------------------
     named("editor.cursor.mode", "cursorMode", "cursor.mode", "cursor_mode")(
@@ -48,6 +53,8 @@ private[config] object ConfigFieldsCursorAndWindow:
         thickness >= AppConfig.MinUiOutlineThicknessPx && thickness <= AppConfig.MaxUiOutlineThicknessPx
       )
     )(_.uiOutlineThicknessPx, (config, value) => config.withUiOutlineThicknessPx(value)),
+    panelEscapeTarget(AppMode.Code),
+    panelEscapeTarget(AppMode.Prose),
 
     // -- Window ----------------------------------------------------------------------------------------------------------
     named("window.chrome", "windowChromeMode", "window.chrome.mode", "window_chrome", "window_chrome_mode")(

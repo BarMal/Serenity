@@ -54,6 +54,10 @@ final case class AppConfig(
   def showAllSettingsRegardlessOfMode: Boolean =
     appModeConfig.showAllSettingsRegardlessOfMode
 
+  /** Where Escape from a focused panel sends focus in the current app mode. */
+  def panelEscapeTarget: PanelEscapeTarget =
+    inputConfig.panelEscapeReturnsTo.forMode(appMode)
+
   def interfaceDensity: InterfaceDensity =
     interfaceConfig.density
 
@@ -308,6 +312,9 @@ final case class AppConfig(
 
   def withShowAllSettingsRegardlessOfMode(value: Boolean): AppConfig =
     withAppModeConfig(appModeConfig.copy(showAllSettingsRegardlessOfMode = value))
+
+  def withPanelEscapeTarget(mode: AppMode, target: PanelEscapeTarget): AppConfig =
+    withInputConfig(inputConfig.copy(panelEscapeReturnsTo = inputConfig.panelEscapeReturnsTo.updated(mode, target)))
 
   def withInterfaceConfig(config: InterfaceConfig): AppConfig =
     copy(interfaceConfig = config.normalized)

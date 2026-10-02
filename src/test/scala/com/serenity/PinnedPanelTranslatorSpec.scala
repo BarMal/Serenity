@@ -31,6 +31,38 @@ class PinnedPanelTranslatorSpec extends AnyFlatSpec with Matchers:
     translator.translate(KeyStrokeInfo(InputKey.Character, Some('X'), Set(Modifier.Shift))) shouldBe ReturnFocus
   }
 
+  it should "dismiss the panel on Escape, apart from the keys that hand focus back to the editor" in {
+    translator.translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)) shouldBe PanelInputEvent.Dismiss
+    List(InputKey.Backspace, InputKey.Delete, InputKey.Tab, InputKey.ReverseTab).foreach { key =>
+      translator.translate(KeyStrokeInfo(key, None, Set.empty)) shouldBe ReturnFocus
+    }
+  }
+
+  it should "still dismiss on Escape when a session saved before the split also binds it to return focus" in {
+    val legacy = AppConfig.default.withFocusedKeymapConfig(
+      FocusedKeymapConfig(panel =
+        KeymapGroupConfig(
+          PanelKeyAction.defaultBindings + (PanelKeyAction.ReturnFocus -> List(
+            HotkeyTrigger(InputKey.Backspace, None, Set.empty),
+            HotkeyTrigger(InputKey.Escape, None, Set.empty)
+          ))
+        )
+      )
+    )
+
+    new PinnedPanelTranslator(legacy).translate(KeyStrokeInfo(InputKey.Escape, None, Set.empty)) shouldBe
+      PanelInputEvent.Dismiss
+  }
+
+  it should "respect a configured dismiss binding" in {
+    val customTranslator = new PinnedPanelTranslator(
+      AppConfig.default.withKeymapBinding(KeymapGroup.Panel)(PanelKeyAction.Dismiss, "ctrl+q")
+    )
+
+    customTranslator.translate(KeyStrokeInfo(InputKey.Character, Some('q'), Set(Modifier.Ctrl))) shouldBe
+      PanelInputEvent.Dismiss
+  }
+
   it should "leave a ctrl-modified character unhandled" in {
     translator
       .translate(KeyStrokeInfo(InputKey.Character, Some('x'), Set(Modifier.Ctrl)))
