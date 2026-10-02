@@ -49,7 +49,7 @@ object RendererFloatingPanels:
         case None => paint(context)
 
     overlays.tabBar.foreach(paintOverlay)
-    overlays.aboveCursor.foreach(paintOverlay)
+    overlays.aboveCursorStack.foreach(paintOverlay)
     val belowOverlays =
       if overlays.belowCursorStack.nonEmpty then overlays.belowCursorStack else overlays.belowCursor.toList
     belowOverlays.foreach(paintOverlay)
@@ -58,7 +58,7 @@ object RendererFloatingPanels:
     // which always runs before this method for a given frame) still sees last frame's rects while planning this one --
     // see `RendererFrameState.previousFloatingSurfaceRects`' doc comment.
     val currentFloatingRects: Map[SurfaceId, PixelRect] =
-      (overlays.aboveCursor.toList ++ belowOverlays).flatMap { overlay =>
+      (overlays.aboveCursorStack ++ belowOverlays).flatMap { overlay =>
         overlay.surfaceId.map(_ -> floatingPanelPixelRect(overlay.rect, context.cellMetrics))
       }.toMap
     context.caches.frameState.rememberFloatingSurfaceRects(context.surface, currentFloatingRects)

@@ -4,7 +4,7 @@ import com.serenity.animation.{EasingCurve, Tween}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.{DockedPanelFixtures, MockRenderSurface, TestWorkspaceTrees}
+import com.serenity.{AboveCursorStackFixtures, DockedPanelFixtures, MockRenderSurface, TestWorkspaceTrees}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -139,6 +139,17 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
 
     val key = SurfaceContentIdentity(surface)
     caches.frameState.previousFloatingSurfaceRectsFor(key) shouldBe Map(surfaceId -> expectedRect)
+  }
+
+  it should "paint every surface stacked above the cursor, not just one of them" in {
+    val state   = AboveCursorStackFixtures.lensAndPeek(20)
+    val surface = new MockRenderSurface(100, 30, persistentContent = true)
+    val caches  = com.serenity.state.manager.RenderCaches.create()
+
+    RendererEntryPoints.render(state, cursorVisible = false, surface, AboveCursorStackFixtures.StackViewport, caches)
+
+    caches.frameState.previousFloatingSurfaceRectsFor(SurfaceContentIdentity(surface)).keySet shouldBe
+      Set(AboveCursorStackFixtures.lensId(state), AboveCursorStackFixtures.peekId(state))
   }
 
   "renderPinnedPanels" should "clip an opening docked panel to its in-flight scale-in rect" in {

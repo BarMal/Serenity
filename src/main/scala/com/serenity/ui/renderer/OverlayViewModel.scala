@@ -5,7 +5,6 @@ import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.document.DocumentNavigation
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import org.slf4j.LoggerFactory
 
 /** A floating surface's resolved paint plan. `composition` is the surface's *only* stored content representation (issue
   * #1683) -- there is no second, independently-settable `rows`/`header`/`footer`/`keyHintRow` that could disagree with
@@ -87,6 +86,7 @@ object TextOverlayView:
 
 final case class OverlayViews(
     aboveCursor: Option[TextOverlayView] = None,
+    aboveCursorStack: List[TextOverlayView] = Nil,
     belowCursor: Option[TextOverlayView] = None,
     belowCursorStack: List[TextOverlayView] = Nil,
     modal: List[TextOverlayView] = Nil,
@@ -94,7 +94,6 @@ final case class OverlayViews(
 )
 
 object OverlayViewModel:
-  private val logger = LoggerFactory.getLogger("com.serenity.ui.renderer.OverlayViewModel")
   private val InactiveFloatingPanelAlphaMultiplier = 0.68f
 
   def fromState(state: AppState, layout: CalculatedLayout): OverlayViews =
@@ -109,18 +108,12 @@ object OverlayViewModel:
     layout: CalculatedLayout,
     scene: Option[UiSceneSnapshot]
   ): OverlayViews =
-    val aboveCursor = preferredFloatingSurface(state, SurfacePlacement.AboveCursor)
-      .flatMap(surface =>
-        buildView(
-          surface,
-          state,
-          overlayRect(surface.id, layout, scene),
-          collapsed = false,
-          verticalOffsetRows = layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0)
-        )
-      )
+    // A surface still fading the buffer out from under it (`SurfacePhase.BufferFadingOut`) is not painted yet.
+    val aboveCursorStack =
+      stackViews(aboveCursorSurfaceIds(state, layout).filterNot(isFadingBufferOut(_, state)), state, layout, scene)
+    val aboveCursor = aboveCursorStack.headOption
 
-    val belowCursorStack = preferredBelowCursorSurfaces(state, layout, scene)
+    val belowCursorStack = stackViews(layout.belowCursorOverlayStack.map(_._1), state, layout, scene)
     val belowCursor      = belowCursorStack.headOption
     val modal = scene.toList.flatMap(_.modal).flatMap {
       case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) =>
@@ -138,6 +131,7 @@ object OverlayViewModel:
 
     OverlayViews(
       aboveCursor = aboveCursor,
+      aboveCursorStack = aboveCursorStack,
       belowCursor = belowCursor,
       belowCursorStack = belowCursorStack,
       modal = modal,
@@ -233,40 +227,27 @@ object OverlayViewModel:
       )
     }
 
-  private def preferredFloatingSurface(
-    state: AppState,
-    placement: SurfacePlacement
-  ): Option[com.serenity.state.models.UiSurface] =
-    val matchingSurfaces = state.runtime.uiSurfaces.filter { surface =>
-      val phase = state.runtime.motion.surfaceAnimations.get(surface.id).map(_.phase).getOrElse(SurfacePhase.Visible)
-      phase != SurfacePhase.BufferFadingOut &&
-      (surface match
-        case com.serenity.state.models.UiSurface(_, _, SurfacePresentation.Floating(_, currentPlacement), _) =>
-          currentPlacement == placement
-        case _ => false)
-    }
+  /** A layout built by hand with only the legacy single `aboveCursorOverlayRect` names no stack: it shows the focused
+    * above-cursor surface, else the first.
+    */
+  private def aboveCursorSurfaceIds(state: AppState, layout: CalculatedLayout): List[SurfaceId] =
+    if layout.aboveCursorOverlayStack.nonEmpty then layout.aboveCursorOverlayStack.map(_._1)
+    else
+      val aboveCursorIds = state.floatingSurfaces.collect {
+        case UiSurface(surfaceId, _, SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor), _) => surfaceId
+      }
+      val focusedId = state.persisted.focus match
+        case Focus.Surface(surfaceId) => aboveCursorIds.find(_ == surfaceId)
+        case _                        => None
+      layout.aboveCursorOverlayRect.toList.flatMap(_ => focusedId.orElse(aboveCursorIds.headOption))
 
-    val selectedSurface = state.persisted.focus match
-      case com.serenity.state.models.Focus.Surface(surfaceId) =>
-        matchingSurfaces.find(_.id == surfaceId).orElse(matchingSurfaces.headOption)
-      case _ =>
-        matchingSurfaces.headOption
-
-    selectedSurface.foreach { surface =>
-      logger.info(
-        s"[OVERLAY SELECTED] placement=$placement focus=${state.persisted.focus} surfaceId=${surface.id} " +
-          s"content=${surface.content.getClass.getSimpleName}"
-      )
-    }
-
-    selectedSurface
-
-  private def preferredBelowCursorSurfaces(
+  private def stackViews(
+    surfaceIds: List[SurfaceId],
     state: AppState,
     layout: CalculatedLayout,
     scene: Option[UiSceneSnapshot]
   ): List[TextOverlayView] =
-    layout.belowCursorOverlayStack.map(_._1).flatMap { surfaceId =>
+    surfaceIds.flatMap { surfaceId =>
       state
         .surfaceById(surfaceId)
         .flatMap(surface =>
@@ -279,6 +260,9 @@ object OverlayViewModel:
           )
         )
     }
+
+  private def isFadingBufferOut(surfaceId: SurfaceId, state: AppState): Boolean =
+    state.runtime.motion.surfaceAnimations.get(surfaceId).exists(_.phase == SurfacePhase.BufferFadingOut)
 
   private def contentView(
     content: com.serenity.state.models.SurfaceContent,

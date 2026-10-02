@@ -16,7 +16,7 @@ object PeekStateReducer:
     ReducerResult.noEffects(
       stateWithId
         .copy(runtime =
-          stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces.filterNot(isPeekSurface) :+ surface)
+          stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces.filterNot(_.isFloatingPeek) :+ surface)
         )
         .pushFocus(Focus.Surface(surfaceId))
     )
@@ -25,16 +25,11 @@ object PeekStateReducer:
     */
   def dismiss(state: AppState): ReducerResult =
     val dismissed =
-      state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(isPeekSurface)))
+      state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.isFloatingPeek)))
     val focusGone = dismissed.persisted.focus match
       case Focus.Surface(surfaceId) => dismissed.surfaceById(surfaceId).isEmpty
       case _                        => false
     ReducerResult.noEffects(if focusGone then dismissed.popFocus else dismissed)
-
-  private def isPeekSurface(surface: UiSurface): Boolean =
-    surface.presentation match
-      case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) => true
-      case _                                                             => false
 
   private def toSurfaceContent(content: PeekContent): SurfaceContent =
     content match

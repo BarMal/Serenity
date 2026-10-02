@@ -297,16 +297,15 @@ object LayoutEngine:
 
     val paneLayouts = calculateEditorPaneLayouts(state, baseLayout)
 
-    val aboveSurfaces = state.floatingSurfaces.filter {
-      _.presentation match
-        case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) => true
-        case _                                                             => false
-    }
-    val belowSurfaces = OverlayStackLayout.orderedBelowCursorSurfaces(state)
-    val aboveCursorOverlayStack =
-      aboveSurfaces.flatMap(surface =>
-        FloatingSurfaceLayout.calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface.id -> _)
-      )
+    val stackedAboveSurfaces = OverlayStackLayout.orderedAboveCursorSurfaces(state)
+    val ghostAboveSurfaces   = OverlayStackLayout.aboveCursorGhostSurfaces(state)
+    val aboveSurfaces        = stackedAboveSurfaces ++ ghostAboveSurfaces
+    val belowSurfaces        = OverlayStackLayout.orderedBelowCursorSurfaces(state)
+    val aboveLayout =
+      OverlayStackLayout.calculateAboveCursorOverlayStack(stackedAboveSurfaces, state, paneLayouts)
+    val aboveCursorOverlayStack = aboveLayout.stack ++ ghostAboveSurfaces.flatMap(surface =>
+      FloatingSurfaceLayout.calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface.id -> _)
+    )
     val belowLayout = OverlayStackLayout.calculateBelowCursorOverlayStack(belowSurfaces, state, paneLayouts)
     val floatingOffsets = OverlayStackLayout.floatingOverlayOffsets(
       aboveSurfaces,
@@ -322,7 +321,7 @@ object LayoutEngine:
       belowCursorOverlayRect = belowLayout.stack.headOption.map(_._2),
       aboveCursorOverlayStack = aboveCursorOverlayStack,
       belowCursorOverlayStack = belowLayout.stack,
-      collapsedFloatingSurfaceIds = belowLayout.collapsedSurfaceIds,
+      collapsedFloatingSurfaceIds = aboveLayout.collapsedSurfaceIds ++ belowLayout.collapsedSurfaceIds,
       floatingOverlayOffsetRows = floatingOffsets
     )
 

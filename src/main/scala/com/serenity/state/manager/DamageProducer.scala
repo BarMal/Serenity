@@ -269,8 +269,9 @@ object DamageProducer:
     * elsewhere -- typing with the command runner open -- report their own precise row damage instead, which is the
     * whole point of `#1000`. `pinnedSurfaces` is a filtered/reordered projection of `uiSurfaces` (plus `layout`,
     * already covered by `paneChromeDamage`), so it needs no separate check. `focus` changing can retarget which
-    * floating surface `OverlayViewModel.preferredFloatingSurface` selects, or its dim/active tint, without `uiSurfaces`
-    * itself changing (tabbing between two already-open floating panels).
+    * below-cursor surface `OverlayStackLayout.orderedBelowCursorSurfaces` selects, which above-cursor surface
+    * collapses, or a panel's dim/active tint, without `uiSurfaces` itself changing (tabbing between two already-open
+    * floating panels).
     *
     * [[uiSurfacesDamage]] carves out one narrower case: a transition that changes only the one surface identified by
     * some `SurfaceId`, whose presentation is the same kind (`Modal`/`Docked`/`Floating`) on both sides, and nothing
