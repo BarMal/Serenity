@@ -253,8 +253,12 @@ final case class EditorLayoutContract(
         }
     }
 
+  /** The above-cursor stack runs nearest-the-cursor first, so reversed it reads top-down like the below-cursor one. */
   private def floatingOverlayStackViolations: List[LayoutContractViolation] =
-    belowCursorOverlayRects.sliding(2).toList.flatMap {
+    topDownStackViolations(belowCursorOverlayRects) ++ topDownStackViolations(aboveCursorOverlayRects.reverse)
+
+  private def topDownStackViolations(stack: List[(SurfaceId, LayoutRect)]): List[LayoutContractViolation] =
+    stack.sliding(2).toList.flatMap {
       case List((firstId, firstRect), (secondId, secondRect)) =>
         if secondRect.y < firstRect.bottom then
           List(

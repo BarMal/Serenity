@@ -3,14 +3,14 @@ package com.serenity.ui.layout
 import com.serenity.config.CornerPosition
 import com.serenity.state.models.*
 
-/** Stacking multiple floating surfaces together: the below-cursor overlay stack, the vertical offsets that keep a
-  * stack's fractional gap rows visually consistent, and the screen-corner overlay stack (issue #1310, mode 3). Split
-  * out of `LayoutEngine` (600-line architecture ratchet); single-surface rect/size/anchor resolution lives in
+/** Stacking multiple floating surfaces together: the above- and below-cursor overlay stacks, the vertical offsets that
+  * keep a stack's fractional gap rows visually consistent, and the screen-corner overlay stack (issue #1310, mode 3).
+  * Split out of `LayoutEngine` (600-line architecture ratchet); single-surface rect/size/anchor resolution lives in
   * [[FloatingSurfaceLayout]], which this calls back into.
   */
 object OverlayStackLayout:
 
-  final private[layout] case class BelowOverlayLayout(
+  final private[layout] case class CursorStackLayout(
       stack: List[(SurfaceId, LayoutRect)],
       collapsedSurfaceIds: Set[SurfaceId]
   )
@@ -39,6 +39,32 @@ object OverlayStackLayout:
                 case _                                                             => false
             }.toList
 
+  /** Nearest the cursor first. Ghosts (closing surfaces) are left out: they paint at their cached rect, not a slot. */
+  private[layout] def orderedAboveCursorSurfaces(state: AppState): List[UiSurface] =
+    state.floatingSurfaces.filter(surface => isAboveCursorSurface(surface) && !isGhost(surface)).sortBy(aboveCursorRank)
+
+  private[layout] def aboveCursorGhostSurfaces(state: AppState): List[UiSurface] =
+    state.floatingSurfaces.filter(surface => isAboveCursorSurface(surface) && isGhost(surface))
+
+  /** The lens annotates the text under the cursor and sits against it; a peek explains the symbol there and sits just
+    * above; anything else (the command runner's cursor peek) floats beyond both.
+    */
+  private def aboveCursorRank(surface: UiSurface): Int =
+    surface.content match
+      case SurfaceContent.CommentLens(_) => 0
+      case _ if surface.isFloatingPeek   => 1
+      case _                             => 2
+
+  private def isAboveCursorSurface(surface: UiSurface): Boolean =
+    surface.presentation match
+      case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) => true
+      case _                                                             => false
+
+  private def isGhost(surface: UiSurface): Boolean =
+    surface.content match
+      case SurfaceContent.GhostOverlay(_, _) => true
+      case _                                 => false
+
   private def isBelowCursorSurface(surface: UiSurface): Boolean =
     surface.presentation match
       case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor) => true
@@ -48,10 +74,10 @@ object OverlayStackLayout:
     surfaces: List[UiSurface],
     state: AppState,
     paneLayouts: Map[PaneId, EditorPaneLayout]
-  ): BelowOverlayLayout =
-    if surfaces.isEmpty then BelowOverlayLayout(Nil, Set.empty)
+  ): CursorStackLayout =
+    if surfaces.isEmpty then CursorStackLayout(Nil, Set.empty)
     else if surfaces.length == 1 then
-      BelowOverlayLayout(
+      CursorStackLayout(
         surfaces.flatMap(surface =>
           FloatingSurfaceLayout.calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface.id -> _)
         ),
@@ -63,6 +89,93 @@ object OverlayStackLayout:
       // every below-cursor multi-surface case now goes through the same generic stacking.
       stackBelowCursorSurfaces(surfaces, state, paneLayouts)
 
+  /** Stacks `surfaces` (nearest the cursor first) upward from the cursor, each above the previous. A lone surface keeps
+    * its own placement. When the stack does not fit above the cursor, unfocused surfaces collapse to a one-line summary
+    * from the far end inward; if it still does not fit, it is clamped down from the top of the pane, each surface
+    * shrinking to the room left -- the below-cursor stack's overflow rule, mirrored.
+    */
+  private[layout] def calculateAboveCursorOverlayStack(
+    surfaces: List[UiSurface],
+    state: AppState,
+    paneLayouts: Map[PaneId, EditorPaneLayout]
+  ): CursorStackLayout =
+    val preferredRects = surfaces.flatMap(surface =>
+      FloatingSurfaceLayout.calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface -> _)
+    )
+    val nearestAnchor = surfaces.headOption.flatMap(surface =>
+      FloatingSurfaceLayout.calculateFloatingAnchorFrame(surface, state, paneLayouts).map(surface -> _)
+    )
+    (preferredRects, nearestAnchor) match
+      case (List((surface, rect)), _) => CursorStackLayout(List(surface.id -> rect), Set.empty)
+      case (_ :: _ :: _, Some((nearest, anchorFrame))) =>
+        val cursorGapRows =
+          FloatingSurfaceLayout.wholeRowOrigin(FloatingSurfaceLayout.floatingCursorGapRows(state, nearest.content))
+        val stackGapRows = FloatingSurfaceLayout.wholeRowOrigin(FloatingSurfaceLayout.floatingStackGapRows(state))
+        val stackBottom  = anchorFrame.screenPosition.y - cursorGapRows
+        val room         = stackBottom - anchorFrame.contentRect.y
+        val collapsed    = collapsedToFit(preferredRects, room, stackGapRows, state)
+        val fitted = preferredRects.map { (surface, rect) =>
+          val height = if collapsed.contains(surface.id) then collapsedHeight(surface) else rect.height
+          surface -> rect.copy(height = height)
+        }
+        val placed =
+          if stackHeight(fitted, stackGapRows) <= room then placeUpward(fitted, stackBottom, stackGapRows)
+          else placeDownFromTop(fitted, anchorFrame.contentRect, stackGapRows)
+        CursorStackLayout(placed, collapsed.filter(id => placed.exists(_._1 == id)))
+      case _ => CursorStackLayout(Nil, Set.empty)
+
+  private def collapsedToFit(
+    rects: List[(UiSurface, LayoutRect)],
+    room: Int,
+    stackGapRows: Int,
+    state: AppState
+  ): Set[SurfaceId] =
+    val focusedId = state.persisted.focus match
+      case Focus.Surface(surfaceId) => Some(surfaceId)
+      case _                        => None
+    val collapsible =
+      rects.reverse.filter((surface, rect) => !focusedId.contains(surface.id) && rect.height > collapsedHeight(surface))
+    collapsible
+      .foldLeft((Set.empty[SurfaceId], stackHeight(rects, stackGapRows))) {
+        case ((ids, height), (surface, rect)) =>
+          if height <= room then (ids, height) else (ids + surface.id, height - rect.height + collapsedHeight(surface))
+      }
+      ._1
+
+  /** One summary row inside the surface's own frame -- what `OverlayViewModel` paints for a collapsed surface. */
+  private def collapsedHeight(surface: UiSurface): Int =
+    1 + 2 * SurfaceFrameLayout.borderCellsFor(surface.content)
+
+  private def stackHeight(rects: List[(UiSurface, LayoutRect)], stackGapRows: Int): Int =
+    rects.map(_._2.height).sum + stackGapRows * (rects.length - 1).max(0)
+
+  private def placeUpward(
+    rects: List[(UiSurface, LayoutRect)],
+    stackBottom: Int,
+    stackGapRows: Int
+  ): List[(SurfaceId, LayoutRect)] =
+    rects
+      .foldLeft((stackBottom, List.empty[(SurfaceId, LayoutRect)])) {
+        case ((bottom, acc), (surface, rect)) =>
+          val y = bottom - rect.height
+          (y - stackGapRows, acc :+ (surface.id -> rect.copy(y = y)))
+      }
+      ._2
+
+  private def placeDownFromTop(
+    rects: List[(UiSurface, LayoutRect)],
+    contentRect: LayoutRect,
+    stackGapRows: Int
+  ): List[(SurfaceId, LayoutRect)] =
+    rects.reverse
+      .foldLeft((contentRect.y, List.empty[(SurfaceId, LayoutRect)])) {
+        case ((top, acc), (surface, rect)) =>
+          val height = math.min(rect.height, math.max(0, contentRect.bottom - top))
+          (top + height + stackGapRows, (surface.id -> rect.copy(y = top, height = height)) :: acc)
+      }
+      ._2
+      .filter(_._2.height > 0)
+
   private[layout] def floatingOverlayOffsets(
     aboveSurfaces: List[UiSurface],
     aboveRects: List[(SurfaceId, LayoutRect)],
@@ -71,15 +184,19 @@ object OverlayStackLayout:
     state: AppState,
     paneLayouts: Map[PaneId, EditorPaneLayout]
   ): Map[SurfaceId, Double] =
-    val aboveById = aboveSurfaces.map(surface => surface.id -> surface).toMap
+    val aboveById       = aboveSurfaces.map(surface => surface.id -> surface).toMap
+    val stackedAboveIds = aboveSurfaces.filterNot(isGhost).map(_.id)
+    val aboveStackRemainder = FloatingSurfaceLayout.floatingStackGapRows(state) -
+      FloatingSurfaceLayout.wholeRowOrigin(FloatingSurfaceLayout.floatingStackGapRows(state))
     val aboveOffsets = aboveRects.flatMap { (surfaceId, rect) =>
       aboveById.get(surfaceId).flatMap { surface =>
-        val gap = FloatingSurfaceLayout.floatingCursorGapRows(state, surface.content)
+        val gap        = FloatingSurfaceLayout.floatingCursorGapRows(state, surface.content)
+        val stackIndex = stackedAboveIds.indexOf(surfaceId).max(0)
         FloatingSurfaceLayout.calculateFloatingAnchorFrame(surface, state, paneLayouts).map { anchorFrame =>
           surfaceId -> clampedFloatingOffset(
             rect,
             anchorFrame.contentRect,
-            FloatingSurfaceLayout.wholeRowOrigin(gap).toDouble - gap
+            FloatingSurfaceLayout.wholeRowOrigin(gap).toDouble - gap - stackIndex * aboveStackRemainder
           )
         }
       }
@@ -120,7 +237,7 @@ object OverlayStackLayout:
     surfaces: List[UiSurface],
     state: AppState,
     paneLayouts: Map[PaneId, EditorPaneLayout]
-  ): BelowOverlayLayout =
+  ): CursorStackLayout =
     val preferredRects =
       surfaces.flatMap(surface =>
         FloatingSurfaceLayout.calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface -> _)
@@ -132,9 +249,9 @@ object OverlayStackLayout:
     val baseRects = anchorFrameOpt.fold(preferredRects)(frame => fitPaletteBelow(preferredRects, frame, state))
     anchorFrameOpt match
       case None =>
-        BelowOverlayLayout(Nil, Set.empty)
+        CursorStackLayout(Nil, Set.empty)
       case Some(_) if baseRects.isEmpty =>
-        BelowOverlayLayout(Nil, Set.empty)
+        CursorStackLayout(Nil, Set.empty)
       case Some(anchorFrame) =>
         val gapRows = surfaces.headOption
           .map(surface =>
@@ -164,7 +281,7 @@ object OverlayStackLayout:
               acc :+ (surface.id -> rect.copy(y = adjustedY, height = adjustedHeight))
             )
         }
-        BelowOverlayLayout(stacked.filter(_._2.height > 0), Set.empty)
+        CursorStackLayout(stacked.filter(_._2.height > 0), Set.empty)
 
   /** The palette sized itself to the room below the caret on its own (#1045); in a stack it shares that room, so it
     * gives its extra rows back first -- down to its density minimum -- before the whole stack would flip above.

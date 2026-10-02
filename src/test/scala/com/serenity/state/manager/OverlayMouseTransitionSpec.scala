@@ -1,6 +1,5 @@
 package com.serenity.state.manager
 
-import com.serenity.ContextualToolbarTestSupport
 import com.serenity.app.AppStartup
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.AppConfigMotionOps.*
@@ -9,6 +8,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.ui.layout.*
+import com.serenity.{AboveCursorStackFixtures, ContextualToolbarTestSupport}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -119,6 +119,25 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
     val state = editorState("hello world")
 
     run(state)(CommentLensMouseHitTesting.click(MouseClick(1, 1), state, AuthoritativeUiScene()))._2 shouldBe false
+  }
+
+  it should "address the lens and a peek stacked above it as separate targets" in {
+    val stacked = AboveCursorStackFixtures.lensAndPeek(20, CommentLensMode.ReadOnly)
+    val lens    = surfaceFrame(stacked, AboveCursorStackFixtures.lensId(stacked))
+    val peek    = surfaceFrame(stacked, AboveCursorStackFixtures.peekId(stacked))
+    val scene   = AuthoritativeUiScene()
+
+    val (_, peekClaimed) =
+      run(stacked)(CommentLensMouseHitTesting.click(MouseClick(peek.x, peek.y), stacked, scene))
+    val (lensResult, lensClaimed) =
+      run(stacked)(CommentLensMouseHitTesting.click(MouseClick(lens.x, lens.y), stacked, scene))
+
+    peekClaimed shouldBe false
+    lensClaimed shouldBe true
+    lensResult.state.commentLensSurface.map(_.content) should matchPattern {
+      case Some(SurfaceContent.CommentLens(lens)) if lens.mode == CommentLensMode.Editable =>
+    }
+    lensResult.state.peekSurface shouldBe stacked.peekSurface
   }
 
   private def withOpenContextMenu: (AppState, ContextMenu, LayoutRect) =

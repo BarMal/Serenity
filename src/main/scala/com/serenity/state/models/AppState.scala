@@ -389,11 +389,7 @@ final case class AppState(
           case None => this
 
   def peekSurface: Option[UiSurface] =
-    runtime.uiSurfaces.find {
-      _.presentation match
-        case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) => true
-        case _                                                             => false
-    }
+    runtime.uiSurfaces.find(_.isFloatingPeek)
 
   private def findSurface(matches: SurfaceContent => Boolean): Option[UiSurface] =
     runtime.uiSurfaces.find(surface => matches(surface.content))

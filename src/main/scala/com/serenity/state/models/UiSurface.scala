@@ -330,7 +330,20 @@ final case class UiSurface(
     content: SurfaceContent,
     presentation: SurfacePresentation,
     dismissOnMove: Boolean = false
-)
+):
+
+  /** A floating peek (`PeekStateReducer`), recognised by what it shows: the comment lens and the command runner's
+    * cursor peek float above the cursor too, and a peek pinned as a docked panel is no longer one.
+    */
+  def isFloatingPeek: Boolean =
+    (presentation, content) match
+      case (
+            SurfacePresentation.Floating(_, _),
+            SurfaceContent.QuickInfo(_) | SurfaceContent.FilePreview(_, _) | SurfaceContent.SymbolDefinition(_, _) |
+            SurfaceContent.DirectoryListing(_, _, _)
+          ) =>
+        true
+      case _ => false
 
 object UiSurface:
 
