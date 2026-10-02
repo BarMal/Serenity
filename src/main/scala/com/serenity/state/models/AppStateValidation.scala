@@ -62,6 +62,15 @@ object AppStateValidation:
     val staleBufferOrder = state.persisted.bufferOrder.filterNot(state.persisted.buffers.contains)
     if staleBufferOrder.nonEmpty then
       errors += s"Buffer order references non-existent buffers: ${staleBufferOrder.map(_.value).mkString(", ")}"
+    // A note's text lives in hidden buffers; one pointing at a missing or visible buffer would open nothing, or a
+    // document the user can see as a tab.
+    for
+      (bufferId, buffer) <- state.persisted.buffers
+      noteBufferId       <- buffer.annotations.notes.values.flatMap(_.bufferIds)
+      if !state.persisted.buffers.get(noteBufferId).exists(_.hidden)
+    do
+      errors +=
+        s"Buffer ${bufferId.value} has a note on buffer ${noteBufferId.value}, which is not a hidden buffer"
     // Duplicate surfaces
     val duplicateSurfaceIds = duplicates(state.runtime.uiSurfaces.map(_.id.value))
     if duplicateSurfaceIds.nonEmpty then errors += s"Duplicate UI surfaces: ${duplicateSurfaceIds.mkString(", ")}"

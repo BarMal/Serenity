@@ -45,8 +45,12 @@ object SessionState:
     * `editorPanes` array order (or, if present, its legacy `paneOrder` key -- see `SessionJsonCodecs`) seeds a simple
     * left-to-right split tree at restore time. Invalid version-2 trees fall back to that same seed while preserving
     * buffers and supported panel content.
+    *
+    * Schema version 3 adds hidden buffers and the chapter and keyword notes that point at them. Both decode with
+    * defaults, so an older session still restores; the bump is so an older build refuses a newer session rather than
+    * silently dropping its notes.
     */
-  val CurrentSchemaVersion: SchemaVersion = SchemaVersion(2)
+  val CurrentSchemaVersion: SchemaVersion = SchemaVersion(3)
 
   def fromAppState(appState: AppState, persistUnsaved: Boolean = true): SessionState =
     SessionState(

@@ -126,7 +126,8 @@ final case class Annotations(
     bookmarks: List[CursorPosition] = Nil,
     documentComments: List[DocumentComment] = Nil,
     placeholders: List[Placeholder] = Nil,
-    darlings: List[Darling] = Nil
+    darlings: List[Darling] = Nil,
+    notes: Map[NoteKey, Notes] = Map.empty
 )
 
 /** Rich-text authoring state layered on top of the buffer's plain-text `Rope` content. */
