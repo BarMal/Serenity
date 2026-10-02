@@ -29,9 +29,9 @@ class TimerEffectLanesSpec extends AnyFlatSpec with Matchers with StateManagerTe
         )
       )
       _ <- stateManager.applyEvent(ToggleCommandRunner)
-      _ <- "keymap".toList.traverse_(char => stateManager.applyEvent(InsertChar(char)))
-      _ <- stateManager.applyEvent(Enter)
-      _ <- stateManager.applyEvent(Enter)
+      _ <- "navigation keys".toList.traverse_(char => stateManager.applyEvent(InsertChar(char)))
+      _ <- stateManager.applyEvent(Enter) // into Navigation Keys, on the command palette's binding
+      _ <- stateManager.applyEvent(Enter) // record it
     yield stateManager
 
   private def record(stateManager: StateManager, char: Char, atMillis: Long): IO[Unit] =

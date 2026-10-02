@@ -243,7 +243,7 @@ object CommandRunnerSettingsGroups:
       "settings-keymap",
       "Keys",
       "Inspect and edit bindings",
-      inputItems.filter(_.id.startsWith("keymap-"))
+      CommandRunnerSettingsKeymapItems.keymapGroups(inputItems.filter(_.id.startsWith("keymap-")))
     )
 
     // issue #1058: editing a preset reuses these same canonical groups verbatim, only retagged (`settings-preset-*`)

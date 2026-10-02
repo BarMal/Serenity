@@ -25,12 +25,23 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
       .unsafeRunSync()
     stateManager
 
+  /** Searches for a Keys section by its exact label, which opens that section alone, and enters it. */
+  private def openKeysSection(stateManager: com.serenity.state.manager.StateManager, label: String): Unit =
+    label.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+  /** Settings › Keys › Global Keys › Navigation Keys, whose first row is the command palette's binding. */
+  private def openGlobalNavigationKeys(stateManager: com.serenity.state.manager.StateManager): Unit =
+    openKeysSection(stateManager, "navigation keys")
+
+  private def openCommandRunnerKeys(stateManager: com.serenity.state.manager.StateManager): Unit =
+    openKeysSection(stateManager, "command runner keys")
+
   "Keymap editor settings" should "update global hotkey bindings through the command runner" in {
     val stateManager = createLinuxStateManager("KeymapEditorStateManagerSpec")
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    "keymap".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    openGlobalNavigationKeys(stateManager)
     "ctrl+k".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
 
@@ -50,8 +61,7 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
       )
       .unsafeRunSync()
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    "keymap".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    openGlobalNavigationKeys(stateManager)
     "default".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
 
@@ -64,8 +74,7 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
     val stateManager = createLinuxStateManager("KeymapEditorSingleKeyExpirySpec")
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    "keymap".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    openGlobalNavigationKeys(stateManager)
     stateManager.applyEvent(Enter).unsafeRunSync()
     stateManager
       .applyEvent(RunnerRecordBinding(KeyStrokeInfo(InputKey.Character, Some('k'), Set.empty), 1_000L))
@@ -103,8 +112,7 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
       )
       .unsafeRunSync()
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    "keymap".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    openGlobalNavigationKeys(stateManager)
     "ctrl+o".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
 
@@ -124,8 +132,7 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
     val stateManager = createLinuxStateManager("KeymapEditorConflictResolveSpec")
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    "keymap".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    stateManager.applyEvent(Enter).unsafeRunSync()
+    openGlobalNavigationKeys(stateManager)
     "ctrl+o".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
     stateManager.applyEvent(Enter).unsafeRunSync()
@@ -151,9 +158,8 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
       )
       .unsafeRunSync()
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    "keymap".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    stateManager.applyEvent(Enter).unsafeRunSync()
-    List.fill(3)(MoveDown).foreach(event => stateManager.applyEvent(event).unsafeRunSync())
+    openCommandRunnerKeys(stateManager)
+    List.fill(CommandRunnerKeyAction.Submit.ordinal)(MoveDown).foreach(stateManager.applyEvent(_).unsafeRunSync())
     "ctrl+k".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
 
@@ -180,9 +186,8 @@ class KeymapEditorStateManagerSpec extends AnyFlatSpec with Matchers with StateM
       )
       .unsafeRunSync()
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    "keymap".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    stateManager.applyEvent(Enter).unsafeRunSync()
-    List.fill(3)(MoveDown).foreach(event => stateManager.applyEvent(event).unsafeRunSync())
+    openCommandRunnerKeys(stateManager)
+    List.fill(CommandRunnerKeyAction.Submit.ordinal)(MoveDown).foreach(stateManager.applyEvent(_).unsafeRunSync())
     stateManager.getCurrentState
       .unsafeRunSync()
       .commandRunnerSurface
