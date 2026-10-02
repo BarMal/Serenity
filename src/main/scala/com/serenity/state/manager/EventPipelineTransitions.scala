@@ -29,8 +29,11 @@ private[manager] object EventPipelineTransitions:
   def withPaneFlow(model: Model, sweep: SweepDirection): Model =
     model.copy(bufferAnimations = AnimationChoreography.withPaneFlowAnimation(model.app, sweep)(model.bufferAnimations))
 
+  /** Focus handed back to an open command runner that lost it -- unless a modal raised over the runner holds it, in
+    * which case the runner gets it back once that modal closes.
+    */
   def commandRunnerFocusNormalized(state: AppState): AppState =
-    if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() then
+    if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() && !state.isModalFocus then
       state.preferredCommandRunnerFocus.fold(state)(focus =>
         state.copy(persisted = state.persisted.copy(focus = focus))
       )

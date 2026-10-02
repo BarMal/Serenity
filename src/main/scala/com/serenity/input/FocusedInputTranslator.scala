@@ -57,7 +57,7 @@ object FocusedInputTranslator:
         case _ => false
     }
     val localTranslator =
-      if state.hasCommandRunnerDomain then translators.commandRunner
+      if state.hasCommandRunnerDomain && !state.isModalFocus then translators.commandRunner
       else
         state.activeSurface match
           case Some(surface) =>
