@@ -102,7 +102,43 @@ class ChapterNoteTransitionsSpec extends AnyFlatSpec with Matchers:
 
     notes(bothOpened).keySet shouldBe Set(storm, calm)
     notes(bothOpened)(storm).overview should not be notes(bothOpened)(calm).overview
-    bothOpened.persisted.layout.editorPanes should have size 3
+  }
+
+  it should "make the pane showing the note follow the pane that holds the manuscript" in {
+    val opened = open(withManuscript(manuscript, cursorLine = 3))
+
+    opened.runtime.notesPane shouldBe Some(NotesPane(PaneId(1), PaneId(0)))
+  }
+
+  it should "reuse the notes pane for another chapter's note rather than splitting again" in {
+    val stormOpened = open(withManuscript(manuscript, cursorLine = 1))
+    val bothOpened  = open(returnToManuscript(stormOpened, cursorLine = 3))
+
+    bothOpened.persisted.layout.editorPanes should have size 2
+    bothOpened.runtime.notesPane shouldBe Some(NotesPane(PaneId(1), PaneId(0)))
+    activePaneBuffer(bothOpened) shouldBe Some(notes(bothOpened)(calm).overview)
+  }
+
+  it should "start following again when opened while the notes pane is pinned" in {
+    val pinned   = ChapterNoteTransitions.toggleNotesPin(open(withManuscript(manuscript, cursorLine = 3)))
+    val reopened = open(returnToManuscript(pinned, cursorLine = 3))
+
+    pinned.runtime.notesPane.map(_.pinned) shouldBe Some(true)
+    reopened.runtime.notesPane.map(_.pinned) shouldBe Some(false)
+  }
+
+  "Pinning the notes pane" should "flip between pinned and following" in {
+    val opened = open(withManuscript(manuscript, cursorLine = 3))
+    val pinned = ChapterNoteTransitions.toggleNotesPin(opened)
+
+    pinned.runtime.notesPane.map(_.pinned) shouldBe Some(true)
+    ChapterNoteTransitions.toggleNotesPin(pinned).runtime.notesPane.map(_.pinned) shouldBe Some(false)
+  }
+
+  it should "do nothing when there is no notes pane" in {
+    val state = withManuscript(manuscript, cursorLine = 3)
+
+    ChapterNoteTransitions.toggleNotesPin(state) shouldBe state
   }
 
   it should "do nothing before the first heading" in {
@@ -126,4 +162,9 @@ class ChapterNoteTransitionsSpec extends AnyFlatSpec with Matchers:
   "The command registry" should "offer a command to open the current chapter's note" in {
     CommandRegistry.withToggleUI.findCommand("open-chapter-note").map(_.intent) shouldBe
       Some(CommandIntent.View(ViewIntent.OpenChapterNote))
+  }
+
+  it should "offer a command to pin or unpin the notes pane" in {
+    CommandRegistry.withToggleUI.findCommand("toggle-notes-pin").map(_.intent) shouldBe
+      Some(CommandIntent.View(ViewIntent.ToggleNotesPin))
   }

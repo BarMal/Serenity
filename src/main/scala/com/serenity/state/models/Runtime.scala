@@ -61,7 +61,9 @@ final case class Runtime(
     projectPresence: ProjectPresence = ProjectPresence.Unchecked,
     // Never persisted: whether a chapter note's overview is painted, faded, under an empty chapter. The notes themselves
     // are untouched by hiding the ghosts.
-    chapterGhostsVisible: Boolean = true
+    chapterGhostsVisible: Boolean = true,
+    // Never persisted: the pane showing chapter notes, and whether it follows the cursor's chapter or is pinned.
+    notesPane: Option[NotesPane] = None
 ):
 
   /** A typed character: the quiet window for cursor-adjacent surfaces always restarts; the companion sprite panel

@@ -104,6 +104,9 @@ enum ViewIntent:
   /** Shows or hides the faded overview under empty chapters; the notes themselves are untouched. */
   case ToggleChapterGhosts
 
+  /** Pins the notes pane to the note it shows, or lets it follow the cursor's chapter again. */
+  case ToggleNotesPin
+
   /** Moves focus to the nearest editor pane or docked panel in `direction`. */
   case FocusInDirection(direction: Direction)
   case MovePanelEarlier(id: PanelId)

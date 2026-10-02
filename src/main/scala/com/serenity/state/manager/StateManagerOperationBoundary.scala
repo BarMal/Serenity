@@ -13,6 +13,7 @@ import com.serenity.document.CommentRendering
 import com.serenity.io.{FileBrowser, FileEntry}
 import com.serenity.lsp.client.DocumentUri
 import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, SpellChecker}
+import com.serenity.state.core.NotesPaneSync
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.CommandRunnerPanelSelections
@@ -331,6 +332,7 @@ private[manager] object StateManagerOperationBoundary:
       .validated(normalizeCommandRunnerFocus(newState))
       .map(CommentRendering.syncFloatingLensWithCursor(_, fallbackState))
       .map(PanelContentSync.synced(_, fallbackState))
+      .map(NotesPaneSync.synced(_, fallbackState))
 
   private def normalizeCommandRunnerFocus(state: AppState): AppState =
     if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() then

@@ -61,6 +61,8 @@ final private[manager] class StateManagerPanelEffects(
         commitApp(ChapterNoteTransitions.openCurrentChapterNote(_, SplitAxis.Horizontal))
       case ViewIntent.ToggleChapterGhosts =>
         commitApp(ChapterNoteTransitions.toggleGhosts)
+      case ViewIntent.ToggleNotesPin =>
+        commitApp(ChapterNoteTransitions.toggleNotesPin)
       case ViewIntent.TogglePanelShown(id) =>
         if isShown(id, state) then hidePanel(id, state) else pinAtDefaultEdge(id)
       case ViewIntent.FocusPanel(id) =>

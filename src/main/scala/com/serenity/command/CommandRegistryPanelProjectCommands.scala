@@ -78,6 +78,13 @@ private[command] object CommandRegistryPanelProjectCommands:
       label = "Show/Hide Chapter Ghosts"
     ),
     Command.typed(
+      "toggle-notes-pin",
+      "Pin the notes pane to the note it shows, or let it follow the chapter the cursor is in again.",
+      CommandIntent.View(ViewIntent.ToggleNotesPin),
+      CommandCategory.View,
+      label = "Pin/Unpin Notes"
+    ),
+    Command.typed(
       "close-pane",
       "Close the focused editor pane.",
       CommandIntent.View(ViewIntent.ClosePane),

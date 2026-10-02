@@ -10,25 +10,34 @@ import com.serenity.ui.layout.SplitAxis
   */
 object ChapterNoteTransitions:
 
-  /** Shows the current chapter's note in a pane split beside the focused one, creating the note the first time. Does
-    * nothing outside a chapter (before the first heading, or in a document with none) and inside a note, which has no
-    * chapters of its own.
+  /** Shows the current chapter's note in the notes pane -- a pane split beside the focused one the first time, the same
+    * pane after that -- creating the note the first time, and makes that pane follow the cursor's chapter. Does nothing
+    * outside a chapter (before the first heading, or in a document with none) and inside a note, which has no chapters
+    * of its own.
     */
   def openCurrentChapterNote(state: AppState, axis: SplitAxis)(using Balance): AppState =
     val opened =
       for
         buffer <- state.activeBuffer.filterNot(_.hidden)
         cursor <- state.activeCursorPosition
-        key    <- chapterKey(buffer, cursor)
+        key    <- chapterKeyAt(buffer, cursor)
       yield
+        val sourcePane         = state.persisted.layout.activeEditorPaneId
         val (withNote, noteId) = noteBuffer(state, buffer.id, key)
-        showInPane(withNote, noteId, axis)
+        registered(showInPane(withNote, noteId, axis), sourcePane)
     opened.getOrElse(state)
 
   def toggleGhosts(state: AppState): AppState =
     state.copy(runtime = state.runtime.copy(chapterGhostsVisible = !state.runtime.chapterGhostsVisible))
 
-  private def chapterKey(buffer: Buffer, cursor: CursorPosition): Option[NoteKey] =
+  /** Pins the notes pane to the note it shows, or lets it follow the cursor's chapter again. */
+  def toggleNotesPin(state: AppState): AppState =
+    state.copy(runtime =
+      state.runtime.copy(notesPane = state.runtime.notesPane.map(pane => pane.copy(pinned = !pane.pinned)))
+    )
+
+  /** The note a position in `buffer` belongs to: the chapter whose heading is the last at or before it. */
+  def chapterKeyAt(buffer: Buffer, cursor: CursorPosition): Option[NoteKey] =
     val headings = HeadingIdentity.forHeadings(DocumentOutline.forBuffer(buffer))
     DocumentNavigation
       .currentSymbol(headings.map(_._2), cursor)
@@ -56,20 +65,42 @@ object ChapterNoteTransitions:
   private def withNote(annotations: Annotations, key: NoteKey, noteId: BufferId): Annotations =
     annotations.copy(notes = annotations.notes.updated(key, Notes(noteId)))
 
-  /** Focuses the pane already showing the note, or splits a new one for it. A split that does not happen leaves the
-    * layout alone rather than putting the note over the manuscript.
+  /** Focuses the pane already showing the note, else reuses the notes pane for it, else splits a new pane beside the
+    * focused one. A split that does not happen leaves the layout alone rather than putting the note over the
+    * manuscript.
     */
   private def showInPane(state: AppState, noteId: BufferId, axis: SplitAxis): AppState =
-    if state.persisted.layout.editorPanes.values.exists(_.bufferId.contains(noteId)) then
-      EditorState.focusBuffer(state, noteId)
+    val panes     = state.persisted.layout.editorPanes
+    val notesPane = state.runtime.notesPane.map(_.paneId).filter(panes.contains)
+    if panes.values.exists(_.bufferId.contains(noteId)) then EditorState.focusBuffer(state, noteId)
     else
-      val split = EditorState.splitFocusedPane(state, axis)
-      split.persisted.layout.editorPanes.keySet.diff(state.persisted.layout.editorPanes.keySet).toList match
-        case List(paneId) =>
-          val layout = split.persisted.layout
-          split.copy(persisted =
-            split.persisted.copy(layout =
-              layout.copy(editorPanes = layout.editorPanes.updated(paneId, EditorPane.withBuffer(paneId, noteId)))
-            )
+      notesPane.fold(splitForNote(state, noteId, axis))(paneId =>
+        EditorState.focusBuffer(withPaneBuffer(state, paneId, noteId), noteId)
+      )
+
+  private def splitForNote(state: AppState, noteId: BufferId, axis: SplitAxis): AppState =
+    val split = EditorState.splitFocusedPane(state, axis)
+    split.persisted.layout.editorPanes.keySet.diff(state.persisted.layout.editorPanes.keySet).toList match
+      case List(paneId) =>
+        val layout = split.persisted.layout
+        split.copy(persisted =
+          split.persisted.copy(layout =
+            layout.copy(editorPanes = layout.editorPanes.updated(paneId, EditorPane.withBuffer(paneId, noteId)))
           )
-        case _ => state
+        )
+      case _ => state
+
+  private def withPaneBuffer(state: AppState, paneId: PaneId, bufferId: BufferId): AppState =
+    val layout = state.persisted.layout
+    state.copy(persisted =
+      state.persisted.copy(layout =
+        layout.copy(editorPanes = layout.editorPanes.updatedWith(paneId)(_.map(_.copy(bufferId = Some(bufferId)))))
+      )
+    )
+
+  /** Makes the pane now showing the note the notes pane, following `sourcePane`. */
+  private def registered(shown: AppState, sourcePane: Option[PaneId]): AppState =
+    (shown.persisted.layout.activeEditorPaneId, sourcePane) match
+      case (Some(paneId), Some(source)) if paneId != source =>
+        shown.copy(runtime = shown.runtime.copy(notesPane = Some(NotesPane(paneId, source))))
+      case _ => shown
