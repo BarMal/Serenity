@@ -112,7 +112,8 @@ class ModelessModalOutsideClickSpec extends AnyFlatSpec with Matchers:
     val explorerId = SurfaceId("explorer")
     val (sm, _)    = editorWith(text)
     sm.updateState(state =>
-      DockedPanelFixtures.dock(state, explorerId, SurfaceContent.DirectoryTree(tree, Some(root)), PanelPosition.Left, 28)
+      DockedPanelFixtures
+        .dock(state, explorerId, SurfaceContent.DirectoryTree(tree, Some(root)), PanelPosition.Left, 28)
     ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
     sm.applyEvent(OpenFind).unsafeRunSync()

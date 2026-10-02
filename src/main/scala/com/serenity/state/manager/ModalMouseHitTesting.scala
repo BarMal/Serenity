@@ -76,8 +76,8 @@ private[manager] object ModalMouseHitTesting:
     yield (modal, hit)
 
   /** The focused floating modal workflow closed exactly as Escape closes it -- its `onDismiss` included -- when a
-    * primary press or click lands outside it (`inside` says whether it landed inside), so the input can go on to what it
-    * was aimed at instead of leaving the modal open but unfocused.
+    * primary press or click lands outside it (`inside` says whether it landed inside), so the input can go on to what
+    * it was aimed at instead of leaving the modal open but unfocused.
     */
   def dismissedByOutsideInput(
     event: MouseInputEvent,
@@ -86,8 +86,9 @@ private[manager] object ModalMouseHitTesting:
   ): Option[ReducerResult] =
     focusedFloatingModalWorkflow(state)
       .filter(surface => event.button == MouseButton.Primary && !inside(surface))
-      .collect { case UiSurface(_, SurfaceContent.ModalWorkflow(modal), _, _) =>
-        ModalEventReducer.reduce(modalType(modal), ModalDismiss, state)
+      .collect {
+        case UiSurface(_, SurfaceContent.ModalWorkflow(modal), _, _) =>
+          ModalEventReducer.reduce(modalType(modal), ModalDismiss, state)
       }
 
   def focusedFloatingModalWorkflow(state: AppState): Option[UiSurface] =
