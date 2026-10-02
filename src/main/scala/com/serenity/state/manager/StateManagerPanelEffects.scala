@@ -137,11 +137,7 @@ final private[manager] class StateManagerPanelEffects(
       .traverse_(setPanelPin(_, None))
 
   private[manager] def openMarkdownPreview: IO[Unit] =
-    pinPanel(
-      PanelId.MarkdownPreview,
-      PanelRegistry.registrationFor(PanelId.MarkdownPreview).defaultPosition,
-      refreshSelections = false
-    )
+    pinPanel(PanelId.MarkdownPreview, PanelRegistry.registrationFor(PanelId.MarkdownPreview).defaultPosition)
 
   private def placePanel(id: PanelId, position: Option[PanelPosition], index: Int): IO[Unit] =
     position match
@@ -158,14 +154,14 @@ final private[manager] class StateManagerPanelEffects(
   private def setPanelPin(id: PanelId, position: Option[PanelPosition]): IO[Unit] =
     position match
       case None =>
-        commitModel(PanelTransitions.panelChange(_, PanelTransitions.removePanel(id), refreshSelections = true)) >>
+        commitModel(PanelTransitions.panelChange(_, PanelTransitions.removePanel(id))) >>
           setCompanionSpriteEnabled(false).whenA(id == PanelId.Companion)
       case Some(targetPosition) =>
         currentState.flatMap { state =>
           val showsCompanion =
             id == PanelId.Companion && state.persisted.config.visualFlairLevel != VisualFlairLevel.Off
           setCompanionSpriteEnabled(true)
-            .whenA(showsCompanion) >> pinPanel(id, targetPosition, refreshSelections = true)
+            .whenA(showsCompanion) >> pinPanel(id, targetPosition)
         }
 
   /** The command/keyboard resize entry point (issue #1310) onto the same `resizePinnedPanel` -- and, through it,
@@ -185,19 +181,17 @@ final private[manager] class StateManagerPanelEffects(
   /** Only the per-panel pin/unpin mutations declare an undo boundary (#1016 PR4) -- not `PlacePanel`'s same-edge
     * reordering, which adjusts an already-pinned panel rather than pinning or unpinning one.
     */
-  private def pinPanel(id: PanelId, position: PanelPosition, refreshSelections: Boolean): IO[Unit] =
+  private def pinPanel(id: PanelId, position: PanelPosition): IO[Unit] =
     currentState.flatMap { state =>
-      val refreshed =
-        if refreshSelections then commitApp(PanelTransitions.withCommandRunnerPanelSelections) else IO.unit
       PanelTransitions.pinPlan(id, position, state) match
         case PanelPinPlan.Commit(update) =>
-          commitModel(PanelTransitions.panelChange(_, update, refreshSelections))
+          commitModel(PanelTransitions.panelChange(_, update))
         case PanelPinPlan.LoadExplorerRoot(size) =>
-          FileUtils.getCurrentDirectory.flatMap(pinExplorerPanelEffect(position, _, size)) >> refreshed
+          FileUtils.getCurrentDirectory.flatMap(pinExplorerPanelEffect(position, _, size))
         case PanelPinPlan.Report(message) =>
-          showQuickInfo(state, message) >> refreshed
+          showQuickInfo(state, message)
         case PanelPinPlan.Ignore(debugLog) =>
-          logger.debug(debugLog) >> refreshed
+          logger.debug(debugLog)
     }
 
   /** Toggles the TUI's spawned Swing preview window (issue #1113): closes it when already open for the focused buffer,

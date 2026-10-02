@@ -16,7 +16,6 @@ import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, SpellChecker}
 import com.serenity.state.core.NotesPaneSync
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.CommandRunnerPanelSelections
 import com.serenity.ui.layout.DirEntry
 import org.typelevel.log4cats.Logger
 
@@ -83,9 +82,7 @@ final private[manager] class StateManagerOperationBoundary private (
         state.runtime.capabilities,
         state.commandRunnerContext
       )
-    val runner = activatedRunner.copy(
-      optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
-    )
+    val runner = activatedRunner
     val (stateWithId, surfaceId) =
       state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
     val surface = UiSurface(
