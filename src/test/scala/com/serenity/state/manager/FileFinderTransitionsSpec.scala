@@ -65,7 +65,7 @@ class FileFinderTransitionsSpec extends AnyFlatSpec with Matchers:
 
   it should "be dropped once the finder has closed" in {
     val (state, id) = opened
-    val dismissed   = WorkflowSurfaces.dismissedToEditor(state, id)
+    val dismissed   = WorkflowSurfaces.dismissedToPriorFocus(state, id)
 
     FileFinderTransitions.withFilesListed(dismissed, id, root, Right(files)) shouldBe dismissed
   }

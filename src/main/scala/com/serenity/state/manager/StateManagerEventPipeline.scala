@@ -408,7 +408,7 @@ final private[manager] class StateManagerEventPipeline(
       case ComponentResult.FocusTransfer(newFocus) =>
         cats.effect.IO.pure(state.copy(persisted = state.persisted.copy(focus = newFocus)))
       case ComponentResult.Dismiss =>
-        cats.effect.IO.pure(EventPipelineTransitions.dismissedToEditor(dismissCurrentFocus(state)))
+        cats.effect.IO.pure(EventPipelineTransitions.dismissedToPriorFocus(dismissCurrentFocus(state)))
       case ComponentResult.ExecuteCommand(command) =>
         // The command reads the committed state, so the one built so far commits (validated) first.
         for

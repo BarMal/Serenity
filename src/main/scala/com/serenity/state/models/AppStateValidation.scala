@@ -18,6 +18,8 @@ object AppStateValidation:
         errors += s"Focus points to non-existent pane: $paneId"
       case Focus.Surface(surfaceId) if state.surfaceById(surfaceId).isEmpty =>
         errors += s"Focus points to non-existent surface: $surfaceId"
+      case Focus.Modal if state.runtime.modalStack.isEmpty =>
+        errors += "Focus is on the modal layer but no modal is open"
       case _ => // Valid focus
     errors ++= orderAndIdentityErrors(state)
     errors ++= documentPositionErrors(state)
