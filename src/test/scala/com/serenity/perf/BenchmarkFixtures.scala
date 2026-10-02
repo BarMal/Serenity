@@ -78,6 +78,52 @@ private[perf] object BenchmarkFixtures:
       .map(i => s"Line $i with enough text to exercise wrapping, comments, and cursor movement.")
       .mkString("\n")
 
+  /** Deterministic lorem ipsum: paragraphs of 40-120 words separated by blank lines, like prose a writer keeps. */
+  def loremIpsumProse(paragraphs: Int): String =
+    val words = Vector(
+      "lorem",
+      "ipsum",
+      "dolor",
+      "sit",
+      "amet",
+      "consectetur",
+      "adipiscing",
+      "elit",
+      "sed",
+      "do",
+      "eiusmod",
+      "tempor",
+      "incididunt",
+      "ut",
+      "labore",
+      "et",
+      "dolore",
+      "magna",
+      "aliqua",
+      "enim",
+      "ad",
+      "minim",
+      "veniam",
+      "quis",
+      "nostrud",
+      "exercitation",
+      "ullamco",
+      "laboris",
+      "nisi",
+      "aliquip",
+      "ex",
+      "ea",
+      "commodo",
+      "consequat"
+    )
+    val random = new scala.util.Random(1798L)
+    (1 to paragraphs)
+      .map { _ =>
+        val sentence = Vector.fill(40 + random.nextInt(81))(words(random.nextInt(words.size))).mkString(" ")
+        sentence.capitalize + "."
+      }
+      .mkString("\n\n")
+
   def largeFindDocument(matches: Int): String =
     (1 to matches).map(index => s"needle $index with replacement candidate").mkString("\n")
 

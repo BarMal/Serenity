@@ -189,6 +189,22 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
     ConfigManager.configToString(config) should include("ui.render.layer_cache = true")
   }
 
+  it should "default frame timing to off, then load and write it" in {
+    AppConfig.default.surfaceConfig.frameTimingEnabled shouldBe false
+
+    val configFile = Files.createTempFile("serenity-render-frame-timing-config", ".conf")
+    Files.writeString(
+      configFile,
+      """ui.render.frame_timing = true
+        |""".stripMargin
+    )
+
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    config.surfaceConfig.frameTimingEnabled shouldBe true
+    ConfigManager.configToString(config) should include("ui.render.frame_timing = true")
+  }
+
   it should "load and write the cursor info bar background alpha override" in {
     val configFile = Files.createTempFile("serenity-cursor-info-bar-alpha-config", ".conf")
     Files.writeString(

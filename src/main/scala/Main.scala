@@ -6,7 +6,7 @@ import cats.syntax.all.*
 import com.serenity.BuildInfo
 import com.serenity.app.*
 import com.serenity.config.{AppConfig, ConfigManager, ConfigMigrationWarning}
-import com.serenity.diagnostics.{Trace, TuiConsoleLogFilter}
+import com.serenity.diagnostics.{FrameKind, FramePhase, FrameTimings, Trace, TuiConsoleLogFilter}
 import com.serenity.frontend.{Frontend, FrontendRuntime, GuiFrontend}
 import com.serenity.input.SwingInputHandler
 import com.serenity.io.SwingFileDialog
@@ -114,12 +114,14 @@ object Main extends IOApp:
     for
       displayState <- RuntimeDisplayState.create(appConfig.editorConfig.fontConfig)
       initialDisplay = displayState.snapshot
+      frameTimings   = FrameTimings()
       _ <- (
         SwingWindow.resource(
           initialDisplay.codeMetrics,
           initialDisplay.uiMetrics,
           appConfig.windowChromeMode,
-          appConfig.preferredWindowSize
+          appConfig.preferredWindowSize,
+          frameTimings
         ),
         PaintExecutionContext.resource
       ).tupled
@@ -168,19 +170,25 @@ object Main extends IOApp:
                     router,
                     () => swingWin.metrics,
                     () => displayState.uiMetrics,
-                    actualAppConfig.inputConfig.wheelScrollLines
+                    actualAppConfig.inputConfig.wheelScrollLines,
+                    frameTimings
                   )
                 ),
               renderFull = (state, vis, cc, damage, bufferAnimations, caches) =>
-                syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >>
+                timedFrame(frameTimings, FrameKind.Full)(
+                  syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
                   IO(
                     paintFullFrame(state, vis, cc, swingWin, displayState.snapshot, damage, bufferAnimations, caches)
-                  ).evalOn(paintEc),
+                  ).evalOn(paintEc)
+                ),
               renderCursorOnly = (state, vis, cc, damage, bufferAnimations, caches) =>
-                syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >>
+                timedFrame(frameTimings, FrameKind.CursorOnly)(
+                  syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
                   IO(
                     paintCursorFrame(state, vis, cc, swingWin, displayState.snapshot, damage, bufferAnimations, caches)
                   ).evalOn(paintEc)
+                ),
+              frameTimings = frameTimings
             )
 
             initialScaleSync >> AppRuntime.run(
@@ -214,6 +222,11 @@ object Main extends IOApp:
           }
         }
     yield ()
+
+  private def timedFrame(timings: FrameTimings, kind: FrameKind)(sync: IO[Unit], draw: IO[Unit]): IO[Unit] =
+    IO(timings.renderStarted()) >> timings.timedIO(FramePhase.Sync)(sync) >> draw.guarantee(
+      IO(timings.renderFinished(kind))
+    )
 
   private def resolveAutoTextScale(config: AppConfig, detectedTextScale: Double): AppConfig =
     config.withFontConfig(config.editorConfig.fontConfig.resolveAutoTextScale(detectedTextScale))

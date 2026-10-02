@@ -59,6 +59,9 @@
 # paydown: StateManagerCapabilitySpec.scala grew by 1 line (638 -> 639): `CommandEffectInterpreter.Dependencies` gained
 # `unrecordedCommand` (the `AppEffect.ExecuteCommandUnrecorded` route picker previews and dismiss commands take), and
 # this spec's effect-order test builds every dependency by name.
+# paydown: PerformanceBenchmarks.scala grew by 1 line (764 -> 765): `main` opens a second, laptop-sized window for
+# LaptopFrameBenchmarks' present benchmark (#1798 follow-up). The benchmarks themselves live in their own file and the
+# name-prefix selection in BenchmarkRunner.runMatching; what's left here is the one extra resource acquisition.
 main/scala/com/serenity/app/RuntimeDisplayState.scala	forbidden mutable state at line 78: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/config/ConfigManager.scala	method parseConfig	100
 main/scala/com/serenity/io/SwingFileDialog.scala	forbidden mutable state at line 35: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
@@ -87,7 +90,7 @@ test/scala/com/serenity/RendererTextLayoutSpec.scala	file length	722
 test/scala/com/serenity/ReplaceWorkflowStateManagerSpec.scala	file length	713
 test/scala/com/serenity/SpellCheckerDictionaryIoSpec.scala	file length	646
 test/scala/com/serenity/SpellCheckerSpec.scala	file length	602
-test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	764
+test/scala/com/serenity/perf/PerformanceBenchmarks.scala	file length	765
 test/scala/com/serenity/perf/PerformanceBenchmarks.scala	method benchmarks	316
 test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file length	639
 test/scala/com/serenity/ui/tui/TerminalEmulator.scala	method interpret	84

@@ -108,6 +108,10 @@ object BenchmarkRunner:
       Some(bean)
     case _ => None
 
+  /** Runs the benchmarks whose names start with any of `prefixes`, or all of them when there are none. */
+  private[perf] def runMatching(prefixes: List[String], benchmarks: List[Benchmark]): List[BenchmarkResult] =
+    benchmarks.filter(b => prefixes.isEmpty || prefixes.exists(b.name.startsWith)).map(runBenchmark)
+
   private[perf] def runBenchmark(benchmark: Benchmark): BenchmarkResult =
     benchmark.verify()
     val (warmupInvocations, warmupAcc) =

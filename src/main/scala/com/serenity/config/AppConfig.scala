@@ -217,6 +217,9 @@ final case class AppConfig(
   def withLayerCaching(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(layerCachingEnabled = enabled))
 
+  def withFrameTiming(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(frameTimingEnabled = enabled))
+
   def withDiagnosticHighlightBlendWeight(weight: Double): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(diagnosticHighlightBlendWeight = weight))
 

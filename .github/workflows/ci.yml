@@ -161,7 +161,8 @@ jobs:
       # periodically run and archive the CSV output for trend tracking"; the regression check below is its "or wire a
       # subset into CI with a regression threshold" half.
       - name: Run performance benchmarks
-        run: xvfb-run -a sbt -v "Test/runMain com.serenity.perf.PerformanceBenchmarks" | tee perf-results-raw.txt
+        # A screen large enough for `LaptopFrameBenchmarks`' 1500x1000 window; xvfb-run's default is 1280x1024.
+        run: xvfb-run -a -s "-screen 0 1920x1200x24" sbt -v "Test/runMain com.serenity.perf.PerformanceBenchmarks" | tee perf-results-raw.txt
 
       - name: Extract benchmark CSV from sbt output
         shell: bash
