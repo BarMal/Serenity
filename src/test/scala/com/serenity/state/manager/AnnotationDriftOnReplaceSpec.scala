@@ -8,8 +8,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** When a buffer's whole text is swapped -- reloaded from disk, or replaced by a formatter or file watcher -- its
-  * annotations must keep their place relative to the text around the change, and none may be left pointing past the
-  * end of a document that has shrunk.
+  * annotations must keep their place relative to the text around the change, and none may be left pointing past the end
+  * of a document that has shrunk.
   */
 class AnnotationDriftOnReplaceSpec extends AnnotationDriftFixtures:
 

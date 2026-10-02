@@ -197,9 +197,8 @@ final case class Buffer(
     copy(editing = EditingState(updated))
 
   /** Moves cursors and selection ends past the last line onto it, and drops bookmarks, comments and placeholders past
-    * it -- for
-    * content replaced from disk (a reload, or a session restore that prefers the disk), which may be shorter than the
-    * positions recorded against the old content.
+    * it -- for content replaced from disk (a reload, or a session restore that prefers the disk), which may be shorter
+    * than the positions recorded against the old content.
     */
   def clampedToContent: Buffer =
     val lineCount                         = document.content.lineCount
