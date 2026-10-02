@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
+import com.serenity.state.reducers.EditorEditSupport
 import com.serenity.ui.layout.LayoutEngine
 
 private[manager] enum SaveKind:
@@ -69,7 +70,16 @@ private[manager] object FileResults:
       .get(bufferId)
       .filter(buffer => buffer.document.filePath.contains(path) && buffer.document.content == contentAtRequest)
       .fold(state)(current =>
-        withBuffer(state, current.copy(document = disk.document, richText = disk.richText).clampedToContent)
+        val annotations =
+          EditorEditSupport.adjustAnnotationsAcrossReplacement(
+            current.annotations,
+            current.document.content,
+            disk.document.content
+          )
+        withBuffer(
+          state,
+          current.copy(document = disk.document, richText = disk.richText, annotations = annotations).clampedToContent
+        )
       )
 
   /** Adds the loaded buffer under a fresh id, focuses it and dismisses the start page -- only the start page: every

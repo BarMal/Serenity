@@ -196,7 +196,8 @@ final case class Buffer(
   def withCursorList(updated: NonEmptyList[Cursor]): Buffer =
     copy(editing = EditingState(updated))
 
-  /** Moves cursors and selection ends past the last line onto it, and drops bookmarks and comments past it -- for
+  /** Moves cursors and selection ends past the last line onto it, and drops bookmarks, comments and placeholders past
+    * it -- for
     * content replaced from disk (a reload, or a session restore that prefers the disk), which may be shorter than the
     * positions recorded against the old content.
     */
@@ -217,7 +218,8 @@ final case class Buffer(
       annotations = annotations.copy(
         bookmarks = annotations.bookmarks.filter(inRange),
         documentComments =
-          annotations.documentComments.filter(comment => inRange(comment.anchor) && inRange(comment.focus))
+          annotations.documentComments.filter(comment => inRange(comment.anchor) && inRange(comment.focus)),
+        placeholders = annotations.placeholders.filter(placeholder => inRange(placeholder.position))
       )
     )
 
