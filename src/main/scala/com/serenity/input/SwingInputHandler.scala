@@ -6,6 +6,7 @@ import java.util.concurrent.{ConcurrentLinkedQueue, Semaphore}
 
 import cats.effect.Sync
 import com.serenity.config.InputConfig
+import com.serenity.diagnostics.FrameTimings
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.ui.layout.CellMetrics
@@ -22,7 +23,8 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     inputRouter: InputRouter[F, E],
     metrics: () => CellMetrics,
     uiMetrics: () => CellMetrics,
-    wheelScrollLines: Int = InputConfig().wheelScrollLines
+    wheelScrollLines: Int = InputConfig().wheelScrollLines,
+    frameTimings: FrameTimings = FrameTimings()
 ) extends InputHandler[F]:
 
   def this(component: java.awt.Component, inputRouter: InputRouter[F, E], metrics: () => CellMetrics) =
@@ -90,6 +92,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
 
   private def enqueue(input: QueuedInput): Unit =
     if !shutdownFlag.get() then
+      frameTimings.inputArrived()
       enqueuesInFlight.incrementAndGet()
       if !shutdownFlag.get() then
         input match

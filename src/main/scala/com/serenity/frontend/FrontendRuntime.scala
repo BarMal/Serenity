@@ -3,6 +3,7 @@ package com.serenity.frontend
 import java.awt.Color
 
 import cats.effect.IO
+import com.serenity.diagnostics.FrameTimings
 import com.serenity.input.{InputHandler, InputRouter}
 import com.serenity.keystroke.events.Event
 import com.serenity.state.manager.RenderCaches
@@ -50,5 +51,6 @@ object FrontendRuntime:
 final case class FrontendRuntime(
     inputHandler: InputRouter[IO, Event] => IO[InputHandler[IO]],
     renderFull: FrontendRuntime.RenderFn,
-    renderCursorOnly: FrontendRuntime.RenderFn
+    renderCursorOnly: FrontendRuntime.RenderFn,
+    frameTimings: FrameTimings = FrameTimings()
 )

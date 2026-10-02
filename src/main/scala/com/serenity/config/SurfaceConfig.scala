@@ -91,6 +91,7 @@ final case class SurfaceConfig(
     // Off by default: a cached layer holds a full-window image per modal/panel, and repainting a panel directly costs
     // less than compositing that image back over the whole frame (#1798).
     layerCachingEnabled: Boolean = false,
+    frameTimingEnabled: Boolean = false,
     // How strongly a misspelled-word/LSP diagnostic's severity colour shows through its highlight, versus the colour
     // it's painted over -- the current (possibly focus-mode-dimmed) foreground/background, not always the theme's own
     // full-intensity ones (#1530). Was a hardcoded literal in `RendererHighlights` (#1529); 0.45 matches that literal

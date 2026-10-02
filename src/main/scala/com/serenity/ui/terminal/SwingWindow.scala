@@ -13,6 +13,7 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.{IO, Resource}
 import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
+import com.serenity.diagnostics.FrameTimings
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, SwingAccessibilityBridge}
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
@@ -23,7 +24,8 @@ class SwingWindow(
     initialPixelSize: Dimension,
     initialMetrics: CellMetrics,
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
-    initialChromeMetrics: CellMetrics
+    initialChromeMetrics: CellMetrics,
+    frameTimings: FrameTimings = FrameTimings()
 ):
 
   private val usesCustomChrome           = SwingWindow.shouldUseCustomChrome(chromeMode)
@@ -92,12 +94,15 @@ class SwingWindow(
           publishCanvasResize(getSize())
     )
     override def paintComponent(g: java.awt.Graphics): Unit =
-      val g2 = g.create().asInstanceOf[Graphics2D]
-      try SwingWindow.paintCanvasBackground(g2, getWidth, getHeight, contentTransparentRef.get())
-      finally g2.dispose()
-      val published = publishedImagesRef.get()
-      published.base.foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
-      published.overlay.foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
+      val paintStart = frameTimings.paintStarted()
+      try
+        val g2 = g.create().asInstanceOf[Graphics2D]
+        try SwingWindow.paintCanvasBackground(g2, getWidth, getHeight, contentTransparentRef.get())
+        finally g2.dispose()
+        val published = publishedImagesRef.get()
+        published.base.foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
+        published.overlay.foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
+      finally frameTimings.paintFinished(paintStart)
 
   private val accessibilityBridge = new SwingAccessibilityBridge(canvas)
 
@@ -124,9 +129,12 @@ class SwingWindow(
     publishedImagesRef.set(SwingWindow.PublishedImages(Some(image), None))
     dirtyRegion.filter(_ => displayedOverlay.isEmpty) match
       case Some(region) if region.width > 0 && region.height > 0 =>
+        frameTimings.framePublished()
         SwingUtilities.invokeLater(() => canvas.repaint(region.x, region.y, region.width, region.height))
       case Some(_) => ()
-      case None    => SwingUtilities.invokeLater(() => canvas.repaint())
+      case None =>
+        frameTimings.framePublished()
+        SwingUtilities.invokeLater(() => canvas.repaint())
 
   def onBaseImageReady(image: BufferedImage): Unit =
     baseImagePool.publish(image)
@@ -155,9 +163,12 @@ class SwingWindow(
         val previousCursorRects = previousCursorRectsRef.getAndSet(currentCursorRects)
         SwingWindow.combinedCursorRepaintRegion(baseDirtyRegion, previousCursorRects, currentCursorRects) match
           case Some(region) if region.width > 0 && region.height > 0 =>
+            frameTimings.framePublished()
             SwingUtilities.invokeLater(() => canvas.repaint(region.x, region.y, region.width, region.height))
           case Some(_) => ()
-          case None    => SwingUtilities.invokeLater(() => canvas.repaint())
+          case None =>
+            frameTimings.framePublished()
+            SwingUtilities.invokeLater(() => canvas.repaint())
         true
       case None =>
         false
@@ -453,7 +464,8 @@ object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport
     metrics: CellMetrics = DefaultMetrics,
     chromeMetrics: CellMetrics = DefaultMetrics,
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
-    preferredWindowSize: Option[PreferredWindowSize] = None
+    preferredWindowSize: Option[PreferredWindowSize] = None,
+    frameTimings: FrameTimings = FrameTimings()
   ): Resource[IO, SwingWindow] =
     Resource.make(
       IO.blocking {
@@ -462,7 +474,8 @@ object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport
           new Dimension(initialSize.width, initialSize.height),
           metrics,
           chromeMode,
-          chromeMetrics
+          chromeMetrics,
+          frameTimings
         )
         win.start()
         win

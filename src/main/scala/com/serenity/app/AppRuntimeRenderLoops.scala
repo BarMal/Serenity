@@ -7,7 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.*
 import cats.syntax.semigroup.*
 import com.serenity.config.{AppConfig, CursorMode}
-import com.serenity.diagnostics.Trace
+import com.serenity.diagnostics.{FrameTimings, Trace}
 import com.serenity.input.*
 import com.serenity.keystroke.events.Event
 import com.serenity.state.manager.*
@@ -67,7 +67,8 @@ private[serenity] object AppRuntimeRenderLoops:
     emitDamage: Damage => IO[Unit],
     translatorCache: Ref[IO, Option[FocusedTranslatorCacheEntry]] = Ref.unsafe[IO, Option[FocusedTranslatorCacheEntry]](
       None
-    )
+    ),
+    frameTimings: FrameTimings = FrameTimings()
   )(using balance: com.serenity.rope.Balance): Stream[IO, Event] => Stream[IO, Unit] =
     _.evalMap { event =>
       for
@@ -76,7 +77,9 @@ private[serenity] object AppRuntimeRenderLoops:
           checkResizeBeforeInput(event, checkResizeAndHandle) >>
             ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
             observeCompanionSpriteTyping(event, stateManager) >>
+            IO(frameTimings.inputApplyStarted()) >>
             stateManager.applyEvent(event) >>
+            IO(frameTimings.inputApplyFinished()) >>
             ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
             refreshFocusedInputTranslator(stateManager, inputRouter, translatorCache) >>
             AppRuntime.resetCursorActivity(cursorVisible, breathIndex)

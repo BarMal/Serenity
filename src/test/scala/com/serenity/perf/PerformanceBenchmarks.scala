@@ -64,11 +64,13 @@ object PerformanceBenchmarks:
 
     SwingWindow
       .resource(metrics = cellMetrics, chromeMetrics = uiMetrics)
-      .flatMap(window => projectTaskFixtureResource.map(projectRoot => window -> projectRoot))
+      .flatMap(window => LaptopFrameBenchmarks.presentWindowResource(cellMetrics, uiMetrics).map(window -> _))
+      .flatMap(windows => projectTaskFixtureResource.map(projectRoot => windows -> projectRoot))
       .use {
-        case (window, projectRoot) =>
+        case ((window, presentWindow), projectRoot) =>
           IO {
-            val results = benchmarks(window, projectRoot).map(BenchmarkRunner.runBenchmark)
+            val all     = benchmarks(window, projectRoot) ++ LaptopFrameBenchmarks.benchmarks(presentWindow)
+            val results = BenchmarkRunner.runMatching(args.toList, all)
             BenchmarkRunner.printResults(results)
           }
       }

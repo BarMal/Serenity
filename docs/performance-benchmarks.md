@@ -21,6 +21,20 @@ Scenarios cover:
 - LSP frame decoding and project-task detection/terminal preparation
 - Markdown preview and inline-lens rendering
 - visible animation tick advancement
+- `laptop.*`: the editor at a real laptop's size (1500x1000 logical at 2x, word-wrapped lorem ipsum, default config):
+  full frames with and without a Frosted pinned panel, keystrokes applied through a live `StateManager`, and Swing
+  painting a 1500x1000 window. The window needs a screen at least that large, so run it with
+  `xvfb-run -a -s "-screen 0 1920x1200x24"`.
+
+Pass name prefixes to run only some scenarios, e.g. `sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks laptop."`.
+
+## Frame timing in the running app
+
+Set `ui.render.frame_timing = true` in `~/.serenity/config.conf` and the app logs a `[FRAME]` line to
+`~/.serenity/serenity.log` every 5 seconds: frame counts and rates, then p50/p95/max per stage -- `input-queue`,
+`input-apply`, `render-wait`, `sync`, `render` (sync included), `paint-wait`, `paint`, and `input-to-paint`, the time
+from an input arriving to the end of the first paint that shows it. The `laptop.*` benchmarks measure the same stages,
+so a laptop log and a CI run can be compared stage by stage.
 
 This remains a manual comparison tool for local before/after investigation. CI additionally runs this harness on every
 push/PR and gates on it: `scripts/check_perf_regression.py` compares the run's p50 against a stored baseline and

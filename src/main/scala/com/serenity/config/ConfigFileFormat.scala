@@ -201,6 +201,8 @@ object ConfigFileFormat:
     field("ui.render.cache_capacity"),
     comment("Cache modal/panel layers between frames instead of repainting them (each holds a full-window image)"),
     field("ui.render.layer_cache"),
+    comment("Log a [FRAME] timing summary (input, render and paint latency) to the app log every 5 seconds"),
+    field("ui.render.frame_timing"),
     comment("Visual flair tier for purely decorative extras (companion sprite, background blur): full, reduced, off"),
     field("ui.visual_flair"),
     comment("Companion sprite: a small pixel-art character idling in a pinned pane, reacting to typing (issue #934)"),

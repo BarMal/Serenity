@@ -105,6 +105,52 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync() shouldBe (4, 0)
   }
 
+  it should "time each input's wait for the input loop and its application to the state" in {
+    val timings = com.serenity.diagnostics.FrameTimings()
+    val program = for
+      cursorVisible <- Ref.of[IO, Boolean](true)
+      breathIndex   <- Ref.of[IO, Int](0)
+      router = new InputRouter[IO, Event]:
+        private val initialTranslator = new TextEntryTranslator(AppConfig.default)
+
+        def eventStream(infoStream: Stream[IO, KeyStrokeInfo]): Stream[IO, Event] = Stream.empty
+        def setActiveTranslator(translator: Translator[Event]): IO[Unit]          = IO.unit
+        def getActiveTranslator: IO[Translator[Event]]                            = IO.pure(initialTranslator)
+      stateManager = new com.serenity.state.manager.StateEngine:
+        def getCurrentState: IO[AppState] = IO.pure(AppState.initial)
+        def getModel: IO[com.serenity.state.manager.Model] =
+          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState(), Map.empty))
+        def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
+        def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
+        def updateStateValidated(update: AppState => AppState): IO[Unit]                  = IO.unit
+        def updateBufferAnimations(
+          update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
+            BufferId,
+            com.serenity.animation.AnimationState
+          ]
+        ): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit] = IO.unit
+      clipboard = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
+      _ <- AppRuntimeRenderLoops
+        .inputEventPhase(
+          stateManager,
+          router,
+          clipboard,
+          IO.unit,
+          cursorVisible,
+          breathIndex,
+          (_: Damage) => IO.unit,
+          frameTimings = timings
+        )(Stream.emits(List(InsertChar('a'), MoveLeft, InsertChar('b'))))
+        .compile
+        .drain
+    yield timings.drain()
+
+    val summary = program.unsafeRunSync()
+    summary.phases.get(com.serenity.diagnostics.FramePhase.InputQueue).map(_.count) shouldBe Some(3)
+    summary.phases.get(com.serenity.diagnostics.FramePhase.InputApply).map(_.count) shouldBe Some(3)
+  }
+
   it should "check for a resize before applying pointer input" in {
     val program = for
       resizeChecks  <- Ref.of[IO, Int](0)

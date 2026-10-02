@@ -10,6 +10,7 @@ import cats.syntax.foldable.*
 import cats.syntax.parallel.*
 import cats.syntax.semigroup.*
 import com.serenity.config.{AppConfig, RenderFpsTarget}
+import com.serenity.diagnostics.{FrameTimingReport, FrameTimings}
 import com.serenity.frontend.{Frontend, FrontendRuntime}
 import com.serenity.input.*
 import com.serenity.keystroke.events.Event
@@ -200,7 +201,8 @@ object AppRuntime:
           cursorVisible,
           breathIndex,
           emitDamage,
-          translatorCache
+          translatorCache,
+          runtime.frameTimings
         )
         inputLoop = runInputLoop(stateManager, inputHandler, inputFunnel)
         _ <-
@@ -247,7 +249,8 @@ object AppRuntime:
                     renderLoop,
                     watcher,
                     awaitExternalQuit,
-                    appConfig
+                    appConfig,
+                    runtime.frameTimings
                   )
                 )
               }
@@ -263,7 +266,8 @@ object AppRuntime:
     renderLoop: Stream[IO, Unit],
     fileChangeWatcher: com.serenity.io.FileChangeWatcher,
     awaitExternalQuit: IO[Unit],
-    appConfig: AppConfig
+    appConfig: AppConfig,
+    frameTimings: FrameTimings
   )(using logger: Logger[IO]): IO[Unit] =
     val (lifecycle, quitSignal) = (stateManager.runtimeLifecycle, stateManager.runtimeLifecycle.awaitQuit.attempt)
     (
@@ -299,8 +303,19 @@ object AppRuntime:
           stateManager.fileService.explorerWatchDirectories,
           stateManager.fileService.markExplorerDirectoriesStale
         ).interruptWhen(quitSignal).compile.drain
+      ),
+      AppRuntimeRenderLoops.superviseLoop("frame timing report", lifecycle.forceQuit)(
+        FrameTimingReport
+          .stream(
+            frameTimings,
+            stateManager.getCurrentState.map(_.persisted.config.surfaceConfig.frameTimingEnabled),
+            line => logger.info(line)
+          )
+          .interruptWhen(quitSignal)
+          .compile
+          .drain
       )
-    ).parMapN((_, _, _, _, _, _, _, _) => ())
+    ).parMapN((_, _, _, _, _, _, _, _, _) => ())
 
   /** Background half of external-change detection (#1623), complementing the focus-in re-check: each cycle, re-derives
     * the watched directory set from the currently open local buffers (`FileChangeWatcher.sync` handles buffers

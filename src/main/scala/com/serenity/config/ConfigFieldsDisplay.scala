@@ -46,6 +46,10 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.layerCachingEnabled,
       (config, value) => config.withLayerCaching(value)
     ),
+    field("ui.render.frame_timing", "render.frame_timing", "render_frame_timing")(boolean)(
+      _.surfaceConfig.frameTimingEnabled,
+      (config, value) => config.withFrameTiming(value)
+    ),
     named("editor.word_wrap", "wordWrapEnabled", "display.word_wrap", "display.word.wrap", "display_word_wrap")(
       boolean
     )(
