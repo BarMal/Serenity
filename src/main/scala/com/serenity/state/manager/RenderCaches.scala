@@ -21,7 +21,8 @@ final class RenderCaches private (
     val themeHighlightCache: ThemeHighlightCache,
     val graphemeSegmentationCache: GraphemeSegmentationCache,
     val authoritativeScene: AuthoritativeUiScene,
-    val markdownPreviewCache: MarkdownPreviewCache
+    val markdownPreviewCache: MarkdownPreviewCache,
+    val chapterGhosts: ChapterGhostCache
 )
 
 object RenderCaches:
@@ -36,5 +37,6 @@ object RenderCaches:
       ThemeHighlightCache(),
       GraphemeSegmentationCache(),
       AuthoritativeUiScene(),
-      MarkdownPreviewCache()
+      MarkdownPreviewCache(),
+      ChapterGhostCache()
     )

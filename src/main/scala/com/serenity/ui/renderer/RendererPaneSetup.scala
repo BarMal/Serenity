@@ -40,7 +40,9 @@ final case class BufferRenderAnnotations(
     // See `SemanticTokensAvailability` for what each case means -- `Pending` (a request may still be in flight) is
     // deliberately distinct from `Unavailable` (confirmed no server/capability). AppState.semanticTokensAvailability
     // is where this is derived.
-    semanticTokensAvailability: SemanticTokensAvailability
+    semanticTokensAvailability: SemanticTokensAvailability,
+    // A chapter note's overview, keyed by the blank buffer line it is painted faded on (see `ChapterGhosts`).
+    ghostsByLine: Map[Int, String] = Map.empty
 )
 
 /** Answers "what does each pane's content look like this frame": the per-frame [[EditorPaneRenderPlan]] (buffer layout
@@ -102,14 +104,23 @@ object RendererPaneSetup:
       .toList
       .distinct
       .flatMap { bufferId =>
-        state.persisted.buffers.get(bufferId).map { _ =>
+        state.persisted.buffers.get(bufferId).map { buffer =>
           val visibleLines   = visibleLinesByBuffer.getOrElse(bufferId, Set.empty)
           val cached         = state.annotationIndex(bufferId).getOrElse(AnnotationLineIndex(Vector.empty, Map.empty))
           val commentsByLine = cached.commentsByLine(visibleLines)
           val diagnosticsByLine = visibleAnnotationLines(visibleLines, cached.diagnosticsByLine)
           val semanticTokensAvailability =
             state.semanticTokensAvailability(bufferId).getOrElse(SemanticTokensAvailability.Pending)
-          bufferId -> BufferRenderAnnotations(commentsByLine, diagnosticsByLine, semanticTokensAvailability)
+          val ghostsByLine =
+            if state.runtime.chapterGhostsVisible && !RendererMarkdownLens.isInlineMarkdownLens(buffer, state) then
+              context.caches.chapterGhosts.ghostsFor(buffer, state.persisted.buffers)
+            else Map.empty[Int, String]
+          bufferId -> BufferRenderAnnotations(
+            commentsByLine,
+            diagnosticsByLine,
+            semanticTokensAvailability,
+            ghostsByLine
+          )
         }
       }
       .toMap
