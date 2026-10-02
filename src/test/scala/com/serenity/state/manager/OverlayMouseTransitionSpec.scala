@@ -1,6 +1,5 @@
 package com.serenity.state.manager
 
-import com.serenity.{AboveCursorStackFixtures, ContextualToolbarTestSupport}
 import com.serenity.app.AppStartup
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.AppConfigMotionOps.*
@@ -9,6 +8,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.ui.layout.*
+import com.serenity.{AboveCursorStackFixtures, ContextualToolbarTestSupport}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
