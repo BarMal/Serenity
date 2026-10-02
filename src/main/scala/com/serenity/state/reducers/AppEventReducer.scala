@@ -53,6 +53,12 @@ object AppEventReducer:
       case ToggleChapterGhosts =>
         ReducerResult.noEffects(ChapterNoteTransitions.toggleGhosts(state))
 
+      case OpenChapterNote =>
+        ReducerResult.noEffects(ChapterNoteTransitions.openCurrentChapterNote(state, SplitAxis.Horizontal))
+
+      case ToggleNotesPin =>
+        ReducerResult.noEffects(ChapterNoteTransitions.toggleNotesPin(state))
+
       case SplitPaneHorizontal =>
         ReducerResult.noEffects(EditorState.splitFocusedPane(state, SplitAxis.Horizontal))
 

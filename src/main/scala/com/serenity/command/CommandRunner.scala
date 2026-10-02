@@ -469,6 +469,8 @@ object CommandRunner:
       "split-pane-horizontal" -> HotkeyAction.SplitPaneHorizontal,
       "split-pane-vertical"   -> HotkeyAction.SplitPaneVertical,
       "toggle-chapter-ghosts" -> HotkeyAction.ToggleChapterGhosts,
+      "open-chapter-note"     -> HotkeyAction.OpenChapterNote,
+      "toggle-notes-pin"      -> HotkeyAction.ToggleNotesPin,
       "close-pane"            -> HotkeyAction.ClosePane,
       "find"                  -> HotkeyAction.Find,
       "replace"               -> HotkeyAction.Replace,

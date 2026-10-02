@@ -38,6 +38,8 @@ enum HotkeyAction:
   case FocusUp
   case FocusDown
   case ToggleChapterGhosts
+  case OpenChapterNote
+  case ToggleNotesPin
 
   def configKey: String =
     this match
@@ -73,6 +75,8 @@ enum HotkeyAction:
       case FocusUp                  => "focus_up"
       case FocusDown                => "focus_down"
       case ToggleChapterGhosts      => "toggle_chapter_ghosts"
+      case OpenChapterNote          => "open_chapter_note"
+      case ToggleNotesPin           => "toggle_notes_pin"
 
 final case class HotkeyTrigger(
     keyType: InputKey,
@@ -309,10 +313,16 @@ object HotkeyConfig:
       HotkeyAction.FocusDown  -> InputKey.ArrowDown
     ).view.mapValues(key => List(HotkeyTrigger(key, None, Set(Modifier.Alt)))).toMap
 
-  // Shifted Go to Line, the same shift-for-the-related-action pattern as FileSearch over Find.
-  private def chapterGhostBindings(primaryModifier: Modifier): Map[HotkeyAction, List[HotkeyTrigger]] =
-    val trigger = HotkeyTrigger(InputKey.Character, Some('g'), Set(primaryModifier, Modifier.Shift))
-    Map(HotkeyAction.ToggleChapterGhosts -> List(trigger))
+  // Ctrl+G is Go to Line, so the chapter-note keys live on the shifted letters. None of them is Ctrl+Shift+H/I/J/M,
+  // which collapse into Backspace/Tab/Enter on terminals that cannot tell Ctrl+Shift+letter from Ctrl+letter.
+  private def chapterNoteBindings(primaryModifier: Modifier): Map[HotkeyAction, List[HotkeyTrigger]] =
+    def shifted(key: Char): List[HotkeyTrigger] =
+      List(HotkeyTrigger(InputKey.Character, Some(key), Set(primaryModifier, Modifier.Shift)))
+    Map(
+      HotkeyAction.ToggleChapterGhosts -> shifted('g'),
+      HotkeyAction.OpenChapterNote     -> shifted('n'),
+      HotkeyAction.ToggleNotesPin      -> shifted('l')
+    )
 
   def defaultBindingsFor(osName: String): Map[HotkeyAction, List[HotkeyTrigger]] =
     val isMac           = osName.toLowerCase(java.util.Locale.ROOT).contains("mac")
@@ -392,7 +402,7 @@ object HotkeyConfig:
       // every terminal and by AWT regardless of platform, so it needs none of `forTerminalUse`'s Mac-Cmd rewriting
       // (issue #1213) and no per-OS branching here.
       HotkeyAction.ToggleShortcutsHelp -> List(HotkeyTrigger(InputKey.F1, None, Set.empty))
-    ) ++ directionalFocusBindings ++ chapterGhostBindings(primaryModifier)
+    ) ++ directionalFocusBindings ++ chapterNoteBindings(primaryModifier)
 
   def validate(bindings: Map[HotkeyAction, List[HotkeyTrigger]]): Either[String, Unit] =
     bindings.toList

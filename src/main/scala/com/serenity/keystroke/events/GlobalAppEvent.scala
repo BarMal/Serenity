@@ -14,6 +14,8 @@ case object ToggleContextualToolbar extends GlobalAppEvent
 case object ToggleShortcutsHelp     extends GlobalAppEvent // F1 (issue #1247)
 case object ToggleTabList           extends GlobalAppEvent // issue #1307
 case object ToggleChapterGhosts     extends GlobalAppEvent // Ctrl+Shift+G
+case object OpenChapterNote         extends GlobalAppEvent // Ctrl+Shift+N
+case object ToggleNotesPin          extends GlobalAppEvent // Ctrl+Shift+L
 case object ToggleRecentFilesInMode extends GlobalAppEvent // issue #1307
 
 /** Toggles a registered panel's floating (command-palette) presentation open or closed (issue #1310) -- the parametric
