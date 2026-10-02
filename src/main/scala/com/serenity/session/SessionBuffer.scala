@@ -34,7 +34,8 @@ final case class SessionBuffer(
     notes: List[SessionNote] = Nil
 )
 
-/** One note, flattened for JSON: `kind` says whether `title` is a chapter heading (with its `occurrence`) or a keyword. */
+/** One note, flattened for JSON: `kind` says whether `title` is a chapter heading (with its `occurrence`) or a keyword.
+  */
 final case class SessionNote(kind: String, title: String, occurrence: Int, overview: Int, extra: Option[Int])
 
 final case class SessionCursorPosition(
