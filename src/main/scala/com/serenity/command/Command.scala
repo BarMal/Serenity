@@ -99,6 +99,15 @@ enum ViewIntent:
   /** Maximises the focused panel into the workspace, or restores the maximised one. */
   case ToggleMaximisePanel
 
+  /** Shows the note for the chapter the cursor is in beside the manuscript, creating it the first time. */
+  case OpenChapterNote
+
+  /** Shows or hides the faded overview under empty chapters; the notes themselves are untouched. */
+  case ToggleChapterGhosts
+
+  /** Pins the notes pane to the note it shows, or lets it follow the cursor's chapter again. */
+  case ToggleNotesPin
+
   /** Moves focus to the nearest editor pane or docked panel in `direction`. */
   case FocusInDirection(direction: Direction)
 

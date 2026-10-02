@@ -29,8 +29,14 @@ final case class SessionBuffer(
     lineEnding: Option[String] = None,
     // The on-disk revision the buffer's content was based on (#1670), so a dirty buffer restored from the session
     // still detects a file changed since.
-    revision: Option[String] = None
+    revision: Option[String] = None,
+    hidden: Boolean = false,
+    notes: List[SessionNote] = Nil
 )
+
+/** One note, flattened for JSON: `kind` says whether `title` is a chapter heading (with its `occurrence`) or a keyword.
+  */
+final case class SessionNote(kind: String, title: String, occurrence: Int, overview: Int, extra: Option[Int])
 
 final case class SessionCursorPosition(
     line: Int,
@@ -88,7 +94,7 @@ object SessionBuffer:
       // Clean, file-backed buffers rely on the on-disk file (see toBufferIO's disk-read fallback) --
       // only a buffer with actual unsaved content needs its text re-serialized into session JSON.
       unsavedContent =
-        if persistUnsaved || buffer.hasUnsavedChanges then Some(text)
+        if persistUnsaved || buffer.hidden || buffer.hasUnsavedChanges then Some(text)
         else None,
       richTextDocument = buffer.richText.richTextDocument.filter(_.matchesPlainText(text)),
       richTextFidelity = buffer.richText.richTextFidelity,
@@ -97,7 +103,9 @@ object SessionBuffer:
       documentComments = buffer.annotations.documentComments.map(SessionDocumentComment.fromDocumentComment),
       placeholders = buffer.annotations.placeholders.map(SessionPlaceholder.fromPlaceholder),
       darlings = buffer.annotations.darlings.map(SessionDarling.fromDarling),
-      revision = buffer.document.revision.map(_.value)
+      revision = buffer.document.revision.map(_.value),
+      hidden = buffer.hidden,
+      notes = buffer.annotations.notes.toList.map(SessionNote.fromEntry).sortBy(SessionNote.order)
     )
 
   def toBuffer(sessionBuffer: SessionBuffer)(using balance: com.serenity.rope.Balance): Buffer =
@@ -124,14 +132,16 @@ object SessionBuffer:
         bookmarks = sessionBuffer.bookmarks.map(SessionCursorPosition.toCursorPosition),
         documentComments = sessionBuffer.documentComments.map(SessionDocumentComment.toDocumentComment),
         placeholders = sessionBuffer.placeholders.map(SessionPlaceholder.toPlaceholder),
-        darlings = sessionBuffer.darlings.map(SessionDarling.toDarling)
+        darlings = sessionBuffer.darlings.map(SessionDarling.toDarling),
+        notes = sessionBuffer.notes.flatMap(SessionNote.toEntry).toMap
       ),
       // `fromBuffer` only ever persists a `richTextDocument` that passed `matchesPlainText` against the exact text
       // being saved, and the `Document` just built above starts at its default `contentVersion` of `0L` -- so a
       // restored document is, by construction, in sync with this fresh buffer at that version (#1663).
       richText = RichTextState()
         .withSyncedDocument(sessionBuffer.richTextDocument, contentVersion = 0L)
-        .copy(richTextFidelity = sessionBuffer.richTextFidelity)
+        .copy(richTextFidelity = sessionBuffer.richTextFidelity),
+      hidden = sessionBuffer.hidden
     )
 
   /** A clean file-backed buffer is read from disk through `FileManager` (#1670): the disk is the truth for it, and the
@@ -232,6 +242,29 @@ object SessionDocumentComment:
       focus = SessionCursorPosition.toCursorPosition(sessionComment.focus),
       text = sessionComment.text
     )
+
+object SessionNote:
+
+  private val ChapterKind = "chapter"
+  private val KeywordKind = "keyword"
+
+  def order(note: SessionNote): (String, String, Int) = (note.kind, note.title, note.occurrence)
+
+  def fromEntry(entry: (NoteKey, Notes)): SessionNote =
+    val (key, notes) = entry
+    key match
+      case NoteKey.Chapter(heading) =>
+        SessionNote(ChapterKind, heading.title, heading.occurrence, notes.overview.value, notes.extra.map(_.value))
+      case NoteKey.Keyword(term) =>
+        SessionNote(KeywordKind, term, 0, notes.overview.value, notes.extra.map(_.value))
+
+  /** `None` for a kind this version does not know, so a session written by a newer version still restores. */
+  def toEntry(note: SessionNote): Option[(NoteKey, Notes)] =
+    val notes = Notes(BufferId(note.overview), note.extra.map(BufferId.apply))
+    note.kind match
+      case ChapterKind => Some(NoteKey.Chapter(HeadingIdentity(note.title, note.occurrence)) -> notes)
+      case KeywordKind => Some(NoteKey.Keyword(note.title) -> notes)
+      case _           => None
 
 object SessionPlaceholder:
 

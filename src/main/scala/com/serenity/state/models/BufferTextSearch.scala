@@ -39,6 +39,7 @@ object BufferTextSearch:
     val needle = query.toLowerCase(Locale.ROOT)
     val size   = batchSize.max(1)
     val buffers = state.persisted.buffers.values.toVector
+      .filterNot(_.hidden)
       .sortBy(_.id.value)
       .dropWhile(buffer => from.exists(start => buffer.id.value < start.bufferId.value))
     val matches = for

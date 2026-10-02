@@ -4,7 +4,7 @@ import com.serenity.command.{CommandRegistry, CommandRunner, FileFinderCommands}
 import com.serenity.input.{CursorPeekDetector, CursorPeekState}
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
-import com.serenity.state.core.EditorState
+import com.serenity.state.core.{ChapterNoteTransitions, EditorState}
 import com.serenity.state.models.*
 import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.SplitAxis
@@ -49,6 +49,15 @@ object AppEventReducer:
 
       case CloseTabById(bufferId) =>
         ReducerResult.noEffects(closeTabByIdState(state, registry, bufferId))
+
+      case ToggleChapterGhosts =>
+        ReducerResult.noEffects(ChapterNoteTransitions.toggleGhosts(state))
+
+      case OpenChapterNote =>
+        ReducerResult.noEffects(ChapterNoteTransitions.openCurrentChapterNote(state, SplitAxis.Horizontal))
+
+      case ToggleNotesPin =>
+        ReducerResult.noEffects(ChapterNoteTransitions.toggleNotesPin(state))
 
       case SplitPaneHorizontal =>
         ReducerResult.noEffects(EditorState.splitFocusedPane(state, SplitAxis.Horizontal))

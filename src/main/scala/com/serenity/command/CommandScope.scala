@@ -93,7 +93,8 @@ object CommandScope:
       case ViewIntent.SetPanelPin(id, Some(_))   => panelScope(id)
       case ViewIntent.SetPanelPin(_, None)       => core
       case ViewIntent.NextTab | ViewIntent.PreviousTab | ViewIntent.SplitPaneHorizontal | ViewIntent.SplitPaneVertical |
-          ViewIntent.ClosePane | ViewIntent.ToggleMaximisePanel | ViewIntent.FocusInDirection(_) |
+          ViewIntent.ClosePane | ViewIntent.ToggleMaximisePanel | ViewIntent.OpenChapterNote |
+          ViewIntent.ToggleChapterGhosts | ViewIntent.ToggleNotesPin | ViewIntent.FocusInDirection(_) |
           ViewIntent.ArrangePanels | ViewIntent.OpenMarkdownPreview | ViewIntent.SetMarkdownViewMode(_) |
           ViewIntent.SetDefaultDocumentMode(_) | ViewIntent.SetAppMode(_) |
           ViewIntent.SetShowAllSettingsRegardlessOfMode(_) | ViewIntent.ToggleShortcutsHelp | ViewIntent.ToggleTabList |

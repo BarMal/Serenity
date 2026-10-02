@@ -493,3 +493,24 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
 
     fixture.stateRef.get.unsafeRunSync().persisted.config.appMode shouldBe target
   }
+
+  it should "open the current chapter's note in a pane beside the manuscript" in {
+    val initial = AppState.initial
+    val buffer  = initial.persisted.buffers(BufferId(0))
+    val manuscript = buffer.copy(
+      document = buffer.document.copy(
+        content = com.serenity.rope.Rope("# Chapter 1: Storm\nthe sea"),
+        language = Some(com.serenity.lsp.config.LanguageId.Markdown)
+      ),
+      editing = EditingState(List(CursorPosition(1, 0)))
+    )
+    val state   = initial.copy(persisted = initial.persisted.copy(buffers = Map(BufferId(0) -> manuscript)))
+    val fixture = harness(state)
+
+    fixture.panels.interpret(ViewIntent.OpenChapterNote, state).unsafeRunSync()
+
+    val after = fixture.stateRef.get.unsafeRunSync()
+    after.persisted.layout.editorPanes should have size 2
+    after.persisted.buffers.values.count(_.hidden) shouldBe 1
+    after.persisted.bufferOrder shouldBe List(BufferId(0))
+  }

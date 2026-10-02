@@ -126,7 +126,8 @@ final case class Annotations(
     bookmarks: List[CursorPosition] = Nil,
     documentComments: List[DocumentComment] = Nil,
     placeholders: List[Placeholder] = Nil,
-    darlings: List[Darling] = Nil
+    darlings: List[Darling] = Nil,
+    notes: Map[NoteKey, Notes] = Map.empty
 )
 
 /** Rich-text authoring state layered on top of the buffer's plain-text `Rope` content. */
@@ -165,7 +166,12 @@ final case class Buffer(
       * settles. While the two differ, the renderer reuses its last markdown preview image instead of re-running the
       * expensive HTML/CSS layout pass on every keystroke.
       */
-    markdownPreviewCommittedGeneration: Long = 0L
+    markdownPreviewCommittedGeneration: Long = 0L,
+    /** A hidden buffer holds text the user authors without being a document of its own -- a chapter note. It lives in
+      * `Persisted.buffers` so an editor pane can show and edit it, but is never listed as an open document: it is not
+      * in `bufferOrder`, never prompts to be saved, and is not searched with the project's files.
+      */
+    hidden: Boolean = false
 ):
 
   def typographyRole: TypographyRole =
@@ -222,9 +228,11 @@ final case class Buffer(
       )
     )
 
-  /** True when closing this buffer may lose user-authored content. */
+  /** True when closing this buffer may lose user-authored content. A hidden buffer is never closed on its own, and the
+    * session keeps its text, so it never asks to be saved.
+    */
   def hasUnsavedChanges: Boolean =
-    document.isDirty || (document.filePath.isEmpty && !document.isNewEmpty)
+    !hidden && (document.isDirty || (document.filePath.isEmpty && !document.isNewEmpty))
 
   /** True when saving to this buffer's own file would silently drop its formatting. An untitled buffer has no format
     * yet, so its save (always a Save As) is judged against the path chosen then instead.

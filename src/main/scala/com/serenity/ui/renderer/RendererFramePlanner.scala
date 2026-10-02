@@ -180,6 +180,7 @@ object RendererFramePlanner:
           editorRenderPlan,
           framePlan.map(_.dirtyRowsByPane).getOrElse(Map.empty)
         )
+        RendererChapterGhosts.render(state, context, editorRenderPlan)
       },
       PinnedPanelsLayerId   -> { () => RendererFloatingPanels.renderPinnedPanels(state, context, scene, damage) },
       FloatingPanelsLayerId -> { () => RendererFloatingPanels.renderFloatingPanels(state, context, scene, damage) },
@@ -406,11 +407,13 @@ object RendererFramePlanner:
           )
         val effectiveDamage = if inputsOrPanesChanged then Damage.Everything else bufferDamageSinceLastDraw
 
-        val dirtyRowsByPane =
-          panes.map {
-            case (paneId, record) =>
-              paneId -> dirtyRowsFor(effectiveDamage, paneId, record, persistenceKey, context.caches)
-          }
+        // A ghost is derived from a note's text and from which chapters are empty, neither of which a buffer's own
+        // damage reports, so a pane showing ghosts repaints whole rather than reusing rows a stale ghost sits in.
+        val ghostPaneIds = panes.filter((_, record) => showsChapterGhosts(state, record.bufferId)).keySet
+        def rowsToRedraw(paneId: PaneId, record: PaneFrameRecord): Set[Int] =
+          if ghostPaneIds.contains(paneId) then record.rowRects.indices.toSet
+          else dirtyRowsFor(effectiveDamage, paneId, record, persistenceKey, context.caches)
+        val dirtyRowsByPane = panes.map((paneId, record) => paneId -> rowsToRedraw(paneId, record))
 
         val preserved = panes.toList.flatMap {
           case (paneId, record) =>
@@ -424,6 +427,7 @@ object RendererFramePlanner:
         val screenDamageSincePublish = context.caches.frameState.drainScreenDamage(output)
         val boundedRepaintEligible =
           allPanesReusable &&
+            ghostPaneIds.isEmpty &&
             !context.caches.frameState.screenPaneIdsChanged(output, paneIds) &&
             Damage.isBufferRowsOnly(screenDamageSincePublish)
         val repaintRows =
@@ -445,6 +449,17 @@ object RendererFramePlanner:
 
     if plan.isEmpty then forgetPreservedContent(context.surface, output, context.caches)
     plan
+
+  private def showsChapterGhosts(state: AppState, bufferId: BufferId): Boolean =
+    state.runtime.chapterGhostsVisible &&
+      state.persisted.buffers
+        .get(bufferId)
+        .exists(buffer => !buffer.hidden && buffer.annotations.notes.keys.exists(hasChapterKey))
+
+  private def hasChapterKey(key: NoteKey): Boolean =
+    key match
+      case NoteKey.Chapter(_) => true
+      case NoteKey.Keyword(_) => false
 
   /** Rows of `record` that `damage` marks dirty, translated from buffer line numbers to this pane's current visual row
     * indices, widened by one row on each side and by the rows whose glyphs reach outside the band this pane can

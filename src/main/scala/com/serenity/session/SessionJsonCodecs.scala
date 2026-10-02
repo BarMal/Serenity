@@ -74,6 +74,9 @@ given Decoder[SessionFindResult] = deriveDecoder
 given Encoder[SessionDocumentComment] = deriveEncoder
 given Decoder[SessionDocumentComment] = deriveDecoder
 
+given Encoder[SessionNote] = deriveEncoder
+given Decoder[SessionNote] = deriveDecoder
+
 given Encoder[SessionPlaceholder] = deriveEncoder
 given Decoder[SessionPlaceholder] = deriveDecoder
 
@@ -114,6 +117,8 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     darlings         <- cursor.getOrElse[List[SessionDarling]]("darlings")(Nil)
     lineEnding       <- cursor.getOrElse[Option[String]]("lineEnding")(None)
     revision         <- cursor.getOrElse[Option[String]]("revision")(None)
+    hidden           <- cursor.getOrElse[Boolean]("hidden")(false)
+    notes            <- cursor.getOrElse[List[SessionNote]]("notes")(Nil)
   yield SessionBuffer(
     id,
     filePath,
@@ -131,7 +136,9 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     placeholders,
     darlings,
     lineEnding,
-    revision
+    revision,
+    hidden,
+    notes
   )
 }
 

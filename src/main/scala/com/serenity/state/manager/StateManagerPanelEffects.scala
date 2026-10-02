@@ -9,6 +9,7 @@ import com.serenity.config.{AppConfig, AppMode, MarkdownViewMode, VisualFlairLev
 import com.serenity.frontend.MarkdownPreviewWindowAvailability
 import com.serenity.io.FileUtils
 import com.serenity.keystroke.events.Event
+import com.serenity.state.core.ChapterNoteTransitions
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{DirectionalFocus, ModalStateReducer, PanelStateReducer, PinnedPanelContentReducer}
 import com.serenity.ui.layout.{PanelPosition, PanelTarget, SplitAxis}
@@ -31,7 +32,7 @@ final private[manager] class StateManagerPanelEffects(
     switchToPinnedPanel: PanelTarget => IO[Unit],
     resizePinnedPanel: (PanelTarget, Int) => IO[Unit],
     setCompanionSpriteEnabled: Boolean => IO[Unit]
-):
+)(using com.serenity.rope.Balance):
 
   /** Floor for command/keyboard panel resize (issue #1310) -- prevents a panel from shrinking to zero or negative
     * cells; `WorkspaceTree.resizeSurface`'s own ratio clamp is the further backstop against it eating the viewport.
@@ -56,6 +57,12 @@ final private[manager] class StateManagerPanelEffects(
         commitApp(com.serenity.state.core.EditorState.splitFocusedPane(_, SplitAxis.Vertical))
       case ViewIntent.ClosePane =>
         commitApp(com.serenity.state.core.EditorState.removeFocusedPane)
+      case ViewIntent.OpenChapterNote =>
+        commitApp(ChapterNoteTransitions.openCurrentChapterNote(_, SplitAxis.Horizontal))
+      case ViewIntent.ToggleChapterGhosts =>
+        commitApp(ChapterNoteTransitions.toggleGhosts)
+      case ViewIntent.ToggleNotesPin =>
+        commitApp(ChapterNoteTransitions.toggleNotesPin)
       case ViewIntent.TogglePanelShown(id) =>
         if isShown(id, state) then hidePanel(id, state) else pinAtDefaultEdge(id)
       case ViewIntent.FocusPanel(id) =>
