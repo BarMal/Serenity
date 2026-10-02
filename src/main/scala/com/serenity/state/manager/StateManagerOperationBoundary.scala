@@ -328,17 +328,10 @@ private[manager] object StateManagerOperationBoundary:
     // lens in sync with the cursor regardless of what moved it -- a keyboard cursor move opens/closes it exactly as a
     // mouse click already did, without each event source having to remember to call it itself.
     AppStateValidation
-      .validated(normalizeCommandRunnerFocus(newState))
+      .validated(EventPipelineTransitions.commandRunnerFocusNormalized(newState))
       .map(CommentRendering.syncFloatingLensWithCursor(_, fallbackState))
       .map(PanelContentSync.synced(_, fallbackState))
       .map(PanelArrangement.resyncedIn)
-
-  private def normalizeCommandRunnerFocus(state: AppState): AppState =
-    if state.hasCommandRunnerDomain && !state.isCommandRunnerDomainFocus() then
-      state.preferredCommandRunnerFocus.fold(state)(focus =>
-        state.copy(persisted = state.persisted.copy(focus = focus))
-      )
-    else state
 
   /** A directory listing for an explorer. `FileBrowser` lists a missing directory as empty, which an explorer would
     * show as an empty folder, so an empty listing is checked for the directory still being there.

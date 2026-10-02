@@ -371,6 +371,10 @@ final case class AppState(
   def hasBlockingModal: Boolean =
     runtime.modalStack.nonEmpty
 
+  /** A blocking dialog is up, or a modeless modal workflow has focus: either one owns input until it closes. */
+  def isModalFocus: Boolean =
+    hasBlockingModal || activeSurface.exists(isModalWorkflow)
+
   /** Remove the topmost modal dialog (or, absent one, the focused modeless modal workflow surface) and restore the
     * focus that opened it.
     */
