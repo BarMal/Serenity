@@ -45,7 +45,9 @@ object RendererFloatingPanels:
         case Some(surfaceId) =>
           def clippedPaint(layerContext: RenderContext): Unit =
             withPanelGeometryClip(state, surfaceId, layerContext)(paint(layerContext))
-          RendererFramePlanner.paintPanelLayer(context, surfaceId, overlay.rect, panelIsDirty(surfaceId))(clippedPaint)
+          RendererFramePlanner.paintPanelLayer(state, context, surfaceId, overlay.rect, panelIsDirty(surfaceId))(
+            clippedPaint
+          )
         case None => paint(context)
 
     overlays.tabBar.foreach(paintOverlay)
@@ -204,7 +206,7 @@ object RendererFloatingPanels:
         def paint(layerContext: RenderContext): Unit =
           withPanelGeometryClip(state, surface.id, layerContext)(paintContent(layerContext))
 
-        RendererFramePlanner.paintPanelLayer(context, surface.id, rect, panelIsDirty(surface.id))(paint)
+        RendererFramePlanner.paintPanelLayer(state, context, surface.id, rect, panelIsDirty(surface.id))(paint)
       }
     }
 

@@ -93,7 +93,8 @@ object RendererEntryPoints:
       codeFont,
       swingWin.canvas,
       publishFrame,
-      swingWin.acquireBaseImage
+      swingWin.acquireBaseImage,
+      scratch = swingWin.renderScratch
     )
     val viewportSize = swingWin.viewportSize
     // A Swing/Java2D surface always has a real FontRenderContext to measure against, so this scene keeps its

@@ -220,7 +220,7 @@ object RendererFramePlanner:
     scene: UiSceneSnapshot,
     isDirty: Boolean
   ): Unit =
-    context.surface.layerBuffers match
+    layerSupportFor(state, context) match
       case None => RendererFloatingPanels.renderModalLayer(state, context, scene)
       case Some(support) =>
         scene.modalBackdrop match
@@ -236,7 +236,7 @@ object RendererFramePlanner:
             if reusable then cached.foreach(c => context.surface.pixels.compositeFullSurfaceLayer(c.image))
             else
               val capturedRef  = new AtomicReference[Option[BufferedImage]](None)
-              val layerSurface = support.newLayerSurface(image => capturedRef.set(Some(image)))
+              val layerSurface = support.newLayerSurface(image => capturedRef.set(Some(image)), cached.map(_.image))
               RendererFloatingPanels.renderModalLayer(state, context.copy(surface = layerSurface), scene)
               layerSurface.flush()
               capturedRef.get().foreach { image =>
@@ -273,26 +273,22 @@ object RendererFramePlanner:
     * pixels instead of repainting when [[panelDirtyCheck]] says it's safe to -- the panel generalisation of
     * [[paintModalLayer]] (#1100 stage 3).
     *
-    * Unlike the modal, a panel's own paint step (`paintPanel`) can read pixels back off the surface it paints onto
-    * (`SurfaceMaterials.effectiveBlurRadius`'s `blurRegion` call), so this seeds the layer buffer from a snapshot of
-    * this frame's live pixels (`LayerBufferSupport.newSeededLayerSurface`) instead of starting fully transparent --
-    * `blurRegion` then reads exactly the same background it would reading the live frame surface directly, because the
-    * snapshot *is* that surface's pixels at the moment it was taken. Painting the rest of the panel into the same
-    * seeded buffer and compositing the whole buffer back at full opacity is then pixel-identical to painting directly,
-    * the same "paint onto a copy, composite back" argument [[Java2DRenderSurface.newLayerSurface]]'s doc comment makes
-    * for the transparent case.
+    * Unlike the modal, a panel's own paint step (`paintPanel`) reads pixels back via `blurRegion`. The layer still
+    * starts transparent: its `blurRegion` samples the frame surface instead (see
+    * [[LayerBufferSupport.newLayerSurface]]), so everything the panel didn't paint stays transparent and compositing
+    * the whole layer back over a frame whose content has since changed is still correct.
     *
-    * No `layerBuffers` capability (TUI's `TerminalRenderSurface`) -> falls straight through to `paintPanel`, painting
-    * directly into the shared surface every frame exactly as before this stage -- the same TUI exclusion #1100 stage 2
-    * documented for the modal.
+    * No `layerBuffers` capability (TUI's `TerminalRenderSurface`), or layer caching switched off -> falls straight
+    * through to `paintPanel`, painting directly into the shared surface every frame.
     */
   def paintPanelLayer(
+    state: AppState,
     context: RenderContext,
     surfaceId: SurfaceId,
     frameRect: LayoutRect,
     isDirty: Boolean
   )(paintPanel: RenderContext => Unit): Unit =
-    context.surface.layerBuffers match
+    layerSupportFor(state, context) match
       case None => paintPanel(context)
       case Some(support) =>
         val cached = context.caches.frameState.cachedPanelLayersFor(context.surface).get(surfaceId)
@@ -305,7 +301,7 @@ object RendererFramePlanner:
         if reusable then cached.foreach(c => context.surface.pixels.compositeFullSurfaceLayer(c.image))
         else
           val capturedRef  = new AtomicReference[Option[BufferedImage]](None)
-          val layerSurface = support.newSeededLayerSurface(image => capturedRef.set(Some(image)))
+          val layerSurface = support.newLayerSurface(image => capturedRef.set(Some(image)), cached.map(_.image))
           paintPanel(context.copy(surface = layerSurface))
           layerSurface.flush()
           capturedRef.get().foreach { image =>
@@ -335,7 +331,15 @@ object RendererFramePlanner:
     val floatingIds =
       (overlays.aboveCursorStack ++ overlays.belowCursorStack ++ overlays.tabBar.toList).flatMap(_.surfaceId).toSet
     val activeIds = pinnedAndExpandedIds ++ floatingIds
-    caches.frameState.pruneStalePanelLayers(surface, activeIds)
+    if state.persisted.config.surfaceConfig.layerCachingEnabled then
+      caches.frameState.pruneStalePanelLayers(surface, activeIds)
+    else caches.frameState.forgetLayerBuffers(surface)
+
+  /** Layer buffers exist only to be cached; with caching off, painting straight onto the frame is the same picture
+    * without allocating a full-window image per layer per frame (#1798).
+    */
+  private def layerSupportFor(state: AppState, context: RenderContext): Option[LayerBufferSupport] =
+    context.surface.layerBuffers.filter(_ => state.persisted.config.surfaceConfig.layerCachingEnabled)
 
   /** Drop every reuse promise attached to this surface and force the next repaint to cover the whole canvas.
     *

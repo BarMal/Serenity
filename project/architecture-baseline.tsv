@@ -66,13 +66,12 @@ main/scala/com/serenity/lsp/LspManager.scala	file length	673
 main/scala/com/serenity/rope/Rope.scala	file length	631
 main/scala/com/serenity/spellcheck/HunspellFreeCompoundMatcher.scala	forbidden mutable state at line 106: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/CharacterRenderer.scala	file length	630
-main/scala/com/serenity/ui/renderer/Java2DPostProcessingEffects.scala	method applyGlow	90
 main/scala/com/serenity/ui/renderer/RendererCursorOverlay.scala	forbidden mutable state at line 326: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/RendererCursorOverlay.scala	forbidden mutable state at line 401: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/RendererEntryPoints.scala	forbidden mutable state at line 85: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
-main/scala/com/serenity/ui/renderer/RendererEntryPoints.scala	forbidden mutable state at line 260: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/renderer/RendererEntryPoints.scala	forbidden mutable state at line 261: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/RendererFramePlanner.scala	forbidden mutable state at line 238: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
-main/scala/com/serenity/ui/renderer/RendererFramePlanner.scala	forbidden mutable state at line 307: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/renderer/RendererFramePlanner.scala	forbidden mutable state at line 303: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/RendererPaneContent.scala	file length	604
 main/scala/com/serenity/ui/tui/MarkdownPreviewWindow.scala	forbidden mutable state at line 71: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/tui/TerminalInputHandler.scala	forbidden mutable state at line 175: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1

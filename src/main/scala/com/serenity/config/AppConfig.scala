@@ -214,6 +214,9 @@ final case class AppConfig(
   def withRendererFrameStateCacheCapacity(capacity: Int): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(rendererFrameStateCacheCapacity = capacity))
 
+  def withLayerCaching(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(layerCachingEnabled = enabled))
+
   def withDiagnosticHighlightBlendWeight(weight: Double): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(diagnosticHighlightBlendWeight = weight))
 

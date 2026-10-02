@@ -28,6 +28,11 @@ trait RenderSurface:
     * unknown pixels and everything must be drawn.
     */
   def persistentContentKey: Option[SurfaceContentIdentity] = None
+
+  /** Whose cached modal/panel layers this surface may reuse. Successive frames of one window must agree on it even
+    * though each frame is a fresh surface, or every frame starts a new cache entry (#1798).
+    */
+  def layerCacheOwner: ScreenIdentity = ScreenIdentity(this)
   def setForegroundColor(color: Color): Unit
   def setBackgroundColor(color: Color): Unit
   def getBackgroundColor: Color
