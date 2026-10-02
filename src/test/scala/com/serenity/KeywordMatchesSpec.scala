@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.document.{KeywordMatches, KeywordOccurrence}
+import com.serenity.document.KeywordMatches
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
