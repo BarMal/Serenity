@@ -64,6 +64,13 @@ private[command] object CommandRegistryPanelProjectCommands:
       label = "Split Pane Vertically"
     ),
     Command.typed(
+      "open-chapter-note",
+      "Open the note for the chapter the cursor is in beside the manuscript, creating it the first time.",
+      CommandIntent.View(ViewIntent.OpenChapterNote),
+      CommandCategory.View,
+      label = "Open Chapter Note"
+    ),
+    Command.typed(
       "close-pane",
       "Close the focused editor pane.",
       CommandIntent.View(ViewIntent.ClosePane),
