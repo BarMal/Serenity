@@ -45,6 +45,18 @@ class SurfaceOperationReducersSpec extends AnyFlatSpec with Matchers:
     valid(dismissed) shouldBe true
   }
 
+  it should "return focus to the pinned panel the peek was shown over" in {
+    val panelFocus = Focus.Surface(outlineId)
+    val overPanel  = withOutline.copy(persisted = withOutline.persisted.copy(focus = panelFocus))
+    val shown      = PeekStateReducer.show(PeekContent.QuickInfo("info"), CursorPosition(0, 0), overPanel).state
+
+    val dismissed = PeekStateReducer.dismiss(shown).state
+
+    dismissed.persisted.focus shouldBe panelFocus
+    dismissed.runtime.focusHistory should not contain panelFocus
+    valid(dismissed) shouldBe true
+  }
+
   "PanelStateReducer.pinPeekOverlay" should "dock the active directory-listing peek" in {
     val listingPeek =
       PeekStateReducer.show(PeekContent.DirectoryListing(Paths.get("/repo"), Nil), CursorPosition(0, 0), sized).state

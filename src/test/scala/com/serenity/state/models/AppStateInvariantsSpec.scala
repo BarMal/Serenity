@@ -1,6 +1,7 @@
 package com.serenity.state.models
 
 import com.serenity.rope.Balance
+import com.serenity.state.reducers.ModalStateReducer
 import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -19,6 +20,24 @@ class AppStateInvariantsSpec extends AnyFlatSpec with Matchers:
   "AppState.initial" should "be valid by its own invariants" in {
     AppState.initial.isValid shouldBe true
     AppStateValidation.validationErrors(AppState.initial) shouldBe empty
+  }
+
+  "Modal focus" should "be rejected when no modal is open" in {
+    val base    = AppState.initial
+    val invalid = base.copy(persisted = base.persisted.copy(focus = Focus.Modal))
+
+    invalid.isValid shouldBe false
+    AppStateValidation.validationErrors(invalid) should contain("Focus is on the modal layer but no modal is open")
+  }
+
+  it should "be accepted while a modal is open" in {
+    val shown =
+      ModalStateReducer
+        .show(Modal.FileWorkflow(FileWorkflowState(mode = FileWorkflowMode.Open)), AppState.initial)
+        .state
+
+    shown.persisted.focus shouldBe Focus.Modal
+    AppStateValidation.validationErrors(shown) shouldBe empty
   }
 
   behavior of "active-pane coherence"

@@ -73,7 +73,7 @@ private[manager] object FileWorkflowTransitions:
     showing(state, surfaceId, requested).fold(state) { current =>
       target match
         case FileWorkflowTarget.ReadableFile(_) =>
-          WorkflowSurfaces.dismissedToEditor(state, surfaceId)
+          WorkflowSurfaces.dismissedToShownBuffer(state, surfaceId)
         case FileWorkflowTarget.Directory(path) =>
           withFileDialog(
             state,
@@ -92,7 +92,7 @@ private[manager] object FileWorkflowTransitions:
     isDirectory: Boolean
   ): AppState =
     showing(state, surfaceId, requested).fold(state)(current =>
-      if isDirectory then WorkflowSurfaces.dismissedToEditor(state, surfaceId)
+      if isDirectory then WorkflowSurfaces.dismissedToShownBuffer(state, surfaceId)
       else withStatus(state, surfaceId, current, s"Not a directory: $target")
     )
 

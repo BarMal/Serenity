@@ -35,7 +35,7 @@ final private[manager] class CloseWorkflowTransitions(ensureCommandRunnerSurface
     val next =
       if workflow.scope == CloseScope.ReturnToStartPage then dismissed
       else closeForScope(workflow.scope, dismissed, workflow.currentBufferId)
-    continued(workflow, next)
+    continued(workflow, refocused(next, dismissed.persisted.focus))
 
   /** The prompt's buffer was saved under a new path. Unlike [[resolved]], Quit keeps it open too. */
   def resolvedBySaveAs(workflow: CloseWorkflowState, state: AppState): CloseTransition =
@@ -43,7 +43,7 @@ final private[manager] class CloseWorkflowTransitions(ensureCommandRunnerSurface
     val next =
       if preservesBuffers(workflow.scope) then dismissed
       else closeForScope(workflow.scope, dismissed, workflow.currentBufferId)
-    continued(workflow, next)
+    continued(workflow, refocused(next, dismissed.persisted.focus))
 
   /** What cancelling the close leaves: no close pending, and a tab close's original tab active. The prompt has already
     * closed by the time its answer runs.
@@ -88,13 +88,15 @@ final private[manager] class CloseWorkflowTransitions(ensureCommandRunnerSurface
 
   /** Clears every modal: each caller is finishing a close/save chain, possibly a Save-As form over a close prompt. */
   def dismissModalSurface(state: AppState): AppState =
-    state.copy(runtime =
-      state.runtime.copy(
-        uiSurfaces = state.runtime.uiSurfaces.filterNot {
-          case UiSurface(_, SurfaceContent.ModalWorkflow(_), _, _) => true
-          case _                                                   => false
-        },
-        modalStack = Nil
+    WorkflowSurfaces.withFocusRepaired(
+      state.copy(runtime =
+        state.runtime.copy(
+          uiSurfaces = state.runtime.uiSurfaces.filterNot {
+            case UiSurface(_, SurfaceContent.ModalWorkflow(_), _, _) => true
+            case _                                                   => false
+          },
+          modalStack = Nil
+        )
       )
     )
 
@@ -106,10 +108,21 @@ final private[manager] class CloseWorkflowTransitions(ensureCommandRunnerSurface
         CloseTransition(clearCloseActions(state), Some(workflow.scope))
 
   private def prompted(state: AppState, scope: CloseScope, bufferId: BufferId, remaining: List[BufferId]): AppState =
-    val workflow   = CloseWorkflowState(scope, bufferId, closeBufferLabel(state, bufferId), remaining)
-    val focused    = focusBufferForWorkflow(state, bufferId)
-    val withAction = focused.copy(runtime = focused.runtime.copy(actionStack = List(AppAction.CloseWorkflow(workflow))))
+    val workflow = CloseWorkflowState(scope, bufferId, closeBufferLabel(state, bufferId), remaining)
+    val focused  = focusBufferForWorkflow(state, bufferId)
+    // The prompt's own push records the focus it returns to, so it must see the focus the close began from.
+    val recorded = refocused(focused, state.persisted.focus)
+    val withAction =
+      recorded.copy(runtime = recorded.runtime.copy(actionStack = List(AppAction.CloseWorkflow(workflow))))
     ModalStateReducer.show(Modal.Confirm(workflow.prompt), withAction).state
+
+  /** `focus` back, after a close step moved focus to the editor to work on a buffer, if it outlived the step and an
+    * editor is still open; otherwise the step's own focus stands.
+    */
+  private def refocused(state: AppState, focus: Focus): AppState =
+    if state.persisted.layout.activeEditorPaneId.isDefined && WorkflowSurfaces.focusTargetExists(state, focus) then
+      state.copy(persisted = state.persisted.copy(focus = focus))
+    else state
 
   /** Scopes that leave clean buffers open rather than closing them as they go: Quit (state is discarded on exit anyway)
     * and ReturnToStartPage (the whole session is snapshotted, then replaced by the start page).
@@ -158,14 +171,33 @@ private[manager] object WorkflowSurfaces:
       .flatMap(state.persisted.layout.editorPanes.get)
       .flatMap(_.bufferId)
 
-  /** Removes `surfaceId`, modal or not, and hands focus back to the active editor pane. */
-  def dismissedToEditor(state: AppState, surfaceId: SurfaceId): AppState =
-    val baseState = state.copy(runtime =
+  /** Removes `surfaceId`, modal or not, for a workflow whose result is a buffer now on show: focus goes to the active
+    * editor pane, and the focus the surface would have handed back is dropped from history rather than left stale.
+    */
+  def dismissedToShownBuffer(state: AppState, surfaceId: SurfaceId): AppState =
+    val popped = withoutSurface(state, surfaceId).popFocus
+    state.persisted.layout.activeEditorPaneId.fold(popped)(paneId =>
+      popped.copy(persisted = popped.persisted.copy(focus = Focus.EditorPane(paneId)))
+    )
+
+  /** Removes `surfaceId`, modal or not, and, if it held focus, hands focus back to whatever held it before. */
+  def dismissedToPriorFocus(state: AppState, surfaceId: SurfaceId): AppState =
+    withFocusRepaired(withoutSurface(state, surfaceId))
+
+  /** `state` with focus handed back through its history if what it points at has gone. */
+  def withFocusRepaired(state: AppState): AppState =
+    if focusTargetExists(state, state.persisted.focus) then state else state.popFocus
+
+  def focusTargetExists(state: AppState, focus: Focus): Boolean =
+    focus match
+      case Focus.EditorPane(paneId) => state.persisted.layout.editorPanes.contains(paneId)
+      case Focus.Surface(surfaceId) => state.surfaceById(surfaceId).isDefined
+      case Focus.Modal              => state.runtime.modalStack.nonEmpty
+
+  private def withoutSurface(state: AppState, surfaceId: SurfaceId): AppState =
+    state.copy(runtime =
       state.runtime.copy(
         uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surfaceId),
         modalStack = state.runtime.modalStack.filterNot(_.id == surfaceId)
       )
     )
-    state.persisted.layout.activeEditorPaneId match
-      case Some(paneId) => baseState.copy(persisted = baseState.persisted.copy(focus = Focus.EditorPane(paneId)))
-      case None         => baseState

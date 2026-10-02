@@ -206,7 +206,7 @@ final private[manager] class StateManagerWorkflowCapability(
     modelCommit.currentState.flatMap { saved =>
       close.pendingOn(saved, bufferId) match
         case Some(closeWorkflow) => commitClose(saved, close.resolvedBySaveAs(closeWorkflow, saved))
-        case None                => modelCommit.commitState(WorkflowSurfaces.dismissedToEditor(saved, surfaceId), saved)
+        case None => modelCommit.commitState(WorkflowSurfaces.dismissedToPriorFocus(saved, surfaceId), saved)
     }
 
   private[manager] def requestSaveAsFileDialog(state: AppState, bufferIdOverride: Option[BufferId]): IO[Unit] =
@@ -315,7 +315,7 @@ final private[manager] class StateManagerWorkflowCapability(
     */
   private[manager] def submitSessionNamePromptEffect(surfaceId: SurfaceId): IO[Unit] =
     modelCommit.currentState.flatMap { state =>
-      val dismissed = WorkflowSurfaces.dismissedToEditor(state, surfaceId)
+      val dismissed = WorkflowSurfaces.dismissedToPriorFocus(state, surfaceId)
       val write = SessionWorkflowTransitions.sessionNamePrompt(state, surfaceId) match
         case Some((SessionNamePromptMode.SaveAs, input)) if input.trim.nonEmpty =>
           Some(sessionManager.saveSessionAs(input.trim, dismissed).void)

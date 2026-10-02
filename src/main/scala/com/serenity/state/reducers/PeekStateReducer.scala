@@ -14,20 +14,22 @@ object PeekStateReducer:
       dismissOnMove = true
     )
     ReducerResult.noEffects(
-      stateWithId.copy(
-        persisted = stateWithId.persisted.copy(focus = Focus.Surface(surfaceId)),
-        runtime =
+      stateWithId
+        .copy(runtime =
           stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces.filterNot(isPeekSurface) :+ surface)
-      )
+        )
+        .pushFocus(Focus.Surface(surfaceId))
     )
 
+  /** Removes the peek and, if it held focus, hands focus back to what held it before -- the active pane if nothing did.
+    */
   def dismiss(state: AppState): ReducerResult =
-    ReducerResult.noEffects(
-      state.copy(
-        persisted = state.persisted.copy(focus = fallbackEditorFocus(state)),
-        runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(isPeekSurface))
-      )
-    )
+    val dismissed =
+      state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(isPeekSurface)))
+    val focusGone = dismissed.persisted.focus match
+      case Focus.Surface(surfaceId) => dismissed.surfaceById(surfaceId).isEmpty
+      case _                        => false
+    ReducerResult.noEffects(if focusGone then dismissed.popFocus else dismissed)
 
   private def isPeekSurface(surface: UiSurface): Boolean =
     surface.presentation match
@@ -44,8 +46,3 @@ object PeekStateReducer:
         SurfaceContent.SymbolDefinition(symbol, location)
       case PeekContent.DirectoryListing(path, entries) =>
         SurfaceContent.DirectoryListing(path, entries)
-
-  private def fallbackEditorFocus(state: AppState): Focus =
-    state.persisted.layout.activeEditorPaneId match
-      case Some(paneId) => Focus.EditorPane(paneId)
-      case None         => Focus.EditorPane(PaneId(0))
