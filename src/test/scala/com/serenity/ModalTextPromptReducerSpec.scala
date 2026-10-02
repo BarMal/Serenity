@@ -43,6 +43,14 @@ class ModalTextPromptReducerSpec extends AnyFlatSpec with Matchers:
     shown(fixed).map(field => (field.input, field.field.caret)) shouldBe Some(("draf", 4))
   }
 
+  it should "move the caret to either end with Home and End" in {
+    val atStart = after(stateWith(TextPrompt.sessionName(SessionNamePromptMode.SaveAs, "draft")), ModalLineStart)
+    shown(atStart).map(_.field.caret) shouldBe Some(0)
+
+    val edited = after(atStart, InsertChar('a'), ModalLineEnd, InsertChar('z'))
+    shown(edited).map(field => (field.input, field.field.caret)) shouldBe Some(("adraftz", 7))
+  }
+
   it should "take only digits for go to line" in {
     shown(after(stateWith(TextPrompt.gotoLine("1")), InsertChar('x'), InsertChar('2'))).map(_.input) shouldBe Some("12")
   }

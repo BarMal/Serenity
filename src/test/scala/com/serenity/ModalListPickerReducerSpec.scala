@@ -1,7 +1,9 @@
 package com.serenity
 
 import com.serenity.command.{Command, CommandIntent, SessionIntent}
+import com.serenity.input.FocusedInputTranslator
 import com.serenity.keystroke.events.*
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionId
 import com.serenity.state.models.*
@@ -231,4 +233,86 @@ class ModalListPickerReducerSpec extends AnyFlatSpec with Matchers:
     val (dismissed, dismissEffects) = after(List(Escape), pending)
     dismissed.modalSurface shouldBe None
     dismissEffects shouldBe List(AppEffect.ExecuteCommandUnrecorded(restore))
+  }
+
+  private val many = (0 until 20).map(index => previewed(s"Item$index", s"row $index")).toVector
+
+  private val long = ListPicker.of("Many", many, emptyMessage = "Nothing to pick")
+
+  private def highlightedIn(state: AppState): Option[ListChoice] = shown(state).flatMap(_.selectedChoice)
+
+  "A list picker without a query" should "jump to its first and last rows with Home and End, previewing them" in {
+    val (atEnd, endEffects) = after(List(ModalLineEnd), long)
+    highlightedIn(atEnd) shouldBe many.lastOption
+    endEffects shouldBe many.lastOption.map(previewEffect).toList
+
+    val (atStart, startEffects) = after(List(ModalLineEnd, ModalLineStart), long)
+    highlightedIn(atStart) shouldBe Some(many(0))
+    startEffects shouldBe List(previewEffect(many(19)), previewEffect(many(0)))
+  }
+
+  it should "page by one screen less a row, stopping at either end rather than wrapping" in {
+    val pageStep = ListPickerComposition.VisibleRows - 1
+
+    val (paged, pagedEffects) = after(List(ModalPage(1), ModalPage(1)), long)
+    highlightedIn(paged) shouldBe Some(many(2 * pageStep))
+    pagedEffects shouldBe List(previewEffect(many(pageStep)), previewEffect(many(2 * pageStep)))
+
+    val (bottom, _) = after(List.fill(4)(ModalPage(1)), long)
+    highlightedIn(bottom) shouldBe many.lastOption
+
+    val (back, _) = after(List(ModalLast, ModalPage(-1)), long)
+    highlightedIn(back) shouldBe Some(many(19 - pageStep))
+
+    val (top, topEffects) = after(List(ModalPage(-1)), long)
+    highlightedIn(top) shouldBe Some(many(0))
+    topEffects shouldBe Nil
+  }
+
+  "A list picker with a query" should "move the query's caret with Home and End, leaving the highlight" in {
+    val (state, effects) = after(typed("et") ++ List(ModalLineStart, InsertChar('b'), ModalLineEnd, InsertChar('a')))
+
+    query(state) shouldBe Some(TextField("beta", 4))
+    highlightedIn(state) shouldBe Some(beta)
+    effects shouldBe List(previewEffect(beta))
+
+    val (homed, homedEffects) = after(typed("a") :+ ModalLineStart)
+    query(homed) shouldBe Some(TextField("a", 0))
+    highlightedIn(homed) shouldBe Some(alpha)
+    homedEffects shouldBe Nil
+  }
+
+  it should "jump to its first and last rows with Ctrl+Home and Ctrl+End, and page its rows, previewing each" in {
+    val (last, lastEffects) = after(List(ModalLast))
+    highlightedIn(last) shouldBe Some(gamma)
+    lastEffects shouldBe List(previewEffect(gamma))
+
+    val (first, firstEffects) = after(List(ModalLast, ModalFirst))
+    highlightedIn(first) shouldBe Some(alpha)
+    firstEffects shouldBe List(previewEffect(gamma), previewEffect(alpha))
+
+    val (paged, pagedEffects) = after(List(ModalPage(1)))
+    highlightedIn(paged) shouldBe Some(gamma)
+    pagedEffects shouldBe List(previewEffect(gamma))
+  }
+
+  "A floating list picker" should "receive Home, End, Ctrl+Home, Ctrl+End, PageUp and PageDown as modal keys" in {
+    val translator = FocusedInputTranslator.forState(stateWith(filterable))
+    val ctrl       = Set(Modifier.Ctrl)
+
+    translator.translate(KeyStrokeInfo(InputKey.Home, None, Set.empty)) shouldBe ModalLineStart
+    translator.translate(KeyStrokeInfo(InputKey.End, None, Set.empty)) shouldBe ModalLineEnd
+    translator.translate(KeyStrokeInfo(InputKey.Home, None, ctrl)) shouldBe ModalFirst
+    translator.translate(KeyStrokeInfo(InputKey.End, None, ctrl)) shouldBe ModalLast
+    translator.translate(KeyStrokeInfo(InputKey.PageUp, None, Set.empty)) shouldBe ModalPage(-1)
+    translator.translate(KeyStrokeInfo(InputKey.PageDown, None, Set.empty)) shouldBe ModalPage(1)
+  }
+
+  "A pending list picker" should "ignore Home, End and paging" in {
+    val waiting = alpha.copy(waitingLabel = Some("Loading Alpha…"))
+    val pending = ListPicker.filterable("Pick", Vector(waiting, beta)).copy(pending = Some(waiting))
+
+    val (state, effects) = after(List(ModalLineEnd, ModalLast, ModalPage(1)), pending)
+    state shouldBe stateWith(pending)
+    effects shouldBe Nil
   }

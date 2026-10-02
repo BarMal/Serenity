@@ -199,6 +199,29 @@ class ConfigManagerHotkeyKeymapSpec extends AnyFlatSpec with Matchers with Optio
     keymap.peek.bindingsFor(PeekKeyAction.Dismiss).map(_.render) shouldBe List("alt+d")
   }
 
+  it should "load overrides for the modal line, list and page keys" in {
+    val configFile = Files.createTempFile("serenity-modal-ends", ".conf")
+    Files.writeString(
+      configFile,
+      """keymap.modal.line_start = ctrl+a
+        |keymap.modal.line_end = ctrl+e
+        |keymap.modal.first = alt+home
+        |keymap.modal.last = alt+end
+        |keymap.modal.page_up = alt+pageup
+        |keymap.modal.page_down = alt+pagedown
+        |""".stripMargin
+    )
+
+    val modal = ConfigManagerTestSupport.loadConfig(Some(configFile.toString)).inputConfig.focusedKeymapConfig.modal
+
+    modal.bindingsFor(ModalKeyAction.LineStart).map(_.render) shouldBe List("ctrl+a")
+    modal.bindingsFor(ModalKeyAction.LineEnd).map(_.render) shouldBe List("ctrl+e")
+    modal.bindingsFor(ModalKeyAction.First).map(_.render) shouldBe List("alt+home")
+    modal.bindingsFor(ModalKeyAction.Last).map(_.render) shouldBe List("alt+end")
+    modal.bindingsFor(ModalKeyAction.PageUp).map(_.render) shouldBe List("alt+pageup")
+    modal.bindingsFor(ModalKeyAction.PageDown).map(_.render) shouldBe List("alt+pagedown")
+  }
+
   it should "round-trip the focused keymap config through its JSON codec unchanged" in {
     import _root_.io.circe.syntax.*
 

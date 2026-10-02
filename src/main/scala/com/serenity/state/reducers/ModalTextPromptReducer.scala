@@ -33,6 +33,8 @@ private[reducers] object ModalTextPromptReducer:
       case ModalDeleteWordForward                        => Some(WidgetInput.DeleteWordForward)
       case ModalNavigate(Direction.Left)                 => Some(WidgetInput.Left)
       case ModalNavigate(Direction.Right)                => Some(WidgetInput.Right)
+      case ModalLineStart                                => Some(WidgetInput.First)
+      case ModalLineEnd                                  => Some(WidgetInput.Last)
       case _                                             => None
 
   private def submitted(id: SurfaceId, prompt: TextPrompt, state: AppState): ReducerResult =

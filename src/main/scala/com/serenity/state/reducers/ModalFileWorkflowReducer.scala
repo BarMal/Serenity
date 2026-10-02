@@ -23,6 +23,8 @@ private[reducers] object ModalFileWorkflowReducer:
       case ModalPreviousField            => handlePreviousField(currentState)
       case ModalNavigate(Direction.Up)   => handleNavigateUp(currentState)
       case ModalNavigate(Direction.Down) => handleNavigateDown(currentState)
+      case ModalFirst                    => handleSuggestionAt(currentState)(_ => 0)
+      case ModalLast                     => handleSuggestionAt(currentState)(_ - 1)
       case ModalSubmit                   => handleSubmit(currentState)
       case ModalCreateDirectory          => handleCreateDirectory(currentState)
       case ModalOpenAsProjectRoot        => handleOpenAsProjectRoot(currentState)
@@ -98,6 +100,16 @@ private[reducers] object ModalFileWorkflowReducer:
         ReducerResult.noEffects(updateModal(currentState, id, Modal.FileWorkflow(workflow.cycleFormat(1))))
       case Some((id, Modal.FileWorkflow(workflow))) =>
         ReducerResult.noEffects(updateModal(currentState, id, Modal.FileWorkflow(workflow.moveSuggestion(1))))
+      case _ =>
+        ReducerResult.noEffects(currentState)
+
+  private def handleSuggestionAt(currentState: AppState)(index: Int => Int): ReducerResult =
+    currentModal(currentState) match
+      case Some((id, Modal.FileWorkflow(workflow)))
+          if workflow.suggestions.nonEmpty && workflow.activeField != FileWorkflowField.Format =>
+        val selected =
+          workflow.updated(selectedSuggestionIndex = index(workflow.suggestions.size), statusMessage = None)
+        ReducerResult.noEffects(updateModal(currentState, id, Modal.FileWorkflow(selected)))
       case _ =>
         ReducerResult.noEffects(currentState)
 

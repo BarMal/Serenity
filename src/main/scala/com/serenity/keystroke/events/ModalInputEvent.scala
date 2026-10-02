@@ -12,6 +12,17 @@ case object ModalDeleteWordForward           extends ModalInputEvent
 case object ModalPaste                               extends ModalInputEvent
 final case class ModalNavigate(direction: Direction) extends ModalInputEvent
 
+/** Home and End: the ends of the focused text, or of a list with no text to move through. */
+case object ModalLineStart extends ModalInputEvent
+case object ModalLineEnd   extends ModalInputEvent
+
+/** Ctrl+Home and Ctrl+End: the first and last item of a list, whether or not it also has text. */
+case object ModalFirst extends ModalInputEvent
+case object ModalLast  extends ModalInputEvent
+
+/** PageUp (`pages = -1`) and PageDown (`pages = 1`). */
+final case class ModalPage(pages: Int) extends ModalInputEvent
+
 /** Moves the selected item of a reorderable list, rather than the selection (Alt+Up/Down by default). */
 final case class ModalMove(direction: Direction) extends ModalInputEvent
 case object ModalNextField                       extends ModalInputEvent

@@ -41,3 +41,14 @@ class SingleLineFormTranslatorSpec extends AnyFlatSpec with Matchers:
       KeyStrokeInfo(InputKey.Character, Some('a'), Set(Modifier.Alt))
     ) should not be a[ModalInsertChar]
   }
+
+  it should "read Home and End as line ends, Ctrl+Home and Ctrl+End as list ends, and PageUp and PageDown as pages" in {
+    val ctrl = Set(Modifier.Ctrl)
+
+    translator.translate(KeyStrokeInfo(InputKey.Home, None, Set.empty)) shouldBe ModalLineStart
+    translator.translate(KeyStrokeInfo(InputKey.End, None, Set.empty)) shouldBe ModalLineEnd
+    translator.translate(KeyStrokeInfo(InputKey.Home, None, ctrl)) shouldBe ModalFirst
+    translator.translate(KeyStrokeInfo(InputKey.End, None, ctrl)) shouldBe ModalLast
+    translator.translate(KeyStrokeInfo(InputKey.PageUp, None, Set.empty)) shouldBe ModalPage(-1)
+    translator.translate(KeyStrokeInfo(InputKey.PageDown, None, Set.empty)) shouldBe ModalPage(1)
+  }

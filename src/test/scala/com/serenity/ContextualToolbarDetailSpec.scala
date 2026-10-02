@@ -1,7 +1,9 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.input.FocusedInputTranslator
 import com.serenity.keystroke.events.*
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.richtext.*
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
@@ -121,6 +123,61 @@ class ContextualToolbarDetailSpec extends AnyFlatSpec with Matchers with Context
       .map(_.style.marks)
       .shouldBe(Some(Set(InlineMark.Bold)))
     state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+  }
+
+  it should "move its focused item with Tab and Shift+Tab, wrapping, the same as Right and Left" in {
+    val stateManager = createProseStateManager("ContextualToolbarSpec-tab-focus")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+    focusToolbar(stateManager)
+
+    val opened = stateManager.getCurrentState.unsafeRunSync()
+    val items  = ContextualToolbar.itemsFor(opened)
+    val start  = toolbarStateFrom(opened).normalized(items)
+
+    stateManager.applyEvent(TabKey).unsafeRunSync()
+    toolbarStateFrom(stateManager.getCurrentState.unsafeRunSync()).focusedIndex shouldBe
+      start.moveFocus(1, items).focusedIndex
+
+    stateManager.applyEvent(ReverseTabKey).unsafeRunSync()
+    stateManager.applyEvent(ReverseTabKey).unsafeRunSync()
+    toolbarStateFrom(stateManager.getCurrentState.unsafeRunSync()).focusedIndex shouldBe
+      start.moveFocus(-1, items).focusedIndex
+  }
+
+  it should "receive Tab and Shift+Tab as next and previous field while focused" in {
+    val stateManager = createProseStateManager("ContextualToolbarSpec-tab-keys")
+
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+    focusToolbar(stateManager)
+    val translator = FocusedInputTranslator.forState(stateManager.getCurrentState.unsafeRunSync())
+
+    translator.translate(KeyStrokeInfo(InputKey.Tab, None, Set.empty)) shouldBe ModalNextField
+    translator.translate(KeyStrokeInfo(InputKey.ReverseTab, None, Set.empty)) shouldBe ModalPreviousField
+  }
+
+  it should "move an open dropdown's selection with Tab and Shift+Tab, the same as Right and Left" in {
+    val stateManager = createProseStateManager("ContextualToolbarSpec-tab-dropdown")
+
+    stateManager.applyEvent(ResizeEvent(ViewportSize(120, 30))).unsafeRunSync()
+    stateManager.applyEvent(ToggleContextualToolbar).unsafeRunSync()
+    moveToolbarFocusTo(stateManager, "paragraph-role")
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    val opened = stateManager.getCurrentState.unsafeRunSync()
+    val items  = ContextualToolbar.itemsFor(opened)
+    val start  = toolbarStateFrom(opened)
+    start.detailState.getOrElse(fail("Expected dropdown detail")) shouldBe a[ContextualToolbarDetailState.Dropdown]
+
+    stateManager.applyEvent(TabKey).unsafeRunSync()
+    toolbarStateFrom(stateManager.getCurrentState.unsafeRunSync()).detailState shouldBe
+      start.moveDetailSelection(1, items).detailState
+
+    stateManager.applyEvent(ReverseTabKey).unsafeRunSync()
+    stateManager.applyEvent(ReverseTabKey).unsafeRunSync()
+    toolbarStateFrom(stateManager.getCurrentState.unsafeRunSync()).detailState shouldBe
+      start.moveDetailSelection(-1, items).detailState
   }
 
   it should "dismiss on Escape and restore editor focus" in {

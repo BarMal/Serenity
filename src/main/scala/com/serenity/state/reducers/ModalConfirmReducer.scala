@@ -5,8 +5,9 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.ConfirmComposition
 import com.serenity.ui.widget.WidgetInput
 
-/** Input for a [[Modal.Confirm]] prompt: the arrows and Tab move between its choices, Enter takes the highlighted one,
-  * Escape takes the prompt's `onDismiss`, and a click highlights the clicked choice (the mouse layer then submits it).
+/** Input for a [[Modal.Confirm]] prompt: the arrows and Tab move between its choices, Home/End and paging jump to the
+  * first or last, Enter takes the highlighted one, Escape takes the prompt's `onDismiss`, and a click highlights the
+  * clicked choice (the mouse layer then submits it).
   */
 private[reducers] object ModalConfirmReducer:
   import ModalEventReducer.{currentModal, dismissToPane, updateModal}
@@ -31,7 +32,10 @@ private[reducers] object ModalConfirmReducer:
     event match
       case ModalNextField | ModalNavigate(Direction.Down) | ModalNavigate(Direction.Right)  => Some(WidgetInput.Down)
       case ModalPreviousField | ModalNavigate(Direction.Up) | ModalNavigate(Direction.Left) => Some(WidgetInput.Up)
-      case _                                                                                => None
+      case ModalLineStart | ModalFirst                                                      => Some(WidgetInput.First)
+      case ModalLineEnd | ModalLast                                                         => Some(WidgetInput.Last)
+      case ModalPage(pages) => Some(if pages < 0 then WidgetInput.PageUp else WidgetInput.PageDown)
+      case _                => None
 
   private def moved(id: SurfaceId, prompt: ConfirmPrompt, input: WidgetInput, state: AppState): ReducerResult =
     val (choices, _) = prompt.choices.update(input, prompt.choices.items.size)

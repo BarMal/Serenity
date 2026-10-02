@@ -17,13 +17,13 @@ class ContextualToolbarComponent extends TypedFocusedComponent[ModalInputEvent]:
           case SurfaceContent.ContextualToolbar(toolbarState) =>
             val items = ContextualToolbar.itemsFor(currentState)
             event match
-              case ModalNavigate(Direction.Left) =>
+              case ModalNavigate(Direction.Left) | ModalPreviousField =>
                 toolbarState.normalized(items).detailState match
                   case Some(_: ContextualToolbarDetailState.Dropdown) =>
                     updateToolbarState(surface, toolbarState.moveDetailSelection(-1, items))
                   case _ =>
                     updateToolbarState(surface, toolbarState.moveFocus(-1, items))
-              case ModalNavigate(Direction.Right) =>
+              case ModalNavigate(Direction.Right) | ModalNextField =>
                 toolbarState.normalized(items).detailState match
                   case Some(_: ContextualToolbarDetailState.Dropdown) =>
                     updateToolbarState(surface, toolbarState.moveDetailSelection(1, items))
