@@ -5,9 +5,10 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.PanelArrangementComposition
 
-/** Input for a [[Modal.PanelArrangement]]: arrows and Tab move the selection, Alt+arrows move the selected panel, Enter
-  * or Space shows or hides it, a click selects the clicked panel, and Escape closes the list. A move asks for the panel
-  * to be placed and leaves the list as it is; the commit that moves the panel brings the list up to date.
+/** Input for a [[Modal.PanelArrangement]]: arrows and Tab move the selection, Home/End select the first or last panel,
+  * Alt+arrows move the selected panel, Enter or Space shows or hides it, a click selects the clicked panel, and Escape
+  * closes the list. A move asks for the panel to be placed and leaves the list as it is; the commit that moves the
+  * panel brings the list up to date.
   */
 private[reducers] object ModalPanelArrangementReducer:
   import ModalEventReducer.{currentModal, dismissToPane, updateModal}
@@ -17,10 +18,13 @@ private[reducers] object ModalPanelArrangementReducer:
       case Some((id, Modal.PanelArrangement(arrangement))) =>
         def selecting(next: PanelArrangement) =
           ReducerResult.noEffects(updateModal(currentState, id, Modal.PanelArrangement(next)))
+        def selectingRow(row: Option[PanelId]) = selecting(row.fold(arrangement)(arrangement.selecting))
         event match
           case ModalDismiss                                     => ReducerResult.noEffects(dismissToPane(currentState))
           case ModalNavigate(Direction.Down) | ModalNextField   => selecting(arrangement.selectionMoved(1))
           case ModalNavigate(Direction.Up) | ModalPreviousField => selecting(arrangement.selectionMoved(-1))
+          case ModalLineStart | ModalFirst                      => selectingRow(arrangement.rows.headOption)
+          case ModalLineEnd | ModalLast                         => selectingRow(arrangement.rows.lastOption)
           case ModalMove(Direction.Down)                        => placed(arrangement.moved(1), currentState)
           case ModalMove(Direction.Up)                          => placed(arrangement.moved(-1), currentState)
           case ModalSubmit | ModalInsertChar(' ')               => placed(arrangement.toggled, currentState)

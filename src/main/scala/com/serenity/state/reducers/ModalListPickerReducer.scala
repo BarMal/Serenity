@@ -5,12 +5,14 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.ListPickerComposition
 import com.serenity.ui.widget.{Loadable, TextField, TextFieldOutcome, WidgetInput}
 
-/** Input for a [[Modal.ListPicker]]: arrows and Tab move the highlight, Enter runs the highlighted choice's command,
-  * Escape closes it (then runs its `onDismiss`), and a click highlights the clicked choice (the mouse layer then
-  * submits it). A picker with a query takes typing, deletes, paste and Left/Right as edits to it, and recomputes its
-  * items after each change. Each move of the highlight runs the newly highlighted choice's preview. Moving down off the
-  * last choice of a picker whose source has more loads the next batch instead of wrapping. A choice that waits on slow
-  * work keeps the picker open and pending on it; nothing else can be picked or typed meanwhile.
+/** Input for a [[Modal.ListPicker]]: arrows and Tab move the highlight, PageUp/PageDown page it, Ctrl+Home/Ctrl+End
+  * jump to the first or last loaded choice, Enter runs the highlighted choice's command, Escape closes it (then runs
+  * its `onDismiss`), and a click highlights the clicked choice (the mouse layer then submits it). A picker with a query
+  * takes typing, deletes, paste, Left/Right and Home/End as edits to it, and recomputes its items after each change;
+  * without one, Home/End jump like Ctrl+Home/Ctrl+End. Each move of the highlight runs the newly highlighted choice's
+  * preview. Moving down off, or paging down onto, the last choice of a picker whose source has more loads the next
+  * batch first. A choice that waits on slow work keeps the picker open and pending on it; nothing else can be picked or
+  * typed meanwhile.
   */
 private[reducers] object ModalListPickerReducer:
   import ModalEventReducer.{currentModal, dismissToPane, updateModal}
@@ -54,13 +56,18 @@ private[reducers] object ModalListPickerReducer:
       case ModalPaste                     => state.runtime.clipboard.map(WidgetInput.InsertText(_))
       case ModalNavigate(Direction.Left)  => Some(WidgetInput.Left)
       case ModalNavigate(Direction.Right) => Some(WidgetInput.Right)
+      case ModalLineStart                 => Some(WidgetInput.First)
+      case ModalLineEnd                   => Some(WidgetInput.Last)
       case _                              => None
 
   private def navigation(event: ModalInputEvent): Option[WidgetInput] =
     event match
       case ModalNextField | ModalNavigate(Direction.Down) | ModalNavigate(Direction.Right)  => Some(WidgetInput.Down)
       case ModalPreviousField | ModalNavigate(Direction.Up) | ModalNavigate(Direction.Left) => Some(WidgetInput.Up)
-      case _                                                                                => None
+      case ModalLineStart | ModalFirst                                                      => Some(WidgetInput.First)
+      case ModalLineEnd | ModalLast                                                         => Some(WidgetInput.Last)
+      case ModalPage(pages) => Some(if pages < 0 then WidgetInput.PageUp else WidgetInput.PageDown)
+      case _                => None
 
   private def edited(picker: ListPicker, field: TextField, input: WidgetInput, state: AppState): ListPicker =
     field.update(input) match
@@ -71,12 +78,17 @@ private[reducers] object ModalListPickerReducer:
   private def moved(picker: ListPicker, input: WidgetInput, state: AppState): ListPicker =
     val grown = input match
       case WidgetInput.Down if picker.hasMore && isOnLastChoice(picker) => ListPickerSearch.extended(picker, state)
-      case _                                                            => picker
-    grown.items match
+      case WidgetInput.PageDown if picker.hasMore && isOnLastChoice(movedWithinLoaded(picker, input)) =>
+        ListPickerSearch.extended(picker, state)
+      case _ => picker
+    movedWithinLoaded(grown, input)
+
+  private def movedWithinLoaded(picker: ListPicker, input: WidgetInput): ListPicker =
+    picker.items match
       case Loadable.Ready(choices) =>
         val (updated, _) = choices.update(input, ListPickerComposition.VisibleRows)
-        grown.copy(items = Loadable.Ready(updated))
-      case _ => grown
+        picker.copy(items = Loadable.Ready(updated))
+      case _ => picker
 
   private def isOnLastChoice(picker: ListPicker): Boolean =
     picker.items.toOption.exists(choices => choices.selected.contains(choices.items.size - 1))

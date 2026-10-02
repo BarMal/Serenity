@@ -66,6 +66,20 @@ class ModalConfirmReducerSpec extends AnyFlatSpec with Matchers:
     highlighted(clicked.state) shouldBe Some("Cancel")
   }
 
+  it should "jump to the first or last choice with Home, End, Ctrl+Home, Ctrl+End, PageUp and PageDown" in {
+    def after(events: ModalInputEvent*): Option[String] =
+      highlighted(events.foldLeft(stateWith(Modal.Confirm(prompt))) { (state, event) =>
+        ModalEventReducer.reduce(ModalType.Confirm, event, state).state
+      })
+
+    after(ModalLineEnd) shouldBe Some("Cancel")
+    after(ModalLast) shouldBe Some("Cancel")
+    after(ModalPage(1)) shouldBe Some("Cancel")
+    after(ModalLast, ModalLineStart) shouldBe Some("Reload from disk")
+    after(ModalLast, ModalFirst) shouldBe Some("Reload from disk")
+    after(ModalLast, ModalPage(-1)) shouldBe Some("Reload from disk")
+  }
+
   it should "dismiss the prompt without queuing an effect" in {
     val result = ModalEventReducer.reduce(ModalType.Confirm, ModalDismiss, stateWith(Modal.Confirm(prompt)))
 

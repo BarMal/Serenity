@@ -392,6 +392,27 @@ class ModalFileWorkflowReducerSpec extends AnyFlatSpec with Matchers:
     saveAsResult.effects shouldBe Nil
   }
 
+  it should "select the first or last suggestion with Ctrl+Home and Ctrl+End, leaving Home and End alone" in {
+    val suggestions = List("one", "two", "three").map(FileWorkflowSuggestion(_))
+    def stateWith(workflow: FileWorkflowState) = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(focus = Focus.Modal),
+      runtime = AppState.initial.runtime.copy(
+        modalStack = List(ModalDialog(SurfaceId("open"), Modal.FileWorkflow(workflow), ModalPlacement.Centered))
+      )
+    )
+    def selectedAfter(event: ModalInputEvent, workflow: FileWorkflowState): Option[Int] =
+      ModalEventReducer.reduce(ModalType.FileWorkflow, event, stateWith(workflow)).state.topModal.map(_.modal).collect {
+        case Modal.FileWorkflow(shown) => shown.selectedSuggestionIndex
+      }
+    val open = OpenFileWorkflowState(path = "/tmp/", suggestions = suggestions, selectedSuggestionIndex = 1)
+
+    selectedAfter(ModalLast, open) shouldBe Some(2)
+    selectedAfter(ModalFirst, open) shouldBe Some(0)
+    selectedAfter(ModalLast, open.updated(suggestions = Nil, selectedSuggestionIndex = 0)) shouldBe Some(0)
+    ModalEventReducer.reduce(ModalType.FileWorkflow, ModalLineEnd, stateWith(open)).state shouldBe stateWith(open)
+    ModalEventReducer.reduce(ModalType.FileWorkflow, ModalPage(1), stateWith(open)).state shouldBe stateWith(open)
+  }
+
   it should "queue file workflow submission when enter is pressed without suggestions" in {
     val initialWorkflow = SaveAsFileWorkflowState(
       filename = "notes.scala",

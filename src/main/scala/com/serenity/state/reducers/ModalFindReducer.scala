@@ -46,6 +46,8 @@ private[reducers] object ModalFindReducer:
           case Some((id, Modal.Find(query, results, currentIndex))) if query.nonEmpty =>
             ReducerResult.noEffects(updateFindSelection(currentState, id, query, results, currentIndex - 1))
           case _ => ReducerResult.noEffects(currentState)
+      case ModalFirst => ReducerResult.noEffects(findSelectionAt(currentState)(_ => 0))
+      case ModalLast  => ReducerResult.noEffects(findSelectionAt(currentState)(_ - 1))
       case ModalSubmit =>
         currentModal(currentState) match
           case Some((id, Modal.Find(query, results, currentIndex))) if query.nonEmpty =>
@@ -87,6 +89,12 @@ private[reducers] object ModalFindReducer:
       state.runtime.uiSurfaces.find(_.id == request.surfaceId) match
         case Some(surface) => updateFindSelection(state, surface.id, request.query, results, requestedIndex = 0)
         case None          => state
+
+  private def findSelectionAt(state: AppState)(index: Int => Int): AppState =
+    currentModal(state) match
+      case Some((id, Modal.Find(query, results, _))) if query.nonEmpty =>
+        updateFindSelection(state, id, query, results, index(results.length))
+      case _ => state
 
   private def updateFindQuery(state: AppState, id: SurfaceId, query: String): ReducerResult =
     val currentQueryMatches = state

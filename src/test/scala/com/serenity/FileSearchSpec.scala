@@ -129,6 +129,28 @@ class FileSearchSpec extends AnyFlatSpec with Matchers:
     shown(exhausted).hasMore shouldBe false
   }
 
+  it should "jump to the last loaded match on Ctrl+End, and load the next batch when a page runs past it" in {
+    val state           = withBuffers((BufferId(0), Some("/tmp/many.txt"), GuardedRope(numbered(250))))
+    val (atLast, _)     = after(opened(state), typed("needle") :+ ModalLast)
+    val (paged, _)      = after(atLast, List(ModalPage(1)))
+    val (nearEnd, _)    = after(atLast, List.fill(4)(MoveUp))
+    val (crossed, _)    = after(nearEnd, List(ModalPage(1)))
+    val (withinPage, _) = after(opened(state), typed("needle") :+ ModalPage(1))
+
+    shown(atLast).selectedChoice.map(_.label) shouldBe Some("many.txt:100")
+    choices(atLast).size shouldBe 100
+    shown(atLast).hasMore shouldBe true
+
+    choices(paged).size shouldBe 200
+    shown(paged).selectedChoice.map(_.label) shouldBe Some("many.txt:107")
+
+    choices(crossed).size shouldBe 200
+    shown(crossed).selectedChoice.map(_.label) shouldBe Some("many.txt:103")
+
+    choices(withinPage).size shouldBe 100
+    shown(withinPage).selectedChoice.map(_.label) shouldBe Some("many.txt:8")
+  }
+
   it should "wrap from the last match to the first once every match is loaded" in {
     val state        = withBuffers((BufferId(0), None, numbered(3)))
     val (last, _)    = after(opened(state), typed("needle") :+ MoveUp)

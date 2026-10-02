@@ -93,6 +93,16 @@ class ModalPanelArrangementReducerSpec extends AnyFlatSpec with Matchers:
     shown(reduce(ModalDismiss).state) shouldBe None
   }
 
+  it should "select its first or last panel with Home, End, Ctrl+Home and Ctrl+End" in {
+    val rows = PanelArrangement.of(layout).rows
+
+    shown(reduce(ModalLineEnd).state).flatMap(_.selected) shouldBe rows.lastOption
+    shown(reduce(ModalLast).state).flatMap(_.selected) shouldBe rows.lastOption
+    shown(reduce(ModalLineStart, reduce(ModalLast).state).state).flatMap(_.selected) shouldBe rows.headOption
+    shown(reduce(ModalFirst, reduce(ModalLast).state).state).flatMap(_.selected) shouldBe rows.headOption
+    reduce(ModalLast).effects shouldBe Nil
+  }
+
   "Alt+Up and Alt+Down" should "move the selected panel while the list has focus, not move focus" in {
     val translator = com.serenity.input.FocusedInputTranslator.forState(atOutline)
     def altKey(key: com.serenity.keystroke.InputKey) =
