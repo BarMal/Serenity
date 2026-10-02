@@ -231,11 +231,25 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "spellcheck-words"
     )
     group("settings-keymap").label shouldBe "Keys"
-    group("settings-keymap").children.map(_.id) should contain allOf (
-      "keymap-global-command_palette",
-      "keymap-command-runner-submit",
-      "keymap-modal-dismiss"
+    group("settings-keymap").children.map(_.id) shouldBe List(
+      "settings-keymap-global",
+      "settings-keymap-editor",
+      "settings-keymap-command-runner",
+      "settings-keymap-dialogs",
+      "settings-keymap-panels",
+      "settings-keymap-peek"
     )
+    nestedGroup("settings-keymap-global").children.map(_.id) shouldBe List(
+      "settings-keymap-global-navigation",
+      "settings-keymap-global-files",
+      "settings-keymap-global-editing",
+      "settings-keymap-global-view"
+    )
+    nestedGroup("settings-keymap-global-navigation").children.map(_.id).headOption shouldBe
+      Some("keymap-global-command_palette")
+    nestedGroup("settings-keymap-command-runner").children.map(_.id) should contain("keymap-command-runner-submit")
+    nestedGroup("settings-keymap-dialogs").children.map(_.id) should contain("keymap-modal-dismiss")
+    nestedGroup("settings-keymap-panels").children.map(_.id) should contain("keymap-panel-navigate_up")
     nestedGroup("settings-document-defaults").label shouldBe "Document Defaults"
     nestedGroup("settings-document-defaults").children.map(_.id) should contain allOf (
       "default-document-mode",
@@ -529,4 +543,18 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
         SettingsIntent.SpellCheck(SpellCheckIntent.SetSpellCheckWords(List("serenity", "caf\u00e9")))
       )
     )
+  }
+
+  it should "file every key binding under exactly one Keys section" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner            = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
+    val keys              = groupByIdRecursive(runner.settingsGroups, "settings-keymap")
+    val bindingIds        = descendants(keys).collect { case item: CommandSurfaceItem.InputItem => item.id }
+    val expected =
+      HotkeyAction.values.size + EditorKeyAction.values.size + CommandRunnerKeyAction.values.size +
+        ModalKeyAction.values.size + PanelKeyAction.values.size + PeekKeyAction.values.size
+
+    bindingIds should have size expected.toLong
+    bindingIds.distinct should have size expected.toLong
   }

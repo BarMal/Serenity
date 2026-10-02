@@ -53,10 +53,10 @@ class CommandRunnerReducerKeybindingRecordingSpec extends AnyFlatSpec with Match
   "CommandRunnerReducer" should "enter binding recording mode for a selected keymap input" in {
     val registry = CommandRegistry.default
     val base     = CommandRunner.empty.activate(registry, AppConfig.default).openSettings
-    val items    = base.submenuItems("settings-keymap")
+    val items    = base.submenuItems("settings-keymap-global-editing")
     val runner = base.withDrilledSettingsSurface(
       SettingsSurfaceState(
-        SettingsPage.Group("settings-keymap", items.indexWhere(_.id == "keymap-global-find"))
+        SettingsPage.Group("settings-keymap-global-editing", items.indexWhere(_.id == "keymap-global-find"))
       )
     )
     val activated = activeState(registry)
@@ -85,7 +85,7 @@ class CommandRunnerReducerKeybindingRecordingSpec extends AnyFlatSpec with Match
     val runner = base.withDrilledSettingsSurface(
       SettingsSurfaceState(
         SettingsPage.Editing(
-          groupId = "settings-keymap",
+          groupId = "settings-keymap-global-editing",
           itemId = "keymap-global-find",
           draftText = "",
           recording = Some(RecordingState("keymap-global-find"))
@@ -144,7 +144,7 @@ class CommandRunnerReducerKeybindingRecordingSpec extends AnyFlatSpec with Match
     val runner = base.withDrilledSettingsSurface(
       SettingsSurfaceState(
         SettingsPage.Editing(
-          groupId = "settings-keymap",
+          groupId = "settings-keymap-global-editing",
           itemId = "keymap-global-find",
           draftText = "",
           recording = Some(RecordingState("keymap-global-find"))
@@ -190,7 +190,7 @@ class CommandRunnerReducerKeybindingRecordingSpec extends AnyFlatSpec with Match
     val runner = base.withDrilledSettingsSurface(
       SettingsSurfaceState(
         SettingsPage.Editing(
-          groupId = "settings-keymap",
+          groupId = "settings-keymap-global-editing",
           itemId = "keymap-global-find",
           draftText = "",
           recording = Some(
@@ -245,7 +245,7 @@ class CommandRunnerReducerKeybindingRecordingSpec extends AnyFlatSpec with Match
     val runner = base.withDrilledSettingsSurface(
       SettingsSurfaceState(
         SettingsPage.Editing(
-          groupId = "settings-keymap",
+          groupId = "settings-keymap-global-editing",
           itemId = "keymap-global-find",
           draftText = "",
           recording = Some(RecordingState("keymap-global-find"))
@@ -337,7 +337,7 @@ class CommandRunnerReducerKeybindingRecordingSpec extends AnyFlatSpec with Match
     val runner = base.withDrilledSettingsSurface(
       SettingsSurfaceState(
         SettingsPage.Editing(
-          groupId = "settings-keymap",
+          groupId = "settings-keymap-global-editing",
           itemId = "keymap-global-find",
           draftText = "",
           recording = Some(

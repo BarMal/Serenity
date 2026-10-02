@@ -5,6 +5,13 @@ import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.given
 import io.circe.{Decoder, Encoder}
 
+/** What a global hotkey is for -- the section of Settings › Keys › Global it is listed under. */
+enum HotkeyPurpose(val label: String):
+  case Navigation extends HotkeyPurpose("Navigation")
+  case Files      extends HotkeyPurpose("Files")
+  case Editing    extends HotkeyPurpose("Editing")
+  case View       extends HotkeyPurpose("View")
+
 enum HotkeyAction:
   case Save
   case Quit
@@ -73,6 +80,15 @@ enum HotkeyAction:
       case FocusRight               => "focus_right"
       case FocusUp                  => "focus_up"
       case FocusDown                => "focus_down"
+
+  def purpose: HotkeyPurpose =
+    this match
+      case Save | SaveAs | OpenFile | NewTab | CloseTab | Quit                      => HotkeyPurpose.Files
+      case Undo | Redo | Copy | Paste | Cut | SelectAll | Find | Replace | GoToLine => HotkeyPurpose.Editing
+      case ToggleCommandRunner | FileSearch | GoToFile | NextTab | PreviousTab | MoveTabLeft | MoveTabRight |
+          SplitPaneHorizontal | SplitPaneVertical | ClosePane | FocusLeft | FocusRight | FocusUp | FocusDown =>
+        HotkeyPurpose.Navigation
+      case ToggleShortcutsHelp | ToggleContextualToolbar | ToggleSyntaxHighlighting => HotkeyPurpose.View
 
 final case class HotkeyTrigger(
     keyType: InputKey,
