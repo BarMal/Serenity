@@ -18,7 +18,7 @@ import com.serenity.config.{
 import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
 import com.serenity.spellcheck.{DictionaryWord, SpellChecker}
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{CommandRunnerPanelSelections, CommandRunnerReducer}
+import com.serenity.state.reducers.CommandRunnerReducer
 
 /** Config-update infrastructure and the settings-intent dispatch that drives it: appearance, motion, cursor, panel
   * chrome, spell-check, and general settings all funnel through the same commit-then-persist path. The state change
@@ -469,12 +469,7 @@ private[manager] object StateManagerConfigEffects:
       state.commandRunnerSurface.flatMap { surface =>
         surface.content match
           case SurfaceContent.CommandPalette(runner) =>
-            val configRunner = runner.updateInputItems(config)
-            Some(
-              configRunner.copy(optionSelections =
-                configRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
-              )
-            )
+            Some(runner.updateInputItems(config))
           case _ =>
             None
       }

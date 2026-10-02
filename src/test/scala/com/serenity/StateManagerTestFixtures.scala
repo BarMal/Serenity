@@ -7,7 +7,6 @@ import com.serenity.state.core.EditorState
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.state.reducers.CommandRunnerPanelSelections
 import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.*
 
@@ -238,9 +237,7 @@ private[serenity] object StateManagerTestFixtures:
       state.runtime.capabilities,
       context = state.commandRunnerContext
     )
-    val runner = activatedRunner.copy(
-      optionSelections = activatedRunner.optionSelections ++ CommandRunnerPanelSelections.fromState(state)
-    )
+    val runner = activatedRunner
     val (stateWithId, surfaceId) =
       state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
     val surface = UiSurface(
