@@ -12,7 +12,7 @@ import com.serenity.state.undo.{BufferSnapshot, HistoryEntry}
   * `EditorEventReducer` (which grew past its 600-line target) rather than any one event family, since every family that
   * edits content -- text editing, clipboard, deletion -- depends on this pairing being kept consistent.
   */
-private[reducers] object EditorEditSupport:
+private[state] object EditorEditSupport:
 
   /** Every call site in this file computes `start`/`end`/`index` from `content` itself (a cursor offset, a selection
     * boundary, a grapheme boundary, an LSP/tracked edit range) immediately before calling `insert`/`delete`, so an
@@ -138,8 +138,12 @@ private[reducers] object EditorEditSupport:
       val baseBuffer = buffer.withEditedContent(
         content = updatedContent,
         cursors = finalCursors,
-        documentComments =
-          adjustDocumentComments(buffer.annotations.documentComments, buffer.document.content, updatedContent, edits),
+        adjustedAnnotations = adjustAnnotations(
+          buffer.annotations,
+          buffer.document.content,
+          updatedContent,
+          edits
+        ),
         richTextDocument = updatedRichTextDocument
       )
       (baseBuffer, edits)
@@ -176,8 +180,8 @@ private[reducers] object EditorEditSupport:
       val baseBuffer = buffer.withEditedContent(
         content = updatedContent,
         cursors = finalCursors,
-        documentComments = adjustDocumentComments(
-          buffer.annotations.documentComments,
+        adjustedAnnotations = adjustAnnotations(
+          buffer.annotations,
           buffer.document.content,
           updatedContent,
           mergedEdits
@@ -233,6 +237,81 @@ private[reducers] object EditorEditSupport:
           comment.text
         )
       }
+
+  /** A placeholder stays put when text is typed exactly at its position: it marks where writing is still owed, so an
+    * Enter at the end of a heading must leave it on the heading line rather than carrying it into the new paragraph.
+    */
+  def adjustPlaceholders(
+    placeholders: List[Placeholder],
+    initialContent: Rope,
+    updatedContent: Rope,
+    edits: List[MultiCursorEdit]
+  ): List[Placeholder] =
+    if placeholders.isEmpty || edits.isEmpty then placeholders
+    else
+      val sortedEdits = edits.sortBy(edit => (edit.start, edit.end))
+      placeholders.map(placeholder =>
+        placeholder.copy(position = remapPoint(placeholder.position, initialContent, updatedContent, sortedEdits))
+      )
+
+  /** Bookmarks follow edits the way placeholders do, and two that a deletion collapses onto one spot become one. */
+  def adjustBookmarks(
+    bookmarks: List[CursorPosition],
+    initialContent: Rope,
+    updatedContent: Rope,
+    edits: List[MultiCursorEdit]
+  ): List[CursorPosition] =
+    if bookmarks.isEmpty || edits.isEmpty then bookmarks
+    else
+      val sortedEdits = edits.sortBy(edit => (edit.start, edit.end))
+      bookmarks.map(remapPoint(_, initialContent, updatedContent, sortedEdits)).distinct
+
+  private def remapPoint(
+    position: CursorPosition,
+    initialContent: Rope,
+    updatedContent: Rope,
+    sortedEdits: List[MultiCursorEdit]
+  ): CursorPosition =
+    val offset = initialContent.lineColumnToOffset(position.line, position.column)
+    updatedContent.offsetToCursorPosition(remapEditBoundary(offset, sortedEdits, insertionAtBoundaryMoves = false))
+
+  /** The one place an edit's effect on user-authored annotations is decided, so a new annotation kind cannot be added
+    * to `Annotations` and then forgotten by one of the edit paths.
+    */
+  def adjustAnnotations(
+    annotations: Annotations,
+    initialContent: Rope,
+    updatedContent: Rope,
+    edits: List[MultiCursorEdit]
+  ): Annotations =
+    annotations.copy(
+      bookmarks = adjustBookmarks(annotations.bookmarks, initialContent, updatedContent, edits),
+      documentComments = adjustDocumentComments(annotations.documentComments, initialContent, updatedContent, edits),
+      placeholders = adjustPlaceholders(annotations.placeholders, initialContent, updatedContent, edits)
+    )
+
+  /** For a whole-content swap that carries no edit list -- undo and redo restore a snapshot's text outright. The
+    * difference is treated as one replaced region (common prefix and suffix trimmed), so annotations keep their place
+    * relative to the text around the change. Inside a run of identical characters the region is ambiguous, and a marker
+    * there may land anywhere within the run.
+    */
+  def adjustAnnotationsAcrossReplacement(annotations: Annotations, before: Rope, after: Rope): Annotations =
+    if annotations.bookmarks.isEmpty && annotations.documentComments.isEmpty && annotations.placeholders.isEmpty then
+      annotations
+    else
+      val beforeText = before.collect()
+      val afterText  = after.collect()
+      val limit      = math.min(beforeText.length, afterText.length)
+      val prefix     = Iterator.range(0, limit).takeWhile(i => beforeText(i) == afterText(i)).size
+      val suffix = Iterator
+        .range(0, limit - prefix)
+        .takeWhile(i => beforeText(beforeText.length - 1 - i) == afterText(afterText.length - 1 - i))
+        .size
+      if prefix == beforeText.length && prefix == afterText.length then annotations
+      else
+        val replacement = afterText.substring(prefix, afterText.length - suffix)
+        val edit        = MultiCursorEdit(0, prefix, beforeText.length - suffix, replacement)
+        adjustAnnotations(annotations, before, after, List(edit))
 
   private def remapCommentStart(offset: Int, edits: List[MultiCursorEdit]): Int =
     remapEditBoundary(offset, edits, insertionAtBoundaryMoves = true)
@@ -305,13 +384,11 @@ private[reducers] object EditorEditSupport:
       buffer.copy(
         document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
         editing = buffer.editing.withPrimary(Cursor(newCursor)),
-        annotations = buffer.annotations.copy(
-          documentComments = adjustDocumentComments(
-            buffer.annotations.documentComments,
-            buffer.document.content,
-            newContent,
-            List(replacementEdit)
-          )
+        annotations = adjustAnnotations(
+          buffer.annotations,
+          buffer.document.content,
+          newContent,
+          List(replacementEdit)
         ),
         // `document` above and `richTextDocument` below both leave `contentVersion`/`richTextSyncedVersion` at
         // whatever `buffer` already had, rather than updating either: as long as the two only ever move together
@@ -352,13 +429,11 @@ private[reducers] object EditorEditSupport:
     val baseBuffer = buffer.copy(
       document = buffer.document.copy(content = newContent, isDirty = true, isNewEmpty = false),
       editing = buffer.editing.withPrimary(Cursor(newCursor)),
-      annotations = buffer.annotations.copy(
-        documentComments = adjustDocumentComments(
-          buffer.annotations.documentComments,
-          buffer.document.content,
-          newContent,
-          List(MultiCursorEdit(0, startOffset, endOffset, ""))
-        )
+      annotations = adjustAnnotations(
+        buffer.annotations,
+        buffer.document.content,
+        newContent,
+        List(MultiCursorEdit(0, startOffset, endOffset, ""))
       ),
       richText = buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, ""))
     )

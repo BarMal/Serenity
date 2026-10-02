@@ -2,6 +2,7 @@ package com.serenity.state.undo
 
 import com.serenity.rope.Rope
 import com.serenity.state.models.*
+import com.serenity.state.reducers.EditorEditSupport
 import com.serenity.ui.layout.{Layout, WorkspaceNodeId, WorkspaceTree}
 
 final case class BufferSnapshot(
@@ -21,7 +22,9 @@ final case class BufferSnapshot(
       ),
       editing = editing,
       viewport = viewport,
-      findState = findState
+      findState = findState,
+      annotations =
+        EditorEditSupport.adjustAnnotationsAcrossReplacement(buffer.annotations, buffer.document.content, content)
     )
 
 object BufferSnapshot:
