@@ -94,7 +94,9 @@ enum HotkeyAction:
       case ToggleCommandRunner | FileSearch | GoToFile | NextTab | PreviousTab | MoveTabLeft | MoveTabRight |
           SplitPaneHorizontal | SplitPaneVertical | ClosePane | FocusLeft | FocusRight | FocusUp | FocusDown =>
         HotkeyPurpose.Navigation
-      case ToggleShortcutsHelp | ToggleContextualToolbar | ToggleSyntaxHighlighting => HotkeyPurpose.View
+      case ToggleShortcutsHelp | ToggleContextualToolbar | ToggleSyntaxHighlighting | ToggleChapterGhosts |
+          OpenChapterNote | ToggleNotesPin =>
+        HotkeyPurpose.View
 
 final case class HotkeyTrigger(
     keyType: InputKey,
