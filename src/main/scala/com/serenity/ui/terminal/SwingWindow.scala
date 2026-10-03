@@ -28,7 +28,13 @@ class SwingWindow(
 ):
 
   private val usesCustomChrome =
-    SwingWindow.shouldUseCustomChrome(chromeMode, System.getProperty("os.name", ""), env)
+    SwingWindow.shouldUseCustomChrome(
+      chromeMode,
+      System.getProperty("os.name", ""),
+      env,
+      SwingWindow.isNativeWaylandToolkit(Toolkit.getDefaultToolkit.getClass.getName)
+    )
+
   private val effectiveChromeMode        = if usesCustomChrome then WindowChromeMode.Custom else chromeMode
   private val usesNativeThemedChrome     = chromeMode == WindowChromeMode.NativeThemed
   private val initialChromeLayoutMetrics = SwingWindow.ChromeMetrics.fromCellMetrics(initialChromeMetrics)

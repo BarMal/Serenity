@@ -190,6 +190,8 @@ object ConfigFileFormat:
     field("ui.render.layer_cache"),
     comment("Log a [FRAME] timing summary (input, render and paint latency) to the app log every 5 seconds"),
     field("ui.render.frame_timing"),
+    comment("After the first frame, briefly exercise typing and drawing off-screen so early keystrokes are not slow"),
+    field("startup.warm_up"),
     blank,
     comment(
       "Window chrome: auto uses themed chrome on Linux; native preserves OS snap/window animations; native-themed " +
