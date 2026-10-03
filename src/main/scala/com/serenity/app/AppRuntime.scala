@@ -113,7 +113,7 @@ object AppRuntime:
       val damage = DamageProducer.forTransition(before, after)
       IO.whenA(damage != Damage.Nothing)(emitDamage(damage))
 
-  final private[serenity] case class AnimationTickCadence(remainderNanos: Long):
+  final private[serenity] case class AnimationTickCadence(remainderNanos: Long, yieldedLastFrame: Boolean = false):
 
     def advance(elapsed: FiniteDuration, frameInterval: FiniteDuration): (AnimationTickCadence, Int) =
       // The tick bucket follows the configured renderFpsTarget's interval rather than a fixed 60Hz constant, so
@@ -121,11 +121,32 @@ object AppRuntime:
       // frame keeps animations at their designed speed when frames run late; the clamp stops a stall (a GC pause, a
       // suspended laptop) from fast-forwarding every animation to its end in one frame.
       val animationNanos = math.max(1L, frameInterval.toNanos)
-      val elapsedNanos   = elapsed.toNanos.max(0L).min(animationNanos * AnimationTickCadence.MaxTicksPerFrame)
-      val totalNanos     = remainderNanos + elapsedNanos
-      val ticks          = (totalNanos / animationNanos).toInt
-      val nextRemainder  = totalNanos % animationNanos
+      val totalNanos =
+        (remainderNanos + clampedElapsedNanos(elapsed, animationNanos)).min(maxBankedNanos(animationNanos))
+      val ticks         = (totalNanos / animationNanos).toInt
+      val nextRemainder = totalNanos % animationNanos
       (AnimationTickCadence(nextRemainder), ticks)
+
+    /** As [[advance]], but a frame with fresh input to show banks its time instead of ticking, so input paints without
+      * waiting behind animation work; the banked ticks run on the next frame. It never yields two frames running, so a
+      * key held on repeat cannot stall animations.
+      */
+    def advanceYieldingTo(
+      inputPending: Boolean,
+      elapsed: FiniteDuration,
+      frameInterval: FiniteDuration
+    ): (AnimationTickCadence, Int) =
+      if inputPending && !yieldedLastFrame then
+        val animationNanos = math.max(1L, frameInterval.toNanos)
+        val banked = (remainderNanos + clampedElapsedNanos(elapsed, animationNanos)).min(maxBankedNanos(animationNanos))
+        (AnimationTickCadence(banked, yieldedLastFrame = true), 0)
+      else advance(elapsed, frameInterval)
+
+    private def clampedElapsedNanos(elapsed: FiniteDuration, animationNanos: Long): Long =
+      elapsed.toNanos.max(0L).min(animationNanos * AnimationTickCadence.MaxTicksPerFrame)
+
+    private def maxBankedNanos(animationNanos: Long): Long =
+      animationNanos * (AnimationTickCadence.MaxTicksPerFrame + 1) - 1
 
   private[serenity] object AnimationTickCadence:
     val empty: AnimationTickCadence = AnimationTickCadence(0L)
@@ -214,18 +235,23 @@ object AppRuntime:
         translatorCache      <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
         currentStateForDiagnostics = stateManager.getCurrentState.map(Some(_))
         checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, requestFastRender))
-        inputFunnel = AppRuntimeRenderLoops.inputEventPhase(
-          stateManager,
-          inputRouter,
-          systemClipboard,
-          checkResizeAndHandle,
-          cursorVisible,
-          breathIndex,
-          emitDamage,
-          translatorCache,
-          runtime.frameTimings
+        inputPending <- Ref.of[IO, Boolean](false)
+        inputFunnel = AppRuntimeRenderLoops.inputBatchPhase(
+          AppRuntimeRenderLoops.InputBatchContext(
+            stateManager,
+            inputRouter,
+            systemClipboard,
+            checkResizeAndHandle,
+            cursorVisible,
+            breathIndex,
+            emitDamage,
+            translatorCache,
+            runtime.frameTimings,
+            markInputPending = inputPending.set(true),
+            logEvent = (event, focus) => AppRuntimeLogging.logSelectiveEvents(event, focus, logger)
+          )
         )
-        inputLoop = runInputLoop(stateManager, inputHandler, inputFunnel)
+        inputLoop = runInputLoop(stateManager, inputHandler.inputBatches.through(inputFunnel))
         _ <-
           Resource.make(inputLoop.start)(_.cancel).use { inputFiber =>
             runtime.renderFull(initialState, true, None, Damage.Everything, Map.empty, stateManager.renderCaches) >>
@@ -257,7 +283,8 @@ object AppRuntime:
                   checkResizeAndHandle,
                   runtime.renderFull,
                   stateManager.renderCaches,
-                  lastFrameStart = lastFastFrameStart
+                  lastFrameStart = lastFastFrameStart,
+                  takeInputPending = inputPending.getAndSet(false)
                 )
 
                 val renderLoop: Stream[IO, Unit] =
@@ -387,23 +414,12 @@ object AppRuntime:
       yield ()
     )
 
-  private def runInputLoop(
-    stateManager: StateManager,
-    inputHandler: InputHandler[IO],
-    inputFunnel: Stream[IO, Event] => Stream[IO, Unit]
-  )(using logger: Logger[IO]): IO[Unit] =
+  private def runInputLoop(stateManager: StateManager, inputLoop: Stream[IO, Unit])(using
+    logger: Logger[IO]
+  ): IO[Unit] =
     val quitSignal = stateManager.runtimeLifecycle.awaitQuit.attempt
     AppRuntimeRenderLoops.superviseLoop("input loop", stateManager.runtimeLifecycle.forceQuit)(
-      inputHandler.eventStream
-        .evalTap(event =>
-          stateManager.getCurrentState.flatMap(s =>
-            AppRuntimeLogging.logSelectiveEvents(event, s.persisted.focus, logger)
-          )
-        )
-        .through(inputFunnel)
-        .interruptWhen(quitSignal)
-        .compile
-        .drain
+      inputLoop.interruptWhen(quitSignal).compile.drain
     )
 
   private[serenity] def coordinateExternalQuit(

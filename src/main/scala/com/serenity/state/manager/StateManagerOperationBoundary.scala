@@ -44,7 +44,8 @@ final private[manager] class StateManagerOperationBoundary private (
     dictionaryCache: DictionaryCache,
     listDirectory: Path => IO[List[DirEntry]],
     commitObserver: Ref[IO, (AppState, AppState) => IO[Unit]],
-    wrapCache: WrappedLineCache
+    wrapCache: WrappedLineCache,
+    commitsUnobserved: Ref[IO, Boolean]
 ):
   private val DocumentAnalysisDebounce         = 150.millis
   private val FindSearchDebounce               = 50.millis
@@ -107,11 +108,17 @@ final private[manager] class StateManagerOperationBoundary private (
     logModalTransition(fallbackState, committedState) >> scheduleDocumentAnalysis() >>
       PanelContentSync.outlineRefreshDue(committedState, fallbackState).traverse_(scheduleOutlineRefresh) >>
       PanelContentSync.explorerListingsDue(committedState, fallbackState).traverse_(listExplorerDirectory) >>
-      commitObserver.get.flatMap(_(fallbackState, committedState))
+      commitsUnobserved.get.ifM(IO.unit, commitObserver.get.flatMap(_(fallbackState, committedState)))
 
   /** Replaces the observer told of every commit `afterCommit` follows up, with the states before and after. */
   def observeCommits(observer: (AppState, AppState) => IO[Unit]): IO[Unit] =
     commitObserver.set(observer)
+
+  /** Runs `work` with its commits kept from the commit observer, for a caller that reports their damage itself. Only
+    * sound on the dispatcher, where no other writer's commit can land while `work` runs.
+    */
+  def unobserved[A](work: IO[A]): IO[A] =
+    commitsUnobserved.set(true).bracket(_ => work)(_ => commitsUnobserved.set(false))
 
   private[manager] def logRejectedCommit(errors: List[String]): IO[Unit] =
     logger.error(s"State validation failed: ${errors.mkString(", ")}")
@@ -377,9 +384,10 @@ private[manager] object StateManagerOperationBoundary:
       (effectLanes, releaseEffectLanes) <- EffectLanes
         .resource((lane, error) => logger.error(error)(s"[EFFECTS] Job on $lane failed"))
         .allocated
-      dispatcher      <- StateManagerDispatcher.create(logger)
-      fileWriteLedger <- FileWriteLedger.create
-      commitObserver  <- Ref.of[IO, (AppState, AppState) => IO[Unit]]((_, _) => IO.unit)
+      dispatcher        <- StateManagerDispatcher.create(logger)
+      fileWriteLedger   <- FileWriteLedger.create
+      commitObserver    <- Ref.of[IO, (AppState, AppState) => IO[Unit]]((_, _) => IO.unit)
+      commitsUnobserved <- Ref.of[IO, Boolean](false)
     yield new StateManagerOperationBoundary(
       pendingOperations,
       modelRef,
@@ -399,5 +407,6 @@ private[manager] object StateManagerOperationBoundary:
       DictionaryCache(),
       listDirectory,
       commitObserver,
-      wrapCache
+      wrapCache,
+      commitsUnobserved
     )

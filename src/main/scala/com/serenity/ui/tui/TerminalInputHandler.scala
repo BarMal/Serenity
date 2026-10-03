@@ -9,10 +9,17 @@ import cats.effect.std.Queue
 import cats.effect.{FiberIO, IO, Ref}
 import cats.syntax.all.*
 import com.serenity.config.InputConfig
-import com.serenity.input.{InputHandler, InputRouter, ModifierTapDetector, ModifierTapState, SystemClipboard}
+import com.serenity.input.{
+  InputHandler,
+  InputRouter,
+  ModifierTapDetector,
+  ModifierTapState,
+  PendingInput,
+  SystemClipboard
+}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
-import fs2.Stream
+import fs2.{Chunk, Stream}
 import org.jline.terminal.Terminal
 import org.jline.utils.NonBlockingReader
 
@@ -62,6 +69,20 @@ final class TerminalInputHandler private (
     }
 
   private def orderedInputStream: Stream[IO, QueuedInput] = Stream.fromQueueNoneTerminated(queue)
+
+  override def inputBatches: Stream[IO, Chunk[PendingInput]] =
+    Stream
+      .repeatEval(queue.take.flatMap(first => queue.tryTakeN(None).map(first :: _)))
+      .takeThrough(_.forall(_.isDefined))
+      .evalMap(taken => taken.takeWhile(_.isDefined).flatten.traverse(pendingInput).map(_.flatten))
+      .filter(_.nonEmpty)
+      .map(Chunk.from)
+
+  private def pendingInput(input: QueuedInput): IO[Option[PendingInput]] =
+    input match
+      case QueuedInput.Key(info)      => IO.pure(Some(PendingInput.Keystroke(info)))
+      case QueuedInput.Direct(event)  => IO.pure(Some(PendingInput.Ready(event)))
+      case QueuedInput.Movement(slot) => slot.claim.map(_.map(PendingInput.Ready(_)))
 
   def shutdown: IO[Unit] =
     readerFiber.cancel >> disableModes.attempt.void >> metrics.logSummary("shutdown") >> queue.offer(None)
