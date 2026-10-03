@@ -1,20 +1,18 @@
 package com.serenity.command
 
-import com.serenity.config.{BackgroundStyle, StatusSegment, WindowChromeMode}
+import com.serenity.config.{StatusSegment, WindowChromeMode}
 import com.serenity.ui.presets.UiPreset
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
 
-  // issue #1299/#1044: three boolean settings toggles -- "Menu & Panel Shadows", "Show All Settings", and
-  // "Spell Check" -- were built inline with their options ordered Off/On, the one encoding in the settings tree that
+  // issue #1299/#1044: boolean settings toggles such as "Show All Settings" and "Spell Check" were built inline with their options ordered Off/On, the one encoding in the settings tree that
   // disagreed with `CommandRunnerSettingsOptionItemHelpers.enabledOptionItem`'s On/Off convention every other
   // boolean toggle follows (`companion-sprite-enabled`, `code-ligatures`, the three `enabledOptionItem`-built
   // toggles, etc). All three are normalized onto that one shared pattern now.
   "boolean toggle settings" should "all order their options On, Off, matching the shared enabledOptionItem convention" in {
     val onOffToggles = List(
-      CommandRunnerSettingsAppearanceItems.uiShadowsOptionItem(Map.empty),
       CommandRunnerSettingsItems.showAllSettingsOptionItem(Map.empty),
       CommandRunnerSettingsItems.spellCheckOptionItem(Map.empty),
       CommandRunnerSettingsAppearanceItems.companionSpriteEnabledOptionItem(Map.empty)
@@ -28,27 +26,8 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
   }
 
   "CommandRunnerSettingsItems" should "build typed option rows independently of runner state" in {
-    val background = CommandRunnerSettingsAppearanceItems.backgroundStyleOptionItem(Map("background-style" -> 3))
-    val cursor     = CommandRunnerSettingsCursorItems.cursorModeOptionItem(Map("cursor-mode" -> 1))
-    val chrome     = CommandRunnerSettingsAppearanceItems.windowChromeOptionItem(Map("window-chrome" -> 0))
-
-    background.label shouldBe "Background Style"
-    background.selectedOption shouldBe "Glass"
-    background.selectedIntent shouldBe Some(
-      CommandIntent.Settings(
-        SettingsIntent.General(GeneralSettingsIntent.SetBackgroundStyle(BackgroundStyle.GlassLike))
-      )
-    )
-    background.options.map(_.label) shouldBe List("Solid", "Transparent", "Frosted", "Glass")
-
-    // issue #1044: options are ordered On (index 0), Off (index 1) -- the `enabledOptionItem` convention every
-    // other boolean toggle in the settings tree follows.
-    val shadows = CommandRunnerSettingsAppearanceItems.uiShadowsOptionItem(Map("ui-shadows" -> 0))
-    shadows.options.map(_.label) shouldBe List("On", "Off")
-    shadows.selectedOption shouldBe "On"
-    shadows.selectedIntent shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetUiShadowsEnabled(true)))
-    )
+    val cursor = CommandRunnerSettingsCursorItems.cursorModeOptionItem(Map("cursor-mode" -> 1))
+    val chrome = CommandRunnerSettingsAppearanceItems.windowChromeOptionItem(Map("window-chrome" -> 0))
 
     cursor.label shouldBe "Cursor Style"
     cursor.selectedOption shouldBe "Breathe"

@@ -96,7 +96,7 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
       .openSettings
       .withSelectedItem("settings-look")
       .enterSelectedGroup
-      .withSelectedFocusedSubmenuIndex(4)
+      .withSelectedFocusedSubmenuIndex(3)
       .enterSelectedSubmenuGroup
       .withSelectedFocusedSubmenuIndex(0)
       .beginSubmenuEditMode
@@ -117,14 +117,14 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
     val root =
       CommandRunner.empty.activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true)).openSettings
     val option = root.withDrilledSettingsSurface(
-      SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance"))
+      SettingsSurfaceState(SettingsPage.Group("settings-interface-layout"))
     )
     val input = option.withDrilledSettingsSurface(
       SettingsSurfaceState(SettingsPage.Group("settings-look-advanced", selectedIndex = 0))
     )
     val editing = input.withDrilledSettingsSurface(
       SettingsSurfaceState(
-        SettingsPage.Editing(groupId = "settings-look-advanced", itemId = "blur-radius", draftText = "1")
+        SettingsPage.Editing(groupId = "settings-look-advanced", itemId = "ui-element-gap", draftText = "1")
       )
     )
 

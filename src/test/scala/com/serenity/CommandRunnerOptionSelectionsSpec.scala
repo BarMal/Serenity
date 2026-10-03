@@ -41,8 +41,6 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     val uiFont   = FontLoader.availableUiFamilies.drop(1).headOption.getOrElse("missing-ui-font")
     val config = AppConfig.default.copy(
       surfaceConfig = AppConfig.default.surfaceConfig.copy(
-        materialPreset = MaterialPreset.Crystal,
-        uiShadowsEnabled = false,
         motionPreset = MotionPreset.Expressive,
         commandRunnerAnimation = AnimationConfig.quick,
         uiAnimation = AnimationConfig.subtle,
@@ -50,7 +48,6 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
         commandRunnerTransitionKind = Some(TransitionKind.OutlineThenContent),
         panelOpenTransitionKind = Some(TransitionKind.OutlineThenContent),
         panelCloseTransitionKind = Some(TransitionKind.DirectionalSweep),
-        backgroundStyle = BackgroundStyle.GlassLike,
         contextualToolbarDisplayMode = ToolbarDisplayMode.TextOnly,
         showLineNumbers = false,
         wordWrapEnabled = false,
@@ -81,10 +78,6 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
 
     val selections = CommandRunnerOptionSelections.default(config)
 
-    selections("material-preset") shouldBe 3
-    // issue #1044: "ui-shadows" now encodes On=0/Off=1 like every other boolean toggle (`enabledIndex`) --
-    // previously the one hand-rolled Off=0/On=1 encoding in this map, for a config with uiShadowsEnabled = false.
-    selections("ui-shadows") shouldBe 1
     selections("motion-preset") shouldBe 3
     selections("command-runner-fade") shouldBe 3
     selections("ui-animation") shouldBe 1
@@ -99,7 +92,6 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("status-char-count") shouldBe 1
     selections("status-reading-time") shouldBe 1
     selections("status-placement") shouldBe 0
-    selections("background-style") shouldBe 3
     selections("interface-density") shouldBe 0
     selections("window-chrome") shouldBe 2
     selections("markdown-view") shouldBe 2

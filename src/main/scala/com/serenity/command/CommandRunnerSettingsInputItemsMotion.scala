@@ -90,8 +90,7 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
   private[command] def speedScaleItems(
     commandRunnerSpeedScaleValue: String,
     uiSpeedScaleValue: String,
-    cursorSpeedScaleValue: String,
-    blurValue: String
+    cursorSpeedScaleValue: String
   ): List[CommandSurfaceItem.InputItem] = List(
     CommandSurfaceItem.InputItem(
       id = "command-runner-speed-scale",
@@ -148,20 +147,5 @@ private[command] object CommandRunnerSettingsInputItemsMotion:
           ),
       category = CommandCategory.Settings,
       defaultValue = Some(f"${AppConfig.default.effectiveCursorTransitionSpeedScale}%.2f")
-    ),
-    CommandSurfaceItem.InputItem(
-      id = "blur-radius",
-      label = "Blur Radius",
-      hint = "Strength (0.0-1.0)",
-      currentValue = blurValue,
-      kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
-      parse = text =>
-        text.toFloatOption
-          .filter(v => v >= 0.0f && v <= 1.0f)
-          .map(commandIntentArg =>
-            CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetBlurRadius(commandIntentArg)))
-          ),
-      category = CommandCategory.Settings,
-      defaultValue = Some(AppConfig.default.surfaceConfig.blurRadius.toString)
     )
   )

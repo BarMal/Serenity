@@ -26,14 +26,14 @@ import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateSt
 import com.serenity.state.manager.{CursorViewport, RenderCaches, StateManager}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, PanelPosition, ViewportSize}
-import com.serenity.ui.renderer.{Java2DRenderSurface, Java2DScratchBuffers, RendererEntryPoints}
+import com.serenity.ui.renderer.{Java2DRenderSurface, RendererEntryPoints}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.{DockedPanelFixtures, setBufferForPane, setCursorPosition}
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.{NoOpFactory, NoOpLogger}
 
 /** The editor at the size issue #1798's laptop runs it: a 1500x1000 logical window at 2x device scale, showing
-  * word-wrapped lorem ipsum prose under the app's own default config (Frosted material, so panel blur is on).
+  * word-wrapped lorem ipsum prose under the app's own default config.
   *
   * The other render benchmarks use a 120x40-cell viewport and a no-wrap config, which kept a full frame near a
   * millisecond while a real session at this size spent tens of milliseconds per keystroke. These measure the same
@@ -88,9 +88,6 @@ private[perf] object LaptopFrameBenchmarks:
       BufferedImage.TYPE_INT_ARGB
     )
 
-  /** One window's effect buffers, shared by every frame as `Java2DRenderSurface.forFrame` shares them in the app. */
-  private val scratch = Java2DScratchBuffers()
-
   def renderedFrame(state: AppState, caches: RenderCaches, image: BufferedImage): BufferedImage =
     val surface = new Java2DRenderSurface(
       image,
@@ -100,8 +97,7 @@ private[perf] object LaptopFrameBenchmarks:
       logicalWidthPx = LogicalWidthPx,
       logicalHeightPx = LogicalHeightPx,
       deviceScaleX = DeviceScale,
-      deviceScaleY = DeviceScale,
-      scratch = scratch
+      deviceScaleY = DeviceScale
     )
     RendererEntryPoints.render(
       state,

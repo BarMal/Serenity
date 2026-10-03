@@ -59,3 +59,35 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "A session written before a setting was removed" should "still decode, ignoring the removed field" in
     assertSessionIgnores("postProcessingEffect" -> Json.fromString("Glow"))
+
+  "A config file naming the removed panel material, shadow and corner settings" should "load and report each once" in
+    assertRemovedAndIgnored(
+      "ui.material"         -> "crystal",
+      "ui.shadows"          -> "false",
+      "ui.background_style" -> "glass-like",
+      "ui.blur_radius"      -> "0.42",
+      "ui.corner_radius"    -> "12"
+    )
+
+  it should "treat their older spellings as removed too" in
+    assertRemovedAndIgnored(
+      "ui_material"         -> "clear",
+      "material.preset"     -> "solid",
+      "material_preset"     -> "frosted",
+      "ui_shadows"          -> "true",
+      "ui.background.style" -> "solid",
+      "ui_background_style" -> "transparent",
+      "ui.blur.radius"      -> "0.1",
+      "ui_blur_radius"      -> "0.2",
+      "ui.corner.radius"    -> "4",
+      "ui_corner_radius"    -> "6"
+    )
+
+  "A session saved with panel material, shadow and corner settings" should "still decode, ignoring them" in
+    assertSessionIgnores(
+      "materialPreset"   -> Json.fromString("crystal"),
+      "uiShadowsEnabled" -> Json.fromBoolean(false),
+      "backgroundStyle"  -> Json.fromString("GlassLike"),
+      "blurRadius"       -> Json.fromDoubleOrNull(0.42),
+      "uiCornerRadiusPx" -> Json.fromInt(12)
+    )

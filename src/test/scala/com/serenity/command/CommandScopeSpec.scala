@@ -85,7 +85,7 @@ class CommandScopeSpec extends AnyFlatSpec with Matchers:
   it should "leave settings changes available everywhere, including switching the app mode itself" in {
     CommandScope.of(CommandIntent.View(ViewIntent.SetAppMode(AppMode.Prose))) shouldBe CommandScope.core
     CommandScope.of(
-      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetBlurRadius(4f)))
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiElementGap(4.0)))
     ) shouldBe CommandScope.core
   }
 

@@ -94,7 +94,7 @@ class Java2DLayerSurfaceSpec extends AnyFlatSpec with Matchers:
     new Color(recycled.getRGB(5, 5), true) shouldBe Color.RED
   }
 
-  "Java2DRenderSurface.newLayerSurface" should "blur the frame behind it while staying transparent everywhere else" in {
+  "Java2DRenderSurface.newLayerSurface" should "stay transparent wherever it did not paint, compositing exactly like painting directly" in {
     val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
     val frame   = stripedImage(40, 40)
@@ -104,7 +104,7 @@ class Java2DLayerSurfaceSpec extends AnyFlatSpec with Matchers:
     val layer = surface.layerBuffers
       .getOrElse(fail("expected layer buffer support"))
       .newLayerSurface(image => flushedRef.set(Some(image)))
-    layer.effects.getOrElse(fail("expected effects")).blurRegion(0, 0, 2, 2, 0.2f)
+    layer.pixels.fillPixelRect(0, 0, 20, 20, Color.RED)
     layer.flush()
     val layerPixels = flushedRef.get().getOrElse(fail("layer was not flushed"))
     new Color(layerPixels.getRGB(30, 30), true).getAlpha shouldBe 0
@@ -115,7 +115,7 @@ class Java2DLayerSurfaceSpec extends AnyFlatSpec with Matchers:
     try graphics.drawImage(layerPixels, 0, 0, null)
     finally graphics.dispose()
     val direct = stripedImage(40, 40)
-    new Java2DRenderSurface(direct, metrics, font, _ => ()).blurRegion(0, 0, 2, 2, 0.2f)
+    new Java2DRenderSurface(direct, metrics, font, _ => ()).fillPixelRect(0, 0, 20, 20, Color.RED)
 
     for
       x <- 0 until 40

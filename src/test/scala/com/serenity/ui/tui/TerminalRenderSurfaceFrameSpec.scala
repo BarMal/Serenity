@@ -11,7 +11,7 @@ import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** The rounded box-drawing frame `TerminalRenderSurface.strokeRoundRect` draws in the border cell `SurfaceFrameLayout`
+/** The rounded box-drawing frame `TerminalRenderSurface.strokeRect` draws in the border cell `SurfaceFrameLayout`
   * reserves around every framed floating surface and pinned panel.
   */
 class TerminalRenderSurfaceFrameSpec extends AnyFlatSpec with Matchers:
@@ -35,9 +35,9 @@ class TerminalRenderSurfaceFrameSpec extends AnyFlatSpec with Matchers:
     val vertical   = (rect.y + 1 until rect.bottom - 1).toList.flatMap(y => List((rect.x, y), (rect.right - 1, y)))
     horizontal ++ vertical
 
-  "strokeRoundRect" should "draw a rounded box-drawing frame on the rect's outermost cells" in {
+  "strokeRect" should "draw a rounded box-drawing frame on the rect's outermost cells" in {
     val (rs, writer) = surface(6, 5)
-    rs.roundedRects.get.strokeRoundRect(1, 1, 4, 3, arcPx = 8, Color.RED)
+    rs.panelOutlines.get.strokeRect(1, 1, 4, 3, Color.RED, 1f)
 
     val screen = screenOf(rs, writer, 6, 5)
     screen.rowText(0) shouldBe "      "
@@ -58,7 +58,7 @@ class TerminalRenderSurfaceFrameSpec extends AnyFlatSpec with Matchers:
     rs.setForegroundColor(Color.YELLOW)
     rs.setBackgroundColor(Color.MAGENTA)
 
-    rs.roundedRects.get.strokeRoundRect(0, 0, 4, 3, arcPx = 0, Color.RED)
+    rs.panelOutlines.get.strokeRect(0, 0, 4, 3, Color.RED, 1f)
     rs.putString(1, 1, "x")
 
     val screen = screenOf(rs, writer, 4, 3)
@@ -74,8 +74,8 @@ class TerminalRenderSurfaceFrameSpec extends AnyFlatSpec with Matchers:
     rs.flush()
     writer.getBuffer.setLength(0)
 
-    rs.roundedRects.get.strokeRoundRect(0, 0, 1, 4, arcPx = 0, Color.RED)
-    rs.roundedRects.get.strokeRoundRect(0, 0, 4, 1, arcPx = 0, Color.RED)
+    rs.panelOutlines.get.strokeRect(0, 0, 1, 4, Color.RED, 1f)
+    rs.panelOutlines.get.strokeRect(0, 0, 4, 1, Color.RED, 1f)
     rs.flush()
 
     writer.toString shouldBe ""
@@ -83,8 +83,8 @@ class TerminalRenderSurfaceFrameSpec extends AnyFlatSpec with Matchers:
 
   it should "respect an active clip" in {
     val (rs, writer) = surface(6, 3)
-    rs.roundedRects.get.withRoundRectClip(0, 0, 3, 3, arcPx = 0) {
-      rs.roundedRects.get.strokeRoundRect(0, 0, 6, 3, arcPx = 0, Color.RED)
+    rs.panelOutlines.get.withRectClip(0, 0, 3, 3) {
+      rs.panelOutlines.get.strokeRect(0, 0, 6, 3, Color.RED, 1f)
     }
 
     val screen = screenOf(rs, writer, 6, 3)

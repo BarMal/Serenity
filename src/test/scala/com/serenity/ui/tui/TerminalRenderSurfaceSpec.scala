@@ -13,8 +13,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Covers #1107's `TerminalRenderSurface`: forwarding onto a `TerminalScreenBuffer`, the `RenderSurface` capability
-  * shape (`persistentContentKey`, the required-but-inert `text`/`pixels` groups, `withRoundRectClip` as a plain
-  * rectangular clip), and driving an `AppState` through #1104's surface-generic `Renderer` entry points to produce real
+  * shape (`persistentContentKey`, the required-but-inert `text`/`pixels` groups, `withRectClip` as a plain rectangular
+  * clip), and driving an `AppState` through #1104's surface-generic `Renderer` entry points to produce real
   * damage-diffed ANSI output -- the harness AC.
   */
 class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
@@ -62,7 +62,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
     rs.putString(0, 0, "TITLEBAR") // chrome
     rs.fillRect(0, 2, 3, 2, '#')   // panel
-    rs.roundedRects.get.withRoundRectClip(2, 4, 6, 1, arcPx = 0) {
+    rs.panelOutlines.get.withRectClip(2, 4, 6, 1) {
       rs.putString(2, 4, "MODALTEXT") // modal, clipped to 6 columns wide
     }
     rs.flush()
@@ -185,12 +185,12 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     writer.toString should not be empty
   }
 
-  "withRoundRectClip" should "restrict putString to a rectangular cell region, ignoring the arc radius" in {
+  "withRectClip" should "restrict putString to a rectangular cell region" in {
     val (rs, writer) = surface(width = 4, height = 1)
     rs.setForegroundColor(Color.WHITE)
     rs.setBackgroundColor(Color.BLACK)
-    rs.roundedRects shouldBe defined
-    rs.roundedRects.get.withRoundRectClip(0, 0, 2, 1, arcPx = 99) {
+    rs.panelOutlines shouldBe defined
+    rs.panelOutlines.get.withRectClip(0, 0, 2, 1) {
       rs.putString(0, 0, "abcd") // would overflow the 2-wide clip if it weren't enforced
     }
     rs.flush()

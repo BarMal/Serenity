@@ -22,15 +22,15 @@ class TuiSettingsSpec extends TuiSpec:
   it should "search within settings and open the matching group" in runTui() {
     for
       _ <- openSettings
-      _ <- typeText("material")
+      _ <- typeText("density")
       _ <- verify("searched") { screen =>
-        screen.containsText("Settings search: material") shouldBe true
-        screen.containsText("Surface Appearance") shouldBe true
+        screen.containsText("Settings search: density") shouldBe true
+        screen.containsText("Interface Layout") shouldBe true
       }
       _ <- enter
       _ <- verify("opened group") { screen =>
-        screen.containsText("Settings > Look > Surface Appearance") shouldBe true
-        screen.containsText("Material Preset") shouldBe true
+        screen.containsText("Settings > Look > Interface Layout") shouldBe true
+        screen.containsText("Interface Density") shouldBe true
       }
     yield ()
   }

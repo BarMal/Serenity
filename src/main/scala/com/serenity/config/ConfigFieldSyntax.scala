@@ -87,20 +87,6 @@ private[config] object ConfigFieldSyntax:
       value => value.toString.toLowerCase(Locale.ROOT)
     )
 
-  private[config] val materialPreset: FieldCodec[MaterialPreset] =
-    enumerated(
-      text =>
-        text.toLowerCase(Locale.ROOT) match
-          case "solid" | "opaque"      => Some(MaterialPreset.Solid)
-          case "clear" | "transparent" => Some(MaterialPreset.Clear)
-          case "frosted" | "soft"      => Some(MaterialPreset.Frosted)
-          case "crystal" | "glass"     => Some(MaterialPreset.Crystal)
-          case "custom"                => Some(MaterialPreset.Custom)
-          case _                       => None
-      ,
-      _.configKey
-    )
-
   private[config] def field[A](key: String, aliases: String*)(codec: FieldCodec[A])(
     get: AppConfig => A,
     set: (AppConfig, A) => AppConfig

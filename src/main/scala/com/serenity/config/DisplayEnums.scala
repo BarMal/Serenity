@@ -2,47 +2,6 @@ package com.serenity.config
 
 import com.serenity.animation.*
 
-enum BackgroundStyle:
-  case Solid
-  case Transparent
-  case Frosted
-  case GlassLike
-
-  def configKey: String =
-    this match
-      case Solid       => "solid"
-      case Transparent => "transparent"
-      case Frosted     => "frosted"
-      case GlassLike   => "glass-like"
-
-object BackgroundStyle:
-
-  def fromConfigKey(value: String): Option[BackgroundStyle] =
-    val normalized = value.trim.toLowerCase.replace("_", "-")
-    BackgroundStyle.values.find(_.configKey == normalized)
-
-enum MaterialPreset(val configKey: String):
-  case Solid   extends MaterialPreset("solid")
-  case Clear   extends MaterialPreset("clear")
-  case Frosted extends MaterialPreset("frosted")
-  case Crystal extends MaterialPreset("crystal")
-  case Custom  extends MaterialPreset("custom")
-
-  def backgroundStyle: BackgroundStyle =
-    this match
-      case Solid   => BackgroundStyle.Solid
-      case Clear   => BackgroundStyle.Transparent
-      case Frosted => BackgroundStyle.Frosted
-      case Crystal => BackgroundStyle.GlassLike
-      case Custom  => BackgroundStyle.Frosted
-
-  def blurRadius: Float =
-    this match
-      case Solid | Clear => 0.0f
-      case Frosted       => 0.18f
-      case Crystal       => 0.42f
-      case Custom        => 0.18f
-
 enum MotionPreset(val configKey: String):
   case Reduced    extends MotionPreset("reduced")
   case Subtle     extends MotionPreset("subtle")

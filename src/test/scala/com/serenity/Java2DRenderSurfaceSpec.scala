@@ -18,7 +18,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  "Java2DRenderSurface.strokeRoundRect" should "respect the active alpha composite when drawing borders" in {
+  "Java2DRenderSurface.strokeRect" should "respect the active alpha composite when drawing borders" in {
     val lowAlphaImage  = new BufferedImage(80, 60, BufferedImage.TYPE_INT_ARGB)
     val fullAlphaImage = new BufferedImage(80, 60, BufferedImage.TYPE_INT_ARGB)
     val metrics        = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
@@ -27,83 +27,39 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val lowAlphaSurface =
       new Java2DRenderSurface(lowAlphaImage, metrics, font, _ => ())
     lowAlphaSurface.setAlpha(0.25f)
-    lowAlphaSurface.strokeRoundRect(1, 1, 4, 3, arcPx = 0, color = java.awt.Color.WHITE, strokeWidth = 2.0f)
+    lowAlphaSurface.strokeRect(1, 1, 4, 3, color = java.awt.Color.WHITE, strokeWidth = 2.0f)
     lowAlphaSurface.flush()
 
     val fullAlphaSurface =
       new Java2DRenderSurface(fullAlphaImage, metrics, font, _ => ())
     fullAlphaSurface.setAlpha(1.0f)
-    fullAlphaSurface.strokeRoundRect(1, 1, 4, 3, arcPx = 0, color = java.awt.Color.WHITE, strokeWidth = 2.0f)
+    fullAlphaSurface.strokeRect(1, 1, 4, 3, color = java.awt.Color.WHITE, strokeWidth = 2.0f)
     fullAlphaSurface.flush()
 
     maxAlpha(lowAlphaImage) should be < maxAlpha(fullAlphaImage)
   }
 
-  "Java2DRenderSurface.blurRegion" should "respect an active rounded clip" in {
+  "Java2DRenderSurface.withRectClip" should "confine drawing to the clipped cells" in {
     val image   = new BufferedImage(120, 120, BufferedImage.TYPE_INT_ARGB)
     val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
 
     surface.clearViewport(Color.WHITE)
-    surface.fillPixelRect(25, 25, 10, 10, Color.BLACK)
-    surface.withRoundRectClip(x = 1, y = 1, width = 10, height = 10, arcPx = 50) {
-      surface.blurRegion(x = 1, y = 1, width = 10, height = 10, radius = 1.0f)
+    surface.withRectClip(x = 1, y = 1, width = 2, height = 2) {
+      surface.fillPixelRect(0, 0, 120, 120, Color.BLACK)
     }
     surface.flush()
 
-    new Color(image.getRGB(20, 20), true) shouldBe Color.WHITE
-  }
-
-  it should "blur the translated device region for fractional floating offsets" in {
-    val image   = new BufferedImage(12, 14, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.GREEN)
-    (5 to 10).foreach(y => image.setRGB(6, y, Color.BLUE.getRGB))
-    image.setRGB(6, 7, Color.RED.getRGB)
-
-    surface.withPixelTranslation(0.0, 5.5) {
-      surface.blurRegion(x = 0, y = 0, width = 12, height = 5, radius = 0.1f)
-    }
-    surface.flush()
-
-    new Color(image.getRGB(6, 7), true) should not be Color.RED
-    new Color(image.getRGB(6, 2), true) shouldBe Color.GREEN
+    new Color(image.getRGB(5, 5), true) shouldBe Color.WHITE
+    new Color(image.getRGB(15, 15), true) shouldBe Color.BLACK
+    new Color(image.getRGB(35, 35), true) shouldBe Color.WHITE
   }
 
   "Java2DRenderSurface.deviceImageDimension" should "scale logical pixels up to device pixels" in {
     Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 1024, deviceScale = 2.0) shouldBe 2048
     Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 801, deviceScale = 1.5) shouldBe 1202
     Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 0, deviceScale = 2.0) shouldBe 2
-  }
-
-  "Java2DRenderSurface.deviceRegionFor" should "map logical pixel regions to clamped device pixels" in {
-    Java2DRenderSurface.deviceRegionFor(
-      logicalX = 10,
-      logicalY = 5,
-      logicalWidth = 20,
-      logicalHeight = 10,
-      imageWidth = 200,
-      imageHeight = 100,
-      deviceScaleX = 2.0,
-      deviceScaleY = 1.5
-    ) shouldBe Some(Java2DRenderSurface.DeviceRegion(xPx = 20, yPx = 7, widthPx = 40, heightPx = 16))
-  }
-
-  it should "discard device regions outside the backing image" in {
-    Java2DRenderSurface.deviceRegionFor(
-      logicalX = 50,
-      logicalY = 50,
-      logicalWidth = 10,
-      logicalHeight = 10,
-      imageWidth = 30,
-      imageHeight = 30,
-      deviceScaleX = 2.0,
-      deviceScaleY = 2.0
-    ) shouldBe None
   }
 
   it should "keep viewport dimensions in logical cells for a high-DPI backing image" in {

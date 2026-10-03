@@ -156,7 +156,6 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     SurfaceConfigSchemaKeys.currentKeys.should(contain("motion.cursor.speed_scale"))
     SurfaceConfigSchemaKeys.currentKeys.should(contain("motion.panel_open"))
     SurfaceConfigSchemaKeys.currentKeys.should(contain("motion.family.command_surfaces.transition"))
-    SurfaceConfigSchemaKeys.currentKeys.shouldNot(contain("ui.material"))
     SurfaceConfigSchemaKeys.currentKeys.shouldNot(contain("display.contextual_toolbar_mode"))
     SurfaceConfigSchemaKeys.currentKeys.shouldNot(contain("viewport.height.max"))
 
@@ -166,14 +165,12 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     SurfaceConfigSchemaKeys.deprecatedKeys.shouldNot(contain key "display_contextual_toolbar_mode")
 
     // Retired keys are still known and parsed -- just through `ConfigRegistry` rather than this schema.
-    ConfigRegistry.allKeys.should(contain("ui.material"))
     ConfigRegistry.allKeys.should(contain("editor.contextual_toolbar_mode"))
     ConfigRegistry.allKeys.should(contain("window.viewport.height_max"))
   }
 
   it should "group motion, appearance, and text display settings under AppConfig" in {
     val config = AppConfig.default
-      .withMaterialPreset(MaterialPreset.Crystal)
       .withMotionPreset(MotionPreset.Subtle)
       .withElementTransitionSpeedScale(1.75)
       .withCursorTransitionSpeedScale(Some(0.75))
@@ -189,7 +186,6 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
       .withFocusedTextBody(true)
       .withContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly)
 
-    config.surfaceConfig.materialPreset.shouldBe(MaterialPreset.Crystal)
     config.surfaceConfig.motionPreset.shouldBe(MotionPreset.Subtle)
     config.surfaceConfig.elementTransitionSpeedScale.shouldBe(1.75)
     config.surfaceConfig.cursorTransitionSpeedScale.shouldBe(Some(0.75))
@@ -329,14 +325,12 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default
       .withInterfaceDensity(InterfaceDensity.Spacious)
       .withUiElementGap(Some(3))
-      .withUiCornerRadiusPx(12)
       .withUiOutlineThicknessPx(4)
 
     config.interfaceConfig.shouldBe(
       InterfaceConfig(
         density = InterfaceDensity.Spacious,
         elementGap = Some(3),
-        cornerRadiusPx = 12,
         outlineThicknessPx = 4
       )
     )

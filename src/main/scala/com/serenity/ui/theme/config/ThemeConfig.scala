@@ -30,7 +30,6 @@ final case class UiColors(
 final case class UiTokenConfig(
     foreground: String,
     background: String,
-    alpha: Option[Double] = None,
     style: StyleConfig = StyleConfig()
 ) derives ConfigReader
 
@@ -83,7 +82,7 @@ object ThemeConfig:
         cursor = "#F4D03F",
         highlighted = UiTokenConfig(foreground = "#F5F7FA", background = "#24556D"),
         menuItem = UiTokenConfig(foreground = "#F5F7FA", background = "#182734"),
-        panel = UiTokenConfig(foreground = "#F5F7FA", background = "#111821", alpha = Some(0.94)),
+        panel = UiTokenConfig(foreground = "#F5F7FA", background = "#111821"),
         error = UiTokenConfig(foreground = "#FF6B6B", background = "#2B1215"),
         warning = Some(UiTokenConfig(foreground = "#F0B429", background = "#2B2000")),
         border = "#37566A",
@@ -116,7 +115,7 @@ object ThemeConfig:
         cursor = "#0066CC",
         highlighted = UiTokenConfig(foreground = "#FDFDFD", background = "#365F78"),
         menuItem = UiTokenConfig(foreground = "#102A43", background = "#E7EDF3"),
-        panel = UiTokenConfig(foreground = "#102A43", background = "#EFF3F8", alpha = Some(0.94)),
+        panel = UiTokenConfig(foreground = "#102A43", background = "#EFF3F8"),
         error = UiTokenConfig(foreground = "#B00020", background = "#FDECEC"),
         warning = Some(UiTokenConfig(foreground = "#945802", background = "#FFFAEC")),
         border = "#B0C4D0",
@@ -146,8 +145,7 @@ object ThemeConfig:
     * light or dark, the foreground and accent colors below lean brighter and more saturated than
     * `defaultDark`/`defaultLight` -- there is no guaranteed contrast baseline to rely on. Chrome surfaces that need
     * their own reliable contrast (panel, menu, highlighted, error, warning) keep ordinary opaque backgrounds, so they
-    * stay legible regardless of what shows through behind the editor. A terminal, which cannot paint the panel's
-    * translucent material, shows its own background there instead (`SurfaceMaterials.backdropShowingThrough`).
+    * stay legible regardless of what shows through behind the editor.
     */
   val transparent: ThemeConfig =
     ThemeConfig(
@@ -158,7 +156,7 @@ object ThemeConfig:
         cursor = "#FFD60A",
         highlighted = UiTokenConfig(foreground = "#0B0F14", background = "#5DD8FF"),
         menuItem = UiTokenConfig(foreground = "#FFFFFF", background = "#12161C"),
-        panel = UiTokenConfig(foreground = "#FFFFFF", background = "#12161C", alpha = Some(0.94)),
+        panel = UiTokenConfig(foreground = "#FFFFFF", background = "#12161C"),
         error = UiTokenConfig(foreground = "#FF5C5C", background = "#2B1215"),
         warning = Some(UiTokenConfig(foreground = "#FFD166", background = "#2B2000")),
         border = "#7DD3FC",

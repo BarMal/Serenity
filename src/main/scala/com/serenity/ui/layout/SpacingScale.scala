@@ -18,9 +18,9 @@ enum SpacingStep(val em: Double):
 /** Resolves [[SpacingStep]]s against one typographic base.
   *
   * Chrome spacing is expressed relative to the UI font's em rather than in fixed pixels, so it stays proportionate as
-  * the UI font size and device scale change -- the same reason `AppConfig.scaledUiCornerRadiusPx` scales corner radius
-  * (issue #1542). Fixed pixel spacing under a doubled font size reads as cramped; fixed *cell* spacing, which is what
-  * the surface layer used before this type, could only ever be a whole character wide and was therefore both
+  * the UI font size and device scale change -- the same reason `AppConfig.scaledUiOutlineThicknessPx` scales border
+  * thickness (issue #1542). Fixed pixel spacing under a doubled font size reads as cramped; fixed *cell* spacing, which
+  * is what the surface layer used before this type, could only ever be a whole character wide and was therefore both
   * unadjustable and asymmetric (a cell is much taller than it is wide).
   */
 final case class SpacingScale(basePx: Double):

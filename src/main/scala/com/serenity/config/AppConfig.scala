@@ -68,24 +68,14 @@ final case class AppConfig(
   def uiElementGap: Option[Double] =
     interfaceConfig.elementGap
 
-  def uiCornerRadiusPx: Int =
-    interfaceConfig.cornerRadiusPx
-
   def uiOutlineThicknessPx: Int =
     interfaceConfig.outlineThicknessPx
 
   def uiChromeScale: Double =
     editorConfig.fontConfig.uiChromeScale
 
-  /** [[uiCornerRadiusPx]] scaled by [[uiChromeScale]] -- what renderers should actually draw with, so a panel's corner
-    * radius stays proportionate to the panel as the UI font size changes (issue #1542) instead of always painting the
-    * configured pixel value regardless of font size.
-    */
-  def scaledUiCornerRadiusPx: Int =
-    math.round(uiCornerRadiusPx * uiChromeScale).toInt.max(0)
-
-  /** [[uiOutlineThicknessPx]] scaled the same way as [[scaledUiCornerRadiusPx]]; floored above zero since `BasicStroke`
-    * requires a positive width.
+  /** [[uiOutlineThicknessPx]] scaled by [[uiChromeScale]], so a panel border stays proportionate to the panel as the UI
+    * font size changes (issue #1542); floored above zero since `BasicStroke` requires a positive width.
     */
   def scaledUiOutlineThicknessPx: Float =
     (uiOutlineThicknessPx * uiChromeScale).toFloat.max(0.5f)
@@ -227,32 +217,6 @@ final case class AppConfig(
   def withDiagnosticHighlightBlendWeight(weight: Double): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(diagnosticHighlightBlendWeight = weight))
 
-  // #1316: re-assigning a setting its own current value is not customising it -- flip the preset only when the value
-  // actually changes, so putting back what was already there is a no-op.
-  def withBlurRadius(r: Float): AppConfig =
-    if surfaceConfig.blurRadius == r then this
-    else withSurfaceConfig(surfaceConfig.copy(blurRadius = r, materialPreset = MaterialPreset.Custom))
-
-  def withBackgroundStyle(style: BackgroundStyle): AppConfig =
-    if surfaceConfig.backgroundStyle == style then this
-    else withSurfaceConfig(surfaceConfig.copy(backgroundStyle = style, materialPreset = MaterialPreset.Custom))
-
-  def withMaterialPreset(preset: MaterialPreset): AppConfig =
-    preset match
-      case MaterialPreset.Custom =>
-        withSurfaceConfig(surfaceConfig.copy(materialPreset = MaterialPreset.Custom))
-      case _ =>
-        withSurfaceConfig(
-          surfaceConfig.copy(
-            materialPreset = preset,
-            backgroundStyle = preset.backgroundStyle,
-            blurRadius = preset.blurRadius
-          )
-        )
-
-  def withUiShadowsEnabled(enabled: Boolean): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(uiShadowsEnabled = enabled))
-
   def cursorMode: CursorMode =
     cursorConfig.mode
 
@@ -335,9 +299,6 @@ final case class AppConfig(
   def withUiElementGap(gap: Option[Double]): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(elementGap = gap))
 
-  def withUiCornerRadiusPx(radius: Int): AppConfig =
-    withInterfaceConfig(interfaceConfig.copy(cornerRadiusPx = radius))
-
   def withUiOutlineThicknessPx(thickness: Int): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(outlineThicknessPx = thickness))
 
@@ -386,8 +347,6 @@ object AppConfig:
   val MaxElementTransitionSpeedScale: Double    = 4.0
   val MinUiElementGap: Double                   = 0.0
   val MaxUiElementGap: Double                   = 8.0
-  val MinUiCornerRadiusPx: Int                  = 0
-  val MaxUiCornerRadiusPx: Int                  = 32
   val MinUiOutlineThicknessPx: Int              = 1
   val MaxUiOutlineThicknessPx: Int              = 8
   val MinCommandRunnerVisibleRows: Int          = 1
@@ -412,9 +371,6 @@ object AppConfig:
 
   def clampUiElementGap(gap: Double): Double =
     if gap.isFinite then gap.max(MinUiElementGap).min(MaxUiElementGap) else MinUiElementGap
-
-  def clampUiCornerRadiusPx(radius: Int): Int =
-    radius.max(MinUiCornerRadiusPx).min(MaxUiCornerRadiusPx)
 
   def clampUiOutlineThicknessPx(thickness: Int): Int =
     thickness.max(MinUiOutlineThicknessPx).min(MaxUiOutlineThicknessPx)

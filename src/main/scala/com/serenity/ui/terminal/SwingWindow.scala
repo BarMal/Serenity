@@ -17,7 +17,6 @@ import com.serenity.diagnostics.FrameTimings
 import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySnapshot, SwingAccessibilityBridge}
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.Java2DScratchBuffers
 import com.serenity.ui.theme.Theme
 
 class SwingWindow(
@@ -57,7 +56,6 @@ class SwingWindow(
   private val publishedCaretsRef       = new AtomicReference[scala.List[SwingWindow.CaretPaint]](Nil)
   private val previousCursorRectsRef   = new AtomicReference[scala.List[Rectangle]](Nil)
   private val baseImagePool            = new SwingWindow.ReusableImagePool
-  private[serenity] val renderScratch  = new Java2DScratchBuffers
   private val savedBoundsRef           = new AtomicReference[Option[Rectangle]](None)
   private val maximizedRef             = new AtomicBoolean(false)
   private val maxBtnRef                = new AtomicReference[Option[ChromeControlButton]](None)

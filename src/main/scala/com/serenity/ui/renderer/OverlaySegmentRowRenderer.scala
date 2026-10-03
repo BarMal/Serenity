@@ -293,12 +293,10 @@ object OverlaySegmentRowRenderer:
     if width > 0 then
       val segmentBackground =
         segment.backgroundColor
-          .map(SurfaceMaterials.fadedWith(_, defaultBackground, theme))
+          .map(_.withAlpha(defaultBackground.getAlpha))
           .getOrElse(
-            if segment.selected then SurfaceMaterials.fadedWith(theme.highlighted.background, defaultBackground, theme)
-            else
-              toneBackground(segment.tone, theme)
-                .fold(defaultBackground)(SurfaceMaterials.fadedWith(_, defaultBackground, theme))
+            if segment.selected then theme.highlighted.background.withAlpha(defaultBackground.getAlpha)
+            else toneBackground(segment.tone, theme).fold(defaultBackground)(_.withAlpha(defaultBackground.getAlpha))
           )
       val segmentForeground =
         segment.foregroundColor

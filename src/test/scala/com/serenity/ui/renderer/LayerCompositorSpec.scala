@@ -107,9 +107,8 @@ class LayerCompositorSpec extends AnyFlatSpec with Matchers:
     def paintedAtAlpha: Option[Float]     = painted.get()
     def markPaintedAt(alpha: Float): Unit = painted.set(Some(alpha))
 
-    override def effects: Option[Effects]                                        = Some(this)
-    def setAlpha(alpha: Float): Unit                                             = alphaCalls.updateAndGet(_ :+ alpha)
-    def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit = ()
+    override def effects: Option[Effects] = Some(this)
+    def setAlpha(alpha: Float): Unit      = alphaCalls.updateAndGet(_ :+ alpha)
 
     def setForegroundColor(color: java.awt.Color): Unit                     = ()
     def setBackgroundColor(color: java.awt.Color): Unit                     = ()

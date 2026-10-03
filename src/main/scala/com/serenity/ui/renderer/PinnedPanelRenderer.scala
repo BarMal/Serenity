@@ -18,36 +18,20 @@ object PinnedPanelRenderer:
     theme: Theme,
     config: AppConfig,
     cellMetrics: CellMetrics,
-    animationState: AnimationState = AnimationState.empty,
-    opaqueBeneath: Option[Color] = None
+    animationState: AnimationState = AnimationState.empty
   ): Unit =
     val rect            = panel.rect
-    val arcPx           = config.scaledUiCornerRadiusPx
-    val shadow          = Option.when(config.surfaceConfig.uiShadowsEnabled)(new Color(0, 0, 0))
-    val backdrop        = SurfaceMaterials.backdropShowingThrough(config, theme, surface)
-    val panelBackground = backdrop.getOrElse(theme.panel.background)
-    val panelAlpha      = SurfaceMaterials.panelAlpha(config, theme)
+    val panelBackground = theme.panel.background
 
-    surface.effects.foreach(_.setAlpha(panelAlpha))
     surface.setForegroundColor(theme.panel.foreground)
     surface.setBackgroundColor(panelBackground)
-    surface.panelBodies match
-      case Some(bodies) =>
-        val body = PanelBodyFill(panelBackground, panelAlpha, opaqueBeneath)
-        bodies.fillPanelBody(rect.x, rect.y, rect.width, rect.height, arcPx, shadow, body)
-      case None =>
-        shadow.foreach { color =>
-          surface.roundedRects.foreach(_.drawRoundRectShadow(rect.x, rect.y, rect.width, rect.height, arcPx, color))
-        }
-        for y <- rect.y until rect.bottom do surface.putString(rect.x, y, " " * rect.width)
+    for y <- rect.y until rect.bottom do surface.putString(rect.x, y, " " * rect.width)
 
     val textInsetPx = SurfaceTextInset.px(config)
-    if backdrop.isEmpty then applyGlassSheen(surface, panel, theme, config)
     drawBorder(surface, panel, theme, config, animationState)
     drawTitle(surface, panel, theme, animationState, textInsetPx)
     drawComposition(surface, panel, panel.composition, theme, panelBackground, animationState, cellMetrics, textInsetPx)
 
-    surface.effects.foreach(_.setAlpha(1.0f))
     surface.setForegroundColor(theme.foreground)
     surface.setBackgroundColor(theme.background)
 
@@ -62,16 +46,8 @@ object PinnedPanelRenderer:
     if rect.width >= 2 && rect.height >= 2 then
       val borderColor =
         animationForeground(animationState, BorderAnimationColumn, BorderAnimationRow).getOrElse(theme.border)
-      surface.roundedRects.foreach(
-        _.strokeRoundRect(
-          rect.x,
-          rect.y,
-          rect.width,
-          rect.height,
-          config.scaledUiCornerRadiusPx,
-          borderColor,
-          config.scaledUiOutlineThicknessPx
-        )
+      surface.panelOutlines.foreach(
+        _.strokeRect(rect.x, rect.y, rect.width, rect.height, borderColor, config.scaledUiOutlineThicknessPx)
       )
 
   private def drawTitle(
@@ -161,20 +137,3 @@ object PinnedPanelRenderer:
 
   private def animationForeground(animationState: AnimationState, column: Int, row: Int): Option[java.awt.Color] =
     animationState.getCell(column, row).flatMap(_.currentForeground)
-
-  private def applyGlassSheen(
-    surface: RenderSurface,
-    panel: TextPanelView,
-    theme: Theme,
-    config: AppConfig
-  ): Unit =
-    SurfaceMaterials.glassSheenBackground(config, theme).foreach { sheenColor =>
-      val contentRect = panel.resolvedContentRect
-      val sheenWidth  = contentRect.width
-      val sheenHeight = math.min(1, contentRect.height)
-      if sheenWidth > 0 && sheenHeight > 0 then
-        surface.setBackgroundColor(sheenColor)
-        (0 until sheenHeight).foreach { rowOffset =>
-          CharacterRenderer.renderStringPlain(surface, contentRect.x, contentRect.y + rowOffset, " " * sheenWidth)
-        }
-    }
