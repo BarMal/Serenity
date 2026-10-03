@@ -52,10 +52,6 @@ private[config] object ConfigFieldsCursorAndWindow:
     named("window.chrome", "windowChromeMode", "window.chrome.mode", "window_chrome", "window_chrome_mode")(
       enumerated(WindowChromeMode.fromConfigKey, _.configKey, text => WindowChromeMode.values.find(_.toString == text))
     )(_.windowChromeMode, (config, value) => config.withWindowChromeMode(value)),
-    field("window.translucent", "window_translucent")(boolean.orAuto)(
-      _.windowTranslucent,
-      (config, value) => config.withWindowTranslucent(value)
-    ),
     // #1316: no preferred size to update yet means there is nothing to update -- inventing the other dimension made a
     // width-only edit fabricate a height nobody asked for.
     named("window.preferred.width", "preferredWindowWidth", "window_preferred_width")(int.orEmpty)(

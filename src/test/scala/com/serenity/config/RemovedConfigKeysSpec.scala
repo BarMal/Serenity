@@ -121,3 +121,12 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
       "ui.companion_sprite.size"      -> Json.fromInt(12),
       "ui.visual_flair"               -> Json.fromString("reduced")
     )
+
+  "A config file naming the removed window translucency setting" should "load and report it once" in
+    assertRemovedAndIgnored("window.translucent" -> "true")
+
+  it should "treat its older spelling as removed too" in
+    assertRemovedAndIgnored("window_translucent" -> "false")
+
+  "A session saved with window translucency" should "still decode, ignoring it" in
+    assertSessionIgnores("window.translucent" -> Json.False)

@@ -2,7 +2,6 @@ package com.serenity.ui.terminal
 
 import java.awt.*
 import java.awt.event.*
-import java.awt.geom.RoundRectangle2D
 import java.awt.image.BufferedImage
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
@@ -25,7 +24,6 @@ class SwingWindow(
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
     initialChromeMetrics: CellMetrics,
     frameTimings: FrameTimings = FrameTimings(),
-    translucentSetting: Option[Boolean] = None,
     env: Map[String, String] = sys.env
 ):
 
@@ -66,18 +64,6 @@ class SwingWindow(
   private val titleSpacerRef           = new AtomicReference[Option[JPanel]](None)
   private val onResizeCallbackRef      = new AtomicReference[Option[() => Unit]](None)
   private val onFocusCallbackRef       = new AtomicReference[Option[Boolean => Unit]](None)
-  private val resizeGlassPaneRef       = new AtomicReference[Option[JComponent]](None)
-  private val roundedCornerMaskRef     = new AtomicReference[Option[Int]](None)
-  private val roundedContentBuffers    = new SwingWindow.RoundedCornerMaskBufferCache
-  private val translucentWindow =
-    SwingWindow.usesTranslucentWindow(translucentSetting, env, SwingWindow.perPixelTranslucencySupported)
-  private val shapeUpdateCoalescer = new SwingWindow.CoalescedEdtUpdate(() => updateShape())
-
-  /** Whether `canvas` should paint its own background as genuinely transparent this frame -- see
-    * [[SwingWindow.shouldPaintTransparentContent]]. Kept up to date by [[updateChromeTheme]], which already runs once
-    * per frame (`Main`'s `syncChromeTheme`), so no extra wiring is needed to keep this current.
-    */
-  private val contentTransparentRef = new AtomicBoolean(false)
 
   def setOnResize(cb: () => Unit): Unit = onResizeCallbackRef.set(Some(cb))
 
@@ -99,14 +85,7 @@ class SwingWindow(
       val g2         = g.create().asInstanceOf[Graphics2D]
       try
         val base = baseImagePool.leasePublished()
-        SwingWindow.paintPresentedFrame(
-          g2,
-          base,
-          publishedCaretsRef.get(),
-          getWidth,
-          getHeight,
-          contentTransparentRef.get()
-        )
+        SwingWindow.paintPresentedFrame(g2, base, publishedCaretsRef.get(), getWidth, getHeight)
       finally
         baseImagePool.releaseLease()
         g2.dispose()
@@ -178,30 +157,6 @@ class SwingWindow(
   private[serenity] def acquireBaseImage(width: Int, height: Int, imageType: Int): BufferedImage =
     baseImagePool.acquire(width, height, imageType)
 
-  private def updateShape(): Unit =
-    val roundedCornerMask = SwingWindow.roundedCornerMask(
-      usesCustomChrome,
-      maximizedRef.get(),
-      translucentWindow,
-      chromeMetricsRef.get().cornerArc
-    )
-    val refreshRoundedCornerMask =
-      SwingWindow.shouldRefreshRoundedCornerMask(roundedCornerMaskRef.get(), roundedCornerMask)
-    roundedCornerMaskRef.set(roundedCornerMask)
-
-    if roundedCornerMask.nonEmpty
-    then frame.setShape(null)
-    else if usesCustomChrome && !maximizedRef.get() then
-      val d      = frame.getSize
-      val chrome = chromeMetricsRef.get()
-      frame.setShape(new RoundRectangle2D.Double(0, 0, d.width, d.height, chrome.cornerArc, chrome.cornerArc))
-    else if usesCustomChrome then frame.setShape(null)
-
-    if refreshRoundedCornerMask then resizeGlassPaneRef.get().foreach(_.repaint())
-
-  private def scheduleShapeUpdate(): Unit =
-    if usesCustomChrome then shapeUpdateCoalescer.schedule(SwingUtilities.invokeLater)
-
   private def toggleMaximize(): Unit =
     if maximizedRef.get() then
       frame.setExtendedState(Frame.NORMAL)
@@ -242,7 +197,6 @@ class SwingWindow(
     val f = new JFrame(SwingWindow.WindowTitle)
     f.setIconImages(SwingWindow.applicationIconImages.asJava)
     f.setUndecorated(usesCustomChrome)
-    if usesCustomChrome && translucentWindow then f.setBackground(SwingWindow.Transparent)
     f.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE)
     f.addWindowListener(
       new WindowAdapter:
@@ -263,29 +217,15 @@ class SwingWindow(
             .foreach(_.setKind {
               if isMax then SwingWindow.ChromeControlKind.Restore else SwingWindow.ChromeControlKind.Maximize
             })
-          updateShape()
       }
     )
-    f.addComponentListener(
-      new ComponentAdapter:
-        override def componentResized(e: ComponentEvent): Unit =
-          scheduleShapeUpdate()
-    )
-    val content = new RoundedContentPane(
-      new BorderLayout,
-      usesCustomChrome,
-      maximizedRef,
-      translucentWindow,
-      chromeMetricsRef,
-      roundedContentBuffers
-    ):
+    val content = new JPanel(new BorderLayout):
       setBackground(Color.BLACK)
     if usesCustomChrome then content.add(chromeTitleBar.panel, BorderLayout.NORTH)
     content.add(canvas, BorderLayout.CENTER)
     f.setContentPane(content)
     if usesCustomChrome then
       val glassPane = new ResizeGlassPane(() => frame, chromeMetricsRef, maximizedRef)
-      resizeGlassPaneRef.set(Some(glassPane))
       f.setGlassPane(glassPane)
       glassPane.setVisible(true)
     f.pack()
@@ -301,7 +241,6 @@ class SwingWindow(
   def start(): Unit =
     val showWindow: Runnable = () =>
       frame.setVisible(true)
-      if usesCustomChrome then updateShape()
       if usesNativeThemedChrome then updateNativeChromeTheme(chromePaletteRef.get())
       publishCanvasResize(canvas.getSize())
       val _ = canvas.requestFocusInWindow()
@@ -354,13 +293,6 @@ class SwingWindow(
     onResizeCallbackRef.get().foreach(_.apply())
 
   def updateChromeTheme(theme: Theme): Unit =
-    contentTransparentRef.set(
-      SwingWindow.shouldPaintTransparentContent(
-        usesCustomChrome,
-        translucentWindow,
-        theme.background.getAlpha
-      )
-    )
     if usesCustomChrome then
       val palette = SwingWindow.ChromePalette.fromTheme(theme)
       if customChromePaletteCache.recordIfChanged(palette, supported = true) then
@@ -405,7 +337,6 @@ class SwingWindow(
       titleSpacerRef.get().foreach(_.setPreferredSize(chromeSpacerSize))
       titleBarRef.get().foreach(_.setPreferredSize(chromeTitleBarSize))
       frame.setMinimumSize(new Dimension(chrome.minWidth, chrome.minHeight))
-      updateShape()
       frame.revalidate()
     else frame.setMinimumSize(new Dimension(SwingWindow.BaseMinWidth, SwingWindow.BaseMinHeight))
 
@@ -447,7 +378,6 @@ object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport
     */
   private[serenity] def awaitCloseLatch(latch: CountDownLatch): IO[Unit] =
     IO.interruptible(latch.await())
-  private[serenity] val Transparent = new Color(0, 0, 0, 0)
 
   private[serenity] lazy val applicationIconImages: scala.List[Image] =
     Option(getClass.getResource(ApplicationIconResource))
@@ -459,17 +389,12 @@ object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport
   val BaseMinHeight: Int                    = 300
   private[serenity] val WindowTitle: String = "Serenity"
 
-  private[serenity] def perPixelTranslucencySupported: Boolean =
-    GraphicsEnvironment.getLocalGraphicsEnvironment.getDefaultScreenDevice
-      .isWindowTranslucencySupported(GraphicsDevice.WindowTranslucency.PERPIXEL_TRANSLUCENT)
-
   def resource(
     metrics: CellMetrics = DefaultMetrics,
     chromeMetrics: CellMetrics = DefaultMetrics,
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
     preferredWindowSize: Option[PreferredWindowSize] = None,
-    frameTimings: FrameTimings = FrameTimings(),
-    translucentSetting: Option[Boolean] = None
+    frameTimings: FrameTimings = FrameTimings()
   ): Resource[IO, SwingWindow] =
     Resource.make(
       IO.blocking {
@@ -479,8 +404,7 @@ object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport
           metrics,
           chromeMode,
           chromeMetrics,
-          frameTimings,
-          translucentSetting
+          frameTimings
         )
         win.start()
         win

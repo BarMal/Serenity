@@ -11,8 +11,7 @@ final case class PreferredWindowSize(width: Int, height: Int):
 
 final case class WindowConfig(
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
-    preferredSize: Option[PreferredWindowSize] = None,
-    translucent: Option[Boolean] = None
+    preferredSize: Option[PreferredWindowSize] = None
 ):
 
   def normalized: WindowConfig =

@@ -114,7 +114,6 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withTextAreaBottomInset(5.0)
     .withMinimumPaneWidth(24)
     .withWindowChromeMode(WindowChromeMode.Native)
-    .withWindowTranslucent(Some(false))
     .withCharacterAnimation(AnimationConfig(steps = 9, totalDuration = 210.milliseconds))
     .withFontConfig(
       FontConfig(

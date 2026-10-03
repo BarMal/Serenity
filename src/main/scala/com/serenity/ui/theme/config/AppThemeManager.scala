@@ -1,8 +1,10 @@
 package com.serenity.ui.theme.config
 
 import cats.effect.IO
+import cats.syntax.all.*
 import com.serenity.state.models.AppState
-import com.serenity.ui.theme.Theme
+import com.serenity.ui.theme.{DefaultThemes, Theme}
+import org.slf4j.LoggerFactory
 
 /** Application-level theme manager that integrates with AppState */
 class AppThemeManager:
@@ -15,9 +17,11 @@ class AppThemeManager:
     themeManager
       .loadAndSetTheme(themeName)
       .handleErrorWith(_ =>
-        // Fallback to internal default if theme loading fails
-        val defaultTheme = com.serenity.ui.theme.DefaultThemes.default
-        themeManager.setCurrentTheme(defaultTheme, defaultTheme.name).as(defaultTheme)
+        val defaultTheme = DefaultThemes.default
+        AppThemeManager
+          .warnRemovedTheme(themeName, defaultTheme.name)
+          .whenA(DefaultThemes.removedInternal.contains(themeName)) >>
+          themeManager.setCurrentTheme(defaultTheme, defaultTheme.name).as(defaultTheme)
       )
 
   /** Get the current active theme */
@@ -55,5 +59,10 @@ class AppThemeManager:
     state => state.copy(persisted = state.persisted.copy(theme = theme))
 
 object AppThemeManager:
+  private val logger = LoggerFactory.getLogger(classOf[AppThemeManager])
+
+  private def warnRemovedTheme(themeName: String, fallbackName: String): IO[Unit] =
+    IO(logger.warn(s"Theme '$themeName' was removed; using the default theme '$fallbackName' instead"))
+
   /** Create a new instance with default configuration */
   def create: AppThemeManager = new AppThemeManager()

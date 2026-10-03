@@ -1,16 +1,14 @@
 package com.serenity.ui.terminal
 
 import java.awt.*
-import java.awt.geom.RoundRectangle2D
 import java.awt.image.BufferedImage
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
+import java.util.concurrent.atomic.AtomicReference
 
-/** Frame-buffer pooling, rounded-corner masking, and cursor-overlay repaint math for [[SwingWindow]]. Mixed into that
-  * class's companion object so callers keep seeing `SwingWindow.ReusableImagePool` etc.; split into its own file to
-  * keep `SwingWindow.scala` within the architecture ratchet's line target.
+/** Frame-buffer pooling and cursor-overlay repaint math for [[SwingWindow]]. Mixed into that class's companion object
+  * so callers keep seeing `SwingWindow.ReusableImagePool` etc.; split into its own file to keep `SwingWindow.scala`
+  * within the architecture ratchet's line target.
   */
 private[terminal] trait SwingWindowImageSupport:
-  private val RoundedCornerMaskScale = 2
 
   final private[serenity] case class CaretPaint(rect: Rectangle, color: Color)
 
@@ -49,138 +47,6 @@ private[terminal] trait SwingWindowImageSupport:
 
     def releaseLease(): Unit =
       val _ = slots.updateAndGet(_.copy(leased = None))
-
-  final private[serenity] class RoundedCornerMaskBufferCache:
-    private val buffersRef = new AtomicReference[Option[RoundedCornerMaskBuffers]](None)
-
-    @annotation.tailrec
-    final def acquire(width: Int, height: Int, cornerArc: Int): RoundedCornerMaskBuffers =
-      buffersRef.get() match
-        case Some(buffers) if buffers.matches(width, height, cornerArc) => buffers
-        case current =>
-          val replacement = RoundedCornerMaskBuffers.create(width, height, cornerArc)
-          if buffersRef.compareAndSet(current, Some(replacement)) then replacement
-          else acquire(width, height, cornerArc)
-
-  final private[serenity] case class CornerTile(bounds: Rectangle, mask: BufferedImage)
-
-  /** One corner tile of the window at a time is re-rendered off-screen and masked; the rest of the window is painted
-    * directly, so a repaint away from the corners costs nothing extra.
-    */
-  final private[serenity] class RoundedCornerMaskBuffers private (
-      val width: Int,
-      val height: Int,
-      val cornerArc: Int,
-      val corners: scala.List[CornerTile],
-      private val contents: BufferedImage,
-      private val masked: BufferedImage
-  ):
-
-    def matches(otherWidth: Int, otherHeight: Int, otherCornerArc: Int): Boolean =
-      width == otherWidth && height == otherHeight && cornerArc == otherCornerArc.max(0)
-
-    def cornersTouching(clip: Rectangle): scala.List[CornerTile] =
-      corners.filter(_.bounds.intersects(clip))
-
-    /** `paintContents` paints in window coordinates; the result is `tile`-sized and only valid until the next call. */
-    def render(tile: CornerTile, paintContents: Graphics => Unit): BufferedImage =
-      val bounds           = tile.bounds
-      val contentsGraphics = contents.createGraphics()
-      try
-        contentsGraphics.setComposite(AlphaComposite.Clear)
-        contentsGraphics.fillRect(0, 0, contents.getWidth, contents.getHeight)
-        contentsGraphics.setComposite(AlphaComposite.SrcOver)
-        contentsGraphics.translate(-bounds.x, -bounds.y)
-        contentsGraphics.clipRect(bounds.x, bounds.y, bounds.width, bounds.height)
-        paintContents(contentsGraphics)
-      finally contentsGraphics.dispose()
-      val maskedGraphics = masked.createGraphics()
-      try
-        maskedGraphics.setComposite(AlphaComposite.Src)
-        maskedGraphics.drawImage(contents, 0, 0, null)
-        maskedGraphics.setComposite(AlphaComposite.DstIn)
-        maskedGraphics.drawImage(tile.mask, 0, 0, null)
-        masked
-      finally maskedGraphics.dispose()
-
-  private[serenity] object RoundedCornerMaskBuffers:
-
-    def create(width: Int, height: Int, cornerArc: Int): RoundedCornerMaskBuffers =
-      val normalizedWidth  = width.max(1)
-      val normalizedHeight = height.max(1)
-      val normalizedArc    = cornerArc.max(0)
-      val tiles = cornerTileBounds(normalizedWidth, normalizedHeight, normalizedArc).map(bounds =>
-        CornerTile(bounds, cornerMask(bounds, normalizedWidth, normalizedHeight, normalizedArc))
-      )
-      val tileWidth  = tiles.headOption.fold(1)(_.bounds.width)
-      val tileHeight = tiles.headOption.fold(1)(_.bounds.height)
-      new RoundedCornerMaskBuffers(
-        normalizedWidth,
-        normalizedHeight,
-        normalizedArc,
-        tiles,
-        new BufferedImage(tileWidth, tileHeight, BufferedImage.TYPE_INT_ARGB),
-        new BufferedImage(tileWidth, tileHeight, BufferedImage.TYPE_INT_ARGB)
-      )
-
-    /** The `bounds` part of the whole-window rounded rectangle, antialiased by 2x supersampling. The tile's inner edges
-      * lie where the mask is uniformly opaque, so downsampling a tile alone gives the same pixels as the whole window.
-      */
-    private def cornerMask(bounds: Rectangle, width: Int, height: Int, cornerArc: Int): BufferedImage =
-      val scale        = RoundedCornerMaskScale
-      val supersampled = new BufferedImage(bounds.width * scale, bounds.height * scale, BufferedImage.TYPE_INT_ARGB)
-      val maskGraphics = supersampled.createGraphics()
-      try
-        maskGraphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-        maskGraphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
-        maskGraphics.setColor(Color.WHITE)
-        maskGraphics.translate(-bounds.x * scale, -bounds.y * scale)
-        maskGraphics.fill(
-          new RoundRectangle2D.Double(
-            0,
-            0,
-            width.toDouble * scale,
-            height.toDouble * scale,
-            cornerArc.toDouble * scale,
-            cornerArc.toDouble * scale
-          )
-        )
-      finally maskGraphics.dispose()
-
-      val mask               = new BufferedImage(bounds.width, bounds.height, BufferedImage.TYPE_INT_ARGB)
-      val downsampleGraphics = mask.createGraphics()
-      try
-        downsampleGraphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
-        downsampleGraphics.setRenderingHint(
-          RenderingHints.KEY_INTERPOLATION,
-          RenderingHints.VALUE_INTERPOLATION_BICUBIC
-        )
-        downsampleGraphics.drawImage(supersampled, 0, 0, bounds.width, bounds.height, null)
-      finally downsampleGraphics.dispose()
-      mask
-
-  private[serenity] def cornerTileBounds(width: Int, height: Int, cornerArc: Int): scala.List[Rectangle] =
-    if cornerArc <= 0 then Nil
-    else
-      val tileWidth  = cornerArc.min(width)
-      val tileHeight = cornerArc.min(height)
-      val right      = width - tileWidth
-      val bottom     = height - tileHeight
-      scala
-        .List((0, 0), (right, 0), (0, bottom), (right, bottom))
-        .map((x, y) => new Rectangle(x, y, tileWidth, tileHeight))
-
-  final private[serenity] class CoalescedEdtUpdate(update: () => Unit):
-    private val queued = new AtomicBoolean(false)
-
-    def schedule(enqueue: Runnable => Unit): Unit =
-      if queued.compareAndSet(false, true) then
-        enqueue(
-          new Runnable:
-            def run(): Unit =
-              queued.set(false)
-              update()
-        )
 
   def shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible: Boolean): Boolean =
     !cursorVisible
@@ -253,12 +119,11 @@ private[terminal] trait SwingWindowImageSupport:
     base: Option[BufferedImage],
     carets: scala.List[CaretPaint],
     panelWidth: Int,
-    panelHeight: Int,
-    transparent: Boolean
+    panelHeight: Int
   ): Unit =
     val clip       = Option(g.getClipBounds).getOrElse(new Rectangle(0, 0, panelWidth, panelHeight))
     val background = g.create().asInstanceOf[Graphics2D]
-    try SwingWindow.paintCanvasBackground(background, panelWidth, panelHeight, transparent)
+    try SwingWindow.paintCanvasBackground(background, panelWidth, panelHeight)
     finally background.dispose()
     base.foreach(image => drawImageRegion(g, image, clip, panelWidth, panelHeight))
     carets.filter(_.rect.intersects(clip)).foreach { caret =>
