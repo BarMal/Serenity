@@ -60,6 +60,10 @@ private[config] object ConfigFieldsCursorAndWindow:
     named("window.chrome", "windowChromeMode", "window.chrome.mode", "window_chrome", "window_chrome_mode")(
       enumerated(WindowChromeMode.fromConfigKey, _.configKey, text => WindowChromeMode.values.find(_.toString == text))
     )(_.windowChromeMode, (config, value) => config.withWindowChromeMode(value)),
+    field("window.translucent", "window_translucent")(boolean.orAuto)(
+      _.windowTranslucent,
+      (config, value) => config.withWindowTranslucent(value)
+    ),
     // -- Companion sprite ------------------------------------------------------------------------------------------------
     // motion.window_sitter.* (#934) is gone: the companion sprite panel absorbed the window sitter's
     // typing-reactivity (#934 v2), so those keys are no longer registered here. An old config file naming them reads

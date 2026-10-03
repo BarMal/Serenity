@@ -114,7 +114,8 @@ final private[terminal] class ResizeGlassPane(
   addMouseMotionListener(adapter)
 
 /** The window's content pane, rendered with soft rounded corners whenever per-pixel translucency lets the frame
-  * composite them against the desktop. Decoupled from [[SwingWindow]] so it can live in its own file.
+  * composite them against the desktop. Only the corner tiles a repaint touches are re-rendered and masked; everything
+  * else paints straight through. Decoupled from [[SwingWindow]] so it can live in its own file.
   */
 private[terminal] class RoundedContentPane(
     layout: LayoutManager,
@@ -133,6 +134,15 @@ private[terminal] class RoundedContentPane(
           perPixelTranslucencySupported
         ) && getWidth > 0 && getHeight > 0
     then
+      super.paint(g)
+      val clip    = Option(g.getClipBounds).getOrElse(new Rectangle(0, 0, getWidth, getHeight))
       val buffers = roundedContentBuffers.acquire(getWidth, getHeight, chromeMetricsRef.get().cornerArc)
-      val _       = g.drawImage(buffers.render(contentsGraphics => super.paint(contentsGraphics)), 0, 0, null)
+      buffers.cornersTouching(clip).foreach { tile =>
+        val masked = buffers.render(tile, contentsGraphics => super.paint(contentsGraphics))
+        val corner = g.create().asInstanceOf[Graphics2D]
+        try
+          corner.setComposite(AlphaComposite.Src)
+          val _ = corner.drawImage(masked, tile.bounds.x, tile.bounds.y, null)
+        finally corner.dispose()
+      }
     else super.paint(g)

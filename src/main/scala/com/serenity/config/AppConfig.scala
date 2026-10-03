@@ -42,6 +42,10 @@ final case class AppConfig(
   def preferredWindowSize: Option[PreferredWindowSize] =
     windowConfig.preferredSize
 
+  /** `None` leaves translucency to the session: opaque on Wayland, translucent elsewhere. */
+  def windowTranslucent: Option[Boolean] =
+    windowConfig.translucent
+
   def markdownViewMode: MarkdownViewMode =
     documentConfig.markdownViewMode
 
@@ -291,6 +295,9 @@ final case class AppConfig(
 
   def withWindowChromeMode(mode: WindowChromeMode): AppConfig =
     withWindowConfig(windowConfig.copy(chromeMode = mode))
+
+  def withWindowTranslucent(translucent: Option[Boolean]): AppConfig =
+    withWindowConfig(windowConfig.copy(translucent = translucent))
 
   def withDocumentConfig(config: DocumentConfig): AppConfig =
     copy(documentConfig = config)

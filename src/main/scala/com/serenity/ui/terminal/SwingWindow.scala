@@ -25,10 +25,13 @@ class SwingWindow(
     initialMetrics: CellMetrics,
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
     initialChromeMetrics: CellMetrics,
-    frameTimings: FrameTimings = FrameTimings()
+    frameTimings: FrameTimings = FrameTimings(),
+    translucentSetting: Option[Boolean] = None,
+    env: Map[String, String] = sys.env
 ):
 
-  private val usesCustomChrome           = SwingWindow.shouldUseCustomChrome(chromeMode)
+  private val usesCustomChrome =
+    SwingWindow.shouldUseCustomChrome(chromeMode, System.getProperty("os.name", ""), env)
   private val effectiveChromeMode        = if usesCustomChrome then WindowChromeMode.Custom else chromeMode
   private val usesNativeThemedChrome     = chromeMode == WindowChromeMode.NativeThemed
   private val initialChromeLayoutMetrics = SwingWindow.ChromeMetrics.fromCellMetrics(initialChromeMetrics)
@@ -51,10 +54,9 @@ class SwingWindow(
   private val pendingResize            = new AtomicReference[Option[ViewportSize]](None)
   private val closeLatch               = new CountDownLatch(1)
   private val baseImageRef             = new AtomicReference[Option[BufferedImage]](None)
-  private val publishedImagesRef       = new AtomicReference(SwingWindow.PublishedImages.empty)
+  private val publishedCaretsRef       = new AtomicReference[scala.List[SwingWindow.CaretPaint]](Nil)
   private val previousCursorRectsRef   = new AtomicReference[scala.List[Rectangle]](Nil)
   private val baseImagePool            = new SwingWindow.ReusableImagePool
-  private val cursorOverlayPool        = new SwingWindow.ReusableImagePool
   private[serenity] val renderScratch  = new Java2DScratchBuffers
   private val savedBoundsRef           = new AtomicReference[Option[Rectangle]](None)
   private val maximizedRef             = new AtomicBoolean(false)
@@ -69,8 +71,8 @@ class SwingWindow(
   private val resizeGlassPaneRef       = new AtomicReference[Option[JComponent]](None)
   private val roundedCornerMaskRef     = new AtomicReference[Option[Int]](None)
   private val roundedContentBuffers    = new SwingWindow.RoundedCornerMaskBufferCache
-  private val perPixelTranslucencySupported =
-    SwingWindow.perPixelTranslucencySupported
+  private val translucentWindow =
+    SwingWindow.usesTranslucentWindow(translucentSetting, env, SwingWindow.perPixelTranslucencySupported)
   private val shapeUpdateCoalescer = new SwingWindow.CoalescedEdtUpdate(() => updateShape())
 
   /** Whether `canvas` should paint its own background as genuinely transparent this frame -- see
@@ -96,14 +98,21 @@ class SwingWindow(
     )
     override def paintComponent(g: java.awt.Graphics): Unit =
       val paintStart = frameTimings.paintStarted()
+      val g2         = g.create().asInstanceOf[Graphics2D]
       try
-        val g2 = g.create().asInstanceOf[Graphics2D]
-        try SwingWindow.paintCanvasBackground(g2, getWidth, getHeight, contentTransparentRef.get())
-        finally g2.dispose()
-        val published = publishedImagesRef.get()
-        published.base.foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
-        published.overlay.foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
-      finally frameTimings.paintFinished(paintStart)
+        val base = baseImagePool.leasePublished()
+        SwingWindow.paintPresentedFrame(
+          g2,
+          base,
+          publishedCaretsRef.get(),
+          getWidth,
+          getHeight,
+          contentTransparentRef.get()
+        )
+      finally
+        baseImagePool.releaseLease()
+        g2.dispose()
+        frameTimings.paintFinished(paintStart)
 
   private val accessibilityBridge      = new SwingAccessibilityBridge(canvas)
   private val accessibilityPublishGate = new AccessibilityPublishGate
@@ -120,18 +129,13 @@ class SwingWindow(
     onImageReady(image, None)
 
   /** Publish a finished base frame, repainting only `dirtyRegion` when the rest of the frame is known to be identical
-    * to what is already on screen.
-    *
-    * The bounded repaint is dropped whenever a cursor overlay was part of the displayed frame: dropping that overlay
-    * changes pixels outside the region, and stale caret pixels would survive a partial repaint.
+    * to what is already on screen -- widened by any carets this frame drops, whose pixels would otherwise survive.
     */
   def onImageReady(image: BufferedImage, dirtyRegion: Option[Rectangle]): Unit =
-    val displayedOverlay = publishedImagesRef.get().overlay
+    val displayedCarets = publishedCaretsRef.getAndSet(Nil)
     baseImagePool.publish(image)
     baseImageRef.set(Some(image))
-    cursorOverlayPool.clearPublished()
-    publishedImagesRef.set(SwingWindow.PublishedImages(Some(image), None))
-    dirtyRegion.filter(_ => displayedOverlay.isEmpty) match
+    SwingWindow.combinedCursorRepaintRegion(dirtyRegion, displayedCarets.map(_.rect), Nil) match
       case Some(region) if region.width > 0 && region.height > 0 =>
         frameTimings.framePublished()
         SwingUtilities.invokeLater(() => canvas.repaint(region.x, region.y, region.width, region.height))
@@ -141,29 +145,25 @@ class SwingWindow(
         SwingUtilities.invokeLater(() => canvas.repaint())
 
   def onBaseImageReady(image: BufferedImage): Unit =
+    publishedCaretsRef.set(Nil)
     baseImagePool.publish(image)
     baseImageRef.set(Some(image))
-    cursorOverlayPool.clearPublished()
-    publishedImagesRef.set(SwingWindow.PublishedImages(Some(image), None))
 
-  /** Publish a freshly-painted cursor overlay and repaint just the pixels it actually changed.
+  /** Publish the carets to fill over the current base frame and repaint just the pixels they changed.
     *
-    * The overlay image is cleared and redrawn from scratch every call, so a caret that moved needs both its old and new
-    * position repainted -- not just whatever the base frame changed. `baseDirtyRegion` is the caller's own
-    * bounded-repaint region for the base frame (`None` for "the whole canvas changed"); `drawOverlay` paints the
-    * overlay and reports back the pixel rects it painted. The final repaint is bounded to the union of all three, or
+    * A caret that moved needs both its old and new position repainted -- not just whatever the base frame changed.
+    * `baseDirtyRegion` is the caller's own bounded-repaint region for the base frame (`None` for "the whole canvas
+    * changed"); `paintCarets` reports the carets to fill. The final repaint is bounded to the union of all three, or
     * unbounded whenever `baseDirtyRegion` itself is `None`.
     */
   def onCursorOverlayReady(baseDirtyRegion: Option[Rectangle])(
-    drawOverlay: BufferedImage => scala.List[Rectangle]
+    paintCarets: => scala.List[SwingWindow.CaretPaint]
   ): Boolean =
     baseImageRef.get() match
-      case Some(baseImage) =>
-        val overlayImage = cursorOverlayPool.acquire(baseImage.getWidth, baseImage.getHeight, baseImage.getType)
-        SwingWindow.clearImage(overlayImage)
-        val currentCursorRects = drawOverlay(overlayImage)
-        cursorOverlayPool.publish(overlayImage)
-        publishedImagesRef.set(SwingWindow.PublishedImages(Some(baseImage), Some(overlayImage)))
+      case Some(_) =>
+        val carets = paintCarets
+        publishedCaretsRef.set(carets)
+        val currentCursorRects  = carets.map(_.rect)
         val previousCursorRects = previousCursorRectsRef.getAndSet(currentCursorRects)
         SwingWindow.combinedCursorRepaintRegion(baseDirtyRegion, previousCursorRects, currentCursorRects) match
           case Some(region) if region.width > 0 && region.height > 0 =>
@@ -184,7 +184,7 @@ class SwingWindow(
     val roundedCornerMask = SwingWindow.roundedCornerMask(
       usesCustomChrome,
       maximizedRef.get(),
-      perPixelTranslucencySupported,
+      translucentWindow,
       chromeMetricsRef.get().cornerArc
     )
     val refreshRoundedCornerMask =
@@ -244,7 +244,7 @@ class SwingWindow(
     val f = new JFrame(SwingWindow.WindowTitle)
     f.setIconImages(SwingWindow.applicationIconImages.asJava)
     f.setUndecorated(usesCustomChrome)
-    if usesCustomChrome && perPixelTranslucencySupported then f.setBackground(SwingWindow.Transparent)
+    if usesCustomChrome && translucentWindow then f.setBackground(SwingWindow.Transparent)
     f.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE)
     f.addWindowListener(
       new WindowAdapter:
@@ -277,7 +277,7 @@ class SwingWindow(
       new BorderLayout,
       usesCustomChrome,
       maximizedRef,
-      perPixelTranslucencySupported,
+      translucentWindow,
       chromeMetricsRef,
       roundedContentBuffers
     ):
@@ -359,7 +359,7 @@ class SwingWindow(
     contentTransparentRef.set(
       SwingWindow.shouldPaintTransparentContent(
         usesCustomChrome,
-        perPixelTranslucencySupported,
+        translucentWindow,
         theme.background.getAlpha
       )
     )
@@ -470,7 +470,8 @@ object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport
     chromeMetrics: CellMetrics = DefaultMetrics,
     chromeMode: WindowChromeMode = WindowChromeMode.Auto,
     preferredWindowSize: Option[PreferredWindowSize] = None,
-    frameTimings: FrameTimings = FrameTimings()
+    frameTimings: FrameTimings = FrameTimings(),
+    translucentSetting: Option[Boolean] = None
   ): Resource[IO, SwingWindow] =
     Resource.make(
       IO.blocking {
@@ -480,7 +481,8 @@ object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport
           metrics,
           chromeMode,
           chromeMetrics,
-          frameTimings
+          frameTimings,
+          translucentSetting
         )
         win.start()
         win

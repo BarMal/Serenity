@@ -129,7 +129,8 @@ object ConfigGenerators:
       chrome <- oneOfEnum(WindowChromeMode.values)
       // Above `PreferredWindowSize.normalized`'s own floor, so the generated value is one the application would keep.
       size <- Gen.option(for w <- Gen.choose(400, 4000); h <- Gen.choose(300, 4000) yield PreferredWindowSize(w, h))
-    yield WindowConfig(chrome, size)
+      translucent <- Gen.option(Gen.oneOf(true, false))
+    yield WindowConfig(chrome, size, translucent)
 
   val genCompanionSpriteConfig: Gen[CompanionSpriteConfig] =
     for

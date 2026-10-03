@@ -546,7 +546,7 @@ object Java2DRenderSurface:
   private def scaledCeil(logicalPx: Int, deviceScale: Double): Int =
     math.ceil(logicalPx.toDouble * deviceScale.max(1.0)).toInt
 
-  private def deviceScaleFor(canvas: javax.swing.JPanel): DeviceScale =
+  private[serenity] def deviceScaleFor(canvas: javax.swing.JPanel): DeviceScale =
     Option(canvas.getGraphicsConfiguration)
       .map(_.getDefaultTransform)
       .map(transform => DeviceScale(transform.getScaleX.max(1.0), transform.getScaleY.max(1.0)))
