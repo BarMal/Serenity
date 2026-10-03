@@ -18,28 +18,28 @@ object PinnedPanelRenderer:
     theme: Theme,
     config: AppConfig,
     cellMetrics: CellMetrics,
-    animationState: AnimationState = AnimationState.empty
+    animationState: AnimationState = AnimationState.empty,
+    opaqueBeneath: Option[Color] = None
   ): Unit =
-    val rect = panel.rect
-
-    if config.surfaceConfig.uiShadowsEnabled then
-      surface.roundedRects.foreach(
-        _.drawRoundRectShadow(
-          rect.x,
-          rect.y,
-          rect.width,
-          rect.height,
-          config.scaledUiCornerRadiusPx,
-          new java.awt.Color(0, 0, 0)
-        )
-      )
+    val rect            = panel.rect
+    val arcPx           = config.scaledUiCornerRadiusPx
+    val shadow          = Option.when(config.surfaceConfig.uiShadowsEnabled)(new Color(0, 0, 0))
     val backdrop        = SurfaceMaterials.backdropShowingThrough(config, theme, surface)
     val panelBackground = backdrop.getOrElse(theme.panel.background)
-    surface.effects.foreach(_.setAlpha(SurfaceMaterials.panelAlpha(config, theme)))
+    val panelAlpha      = SurfaceMaterials.panelAlpha(config, theme)
+
+    surface.effects.foreach(_.setAlpha(panelAlpha))
     surface.setForegroundColor(theme.panel.foreground)
     surface.setBackgroundColor(panelBackground)
-
-    for y <- rect.y until rect.bottom do surface.putString(rect.x, y, " " * rect.width)
+    surface.panelBodies match
+      case Some(bodies) =>
+        val body = PanelBodyFill(panelBackground, panelAlpha, opaqueBeneath)
+        bodies.fillPanelBody(rect.x, rect.y, rect.width, rect.height, arcPx, shadow, body)
+      case None =>
+        shadow.foreach { color =>
+          surface.roundedRects.foreach(_.drawRoundRectShadow(rect.x, rect.y, rect.width, rect.height, arcPx, color))
+        }
+        for y <- rect.y until rect.bottom do surface.putString(rect.x, y, " " * rect.width)
 
     val textInsetPx = SurfaceTextInset.px(config)
     if backdrop.isEmpty then applyGlassSheen(surface, panel, theme, config)

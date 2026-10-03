@@ -14,7 +14,7 @@ import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateSt
 import com.serenity.state.manager.{CursorViewport, RenderCaches, StateManager}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, PanelPosition, ViewportSize}
-import com.serenity.ui.renderer.{Java2DRenderSurface, RendererEntryPoints}
+import com.serenity.ui.renderer.{Java2DRenderSurface, Java2DScratchBuffers, RendererEntryPoints}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.{DockedPanelFixtures, setBufferForPane, setCursorPosition}
 import org.typelevel.log4cats.LoggerFactory
@@ -76,6 +76,9 @@ private[perf] object LaptopFrameBenchmarks:
       BufferedImage.TYPE_INT_ARGB
     )
 
+  /** One window's effect buffers, shared by every frame as `Java2DRenderSurface.forFrame` shares them in the app. */
+  private val scratch = Java2DScratchBuffers()
+
   def renderedFrame(state: AppState, caches: RenderCaches, image: BufferedImage): BufferedImage =
     val surface = new Java2DRenderSurface(
       image,
@@ -85,7 +88,8 @@ private[perf] object LaptopFrameBenchmarks:
       logicalWidthPx = LogicalWidthPx,
       logicalHeightPx = LogicalHeightPx,
       deviceScaleX = DeviceScale,
-      deviceScaleY = DeviceScale
+      deviceScaleY = DeviceScale,
+      scratch = scratch
     )
     RendererEntryPoints.render(
       state,

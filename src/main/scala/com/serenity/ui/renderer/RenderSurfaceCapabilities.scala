@@ -177,3 +177,24 @@ trait RoundedRectDrawing:
     height: Int,
     arcPx: Int
   )(render: => Unit): Unit
+
+/** A panel body: `colour` at `alpha` over the whole panel rect. `opaqueBeneath` is the opaque colour the caller knows
+  * lies under the panel, if any, so the parts nothing else shows through can be precomputed as one opaque colour.
+  */
+final case class PanelBodyFill(colour: Color, alpha: Float, opaqueBeneath: Option[Color])
+
+/** A panel's drop shadow and translucent body painted in one step, so a raster surface can composite each pixel once
+  * instead of stacking full-area alpha fills. Optional: without it, callers draw the shadow through
+  * [[RoundedRectDrawing]] and the body as ordinary background fills. Leaves the surface's alpha as it found it.
+  */
+trait PanelBodyDrawing:
+
+  def fillPanelBody(
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    arcPx: Int,
+    shadow: Option[Color],
+    body: PanelBodyFill
+  ): Unit

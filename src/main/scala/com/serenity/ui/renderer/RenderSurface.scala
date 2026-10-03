@@ -74,6 +74,9 @@ trait RenderSurface:
     */
   def roundedRects: Option[RoundedRectDrawing] = None
 
+  /** A panel's shadow and body painted together, when this surface can composite them more cheaply than separately. */
+  def panelBodies: Option[PanelBodyDrawing] = None
+
   /** Delegating the caret to this surface's own native cursor, when it has one. `None` means every caret this surface
     * draws is app-painted content -- the default, and what every GUI canvas keeps doing.
     */

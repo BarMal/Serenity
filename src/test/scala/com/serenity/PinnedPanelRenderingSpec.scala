@@ -280,7 +280,7 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getBg(contentRect.x + 1, contentRect.y) shouldBe Theme.light.panel.background
   }
 
-  it should "request backdrop blur for pinned panels using the configured blur radius" in {
+  it should "not request backdrop blur for a docked panel, since its slot holds only cleared background" in {
     val baseState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         theme = Theme.light,
@@ -308,9 +308,8 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    surface.blurRegionCalls should contain(
+    surface.blurRegionCalls should not contain
       surface.BlurRegionCall(panelRect.x, panelRect.y, panelRect.width, panelRect.height, 0.4f)
-    )
   }
 
   it should "skip backdrop blur for pinned panels when the background style is solid" in {
