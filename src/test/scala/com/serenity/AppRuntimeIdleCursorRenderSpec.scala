@@ -7,7 +7,6 @@ import scala.concurrent.duration.*
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.CursorMode
 import com.serenity.frontend.GuiFrontend
 import com.serenity.rope.Balance
@@ -102,11 +101,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "skip idle cursor rendering when the cursor idle interval is disabled" in {
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        config = AppState.initial.persisted.config.withCursorTransitionSpeedScale(Some(0.0))
-      )
-    )
+    val state = AppState.initial
 
     val program = for
       cursorVisible      <- Ref.of[IO, Boolean](true)
@@ -130,7 +125,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
           _: com.serenity.state.manager.RenderCaches
         ) => renderCalls.update(_ + 1),
         requestFastRender = IO.unit,
-        cursorIdleInterval = GuiFrontend.cursorIdleInterval,
+        cursorIdleInterval = _ => None,
         renderCaches = com.serenity.state.manager.RenderCaches.create()
       )
       calls <- renderCalls.get

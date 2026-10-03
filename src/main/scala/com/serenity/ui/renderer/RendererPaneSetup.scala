@@ -251,27 +251,6 @@ object RendererPaneSetup:
         )
     if hasFontRenderContext then snapshot else snapshot.copy(usesMeasuredLayout = false)
 
-  /** Column-based document layout (issue #1338, Phase 1 animation): the snapshot for a column OTHER than the buffer's
-    * own current one -- anchored at `topLine`/`topVisualLine` instead of `buffer.viewport`'s -- used by
-    * `RendererColumnTransition` to rebuild the outgoing column's content for as long as it is still mid-sweep.
-    * Delegates to [[snapshotForBuffer]]'s own column-aware sizing, so the two columns are always measured identically;
-    * callers only ever use this while `columnModeEnabled && wordWrapEnabled`, same as the transition itself requires.
-    */
-  def snapshotForBufferColumnAt(
-    buffer: Buffer,
-    topLine: Int,
-    topVisualLine: Int,
-    contentRect: LayoutRect,
-    state: AppState,
-    context: RenderContext
-  ): TextLayoutSnapshot =
-    snapshotForBuffer(
-      buffer.copy(viewport = buffer.viewport.copy(topLine = topLine, topVisualLine = topVisualLine)),
-      contentRect,
-      state,
-      context
-    )
-
   private def visibleColumnsFor(
     font: Font,
     fontRenderContext: java.awt.font.FontRenderContext,

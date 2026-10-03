@@ -110,18 +110,14 @@ class AnimationChoreographySpec extends AnyFlatSpec with Matchers:
     next.forall(isValid) shouldBe true
   }
 
-  it should "seed an opening pinned panel's fade or geometry and still validate" in {
+  it should "seed an opening pinned panel's fade and still validate" in {
     val pinned  = pinOutline(animated)
     val panelId = pinned.pinnedSurfaces.map(_.id).filterNot(animated.pinnedSurfaces.map(_.id).contains)
 
     val next = AnimationChoreography.animateSurfaceTransitions(animated, pinned)
 
     panelId should have size 1
-    next.exists(state =>
-      panelId.forall(id =>
-        state.runtime.motion.surfaceAnimations.contains(id) || state.runtime.motion.panelGeometry.contains(id)
-      )
-    ) shouldBe true
+    next.exists(state => panelId.forall(state.runtime.motion.surfaceAnimations.contains)) shouldBe true
     next.forall(isValid) shouldBe true
   }
 

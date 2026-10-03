@@ -48,12 +48,10 @@ object AccessibilitySync:
       persisted = state.persisted.copy(
         buffers = state.persisted.buffers.view
           .mapValues(buffer =>
-            buffer
-              .withCursorList(buffer.editing.cursors.map(_.copy(glide = None, selectionGeometry = None)))
-              .copy(
-                markdownPreviewEditGeneration = 0L,
-                markdownPreviewCommittedGeneration = 0L
-              )
+            buffer.copy(
+              markdownPreviewEditGeneration = 0L,
+              markdownPreviewCommittedGeneration = 0L
+            )
           )
           .toMap
       ),

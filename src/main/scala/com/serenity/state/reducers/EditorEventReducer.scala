@@ -101,12 +101,11 @@ object EditorEventReducer:
   /** Horizontal scroll gestures (issue #1568): shift+wheel/trackpad delta pans `leftColumn` the same way the vertical
     * wheel above already pans `topLine`, or -- while column mode and word wrap are both on -- reduces exactly as
     * `ColumnLeft`/`ColumnRight` already do, through the very same `reduceTextEvent` path a keyboard `PageUp`/`PageDown`
-    * remapped to a column move takes. That reuse is what lets a scroll gesture pick up `CursorViewport`'s existing
-    * animated column-sweep transition for free, rather than a separate ad hoc path -- a single discrete column step per
-    * gesture, the same as one `PageUp`/`PageDown`, regardless of how many lines a fast flick reports.
+    * remapped to a column move takes -- a single discrete column step per gesture, the same as one `PageUp`/
+    * `PageDown`, regardless of how many lines a fast flick reports.
     *
-    * Under plain word wrap without column mode, `leftColumn` is always pinned to `0` (`CursorGlideGeometry`'s own
-    * comment), so the gesture is a no-op there rather than moving a viewport field nothing ever reads.
+    * Under plain word wrap without column mode, `leftColumn` is always pinned to `0`, so the gesture is a no-op there
+    * rather than moving a viewport field nothing ever reads.
     *
     * The upper clamp is measured against the longest of the lines currently on screen -- not the whole document, which
     * no reducer here scans, and not the cursor's own line, which `LayoutEngine.clampLeftColumnForBuffer`'s resize-time

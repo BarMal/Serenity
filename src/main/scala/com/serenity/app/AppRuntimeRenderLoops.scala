@@ -356,5 +356,4 @@ private[serenity] object AppRuntimeRenderLoops:
     state.persisted.buffers.keys.exists(id => bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
       state.runtime.themeDiscovery.transition.isDefined ||
       state.runtime.motion.surfaceAnimations.nonEmpty ||
-      state.runtime.motion.columnTransitions.nonEmpty ||
       state.typingHidesFloatingStatusLine

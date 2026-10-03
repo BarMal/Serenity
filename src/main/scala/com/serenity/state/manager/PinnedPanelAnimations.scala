@@ -25,19 +25,11 @@ private[manager] object PinnedPanelAnimations:
 
     maybeContext.fold(state) {
       case (position, rect) =>
-        val withFade = openAnimation(position, rect, state).fold(state)(animation =>
+        openAnimation(position, rect, state).fold(state)(animation =>
           state.copy(runtime =
             state.runtime.copy(motion =
               state.runtime.motion
                 .copy(surfaceAnimations = state.runtime.motion.surfaceAnimations + (surface.id -> animation))
-            )
-          )
-        )
-        openGeometry(position, rect, withFade).fold(withFade)(geometry =>
-          withFade.copy(runtime =
-            withFade.runtime.copy(motion =
-              withFade.runtime.motion
-                .copy(panelGeometry = withFade.runtime.motion.panelGeometry + (surface.id -> geometry))
             )
           )
         )
@@ -55,10 +47,7 @@ private[manager] object PinnedPanelAnimations:
 
     maybeContext.fold(state) {
       case (position, rect) =>
-        val fade     = closeAnimation(position, rect, state)
-        val geometry = closeGeometry(position, rect, state)
-        if fade.isEmpty && geometry.isEmpty then state
-        else
+        closeAnimation(position, rect, state).fold(state) { fade =>
           val (stateWithId, ghostId) = state.allocateSurfaceId
           val ghostSurface = UiSurface(
             id = ghostId,
@@ -70,12 +59,11 @@ private[manager] object PinnedPanelAnimations:
               uiSurfaces = stateWithId.runtime.uiSurfaces :+ ghostSurface,
               motion = stateWithId.runtime.motion.copy(
                 surfaceAnimations =
-                  (stateWithId.runtime.motion.surfaceAnimations - closedSurface.id) ++ fade.map(ghostId -> _),
-                panelGeometry =
-                  (stateWithId.runtime.motion.panelGeometry - closedSurface.id) ++ geometry.map(ghostId -> _)
+                  (stateWithId.runtime.motion.surfaceAnimations - closedSurface.id) + (ghostId -> fade)
               )
             )
           )
+        }
     }
 
   private def openAnimation(
@@ -117,46 +105,6 @@ private[manager] object PinnedPanelAnimations:
         phaseTick = 0
       )
     )
-
-  /** Panel scale-in (issue #1085 phase 1): grows from a collapsed rect at `position`'s anchor edge to the panel's full
-    * `rect`, gated by the independent `MotionFamily.PanelGeometry` family -- `None` when it is off (including by
-    * accessibility, or `MotionPreset.Reduced`), which callers read as "open at the full rect immediately."
-    */
-  private def openGeometry(position: PanelPosition, rect: LayoutRect, state: AppState): Option[PanelGeometryState] =
-    state.persisted.config.scaledPanelGeometryAnimation.map(animation =>
-      PanelGeometryState.seeded(
-        start = collapsedRect(position, rect),
-        end = rect,
-        curve = animation.curve,
-        steps = animation.steps
-      )
-    )
-
-  /** Panel scale-out (issue #1085 phase 1): mirrors [[openGeometry]], shrinking from the panel's full `rect` back to
-    * the collapsed rect at `position`'s anchor edge.
-    */
-  private def closeGeometry(position: PanelPosition, rect: LayoutRect, state: AppState): Option[PanelGeometryState] =
-    state.persisted.config.scaledPanelGeometryAnimation.map(animation =>
-      PanelGeometryState.seeded(
-        start = rect,
-        end = collapsedRect(position, rect),
-        curve = animation.curve,
-        steps = animation.steps
-      )
-    )
-
-  /** `rect` collapsed to zero width or height at `position`'s docked edge -- the anchor a panel scales in from or out
-    * to. Lerping `LayoutRect`'s independent `x`/`width` (or `y`/`height`) fields between this and the full `rect` keeps
-    * the opposite, non-anchor edge fixed for every frame in between (issue #1085 phase 1's chosen "grow/shrink from the
-    * dock edge" shape): e.g. for `Right`, `x` moves from `rect.right` down to `rect.x` exactly as fast as `width` grows
-    * from `0` to `rect.width`, so `x + width == rect.right` throughout.
-    */
-  private def collapsedRect(position: PanelPosition, rect: LayoutRect): LayoutRect =
-    position match
-      case PanelPosition.Left   => rect.copy(width = 0)
-      case PanelPosition.Right  => rect.copy(x = rect.right, width = 0)
-      case PanelPosition.Top    => rect.copy(height = 0)
-      case PanelPosition.Bottom => rect.copy(y = rect.bottom, height = 0)
 
   private def openCells(rect: LayoutRect, state: AppState): ElementTransitionCells =
     val transparentPanelForeground = transparent(state.persisted.theme.panel.foreground)

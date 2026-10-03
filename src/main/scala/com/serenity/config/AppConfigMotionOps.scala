@@ -282,45 +282,6 @@ object AppConfigMotionOps:
       val motion = appConfig.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
       Option.when(motion.enabled)(AppConfig.scaledAnimation(motion.animation, motion.speedScale)).flatten
 
-    /** Column-to-column sweep timing (issue #1338, Phase 1 animation) after applying the effective column-transitions
-      * motion speed -- `None` when the family is disabled (including by accessibility, or under `MotionPreset.Reduced`,
-      * both already folded into `effectiveMotionConfiguration` by `MotionConfig.effective`), which callers read as
-      * "snap instantly, no animation."
-      */
-    def scaledColumnTransitionAnimation: Option[AnimationConfig] =
-      val motion = appConfig.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.ColumnTransitions)
-      Option.when(motion.enabled)(AppConfig.scaledAnimation(motion.animation, motion.speedScale)).flatten
-
-    /** Panel scale-in/out timing (issue #1085 phase 1) after applying the effective `PanelGeometry` motion speed --
-      * `None` when the family is disabled (including by accessibility, or under `MotionPreset.Reduced`), which
-      * `PinnedPanelAnimations` reads as "don't seed a geometry tween, panels open/close at their full rect instantly."
-      * Independent of [[scaledUiAnimation]]/the `PinnedPanels` family's colour fade -- both may be on, off, or one
-      * without the other.
-      */
-    def scaledPanelGeometryAnimation: Option[AnimationConfig] =
-      val motion = appConfig.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.PanelGeometry)
-      Option.when(motion.enabled)(AppConfig.scaledAnimation(motion.animation, motion.speedScale)).flatten
-
-    /** Caret-glide timing (issue #1085 phase 2) after applying the effective `Cursor` motion speed -- `None` when the
-      * family is disabled (including by accessibility, or under `MotionPreset.Reduced`), which `CursorViewport` reads
-      * as "snap the caret to its new position instantly, no glide to seed." Reuses the same `Cursor` family
-      * `AppRuntime.cursorIdleInterval` already gates the blink/breathe cadence with -- a single on/off switch and speed
-      * for every `Cursor`-family motion, not two independent ones.
-      */
-    def scaledCursorGlideAnimation: Option[AnimationConfig] =
-      val motion = appConfig.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.Cursor)
-      Option.when(motion.enabled)(AppConfig.scaledAnimation(motion.animation, motion.speedScale)).flatten
-
-    /** Selection grow/settle timing (issue #1085 phase 3) after applying the effective `SelectionGeometry` motion speed
-      * -- `None` when the family is disabled (including by accessibility, or under `MotionPreset.Reduced`), which
-      * `CursorViewport`/`SelectionGeometry` read as "paint the selection at its live extent instantly, no geometry to
-      * seed." Independent of [[scaledCursorGlideAnimation]] -- a user can turn off caret glide while keeping
-      * selection-highlight motion, or vice versa.
-      */
-    def scaledSelectionGeometryAnimation: Option[AnimationConfig] =
-      val motion = appConfig.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.SelectionGeometry)
-      Option.when(motion.enabled)(AppConfig.scaledAnimation(motion.animation, motion.speedScale)).flatten
-
     def withEditorInsertionTransitionKind(kind: TransitionKind): AppConfig =
       appConfig.updateAuthoritativeMotion(_.copy(editorInsertionTransitionKind = kind)) { configuration =>
         updateMotionFamily(configuration, MotionFamily.EditorText)(_.copy(transitionKind = kind))

@@ -51,9 +51,6 @@ private[manager] object MotionCancellation:
 
   private def cancelAllState(state: AppState): AppState =
     state.copy(
-      persisted = state.persisted.copy(buffers =
-        state.persisted.buffers.view.mapValues(clearCursorGlides andThen clearSelectionGeometries).toMap
-      ),
       runtime = state.runtime.copy(
         themeDiscovery = state.runtime.themeDiscovery.copy(transition = None),
         uiSurfaces = state.runtime.uiSurfaces.filterNot(isGhostOverlay),
@@ -68,48 +65,9 @@ private[manager] object MotionCancellation:
       case MotionFamily.PinnedPanels    => cancelSurfaceMotion(isDockedSurface, state)
       case MotionFamily.UiTransitions =>
         state.copy(runtime = state.runtime.copy(themeDiscovery = state.runtime.themeDiscovery.copy(transition = None)))
-      case MotionFamily.Cursor =>
-        // Caret-glide (issue #1085 phase 2): clears every buffer's in-flight `Cursor.glide` -- the one piece of
-        // `Cursor`-family state that is actually cancellable (unlike blink/breathe cadence, which has no state to
-        // cancel, only a tick interval it stops requesting).
-        state.copy(persisted =
-          state.persisted.copy(buffers = state.persisted.buffers.view.mapValues(clearCursorGlides).toMap)
-        )
-      case MotionFamily.SelectionGeometry =>
-        // Selection grow/settle (issue #1085 phase 3): clears every buffer's in-flight `Cursor.selectionGeometry` --
-        // the one piece of `SelectionGeometry`-family state that is actually cancellable, the same way `Cursor`'s own
-        // case clears `Cursor.glide`.
-        state.copy(persisted =
-          state.persisted.copy(buffers = state.persisted.buffers.view.mapValues(clearSelectionGeometries).toMap)
-        )
-      case MotionFamily.ColumnTransitions =>
-        state.copy(runtime = state.runtime.copy(motion = state.runtime.motion.copy(columnTransitions = Map.empty)))
-      case MotionFamily.PanelGeometry =>
-        // Clears every in-flight scale-in/out, then drops any close ghost that existed only for this geometry (no
-        // `surfaceAnimations` entry of its own) -- otherwise, with its geometry gone and no colour fade left to
-        // eventually remove it (`AnimationChoreography.advancePanelGeometry`'s ordinary path), it would sit in
-        // `uiSurfaces` forever.
-        val orphanedGhostIds =
-          state.runtime.motion.panelGeometry.keySet.filterNot(state.runtime.motion.surfaceAnimations.contains)
-        val ghostIdsToDrop = state.runtime.uiSurfaces.collect {
-          case UiSurface(id, SurfaceContent.GhostOverlay(_, _), _, _) if orphanedGhostIds.contains(id) => id
-        }.toSet
-        state.copy(runtime =
-          state.runtime.copy(
-            motion = state.runtime.motion.copy(panelGeometry = Map.empty),
-            uiSurfaces = state.runtime.uiSurfaces.filterNot(surface => ghostIdsToDrop.contains(surface.id))
-          )
-        )
-
-  private def clearCursorGlides(buffer: Buffer): Buffer =
-    if buffer.editing.cursors.exists(_.glide.isDefined) then
-      buffer.withCursorList(buffer.editing.cursors.map(_.copy(glide = None)))
-    else buffer
-
-  private def clearSelectionGeometries(buffer: Buffer): Buffer =
-    if buffer.editing.cursors.exists(_.selectionGeometry.isDefined) then
-      buffer.withCursorList(buffer.editing.cursors.map(_.copy(selectionGeometry = None)))
-    else buffer
+      case MotionFamily.Cursor | MotionFamily.SelectionGeometry | MotionFamily.ColumnTransitions |
+          MotionFamily.PanelGeometry =>
+        state
 
   private def cancelSurfaceMotion(matches: UiSurface => Boolean, state: AppState): AppState =
     val matchingIds = state.runtime.uiSurfaces.collect { case surface if matches(surface) => surface.id }.toSet

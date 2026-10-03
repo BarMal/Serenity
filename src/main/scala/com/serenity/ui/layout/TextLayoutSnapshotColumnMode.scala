@@ -68,7 +68,7 @@ object TextLayoutSnapshotColumnMode:
     * ordinary [[TextLayoutSnapshot]] so every downstream consumer (painting, cursor placement) needs no column-mode
     * branch of its own. `panelWidthPx` is the column's own (narrower) width, not the pane's full width. Delegates to
     * [[fromBufferColumns]] and takes the first column; kept as a named entry point for the single-column consumers
-    * (`RendererColumnTransition`'s outgoing sliver, the animation path) that only ever want one column.
+    * (`MouseTargetCache`, `RendererPaneSetup`) that only ever want one column.
     */
   def fromBufferColumn(
     buffer: Buffer,

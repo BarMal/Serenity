@@ -2,7 +2,7 @@ package com.serenity.animation
 
 import java.awt.Color
 
-import com.serenity.ui.layout.{LayoutRect, PixelPoint, PixelRect}
+import com.serenity.ui.layout.{LayoutRect, PixelRect}
 
 /** Typeclass for values a [[Tween]] can interpolate between. `t` is already curve-adjusted ("eased progress"), so an
   * instance only ever has to do the linear part -- `start + (end - start) * t` in whatever shape `A` needs.
@@ -50,17 +50,6 @@ object Interpolator:
         yPx = lerpInt(start.yPx, end.yPx, t),
         widthPx = lerpInt(start.widthPx, end.widthPx, t),
         heightPx = lerpInt(start.heightPx, end.heightPx, t)
-      )
-
-  /** `com.serenity.ui.layout.PixelPoint`: caret glide's (issue #1085 phase 2) tweened value -- a single pixel position
-    * rather than a rect, lerped and rounded the same way as `PixelRect`'s corner.
-    */
-  given Interpolator[PixelPoint] with
-
-    def lerp(start: PixelPoint, end: PixelPoint, t: Double): PixelPoint =
-      PixelPoint(
-        xPx = lerpInt(start.xPx, end.xPx, t),
-        yPx = lerpInt(start.yPx, end.yPx, t)
       )
 
   /** `java.awt.Color` (issue #1574): each RGBA channel lerped independently via `Interpolator[Double]`, rounded and
@@ -125,8 +114,7 @@ final case class Tween[A](
     if steps <= 0 then 0 else math.max(0, delay + steps - currentFrame)
 
   /** Continues smoothly from wherever this tween currently is, rather than resetting to `start` -- the "in-flight
-    * retarget" #1083 asks for, and what fixes the column-transition jump-cut on rapid re-triggering
-    * (`ColumnTransitionState`).
+    * retarget" #1083 asks for.
     *
     * The new leg runs `currentValue -> newEnd` over `steps - currentFrame` steps -- the steps this tween had left to
     * run, not its original `steps` count -- so a retarget partway through keeps roughly the same per-step cadence (and

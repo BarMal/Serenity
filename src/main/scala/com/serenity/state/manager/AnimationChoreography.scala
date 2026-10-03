@@ -36,8 +36,6 @@ final private[manager] class AnimationChoreography(port: AnimationChoreographyPo
 
   def advanceSurfaceAnimations(state: AppState): AppState = AnimationChoreography.advanceSurfaceAnimations(state)
 
-  def advancePanelGeometry(state: AppState): AppState = AnimationChoreography.advancePanelGeometry(state)
-
 private[manager] object AnimationChoreography:
 
   def withPaneFlowAnimation(state: AppState, sweep: SweepDirection)(
@@ -86,8 +84,7 @@ private[manager] object AnimationChoreography:
   def shouldApplySurfaceAnimationHooks(state: AppState): Boolean =
     state.runtime.motion.surfaceAnimations.nonEmpty ||
       state.persisted.config.scaledCommandRunnerAnimation.exists(config => !config.isDisabled) ||
-      state.persisted.config.pinnedPanelTransitionSettings.enabled ||
-      state.persisted.config.scaledPanelGeometryAnimation.isDefined
+      state.persisted.config.pinnedPanelTransitionSettings.enabled
 
   private def openedAndClosed(
     previous: List[UiSurface],
@@ -384,25 +381,3 @@ private[manager] object AnimationChoreography:
                 )
               )
     }
-
-  /** Advances every in-flight panel scale-in/out (issue #1085 phase 1) by one tick, and reclaims the transient close
-    * ghost `PinnedPanelAnimations.close` allocates once its own geometry finishes with no colour fade left to remove
-    * it. Ordinarily [[advanceSurfaceAnimations]]'s `SurfacePhase.Exiting` case is what drops that ghost from
-    * `uiSurfaces` -- but a closing panel with the `PinnedPanels` fade family off and `PanelGeometry` on never gets a
-    * `surfaceAnimations` entry for its ghost at all (`PinnedPanelAnimations.close` seeds the two maps independently),
-    * so nothing would otherwise remove it. The `GhostOverlay` content check keeps this from ever touching a real docked
-    * panel's own entry (the *open* case's `panelGeometry` key, which never wraps a ghost).
-    */
-  def advancePanelGeometry(state: AppState): AppState =
-    val advanced                 = state.runtime.motion.panelGeometry.view.mapValues(_.advance).toMap
-    val (completed, stillFlying) = advanced.partition(_._2.isComplete)
-    val orphanedGhostIds         = completed.keySet.filterNot(state.runtime.motion.surfaceAnimations.contains)
-    val ghostIdsToDrop = state.runtime.uiSurfaces.collect {
-      case UiSurface(id, SurfaceContent.GhostOverlay(_, _), _, _) if orphanedGhostIds.contains(id) => id
-    }.toSet
-    state.copy(runtime =
-      state.runtime.copy(
-        motion = state.runtime.motion.copy(panelGeometry = stillFlying),
-        uiSurfaces = state.runtime.uiSurfaces.filterNot(surface => ghostIdsToDrop.contains(surface.id))
-      )
-    )

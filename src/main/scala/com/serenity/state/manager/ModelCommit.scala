@@ -82,12 +82,12 @@ final private[manager] class ModelCommit(
     * workspace-tree node still naming it) unnoticed, the way the old unvalidated write could.
     *
     * Deliberately skips `afterCommit`'s follow-up work -- scheduling document analysis and logging a modal transition
-    * -- unlike every other commit: `update` only ever advances animation progress (cursor glide, panel geometry,
-    * surface fades, ...), so it can never change spell-check-relevant content or open/close a modal, and running that
-    * work every frame would be pure waste for no observable effect. `update` is pure, geometry-preserving animation
-    * math, so validation itself is cheap and exists as a correctness backstop, not because a well-behaved tick is
-    * expected to fail it; a tick that would (a bug) is rejected and logged like any other invalid commit, leaving
-    * animation progress where it was so the next frame retries.
+    * -- unlike every other commit: `update` only ever advances animation progress (surface fades, theme cross-fade,
+    * ...), so it can never change spell-check-relevant content or open/close a modal, and running that work every frame
+    * would be pure waste for no observable effect. `update` is pure, geometry-preserving animation math, so validation
+    * itself is cheap and exists as a correctness backstop, not because a well-behaved tick is expected to fail it; a
+    * tick that would (a bug) is rejected and logged like any other invalid commit, leaving animation progress where it
+    * was so the next frame retries.
     */
   def advanceTick(update: Model => Model): IO[Model] =
     modelRef.flatModify { current =>

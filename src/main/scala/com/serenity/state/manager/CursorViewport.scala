@@ -1,8 +1,5 @@
 package com.serenity.state.manager
 
-import com.serenity.animation.Interpolator.given
-import com.serenity.animation.{TransitionDirection, Tween}
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot, VisualRowCounts, WrappedLineCache}
@@ -24,192 +21,21 @@ object CursorViewport:
         val beforeBuffer = before.persisted.buffers.get(bufferId)
         val headMoved =
           beforeBuffer.exists(_.editing.cursorPositions.headOption != buffer.editing.cursorPositions.headOption)
-        val stateAfterViewport =
-          if !headMoved then state
-          else
-            buffer.editing.cursorPositions.headOption match
-              case Some(cursor) =>
-                val surfaceConfig    = state.persisted.config.surfaceConfig
-                val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
-                val placement =
-                  if columnModeActive then adjustForCursorColumnMode(buffer, state, cursor, wrapCache)
-                  else adjustForCursor(buffer, state, cursor, wrapCache)
-                val updatedBuffer = buffer.copy(viewport = placement)
-                val updatedState = state.copy(persisted =
-                  state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
-                )
-                if columnModeActive then seedColumnTransition(bufferId, buffer.viewport, placement, updatedState)
-                else updatedState
-              case None => state
-        val stateAfterGlide =
-          beforeBuffer.fold(stateAfterViewport)(seedCursorGlide(bufferId, _, stateAfterViewport, wrapCache))
-        beforeBuffer.fold(stateAfterGlide)(seedSelectionGeometry(bufferId, _, stateAfterGlide, wrapCache))
-    }
-
-  /** Caret-glide (issue #1085 phase 2): seeds/retargets `Cursor.glide` for every cursor in `bufferId` whose position
-    * changed between `beforeBuffer` and the buffer now in `state` -- any change (typing, navigation, mouse click,
-    * search jump), matched positionally the same way `RendererCursorGlyphs` already indexes cursors for painting, not
-    * only when the primary cursor moves (unlike the viewport placement above, which only re-centres on the primary
-    * cursor). Gated by the `Cursor` motion family (`AppConfig.scaledCursorGlideAnimation` already folds in
-    * accessibility and the `Reduced` preset) and by `state.runtime.capabilities.pixelMotion`: TUI's caret snaps
-    * instantly, since a terminal cursor can't glide sub-cell (`RendererCursorOverlay.presentHardwareCursor`'s existing
-    * GUI/TUI split).
-    *
-    * Retargets an in-flight glide (`Tween.retarget`) rather than reseeding at progress zero when a cursor moves again
-    * before its previous glide finishes -- the same jump-cut fix `seedColumnTransition` already applies to the
-    * column-sweep tween.
-    */
-  private def seedCursorGlide(
-    bufferId: BufferId,
-    beforeBuffer: Buffer,
-    state: AppState,
-    wrapCache: WrappedLineCache
-  ): AppState =
-    if !state.runtime.capabilities.pixelMotion then state
-    else
-      state.persisted.config.scaledCursorGlideAnimation match
-        case None => state
-        case Some(animation) =>
-          state.persisted.buffers.get(bufferId) match
-            case None => state
-            case Some(afterBuffer) =>
-              val beforeCursors = beforeBuffer.editing.cursors.toList
-              val updatedCursors = afterBuffer.editing.cursors.zipWithIndex.map {
-                case (cursor, index) =>
-                  beforeCursors.lift(index) match
-                    case Some(previous) if previous.position != cursor.position =>
-                      val newPixel = CursorGlideGeometry.paneRelativePosition(
-                        afterBuffer,
-                        state.persisted.config,
-                        cursor.position,
-                        wrapCache
-                      )
-                      // The reducer that moved this cursor typically rebuilds `EditingState` from bare `CursorPosition`s
-                      // (`EditingState.apply`/`Cursor.apply(position)`), which wipes `cursor.glide` back to `None` before
-                      // this ever runs -- so whether a glide was already in flight has to be read from `previous` (the
-                      // pre-reducer `before` state this pass diffs against, which still carries whatever the last
-                      // `seedCursorGlide` call set), never from `cursor` itself.
-                      val tween = previous.glide.filterNot(_.isComplete) match
-                        case Some(existing) => existing.retarget(newPixel)
-                        case None =>
-                          val oldPixel =
-                            CursorGlideGeometry.paneRelativePosition(
-                              afterBuffer,
-                              state.persisted.config,
-                              previous.position,
-                              wrapCache
-                            )
-                          Tween(start = oldPixel, end = newPixel, curve = animation.curve, steps = animation.steps)
-                      cursor.copy(glide = Some(tween))
-                    case _ => cursor
-              }
-              if updatedCursors == afterBuffer.editing.cursors then state
-              else
-                val updatedBuffer = afterBuffer.withCursorList(updatedCursors)
-                state.copy(persisted =
-                  state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
-                )
-
-  /** Selection grow/settle (issue #1085 phase 3): seeds/retargets `Cursor.selectionGeometry` for every cursor in
-    * `bufferId` whose selection changed between `beforeBuffer` and the buffer now in `state` -- any change (extend,
-    * shrink, create, clear), matched positionally the same way `seedCursorGlide` above does. Gated by the
-    * `SelectionGeometry` motion family (`AppConfig.scaledSelectionGeometryAnimation` already folds in accessibility and
-    * the `Reduced` preset). Unlike `seedCursorGlide`, this runs regardless of `state.runtime.capabilities.pixelMotion`
-    * -- `SelectionGeometryState`'s column-granular model serves both the GUI's measured painting and TUI's cell
-    * painting (see its own doc comment), so there is nothing GUI-only about it here.
-    *
-    * Retargets an in-flight geometry (`SelectionGeometryState.diff`'s own `Tween.retarget` handling) rather than
-    * reseeding at progress zero when a selection changes again before its previous animation finishes -- the same
-    * jump-cut fix `seedCursorGlide`/`seedColumnTransition` already apply to their own tweens.
-    */
-  private def seedSelectionGeometry(
-    bufferId: BufferId,
-    beforeBuffer: Buffer,
-    state: AppState,
-    wrapCache: WrappedLineCache
-  ): AppState =
-    state.persisted.config.scaledSelectionGeometryAnimation match
-      case None => state
-      case Some(animation) =>
-        state.persisted.buffers.get(bufferId) match
-          case None => state
-          case Some(afterBuffer) =>
-            val beforeCursors = beforeBuffer.editing.cursors.toList
-            val updatedCursors = afterBuffer.editing.cursors.zipWithIndex.map {
-              case (cursor, index) =>
-                beforeCursors.lift(index) match
-                  case Some(previous) if previous.selection != cursor.selection =>
-                    val beforeRects = previous.selection
-                      .map(SelectionGeometry.rectsForSelection(afterBuffer, state.persisted.config, _, wrapCache))
-                      .getOrElse(Map.empty)
-                    val afterRects = cursor.selection
-                      .map(SelectionGeometry.rectsForSelection(afterBuffer, state.persisted.config, _, wrapCache))
-                      .getOrElse(Map.empty)
-                    val geometry = SelectionGeometryState.diff(
-                      previous.selectionGeometry.filterNot(_.isComplete),
-                      beforeRects,
-                      afterRects,
-                      animation.curve,
-                      animation.steps
-                    )
-                    cursor.copy(selectionGeometry = geometry)
-                  case _ => cursor
-            }
-            if updatedCursors == afterBuffer.editing.cursors then state
-            else
-              val updatedBuffer = afterBuffer.withCursorList(updatedCursors)
+        if !headMoved then state
+        else
+          buffer.editing.cursorPositions.headOption match
+            case Some(cursor) =>
+              val surfaceConfig    = state.persisted.config.surfaceConfig
+              val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
+              val placement =
+                if columnModeActive then adjustForCursorColumnMode(buffer, state, cursor, wrapCache)
+                else adjustForCursor(buffer, state, cursor, wrapCache)
+              val updatedBuffer = buffer.copy(viewport = placement)
               state.copy(persisted =
                 state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
               )
-
-  /** Column-based document layout (issue #1338, Phase 1 animation): seeds `Runtime.motion.columnTransitions` whenever
-    * [[adjustForCursorColumnMode]] actually moved which column is showing -- whatever moved the cursor there, not only
-    * `ColumnLeft`/`ColumnRight`, since this effect boundary has no narrower notion of "why" the cursor moved than any
-    * other placement it applies. Gated by the `ColumnTransitions` motion family
-    * (`AppConfig.scaledColumnTransitionAnimation` already folds in accessibility and the `Reduced` preset): a `None`
-    * there means "snap instantly," so no transition is recorded at all -- the viewport still moves to the new column,
-    * there is just nothing to animate between.
-    *
-    * If a transition for this buffer is already in flight, this retargets it (issue #1083's `Tween.retarget`) rather
-    * than reseeding at progress 0: the previous behaviour snapped the sweep back to its start whenever the cursor
-    * crossed another column boundary before the current sweep finished, a visible jump-cut. Retargeting keeps the
-    * in-flight transition's own `direction`/`previousTop*` -- the column being swept away is still the same one -- and
-    * just lets the sweep continue smoothly the rest of the way to full progress.
-    */
-  private def seedColumnTransition(
-    bufferId: BufferId,
-    previousViewport: Viewport,
-    placedViewport: Viewport,
-    state: AppState
-  ): AppState =
-    val columnChanged =
-      previousViewport.topLine != placedViewport.topLine || previousViewport.topVisualLine != placedViewport.topVisualLine
-    if !columnChanged then state
-    else
-      state.persisted.config.scaledColumnTransitionAnimation match
-        case None => state
-        case Some(animation) =>
-          val inFlight = state.runtime.motion.columnTransitions.get(bufferId).filterNot(_.isComplete)
-          val transition = inFlight match
-            case Some(existing) => existing.retarget
-            case None =>
-              val movedForward =
-                placedViewport.topLine > previousViewport.topLine ||
-                  (placedViewport.topLine == previousViewport.topLine &&
-                    placedViewport.topVisualLine > previousViewport.topVisualLine)
-              ColumnTransitionState.seeded(
-                steps = animation.steps,
-                curve = animation.curve,
-                direction = if movedForward then TransitionDirection.RightToLeft else TransitionDirection.LeftToRight,
-                previousTopLine = previousViewport.topLine,
-                previousTopVisualLine = previousViewport.topVisualLine
-              )
-          state.copy(runtime =
-            state.runtime.copy(motion =
-              state.runtime.motion
-                .copy(columnTransitions = state.runtime.motion.columnTransitions.updated(bufferId, transition))
-            )
-          )
+            case None => state
+    }
 
   def adjustForCursor(
     buffer: Buffer,

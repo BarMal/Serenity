@@ -2,22 +2,14 @@ package com.serenity.state.manager
 
 import java.awt.Color
 
-import com.serenity.animation.{
-  AnimatedCell,
-  AnimationOwner,
-  AnimationState,
-  CharacterKey,
-  EasingCurve,
-  TransitionDirection,
-  Tween
-}
+import com.serenity.animation.{AnimatedCell, AnimationOwner, AnimationState, CharacterKey, EasingCurve, Tween}
 import com.serenity.command.CommandRunner
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, MotionAccessibility, MotionFamily}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.PanelStateReducer
-import com.serenity.ui.layout.{LayoutRect, PanelContent, PanelPosition, PixelPoint}
+import com.serenity.ui.layout.{LayoutRect, PanelContent, PanelPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -48,28 +40,10 @@ class MotionCancellationSpec extends AnyFlatSpec with Matchers:
       phaseTick = 0
     )
 
-  private def geometry: PanelGeometryState =
-    PanelGeometryState(Tween(LayoutRect(0, 0, 20, 10), LayoutRect(0, 0, 0, 10), EasingCurve.Linear, 4))
-
   /** Every cancellable motion family in flight at once, on an otherwise ordinary (valid) initial state. */
   private val inFlight: AppState =
-    val base = AppState.initial(AppConfig.default)
-    val cursor = Cursor(
-      CursorPosition(0, 0),
-      Some(CursorPosition(0, 0)),
-      glide = Some(Tween(PixelPoint(0, 0), PixelPoint(20, 0), EasingCurve.Linear, 4)),
-      selectionGeometry = Some(
-        SelectionGeometryState(
-          List(
-            SelectionLineGeometry(
-              SelectionLineKey(0, 0),
-              Tween(LayoutRect(0, 0, 0, 1), LayoutRect(0, 0, 4, 1), EasingCurve.Linear, 4)
-            )
-          )
-        )
-      )
-    )
-    val buffer = Buffer.fromString(bufferId, "hello world").copy(editing = EditingState.fromCursors(List(cursor)))
+    val base   = AppState.initial(AppConfig.default)
+    val buffer = Buffer.fromString(bufferId, "hello world")
     val surfaces = List(
       UiSurface(
         paletteGhost,
@@ -90,11 +64,7 @@ class MotionCancellationSpec extends AnyFlatSpec with Matchers:
           base.runtime.themeDiscovery.copy(transition = Some(ThemeTransition(base.persisted.theme, 0, 2))),
         motion = MotionState(
           surfaceAnimations =
-            Map(paletteId -> fadeFor(SurfacePhase.Visible), paletteGhost -> fadeFor(SurfacePhase.Exiting)),
-          columnTransitions = Map(
-            bufferId -> ColumnTransitionState.seeded(4, EasingCurve.Linear, TransitionDirection.LeftToRight, 0, 0)
-          ),
-          panelGeometry = Map(panelGhost -> geometry)
+            Map(paletteId -> fadeFor(SurfacePhase.Visible), paletteGhost -> fadeFor(SurfacePhase.Exiting))
         )
       )
     )
@@ -108,8 +78,6 @@ class MotionCancellationSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-
-  private def cursorsOf(state: AppState): List[Cursor] = state.persisted.buffers(bufferId).editing.cursors.toList
 
   private def ownersOf(animations: Map[BufferId, AnimationState]): Set[AnimationOwner] =
     animations(bufferId).animations.values.map(_.owner).toSet
@@ -143,8 +111,6 @@ class MotionCancellationSpec extends AnyFlatSpec with Matchers:
     cancelled.runtime.motion shouldBe MotionState()
     cancelled.runtime.uiSurfaces.map(_.id) should not contain paletteGhost
     cancelled.runtime.uiSurfaces.map(_.id) should not contain panelGhost
-    cursorsOf(cancelled).map(_.glide) shouldBe List(None)
-    cursorsOf(cancelled).map(_.selectionGeometry) shouldBe List(None)
     AppStateValidation.validated(cancelled).isRight shouldBe true
   }
 
@@ -195,38 +161,5 @@ class MotionCancellationSpec extends AnyFlatSpec with Matchers:
 
     cancelled.runtime.themeDiscovery.transition shouldBe None
     ownersOf(cancellation.cancelBufferAnimations(bufferAnimations)) shouldBe Set(AnimationOwner.EditorText)
-    AppStateValidation.validated(cancelled).isRight shouldBe true
-  }
-
-  "cancelling the Cursor family" should "clear every cursor glide, leave selection geometry, and still validate" in {
-    val cancelled = MotionCancellation.Families(List(MotionFamily.Cursor)).cancelState(inFlight)
-
-    cursorsOf(cancelled).map(_.glide) shouldBe List(None)
-    cursorsOf(cancelled).map(_.selectionGeometry.isDefined) shouldBe List(true)
-    AppStateValidation.validated(cancelled).isRight shouldBe true
-  }
-
-  "cancelling the SelectionGeometry family" should "clear every selection geometry, leave glides, and validate" in {
-    val cancelled = MotionCancellation.Families(List(MotionFamily.SelectionGeometry)).cancelState(inFlight)
-
-    cursorsOf(cancelled).map(_.selectionGeometry) shouldBe List(None)
-    cursorsOf(cancelled).map(_.glide.isDefined) shouldBe List(true)
-    AppStateValidation.validated(cancelled).isRight shouldBe true
-  }
-
-  "cancelling the ColumnTransitions family" should "clear every column transition and still validate" in {
-    val cancelled = MotionCancellation.Families(List(MotionFamily.ColumnTransitions)).cancelState(inFlight)
-
-    cancelled.runtime.motion.columnTransitions shouldBe empty
-    cancelled.runtime.motion.panelGeometry should not be empty
-    AppStateValidation.validated(cancelled).isRight shouldBe true
-  }
-
-  "cancelling the PanelGeometry family" should "clear geometry and drop a ghost that existed only for it" in {
-    val cancelled = MotionCancellation.Families(List(MotionFamily.PanelGeometry)).cancelState(inFlight)
-
-    cancelled.runtime.motion.panelGeometry shouldBe empty
-    cancelled.runtime.uiSurfaces.map(_.id) should not contain panelGhost
-    cancelled.runtime.uiSurfaces.map(_.id) should contain(paletteGhost)
     AppStateValidation.validated(cancelled).isRight shouldBe true
   }
