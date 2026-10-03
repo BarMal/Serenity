@@ -195,18 +195,23 @@ object AppRuntime:
         translatorCache    <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
         currentStateForDiagnostics = stateManager.getCurrentState.map(Some(_))
         checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, requestFastRender))
-        inputFunnel = AppRuntimeRenderLoops.inputEventPhase(
-          stateManager,
-          inputRouter,
-          systemClipboard,
-          checkResizeAndHandle,
-          cursorVisible,
-          emitDamage,
-          translatorCache,
-          runtime.frameTimings
-        )
         firstInput <- Deferred[IO, Unit]
-        inputLoop = runInputLoop(stateManager, inputHandler, inputFunnel, firstInput.complete(()).void)
+        inputFunnel = AppRuntimeRenderLoops.inputBatchPhase(
+          AppRuntimeRenderLoops.InputBatchContext(
+            stateManager,
+            inputRouter,
+            systemClipboard,
+            checkResizeAndHandle,
+            cursorVisible,
+            emitDamage,
+            translatorCache,
+            runtime.frameTimings,
+            onUserInput = firstInput.complete(()).void,
+            observeBatch = typingQuietTimer.onCommit,
+            logEvent = (event, focus) => AppRuntimeLogging.logSelectiveEvents(event, focus, logger)
+          )
+        )
+        inputLoop = runInputLoop(stateManager, inputHandler.inputBatches.through(inputFunnel))
         _ <-
           Resource.make(inputLoop.start)(_.cancel).use { inputFiber =>
             runtime.renderFull(initialState, true, None, Damage.Everything, stateManager.renderCaches) >>
@@ -384,25 +389,12 @@ object AppRuntime:
           .background
           .map(_ => ())
 
-  private def runInputLoop(
-    stateManager: StateManager,
-    inputHandler: InputHandler[IO],
-    inputFunnel: Stream[IO, Event] => Stream[IO, Unit],
-    onUserInput: IO[Unit]
-  )(using logger: Logger[IO]): IO[Unit] =
+  private def runInputLoop(stateManager: StateManager, inputLoop: Stream[IO, Unit])(using
+    logger: Logger[IO]
+  ): IO[Unit] =
     val quitSignal = stateManager.runtimeLifecycle.awaitQuit.attempt
     AppRuntimeRenderLoops.superviseLoop("input loop", stateManager.runtimeLifecycle.forceQuit)(
-      inputHandler.eventStream
-        .evalTap(event => IO.whenA(StartupWarmUp.interruptsWarmUp(event))(onUserInput))
-        .evalTap(event =>
-          stateManager.getCurrentState.flatMap(s =>
-            AppRuntimeLogging.logSelectiveEvents(event, s.persisted.focus, logger)
-          )
-        )
-        .through(inputFunnel)
-        .interruptWhen(quitSignal)
-        .compile
-        .drain
+      inputLoop.interruptWhen(quitSignal).compile.drain
     )
 
   private[serenity] def coordinateExternalQuit(

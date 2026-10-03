@@ -6,11 +6,14 @@ import cats.effect.std.Supervisor
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.config.{AppConfig, StatusLinePlacement}
-import com.serenity.keystroke.events.InsertChar
+import com.serenity.input.{InputRouter, PendingInput, SystemClipboard}
+import com.serenity.keystroke.events.{Event, InsertChar}
+import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Damage, TypingActivity}
 import com.serenity.testkit.VirtualTime.runVirtual
+import fs2.{Chunk, Stream}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -153,4 +156,46 @@ class TypingQuietTimerSpec extends AnyFlatSpec with Matchers:
 
     val (during, after, _) = emitted
     after should be > during
+  }
+
+  it should "end a typing burst applied as an input batch, whose commits the commit observer never sees" in {
+    val (during, after, observed) =
+      Supervisor[IO](await = false)
+        .use { supervisor =>
+          for
+            sm <- StateManager(
+              LoggerFactory[IO].getLogger(using LoggerName("TypingQuietTimerSpec")),
+              initialConfig = AppConfig.default
+            )
+            timer          <- TypingQuietTimer.create(supervisor, TypingQuietTimer.expireIn(sm))
+            observedByWake <- Ref.of[IO, Int](0)
+            _              <- sm.runtimeLifecycle.observeCommits((_, _) => observedByWake.update(_ + 1))
+            router         <- InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default))
+            cursorVisible  <- Ref.of[IO, Boolean](true)
+            cache          <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
+            context = AppRuntimeRenderLoops.InputBatchContext(
+              sm,
+              router,
+              SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit),
+              IO.unit,
+              cursorVisible,
+              _ => IO.unit,
+              cache,
+              com.serenity.diagnostics.FrameTimings(),
+              observeBatch = timer.onCommit
+            )
+            _ <- Stream
+              .emit(Chunk.from(List('a', 'b', 'c').map(char => PendingInput.Ready(InsertChar(char)))))
+              .through(AppRuntimeRenderLoops.inputBatchPhase(context))
+              .compile
+              .drain
+            during <- sm.getCurrentState.map(_.runtime.typingActivity.isActive)
+            _      <- IO.sleep(TypingActivity.QuietWindow + 500.millis)
+            after  <- sm.getCurrentState.map(_.runtime.typingActivity.isActive)
+            seen   <- observedByWake.get
+          yield (during, after, seen)
+        }
+        .unsafeRunSync()
+
+    (during, after, observed) shouldBe (true, false, 1)
   }

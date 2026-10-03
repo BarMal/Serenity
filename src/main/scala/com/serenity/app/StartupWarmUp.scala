@@ -10,6 +10,7 @@ import cats.effect.{Deferred, IO, Resource}
 import cats.syntax.all.*
 import com.serenity.config.AppConfig
 import com.serenity.frontend.FrontendRuntime
+import com.serenity.input.PendingInput
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
@@ -54,6 +55,11 @@ object StartupWarmUp:
       PageDown,
       PageUp
     )
+
+  def pendingInputInterruptsWarmUp(input: PendingInput): Boolean =
+    input match
+      case PendingInput.Keystroke(_) => true
+      case PendingInput.Ready(event) => interruptsWarmUp(event)
 
   /** Pointer hovering and system notifications are not someone starting to work. */
   def interruptsWarmUp(event: Event): Boolean =

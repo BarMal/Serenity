@@ -5,14 +5,15 @@ import java.awt.Color
 import scala.concurrent.duration.*
 
 import cats.effect.*
+import cats.syntax.foldable.*
 import com.serenity.config.AppConfig
 import com.serenity.diagnostics.{FrameTimings, Trace}
 import com.serenity.input.*
 import com.serenity.keystroke.events.Event
 import com.serenity.state.manager.*
 import com.serenity.state.models.{AppState, Damage}
-import fs2.Stream
 import fs2.concurrent.SignallingRef
+import fs2.{Chunk, Stream}
 import org.typelevel.log4cats.Logger
 
 /** The render loop internals `AppRuntime.run` drives: the idle phase (cursor-only ticks while nothing changed), the
@@ -53,6 +54,7 @@ private[serenity] object AppRuntimeRenderLoops:
         )
       )
 
+  /** One event per batch, for callers holding events that are already translated. */
   private[serenity] def inputEventPhase(
     stateManager: StateEngine,
     inputRouter: InputRouter[IO, Event],
@@ -65,34 +67,116 @@ private[serenity] object AppRuntimeRenderLoops:
     ),
     frameTimings: FrameTimings = FrameTimings()
   )(using balance: com.serenity.rope.Balance): Stream[IO, Event] => Stream[IO, Unit] =
-    _.evalMap { event =>
-      for
-        before <- stateManager.getModel
-        _ <-
-          checkResizeBeforeInput(event, checkResizeAndHandle) >>
-            ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
-            IO(frameTimings.inputApplyStarted()) >>
-            stateManager.applyEvent(event) >>
-            IO(frameTimings.inputApplyFinished()) >>
-            ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
-            refreshFocusedInputTranslator(stateManager, inputRouter, translatorCache) >>
-            AppRuntime.resetCursorActivity(cursorVisible)
-        after <- stateManager.getModel
-        _ <- emitDamage(
-          DamageProducer.forTransition(before.app, after.app)
+    _.map(event => Chunk.singleton(PendingInput.Ready(event))).through(
+      inputBatchPhase(
+        InputBatchContext(
+          stateManager,
+          inputRouter,
+          systemClipboard,
+          checkResizeAndHandle,
+          cursorVisible,
+          emitDamage,
+          translatorCache,
+          frameTimings
         )
-      yield ()
-    }.drain
+      )
+    )
+
+  /** What the input loop needs to apply a batch. `onUserInput` runs as a batch containing real input starts;
+    * `observeBatch` is told each dispatch's states either side, since the commit observer never sees the commits inside
+    * a batch; `logEvent` sees every applied event with the focus its dispatch left.
+    */
+  final private[serenity] case class InputBatchContext(
+      stateManager: StateEngine,
+      inputRouter: InputRouter[IO, Event],
+      systemClipboard: SystemClipboard[IO],
+      checkResizeAndHandle: IO[Unit],
+      cursorVisible: Ref[IO, Boolean],
+      emitDamage: Damage => IO[Unit],
+      translatorCache: Ref[IO, Option[FocusedTranslatorCacheEntry]],
+      frameTimings: FrameTimings,
+      onUserInput: IO[Unit] = IO.unit,
+      observeBatch: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit,
+      logEvent: (Event, com.serenity.state.models.Focus) => IO[Unit] = (_, _) => IO.unit
+  )
+
+  /** Applies each batch in as few dispatches as its clipboard events allow, and reports its damage once. */
+  private[serenity] def inputBatchPhase(
+    context: InputBatchContext
+  )(using balance: com.serenity.rope.Balance): Stream[IO, Chunk[PendingInput]] => Stream[IO, Unit] =
+    _.evalMap(batch => applyInputBatch(context, batch.toList)).drain
+
+  private def applyInputBatch(context: InputBatchContext, inputs: List[PendingInput])(using
+    com.serenity.rope.Balance
+  ): IO[Unit] =
+    for
+      _           <- IO.whenA(inputs.exists(StartupWarmUp.pendingInputInterruptsWarmUp))(context.onUserInput)
+      _           <- IO.whenA(inputs.exists(isPointerInput))(context.checkResizeAndHandle)
+      _           <- AppRuntime.resetCursorActivity(context.cursorVisible)
+      config      <- context.stateManager.getCurrentState.map(_.persisted.config)
+      translators <- cachedTranslators(config, context.translatorCache)
+      steps = EventBatchSteps[PendingInput](
+        decode = decodeInput(config, translators),
+        isolate = ClipboardEventSync.touchesSystemClipboard,
+        slice = AppRuntime.fastFrameInterval(config.surfaceConfig.renderFpsTarget) / 2
+      )
+      _ <- dispatchInputs(context, steps, inputs)
+      _ <- refreshFocusedInputTranslator(context.stateManager, context.inputRouter, context.translatorCache)
+    yield ()
+
+  /** Each dispatch's damage is published as soon as it lands, so the oldest input of a long batch shows in the next
+    * frame instead of waiting for the inputs queued behind it.
+    */
+  private def dispatchInputs(
+    context: InputBatchContext,
+    steps: EventBatchSteps[PendingInput],
+    inputs: List[PendingInput]
+  )(using com.serenity.rope.Balance): IO[Unit] =
+    for
+      _     <- IO(context.frameTimings.inputApplyStarted())
+      batch <- context.stateManager.applyEventBatch(inputs, steps)
+      _     <- IO(context.frameTimings.inputApplyFinished())
+      _     <- batch.applied.traverse_(context.logEvent(_, batch.after.app.persisted.focus))
+      _     <- context.observeBatch(batch.before.app, batch.after.app)
+      _ <- IO.whenA(batch.applied.nonEmpty)(
+        context.emitDamage(DamageProducer.forTransition(batch.before.app, batch.after.app))
+      )
+      _ <- batch.isolated.fold(IO.unit)(applyIsolated(context, steps, _))
+      _ <- IO.whenA(batch.remaining.nonEmpty)(dispatchInputs(context, steps, batch.remaining))
+    yield ()
+
+  private def applyIsolated(context: InputBatchContext, steps: EventBatchSteps[PendingInput], event: Event)(using
+    com.serenity.rope.Balance
+  ): IO[Unit] =
+    ClipboardEventSync.beforeEvent(event, context.stateManager, context.systemClipboard) >>
+      dispatchInputs(context, steps.copy(isolate = _ => false), List(PendingInput.Ready(event))) >>
+      ClipboardEventSync.afterEvent(event, context.stateManager, context.systemClipboard)
+
+  private def isPointerInput(input: PendingInput): Boolean =
+    input match
+      case PendingInput.Ready(_: com.serenity.keystroke.events.MouseInputEvent) => true
+      case _                                                                    => false
+
+  /** A keystroke is translated against the state the events ahead of it in the batch left, exactly as the focused
+    * translator would have been refreshed between them. Only a batch that changes the config itself pays for a fresh
+    * translator set.
+    */
+  private def decodeInput(config: AppConfig, translators: FocusedInputTranslator.TranslatorSet)(
+    state: AppState,
+    input: PendingInput
+  ): Event =
+    input match
+      case PendingInput.Ready(event) => event
+      case PendingInput.Keystroke(info) =>
+        val current =
+          if state.persisted.config == config then translators
+          else FocusedInputTranslator.TranslatorSet.forConfig(state.persisted.config)
+        FocusedInputTranslator.forState(state, current).translate(info)
 
   /** Keyed on `AppConfig` identity (structural equality): the focused-translator set changes only when the config does,
     * far less often than every keystroke/mouse-move that flows through `refreshFocusedInputTranslator` (issue #1409).
     */
   private[serenity] type FocusedTranslatorCacheEntry = (AppConfig, FocusedInputTranslator.TranslatorSet)
-
-  private def checkResizeBeforeInput(event: Event, checkResizeAndHandle: IO[Unit]): IO[Unit] =
-    event match
-      case _: com.serenity.keystroke.events.MouseInputEvent => checkResizeAndHandle
-      case _                                                => IO.unit
 
   private def refreshFocusedInputTranslator(
     stateManager: StateReader,
@@ -100,16 +184,21 @@ private[serenity] object AppRuntimeRenderLoops:
     translatorCache: Ref[IO, Option[FocusedTranslatorCacheEntry]]
   ): IO[Unit] =
     stateManager.getCurrentState.flatMap { state =>
-      val config = state.persisted.config
-      translatorCache.get
-        .flatMap {
-          case Some((cachedConfig, cachedTranslators)) if cachedConfig == config =>
-            IO.pure(cachedTranslators)
-          case _ =>
-            val translators = FocusedInputTranslator.TranslatorSet.forConfig(config)
-            translatorCache.set(Some(config -> translators)).as(translators)
-        }
-        .flatMap(translators => inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state, translators)))
+      cachedTranslators(state.persisted.config, translatorCache).flatMap(translators =>
+        inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state, translators))
+      )
+    }
+
+  private def cachedTranslators(
+    config: AppConfig,
+    translatorCache: Ref[IO, Option[FocusedTranslatorCacheEntry]]
+  ): IO[FocusedInputTranslator.TranslatorSet] =
+    translatorCache.get.flatMap {
+      case Some((cachedConfig, cachedTranslators)) if cachedConfig == config =>
+        IO.pure(cachedTranslators)
+      case _ =>
+        val translators = FocusedInputTranslator.TranslatorSet.forConfig(config)
+        translatorCache.set(Some(config -> translators)).as(translators)
     }
 
   /** One fast frame: waits out the frame deadline, paints the damage accumulated so far, and ends. The loop returns to

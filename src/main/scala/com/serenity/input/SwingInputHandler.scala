@@ -10,7 +10,7 @@ import com.serenity.diagnostics.FrameTimings
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, Modifier}
 import com.serenity.ui.layout.CellMetrics
-import fs2.Stream
+import fs2.{Chunk, Stream}
 
 /** Bridges AWT keyboard and mouse events on a Swing component to the input pipeline.
   *
@@ -246,6 +246,39 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
         inputQueue.poll()
       }
     )(input => Option(input).getOrElse(QueuedShutdown))
+
+  /** Parks on the blocking pool only when nothing is queued yet: input that piles up while the previous batch was being
+    * applied is taken without that thread hop.
+    */
+  override def inputBatches: Stream[F, Chunk[PendingInput]] =
+    Stream.eval(Sync[F].delay(shutdownFlag.get())).flatMap {
+      case true => Stream.empty
+      case false =>
+        Stream
+          .repeatEval(takeBatch)
+          .takeThrough(batch => !batch.contains(QueuedShutdown))
+          .evalMap(batch => Sync[F].delay(Chunk.from(batch.flatMap(pendingInput))))
+          .filter(_.nonEmpty)
+    }
+
+  private def takeBatch: F[Vector[QueuedInput]] =
+    Sync[F].flatMap(Sync[F].delay(drainAvailable(Vector.empty))) { available =>
+      if available.nonEmpty then Sync[F].pure(available)
+      else Sync[F].flatMap(takeInput)(first => Sync[F].delay(drainAvailable(Vector(first))))
+    }
+
+  @annotation.tailrec
+  private def drainAvailable(taken: Vector[QueuedInput]): Vector[QueuedInput] =
+    if taken.lastOption.contains(QueuedShutdown) || !inputAvailable.tryAcquire() then taken
+    else drainAvailable(taken :+ Option(inputQueue.poll()).getOrElse(QueuedShutdown))
+
+  private def pendingInput(input: QueuedInput): Option[PendingInput] =
+    input match
+      case QueuedKey(info)      => Some(PendingInput.Keystroke(info))
+      case QueuedMouse(event)   => Some(PendingInput.Ready(event))
+      case QueuedRaw(event)     => Some(PendingInput.Ready(event))
+      case QueuedMovement(slot) => slot.claim.map(PendingInput.Ready(_))
+      case QueuedShutdown       => None
 
   /** Cell coordinates and shared fields (pixel position, shift state) common to every mouse event, converted from a raw
     * AWT MouseEvent via the current CellMetrics.

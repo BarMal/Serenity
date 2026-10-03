@@ -180,7 +180,7 @@ final private[manager] class StateManagerEventPipeline(
   def dispatch(decision: cats.effect.IO[Unit]): cats.effect.IO[Unit] =
     operations.dispatch(decision >> drainPendingOperations)
 
-  private def applyEventOnDispatcher(event: Event): cats.effect.IO[Unit] =
+  private[manager] def applyEventOnDispatcher(event: Event): cats.effect.IO[Unit] =
     given org.typelevel.log4cats.Logger[cats.effect.IO] = logger
     def eventLabel                                      = s"event.${event.getClass.getSimpleName}"
     Trace.timed(eventLabel) {

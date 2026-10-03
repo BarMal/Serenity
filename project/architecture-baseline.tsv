@@ -74,8 +74,8 @@ main/scala/com/serenity/ui/renderer/RendererEntryPoints.scala	forbidden mutable 
 main/scala/com/serenity/ui/renderer/RendererFramePlanner.scala	forbidden mutable state at line 233: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/RendererFramePlanner.scala	forbidden mutable state at line 288: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/tui/MarkdownPreviewWindow.scala	forbidden mutable state at line 71: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
-main/scala/com/serenity/ui/tui/TerminalInputHandler.scala	forbidden mutable state at line 175: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
-main/scala/com/serenity/ui/tui/TerminalInputHandler.scala	forbidden mutable state at line 305: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/tui/TerminalInputHandler.scala	forbidden mutable state at line 196: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
+main/scala/com/serenity/ui/tui/TerminalInputHandler.scala	forbidden mutable state at line 326: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/tui/TuiRuntime.scala	forbidden mutable state at line 79: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 test/scala/com/serenity/FocusedInputTranslatorSpec.scala	file length	639
 test/scala/com/serenity/GutterAndLineNumbersSpec.scala	file length	693
