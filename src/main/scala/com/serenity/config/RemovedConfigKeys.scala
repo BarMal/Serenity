@@ -23,7 +23,9 @@ object RemovedConfigKeys:
     "ui.corner.radius",
     "ui_corner_radius",
     "ui.visual_flair",
-    "visual.flair.level"
+    "visual.flair.level",
+    "window.translucent",
+    "window_translucent"
   )
 
   private val prefixes: List[String] = List("ui.companion_sprite.", "companion.sprite.")

@@ -41,9 +41,7 @@ class SwingWindowPresentSpec extends AnyFlatSpec with Matchers:
   "SwingWindow.paintPresentedFrame" should "copy only the clipped part of the base image" in {
     val base   = filled(20, 20, Color.RED)
     val target = filled(20, 20, Color.BLUE)
-    paintInto(target, new Rectangle(5, 5, 4, 4)) { g =>
-      SwingWindow.paintPresentedFrame(g, Some(base), Nil, 20, 20, transparent = false)
-    }
+    paintInto(target, new Rectangle(5, 5, 4, 4))(g => SwingWindow.paintPresentedFrame(g, Some(base), Nil, 20, 20))
 
     new Color(target.getRGB(6, 6), true) shouldBe Color.RED
     new Color(target.getRGB(1, 1), true) shouldBe Color.BLUE
@@ -58,9 +56,7 @@ class SwingWindowPresentSpec extends AnyFlatSpec with Matchers:
       bg.fillRect(20, 20, 20, 20)
     finally bg.dispose()
     val target = filled(20, 20, Color.BLUE)
-    paintInto(target, new Rectangle(0, 0, 20, 20)) { g =>
-      SwingWindow.paintPresentedFrame(g, Some(base), Nil, 20, 20, transparent = false)
-    }
+    paintInto(target, new Rectangle(0, 0, 20, 20))(g => SwingWindow.paintPresentedFrame(g, Some(base), Nil, 20, 20))
 
     new Color(target.getRGB(15, 15), true) shouldBe Color.GREEN
     new Color(target.getRGB(5, 5), true) shouldBe Color.BLACK
@@ -73,9 +69,7 @@ class SwingWindowPresentSpec extends AnyFlatSpec with Matchers:
       SwingWindow.CaretPaint(new Rectangle(2, 2, 2, 6), Color.WHITE),
       SwingWindow.CaretPaint(new Rectangle(10, 2, 2, 6), new Color(255, 255, 255, 128))
     )
-    paintInto(target, new Rectangle(0, 0, 20, 20)) { g =>
-      SwingWindow.paintPresentedFrame(g, Some(base), carets, 20, 20, transparent = false)
-    }
+    paintInto(target, new Rectangle(0, 0, 20, 20))(g => SwingWindow.paintPresentedFrame(g, Some(base), carets, 20, 20))
 
     new Color(target.getRGB(3, 4), true) shouldBe Color.WHITE
     val blended = new Color(target.getRGB(11, 4), true)
@@ -85,12 +79,18 @@ class SwingWindowPresentSpec extends AnyFlatSpec with Matchers:
 
   it should "keep the background fill inside the clip" in {
     val target = filled(20, 20, Color.RED)
-    paintInto(target, new Rectangle(0, 0, 5, 5)) { g =>
-      SwingWindow.paintPresentedFrame(g, None, Nil, 20, 20, transparent = false)
-    }
+    paintInto(target, new Rectangle(0, 0, 5, 5))(g => SwingWindow.paintPresentedFrame(g, None, Nil, 20, 20))
 
     new Color(target.getRGB(2, 2), true) shouldBe Color.BLACK
     new Color(target.getRGB(10, 10), true) shouldBe Color.RED
+  }
+
+  it should "present a frame with a fully transparent background as opaque black" in {
+    val target = filled(20, 20, Color.RED)
+    val base   = filled(20, 20, new Color(0, 0, 0, 0))
+    paintInto(target, new Rectangle(0, 0, 20, 20))(g => SwingWindow.paintPresentedFrame(g, Some(base), Nil, 20, 20))
+
+    new Color(target.getRGB(10, 10), true) shouldBe Color.BLACK
   }
 
   "SwingWindow.ReusableImagePool" should "not hand back an image the EDT is still painting" in {

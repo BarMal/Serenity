@@ -122,8 +122,7 @@ object Main extends IOApp:
           initialDisplay.uiMetrics,
           appConfig.windowChromeMode,
           appConfig.preferredWindowSize,
-          frameTimings,
-          appConfig.windowTranslucent
+          frameTimings
         ),
         PaintExecutionContext.resource
       ).tupled

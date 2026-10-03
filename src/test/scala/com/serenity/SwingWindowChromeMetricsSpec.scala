@@ -1,7 +1,7 @@
 package com.serenity
 
 import java.awt.image.BufferedImage
-import java.awt.{AlphaComposite, Color, Dimension, Graphics}
+import java.awt.{Color, Dimension}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import javax.accessibility.AccessibleContext
 import javax.swing.JComponent
@@ -30,112 +30,15 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     scaled.titleBarHeight shouldBe base.titleBarHeight * 2
     scaled.buttonWidth shouldBe base.buttonWidth * 2
     scaled.margin shouldBe base.margin * 2
-    scaled.cornerArc shouldBe base.cornerArc * 2
     scaled.titleFontSize shouldBe base.titleFontSize * 2
   }
 
-  "SwingWindow" should "use per-pixel translucency for non-maximized custom chrome when supported" in {
-    SwingWindow.shouldUsePerPixelRoundedCorners(
-      usesCustomChrome = true,
-      maximized = false,
-      perPixelTranslucencySupported = true
-    ) shouldBe true
-
-    SwingWindow.shouldUsePerPixelRoundedCorners(
-      usesCustomChrome = true,
-      maximized = true,
-      perPixelTranslucencySupported = true
-    ) shouldBe false
-
-    SwingWindow.shouldUsePerPixelRoundedCorners(
-      usesCustomChrome = true,
-      maximized = false,
-      perPixelTranslucencySupported = false
-    ) shouldBe false
-  }
-
-  it should "use rounded custom chrome only for Auto mode on Linux" in {
+  "SwingWindow" should "use custom chrome only for Auto mode on Linux" in {
     SwingWindow.shouldUseCustomChrome(WindowChromeMode.Auto, "Linux", Map.empty) shouldBe true
     SwingWindow.shouldUseCustomChrome(WindowChromeMode.Auto, "Windows 11", Map.empty) shouldBe false
     SwingWindow.shouldUseCustomChrome(WindowChromeMode.Native, "Linux", Map.empty) shouldBe false
     SwingWindow.shouldUseCustomChrome(WindowChromeMode.NativeThemed, "Linux", Map.empty) shouldBe false
     SwingWindow.shouldUseCustomChrome(WindowChromeMode.Custom, "Linux", Map.empty) shouldBe true
-  }
-
-  it should "refresh the per-pixel corner mask when chrome metrics change" in {
-    val base   = SwingWindow.ChromeMetrics.fromCellMetrics(CellMetrics(charWidth = 8, lineHeight = 16, ascent = 13))
-    val scaled = SwingWindow.ChromeMetrics.fromCellMetrics(CellMetrics(charWidth = 16, lineHeight = 32, ascent = 26))
-
-    val before = SwingWindow.roundedCornerMask(
-      usesCustomChrome = true,
-      maximized = false,
-      perPixelTranslucencySupported = true,
-      cornerArc = base.cornerArc
-    )
-    val after = SwingWindow.roundedCornerMask(
-      usesCustomChrome = true,
-      maximized = false,
-      perPixelTranslucencySupported = true,
-      cornerArc = scaled.cornerArc
-    )
-
-    SwingWindow.shouldRefreshRoundedCornerMask(before, after) shouldBe true
-  }
-
-  it should "coalesce burst resize shape updates until the queued update runs" in {
-    val updates   = new AtomicInteger(0)
-    val queued    = new java.util.concurrent.ConcurrentLinkedQueue[Runnable]()
-    val coalescer = new SwingWindow.CoalescedEdtUpdate(() => updates.incrementAndGet())
-
-    coalescer.schedule(queued.add)
-    coalescer.schedule(queued.add)
-    coalescer.schedule(queued.add)
-
-    queued.size shouldBe 1
-    updates.get() shouldBe 0
-
-    queued.remove().run()
-    updates.get() shouldBe 1
-
-    coalescer.schedule(queued.add)
-    queued.size shouldBe 1
-  }
-
-  it should "antialias a per-pixel rounded-corner mask over the composed window contents" in {
-    val contents = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB)
-    val graphics = contents.createGraphics()
-    try
-      graphics.setColor(new Color(0x22, 0x44, 0x66))
-      graphics.fillRect(0, 0, contents.getWidth, contents.getHeight)
-    finally graphics.dispose()
-
-    val masked = composedCorners(new SwingWindow.RoundedCornerMaskBufferCache().acquire(32, 32, cornerArc = 16)) {
-      _.drawImage(contents, 0, 0, null)
-    }
-    val alphas =
-      for
-        x <- 0 until masked.getWidth
-        y <- 0 until masked.getHeight
-      yield (masked.getRGB(x, y) >>> 24) & 0xff
-
-    ((masked.getRGB(0, 0) >>> 24) & 0xff) shouldBe 0
-    ((masked.getRGB(16, 0) >>> 24) & 0xff) shouldBe 255
-    alphas.exists(alpha => alpha > 0 && alpha < 255) shouldBe true
-    val topCornerEdgeAlpha = (masked.getRGB(4, 0) >>> 24) & 0xff
-    topCornerEdgeAlpha should be > 0
-    topCornerEdgeAlpha should be < 40
-  }
-
-  "SwingWindow.RoundedCornerMaskBufferCache" should "reuse buffers until their size or corner arc changes" in {
-    val cache        = new SwingWindow.RoundedCornerMaskBufferCache
-    val initial      = cache.acquire(width = 640, height = 480, cornerArc = 12)
-    val sameGeometry = cache.acquire(width = 640, height = 480, cornerArc = 12)
-    val resized      = cache.acquire(width = 800, height = 480, cornerArc = 12)
-    val resizedArc   = cache.acquire(width = 800, height = 480, cornerArc = 24)
-
-    sameGeometry should be theSameInstanceAs initial
-    resized should not be theSameInstanceAs(initial)
-    resizedArc should not be theSameInstanceAs(resized)
   }
 
   "SwingWindow.ReusableImagePool" should "reuse an unpublished image and alternate after publication" in {
@@ -178,22 +81,6 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     val second = pool.acquire(width = 64, height = 48, imageType = BufferedImage.TYPE_INT_ARGB)
 
     second should not be theSameInstanceAs(first)
-  }
-
-  it should "clear prior frame pixels before masking a reused rounded buffer" in {
-    val buffers = new SwingWindow.RoundedCornerMaskBufferCache().acquire(width = 32, height = 32, cornerArc = 16)
-
-    composedCorners(buffers) { graphics =>
-      graphics.setColor(Color.RED)
-      graphics.fillRect(0, 0, 32, 32)
-    }
-    val refreshed = composedCorners(buffers) { graphics =>
-      graphics.setColor(Color.BLUE)
-      graphics.fillRect(16, 1, 1, 1)
-    }
-
-    ((refreshed.getRGB(16, 16) >>> 24) & 0xff) shouldBe 0
-    refreshed.getRGB(16, 1) shouldBe Color.BLUE.getRGB
   }
 
   it should "derive viewport size from the live canvas size when available" in {
@@ -526,15 +413,5 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
       }
     }
   }
-
-  /** Every corner tile of `buffers`, rendered and laid back into a window-sized image. */
-  private def composedCorners(buffers: SwingWindow.RoundedCornerMaskBuffers)(paint: Graphics => Unit): BufferedImage =
-    val composed = new BufferedImage(buffers.width, buffers.height, BufferedImage.TYPE_INT_ARGB)
-    val g        = composed.createGraphics()
-    try
-      g.setComposite(AlphaComposite.Src)
-      buffers.corners.foreach(tile => g.drawImage(buffers.render(tile, paint), tile.bounds.x, tile.bounds.y, null))
-    finally g.dispose()
-    composed
 
 end SwingWindowChromeMetricsSpec
