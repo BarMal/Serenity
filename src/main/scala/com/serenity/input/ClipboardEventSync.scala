@@ -6,6 +6,12 @@ import com.serenity.state.manager.{StateReader, StateUpdater}
 
 object ClipboardEventSync:
 
+  /** Events with work on either side of their application: [[beforeEvent]] and [[afterEvent]] must run around them. */
+  def touchesSystemClipboard(event: Event): Boolean =
+    event match
+      case Paste | Copy | Cut => true
+      case _                  => false
+
   def beforeEvent(
     event: Event,
     stateManager: StateUpdater,

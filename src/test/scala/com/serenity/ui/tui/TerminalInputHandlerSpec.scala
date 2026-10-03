@@ -9,7 +9,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.AppConfig
-import com.serenity.input.{InProcessClipboard, InputRouter, SystemClipboard}
+import com.serenity.input.{InProcessClipboard, InputRouter, PendingInput, SystemClipboard}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
@@ -142,6 +142,21 @@ class TerminalInputHandlerSpec extends AnyFlatSpec with Matchers:
         yield events
       )
     events shouldBe List(MouseMove(col = 9, row = 9, shiftDown = false))
+  }
+
+  "keystrokes decoded while the consumer was busy" should "arrive as one untranslated batch, in order" in {
+    val batches = runVirtual(
+      for
+        (handler, _) <- handlerFor(bytes("ab"))
+        _            <- IO.sleep(200.millis)
+        batches      <- handler.inputBatches.take(1).compile.toList
+      yield batches.map(_.toList)
+    )
+    batches.flatten.take(2) shouldBe List(
+      PendingInput.Keystroke(KeyStrokeInfo(InputKey.Character, Some('a'), Set.empty)),
+      PendingInput.Keystroke(KeyStrokeInfo(InputKey.Character, Some('b'), Set.empty))
+    )
+    batches should have size 1
   }
 
   "a bracketed paste" should "write the pasted text to the clipboard and emit a single Paste event, not individual keystrokes" in {

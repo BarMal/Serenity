@@ -48,7 +48,14 @@ trait StateUpdater:
   * `StateUpdater`); `StateEngine` names their union so the hot core is a single first-class type rather than an
   * anonymous intersection. This is the record-of-records epic's one deliberate hot-core exception.
   */
-trait StateEngine extends StateReader, StateUpdater, EventApplier
+trait StateEngine extends StateReader, StateUpdater, EventApplier:
+
+  /** Applies `inputs` in order and reports the models either side of them. This default dispatches each event on its
+    * own; `StateManager` applies the whole batch in one dispatch whose commits the commit observer never sees, so the
+    * caller diffs `before` and `after` once instead.
+    */
+  def applyEventBatch[A](inputs: List[A], steps: EventBatchSteps[A]): IO[EventBatch[A]] =
+    EventBatch.applying(inputs, steps, getModel, applyEvent)
 
 /** Owns application shutdown and periodic session persistence.
   *
@@ -308,3 +315,6 @@ object StateManager:
     )
 
     export composition.*
+
+    override def applyEventBatch[A](inputs: List[A], steps: EventBatchSteps[A]): IO[EventBatch[A]] =
+      composition.dispatchEventBatch(inputs, steps)

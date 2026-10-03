@@ -289,6 +289,19 @@ private[manager] class StateManagerComposition(
     modelCommit.currentState.flatMap(state => effects.interpretCommand(command, state)) >> drainPendingOperations >>
       operations.awaitEffects
 
+  /** The whole batch is one dispatch, so no other writer lands between its events. */
+  private[manager] def dispatchEventBatch[A](inputs: List[A], steps: EventBatchSteps[A]): IO[EventBatch[A]] =
+    operations.dispatch(
+      operations.unobserved(
+        EventBatch.applying(
+          inputs,
+          steps,
+          modelCommit.model,
+          events.applyEventOnDispatcher
+        )
+      )
+    )
+
   private def drainPendingOperations: IO[Unit] =
     operations.takeOperations.flatMap {
       case Nil => IO.unit
