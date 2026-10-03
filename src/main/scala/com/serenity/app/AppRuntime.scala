@@ -74,7 +74,7 @@ object AppRuntime:
   /** The idle loop's per-tick wait: the normal cursor idle cadence while the window is focused, or an indefinite,
     * wakeup-free wait otherwise -- the mechanism that actually stops idle wakeups, rather than merely skipping the
     * render they'd otherwise trigger. Two things can make focused waiting indefinite instead of cadenced:
-    * `cursorIdleInterval` returning `None` (motion disabled, or #1170's TUI-blink caret delegation --
+    * `cursorIdleInterval` returning `None` (#1170's TUI-blink caret delegation --
     * [[com.serenity.frontend.Frontend.cursorIdleInterval]]), racing here against [[Stream.interruptWhen]]'s
     * `fastModeSignal` in [[idleRenderPhase]] so a real input event still wakes it immediately -- and losing focus
     * entirely, which waits on `windowFocused` turning true again instead.

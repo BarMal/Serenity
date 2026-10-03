@@ -1,6 +1,5 @@
 package com.serenity.command
 
-import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.*
 import com.serenity.keystroke.events.Direction
 import com.serenity.project.ProjectTaskKind
@@ -207,25 +206,6 @@ enum FontIntent:
   case SetUiLigatures(enabled: Boolean)
   case ToggleLigatures
 
-/** Motion presets, transition speeds/kinds, and command-runner animation tuning. */
-enum MotionIntent:
-  case SetMotionPreset(preset: MotionPreset)
-  case SetMotionAccessibility(accessibility: MotionAccessibility)
-  case SetElementTransitionSpeedScale(scale: Double)
-  case SetEditorTextTransitionSpeedScale(scale: Double)
-  case SetCommandRunnerTransitionSpeedScale(scale: Double)
-  case SetUiTransitionSpeedScale(scale: Double)
-  case SetCursorTransitionSpeedScale(scale: Double)
-  case SetCommandRunnerAnimation(animation: Option[AnimationConfig])
-  case SetUiAnimation(animation: Option[AnimationConfig])
-  case SetCommandRunnerVisibleRows(rows: Option[Int])
-  case SetCommandRunnerItemGapRows(rows: Option[Double])
-  case SetCommandRunnerCursorGapRows(rows: Option[Double])
-  case SetEditorInsertionTransitionKind(kind: TransitionKind)
-  case SetCommandRunnerTransitionKind(kind: TransitionKind)
-  case SetPanelOpenTransitionKind(kind: TransitionKind)
-  case SetPanelCloseTransitionKind(kind: TransitionKind)
-
 /** Cursor rendering mode and its info-bar presentation. */
 enum CursorIntent:
   case SetCursorMode(mode: CursorMode)
@@ -303,15 +283,15 @@ enum GeneralSettingsIntent:
   case SaveConfig
   case SetRenderFpsTarget(target: RenderFpsTarget)
   case SetRenderDamageGranularity(granularity: RenderDamageGranularity)
-  case SetAnimationDuration(ms: Int)
-  case SetAnimationSteps(n: Int)
+  case SetCommandRunnerVisibleRows(rows: Option[Int])
+  case SetCommandRunnerItemGapRows(rows: Option[Double])
+  case SetCommandRunnerCursorGapRows(rows: Option[Double])
 
 /** The `Settings` family of [[CommandIntent]], split one level deeper than the other groups because it is by far the
   * largest (~85 cases) — mirrors the domain split already established on `AppConfig`.
   */
 enum SettingsIntent:
   case Font(intent: FontIntent)
-  case Motion(intent: MotionIntent)
   case Cursor(intent: CursorIntent)
   case StatusLine(intent: StatusLineIntent)
   case TextDisplay(intent: TextDisplayIntent)

@@ -9,9 +9,9 @@ import com.serenity.ui.presets.UiPreset
 /** Builds the settings tree from schema rows and current option selections.
   *
   * The tree is cut by the task someone is doing, not by where a value happens to live in `AppConfig`: Workspace (what
-  * am I working on), Editor (what the text area shows), Typography, Look, Motion, Language Tools and Keys. Each group
-  * that has knobs nobody needs day to day keeps them in one nested "Advanced" leaf rather than spreading them across
-  * the top level.
+  * am I working on), Editor (what the text area shows), Typography, Look, Language Tools and Keys. Each group that has
+  * knobs nobody needs day to day keeps them in one nested "Advanced" leaf rather than spreading them across the top
+  * level.
   */
 object CommandRunnerSettingsGroups:
 
@@ -180,44 +180,9 @@ object CommandRunnerSettingsGroups:
       "Spacing, outlines, render cadence",
       input("ui-element-gap") ++
         onFrontend.rows(guiOnly, input("ui-outline-thickness")) ++ List(
-          CommandRunnerSettingsMotionItems.renderFpsOptionItem(optionSelections),
-          CommandRunnerSettingsMotionItems.renderDamageGranularityOptionItem(optionSelections)
+          CommandRunnerSettingsRenderItems.renderFpsOptionItem(optionSelections),
+          CommandRunnerSettingsRenderItems.renderDamageGranularityOptionItem(optionSelections)
         )
-    )
-    val customMotionInputIds =
-      if optionSelections.get("motion-preset").contains(4) then List("animation-duration", "animation-steps") else Nil
-    val motionAdvancedGroup = group(
-      "settings-motion-advanced",
-      "Advanced",
-      "Per-family speed, custom timing",
-      input(
-        "cursor-speed-scale",
-        "element-transition-speed-scale",
-        "editor-text-speed-scale",
-        "command-runner-speed-scale",
-        "ui-speed-scale"
-      ) ++ input(customMotionInputIds*)
-    )
-    val motionGroup = group(
-      "settings-animation",
-      "Motion",
-      "Accessibility, preset, reveal style",
-      List(
-        CommandRunnerSettingsMotionItems.motionAccessibilityOptionItem(optionSelections),
-        CommandRunnerSettingsMotionItems.motionPresetOptionItem(optionSelections),
-        CommandRunnerSettingsMotionItems.editorTextTransitionOptionItem(optionSelections)
-      ) ++ onFrontend.rows(
-        guiOnly,
-        List(
-          CommandRunnerSettingsMotionItems.panelOpenTransitionOptionItem(optionSelections),
-          CommandRunnerSettingsMotionItems.panelCloseTransitionOptionItem(optionSelections)
-        )
-      ) ++ List(
-        CommandRunnerSettingsMotionItems.commandRunnerTransitionOptionItem(optionSelections),
-        CommandRunnerSettingsMotionItems.commandRunnerFadeOptionItem(optionSelections),
-        CommandRunnerSettingsMotionItems.uiAnimationOptionItem(optionSelections),
-        motionAdvancedGroup
-      )
     )
     val bufferLanguageGroup = CommandRunnerSettingsItems.bufferLanguageGroupItem(context.bufferLanguage)
     val spellCheckGroup = group(
@@ -241,8 +206,7 @@ object CommandRunnerSettingsGroups:
         id = "settings-preset-workspace-layout",
         children = CommandRunnerSettingsPanelItems.workspaceLayoutItems
       ),
-      cursorGroup.copy(id = "settings-preset-cursor"),
-      motionGroup.copy(id = "settings-preset-animation")
+      cursorGroup.copy(id = "settings-preset-cursor")
     ) ++ onFrontend.rows(
       guiOnly,
       List(
@@ -308,4 +272,4 @@ object CommandRunnerSettingsGroups:
     )
     // A code workspace on a terminal has no typography row left to show.
     List(workspaceGroup, editorGroup) ++ Option.when(typographyGroup.children.nonEmpty)(typographyGroup) ++
-      List(lookGroup, motionGroup, languageToolsGroup, keysGroup)
+      List(lookGroup, languageToolsGroup, keysGroup)

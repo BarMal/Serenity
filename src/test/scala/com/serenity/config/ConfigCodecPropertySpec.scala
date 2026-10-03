@@ -64,14 +64,6 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
     // `CursorMode` has a single value, so there is nothing to move it to. Older files naming `breathe` still load, as
     // blink (CursorConfigSpec).
     "cursorConfig.mode",
-    // Legacy mirrors of the motion hierarchy, kept in the model for files written before it existed. A save writes the
-    // hierarchy and a load restores it, leaving these at their defaults -- so what has to survive is the behaviour they
-    // feed, which the effective-motion property below asserts directly.
-    "surfaceConfig.elementTransitionSpeedScale",
-    "surfaceConfig.editorInsertionTransitionKind",
-    "surfaceConfig.commandRunnerTransitionKind",
-    "surfaceConfig.panelOpenTransitionKind",
-    "surfaceConfig.panelCloseTransitionKind",
     // Keyed maps with their own codecs, dynamic key prefixes and specs (see `ConfigGenerators`).
     "languageToolsConfig.lspUserConfig.servers",
     "inputConfig.hotkeyConfig.bindings",
@@ -80,18 +72,7 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
     "inputConfig.focusedKeymapConfig.commandRunner.bindings",
     "inputConfig.focusedKeymapConfig.modal.bindings",
     "inputConfig.focusedKeymapConfig.panel.bindings",
-    "inputConfig.focusedKeymapConfig.peek.bindings",
-    // `AnimationConfig.curve` (issues #1082/#1083): the text config format only ever writes a preset name
-    // (quick/smooth/subtle) or, under "custom", `steps`/`duration_ms` -- there is no `animation.curve` key in the
-    // schema, because nothing in the settings surface can choose a curve yet (wiring a curve picker into settings is
-    // separate follow-up work, not part of adding the primitive). `genAnimationConfig` correctly never varies it, so
-    // there is nothing to lose on a round trip either -- see `EasingSpec`/`TweenSpec` for this
-    // field's own coverage. Same reasoning for the other two places an `AnimationConfig` sits directly on the config
-    // tree (rather than buried in the `motionConfiguration` families map, which is compared as a single opaque
-    // value and so raises no leaf path of its own here).
-    "editorConfig.characterAnimation.value.curve",
-    "surfaceConfig.commandRunnerAnimation.value.curve",
-    "surfaceConfig.uiAnimation.value.curve"
+    "inputConfig.focusedKeymapConfig.peek.bindings"
   )
 
   /** Every field of the config tree, by path.
@@ -144,26 +125,6 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
       withClue(s"keys that are also parents of another key: ${shadowed.mkString(", ")}\n") {
         shadowed shouldBe empty
       }
-    }
-
-  it should "keep the motion behaviour it was saved with" in
-    forAll(ConfigGenerators.genAppConfig) { config =>
-      val reloaded = savedAndReloaded(config)
-      reloaded.surfaceConfig.effectiveMotionBaseline shouldBe config.surfaceConfig.effectiveMotionBaseline
-      reloaded.surfaceConfig.effectiveCommandRunnerTransitionKind shouldBe
-        config.surfaceConfig.effectiveCommandRunnerTransitionKind
-      reloaded.surfaceConfig.effectivePanelOpenTransitionKind shouldBe
-        config.surfaceConfig.effectivePanelOpenTransitionKind
-      reloaded.surfaceConfig.effectivePanelCloseTransitionKind shouldBe
-        config.surfaceConfig.effectivePanelCloseTransitionKind
-      // Per family, from the hierarchy the renderer reads. Not `effectiveEditorTextTransitionSpeedScale` and friends:
-      // those resolve `editorTextTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)` without consulting the
-      // hierarchy at all, so they answer from the legacy fields a saved file no longer carries even when the hierarchy
-      // holds the same value.
-      def familySpeeds(candidate: AppConfig): Map[MotionFamily, Double] =
-        candidate.surfaceConfig.effectiveMotionConfiguration.families.view.mapValues(_.speedScale).toMap
-
-      familySpeeds(reloaded) shouldBe familySpeeds(config)
     }
 
   it should "come back exactly as it was saved" in

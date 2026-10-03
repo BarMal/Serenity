@@ -28,7 +28,7 @@ object LaunchOptions:
       .orNone
 
   private val eco: Opts[Boolean] =
-    Opts.flag("eco", "Lower the frame-rate target and reduce motion.").orFalse
+    Opts.flag("eco", "Lower the frame-rate target.").orFalse
 
   private val tui: Opts[Boolean] =
     Opts.flag("tui", "Force the terminal interface.").orFalse

@@ -1,6 +1,5 @@
 package com.serenity.session
 
-import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.{
   AppConfig,
   ConfigRegistry,
@@ -8,8 +7,6 @@ import com.serenity.config.{
   FocusedKeymapConfig,
   HotkeyConfig,
   LegacyStatusLineKeys,
-  MotionConfig,
-  MotionPreset,
   PreferredWindowSize,
   SpellCheckConfig,
   StatusLinePlacement,
@@ -69,11 +66,6 @@ final case class SessionField[A](key: String, get: AppConfig => A, set: (AppConf
 object SessionConfigCodec:
 
   val composites: List[SessionField[?]] = List(
-    SessionField[Option[AnimationConfig]](
-      "characterAnimation",
-      _.editorConfig.characterAnimation,
-      (config, value) => config.withEditorConfig(config.editorConfig.copy(characterAnimation = value))
-    ),
     SessionField[HotkeyConfig](
       "hotkeyConfig",
       _.inputConfig.hotkeyConfig,
@@ -88,88 +80,6 @@ object SessionConfigCodec:
       "lspUserConfig",
       _.languageToolsConfig.lspUserConfig,
       (config, value) => config.withLanguageToolsConfig(config.languageToolsConfig.copy(lspUserConfig = value))
-    ),
-    SessionField[MotionPreset](
-      "motionPreset",
-      _.surfaceConfig.motionPreset,
-      (config, value) => config.withSurfaceConfig(config.surfaceConfig.copy(motionPreset = value))
-    ),
-    SessionField[Double](
-      "elementTransitionSpeedScale",
-      _.surfaceConfig.elementTransitionSpeedScale,
-      (config, value) =>
-        config.withSurfaceConfig(
-          config.surfaceConfig.copy(elementTransitionSpeedScale = AppConfig.clampElementTransitionSpeedScale(value))
-        )
-    ),
-    SessionField[Option[Double]](
-      "editorTextTransitionSpeedScale",
-      _.surfaceConfig.editorTextTransitionSpeedScale,
-      (config, value) =>
-        config.withSurfaceConfig(
-          config.surfaceConfig
-            .copy(editorTextTransitionSpeedScale = value.map(AppConfig.clampElementTransitionSpeedScale))
-        )
-    ),
-    SessionField[Option[Double]](
-      "commandRunnerTransitionSpeedScale",
-      _.surfaceConfig.commandRunnerTransitionSpeedScale,
-      (config, value) =>
-        config.withSurfaceConfig(
-          config.surfaceConfig
-            .copy(commandRunnerTransitionSpeedScale = value.map(AppConfig.clampElementTransitionSpeedScale))
-        )
-    ),
-    SessionField[Option[Double]](
-      "uiTransitionSpeedScale",
-      _.surfaceConfig.uiTransitionSpeedScale,
-      (config, value) =>
-        config.withSurfaceConfig(
-          config.surfaceConfig.copy(uiTransitionSpeedScale = value.map(AppConfig.clampElementTransitionSpeedScale))
-        )
-    ),
-    SessionField[Option[Double]](
-      "cursorTransitionSpeedScale",
-      _.surfaceConfig.cursorTransitionSpeedScale,
-      (config, value) =>
-        config.withSurfaceConfig(
-          config.surfaceConfig.copy(cursorTransitionSpeedScale = value.map(AppConfig.clampElementTransitionSpeedScale))
-        )
-    ),
-    SessionField[Option[AnimationConfig]](
-      "commandRunnerAnimation",
-      _.surfaceConfig.commandRunnerAnimation,
-      (config, value) => config.withSurfaceConfig(config.surfaceConfig.copy(commandRunnerAnimation = value))
-    ),
-    SessionField[Option[AnimationConfig]](
-      "uiAnimation",
-      _.surfaceConfig.uiAnimation,
-      (config, value) => config.withSurfaceConfig(config.surfaceConfig.copy(uiAnimation = value))
-    ),
-    SessionField[TransitionKind](
-      "editorInsertionTransitionKind",
-      _.surfaceConfig.editorInsertionTransitionKind,
-      (config, value) => config.withSurfaceConfig(config.surfaceConfig.copy(editorInsertionTransitionKind = value))
-    ),
-    SessionField[Option[TransitionKind]](
-      "commandRunnerTransitionKind",
-      _.surfaceConfig.commandRunnerTransitionKind,
-      (config, value) => config.withSurfaceConfig(config.surfaceConfig.copy(commandRunnerTransitionKind = value))
-    ),
-    SessionField[Option[TransitionKind]](
-      "panelOpenTransitionKind",
-      _.surfaceConfig.panelOpenTransitionKind,
-      (config, value) => config.withSurfaceConfig(config.surfaceConfig.copy(panelOpenTransitionKind = value))
-    ),
-    SessionField[Option[TransitionKind]](
-      "panelCloseTransitionKind",
-      _.surfaceConfig.panelCloseTransitionKind,
-      (config, value) => config.withSurfaceConfig(config.surfaceConfig.copy(panelCloseTransitionKind = value))
-    ),
-    SessionField[Option[MotionConfig]](
-      "motionConfiguration",
-      _.surfaceConfig.motionConfiguration,
-      (config, value) => config.withSurfaceConfig(config.surfaceConfig.copy(motionConfiguration = value))
     ),
     SessionField[FontConfig](
       "fontConfig",

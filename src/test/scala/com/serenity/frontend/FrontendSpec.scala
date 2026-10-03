@@ -3,7 +3,6 @@ package com.serenity.frontend
 import scala.concurrent.duration.*
 
 import cats.effect.IO
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, CursorMode}
 import com.serenity.keystroke.KeyboardFidelityTier
 import org.scalatest.flatspec.AnyFlatSpec
@@ -26,12 +25,6 @@ class FrontendSpec extends AnyFlatSpec with Matchers:
   it should "tick the idle cursor cadence at the fixed blink interval, regardless of cursor mode" in {
     GuiFrontend.cursorIdleInterval(AppConfig.default) shouldBe Some(Frontend.BlinkInterval)
     GuiFrontend.cursorIdleInterval(AppConfig.default.withCursorMode(CursorMode.Blink)) shouldBe Some(
-      Frontend.BlinkInterval
-    )
-  }
-
-  it should "keep blinking when the cursor motion speed is zero, since blink is not a motion setting" in {
-    GuiFrontend.cursorIdleInterval(AppConfig.default.withCursorTransitionSpeedScale(Some(0.0))) shouldBe Some(
       Frontend.BlinkInterval
     )
   }

@@ -3,18 +3,18 @@ package com.serenity.app
 import scala.concurrent.duration.*
 
 import cats.effect.std.Supervisor
-import cats.effect.{IO, Ref}
 import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Ref}
 import com.serenity.config.{AppConfig, StatusLinePlacement}
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 import com.serenity.state.models.{AppState, Damage, TypingActivity}
 import com.serenity.testkit.VirtualTime.runVirtual
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.slf4j.Slf4jFactory
+import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** The typing quiet window ends on its own timer, not on a render-loop animation tick: after the last typed character
   * the window runs out and the expiry commit fires exactly once, however many keystrokes extended it on the way.

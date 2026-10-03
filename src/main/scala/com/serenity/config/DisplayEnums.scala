@@ -1,30 +1,5 @@
 package com.serenity.config
 
-import com.serenity.animation.*
-
-enum MotionPreset(val configKey: String):
-  case Reduced    extends MotionPreset("reduced")
-  case Subtle     extends MotionPreset("subtle")
-  case Smooth     extends MotionPreset("smooth")
-  case Expressive extends MotionPreset("expressive")
-  case Custom     extends MotionPreset("custom")
-
-  def animationConfig: Option[AnimationConfig] =
-    this match
-      case Reduced    => AnimationConfig.none
-      case Subtle     => AnimationConfig.subtle
-      case Smooth     => AnimationConfig.smooth
-      case Expressive => AnimationConfig.quick
-      case Custom     => AnimationConfig.smooth
-
-  def elementTransitionSettings: ElementTransitionSettings =
-    this match
-      case Reduced    => ElementTransitionSettings.disabled
-      case Subtle     => ElementTransitionSettings.subtle
-      case Smooth     => ElementTransitionSettings.smooth
-      case Expressive => ElementTransitionSettings.expressive
-      case Custom     => ElementTransitionSettings.smooth
-
 enum RenderFpsTarget(val configKey: String, val framesPerSecond: Int):
   case Fps30    extends RenderFpsTarget("30", 30)
   case Fps60    extends RenderFpsTarget("60", 60)

@@ -201,7 +201,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
 
     val saved = Files.readString(configFile)
     saved should include("config.version = 1")
-    saved should include("motion.preset = smooth")
+    saved should include("editor.word_wrap = true")
     stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface shouldBe None
   }
 
@@ -213,7 +213,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-visible-rows",
           "Set command runner visible rows.",
-          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(Some(9)))),
+          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetCommandRunnerVisibleRows(Some(9)))),
           CommandCategory.Settings
         )
       )
@@ -228,7 +228,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-visible-rows-auto",
           "Reset command runner visible rows.",
-          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerVisibleRows(None))),
+          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetCommandRunnerVisibleRows(None))),
           CommandCategory.Settings
         )
       )
@@ -245,7 +245,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-item-gap-rows",
           "Set command runner item gaps.",
-          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerItemGapRows(Some(1)))),
+          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetCommandRunnerItemGapRows(Some(1)))),
           CommandCategory.Settings
         )
       )
@@ -255,7 +255,7 @@ class CommandRunnerThemeSettingsCommandsSpec extends AnyFlatSpec with Matchers:
         Command.typed(
           "command-runner-cursor-gap-rows",
           "Set command runner cursor gap.",
-          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerCursorGapRows(Some(3)))),
+          CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetCommandRunnerCursorGapRows(Some(3)))),
           CommandCategory.Settings
         )
       )

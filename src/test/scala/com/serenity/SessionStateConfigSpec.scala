@@ -3,9 +3,8 @@ package com.serenity
 import java.awt.Color
 
 import _root_.io.circe.syntax.*
-import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionState
@@ -23,7 +22,6 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
       persisted = AppState.initial.persisted.copy(
         config = AppConfig(
           editorConfig = EditorConfig(
-            characterAnimation = AnimationConfig.quick,
             fontConfig = com.serenity.ui.fonts.FontLoader.FontConfig(
               codeFontFamily = "Monospaced",
               textFontFamily = "SansSerif",
@@ -37,38 +35,6 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
             )
           ),
           surfaceConfig = SurfaceConfig(
-            motionPreset = MotionPreset.Reduced,
-            elementTransitionSpeedScale = 1.75,
-            editorTextTransitionSpeedScale = Some(0.5),
-            commandRunnerTransitionSpeedScale = Some(2.25),
-            uiTransitionSpeedScale = Some(1.25),
-            cursorTransitionSpeedScale = Some(0.75),
-            commandRunnerTransitionKind = Some(TransitionKind.OutlineThenContent),
-            panelOpenTransitionKind = Some(TransitionKind.DirectionalSweep),
-            panelCloseTransitionKind = Some(TransitionKind.Disabled),
-            uiAnimation = AnimationConfig.subtle,
-            motionConfiguration = Some(
-              MotionConfig(
-                MotionAccessibility.Off,
-                MotionPreset.Smooth,
-                Map(
-                  MotionFamily.CommandSurfaces -> MotionFamilyConfig(
-                    transitionKind = TransitionKind.TypedText,
-                    animation = AnimationConfig.subtle,
-                    speedScale = 0.5
-                  ),
-                  MotionFamily.PinnedPanels -> MotionFamilyConfig(
-                    transitionKind = TransitionKind.DirectionalSweep,
-                    animation = AnimationConfig.smooth,
-                    speedScale = 1.0,
-                    transitionOverrides = Map(
-                      TransitionScope.PanelOpen  -> TransitionKind.DirectionalSweep,
-                      TransitionScope.PanelClose -> TransitionKind.Disabled
-                    )
-                  )
-                )
-              )
-            ),
             commandRunnerVisibleRows = Some(9),
             commandRunnerItemGapRows = Some(1),
             commandRunnerCursorGapRows = Some(3),
@@ -121,17 +87,6 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
 
     val decoded = SessionState.fromAppState(appState).asJson.as[SessionState].toOption.get
 
-    decoded.config.surfaceConfig.motionPreset shouldBe MotionPreset.Reduced
-    decoded.config.surfaceConfig.elementTransitionSpeedScale shouldBe 1.75
-    decoded.config.surfaceConfig.editorTextTransitionSpeedScale shouldBe Some(0.5)
-    decoded.config.surfaceConfig.commandRunnerTransitionSpeedScale shouldBe Some(2.25)
-    decoded.config.surfaceConfig.uiTransitionSpeedScale shouldBe Some(1.25)
-    decoded.config.surfaceConfig.cursorTransitionSpeedScale shouldBe Some(0.75)
-    decoded.config.surfaceConfig.commandRunnerTransitionKind shouldBe Some(TransitionKind.OutlineThenContent)
-    decoded.config.surfaceConfig.panelOpenTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
-    decoded.config.surfaceConfig.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
-    decoded.config.surfaceConfig.uiAnimation shouldBe AnimationConfig.subtle
-    decoded.config.surfaceConfig.motionConfiguration shouldBe appState.persisted.config.surfaceConfig.motionConfiguration
     decoded.config.surfaceConfig.commandRunnerVisibleRows shouldBe Some(9)
     decoded.config.surfaceConfig.commandRunnerItemGapRows shouldBe Some(1)
     decoded.config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(3)
@@ -181,8 +136,6 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
       dictionaryPaths = List("C:\\Dictionaries\\en_US.dic"),
       additionalWords = List("serenity")
     )
-    decoded.config.editorConfig.characterAnimation.map(_.steps) shouldBe
-      AnimationConfig.quick.map(_.steps)
   }
 
   it should "round-trip visualLineCursorNavigation disabled" in {

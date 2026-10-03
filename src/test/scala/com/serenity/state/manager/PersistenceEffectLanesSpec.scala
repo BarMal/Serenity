@@ -6,7 +6,7 @@ import scala.concurrent.duration.*
 
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.command.{CommandRunner, KeybindingsIntent, UiPresetsIntent}
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{AppConfig, ConfigError, HotkeyAction, HotkeyTrigger}
 import com.serenity.keystroke.events.{Event, InsertChar}
 import com.serenity.rope.Balance

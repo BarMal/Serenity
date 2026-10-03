@@ -1,7 +1,6 @@
 package com.serenity
 
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -117,12 +116,9 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
     // Every field mergeBuiltInWorkflowConfig's "code" case actually assigns (UiPreset.scala:178-182), forced to a
     // value that differs from what the Code preset carries, so each one is guaranteed to show up as a change --
     // fields the merge leaves alone (e.g. statusLine, showPaneHeaders, blurRadius) are left at their defaults, which
-    // the Code preset also inherits from AppConfig.default, so they must NOT show up. Setting a non-default motion
-    // preset also carries its own character-animation config along (AppConfigMotionOps.withMotionPreset), so the
-    // "motion.character" group changes too once patchMotionConfig copies it back from the preset's own preset.
+    // the Code preset also inherits from AppConfig.default, so they must NOT show up.
     val current = AppConfig.default
       .withAppMode(AppMode.Prose)
-      .withMotionPreset(MotionPreset.Expressive)
       .withFontConfig(FontConfig(codeFontFamily = "Current Code Font"))
       .withLineNumbers(false)
       .withInterfaceDensity(InterfaceDensity.Spacious)
@@ -141,8 +137,6 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
 
     keys(changes) should contain theSameElementsAs List(
       "workspace.mode",
-      "motion",
-      "motion.character",
       "typography.code.family",
       "editor.line_numbers",
       "ui.density",
@@ -212,12 +206,16 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
   it should "apply a composite group wholesale when selected, and leave it untouched when not" in {
     val current = AppConfig.default
     val preset =
-      UiPreset(name = "Custom", config = current.withMotionPreset(MotionPreset.Expressive), themeName = Theme.dark.name)
+      UiPreset(
+        name = "Custom",
+        config = current.withHotkeyOverride(HotkeyAction.Save, "ctrl+shift+s"),
+        themeName = Theme.dark.name
+      )
     val state = AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = current, theme = Theme.dark))
 
     val untouched = UiPresetDiff.applySelected(state, Theme.dark, preset, Set.empty)
-    val applied   = UiPresetDiff.applySelected(state, Theme.dark, preset, Set("motion"))
+    val applied   = UiPresetDiff.applySelected(state, Theme.dark, preset, Set("hotkey"))
 
-    untouched.persisted.config.surfaceConfig.motionPreset shouldBe current.surfaceConfig.motionPreset
-    applied.persisted.config.surfaceConfig.motionPreset shouldBe MotionPreset.Expressive
+    untouched.persisted.config.inputConfig.hotkeyConfig shouldBe current.inputConfig.hotkeyConfig
+    applied.persisted.config.inputConfig.hotkeyConfig shouldBe preset.config.inputConfig.hotkeyConfig
   }

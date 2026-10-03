@@ -11,7 +11,7 @@ object ConfigKeySchema:
   val dynamicPrefixes: List[String] = ConfigGroups.dynamicPrefixes
 
   val currentKeys: Set[String] =
-    Set("config.version") ++ ConfigRegistry.writtenKeys ++ ConfigGroups.currentKeys
+    Set("config.version") ++ ConfigRegistry.writtenKeys
 
   /** An old spelling and the current one to use instead.
     *
@@ -21,16 +21,10 @@ object ConfigKeySchema:
   val deprecatedKeys: Map[String, String] =
     ConfigRegistry.fields.flatMap { field =>
       field.aliases.filterNot(currentKeys.contains).map(_ -> field.key)
-    }.toMap ++ ConfigGroups.deprecatedKeys ++ LegacyStatusLineKeys.replacements
+    }.toMap ++ LegacyStatusLineKeys.replacements
 
   def deprecatedReplacement(key: String): Option[String] =
-    deprecatedKeys
-      .get(key)
-      .orElse(
-        Option.when(key.startsWith(ConfigGroups.legacyMotionFamilyPrefix))(
-          ConfigGroups.motionFamilyPrefix + key.stripPrefix(ConfigGroups.legacyMotionFamilyPrefix)
-        )
-      )
+    deprecatedKeys.get(key)
 
   def isKnownKey(key: String): Boolean =
     currentKeys.contains(key) ||

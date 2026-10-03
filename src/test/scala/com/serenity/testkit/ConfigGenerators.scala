@@ -2,11 +2,7 @@ package com.serenity.testkit
 
 import java.awt.Color
 
-import scala.concurrent.duration.DurationInt
-
-import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
 import com.serenity.ui.fonts.FontLoader
@@ -54,12 +50,6 @@ object ConfigGenerators:
       Gen.alphaStr.suchThat(_.nonEmpty)
     )
 
-  val genAnimationConfig: Gen[AnimationConfig] =
-    for
-      steps      <- Gen.choose(1, 60)
-      durationMs <- Gen.choose(1, 5000)
-    yield AnimationConfig(steps, durationMs.milliseconds)
-
   val genFontConfig: Gen[FontConfig] =
     for
       codeFamily <- genFontFamily
@@ -93,10 +83,9 @@ object ConfigGenerators:
 
   val genEditorConfig: Gen[EditorConfig] =
     for
-      animation <- Gen.option(genAnimationConfig)
       fonts     <- genFontConfig
       paneWidth <- Gen.choose(1, 200)
-    yield EditorConfig(characterAnimation = animation, fontConfig = fonts, minimumPaneWidth = paneWidth)
+    yield EditorConfig(fontConfig = fonts, minimumPaneWidth = paneWidth)
 
   val genSpellCheckConfig: Gen[SpellCheckConfig] =
     for
@@ -179,40 +168,7 @@ object ConfigGenerators:
       max     <- Gen.option(Gen.choose(1, 500))
     yield ViewportAxisSizing(percent, max)
 
-  val genMotionFamilyConfig: Gen[MotionFamilyConfig] =
-    for
-      transition <- oneOfEnum(TransitionKind.values)
-      animation  <- Gen.option(genAnimationConfig)
-      speed      <- double(AppConfig.MinElementTransitionSpeedScale, AppConfig.MaxElementTransitionSpeedScale)
-    yield MotionFamilyConfig(transition, animation, speed)
-
-  val genMotionConfig: Gen[MotionConfig] =
-    for
-      accessibility <- oneOfEnum(MotionAccessibility.values)
-      baseline      <- oneOfEnum(MotionPreset.values)
-      families <- Gen.sequence[List[(MotionFamily, MotionFamilyConfig)], (MotionFamily, MotionFamilyConfig)](
-        MotionFamily.values.toList.map(family => genMotionFamilyConfig.map(family -> _))
-      )
-      panelOpen  <- oneOfEnum(TransitionKind.values)
-      panelClose <- oneOfEnum(TransitionKind.values)
-    yield
-      val withOverrides = families.map {
-        case (MotionFamily.PinnedPanels, settings) =>
-          MotionFamily.PinnedPanels -> settings.copy(transitionOverrides =
-            Map(TransitionScope.PanelOpen -> panelOpen, TransitionScope.PanelClose -> panelClose)
-          )
-        case other => other
-      }
-      MotionConfig(accessibility, baseline, withOverrides.toMap)
-
-  /** Surface settings that are independent of one another, constructed directly.
-    *
-    * The motion settings are deliberately *not* here: `motionConfiguration` and the legacy fields it supersedes
-    * (`motionPreset`, the transition kinds, the animations, the speed scales) are kept in step by `AppConfig`'s own
-    * setters, so setting them independently would describe a config the application can never be in -- and a round-trip
-    * property over unreachable states tests the generator, not the format. They are applied through those setters in
-    * [[genAppConfig]] instead.
-    */
+  /** Surface settings that are independent of one another, constructed directly. */
   val genSurfaceConfig: Gen[SurfaceConfig] =
     for
       lineNumbers         <- Gen.oneOf(true, false)
@@ -296,44 +252,6 @@ object ConfigGenerators:
       columnCount = columnCount
     )
 
-  /** The motion settings, applied the way the settings surface applies them: through `AppConfig`'s setters, which keep
-    * the authoritative hierarchy and the legacy fields that mirror it in step.
-    */
-  val genMotionEdit: Gen[AppConfig => AppConfig] =
-    for
-      preset         <- oneOfEnum(MotionPreset.values.filterNot(_ == MotionPreset.Custom))
-      accessibility  <- oneOfEnum(MotionAccessibility.values)
-      family         <- oneOfEnum(MotionFamily.values)
-      settings       <- genMotionFamilyConfig
-      elementSpeed   <- double(AppConfig.MinElementTransitionSpeedScale, AppConfig.MaxElementTransitionSpeedScale)
-      insertion      <- oneOfEnum(TransitionKind.values)
-      runnerKind     <- Gen.option(oneOfEnum(TransitionKind.values))
-      panelOpenKind  <- Gen.option(oneOfEnum(TransitionKind.values))
-      panelCloseKind <- Gen.option(oneOfEnum(TransitionKind.values))
-      editorSpeed    <- Gen.option(double(0.1, 4.0))
-      runnerSpeed    <- Gen.option(double(0.1, 4.0))
-      uiSpeed        <- Gen.option(double(0.1, 4.0))
-      cursorSpeed    <- Gen.option(double(0.1, 4.0))
-    yield (config: AppConfig) =>
-      // Preset first, then the finer settings -- the order the settings surface applies them in. The other way round,
-      // `withElementTransitionSpeedScale` writes only its legacy field (`updateAuthoritativeMotion` propagates into the
-      // hierarchy only when one already exists), and the preset then installs a hierarchy that does not carry it: a
-      // config whose effective speed and whose hierarchy disagree, which is not a state worth holding the file format
-      // to.
-      config
-        .withMotionPreset(preset)
-        .withMotionAccessibility(accessibility)
-        .withElementTransitionSpeedScale(elementSpeed)
-        .withEditorInsertionTransitionKind(insertion)
-        .withCommandRunnerTransitionKind(runnerKind)
-        .withPanelOpenTransitionKind(panelOpenKind)
-        .withPanelCloseTransitionKind(panelCloseKind)
-        .withMotionFamilyConfiguration(family, settings)
-        .withEditorTextTransitionSpeedScale(editorSpeed)
-        .withCommandRunnerTransitionSpeedScale(runnerSpeed)
-        .withUiTransitionSpeedScale(uiSpeed)
-        .withCursorTransitionSpeedScale(cursorSpeed)
-
   val genAppConfig: Gen[AppConfig] =
     for
       editor           <- genEditorConfig
@@ -348,22 +266,19 @@ object ConfigGenerators:
       spell            <- genSpellCheckConfig
       appMode          <- genAppModeConfig
       status           <- genStatusLineConfig
-      motion           <- genMotionEdit
-    yield motion(
-      AppConfig(
-        editorConfig = editor,
-        inputConfig = input,
-        surfaceConfig = surface,
-        cursorConfig = cursor,
-        windowConfig = window,
-        documentConfig = document,
-        interfaceConfig = interface,
-        languageToolsConfig = LanguageToolsConfig(
-          syntaxHighlightingEnabled = syntax,
-          spellCheck = spell,
-          smartPunctuationEnabled = smartPunctuation
-        ),
-        appModeConfig = appMode,
-        statusLine = status
-      )
+    yield AppConfig(
+      editorConfig = editor,
+      inputConfig = input,
+      surfaceConfig = surface,
+      cursorConfig = cursor,
+      windowConfig = window,
+      documentConfig = document,
+      interfaceConfig = interface,
+      languageToolsConfig = LanguageToolsConfig(
+        syntaxHighlightingEnabled = syntax,
+        spellCheck = spell,
+        smartPunctuationEnabled = smartPunctuation
+      ),
+      appModeConfig = appMode,
+      statusLine = status
     )

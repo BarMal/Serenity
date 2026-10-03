@@ -3,11 +3,8 @@ package com.serenity.config
 import java.awt.Color
 import java.nio.file.{Files, Path}
 
-import scala.concurrent.duration.DurationInt
-
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.{AnimationConfig, TransitionKind}
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{StatusLineColors, StatusLinePlacement, StatusSegment}
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
@@ -114,7 +111,6 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withTextAreaBottomInset(5.0)
     .withMinimumPaneWidth(24)
     .withWindowChromeMode(WindowChromeMode.Native)
-    .withCharacterAnimation(AnimationConfig(steps = 9, totalDuration = 210.milliseconds))
     .withFontConfig(
       FontConfig(
         codeFontFamily = "Iosevka",
@@ -148,49 +144,12 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
         additionalWords = List("Serenity", "scalafix")
       )
     )
-    .withElementTransitionSpeedScale(1.4)
-    .withEditorTextTransitionSpeedScale(Some(1.1))
-    .withCommandRunnerTransitionSpeedScale(Some(1.2))
-    .withUiTransitionSpeedScale(Some(1.3))
-    .withCursorTransitionSpeedScale(Some(0.9))
-    .withMotionPreset(MotionPreset.Expressive)
-    .withEditorInsertionTransitionKind(TransitionKind.DirectionalSweep)
-    .withCommandRunnerTransitionKind(Some(TransitionKind.DirectionalSweep))
-    .withPanelOpenTransitionKind(Some(TransitionKind.TypedText))
-    .withPanelCloseTransitionKind(Some(TransitionKind.DirectionalSweep))
-    .withCommandRunnerAnimation(Some(AnimationConfig(steps = 7, totalDuration = 140.milliseconds)))
-    .withUiAnimation(Some(AnimationConfig(steps = 6, totalDuration = 130.milliseconds)))
     .withViewportWidthSizing(ViewportAxisSizing(percent = 0.8, maxCells = Some(120)))
     .withViewportHeightSizing(ViewportAxisSizing(percent = 0.9, maxCells = Some(60)))
     .withPreferredWindowSize(PreferredWindowSize(1280, 800))
     .withWheelScrollLines(5)
     .withPanelEscapeTarget(AppMode.Code, PanelEscapeTarget.Previous)
     .withPanelEscapeTarget(AppMode.Prose, PanelEscapeTarget.Previous)
-
-  /** Fields that are mirrors of the motion hierarchy rather than settings in their own right: `motionConfiguration` and
-    * its families are what the file carries, and `AppConfig`'s `effectiveMotion*` accessors resolve behaviour from
-    * that. The legacy fields stay in the model for configs written before the hierarchy existed, so a saved file
-    * legitimately reconstructs the hierarchy and leaves them at their defaults. What has to survive is the behaviour,
-    * which the effective-motion test below asserts directly.
-    */
-  private val supersededByMotionHierarchy: Set[String] = Set(
-    // The editor-text family's animation and this field are one setting under two names (`withEditorTextAnimation`
-    // writes both). They agree for any config a user has actually touched; they differ only in the shipped default,
-    // where the field is "no character animation" and the hierarchy derives the baseline preset's -- so the value
-    // reloaded there is the hierarchy's, and no user setting is at stake either way.
-    "editorConfig.characterAnimation",
-    "surfaceConfig.motionConfiguration",
-    "surfaceConfig.elementTransitionSpeedScale",
-    "surfaceConfig.commandRunnerAnimation",
-    "surfaceConfig.uiAnimation",
-    "surfaceConfig.editorInsertionTransitionKind",
-    "surfaceConfig.commandRunnerTransitionKind",
-    "surfaceConfig.panelOpenTransitionKind",
-    "surfaceConfig.panelCloseTransitionKind"
-  )
-
-  private def isSuperseded(path: String): Boolean =
-    supersededByMotionHierarchy.exists(prefix => path == prefix || path.startsWith(s"$prefix."))
 
   private def differences(path: String, before: Any, after: Any): List[String] =
     (before, after) match
@@ -199,8 +158,8 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
           .zip(b.productIterator.zip(a.productIterator))
           .flatMap { case (name, (bv, av)) => differences(if path.isEmpty then name else s"$path.$name", bv, av) }
           .toList
-      case (b, a) if b == a || isSuperseded(path) => Nil
-      case (b, a)                                 => List(s"$path: saved $b, loaded back $a")
+      case (b, a) if b == a => Nil
+      case (b, a)           => List(s"$path: saved $b, loaded back $a")
 
   "a saved config" should "be valid HOCON, whatever the settings are" in {
     noException should be thrownBy ConfigFactory.parseString(savedText(mutated))
@@ -224,14 +183,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     "inputConfig.focusedKeymapConfig.modal.bindings",
     "inputConfig.focusedKeymapConfig.panel.bindings",
     "inputConfig.focusedKeymapConfig.peek.bindings",
-    "inputConfig.hotkeyConfig.bindings",
-    // `AnimationConfig.curve` (issues #1082/#1083): nothing in the settings surface can choose a curve yet (see
-    // `ConfigFileFormat`/`ConfigGroups.animationEntries`, which only ever write a preset name or `steps`/
-    // `duration_ms`) -- wiring a curve picker into settings is separate follow-up work, not part of adding the
-    // primitive. `editorConfig.characterAnimation`'s own `.curve` doesn't show up here at all: its default is `None`
-    // rather than a populated `AnimationConfig`, so this suite's `defaults` map has no leaf for it to compare against.
-    "surfaceConfig.commandRunnerAnimation.value.curve",
-    "surfaceConfig.uiAnimation.value.curve"
+    "inputConfig.hotkeyConfig.bindings"
   )
 
   private def leafValues(config: AppConfig): Map[String, Any] =
@@ -281,35 +233,6 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     withClue(s"${lost.size} field(s) lost:\n${lost.mkString("\n")}\n")(lost shouldBe empty)
   }
 
-  it should "keep the motion behaviour it saved, which the hierarchy carries rather than the legacy fields" in {
-    val reloaded = savedAndReloaded(mutated)
-
-    // Per family, everything except the speed scale, which a saved file deliberately migrates: the writer folds the
-    // legacy per-family speed-scale fields into the hierarchy's own, so the reloaded config holds in one place what
-    // the in-memory one still holds in two. The four effective accessors below are what behaviour actually reads, and
-    // they are what has to agree.
-    def families(config: AppConfig): Map[MotionFamily, (Boolean, Any, Any, Any)] =
-      config.surfaceConfig.effectiveMotionConfiguration.families.map {
-        case (family, settings) =>
-          family -> (settings.enabled, settings.transitionKind, settings.animation, settings.transitionOverrides)
-      }
-
-    families(reloaded) shouldBe families(mutated)
-    reloaded.surfaceConfig.effectiveMotionBaseline shouldBe mutated.surfaceConfig.effectiveMotionBaseline
-    reloaded.surfaceConfig.effectiveCommandRunnerTransitionKind shouldBe
-      mutated.surfaceConfig.effectiveCommandRunnerTransitionKind
-    reloaded.surfaceConfig.effectivePanelOpenTransitionKind shouldBe
-      mutated.surfaceConfig.effectivePanelOpenTransitionKind
-    reloaded.surfaceConfig.effectiveEditorTextTransitionSpeedScale shouldBe
-      mutated.surfaceConfig.effectiveEditorTextTransitionSpeedScale
-    reloaded.surfaceConfig.effectiveCommandRunnerTransitionSpeedScale shouldBe
-      mutated.surfaceConfig.effectiveCommandRunnerTransitionSpeedScale
-    reloaded.surfaceConfig.effectiveUiTransitionSpeedScale shouldBe
-      mutated.surfaceConfig.effectiveUiTransitionSpeedScale
-    reloaded.surfaceConfig.effectiveCursorTransitionSpeedScale shouldBe
-      mutated.surfaceConfig.effectiveCursorTransitionSpeedScale
-  }
-
   it should "survive a cursor info bar with several segments, which needs quoting to stay parseable" in {
     val configured = AppConfig.default
       .withStatusLineSegments(
@@ -344,7 +267,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     // unquoted comma that makes it invalid HOCON. Every setting in such a file was silently replaced by defaults.
     Files.writeString(
       file,
-      """"character.animation" = none
+      """"editor.word_wrap" = false
         |"cursor.info_bar" = position,word_count
         |cursor.info_bar.placement = floating
         |""".stripMargin

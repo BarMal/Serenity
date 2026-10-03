@@ -3,9 +3,7 @@ package com.serenity
 import java.awt.Font
 import java.nio.file.Files
 
-import com.serenity.animation.TransitionKind
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
@@ -128,8 +126,6 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     writing.config.editorConfig.fontConfig.textFontSize should be > AppConfig.default.editorConfig.fontConfig.textFontSize
     writing.config.surfaceConfig.showLineNumbers shouldBe false
     writing.config.statusLine.isPinned shouldBe false
-    writing.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
-    writing.config.surfaceConfig.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
     writing.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
     writing.targetEditorPaneCount shouldBe Some(1)
     writing.config.surfaceConfig.showPaneHeaders shouldBe false
@@ -137,14 +133,11 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     docs.config.markdownViewMode shouldBe MarkdownViewMode.SplitPreview
     docs.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
-    docs.config.surfaceConfig.editorInsertionTransitionKind shouldBe TransitionKind.LineAndCharacterTandem
     docs.targetEditorPaneCount shouldBe Some(1)
     docs.config.surfaceConfig.showPaneHeaders shouldBe false
     docs.pinnedPanels shouldBe Nil
 
     code.config.defaultDocumentMode shouldBe DefaultDocumentMode.PlainText
-    code.config.surfaceConfig.motionPreset shouldBe MotionPreset.Reduced
-    code.config.surfaceConfig.editorInsertionTransitionKind shouldBe TransitionKind.Disabled
     code.config.surfaceConfig.showLineNumbers shouldBe true
     code.config.surfaceConfig.showPaneHeaders shouldBe true
     code.pinnedPanels.map(_.position) should contain(PanelPosition.Left)
@@ -187,7 +180,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     UiPreset.Preview.fromPreset(writing) shouldBe UiPreset.Preview(
       "Writing",
-      "rich text default; dark; subtle motion; typed text reveal; spacious density; Serif 18pt prose; 1 editor pane"
+      "rich text default; dark; spacious density; Serif 18pt prose; 1 editor pane"
     )
   }
 
@@ -252,7 +245,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     )
 
     UiPreset.Preview.fromPreset(preset).hint shouldBe
-      "plain text default; dark; smooth motion; fade text reveal; comfortable density; SansSerif 12pt prose; 2 editor panes"
+      "plain text default; dark; comfortable density; SansSerif 12pt prose; 2 editor panes"
   }
 
   it should "name every pinnable panel content kind in its preview summary" in {
@@ -291,40 +284,6 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     patched.config.uiElementGap shouldBe Some(4)
     patched.config.uiOutlineThicknessPx shouldBe 5
     patched.themeName shouldBe Theme.light.name
-    patched.pinnedPanels shouldBe List(panel)
-    patched.targetEditorPaneCount shouldBe Some(1)
-  }
-
-  it should "patch motion fields without replacing preset layout snapshots" in {
-    val panel = SessionPinnedPanel
-      .fromPanelContent(PanelContent.Outline(Nil), PanelPosition.Left, 28)
-      .getOrElse(fail("outline should be capturable"))
-    val preset = UiPreset(
-      name = "Drafting",
-      config = AppConfig.default.withMotionPreset(MotionPreset.Reduced),
-      themeName = Theme.dark.name,
-      dockedPanels = List(SessionDockedPanel("panel-1", panel)),
-      targetEditorPaneCount = Some(1)
-    )
-    val sourceConfig = AppConfig.default
-      .withMotionPreset(MotionPreset.Subtle)
-      .withElementTransitionSpeedScale(2.25)
-      .withCursorTransitionSpeedScale(Some(0.75))
-      .withEditorInsertionTransitionKind(TransitionKind.TypedText)
-      .withCommandRunnerTransitionKind(Some(TransitionKind.DirectionalSweep))
-      .withPanelOpenTransitionKind(Some(TransitionKind.OutlineThenContent))
-      .withPanelCloseTransitionKind(Some(TransitionKind.Disabled))
-
-    val patched = UiPreset.Patch.Motion(sourceConfig).applyTo(preset)
-
-    patched.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
-    patched.config.editorConfig.characterAnimation shouldBe MotionPreset.Subtle.animationConfig
-    patched.config.surfaceConfig.elementTransitionSpeedScale shouldBe 2.25
-    patched.config.surfaceConfig.cursorTransitionSpeedScale shouldBe Some(0.75)
-    patched.config.surfaceConfig.editorInsertionTransitionKind shouldBe TransitionKind.TypedText
-    patched.config.surfaceConfig.commandRunnerTransitionKind shouldBe Some(TransitionKind.DirectionalSweep)
-    patched.config.surfaceConfig.panelOpenTransitionKind shouldBe Some(TransitionKind.OutlineThenContent)
-    patched.config.surfaceConfig.panelCloseTransitionKind shouldBe Some(TransitionKind.Disabled)
     patched.pinnedPanels shouldBe List(panel)
     patched.targetEditorPaneCount shouldBe Some(1)
   }

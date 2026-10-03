@@ -8,8 +8,8 @@ import com.serenity.ui.presets.UiPreset
 
 /** Builds command-runner settings option rows and static settings command rows.
   *
-  * Cursor, motion, appearance, panel, and text-display settings items live in sibling `CommandRunnerSettings*Items`
-  * objects in this package -- split out to keep every file under the architecture size targets.
+  * Cursor, appearance, panel, and text-display settings items live in sibling `CommandRunnerSettings*Items` objects in
+  * this package -- split out to keep every file under the architecture size targets.
   * [[CommandRunnerSettingsOptionItemHelpers]] holds `boundedOptionIndex`/`enabledOptionItem`, shared by this object and
   * those siblings alike.
   */

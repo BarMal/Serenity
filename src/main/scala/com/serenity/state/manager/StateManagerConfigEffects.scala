@@ -2,19 +2,18 @@ package com.serenity.state.manager
 
 import cats.effect.IO
 import cats.syntax.all.*
-import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{AppConfig, ConfigError, ConfigManager, LineNumberLayout, StatusLinePlacement, StatusSegment}
 import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
 import com.serenity.spellcheck.{DictionaryWord, SpellChecker}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.CommandRunnerReducer
 
-/** Config-update infrastructure and the settings-intent dispatch that drives it: appearance, motion, cursor, panel
-  * chrome, spell-check, and general settings all funnel through the same commit-then-persist path. The state change
-  * commits once, validated, on the dispatcher; the config file write and the session auto-save run FIFO on the Config
-  * lane (#1697).
+/** Config-update infrastructure and the settings-intent dispatch that drives it: appearance, cursor, panel chrome,
+  * spell-check, and general settings all funnel through the same commit-then-persist path. The state change commits
+  * once, validated, on the dispatcher; the config file write and the session auto-save run FIFO on the Config lane
+  * (#1697).
   */
 final private[manager] class StateManagerConfigEffects(
     currentState: IO[AppState],
@@ -33,15 +32,6 @@ final private[manager] class StateManagerConfigEffects(
 
   private def updateAppearanceConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     applyConfigUpdate(update)
-
-  private def updateMotionConfig(update: AppConfig => AppConfig): IO[AppConfig] =
-    applyConfigUpdate(update)
-
-  private def updateMotionAccessibility(accessibility: com.serenity.config.MotionAccessibility): IO[AppConfig] =
-    updateMotionConfig(_.withMotionAccessibility(accessibility))
-
-  private def updateCustomMotionConfig(update: AppConfig => AppConfig): IO[AppConfig] =
-    updateMotionConfig(config => update(config).withCustomMotionBaseline)
 
   private[manager] def updateTextDisplayConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     applyConfigUpdate(update)
@@ -91,7 +81,6 @@ final private[manager] class StateManagerConfigEffects(
   private[manager] def interpret(intent: SettingsIntent, state: AppState): IO[Unit] =
     intent match
       case SettingsIntent.Font(fontIntent)               => interpretFontIntent(fontIntent)
-      case SettingsIntent.Motion(motionIntent)           => interpretMotionIntent(motionIntent)
       case SettingsIntent.StatusLine(statusLineIntent)   => interpretStatusLineIntent(statusLineIntent)
       case SettingsIntent.Cursor(cursorIntent)           => interpretCursorIntent(cursorIntent)
       case SettingsIntent.TextDisplay(textDisplayIntent) => interpretTextDisplayIntent(textDisplayIntent)
@@ -151,41 +140,6 @@ final private[manager] class StateManagerConfigEffects(
         updateFontConfig(config =>
           config.copy(enableLigatures = !config.enableLigatures, textLigatures = !config.textLigatures)
         )
-
-  private def interpretMotionIntent(intent: MotionIntent): IO[Unit] =
-    intent match
-      case MotionIntent.SetMotionPreset(preset) =>
-        updateMotionConfig(_.withMotionPreset(preset)).void
-      case MotionIntent.SetMotionAccessibility(accessibility) =>
-        updateMotionAccessibility(accessibility).void
-      case MotionIntent.SetElementTransitionSpeedScale(scale) =>
-        updateCustomMotionConfig(_.withElementTransitionSpeedScale(scale)).void
-      case MotionIntent.SetEditorTextTransitionSpeedScale(scale) =>
-        updateCustomMotionConfig(_.withEditorTextTransitionSpeedScale(Some(scale))).void
-      case MotionIntent.SetCommandRunnerTransitionSpeedScale(scale) =>
-        updateCustomMotionConfig(_.withCommandRunnerTransitionSpeedScale(Some(scale))).void
-      case MotionIntent.SetUiTransitionSpeedScale(scale) =>
-        updateCustomMotionConfig(_.withUiTransitionSpeedScale(Some(scale))).void
-      case MotionIntent.SetCursorTransitionSpeedScale(scale) =>
-        updateCustomMotionConfig(_.withCursorTransitionSpeedScale(Some(scale))).void
-      case MotionIntent.SetCommandRunnerAnimation(animation) =>
-        updateCustomMotionConfig(_.withCommandRunnerAnimation(animation)).void
-      case MotionIntent.SetUiAnimation(animation) =>
-        updateCustomMotionConfig(_.withUiAnimation(animation)).void
-      case MotionIntent.SetCommandRunnerVisibleRows(rows) =>
-        updateAppearanceConfig(_.withCommandRunnerVisibleRows(rows)).void
-      case MotionIntent.SetCommandRunnerItemGapRows(rows) =>
-        updateAppearanceConfig(_.withCommandRunnerItemGapRows(rows)).void
-      case MotionIntent.SetCommandRunnerCursorGapRows(rows) =>
-        updateAppearanceConfig(_.withCommandRunnerCursorGapRows(rows)).void
-      case MotionIntent.SetEditorInsertionTransitionKind(kind) =>
-        updateCustomMotionConfig(_.withEditorInsertionTransitionKind(kind)).void
-      case MotionIntent.SetCommandRunnerTransitionKind(kind) =>
-        updateCustomMotionConfig(_.withCommandRunnerTransitionKind(Some(kind))).void
-      case MotionIntent.SetPanelOpenTransitionKind(kind) =>
-        updateCustomMotionConfig(_.withPanelOpenTransitionKind(Some(kind))).void
-      case MotionIntent.SetPanelCloseTransitionKind(kind) =>
-        updateCustomMotionConfig(_.withPanelCloseTransitionKind(Some(kind))).void
 
   private def interpretCursorIntent(intent: CursorIntent): IO[Unit] =
     intent match
@@ -341,32 +295,12 @@ final private[manager] class StateManagerConfigEffects(
         updateAppearanceConfig(_.withRenderFpsTarget(target)).void
       case GeneralSettingsIntent.SetRenderDamageGranularity(granularity) =>
         updateAppearanceConfig(_.withRenderDamageGranularity(granularity)).void
-      case GeneralSettingsIntent.SetAnimationDuration(ms) =>
-        updateCustomMotionConfig(withEditorTextAnimationDuration(_, ms)).void
-      case GeneralSettingsIntent.SetAnimationSteps(n) =>
-        updateCustomMotionConfig(withEditorTextAnimationSteps(_, n)).void
-
-  private def withEditorTextAnimationDuration(config: AppConfig, ms: Int): AppConfig =
-    val newAnim =
-      if ms <= 0 then None
-      else
-        Some(
-          config.editorConfig.characterAnimation.fold(
-            AnimationConfig(steps = 12, totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
-          )(existing => existing.copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L)))
-        )
-    config.withEditorTextAnimation(newAnim)
-
-  private def withEditorTextAnimationSteps(config: AppConfig, n: Int): AppConfig =
-    val newAnim =
-      if n <= 0 then None
-      else
-        Some(
-          config.editorConfig.characterAnimation.fold(
-            AnimationConfig(steps = n, totalDuration = scala.concurrent.duration.Duration.fromNanos(200_000_000L))
-          )(existing => existing.copy(steps = n))
-        )
-    config.withEditorTextAnimation(newAnim)
+      case GeneralSettingsIntent.SetCommandRunnerVisibleRows(rows) =>
+        updateAppearanceConfig(_.withCommandRunnerVisibleRows(rows)).void
+      case GeneralSettingsIntent.SetCommandRunnerItemGapRows(rows) =>
+        updateAppearanceConfig(_.withCommandRunnerItemGapRows(rows)).void
+      case GeneralSettingsIntent.SetCommandRunnerCursorGapRows(rows) =>
+        updateAppearanceConfig(_.withCommandRunnerCursorGapRows(rows)).void
 
   /** Queues a write of `config` to the config file, behind any config write already queued. */
   private[manager] def persistConfigFile(config: AppConfig): IO[Unit] =

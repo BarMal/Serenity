@@ -21,15 +21,13 @@ enum MetricGrid:
   * Three kinds of concern used to hide behind one plain "is this TUI?" boolean: shell/effect behaviour (cursor-blink
   * scheduling, markdown-preview window vs. pinned panel, log routing -- now [[Frontend.cursorIdleInterval]] and
   * [[Frontend.logRouting]], or a direct `grid` check at the shell boundary), measurement (cell vs. font metrics --
-  * [[grid]]), and presentation policy (default gaps, "inert in TUI" hints, caret glide -- [[pixelMotion]],
-  * [[typography]]). Splitting them means pure code asks the capability it actually needs ("can this surface animate the
-  * caret?") instead of the frontend's identity ("is this TUI?") -- capabilities can already vary *within* TUI (a mintty
-  * session's narrower keyboard tier, issue #1532), which a two-way GUI/TUI split cannot express.
+  * [[grid]]), and presentation policy (default gaps, "inert in TUI" hints, [[typography]]). Splitting them means pure
+  * code asks the capability it actually needs ("does this surface paint typography?") instead of the frontend's
+  * identity ("is this TUI?") -- capabilities can already vary *within* TUI (a mintty session's narrower keyboard tier,
+  * issue #1532), which a two-way GUI/TUI split cannot express.
   */
 final case class FrontendCapabilities(
     grid: MetricGrid,
-    // Caret glide and smooth scroll: sub-cell motion a fixed character grid cannot represent (issue #1085).
-    pixelMotion: Boolean,
     // Font family/size/ligature pickers paint nothing different on a fixed-cell surface (epic #1103).
     typography: Boolean,
     // The keyboard wire protocol actually negotiated (issue #1194/#1320) -- `Full` unconditionally in GUI mode, since
@@ -44,7 +42,6 @@ object FrontendCapabilities:
   val gui: FrontendCapabilities =
     FrontendCapabilities(
       grid = MetricGrid.Pixels,
-      pixelMotion = true,
       typography = true,
       keyboardFidelityTier = KeyboardFidelityTier.Full
     )
@@ -55,7 +52,6 @@ object FrontendCapabilities:
   def tui(keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full): FrontendCapabilities =
     FrontendCapabilities(
       grid = MetricGrid.Cells,
-      pixelMotion = false,
       typography = false,
       keyboardFidelityTier = keyboardFidelityTier
     )

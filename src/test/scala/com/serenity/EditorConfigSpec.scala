@@ -1,18 +1,13 @@
 package com.serenity
 
-import com.serenity.animation.AnimationConfig
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class EditorConfigSpec extends AnyFlatSpec with Matchers:
 
-  "EditorConfig" should "own character animation and font schema metadata" in {
-    ConfigKeySchema.isKnownKey("character.animation") shouldBe true
-    ConfigKeySchema.isKnownKey("character.animation.duration_ms") shouldBe true
-    ConfigKeySchema.isKnownKey("character.animation.steps") shouldBe true
+  "EditorConfig" should "own font schema metadata" in {
     ConfigKeySchema.isKnownKey("typography.code.family") shouldBe true
     ConfigKeySchema.isKnownKey("typography.prose.family") shouldBe true
     ConfigKeySchema.isKnownKey("typography.ui.family") shouldBe true
@@ -27,16 +22,13 @@ class EditorConfigSpec extends AnyFlatSpec with Matchers:
 
     ConfigKeySchema.deprecatedKeys.should(
       contain allOf (
-        "character_animation"             -> "motion.character.preset",
-        "character_animation_duration_ms" -> "motion.character.duration_ms",
-        "font_code_family"                -> "typography.code.family",
-        "font_ui_ligatures"               -> "typography.ui.ligatures"
+        "font_code_family"  -> "typography.code.family",
+        "font_ui_ligatures" -> "typography.ui.ligatures"
       )
     )
   }
 
-  it should "group editor animation, fonts, and pane width under AppConfig" in {
-    val animation = AnimationConfig.custom(durationMs = 240)
+  it should "group editor fonts and pane width under AppConfig" in {
     val fonts = FontConfig(
       codeFontFamily = "Monospaced",
       textFontFamily = "Serif",
@@ -50,11 +42,9 @@ class EditorConfigSpec extends AnyFlatSpec with Matchers:
     )
 
     val config = AppConfig.default
-      .withCharacterAnimation(animation.get)
       .withFontConfig(fonts)
       .withMinimumPaneWidth(72)
 
-    config.editorConfig.characterAnimation.shouldBe(animation)
     config.editorConfig.fontConfig.shouldBe(fonts)
     config.editorConfig.minimumPaneWidth.shouldBe(72)
   }

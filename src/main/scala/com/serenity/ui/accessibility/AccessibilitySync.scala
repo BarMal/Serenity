@@ -37,7 +37,7 @@ object AccessibilitySync:
       snapshot: AccessibilitySnapshot
   )
 
-  /** Blanks the fields ticked by decorative animations but never read when projecting the accessibility snapshot. */
+  /** Blanks the fields that tick on their own but are never read when projecting the accessibility snapshot. */
   private[accessibility] def normalize(state: AppState): AppState =
     state.copy(
       persisted = state.persisted.copy(

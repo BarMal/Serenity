@@ -243,7 +243,6 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     val sessionManager = createManagerAt(sessionRoot)
     val sessionFile    = currentSessionFile(sessionRoot)
     val missingLegacyConfigKeys = List(
-      "characterAnimation",
       "syntaxHighlightingEnabled",
       "fontConfig",
       "minimumPaneWidth",
@@ -269,9 +268,6 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       loaded <- sessionManager.loadSession()
     yield
       loaded.map(_.persisted.buffers.values.head.document.content.toString) shouldBe Some("legacy config")
-      loaded.map(_.persisted.config.editorConfig.characterAnimation) shouldBe Some(
-        AppConfig.default.editorConfig.characterAnimation
-      )
       loaded.map(_.persisted.config.languageToolsConfig.syntaxHighlightingEnabled) shouldBe Some(
         AppConfig.default.languageToolsConfig.syntaxHighlightingEnabled
       )

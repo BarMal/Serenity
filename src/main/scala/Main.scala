@@ -234,9 +234,9 @@ object Main extends IOApp:
 
   /** Applies the eco overlay (if requested via `--eco` or `SERENITY_ECO=1`) and the alpha overlay (if requested via
     * `--alpha`) before the auto text-scale resolution that follows every config load, so their changes are visible to
-    * that step just like any other loaded setting. Eco touches only the render fps target and motion accessibility;
-    * alpha touches only the currently-gated experimental prototype flags (command-runner cursor-peek today) -- the two
-    * overlays don't share any field, so application order between them doesn't matter.
+    * that step just like any other loaded setting. Eco touches only the render fps target; alpha touches only the
+    * currently-gated experimental prototype flags (command-runner cursor-peek today) -- the two overlays don't share
+    * any field, so application order between them doesn't matter.
     */
   private def resolveAppConfig(loadedConfig: AppConfig, launchOptions: LaunchOptions): AppConfig =
     resolveAutoTextScale(

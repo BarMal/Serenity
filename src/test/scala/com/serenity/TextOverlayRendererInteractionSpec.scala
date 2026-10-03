@@ -356,7 +356,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(40, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val metrics = CellMetrics.fromFont(font)
-    val rowText = "Motion Speed Scale: Scale (0.0-4.0) 12345678901234567890"
+    val rowText = "Line Number Margin: Scale (0.0-4.0) 12345678901234567890"
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 24, 5),
       rows = List(
@@ -365,7 +365,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
           selected = true,
           cursorColumn = Some(rowText.length),
           segments = List(
-            OverlaySegment("Motion Speed Scale"),
+            OverlaySegment("Line Number Margin"),
             OverlaySegment("Scale (0.0-4.0)"),
             OverlaySegment("12345678901234567890", selected = true)
           ),
@@ -377,7 +377,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
     TextOverlayRenderer.render(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
     val renderedRow = surface.getRow(1)
-    renderedRow should include("Motio")
+    renderedRow should include("Line")
     renderedRow should not include "78901234567890"
   }
 

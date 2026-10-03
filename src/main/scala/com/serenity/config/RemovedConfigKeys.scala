@@ -25,9 +25,25 @@ object RemovedConfigKeys:
     "ui.visual_flair",
     "visual.flair.level",
     "window.translucent",
-    "window_translucent"
+    "window_translucent",
+    // `ui.motion` once was a leaf beside `ui.motion.*`; `character.animation` and `character_animation` the same.
+    "ui.motion",
+    "ui_motion",
+    "character.animation",
+    "character_animation"
   )
 
-  private val prefixes: List[String] = List("ui.companion_sprite.", "companion.sprite.")
+  private val prefixes: List[String] = List(
+    "ui.companion_sprite.",
+    "companion.sprite.",
+    // The motion settings: `motion.*` and its older `ui.motion.*` spelling, the per-family blocks under both, and the
+    // character animation keys that sat beside them.
+    "motion.",
+    "ui.motion.",
+    "ui_motion_",
+    "motion_",
+    "character.animation.",
+    "character_animation_"
+  )
 
   def isRemoved(key: String): Boolean = keys.contains(key) || prefixes.exists(key.startsWith)

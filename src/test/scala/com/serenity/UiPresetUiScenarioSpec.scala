@@ -8,12 +8,11 @@ import com.serenity.command.{
   CommandCategory,
   CommandIntent,
   InterfaceChromeIntent,
-  MotionIntent,
   SessionIntent,
   SettingsIntent,
   UiPresetsIntent
 }
-import com.serenity.config.{InterfaceDensity, MotionPreset}
+import com.serenity.config.InterfaceDensity
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
@@ -64,19 +63,22 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
         )
       )
       .unsafeRunSync()
-    val savedMotion = driver.state.unsafeRunSync().persisted.config.surfaceConfig.motionPreset
     execute(driver, CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Scenario")))
     val beforeChange = driver.renderFrame("before-settings-change").unsafeRunSync()
-    execute(driver, CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Subtle))))
+    execute(
+      driver,
+      CommandIntent.Settings(
+        SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetInterfaceDensity(InterfaceDensity.Spacious))
+      )
+    )
     val changed = driver.renderFrame("changed").unsafeRunSync()
-    driver.state.unsafeRunSync().persisted.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
+    driver.state.unsafeRunSync().persisted.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     changed.evidence.layoutViolations shouldBe empty
-    store.find("Scenario").unsafeRunSync().map(_.config.surfaceConfig.motionPreset) shouldBe Some(savedMotion)
+    store.find("Scenario").unsafeRunSync().map(_.config.interfaceDensity) shouldBe Some(InterfaceDensity.Compact)
 
     execute(driver, CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Scenario")))
     val reapplied = driver.state.unsafeRunSync()
     reapplied.persisted.config.interfaceDensity shouldBe InterfaceDensity.Compact
-    reapplied.persisted.config.surfaceConfig.motionPreset shouldBe savedMotion
     beforeChange.evidence.layoutViolations shouldBe empty
     driver.renderFrame("after-reapply").unsafeRunSync().evidence.layoutViolations shouldBe empty
 
@@ -92,21 +94,26 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
 
     execute(driver, CommandIntent.UiPresets(UiPresetsIntent.SaveUiPresetAsNew("Scenario")))
     val beforeChange = driver.renderFrame("before-change-save").unsafeRunSync()
-    val savedMotion  = store.find("Scenario").unsafeRunSync().map(_.config.surfaceConfig.motionPreset)
-    execute(driver, CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Subtle))))
+    val savedDensity = store.find("Scenario").unsafeRunSync().map(_.config.interfaceDensity)
+    execute(
+      driver,
+      CommandIntent.Settings(
+        SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetInterfaceDensity(InterfaceDensity.Compact))
+      )
+    )
     val changed = driver.renderFrame("changed-save").unsafeRunSync()
-    store.find("Scenario").unsafeRunSync().map(_.config.surfaceConfig.motionPreset) shouldBe savedMotion
+    store.find("Scenario").unsafeRunSync().map(_.config.interfaceDensity) shouldBe savedDensity
 
     execute(driver, CommandIntent.UiPresets(UiPresetsIntent.OverwriteUiPreset("Scenario")))
     val saved = driver.renderFrame("after-save").unsafeRunSync()
-    store.find("Scenario").unsafeRunSync().map(_.config.surfaceConfig.motionPreset) shouldBe Some(MotionPreset.Subtle)
+    store.find("Scenario").unsafeRunSync().map(_.config.interfaceDensity) shouldBe Some(InterfaceDensity.Compact)
 
     val restarted =
       UiScenarioDriver.create("ui-preset-preview-save-restarted", uiPresetStore = Some(store)).unsafeRunSync()
     execute(restarted, CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Scenario")))
     val appliedAfterRestart = restarted.renderFrame("applied-after-restart").unsafeRunSync()
 
-    restarted.state.unsafeRunSync().persisted.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
+    restarted.state.unsafeRunSync().persisted.config.interfaceDensity shouldBe InterfaceDensity.Compact
     beforeChange.evidence.layoutViolations shouldBe empty
     changed.evidence.layoutViolations shouldBe empty
     saved.evidence.layoutViolations shouldBe empty

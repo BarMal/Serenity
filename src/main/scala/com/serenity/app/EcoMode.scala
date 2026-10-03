@@ -1,27 +1,21 @@
 package com.serenity.app
 
-import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.{AppConfig, MotionAccessibility, RenderFpsTarget}
+import com.serenity.config.AppConfigOps.*
+import com.serenity.config.{AppConfig, RenderFpsTarget}
 
-/** Bundles the low-power knobs (30fps render cap, reduced motion, steady cursor) that a battery-conscious session would
-  * otherwise require editing several settings for and remembering to revert -- see issue #1173. Every knob `overlay`
-  * sets already exists individually; this only adds the single switch.
+/** Bundles the low-power knobs a battery-conscious session would otherwise require editing several settings for and
+  * remembering to revert -- see issue #1173. Today that is the 30fps render cap; the reduced-motion half of the profile
+  * went away with the motion settings.
   */
 object EcoMode:
 
   val EnvVar: String = "SERENITY_ECO"
 
-  /** Overlays the eco profile onto an already-loaded config, touching only the render fps target and the motion
-    * hierarchy's accessibility field -- every other setting (theme, keybindings, font, window chrome, ...) passes
-    * through unchanged. `MotionAccessibility.Reduced` disables every motion family when resolved (see
-    * `MotionConfig.effective`), cursor included, so this alone delivers the "steady cursor, no blink ticks" half of the
-    * profile without a separate cursor-specific knob, while preserving the user's own motion baseline and per-family
-    * values underneath the override.
+  /** Overlays the eco profile onto an already-loaded config, touching only the render fps target -- every other setting
+    * (theme, keybindings, font, window chrome, ...) passes through unchanged.
     */
   def overlay(config: AppConfig): AppConfig =
-    config
-      .withRenderFpsTarget(RenderFpsTarget.Fps30)
-      .withMotionAccessibility(MotionAccessibility.Reduced)
+    config.withRenderFpsTarget(RenderFpsTarget.Fps30)
 
   /** Whether eco mode should activate for this launch. The `--eco` CLI flag takes priority over the environment
     * variable: it's the more deliberate, per-invocation signal, whereas `SERENITY_ECO=1` exists so an external

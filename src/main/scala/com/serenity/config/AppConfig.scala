@@ -1,6 +1,5 @@
 package com.serenity.config
 
-import com.serenity.animation.*
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.config.LspUserConfig
@@ -327,8 +326,6 @@ final case class AppConfig(
 
 object AppConfig:
 
-  val MinElementTransitionSpeedScale: Double    = 0.0
-  val MaxElementTransitionSpeedScale: Double    = 4.0
   val MinUiElementGap: Double                   = 0.0
   val MaxUiElementGap: Double                   = 8.0
   val MinUiOutlineThicknessPx: Int              = 1
@@ -349,9 +346,6 @@ object AppConfig:
   // ceiling against a fat-fingered config value, not a meaningful capacity anyone would actually want (see #1433).
   val MinRendererFrameStateCacheCapacity: Int = 8
   val MaxRendererFrameStateCacheCapacity: Int = 4096
-
-  def clampElementTransitionSpeedScale(scale: Double): Double =
-    scale.max(MinElementTransitionSpeedScale).min(MaxElementTransitionSpeedScale)
 
   def clampUiElementGap(gap: Double): Double =
     if gap.isFinite then gap.max(MinUiElementGap).min(MaxUiElementGap) else MinUiElementGap
@@ -383,52 +377,10 @@ object AppConfig:
     if weight.isFinite then weight.max(MinDiagnosticHighlightBlendWeight).min(MaxDiagnosticHighlightBlendWeight)
     else MinDiagnosticHighlightBlendWeight
 
-  def scaledAnimation(animation: Option[AnimationConfig], speedScale: Double): Option[AnimationConfig] =
-    animation.flatMap(_.scaledBy(clampElementTransitionSpeedScale(speedScale)))
-
-  /** Default configuration keeps text entry immediate and uses restrained frosted surfaces. */
   /** What the app ships with.
     *
     * Only the settings that differ from their own field's default belong here. Restating one that already matches hides
     * which of the two is the real answer -- four of these used to, and telling them apart meant reading both.
     * `ConfigRegistry.defaults` lists every setting's default, and `docs/default-config.conf` is generated from it.
     */
-  val default: AppConfig = AppConfig(
-    surfaceConfig = SurfaceConfig(motionPreset = MotionPreset.Smooth)
-  )
-
-  /** Test configuration with visible animations enabled */
-  val withTestAnimations: AppConfig = AppConfig(
-    editorConfig = EditorConfig(characterAnimation = AnimationConfig.quick),
-    surfaceConfig = SurfaceConfig(
-      uiAnimation = AnimationConfig.quick,
-      motionPreset = MotionPreset.Expressive
-    )
-  )
-
-  /** Quick fade-in animation configuration */
-  val withQuickAnimation: AppConfig = AppConfig(
-    editorConfig = EditorConfig(characterAnimation = AnimationConfig.quick),
-    surfaceConfig = SurfaceConfig(
-      uiAnimation = AnimationConfig.quick,
-      motionPreset = MotionPreset.Expressive
-    )
-  )
-
-  /** Smooth fade-in animation configuration */
-  val withSmoothAnimation: AppConfig = AppConfig(
-    editorConfig = EditorConfig(characterAnimation = AnimationConfig.smooth),
-    surfaceConfig = SurfaceConfig(
-      uiAnimation = AnimationConfig.smooth,
-      motionPreset = MotionPreset.Smooth
-    )
-  )
-
-  /** Subtle fade-in animation configuration */
-  val withSubtleAnimation: AppConfig = AppConfig(
-    editorConfig = EditorConfig(characterAnimation = AnimationConfig.subtle),
-    surfaceConfig = SurfaceConfig(
-      uiAnimation = AnimationConfig.subtle,
-      motionPreset = MotionPreset.Subtle
-    )
-  )
+  val default: AppConfig = AppConfig()

@@ -2,7 +2,6 @@ package com.serenity
 
 import com.serenity.command.*
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer}
@@ -51,11 +50,8 @@ class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
   ): AppState =
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val effectiveConfig =
-      if itemId == "animation-duration" || itemId == "animation-steps" then config.withMotionPreset(MotionPreset.Custom)
-      else config
     val searchedRunner = CommandRunner.empty
-      .activate(registry, effectiveConfig)
+      .activate(registry, config)
       .openSettings
       .updateSearchTerm(settingsGroupSearchTerm(groupId))
     val selectedIndex = searchedRunner.visibleItems.indexWhere(_.id == groupId) match
@@ -100,10 +96,10 @@ class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
     movedLeft.state shouldBe state
   }
 
-  it should "adjust the selected motion accessibility option inside the submenu with left and right" in {
+  it should "adjust the selected render fps option inside the submenu with left and right" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val state             = settingsStateOnItem("settings-animation", "motion-accessibility")
+    val state             = settingsStateOnItem("settings-look-advanced", "render-fps")
 
     val movedLeft = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Left), state, registry)
     val runnerAfterLeft = movedLeft.state.commandRunnerSurface
@@ -115,11 +111,11 @@ class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected command runner surface"))
 
     runnerAfterLeft
-      .submenuItems("settings-animation")
+      .submenuItems("settings-look-advanced")
       .collectFirst {
-        case option: CommandSurfaceItem.OptionItem if option.id == "motion-accessibility" => option.selectedOption
+        case option: CommandSurfaceItem.OptionItem if option.id == "render-fps" => option.selectedOption
       }
-      .shouldBe(Some("Off"))
+      .shouldBe(Some("30 FPS"))
 
     val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), movedLeft.state, registry)
     val runnerAfterRight = movedRight.state.commandRunnerSurface
@@ -131,11 +127,11 @@ class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected command runner surface"))
 
     runnerAfterRight
-      .submenuItems("settings-animation")
+      .submenuItems("settings-look-advanced")
       .collectFirst {
-        case option: CommandSurfaceItem.OptionItem if option.id == "motion-accessibility" => option.selectedOption
+        case option: CommandSurfaceItem.OptionItem if option.id == "render-fps" => option.selectedOption
       }
-      .shouldBe(Some("Standard"))
+      .shouldBe(Some("60 FPS"))
   }
 
   it should "adjust the selected interface density inside the interface layout submenu" in {

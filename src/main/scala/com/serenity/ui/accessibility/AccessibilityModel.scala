@@ -1,7 +1,7 @@
 package com.serenity.ui.accessibility
 
 import com.serenity.command.CommandSurfaceItem
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.InterfaceDensity
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*

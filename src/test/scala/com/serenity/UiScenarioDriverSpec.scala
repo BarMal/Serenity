@@ -5,7 +5,7 @@ import java.nio.file.Files
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.AppStartup
 import com.serenity.command.{Command, CommandCategory, CommandIntent, GeneralSettingsIntent, SettingsIntent}
-import com.serenity.config.{MarkdownViewMode, MotionPreset}
+import com.serenity.config.MarkdownViewMode
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
@@ -54,7 +54,6 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
     val driver = UiScenarioDriver.create("isolated-config", isolatedConfig = true).unsafeRunSync()
     val config = driver.state.unsafeRunSync().persisted.config
 
-    config.surfaceConfig.motionPreset shouldBe MotionPreset.Reduced
     config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
     config.surfaceConfig.commandRunnerItemGapRows shouldBe Some(0)
   }

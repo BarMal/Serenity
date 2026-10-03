@@ -1,6 +1,5 @@
 package com.serenity.config
 
-import com.serenity.animation.*
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
 
@@ -39,14 +38,6 @@ final case class SurfaceConfig(
     focusedTextBodyEnabled: Boolean = false,
     contextualToolbarEnabled: Boolean = true,
     contextualToolbarDisplayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText,
-    motionPreset: MotionPreset = MotionPreset.Reduced,
-    elementTransitionSpeedScale: Double = 1.0,
-    editorTextTransitionSpeedScale: Option[Double] = None,
-    commandRunnerTransitionSpeedScale: Option[Double] = None,
-    uiTransitionSpeedScale: Option[Double] = None,
-    cursorTransitionSpeedScale: Option[Double] = None,
-    commandRunnerAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
-    uiAnimation: Option[AnimationConfig] = AnimationConfig.smooth,
     commandRunnerVisibleRows: Option[Int] = None,
     // issue #1046: `None` (the default) now falls back to the current interface density's own item spacing
     // (`InterfaceDensityMetrics.itemGapRows`, via `AppConfig.effectiveCommandRunnerItemGapRows`) rather than a flat
@@ -71,11 +62,6 @@ final case class SurfaceConfig(
     commandRunnerCursorPeekPlacement: SurfacePlacement = SurfacePlacement.BelowCursor,
     renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
     renderDamageGranularity: RenderDamageGranularity = RenderDamageGranularity.Rows,
-    editorInsertionTransitionKind: TransitionKind = TransitionKind.Fade,
-    commandRunnerTransitionKind: Option[TransitionKind] = None,
-    panelOpenTransitionKind: Option[TransitionKind] = None,
-    panelCloseTransitionKind: Option[TransitionKind] = None,
-    motionConfiguration: Option[MotionConfig] = None,
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
     viewportSizing: ViewportSizing = ViewportSizing(),
     // Per-cache capacity for RendererFrameState's bounded-LRU caches (issue #1433): a Ref-backed Map can't observe
@@ -99,13 +85,6 @@ final case class SurfaceConfig(
       rendererFrameStateCacheCapacity = AppConfig.clampRendererFrameStateCacheCapacity(rendererFrameStateCacheCapacity),
       columnGap = columnGap.max(0),
       columnTargetWidthCells = columnTargetWidthCells.max(1),
-      elementTransitionSpeedScale = AppConfig.clampElementTransitionSpeedScale(elementTransitionSpeedScale),
-      editorTextTransitionSpeedScale = editorTextTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
-      commandRunnerTransitionSpeedScale =
-        commandRunnerTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
-      uiTransitionSpeedScale = uiTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
-      cursorTransitionSpeedScale = cursorTransitionSpeedScale.map(AppConfig.clampElementTransitionSpeedScale),
-      motionConfiguration = motionConfiguration.map(_.normalized),
       commandRunnerVisibleRows = commandRunnerVisibleRows.map(AppConfig.clampCommandRunnerVisibleRows),
       commandRunnerItemGapRows = commandRunnerItemGapRows.map(AppConfig.clampCommandRunnerItemGapRows),
       commandRunnerCursorGapRows = commandRunnerCursorGapRows.map(AppConfig.clampCommandRunnerCursorGapRows),
@@ -116,150 +95,3 @@ final case class SurfaceConfig(
       viewportSizing = viewportSizing.normalized,
       diagnosticHighlightBlendWeight = AppConfig.clampDiagnosticHighlightBlendWeight(diagnosticHighlightBlendWeight)
     )
-
-  /** Speed scales as the legacy fields alone describe them: a per-family override if there is one, otherwise the
-    * element-wide scale.
-    *
-    * These are what [[MotionConfig.fromLegacy]] reads when it derives a hierarchy from a configuration that has none,
-    * so they cannot themselves consult the hierarchy -- that is what the `effective*` accessors below are for, and
-    * asking one of those here would be circular.
-    *
-    * Deliberately package-visible rather than public: they are the seam [[MotionConfig]] builds a hierarchy across, and
-    * that derivation is the only legitimate caller. Anything outside this package asking for a family's speed wants the
-    * `effective*` accessor -- a legacy field read directly reports a stale value for a configuration loaded from a
-    * file, which is the bug those accessors exist to fix.
-    */
-  private[config] def legacyEditorTextTransitionSpeedScale: Double =
-    editorTextTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
-
-  private[config] def legacyCommandRunnerTransitionSpeedScale: Double =
-    commandRunnerTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
-
-  private[config] def legacyUiTransitionSpeedScale: Double =
-    uiTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
-
-  private[config] def legacyCursorTransitionSpeedScale: Double =
-    cursorTransitionSpeedScale.getOrElse(elementTransitionSpeedScale)
-
-  /** The speed scale configured for a family: an explicit per-family override if the user set one, otherwise whatever
-    * the authoritative hierarchy holds, and the element-wide scale only when there is nothing else to go on. This is
-    * the value the settings surface shows as current -- the runtime value the renderer plans with comes from
-    * `elementTransitionSettings`, where a `Reduced` preset legitimately disables motion the user has scaled.
-    *
-    * The middle step is the one that was missing. A configuration loaded from a file carries its scales in the
-    * hierarchy and its legacy fields at their defaults -- those `Option`s are not written, being a record of what was
-    * set explicitly rather than settings in their own right -- so resolving from the legacy fields alone reported the
-    * element-wide default for a family the file plainly gave a scale to, and the settings row showed the wrong number
-    * after every restart.
-    */
-  private def configuredFamilySpeedScale(family: MotionFamily, explicit: Option[Double]): Double =
-    explicit
-      .orElse(motionConfiguration.map(_ => effectiveMotionConfiguration.family(family).speedScale))
-      .getOrElse(elementTransitionSpeedScale)
-
-  def effectiveEditorTextTransitionSpeedScale: Double =
-    configuredFamilySpeedScale(MotionFamily.EditorText, editorTextTransitionSpeedScale)
-
-  def effectiveCommandRunnerTransitionSpeedScale: Double =
-    configuredFamilySpeedScale(MotionFamily.CommandSurfaces, commandRunnerTransitionSpeedScale)
-
-  def effectiveUiTransitionSpeedScale: Double =
-    configuredFamilySpeedScale(MotionFamily.UiTransitions, uiTransitionSpeedScale)
-
-  def effectiveCursorTransitionSpeedScale: Double =
-    configuredFamilySpeedScale(MotionFamily.Cursor, cursorTransitionSpeedScale)
-
-  /** Resolve every runtime family from one hierarchy, preserving legacy fields when no hierarchy has been saved yet. */
-  def effectiveMotionConfiguration: EffectiveMotionConfig =
-    motionConfiguration match
-      case Some(configuration) =>
-        configuration.withFallback(MotionConfig.fromLegacy(this, configuration.baseline)).effective
-      case None => MotionConfig.fromLegacy(this).effective
-
-  def effectiveMotionBaseline: MotionPreset =
-    motionConfiguration.fold(motionPreset)(_.baseline)
-
-  def effectiveCommandRunnerTransitionKind: TransitionKind =
-    motionConfiguration.fold(commandRunnerTransitionKind.getOrElse(TransitionKind.Fade))(_ =>
-      effectiveMotionConfiguration.family(MotionFamily.CommandSurfaces).transitionKind
-    )
-
-  def effectivePanelOpenTransitionKind: TransitionKind =
-    motionConfiguration.fold(panelOpenTransitionKind.getOrElse(TransitionKind.OutlineThenContent))(_ =>
-      effectiveMotionConfiguration.family(MotionFamily.PinnedPanels).transitionKindFor(TransitionScope.PanelOpen)
-    )
-
-  def effectivePanelCloseTransitionKind: TransitionKind =
-    motionConfiguration.fold(panelCloseTransitionKind.getOrElse(TransitionKind.Fade))(_ =>
-      effectiveMotionConfiguration.family(MotionFamily.PinnedPanels).transitionKindFor(TransitionScope.PanelClose)
-    )
-
-  def elementTransitionSettings: ElementTransitionSettings =
-    val uiMotion = effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
-    val baseSettings =
-      if uiMotion.enabled then effectiveMotionBaseline.elementTransitionSettings else ElementTransitionSettings.disabled
-    if !baseSettings.enabled then baseSettings
-    else
-      val transitionOverrides = motionConfiguration match
-        case Some(_) =>
-          List(
-            TransitionScope.EditorInsertion -> effectiveMotionConfiguration
-              .family(MotionFamily.EditorText)
-              .transitionKind,
-            TransitionScope.CommandRunner -> effectiveMotionConfiguration
-              .family(MotionFamily.CommandSurfaces)
-              .transitionKind,
-            TransitionScope.PanelOpen -> effectiveMotionConfiguration
-              .family(MotionFamily.PinnedPanels)
-              .transitionKindFor(TransitionScope.PanelOpen),
-            TransitionScope.PanelClose -> effectiveMotionConfiguration
-              .family(MotionFamily.PinnedPanels)
-              .transitionKindFor(TransitionScope.PanelClose)
-          ).toMap
-        case None =>
-          List(
-            Some(TransitionScope.EditorInsertion -> editorInsertionTransitionKind),
-            commandRunnerTransitionKind.map(TransitionScope.CommandRunner -> _),
-            panelOpenTransitionKind.map(TransitionScope.PanelOpen -> _),
-            panelCloseTransitionKind.map(TransitionScope.PanelClose -> _)
-          ).flatten.toMap
-
-      baseSettings.copy(
-        speedScale = uiMotion.speedScale,
-        overrides = baseSettings.overrides ++ transitionOverrides
-      )
-
-  def editorInsertionTransitionSettings: ElementTransitionSettings =
-    val editorMotion = effectiveMotionConfiguration.family(MotionFamily.EditorText)
-    val baseSettings =
-      if editorMotion.enabled then effectiveMotionBaseline.elementTransitionSettings
-      else ElementTransitionSettings.disabled
-    if !baseSettings.enabled then baseSettings
-    else
-      baseSettings.copy(
-        speedScale = editorMotion.speedScale,
-        overrides = baseSettings.overrides ++ Map(TransitionScope.EditorInsertion -> editorMotion.transitionKind)
-      )
-
-  /** Transition policy for pinned panels, with independent family timing and reveal strategy. */
-  def pinnedPanelTransitionSettings: ElementTransitionSettings =
-    motionConfiguration match
-      case None => elementTransitionSettings
-      case Some(_) =>
-        val panelMotion = effectiveMotionConfiguration.family(MotionFamily.PinnedPanels)
-        val baseSettings =
-          if panelMotion.enabled then effectiveMotionBaseline.elementTransitionSettings
-          else ElementTransitionSettings.disabled
-        if !baseSettings.enabled then baseSettings
-        else
-          val timing = panelMotion.animation.fold(baseSettings.baseTiming)(animation =>
-            baseSettings.baseTiming.copy(durationMs = animation.durationMs, staggerMs = animation.tickRateMs)
-          )
-          baseSettings.copy(
-            baseTiming = timing,
-            speedScale = panelMotion.speedScale,
-            overrides = baseSettings.overrides ++ Map(
-              TransitionScope.PanelOpen  -> panelMotion.transitionKindFor(TransitionScope.PanelOpen),
-              TransitionScope.PanelClose -> panelMotion.transitionKindFor(TransitionScope.PanelClose)
-            )
-          )

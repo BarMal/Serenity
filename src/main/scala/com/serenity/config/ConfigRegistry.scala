@@ -11,8 +11,8 @@ package com.serenity.config
   * spelled with [[ConfigFieldSyntax]]; this object is the assembled list plus the lookups over it. Concatenation order
   * here is the order the config file is written in.
   *
-  * Composite settings whose shape is not one key to one value -- the motion families, the animation presets, the
-  * LSP/hotkey/keymap groups -- are declared in [[ConfigGroups]] instead, and the coverage tests treat both alike.
+  * Composite settings whose shape is not one key to one value -- the LSP/hotkey/keymap groups -- are declared in
+  * [[ConfigGroups]] instead, and the coverage tests treat both alike.
   */
 object ConfigRegistry:
 

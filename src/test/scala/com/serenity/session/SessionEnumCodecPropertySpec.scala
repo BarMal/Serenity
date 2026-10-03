@@ -40,6 +40,3 @@ class SessionEnumCodecPropertySpec extends AnyPropSpec with ScalaCheckPropertyCh
   roundTripsAllCases("MarkdownViewMode", MarkdownViewMode.values, _.configKey)
   roundTripsAllCases("DefaultDocumentMode", DefaultDocumentMode.values, _.configKey)
   roundTripsAllCases("InterfaceDensity", InterfaceDensity.values, _.configKey)
-  roundTripsAllCases("MotionPreset", MotionPreset.values, _.configKey)
-  roundTripsAllCases("MotionAccessibility", MotionAccessibility.values, _.configKey)
-  roundTripsAllCases("MotionFamily", MotionFamily.values, _.configKey)

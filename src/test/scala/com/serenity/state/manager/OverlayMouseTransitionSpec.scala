@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import com.serenity.app.AppStartup
 import com.serenity.command.{CommandRegistry, CommandRunner}
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*

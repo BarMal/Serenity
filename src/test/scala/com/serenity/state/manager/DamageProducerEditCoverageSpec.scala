@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{RenderDamageGranularity, StatusLinePlacement, StatusSegment}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}

@@ -2,7 +2,6 @@ package com.serenity.config
 
 import java.awt.Color
 
-import com.serenity.animation.AnimationConfig
 import com.serenity.ui.fonts.FontLoader.FontConfig
 
 final case class PreferredWindowSize(width: Int, height: Int):
@@ -33,7 +32,6 @@ final case class CursorConfig(
 )
 
 final case class EditorConfig(
-    characterAnimation: Option[AnimationConfig] = AnimationConfig.none,
     fontConfig: FontConfig = FontConfig(),
     minimumPaneWidth: Int = 50
 ):

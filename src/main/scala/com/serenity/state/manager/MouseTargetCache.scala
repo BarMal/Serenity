@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import java.awt.Font
 import java.util.LinkedHashMap
 
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{AppConfig, InterfaceDensity, StatusLineConfig, TextAreaInsets}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.RichTextDocument

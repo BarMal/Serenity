@@ -3,7 +3,6 @@ package com.serenity
 import scala.concurrent.duration.*
 
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.frontend.{GuiFrontend, TuiFrontend}
 import com.serenity.keystroke.KeyboardFidelityTier
 import org.scalatest.flatspec.AnyFlatSpec
@@ -13,15 +12,8 @@ class AppRuntimeCursorCadenceSpec extends AnyFlatSpec with Matchers:
 
   private val tui = TuiFrontend(KeyboardFidelityTier.Full)
 
-  "GuiFrontend.cursorIdleInterval" should "blink at the fixed interval whatever the motion settings say" in {
+  "GuiFrontend.cursorIdleInterval" should "blink at the fixed interval" in {
     GuiFrontend.cursorIdleInterval(AppConfig.default) shouldBe Some(500.millis)
-    GuiFrontend.cursorIdleInterval(AppConfig.default.withElementTransitionSpeedScale(2.0)) shouldBe Some(500.millis)
-    GuiFrontend.cursorIdleInterval(AppConfig.default.withCursorTransitionSpeedScale(Some(0.0))) shouldBe Some(
-      500.millis
-    )
-    GuiFrontend.cursorIdleInterval(
-      AppConfig.default.withMotionAccessibility(MotionAccessibility.Off)
-    ) shouldBe Some(500.millis)
   }
 
   it should "never delegate the caret to a hardware cursor, since a GUI canvas paints its own caret" in {

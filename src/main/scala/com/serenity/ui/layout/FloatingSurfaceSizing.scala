@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.InterfaceDensityMetrics
 import com.serenity.state.models.*
 

@@ -5,7 +5,6 @@ import java.awt.Color
 import _root_.io.circe.syntax.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.AnimationConfig
 import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.keystroke.events.*
@@ -65,10 +64,10 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
 
   it should "leave other fields unchanged when changing cursorMode" in {
     val config = AppConfig(
-      editorConfig = EditorConfig(characterAnimation = AnimationConfig.quick),
+      editorConfig = EditorConfig(minimumPaneWidth = 40),
       surfaceConfig = SurfaceConfig(showLineNumbers = false, diagnosticHighlightBlendWeight = 0.5)
     ).withCursorMode(CursorMode.Blink)
-    config.editorConfig.characterAnimation shouldBe AnimationConfig.quick
+    config.editorConfig.minimumPaneWidth shouldBe 40
     config.surfaceConfig.showLineNumbers shouldBe false
     config.surfaceConfig.diagnosticHighlightBlendWeight shouldBe 0.5
   }

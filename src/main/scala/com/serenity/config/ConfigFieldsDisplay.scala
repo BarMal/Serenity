@@ -1,6 +1,6 @@
 package com.serenity.config
 
-import AppConfigMotionOps.*
+import AppConfigOps.*
 
 /** Rendering cadence and everything `display.*`: chrome rows, wrap, scrolling, toolbar. */
 private[config] object ConfigFieldsDisplay:
