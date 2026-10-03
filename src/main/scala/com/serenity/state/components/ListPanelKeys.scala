@@ -3,7 +3,7 @@ package com.serenity.state.components
 import com.serenity.document.DocumentNavigation
 import com.serenity.keystroke.events.{Direction, PanelInputEvent}
 import com.serenity.state.models.{AppState, SurfaceContent, UiSurface}
-import com.serenity.ui.layout.{Location, Symbol}
+import com.serenity.ui.layout.{Location, Symbol, WrappedLineCache}
 import com.serenity.ui.widget.{EndBehaviour, SelectableList, WidgetInput}
 
 /** The outline, comments and diagnostics panels' keys: Up/Down/Home/End/PageUp/PageDown move the highlight, stopping at
@@ -11,8 +11,14 @@ import com.serenity.ui.widget.{EndBehaviour, SelectableList, WidgetInput}
   */
 private[components] object ListPanelKeys:
 
-  def handle(event: PanelInputEvent, surface: UiSurface, state: AppState, visibleRows: Int): Option[ComponentResult] =
-    listOf(surface.content, state).flatMap { list =>
+  def handle(
+    event: PanelInputEvent,
+    surface: UiSurface,
+    state: AppState,
+    visibleRows: Int,
+    wrapCache: WrappedLineCache
+  ): Option[ComponentResult] =
+    listOf(surface.content, state, wrapCache).flatMap { list =>
       event match
         case PanelInputEvent.Activate =>
           list.highlighted.map(location => ComponentResult.updateState(list.open(_, location)))
@@ -42,7 +48,7 @@ private[components] object ListPanelKeys:
         endBehaviour = EndBehaviour.Stop
       )
 
-  private def listOf(content: SurfaceContent, state: AppState): Option[ListPanel] =
+  private def listOf(content: SurfaceContent, state: AppState, wrapCache: WrappedLineCache): Option[ListPanel] =
     content match
       case SurfaceContent.Outline(symbols, active) =>
         Some(
@@ -50,7 +56,7 @@ private[components] object ListPanelKeys:
             symbols.map(_.location).toVector,
             active.orElse(cursorEntry(symbols, state)),
             location => SurfaceContent.Outline(symbols, Some(location)),
-            PanelLocationNavigation.editorAt
+            PanelLocationNavigation.editorAt(_, _, wrapCache = wrapCache)
           )
         )
       case SurfaceContent.Comments(symbols, active) =>
@@ -59,7 +65,7 @@ private[components] object ListPanelKeys:
             symbols.map(_.location).toVector,
             active.orElse(cursorEntry(symbols, state)),
             location => SurfaceContent.Comments(symbols, Some(location)),
-            PanelLocationNavigation.commentAt
+            PanelLocationNavigation.commentAt(_, _, wrapCache = wrapCache)
           )
         )
       case SurfaceContent.Diagnostics(issues, active) =>
@@ -68,7 +74,7 @@ private[components] object ListPanelKeys:
             issues.map(_.location).toVector,
             active,
             location => SurfaceContent.Diagnostics(issues, Some(location)),
-            PanelLocationNavigation.editorAt
+            PanelLocationNavigation.editorAt(_, _, wrapCache = wrapCache)
           )
         )
       case _ => None

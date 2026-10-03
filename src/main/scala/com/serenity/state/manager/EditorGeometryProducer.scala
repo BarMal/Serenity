@@ -4,7 +4,14 @@ import com.serenity.keystroke.events.TextEntryEvent
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot, ViewportSize, WrappedLineCache}
+import com.serenity.ui.layout.{
+  CellMetrics,
+  LayoutEngine,
+  TextLayoutSnapshot,
+  ViewportSize,
+  VisualRowCounts,
+  WrappedLineCache
+}
 
 /** Builds, at the effect boundary, the immutable navigation geometry a vertical cursor move needs. This is the font
   * lookup, cell-metric and text-layout-snapshot work the reducer used to do inline; keeping it here leaves the reducer
@@ -103,23 +110,12 @@ object EditorGeometryProducer:
     val windowTopLine       = math.max(0, cursor.line - marginLines)
     val windowBudget        = math.max(24, rowsAbove + buffer.viewport.visibleLines * 3)
     val cellMetricsOverride = if isTui then Some(CellMetrics.cellUnit) else None
-    def visualRowsIn(line: Int): Int =
-      TextLayoutSnapshot
-        .boundedVisualLinesForText(
-          buffer.document.content.getLine(line).getOrElse(""),
-          line,
-          panelWidthPx,
-          font,
-          cellMetricsOverride = cellMetricsOverride,
-          forceCellLayout = isTui,
-          wrapCache = wrapCache
-        )
-        .length
-        .max(1)
+    val visualRows =
+      VisualRowCounts.forBuffer(buffer, panelWidthPx, font, cellMetricsOverride, forceCellLayout = isTui, wrapCache)
     val cursorRowInWindow =
       if !wordWrapEnabled then cursor.line - windowTopLine
       else
-        (windowTopLine until cursor.line).map(visualRowsIn).sum +
+        visualRows.rowsBetween(windowTopLine, cursor.line) +
           TextLayoutSnapshot.visualLineIndexForCursor(
             buffer.document.content.getLine(cursor.line).getOrElse(""),
             cursor.column,
@@ -131,13 +127,19 @@ object EditorGeometryProducer:
             wrapCache = wrapCache
           )
     val windowTopVisualLine = math.max(0, cursorRowInWindow - rowsAbove)
+    // Without rich text a snapshot folds each line into exactly the rows `visualRows` counts, so the window can start
+    // at the line holding its first row instead of wrapping every line above it only to drop them.
+    val (snapshotTopLine, snapshotTopVisualLine) =
+      if wordWrapEnabled && buffer.richText.richTextDocument.isEmpty then
+        visualRows.rowBelow(windowTopLine, windowTopVisualLine).getOrElse((windowTopLine, windowTopVisualLine))
+      else (windowTopLine, windowTopVisualLine)
     val snapshot =
       TextLayoutSnapshot.fromBuffer(
         buffer.copy(viewport =
           buffer.viewport.copy(
             leftColumn = 0,
-            topLine = windowTopLine,
-            topVisualLine = windowTopVisualLine,
+            topLine = snapshotTopLine,
+            topVisualLine = snapshotTopVisualLine,
             visibleLines = windowBudget
           )
         ),

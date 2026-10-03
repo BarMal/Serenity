@@ -10,7 +10,8 @@ import com.serenity.ui.theme.ThemeHighlightCache
   * highlight memoization, [[GraphemeSegmentationCache]]'s grapheme-boundary memoization, [[AuthoritativeUiScene]]'s
   * prepared-scene cache (with its own lock, now scoped to this instance rather than the JVM),
   * [[MarkdownPreviewCache]]'s markdown-preview HTML/image/inline-document caches, and [[WrappedLineCache]]'s wrapped
-  * lines, which the scene and the state-update path (through the scene it is handed) both read.
+  * lines, which the scene and the state-update path (through the scene it is handed) both read, together with the
+  * per-buffer visual-row indexes it keeps for scrolling and jumps.
   *
   * One instance is created per render-owning entity -- today, once per [[StateManager]] (see `StateManager.apply`) --
   * and threaded explicitly: down through [[com.serenity.ui.renderer.RenderContext]] to every render entry point and

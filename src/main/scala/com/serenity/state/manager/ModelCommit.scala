@@ -6,6 +6,7 @@ import com.serenity.animation.AnimationState
 import com.serenity.state.models.{AppState, BufferId}
 import com.serenity.state.reducers.{AppEffect, UndoEffect}
 import com.serenity.state.undo.UndoState
+import com.serenity.ui.layout.WrappedLineCache
 
 /** The one holder of the model `Ref` (#1697): capabilities read the model through it and change it only through its
   * writes. Every app-state write is validated by `StateManagerOperationBoundary.prepareCommit`; [[advanceTick]], the
@@ -14,7 +15,11 @@ import com.serenity.state.undo.UndoState
   *
   * Transitions run inside `Ref.modify`, which may retry them, so they must be pure.
   */
-final private[manager] class ModelCommit(modelRef: Ref[IO, Model], operations: StateManagerOperationBoundary):
+final private[manager] class ModelCommit(
+    modelRef: Ref[IO, Model],
+    operations: StateManagerOperationBoundary,
+    wrapCache: WrappedLineCache
+):
 
   def model: IO[Model] = modelRef.get
 
@@ -50,7 +55,7 @@ final private[manager] class ModelCommit(modelRef: Ref[IO, Model], operations: S
     interpretEffect: AppEffect => IO[Unit] = _ => IO.unit
   ): IO[Unit] =
     modelRef.flatModify { current =>
-      val reduced = EffectResult.reduce(current.app, result)
+      val reduced = EffectResult.reduce(current.app, result, wrapCache = wrapCache)
       if (reduced.state eq current.app) && reduced.effects.isEmpty then (current, IO.unit)
       else
         val next = ModelCommit.applyModelEffects(current.copy(app = reduced.state), reduced.effects)

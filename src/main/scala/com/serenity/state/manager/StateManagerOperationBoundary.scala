@@ -16,7 +16,7 @@ import com.serenity.spellcheck.{DictionaryCache, DictionaryLoader, SpellChecker}
 import com.serenity.state.core.NotesPaneSync
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.DirEntry
+import com.serenity.ui.layout.{DirEntry, WrappedLineCache}
 import org.typelevel.log4cats.Logger
 
 /** Operations emitted by capabilities for ordered interpretation at the event boundary. */
@@ -43,7 +43,8 @@ final private[manager] class StateManagerOperationBoundary private (
     discoverDictionaryFingerprints: SpellCheckConfig => IO[List[SpellCheckDictionaryFingerprint]],
     dictionaryCache: DictionaryCache,
     listDirectory: Path => IO[List[DirEntry]],
-    commitObserver: Ref[IO, (AppState, AppState) => IO[Unit]]
+    commitObserver: Ref[IO, (AppState, AppState) => IO[Unit]],
+    wrapCache: WrappedLineCache
 ):
   private val DocumentAnalysisDebounce         = 150.millis
   private val FindSearchDebounce               = 50.millis
@@ -55,7 +56,7 @@ final private[manager] class StateManagerOperationBoundary private (
   private val ShutdownGracePeriod              = 5.seconds
 
   // Built here, over the dispatcher's own model ref, because every commit it makes runs this boundary's follow-up work.
-  val modelCommit: ModelCommit = new ModelCommit(modelRef, this)
+  val modelCommit: ModelCommit = new ModelCommit(modelRef, this, wrapCache)
 
   def enqueueEvent(event: com.serenity.keystroke.events.Event): IO[Unit] =
     pendingOperations.update(_ :+ StateManagerOperation.Event(event))
@@ -362,7 +363,8 @@ private[manager] object StateManagerOperationBoundary:
     // dictionary directory -- see `StateManagerDictionaryFingerprintCacheSpec`.
     discoverDictionaryFingerprints: SpellCheckConfig => IO[List[SpellCheckDictionaryFingerprint]] = config =>
       IO.blocking(SpellCheckConfig.discoverDictionaryFingerprints(config)),
-    listDirectory: Path => IO[List[DirEntry]] = explorerListing(FileBrowser.listDirectory)
+    listDirectory: Path => IO[List[DirEntry]] = explorerListing(FileBrowser.listDirectory),
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): IO[StateManagerOperationBoundary] =
     for
       pendingOperations         <- Ref.of[IO, List[StateManagerOperation]](Nil)
@@ -396,5 +398,6 @@ private[manager] object StateManagerOperationBoundary:
       discoverDictionaryFingerprints,
       DictionaryCache(),
       listDirectory,
-      commitObserver
+      commitObserver,
+      wrapCache
     )

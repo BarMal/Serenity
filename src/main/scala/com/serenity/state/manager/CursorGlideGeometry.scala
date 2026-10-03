@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import com.serenity.config.AppConfig
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, PixelPoint, TextLayoutSnapshot, WrappedLineCache}
+import com.serenity.ui.layout.{CellMetrics, PixelPoint, TextLayoutSnapshot, VisualRowCounts, WrappedLineCache}
 
 /** Caret-glide (issue #1085 phase 2): the caret's pixel position *within its own pane's content area* -- relative to
   * the pane's top-left content origin, not the pane's absolute on-screen rect.
@@ -53,9 +53,6 @@ private[manager] object CursorGlideGeometry:
         wrapCache = wrapCache
       )
 
-    def visualRowCountForLine(lineIndex: Int): Int =
-      if !wordWrapEnabled then 1 else wrappedRows(lineIndex).length.max(1)
-
     val cursorVisualLineWithinItsLine =
       if !wordWrapEnabled then 0
       else
@@ -69,14 +66,12 @@ private[manager] object CursorGlideGeometry:
           wrapCache = wrapCache
         )
 
-    val rowsBetweenTopAndCursorLine =
-      if cursor.line == viewport.topLine then 0
-      else if cursor.line > viewport.topLine then (viewport.topLine until cursor.line).map(visualRowCountForLine).sum
-      else -(cursor.line until viewport.topLine).map(visualRowCountForLine).sum
-
     val visualRowOffset =
       if !wordWrapEnabled then cursor.line - viewport.topLine
-      else rowsBetweenTopAndCursorLine + cursorVisualLineWithinItsLine - viewport.topVisualLine
+      else
+        VisualRowCounts
+          .forBuffer(buffer, wrapWidthPx, font, None, forceCellLayout = false, wrapCache)
+          .rowsBetween(viewport.topLine, cursor.line) + cursorVisualLineWithinItsLine - viewport.topVisualLine
 
     val safeColumn = cursor.column.max(0)
     val xPxRaw =

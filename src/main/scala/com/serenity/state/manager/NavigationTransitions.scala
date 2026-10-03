@@ -7,7 +7,7 @@ import com.serenity.document.{CommentRendering, DocumentNavigation}
 import com.serenity.rope.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AnimationEffect, AppEffect, ModalStateReducer, ReducerResult}
-import com.serenity.ui.layout.Symbol
+import com.serenity.ui.layout.{Symbol, WrappedLineCache}
 
 private[manager] enum NavigationOutcome:
   case Applied(result: ReducerResult)
@@ -22,7 +22,12 @@ private[manager] object NavigationTransitions:
 
   private type SymbolChooser = (List[Symbol], CursorPosition) => Option[Symbol]
 
-  def comments(intent: CommentsIntent, state: AppState): NavigationOutcome =
+  def comments(
+    intent: CommentsIntent,
+    state: AppState,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  ): NavigationOutcome =
+    given WrappedLineCache = wrapCache
     intent match
       case CommentsIntent.ToggleCommentLens        => toggleCommentLens(state)
       case CommentsIntent.AddDocumentComment(text) => addDocumentComment(state, text)
@@ -30,14 +35,24 @@ private[manager] object NavigationTransitions:
       case CommentsIntent.NextDocumentComment      => navigateDocumentComment(state, DocumentNavigation.nextSymbol)
       case CommentsIntent.PreviousDocumentComment  => navigateDocumentComment(state, DocumentNavigation.previousSymbol)
 
-  def placeholders(intent: PlaceholderIntent, state: AppState): NavigationOutcome =
+  def placeholders(
+    intent: PlaceholderIntent,
+    state: AppState,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  ): NavigationOutcome =
+    given WrappedLineCache = wrapCache
     intent match
       case PlaceholderIntent.AddPlaceholder(note) => addPlaceholder(state, note)
       case PlaceholderIntent.DeletePlaceholder    => deletePlaceholder(state)
       case PlaceholderIntent.NextPlaceholder      => navigatePlaceholder(state, DocumentNavigation.nextSymbol)
       case PlaceholderIntent.PreviousPlaceholder  => navigatePlaceholder(state, DocumentNavigation.previousSymbol)
 
-  def navigation(intent: NavigationIntent, state: AppState): NavigationOutcome =
+  def navigation(
+    intent: NavigationIntent,
+    state: AppState,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  ): NavigationOutcome =
+    given WrappedLineCache = wrapCache
     intent match
       case NavigationIntent.OpenGotoLine =>
         NavigationOutcome.Applied(ModalStateReducer.show(Modal.TextPrompt(TextPrompt.gotoLine()), state))
@@ -74,10 +89,14 @@ private[manager] object NavigationTransitions:
       case SurfaceContent.CommentLens(_) => true
       case _                             => false
 
-  private def navigateDocumentSymbol(state: AppState, chooseSymbol: SymbolChooser): NavigationOutcome =
+  private def navigateDocumentSymbol(state: AppState, chooseSymbol: SymbolChooser)(using
+    WrappedLineCache
+  ): NavigationOutcome =
     navigateSymbols(state, PanelSymbolLookup.outlineSymbolsForBuffer, chooseSymbol, "Document symbol")
 
-  private def navigateBookmark(state: AppState, chooseSymbol: SymbolChooser): NavigationOutcome =
+  private def navigateBookmark(state: AppState, chooseSymbol: SymbolChooser)(using
+    WrappedLineCache
+  ): NavigationOutcome =
     navigateSymbols(
       state,
       buffer => DocumentNavigation.bookmarkSymbols(buffer.annotations.bookmarks),
@@ -85,7 +104,9 @@ private[manager] object NavigationTransitions:
       "Bookmark"
     )
 
-  private def navigateDocumentComment(state: AppState, chooseSymbol: SymbolChooser): NavigationOutcome =
+  private def navigateDocumentComment(state: AppState, chooseSymbol: SymbolChooser)(using
+    WrappedLineCache
+  ): NavigationOutcome =
     navigateSymbols(
       state,
       buffer => DocumentNavigation.commentSymbols(buffer.annotations.documentComments),
@@ -94,7 +115,9 @@ private[manager] object NavigationTransitions:
       onTargetResolved = Some(CommentRendering.openLensAtCursor)
     )
 
-  private def navigatePlaceholder(state: AppState, chooseSymbol: SymbolChooser): NavigationOutcome =
+  private def navigatePlaceholder(state: AppState, chooseSymbol: SymbolChooser)(using
+    WrappedLineCache
+  ): NavigationOutcome =
     navigateSymbols(
       state,
       buffer => DocumentNavigation.placeholderSymbols(buffer.annotations.placeholders),
@@ -108,7 +131,7 @@ private[manager] object NavigationTransitions:
     chooseSymbol: SymbolChooser,
     label: String,
     onTargetResolved: Option[AppState => AppState] = None
-  ): NavigationOutcome =
+  )(using WrappedLineCache): NavigationOutcome =
     val jump = activeEditorBuffer(state).flatMap {
       case (paneId, buffer) =>
         val cursor = primaryCursor(buffer)
@@ -134,7 +157,7 @@ private[manager] object NavigationTransitions:
       case None =>
         ignored(s"[CMD] $label navigation requested without a target")
 
-  private def navigateHistoryBack(state: AppState): NavigationOutcome =
+  private def navigateHistoryBack(state: AppState)(using WrappedLineCache): NavigationOutcome =
     (state.runtime.navigation.backStack, currentNavigationPoint(state)) match
       case (target :: remaining, Some(point)) =>
         jumpThroughHistory(
@@ -146,7 +169,7 @@ private[manager] object NavigationTransitions:
         )
       case _ => NavigationOutcome.Ignored(None)
 
-  private def navigateHistoryForward(state: AppState): NavigationOutcome =
+  private def navigateHistoryForward(state: AppState)(using WrappedLineCache): NavigationOutcome =
     (state.runtime.navigation.forwardStack, currentNavigationPoint(state)) match
       case (target :: remaining, Some(point)) =>
         jumpThroughHistory(
@@ -161,7 +184,9 @@ private[manager] object NavigationTransitions:
   /** Puts the cursor at the start of `line` (the last line, if past the end) in the pane already showing the buffer,
     * else in the active pane, and focuses that pane. Where it came from goes on the back stack, as for any other jump.
     */
-  private def goToBufferLine(state: AppState, bufferId: BufferId, line: Int): NavigationOutcome =
+  private def goToBufferLine(state: AppState, bufferId: BufferId, line: Int)(using
+    WrappedLineCache
+  ): NavigationOutcome =
     val layout = state.persisted.layout
     val showing = (layout.activeEditorPaneId.toList ++ layout.orderedPaneIds)
       .find(paneId => layout.editorPanes.get(paneId).exists(_.bufferId.contains(bufferId)))
@@ -187,7 +212,7 @@ private[manager] object NavigationTransitions:
     target: NavigationPoint,
     backStack: List[NavigationPoint],
     forwardStack: List[NavigationPoint]
-  ): NavigationOutcome =
+  )(using WrappedLineCache): NavigationOutcome =
     val moved = withHistory(moveToNavigationPoint(state, target), backStack, forwardStack)
     NavigationOutcome.Applied(ReducerResult(moved, uiTransitionSweep(moved, target, sweep(from, target))))
 
@@ -232,10 +257,12 @@ private[manager] object NavigationTransitions:
       case head :: _ if head == point => stack
       case _                          => point :: stack
 
-  private def moveToNavigationPoint(state: AppState, point: NavigationPoint): AppState =
+  private def moveToNavigationPoint(state: AppState, point: NavigationPoint)(using
+    wrapCache: WrappedLineCache
+  ): AppState =
     (state.persisted.layout.editorPanes.get(point.paneId), state.persisted.buffers.get(point.bufferId)) match
       case (Some(pane), Some(buffer)) =>
-        val viewport = CursorViewport.adjustForCursor(buffer, state, point.cursor)
+        val viewport = CursorViewport.adjustForCursor(buffer, state, point.cursor, wrapCache = wrapCache)
         val updatedBuffer = buffer.copy(
           editing = EditingState(List(point.cursor)),
           viewport = viewport

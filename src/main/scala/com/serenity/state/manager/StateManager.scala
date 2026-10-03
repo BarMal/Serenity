@@ -249,7 +249,8 @@ object StateManager:
       .create(
         runtime.modelRef,
         runtime.logger,
-        listDirectory = StateManagerOperationBoundary.explorerListing(runtime.fileManager.listDirectory)
+        listDirectory = StateManagerOperationBoundary.explorerListing(runtime.fileManager.listDirectory),
+        wrapCache = runtime.renderCaches.wrappedLines
       )
       .map(operations => new StateManagerImpl(runtime, operations))
 

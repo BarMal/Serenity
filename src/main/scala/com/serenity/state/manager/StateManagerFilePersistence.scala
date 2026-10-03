@@ -9,6 +9,7 @@ import com.serenity.lsp.LspEffect
 import com.serenity.session.SessionPersistence
 import com.serenity.state.effects.{EffectLanes, Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
+import com.serenity.ui.layout.WrappedLineCache
 import org.typelevel.log4cats.Logger
 
 /** Where file work runs and how its results get back (#1697 Wave 3). */
@@ -40,7 +41,8 @@ final private[manager] class StateManagerFilePersistence(
     sessionPersistence: SessionPersistence,
     logger: Logger[IO],
     lspQueue: LspEffectQueue,
-    lanes: FileEffectLanes
+    lanes: FileEffectLanes,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
 ):
   import StateManagerFilePersistence.*
 
@@ -217,7 +219,7 @@ final private[manager] class StateManagerFilePersistence(
     }
 
   private def commit(result: EffectResult): IO[Unit] =
-    currentState.flatMap(state => commitState(EffectResult.applyIfCurrent(state, result), state))
+    currentState.flatMap(state => commitState(EffectResult.applyIfCurrent(state, result, wrapCache = wrapCache), state))
 
   private def awaitLane[A](lane: Lane.Scheduled, job: IO[A]): IO[A] =
     Deferred[IO, Either[Throwable, A]].flatMap { outcome =>

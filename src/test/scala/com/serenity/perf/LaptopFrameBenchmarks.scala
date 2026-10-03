@@ -8,7 +8,19 @@ import javax.swing.SwingUtilities
 import cats.effect.unsafe.IORuntime
 import cats.effect.{IO, Resource}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
-import com.serenity.keystroke.events.{DeleteBackward, Event, InsertChar, MoveDown, MoveUp, ResizeEvent}
+import com.serenity.keystroke.events.{
+  DeleteBackward,
+  Event,
+  InsertChar,
+  ModalInsertChar,
+  ModalSubmit,
+  MoveDown,
+  MoveUp,
+  OpenGotoLine,
+  PageDown,
+  PageUp,
+  ResizeEvent
+}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.manager.{CursorViewport, RenderCaches, StateManager}
@@ -146,18 +158,22 @@ private[perf] object LaptopFrameBenchmarks:
     * resized to the laptop grid (the StateManager otherwise wraps at its 80x24 default) and scrolled so the cursor is
     * on screen, since off-screen editing skips work a real session pays for.
     */
-  private def proseStateManager(using IORuntime): (StateManager, BufferId) =
+  private def proseStateManager(
+    paragraphs: Int = 300,
+    config: AppConfig = AppConfig.default,
+    cursorLine: Int = 150
+  )(using IORuntime): (StateManager, BufferId) =
     given LoggerFactory[IO] = NoOpFactory[IO]
     val sessionRoot         = Files.createTempDirectory("serenity-laptop-benchmarks")
     val stateManager = StateManager.apply(NoOpLogger[IO], sessionRootOverride = Some(sessionRoot)).unsafeRunSync()
     val proseBufferId = (for
-      _ <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = AppConfig.default)))
-      created <- stateManager.createBuffer(BenchmarkFixtures.loremIpsumProse(paragraphs = 300), None)
+      _       <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))
+      created <- stateManager.createBuffer(BenchmarkFixtures.loremIpsumProse(paragraphs), None)
       state   <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, created)
       _ <- stateManager.applyEvent(ResizeEvent(viewport))
-      _ <- stateManager.setCursorPosition(paneId, 150, 40)
+      _ <- stateManager.setCursorPosition(paneId, cursorLine, 40)
       _ <- stateManager.updateState(scrolledToCursor(created))
     yield created).unsafeRunSync()
     (stateManager, proseBufferId)
@@ -170,7 +186,7 @@ private[perf] object LaptopFrameBenchmarks:
       case None => state
 
   private def inputBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    val (stateManager, proseBufferId) = proseStateManager
+    val (stateManager, proseBufferId) = proseStateManager()
     def buffer: Option[Buffer] = stateManager.getCurrentState.unsafeRunSync().persisted.buffers.get(proseBufferId)
     def cursor: Option[CursorPosition] = buffer.flatMap(_.editing.cursorPositions.headOption)
     def length: Option[Int]            = buffer.map(_.document.content.weight)
@@ -218,6 +234,75 @@ private[perf] object LaptopFrameBenchmarks:
           assert(length == before.map(_ + 1) && cursorOnScreen, s"typing did not grow the document: $before -> $length")
         ,
         () => stateManager.applyEvent(InsertChar(typedLetters.next())).unsafeRunSync()
+      ),
+      BenchmarkRunner.Benchmark(
+        "laptop.input.state_manager.page_down_up",
+        3,
+        20,
+        () =>
+          val before = cursor.map(_.line)
+          stateManager.applyEvent(PageDown).unsafeRunSync()
+          val moved = cursor.map(_.line)
+          stateManager.applyEvent(PageUp).unsafeRunSync()
+          assert(
+            moved.exists(m => before.exists(_ < m)) && cursor.map(_.line) == before && cursorOnScreen,
+            s"cursor did not page down and back on screen: $before -> $moved -> $cursor"
+          )
+        ,
+        () => roundTrip(PageDown, PageUp)
+      )
+    ) ++ typewriterBenchmarks ++ goToLineBenchmarks
+
+  private def typewriterBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
+    val typewriter =
+      AppConfig.default.copy(surfaceConfig = AppConfig.default.surfaceConfig.copy(typewriterScrollingEnabled = true))
+    val (stateManager, proseBufferId) = proseStateManager(config = typewriter)
+    def length: Option[Int] =
+      stateManager.getCurrentState.unsafeRunSync().persisted.buffers.get(proseBufferId).map(_.document.content.weight)
+    def keystroke(): Unit = (stateManager.applyEvent(InsertChar('x')) >> stateManager.applyEvent(DeleteBackward))
+      .unsafeRunSync()
+    List(
+      BenchmarkRunner.Benchmark(
+        "laptop.input.state_manager.typewriter_keystroke",
+        3,
+        20,
+        () =>
+          val before = length
+          keystroke()
+          assert(length == before, s"typewriter keystroke changed the document length: $before -> $length")
+        ,
+        () => keystroke()
+      )
+    )
+
+  /** Go to Line through its prompt, jumping between the start and the end of a 3000-paragraph document. */
+  private def goToLineBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
+    val (stateManager, proseBufferId) = proseStateManager(paragraphs = 3000, cursorLine = 100)
+    def cursorLine: Option[Int] = stateManager.getCurrentState
+      .unsafeRunSync()
+      .persisted
+      .buffers
+      .get(proseBufferId)
+      .flatMap(_.editing.cursorPositions.headOption)
+      .map(_.line)
+    def goTo(line: Int): Unit =
+      val typed = line.toString.toList.map(ModalInsertChar(_))
+      (OpenGotoLine :: typed ::: List(ModalSubmit)).foreach(event => stateManager.applyEvent(event).unsafeRunSync())
+    def jumpAndBack(): Unit =
+      goTo(2900)
+      goTo(100)
+    List(
+      BenchmarkRunner.Benchmark(
+        "laptop.input.state_manager.go_to_line_3000_paragraphs",
+        2,
+        10,
+        () =>
+          goTo(2900)
+          val jumped = cursorLine
+          goTo(100)
+          assert(jumped.contains(2899) && cursorLine.contains(99), s"go to line landed on $jumped then $cursorLine")
+        ,
+        () => jumpAndBack()
       )
     )
 

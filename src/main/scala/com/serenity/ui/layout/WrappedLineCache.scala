@@ -5,6 +5,7 @@ import java.util.LinkedHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 import com.serenity.richtext.ParagraphRole
+import com.serenity.rope.Rope
 import com.serenity.state.models.TextVisualLine
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 
@@ -12,6 +13,9 @@ import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
   * dominates every keystroke on word-wrapped prose, and that the state-update path and the render path each repeat for
   * the same lines. One instance lives on [[com.serenity.state.manager.RenderCaches]] so both paths share it. Results
   * are identical with or without a cache.
+  *
+  * It also owns each buffer's [[VisualLineIndex]] of the row counts those wraps produce, which shares its keys' notion
+  * of what a wrap depends on and so belongs with it.
   */
 sealed abstract class WrappedLineCache:
 
@@ -19,6 +23,8 @@ sealed abstract class WrappedLineCache:
   private[layout] def wrapped(key: WrappedLineKey, bufferLine: Int, maxVisualLines: Int)(
     wrap: Int => Vector[TextVisualLine]
   ): Vector[TextVisualLine]
+
+  private[layout] def visualRowCounts(key: VisualRowKey, content: Rope, measure: Int => Int): VisualRowCounts
 
 /** Everything a line's wrap and caret measurement depends on except its buffer line number, which only labels the rows
   * -- so a line keeps its entry when lines are inserted or deleted above it. `resolver` carries the base font and the
@@ -52,6 +58,9 @@ object WrappedLineCache:
       wrap: Int => Vector[TextVisualLine]
     ): Vector[TextVisualLine] = wrap(maxVisualLines)
 
+    private[layout] def visualRowCounts(key: VisualRowKey, content: Rope, measure: Int => Int): VisualRowCounts =
+      VisualRowCounts.walking(content.lineCount, measure)
+
   def bounded(maxLines: Int = DefaultMaxLines, maxChars: Long = DefaultMaxChars): Bounded =
     new Bounded(math.max(1, maxLines), math.max(1L, maxChars))
 
@@ -72,10 +81,16 @@ object WrappedLineCache:
   final class Bounded private[WrappedLineCache] (maxLines: Int, maxChars: Long) extends WrappedLineCache:
     private val entries      = new LinkedHashMap[WrappedLineKey, Entry](256, 0.75f, true)
     private val retainedChar = new AtomicLong(0L)
+    private val visualRows   = new VisualLineIndexStore[VisualRowKey](VisualLineIndexStore.DefaultMaxEntries)
 
     def size: Int = synchronized(entries.size())
 
     def retainedChars: Long = retainedChar.get()
+
+    def visualRowIndexes: Int = visualRows.size
+
+    private[layout] def visualRowCounts(key: VisualRowKey, content: Rope, measure: Int => Int): VisualRowCounts =
+      visualRows.counts(key, content, measure)
 
     private[layout] def wrapped(key: WrappedLineKey, bufferLine: Int, maxVisualLines: Int)(
       wrap: Int => Vector[TextVisualLine]

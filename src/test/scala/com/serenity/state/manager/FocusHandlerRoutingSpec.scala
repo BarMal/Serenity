@@ -13,6 +13,8 @@ import org.scalatest.matchers.should.Matchers
 
 class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
 
+  private val routing = new FocusHandlerRouting(WrappedLineCache.bounded())
+
   private val quickInfo: SurfaceContent        = SurfaceContent.QuickInfo("info")
   private val filePreview: SurfaceContent      = SurfaceContent.FilePreview(Path.of("a.txt"), "content")
   private val symbolDefinition: SurfaceContent = SurfaceContent.SymbolDefinition("sym", Location(0, 0))
@@ -70,36 +72,36 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
   "FocusHandlerRouting.forSurfaceContent" should "return a real handler, never a null or missing routing, for every SurfaceContent case" in
     allContent.foreach { content =>
       withClue(s"content = $content: ") {
-        FocusHandlerRouting.forSurfaceContent(content) should not be null
+        routing.forSurfaceContent(content) should not be null
       }
     }
 
   it should "route theme creator content to a ThemeCreatorComponent" in {
-    FocusHandlerRouting.forSurfaceContent(themeCreator).getClass.getSimpleName shouldBe "ThemeCreatorComponent"
+    routing.forSurfaceContent(themeCreator).getClass.getSimpleName shouldBe "ThemeCreatorComponent"
   }
 
   it should "route contextual toolbar content to a ContextualToolbarComponent" in {
-    FocusHandlerRouting
+    routing
       .forSurfaceContent(contextualToolbar)
       .getClass
       .getSimpleName shouldBe "ContextualToolbarComponent"
   }
 
   it should "route comment lens content to a CommentLensComponent" in {
-    FocusHandlerRouting.forSurfaceContent(commentLens).getClass.getSimpleName shouldBe "CommentLensComponent"
+    routing.forSurfaceContent(commentLens).getClass.getSimpleName shouldBe "CommentLensComponent"
   }
 
   it should "route the context menu to a ContextMenuComponent, not the dismiss-on-any-key peek handler" in {
-    FocusHandlerRouting.forSurfaceContent(contextMenu).getClass.getSimpleName shouldBe "ContextMenuComponent"
+    routing.forSurfaceContent(contextMenu).getClass.getSimpleName shouldBe "ContextMenuComponent"
   }
 
   it should "route the start page to a StartupPageComponent" in {
-    FocusHandlerRouting.forSurfaceContent(startPage).getClass.getSimpleName shouldBe "StartupPageComponent"
+    routing.forSurfaceContent(startPage).getClass.getSimpleName shouldBe "StartupPageComponent"
   }
 
   it should "route a known modal kind to a pooled ModalComponent, reused across dispatches" in {
-    val first = FocusHandlerRouting.forSurfaceContent(modalGotoLine)
-    val second = FocusHandlerRouting.forSurfaceContent(
+    val first = routing.forSurfaceContent(modalGotoLine)
+    val second = routing.forSurfaceContent(
       SurfaceContent.ModalWorkflow(Modal.TextPrompt(TextPrompt.gotoLine("different draft")))
     )
     first.getClass.getSimpleName shouldBe "ModalComponent"
@@ -121,11 +123,11 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
       diagnostics,
       ghostOverlay
     )
-    val reference = FocusHandlerRouting.forSurfaceContent(quickInfo)
+    val reference = routing.forSurfaceContent(quickInfo)
     reference.getClass.getSimpleName shouldBe "PeekOverlayComponent"
     peekCases.foreach { content =>
       withClue(s"content = $content: ") {
-        FocusHandlerRouting.forSurfaceContent(content) should be theSameInstanceAs reference
+        routing.forSurfaceContent(content) should be theSameInstanceAs reference
       }
     }
   }
@@ -133,8 +135,8 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
   it should "not allocate a new component on repeated dispatches for the same content case" in
     allContent.foreach { content =>
       withClue(s"content = $content: ") {
-        val first  = FocusHandlerRouting.forSurfaceContent(content)
-        val second = FocusHandlerRouting.forSurfaceContent(content)
+        val first  = routing.forSurfaceContent(content)
+        val second = routing.forSurfaceContent(content)
         first should be theSameInstanceAs second
       }
     }
@@ -142,14 +144,14 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
   "FocusHandlerRouting.forPinnedPanel" should "return the same pooled PinnedPanelComponent instance per position across dispatches" in
     PanelPosition.values.foreach { position =>
       withClue(s"position = $position: ") {
-        val first  = FocusHandlerRouting.forPinnedPanel(position)
-        val second = FocusHandlerRouting.forPinnedPanel(position)
+        val first  = routing.forPinnedPanel(position)
+        val second = routing.forPinnedPanel(position)
         first.getClass.getSimpleName shouldBe "PinnedPanelComponent"
         first should be theSameInstanceAs second
       }
     }
 
   it should "return distinct instances for distinct positions" in {
-    val instances = PanelPosition.values.map(FocusHandlerRouting.forPinnedPanel).toList
+    val instances = PanelPosition.values.map(routing.forPinnedPanel).toList
     instances.distinct.size shouldBe instances.size
   }
