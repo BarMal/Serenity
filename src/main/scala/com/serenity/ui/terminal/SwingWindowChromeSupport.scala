@@ -121,6 +121,14 @@ private[terminal] trait SwingWindowChromeSupport:
   ): Boolean =
     usesCustomChrome && perPixelTranslucencySupported && backgroundAlpha == 0
 
+  /** A frame needs an alpha channel only where its pixels can show through: in a translucent window, or under a theme
+    * background that is not opaque (the alpha-0 transparent-backdrop sentinel, #1240, or a theme cross-fading through
+    * one). Otherwise a frame is `TYPE_INT_RGB`, which Java2D blends glyphs into markedly faster.
+    */
+  private[serenity] def frameImageType(translucentWindow: Boolean, backgroundAlpha: Int): Int =
+    if translucentWindow || backgroundAlpha < 255 then java.awt.image.BufferedImage.TYPE_INT_ARGB
+    else java.awt.image.BufferedImage.TYPE_INT_RGB
+
   /** Paint `canvas`'s own background into `g`, limited to its clip within `width` x `height`: genuinely transparent
     * pixels when `transparent`, replacing whatever the backing buffer already held (`AlphaComposite.Src`, not the
     * default `SrcOver`, so this actually clears stale opaque pixels rather than leaving a zero-alpha fill's no-op) --

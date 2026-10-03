@@ -93,7 +93,7 @@ object RendererEntryPoints:
       codeFont,
       swingWin.canvas,
       publishFrame,
-      swingWin.acquireBaseImage,
+      swingWin.frameImageAcquirer(state0.persisted.theme),
       scratch = swingWin.renderScratch
     )
     val viewportSize = swingWin.viewportSize

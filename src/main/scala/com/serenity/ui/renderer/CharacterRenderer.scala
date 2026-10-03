@@ -29,21 +29,6 @@ object CharacterRenderer:
   /** A grapheme cluster's boundaries within a line's text, as local character indices. */
   private[renderer] case class GraphemeSpan(startLocalIndex: Int, endLocalIndex: Int)
 
-  /** A grapheme cluster paired with the effective style it should draw with, before any per-frame animation override is
-    * applied.
-    */
-  private case class MeasuredGrapheme(
-      text: String,
-      foreground: Color,
-      background: Color,
-      style: TextStyle,
-      startLocalIndex: Int,
-      endLocalIndex: Int
-  )
-
-  /** A grapheme cluster's measured pixel extent along a specific set of caret stops. */
-  private case class GraphemeBounds(startLocalIndex: Int, endLocalIndex: Int, startXPx: Float, endXPx: Float)
-
   private[renderer] def computeGraphemeSpans(text: String): Vector[GraphemeSpan] =
     @annotation.tailrec
     def collect(localIndex: Int, acc: List[GraphemeSpan]): Vector[GraphemeSpan] =
@@ -209,138 +194,23 @@ object CharacterRenderer:
   ): Unit =
     val text = visualLine.text
     if text.nonEmpty then
-      val stops = visualLine.caretStops
-      val styledSegments0 =
+      val segments =
         styledSegments.getOrElse {
           if syntaxHighlightingEnabled then highlightCache.highlightLine(text, theme, language, semanticTokens)
           else List(StyledText(text, TextStyle.normal, theme.foreground, theme.background))
         }
-
-      final case class MeasuredRun(
-          startLocalIndex: Int,
-          foreground: Color,
-          background: Color,
-          style: TextStyle,
-          text: StringBuilder,
-          endLocalIndex: Int
-      )
-
-      val spans = graphemeCache.spansFor(text)
-
-      val graphemeBounds =
-        @annotation.tailrec
-        def collect(
-          spanIndex: Int,
-          stopIndex: Int,
-          acc: List[GraphemeBounds]
-        ): List[GraphemeBounds] =
-          if spanIndex >= spans.length || stopIndex + 1 >= stops.length then acc.reverse
-          else
-            val span      = spans(spanIndex)
-            val startStop = stops.lift(stopIndex).filter(_.column == visualLine.startColumn + span.startLocalIndex)
-            val endStop   = stops.lift(stopIndex + 1).filter(_.column == visualLine.startColumn + span.endLocalIndex)
-            (startStop, endStop) match
-              case (Some(start), Some(end)) =>
-                collect(
-                  spanIndex + 1,
-                  stopIndex + 1,
-                  GraphemeBounds(span.startLocalIndex, span.endLocalIndex, start.xPx, end.xPx) :: acc
-                )
-              case _ => collect(spanIndex, stopIndex + 1, acc)
-
-        collect(0, 0, Nil)
-
-      // Every local index within a grapheme cluster's [start, end) shares that cluster's pixel bounds, so a run's
-      // extent only needs the clusters it overlaps -- not a Vector expanded to one entry per character, which
-      // `graphemeBoundsByLocalIndex` used to allocate before this was inlined into a single pass over the (much
-      // smaller) cluster list.
-      def visualExtentsForRange(startLocalIndex: Int, endLocalIndex: Int): (Float, Float) =
-        graphemeBounds
-          .foldLeft(Option.empty[(Float, Float)]) {
-            case (acc, GraphemeBounds(clusterStart, clusterEnd, startXPx, endXPx))
-                if clusterStart < endLocalIndex && clusterEnd > startLocalIndex =>
-              acc match
-                case Some((minXPx, maxXPx)) => Some((minXPx.min(startXPx), maxXPx.max(endXPx)))
-                case None                   => Some((startXPx, endXPx))
-            case (acc, _) => acc
-          }
-          .getOrElse((0.0f, 0.0f))
-
-      def drawRun(run: MeasuredRun): Unit =
-        val (minXPx, maxXPx) = visualExtentsForRange(run.startLocalIndex, run.endLocalIndex)
-        val startXPx         = xOriginPx + minXPx
-        val endXPx           = xOriginPx + maxXPx
-        val clippedEndXPx    = clipRightXPx.fold(endXPx)(_.min(endXPx))
-        val widthPx          = clippedEndXPx - startXPx
+      MeasuredLineRuns.of(visualLine, segments, graphemeCache.spansFor(text), theme, animations).foreach { run =>
+        val startXPx      = xOriginPx + run.minXPx
+        val endXPx        = xOriginPx + run.maxXPx
+        val clippedEndXPx = clipRightXPx.fold(endXPx)(_.min(endXPx))
+        val widthPx       = clippedEndXPx - startXPx
         if widthPx > 0.0f then
           surface.setForegroundColor(run.foreground)
           surface.setBackgroundColor(run.background)
           withStyle(surface, run.style) {
-            surface.text.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text.toString)
+            surface.text.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text)
           }
-
-      val chars = styledSegments0
-        .flatMap(segment =>
-          segment.content.map(char => (char, segment.foregroundColor, segment.backgroundColor, segment.style))
-        )
-        .toVector
-      val hasAnimations = animations.animations.nonEmpty
-
-      val graphemeChars: Vector[MeasuredGrapheme] =
-        spans.map { span =>
-          val segmentStyle      = chars.lift(span.startLocalIndex).map(_._4).getOrElse(TextStyle.normal)
-          val segmentForeground = chars.lift(span.startLocalIndex).map(_._2).getOrElse(theme.foreground)
-          val segmentBackground = chars.lift(span.startLocalIndex).map(_._3).getOrElse(theme.background)
-          MeasuredGrapheme(
-            text.substring(span.startLocalIndex, span.endLocalIndex),
-            segmentForeground,
-            segmentBackground,
-            segmentStyle,
-            span.startLocalIndex,
-            span.endLocalIndex
-          )
-        }
-
-      val (runs, currentRun, _) = graphemeChars.foldLeft((List.empty[MeasuredRun], Option.empty[MeasuredRun], 0)) {
-        case (
-              (completed, current, localIndex),
-              MeasuredGrapheme(grapheme, segmentForeground, segmentBackground, style, graphemeStart, graphemeEnd)
-            ) =>
-          val bufferColumn = visualLine.startColumn + graphemeStart
-          val cell         = if hasAnimations then animations.getCell(bufferColumn, visualLine.bufferLine) else None
-          val foreground   = cell.flatMap(_.currentForeground).getOrElse(segmentForeground)
-          val background   = cell.flatMap(_.currentBackground).getOrElse(segmentBackground)
-
-          current match
-            case None =>
-              val run = MeasuredRun(
-                localIndex,
-                foreground,
-                background,
-                style,
-                StringBuilder(grapheme),
-                graphemeEnd
-              )
-              (completed, Some(run), graphemeEnd)
-
-            case Some(run) if foreground == run.foreground && background == run.background && style == run.style =>
-              run.text.append(grapheme)
-              val updatedRun = run.copy(endLocalIndex = graphemeEnd)
-              (completed, Some(updatedRun), graphemeEnd)
-
-            case Some(run) =>
-              val nextRun = MeasuredRun(
-                graphemeStart,
-                foreground,
-                background,
-                style,
-                StringBuilder(grapheme),
-                graphemeEnd
-              )
-              (run :: completed, Some(nextRun), graphemeEnd)
       }
-
-      (currentRun.toList ::: runs).reverse.foreach(drawRun)
 
   private def renderStyledLineWithAnimation(
     surface: RenderSurface,

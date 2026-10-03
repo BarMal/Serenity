@@ -50,6 +50,12 @@ private[terminal] trait SwingWindowImageSupport:
     def releaseLease(): Unit =
       val _ = slots.updateAndGet(_.copy(leased = None))
 
+  /** An acquirer for `Java2DRenderSurface.forFrame` that draws from `pool` in `imageType`, whatever the renderer's
+    * default: the window presenting a frame, not the renderer, knows whether its pixels can ever show through.
+    */
+  private[serenity] def pooledFrameImages(pool: ReusableImagePool, imageType: Int): (Int, Int, Int) => BufferedImage =
+    (width, height, _) => pool.acquire(width, height, imageType)
+
   final private[serenity] class RoundedCornerMaskBufferCache:
     private val buffersRef = new AtomicReference[Option[RoundedCornerMaskBuffers]](None)
 

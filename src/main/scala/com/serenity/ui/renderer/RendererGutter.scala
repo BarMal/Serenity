@@ -62,8 +62,9 @@ object RendererGutter:
     surface.fillRect(railRect.x, railRect.y, railRect.width, railRect.height, ' ')
 
     val wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled
+    val rowMetrics      = RendererPaneContent.textRowMetrics(railRect, context, snapshot)
     snapshot.visualLines.zipWithIndex.foreach {
-      case (visualLine, rowIndex) if RendererPaneContent.visualLineFits(railRect, rowIndex, context, snapshot) =>
+      case (visualLine, rowIndex) if rowMetrics.lineFits(rowIndex) =>
         val text =
           if shouldRenderLineNumberForVisualLine(visualLine, wordWrapEnabled) then
             val numberWidth = math.max(1, railRect.width - 1)
@@ -72,7 +73,7 @@ object RendererGutter:
         if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
           surface.text.drawRunPx(
             context.cellMetrics.toPixelX(railRect.x).toFloat,
-            RendererPaneContent.visualLineTopPx(railRect, rowIndex, context, snapshot),
+            rowMetrics.lineTopPx(rowIndex),
             railRect.width * context.cellMetrics.charWidth.toFloat,
             snapshot.lineHeightPx,
             snapshot.ascentPx,
@@ -147,9 +148,9 @@ object RendererGutter:
             renderPlan.layoutContract.rightLineNumberRowSlots(snapshot.map(_.visualLines.length).getOrElse(0))
           else renderPlan.layoutContract.lineNumberRowSlots(snapshot.map(_.visualLines.length).getOrElse(0))
         snapshot.toList.flatMap { snapshot =>
+          val rowMetrics = RendererPaneContent.textRowMetrics(lineRect, context, snapshot)
           rowSlots.toList.flatMap {
-            case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), rowY)
-                if RendererPaneContent.visualLineFits(lineRect, index, context, snapshot) =>
+            case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), rowY) if rowMetrics.lineFits(index) =>
               snapshot.visualLines.lift(index).toList.flatMap { visualLine =>
                 renderLineNumberRow(
                   state,
@@ -160,7 +161,7 @@ object RendererGutter:
                   pane,
                   buffer,
                   snapshot,
-                  index,
+                  rowMetrics.lineTopPx(index),
                   visualLine,
                   rowY,
                   dividerOnLeft
@@ -180,12 +181,11 @@ object RendererGutter:
     pane: EditorPane,
     buffer: Option[Buffer],
     snapshot: TextLayoutSnapshot,
-    index: Int,
+    lineTopPx: Int,
     visualLine: TextVisualLine,
     rowY: Int,
     dividerOnLeft: Boolean
   ): List[(Int, List[com.serenity.lsp.model.Diagnostic])] =
-    val lineTopPx = RendererPaneContent.visualLineTopPx(lineRect, index, context, snapshot)
     val rendersLineNumber =
       shouldRenderLineNumberForVisualLine(visualLine, state.persisted.config.surfaceConfig.wordWrapEnabled)
     val lineNumberText =

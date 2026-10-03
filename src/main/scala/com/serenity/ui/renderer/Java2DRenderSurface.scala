@@ -141,13 +141,14 @@ class Java2DRenderSurface(
     * default SRC_OVER composite gives a zero-alpha fill against a buffer that may already carry opaque pixels from a
     * previous frame (this surface's backing image can be pooled/reused across frames, see `contentPersists`). Restores
     * whatever composite (e.g. an active `setAlpha` translucency scale) was in effect before the fill, so this only
-    * affects the one fill call, never anything drawn after it.
+    * affects the one fill call, never anything drawn after it. An image without alpha belongs to an opaque window,
+    * whose canvas shows black through a transparent pixel, so it gets that black.
     */
   private def fillBackground(color: Color, px: Int, py: Int, pw: Int, ph: Int): Unit =
     if color.getAlpha == 0 then
       val savedComposite = g.getComposite
       g.setComposite(AlphaComposite.Src)
-      g.setColor(color)
+      g.setColor(if image.getColorModel.hasAlpha then color else Color.BLACK)
       g.fillRect(px, py, pw, ph)
       g.setComposite(savedComposite)
     else

@@ -177,8 +177,14 @@ class SwingWindow(
       case None =>
         false
 
-  private[serenity] def acquireBaseImage(width: Int, height: Int, imageType: Int): BufferedImage =
-    baseImagePool.acquire(width, height, imageType)
+  /** Pooled images for a frame drawn with `theme`, that frame's effective theme, in the pixel format this window can
+    * present it with (see [[SwingWindow.frameImageType]]).
+    */
+  private[serenity] def frameImageAcquirer(theme: Theme): (Int, Int, Int) => BufferedImage =
+    SwingWindow.pooledFrameImages(
+      baseImagePool,
+      SwingWindow.frameImageType(translucentWindow, theme.background.getAlpha)
+    )
 
   private def updateShape(): Unit =
     val roundedCornerMask = SwingWindow.roundedCornerMask(

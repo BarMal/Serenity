@@ -27,6 +27,46 @@ class RopeDiffPropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks wit
         beforeText.take(start) shouldBe afterText.take(start)
         beforeText.takeRight(suffixLen) shouldBe afterText.takeRight(suffixLen)
 
+  /** The range a character-by-character comparison of the two texts gives: the longest common prefix, then the longest
+    * common suffix of what remains.
+    */
+  private def exactRange(beforeText: String, afterText: String): Option[(Int, Int)] =
+    val bound  = math.min(beforeText.length, afterText.length)
+    val prefix = (0 until bound).find(i => beforeText(i) != afterText(i)).getOrElse(bound)
+    if prefix == bound && beforeText.length == afterText.length then None
+    else
+      val suffixBound = bound - prefix
+      val suffix =
+        (0 until suffixBound)
+          .find(i => beforeText(beforeText.length - 1 - i) != afterText(afterText.length - 1 - i))
+          .getOrElse(suffixBound)
+      Some((prefix, afterText.length - suffix))
+
+  property("an insert or delete at any offset reports exactly the common prefix and suffix") {
+    forAll(Generators.ropeWithText, Generators.genText) {
+      case ((before, beforeText), inserted) =>
+        forAll(Gen.chooseNum(0, beforeText.length), Gen.chooseNum(0, 3)) { (at, deleted) =>
+          val removed   = before.deleteRight(at, math.min(deleted, beforeText.length - at)).getOrElse(fail("delete"))
+          val after     = removed.insert(at, inserted).getOrElse(fail("expected insert to succeed"))
+          val afterText = beforeText.take(at) + inserted + beforeText.drop(at + deleted)
+          RopeDiff.changedOffsetRange(before, after) shouldBe exactRange(beforeText, afterText)
+        }
+    }
+  }
+
+  property("a run of single-character edits on a large rope reports exactly the common prefix and suffix") {
+    val start = Rope((1 to 400).map(i => s"line $i of the document").mkString("\n"))
+    (1 to 60).foldLeft((start, start.collect())) {
+      case ((rope, text), step) =>
+        val at        = (step * 977) % (rope.weight + 1)
+        val edited    = if step % 2 == 0 then rope.insert(at, "x") else rope.deleteRight(at, 1)
+        val after     = edited.getOrElse(fail("expected the edit to succeed"))
+        val afterText = after.collect()
+        RopeDiff.changedOffsetRange(rope, after) shouldBe exactRange(text, afterText)
+        (after, afterText)
+    }
+  }
+
   property("an insert at any offset never under-reports") {
     forAll(Generators.ropeWithText, Generators.genText) {
       case ((before, beforeText), inserted) =>

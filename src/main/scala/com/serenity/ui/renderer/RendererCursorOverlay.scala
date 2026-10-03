@@ -407,7 +407,7 @@ object RendererCursorOverlay:
       codeFont,
       swingWin.canvas,
       swingWin.onBaseImageReady,
-      swingWin.acquireBaseImage,
+      swingWin.frameImageAcquirer(state0.persisted.theme),
       scratch = swingWin.renderScratch
     )
     // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
