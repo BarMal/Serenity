@@ -72,7 +72,11 @@ final case class RuntimeLifecycle(
     /** Completes once lane work accepted so far (config/preset writes, searches) and the results it hands back have
       * settled. Event dispatch returns without waiting for that work, so this is the point to observe it.
       */
-    awaitEffects: IO[Unit]
+    awaitEffects: IO[Unit],
+    /** Registers the one observer of committed state changes -- input, effect results and background work alike --
+      * given the states before and after each commit. Render-loop animation ticks are not reported.
+      */
+    observeCommits: ((AppState, AppState) => IO[Unit]) => IO[Unit]
 )
 
 /** Supplies effects for the language-server interpreter.

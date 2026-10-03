@@ -369,7 +369,8 @@ private[manager] class StateManagerComposition(
     awaitQuit = quitSignal.get >> operations.shutdownEffects(),
     awaitEffects = operations.awaitEffects,
     forceQuit = forceQuit,
-    intervalSaveStream = intervalSaveStream
+    intervalSaveStream = intervalSaveStream,
+    observeCommits = operations.observeCommits
   )
 
   // Shutting the effects down also cancels a running project task, destroying its process.

@@ -76,4 +76,4 @@ final case class Runtime(
       if motion.enabled && config.companionSpriteConfig.enabled then
         companionSprite.observeTyping(nowNanos, config.companionSpriteConfig)
       else companionSprite
-    copy(companionSprite = sprite, typingActivity = typingActivity.observed)
+    copy(companionSprite = sprite, typingActivity = typingActivity.observed(nowNanos))

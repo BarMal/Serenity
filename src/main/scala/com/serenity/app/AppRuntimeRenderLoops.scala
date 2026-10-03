@@ -142,7 +142,9 @@ private[serenity] object AppRuntimeRenderLoops:
     checkResizeAndHandle: IO[Unit],
     renderFull: AppRuntime.RenderFn,
     renderCaches: com.serenity.state.manager.RenderCaches,
-    sleep: FiniteDuration => IO[Unit] = IO.sleep
+    sleep: FiniteDuration => IO[Unit] = IO.sleep,
+    frameClock: IO[FiniteDuration] = IO.monotonic,
+    lastFrameStart: Ref[IO, Option[FiniteDuration]] = Ref.unsafe[IO, Option[FiniteDuration]](None)
   )(using logger: Logger[IO], balance: com.serenity.rope.Balance): Stream[IO, Unit] =
     Stream.eval(pendingDamage.getAndSet(Damage.Nothing)).flatMap { _ =>
       Stream
@@ -154,7 +156,7 @@ private[serenity] object AppRuntimeRenderLoops:
               isInitialFrame <- IO.pure(frameIndex == 0L)
               interval <-
                 IO.pure(AppRuntime.fastFrameInterval(stateAtFrameStart.persisted.config.surfaceConfig.renderFpsTarget))
-              _ <- sleep(AppRuntime.fastFrameDelay(interval, isInitialFrame))
+              sincePreviousFrame <- awaitFrameDeadline(interval, lastFrameStart, frameClock, sleep)
               _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(
                 checkResizeAndHandle
               )
@@ -162,7 +164,7 @@ private[serenity] object AppRuntimeRenderLoops:
                 if isInitialFrame then
                   stateManager.getModel.map(model => hasActiveAnimations(model.app, model.bufferAnimations))
                 else
-                  animationTickCadence.modify(_.advance(interval)).flatMap { animationTicks =>
+                  animationTickCadence.modify(_.advance(sincePreviousFrame, interval)).flatMap { animationTicks =>
                     withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(
                       advanceAnimationsForCadence(animationTicks, stateManager, animationTicker, pendingPaintDamage)
                     )
@@ -188,6 +190,26 @@ private[serenity] object AppRuntimeRenderLoops:
           }
         }
     }
+
+  /** Waits out the rest of the frame interval measured from the previous fast frame's start (shared across fast phases,
+    * so input landing just after a frame still waits for the next deadline), records this frame's start, and returns
+    * the time since the previous one. The recorded start is the deadline itself whenever a wait happened, so sleep
+    * overshoot doesn't accumulate into a slower cadence.
+    */
+  private def awaitFrameDeadline(
+    interval: FiniteDuration,
+    lastFrameStart: Ref[IO, Option[FiniteDuration]],
+    frameClock: IO[FiniteDuration],
+    sleep: FiniteDuration => IO[Unit]
+  ): IO[FiniteDuration] =
+    for
+      previous <- lastFrameStart.get
+      now      <- frameClock
+      delay = AppRuntime.fastFrameDelay(interval, previous, now)
+      _ <- sleep(delay)
+      start = now + delay
+      _ <- lastFrameStart.set(Some(start))
+    yield previous.fold(interval)(start - _)
 
   private[serenity] def withRuntimeDiagnostics[A](
     loopName: String,
@@ -322,7 +344,7 @@ private[serenity] object AppRuntimeRenderLoops:
     state: AppState,
     bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
   ): Boolean =
-    needsFullContentRender(state, bufferAnimations) || state.runtime.typingActivity.isActive
+    needsFullContentRender(state, bufferAnimations)
 
   /** Whether the fast render loop's current frame needs a full content repaint, as opposed to the cheaper cursor-only
     * overlay path. Character-reveal animations paint into document glyphs, and a theme transition cross-fades every
@@ -337,6 +359,9 @@ private[serenity] object AppRuntimeRenderLoops:
     * content like any other pinned panel -- there is no longer a canvas-free animation source, so that cursor-only
     * shortcut no longer applies to anything and has been removed rather than left checking a condition nothing can
     * satisfy.
+    *
+    * A typing burst counts only while it is holding the floating status row hidden: that row is an overlay surface, so
+    * showing it again needs a full frame, but with any other placement typing activity changes nothing on screen.
     */
   private[serenity] def needsFullContentRender(
     state: AppState,
@@ -345,4 +370,5 @@ private[serenity] object AppRuntimeRenderLoops:
     state.persisted.buffers.keys.exists(id => bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
       state.runtime.themeDiscovery.transition.isDefined ||
       state.runtime.motion.surfaceAnimations.nonEmpty ||
-      state.runtime.motion.columnTransitions.nonEmpty
+      state.runtime.motion.columnTransitions.nonEmpty ||
+      state.typingHidesFloatingStatusLine

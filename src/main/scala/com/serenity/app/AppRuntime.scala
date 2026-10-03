@@ -39,11 +39,16 @@ object AppRuntime:
   private[serenity] def fastFrameInterval(target: RenderFpsTarget): FiniteDuration =
     FiniteDuration(NanosPerSecond / target.framesPerSecond.toLong, NANOSECONDS)
 
+  /** How long a fast frame waits so it starts no earlier than one interval after the previous frame's start: render
+    * time already spent counts towards the interval instead of adding to it, and a frame whose deadline has passed --
+    * or the first frame ever -- starts at once.
+    */
   private[serenity] def fastFrameDelay(
     frameInterval: FiniteDuration,
-    isInitialFrame: Boolean = false
+    previousFrameStart: Option[FiniteDuration],
+    now: FiniteDuration
   ): FiniteDuration =
-    if isInitialFrame then Duration.Zero else frameInterval
+    previousFrameStart.fold(Duration.Zero)(previous => (previous + frameInterval - now).max(Duration.Zero))
 
   private[serenity] def resetCursorActivity(cursorVisible: Ref[IO, Boolean], breathIndex: Ref[IO, Int]): IO[Unit] =
     cursorVisible.set(true) >> breathIndex.set(0)
@@ -97,20 +102,34 @@ object AppRuntime:
   private[serenity] def shouldClearFastMode(stillActive: Boolean, pendingDamage: Damage): Boolean =
     !stillActive && pendingDamage == Damage.Nothing
 
+  /** Only input, resize and focus changes call `emitDamage` themselves; this covers every other commit -- language
+    * server diagnostics, an async open, task output, find results -- so it shows without waiting for the next key. A
+    * commit that changes nothing on screen stays silent, so an idle editor stays idle.
+    */
+  private[serenity] def wakeRenderLoopOnCommit(
+    emitDamage: Damage => IO[Unit]
+  )(using com.serenity.rope.Balance): (AppState, AppState) => IO[Unit] =
+    (before, after) =>
+      val damage = DamageProducer.forTransition(before, after)
+      IO.whenA(damage != Damage.Nothing)(emitDamage(damage))
+
   final private[serenity] case class AnimationTickCadence(remainderNanos: Long):
 
-    def advance(frameInterval: FiniteDuration): (AnimationTickCadence, Int) =
-      // The tick bucket follows the caller's own frame interval (i.e. the configured renderFpsTarget) rather than a
-      // fixed 60Hz constant, so animation state advances once per actual paint frame -- lowering render FPS also
-      // lowers animation-tick CPU cost instead of ticking internally at 60Hz regardless of paint rate.
-      val totalNanos     = remainderNanos + frameInterval.toNanos
+    def advance(elapsed: FiniteDuration, frameInterval: FiniteDuration): (AnimationTickCadence, Int) =
+      // The tick bucket follows the configured renderFpsTarget's interval rather than a fixed 60Hz constant, so
+      // lowering render FPS also lowers animation-tick CPU cost. Advancing by elapsed time rather than one bucket per
+      // frame keeps animations at their designed speed when frames run late; the clamp stops a stall (a GC pause, a
+      // suspended laptop) from fast-forwarding every animation to its end in one frame.
       val animationNanos = math.max(1L, frameInterval.toNanos)
+      val elapsedNanos   = elapsed.toNanos.max(0L).min(animationNanos * AnimationTickCadence.MaxTicksPerFrame)
+      val totalNanos     = remainderNanos + elapsedNanos
       val ticks          = (totalNanos / animationNanos).toInt
       val nextRemainder  = totalNanos % animationNanos
       (AnimationTickCadence(nextRemainder), ticks)
 
   private[serenity] object AnimationTickCadence:
     val empty: AnimationTickCadence = AnimationTickCadence(0L)
+    val MaxTicksPerFrame: Long      = 4L
 
   final private[serenity] case class RuntimeFailure(
       loopName: String,
@@ -168,6 +187,7 @@ object AppRuntime:
         // The resize/idle-recovery paths don't have a before/after AppState to diff, so they report the coarsest
         // damage rather than none -- inputEventPhase is the one caller that reports real per-event damage.
         requestFastRender = emitDamage(Damage.Everything)
+        _             <- stateManager.runtimeLifecycle.observeCommits(wakeRenderLoopOnCommit(emitDamage))
         _             <- IO(registerResizeCallback(resizeCallbackBridge(requestFastRender, resizeCallbackDispatcher)))
         cursorVisible <- Ref.of[IO, Boolean](true)
         breathIndex   <- Ref.of[IO, Int](0)
@@ -190,6 +210,7 @@ object AppRuntime:
           )
         )
         animationTickCadence <- Ref.of[IO, AnimationTickCadence](AnimationTickCadence.empty)
+        lastFastFrameStart   <- Ref.of[IO, Option[FiniteDuration]](None)
         translatorCache      <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
         currentStateForDiagnostics = stateManager.getCurrentState.map(Some(_))
         checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, requestFastRender))
@@ -235,7 +256,8 @@ object AppRuntime:
                   currentStateForDiagnostics,
                   checkResizeAndHandle,
                   runtime.renderFull,
-                  stateManager.renderCaches
+                  stateManager.renderCaches,
+                  lastFrameStart = lastFastFrameStart
                 )
 
                 val renderLoop: Stream[IO, Unit] =

@@ -195,3 +195,36 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
 
     program.unsafeRunSync() shouldBe 2
   }
+
+  it should "not recompute when only typing activity or the caret's glide and selection animations changed" in {
+    val bufferId = BufferId(1)
+    val stateA = AppState.initial.copy(persisted =
+      AppState.initial.persisted.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "hello")))
+    )
+    val glide =
+      com.serenity.animation.Tween(
+        start = com.serenity.ui.layout.PixelPoint(0, 0),
+        end = com.serenity.ui.layout.PixelPoint(20, 0),
+        curve = com.serenity.animation.EasingCurve.Linear,
+        steps = 4
+      )
+    val gliding = stateA.persisted.buffers(bufferId)
+    val stateB = stateA.copy(
+      persisted = stateA.persisted.copy(buffers =
+        Map(bufferId -> gliding.withCursorList(gliding.editing.cursors.map(_.copy(glide = Some(glide)))))
+      ),
+      runtime = stateA.runtime.copy(typingActivity = stateA.runtime.typingActivity.observed(0L))
+    )
+    val program = for
+      sync      <- AccessibilitySync.empty
+      callCount <- IO.ref(0)
+      compute = (state: AppState) =>
+        (previous: Option[AccessibilitySnapshot]) =>
+          callCount.update(_ + 1).as(AccessibilitySnapshot.from(state, viewport, previous))
+      _     <- sync.sync(stateA)(compute(stateA))
+      _     <- sync.sync(stateB)(compute(stateB))
+      calls <- callCount.get
+    yield calls
+
+    program.unsafeRunSync() shouldBe 1
+  }

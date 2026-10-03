@@ -238,7 +238,8 @@ private[terminal] trait SwingWindowChromeSupport:
       new Color(channel(_.getRed), channel(_.getGreen), channel(_.getBlue))
 
   /** Avoids redundant native DWM updates while preserving applications for palette changes. */
-  final private[serenity] class NativeChromeThemeCache:
+  /** Remembers the last chrome palette applied, so re-syncing an unchanged theme every frame posts no toolkit work. */
+  final private[serenity] class ChromePaletteCache:
     private val paletteRef = new AtomicReference[Option[ChromePalette]](None)
 
     def recordIfChanged(palette: ChromePalette, supported: Boolean): Boolean =
