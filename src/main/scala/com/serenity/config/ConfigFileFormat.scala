@@ -12,8 +12,8 @@ import com.typesafe.config.ConfigFactory
   * it does not name fails [[missingFromLayout]], and the writer cannot silently drop one.
   *
   * The comments and ordering are authored rather than generated because the config library's renderer would restructure
-  * this file: it nests dotted keys into blocks (`character { animation = ... }`), sorts them alphabetically, losing the
-  * grouping [[Entry.Comment]] and [[Entry.Blank]] exist to express, and quotes every key containing an underscore
+  * this file: it nests dotted keys into blocks (`editor { cursor { mode = ... } }`), sorts them alphabetically, losing
+  * the grouping [[Entry.Comment]] and [[Entry.Blank]] exist to express, and quotes every key containing an underscore
   * (`"info_bar"`). It renders authored comments perfectly well -- `setComments(true)` with `setOriginComments(false)`
   * emits them without the library's own provenance lines -- so comments are not the reason; layout is. This is a file
   * people open and edit.
@@ -36,9 +36,9 @@ object ConfigFileFormat:
 
   /** The settings [[render]] would emit that reading the file back would not return, empty when there are none.
     *
-    * A key at a path that also has children (`ui.motion` alongside `ui.motion.family.…`) is not an error to the library
-    * -- the later assignment simply replaces the earlier value with an object -- so assembling the settings into a
-    * `Config` and counting what survives is what reveals it. A duplicated key shows up the same way.
+    * A key at a path that also has children (`editor.cursor` alongside `editor.cursor.mode`) is not an error to the
+    * library -- the later assignment simply replaces the earlier value with an object -- so assembling the settings
+    * into a `Config` and counting what survives is what reveals it. A duplicated key shows up the same way.
     */
   def unwritableSettings(config: AppConfig): List[String] =
     val settings  = lines(config).collect { case Right((key, value)) => key -> value.config }
@@ -114,7 +114,7 @@ object ConfigFileFormat:
     field("editor.contextual_toolbar_mode"),
     comment("Lines one mouse-wheel notch scrolls"),
     field("editor.wheel_scroll_lines"),
-    comment("Cursor: blink or breathe; colour overrides leave empty to use the active theme cursor"),
+    comment("Cursor: blink; colour overrides leave empty to use the active theme cursor"),
     field("editor.cursor.mode"),
     field("editor.cursor.active_color"),
     field("editor.cursor.inactive_color"),
@@ -190,11 +190,6 @@ object ConfigFileFormat:
     field("ui.render.layer_cache"),
     comment("Log a [FRAME] timing summary (input, render and paint latency) to the app log every 5 seconds"),
     field("ui.render.frame_timing"),
-    blank,
-    comment("Motion: preset (reduced, subtle, smooth, expressive, custom), accessibility, and per-family overrides"),
-    group(ConfigGroups.motion),
-    comment("Character animation style: none, quick, smooth, subtle, custom"),
-    group(ConfigGroups.characterAnimation),
     blank,
     comment(
       "Window chrome: auto uses themed chrome on Linux; native preserves OS snap/window animations; native-themed " +

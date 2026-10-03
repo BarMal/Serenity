@@ -100,7 +100,7 @@ private[manager] object ReplaceWorkflowTransitions:
       case Some(paneId) =>
         withReplacement.copy(persisted = withReplacement.persisted.copy(focus = Focus.EditorPane(paneId)))
       case None => withReplacement
-    Model(updatedState, withWorkflowUndo(model.undo, current, bufferId, buffer), model.bufferAnimations)
+    Model(updatedState, withWorkflowUndo(model.undo, current, bufferId, buffer))
 
   private def replaceNextMatch(
     model: Model,
@@ -155,8 +155,7 @@ private[manager] object ReplaceWorkflowTransitions:
       )
     Model(
       withReplaceWorkflowSurface(replaced, surfaceId, workflow.copy(statusMessage = Some("Replaced next match"))),
-      withWorkflowUndo(model.undo, current, bufferId, buffer),
-      model.bufferAnimations
+      withWorkflowUndo(model.undo, current, bufferId, buffer)
     )
 
   /** Shows `workflow` in the replace prompt `surfaceId`, raised to the top of the surfaces. */

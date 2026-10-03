@@ -1,7 +1,6 @@
 package com.serenity.state.manager
 
 import cats.syntax.foldable.*
-import com.serenity.animation.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.diagnostics.Trace
 import com.serenity.keystroke.events.*
@@ -65,8 +64,7 @@ final private[manager] class StateManagerEventPipeline(
         pendingOperations.traverse_ {
           // Already on the dispatcher: offering through the public `applyEvent` would queue behind this very dispatch
           // and deadlock waiting for it.
-          case StateManagerOperation.Event(event)                       => applyEventOnDispatcher(event)
-          case StateManagerOperation.ApplyAnimationHooks(previousState) => applyAnimationHooks(previousState)
+          case StateManagerOperation.Event(event) => applyEventOnDispatcher(event)
         } >> drainPendingOperations
     }
 
@@ -93,11 +91,6 @@ final private[manager] class StateManagerEventPipeline(
       candidateLspBufferIds = StateManagerEventPipeline.candidateLspBufferIds
     )
   )
-
-  private val animations = new AnimationChoreography(new AnimationChoreographyPort:
-    def currentState: cats.effect.IO[AppState] = modelCommit.currentState
-    def commitState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
-      modelCommit.commitState(newState, fallbackState))
 
   private val editorMouseTargeting = new EditorMouseTargeting(
     EditorMouseTargetingPort(
@@ -204,8 +197,7 @@ final private[manager] class StateManagerEventPipeline(
           Trace.timed(s"$eventLabel.enqueueChangedLspDocuments")(
             lspDocumentSync.enqueueChangedLspDocuments(prevState)
           ) >>
-          Trace.timed(s"$eventLabel.scheduleMarkdownPreviewCommits")(scheduleMarkdownPreviewCommits(prevState)) >>
-          Trace.timed(s"$eventLabel.applyAnimationHooks")(applyAnimationHooks(prevState))
+          Trace.timed(s"$eventLabel.scheduleMarkdownPreviewCommits")(scheduleMarkdownPreviewCommits(prevState))
       }
     }
 
@@ -291,8 +283,6 @@ final private[manager] class StateManagerEventPipeline(
     val registry = CommandRegistry.withToggleUI
     def result   = AppEventReducer.reduce(event, prevState, registry)(using balance)
     def reduced  = applyReducerResult(result, prevState)
-    def tabCycled(sweep: SweepDirection) =
-      commitReducerResult(result, prevState, EventPipelineTransitions.withPaneFlow(_, sweep))
     event match
       case CloseTab => beginCloseAction(CloseScope.Current, prevState)
       case Quit     => beginCloseAction(CloseScope.Quit, prevState)
@@ -307,10 +297,8 @@ final private[manager] class StateManagerEventPipeline(
             EventPipelineTransitions.withCommandRunnerUiPresetPreviews(_, previews)
           )
         yield ()
-      case NextTab     => tabCycled(SweepDirection.Backward)
-      case PreviousTab => tabCycled(SweepDirection.Forward)
-      case ToggleContextualToolbar | ToggleShortcutsHelp | ToggleTabList | ToggleRecentFilesInMode | NewTab |
-          FileSearch | GoToFile | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane |
+      case ToggleContextualToolbar | ToggleShortcutsHelp | ToggleTabList | ToggleRecentFilesInMode | NewTab | NextTab |
+          PreviousTab | FileSearch | GoToFile | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane |
           _: CloseTabById | MoveTabLeft | MoveTabRight | _: FocusInDirection | ToggleChapterGhosts | OpenChapterNote |
           ToggleNotesPin =>
         reduced
@@ -411,15 +399,6 @@ final private[manager] class StateManagerEventPipeline(
       .list()
       .map(_.map(UiPreset.Preview.fromPreset))
       .handleErrorWith(error => logger.error(error)("[PRESET] Failed to list UI presets").map(_ => Nil))
-
-  private[manager] def applyAnimationHooks(prevState: AppState): cats.effect.IO[Unit] =
-    animations.applyAnimationHooks(prevState)
-
-  private[manager] def shouldApplySurfaceAnimationHooks(state: AppState): Boolean =
-    animations.shouldApplySurfaceAnimationHooks(state)
-
-  private[manager] def advanceSurfaceAnimations(state: AppState): AppState =
-    animations.advanceSurfaceAnimations(state)
 
   private[manager] def applyComponentResult(result: ComponentResult, state: AppState): cats.effect.IO[AppState] =
     result match

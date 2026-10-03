@@ -13,13 +13,9 @@ private[command] object CommandRunnerSettingsCursorItems:
         CommandOption(
           "Blink",
           CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.SetCursorMode(CursorMode.Blink)))
-        ),
-        CommandOption(
-          "Breathe",
-          CommandIntent.Settings(SettingsIntent.Cursor(CursorIntent.SetCursorMode(CursorMode.Breathe)))
         )
       ),
       selectedIndex = optionSelections.getOrElse("cursor-mode", 0),
       category = CommandCategory.Settings,
-      hint = Some("Blink or breathe")
+      hint = Some("Caret style")
     )

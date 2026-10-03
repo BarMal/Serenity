@@ -1,6 +1,6 @@
 package com.serenity.ui.tui
 
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{StatusLinePlacement, StatusSegment}
 
 import TuiScenarios.*

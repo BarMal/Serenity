@@ -45,7 +45,7 @@ class StateManagerReplaceWorkflowSpec extends AnyFlatSpec with Matchers:
       workflow.replaceWorkflowSurface(currentState, surfaceId).map(_._2).getOrElse(fail("no replace prompt showing"))
 
   private def harness(initialState: AppState): Harness =
-    val modelRef = Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty)).unsafeRunSync()
+    val modelRef = Ref.of[IO, Model](Model(initialState, UndoState())).unsafeRunSync()
     def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
       modelRef.update(model =>
         transition(model).filter(next => AppStateValidation.validated(next.app).isRight).getOrElse(model)

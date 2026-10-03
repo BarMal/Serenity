@@ -72,29 +72,6 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync() shouldBe 1
   }
 
-  it should "not recompute when only a theme transition or surface animation ticked" in {
-    val stateA = AppState.initial
-    val stateB = stateA.copy(
-      runtime = stateA.runtime.copy(
-        themeDiscovery = stateA.runtime.themeDiscovery
-          .copy(transition = Some(ThemeTransition(stateA.persisted.theme, currentStep = 1, totalSteps = 5))),
-        motion = stateA.runtime.motion.copy(surfaceAnimations = Map(SurfaceId("runner") -> SurfaceAnimationState()))
-      )
-    )
-    val program = for
-      sync      <- AccessibilitySync.empty
-      callCount <- IO.ref(0)
-      compute = (state: AppState) =>
-        (previous: Option[AccessibilitySnapshot]) =>
-          callCount.update(_ + 1).as(AccessibilitySnapshot.from(state, viewport, previous))
-      _     <- sync.sync(stateA)(compute(stateA))
-      _     <- sync.sync(stateB)(compute(stateB))
-      calls <- callCount.get
-    yield calls
-
-    program.unsafeRunSync() shouldBe 1
-  }
-
   // Judgement call (issue #1001 migration): this test used to build `stateB` by copying `stateA`'s buffer with an
   // `animations` field set, to prove AccessibilitySync's normalized-state cache treats a decorative character-reveal
   // animation as irrelevant. `Buffer.animations` no longer exists -- character animation state now lives entirely in
@@ -175,23 +152,12 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync() shouldBe 2
   }
 
-  it should "not recompute when only typing activity or the caret's glide and selection animations changed" in {
+  it should "not recompute when only typing activity changed" in {
     val bufferId = BufferId(1)
     val stateA = AppState.initial.copy(persisted =
       AppState.initial.persisted.copy(buffers = Map(bufferId -> Buffer.fromString(bufferId, "hello")))
     )
-    val glide =
-      com.serenity.animation.Tween(
-        start = com.serenity.ui.layout.PixelPoint(0, 0),
-        end = com.serenity.ui.layout.PixelPoint(20, 0),
-        curve = com.serenity.animation.EasingCurve.Linear,
-        steps = 4
-      )
-    val gliding = stateA.persisted.buffers(bufferId)
     val stateB = stateA.copy(
-      persisted = stateA.persisted.copy(buffers =
-        Map(bufferId -> gliding.withCursorList(gliding.editing.cursors.map(_.copy(glide = Some(glide)))))
-      ),
       runtime = stateA.runtime.copy(typingActivity = stateA.runtime.typingActivity.observed(0L))
     )
     val program = for

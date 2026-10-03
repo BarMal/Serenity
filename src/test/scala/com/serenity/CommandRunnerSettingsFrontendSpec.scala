@@ -26,9 +26,7 @@ class CommandRunnerSettingsFrontendSpec extends AnyFlatSpec with Matchers:
     "settings-ui-font",
     "settings-text-scale",
     "rich-text-font-family",
-    "rich-text-font-size",
-    "panel-open-transition",
-    "panel-close-transition"
+    "rich-text-font-size"
   )
 
   private val proseMode   = "app-mode"          -> 1

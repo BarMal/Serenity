@@ -34,15 +34,13 @@ object RenameEditReducer:
           val (updatedBuffer, appliedEdits) =
             EditorEditSupport.applyTrackedEdits(buffer, initialOffsets, multiCursorEdits)
           val stateWithEdit = Focused.replaceBuffer(state, updatedBuffer)
-          val animationEffects =
-            EditorEditSupport.animationRemapEffects(buffer.id, content, updatedBuffer.document.content, appliedEdits)
           val undoEffects = state.persisted.layout.activeEditorPaneId
             .map(paneId =>
               EditorEditSupport.undoBoundaryEffects(buffer.id, paneId, buffer, appliedEdits, groupable = false)
             )
             .getOrElse(Nil)
           val summary = summaryPeek(stateWithEdit, anchor, appliedCount = currentEdits.length, skippedUris)
-          ReducerResult(summary.state, animationEffects ++ undoEffects ++ summary.effects)
+          ReducerResult(summary.state, undoEffects ++ summary.effects)
 
   private def summaryPeek(
     state: AppState,

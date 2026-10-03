@@ -19,7 +19,7 @@ class CommandSurfaceItemInputItemSpec extends AnyFlatSpec with Matchers:
       parse = text =>
         text.toDoubleOption
           .filter(v => v >= 0.0 && v <= 4.0)
-          .map(v => CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(v)))),
+          .map(v => CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiElementGap(v)))),
       category = CommandCategory.Settings,
       defaultValue = default
     )
@@ -34,26 +34,28 @@ class CommandSurfaceItemInputItemSpec extends AnyFlatSpec with Matchers:
       parse = text =>
         text.toIntOption
           .filter(v => v >= 0 && v <= 100)
-          .map(v => CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAnimationSteps(v)))),
+          .map(v =>
+            CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiOutlineThicknessPx(v)))
+          ),
       category = CommandCategory.Settings,
       defaultValue = default
     )
 
   "steppedIntent" should "step a decimal value up and down by the decimal step" in {
     decimalItem("1.00").steppedIntent(1) shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(1.1)))
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiElementGap(1.1)))
     )
     decimalItem("1.00").steppedIntent(-1) shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(0.9)))
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiElementGap(0.9)))
     )
   }
 
   it should "step an integer value up and down by the integer step" in {
     integerItem("50").steppedIntent(1) shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAnimationSteps(51)))
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiOutlineThicknessPx(51)))
     )
     integerItem("50").steppedIntent(-1) shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAnimationSteps(49)))
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiOutlineThicknessPx(49)))
     )
   }
 
@@ -131,16 +133,16 @@ class CommandSurfaceItemInputItemSpec extends AnyFlatSpec with Matchers:
 
   "parseOrDefault" should "reset to the default value when the text is the literal word \"default\"" in {
     decimalItem("2.50").parseOrDefault("default") shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(1.0)))
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiElementGap(1.0)))
     )
     decimalItem("2.50").parseOrDefault("DEFAULT") shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(1.0)))
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiElementGap(1.0)))
     )
   }
 
   it should "parse the text normally when it is not the reset sentinel" in {
     decimalItem("2.50").parseOrDefault("3.00") shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(3.0)))
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiElementGap(3.0)))
     )
   }
 
@@ -161,12 +163,14 @@ class CommandSurfaceItemInputItemSpec extends AnyFlatSpec with Matchers:
       parse = text =>
         text.trim.toLowerCase match
           case "default" | "reset" =>
-            Some(CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAnimationSteps(0))))
+            Some(
+              CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiOutlineThicknessPx(0)))
+            )
           case _ => None,
       category = CommandCategory.Settings
     )
     bindingItem.parseOrDefault("default") shouldBe Some(
-      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAnimationSteps(0)))
+      CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiOutlineThicknessPx(0)))
     )
   }
 

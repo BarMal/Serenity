@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{CommandRunner, RecordingState, SettingsPage, SettingsSurfaceState}
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{AppConfig, InterfaceDensity}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.keystroke.events.*
@@ -42,7 +42,6 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver.state.unsafeRunSync().persisted.config.surfaceConfig.showLineNumbers shouldBe !beforeClick
     searched.evidence.layoutViolations shouldBe empty
     driver.dispatch(Escape).unsafeRunSync()
-    driver.advanceToSettled().unsafeRunSync() shouldBe true
     driver.renderFrame("closed").unsafeRunSync().evidence.surfaceRects shouldBe empty
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
     driver.renderFrame("reopened").unsafeRunSync().evidence.surfaceRects should not be empty
@@ -116,7 +115,6 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     // the bug. Dismissing entirely now takes one Escape per remaining page, so dispatch until it actually closes.
     dismissUntilClosed(driver)
 
-    driver.advanceToSettled().unsafeRunSync() shouldBe true
     driver.state.unsafeRunSync().commandRunnerSurface shouldBe None
   }
 

@@ -2,9 +2,7 @@ package com.serenity.ui.presets
 
 import java.awt.Font
 
-import com.serenity.animation.TransitionKind
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.{withEditorInsertionTransitionKind, withMotionPreset}
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
@@ -29,8 +27,6 @@ private[presets] object BuiltInUiPresets:
         .withLineNumbers(false)
         .withStatusLine(StatusLineConfig(List(StatusSegment.Position), StatusLinePlacement.Floating))
         .withPaneHeaders(false)
-        .withMotionPreset(MotionPreset.Subtle)
-        .withEditorInsertionTransitionKind(TransitionKind.TypedText)
         .withDefaultDocumentMode(DefaultDocumentMode.RichText)
         .withInterfaceDensity(InterfaceDensity.Spacious)
         .withTextAreaInsets(TextAreaInsets.fromPercent(22.0, 22.0))
@@ -53,8 +49,6 @@ private[presets] object BuiltInUiPresets:
         .withLineNumbers(true)
         .withoutStatusLine
         .withPaneHeaders(false)
-        .withMotionPreset(MotionPreset.Subtle)
-        .withEditorInsertionTransitionKind(TransitionKind.LineAndCharacterTandem)
         .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
         .withDefaultDocumentMode(DefaultDocumentMode.Markdown)
         .withFontConfig(
@@ -74,8 +68,6 @@ private[presets] object BuiltInUiPresets:
       config = AppConfig.default
         .withAppMode(AppMode.Code)
         .withLineNumbers(true)
-        .withMotionPreset(MotionPreset.Reduced)
-        .withEditorInsertionTransitionKind(TransitionKind.Disabled)
         .withInterfaceDensity(InterfaceDensity.Compact)
         .withSyntaxHighlighting(true)
         .withFontConfig(FontConfig()),
@@ -101,8 +93,6 @@ private[presets] object BuiltInUiPresets:
         .withPaneHeaders(true)
         .withWordWrap(false)
         .withContextualToolbarEnabled(false)
-        .withMotionPreset(MotionPreset.Reduced)
-        .withEditorInsertionTransitionKind(TransitionKind.Disabled)
         .withInterfaceDensity(InterfaceDensity.Compact)
         .withSyntaxHighlighting(true)
         .withFontConfig(FontConfig()),
@@ -116,8 +106,6 @@ private[presets] object BuiltInUiPresets:
       config = AppConfig.default
         .withAppMode(AppMode.Code)
         .withLineNumbers(true)
-        .withMotionPreset(MotionPreset.Reduced)
-        .withEditorInsertionTransitionKind(TransitionKind.Disabled)
         .withInterfaceDensity(InterfaceDensity.Comfortable)
         .withStatusLineSegments(List(StatusSegment.Position, StatusSegment.Title, StatusSegment.Mode)),
       themeName = Theme.dark.name,

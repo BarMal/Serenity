@@ -409,7 +409,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
   it should "treat a drilled-in settings group's focus as command-runner input rather than peek input" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
-      .withDrilledSettingsSurface(SettingsSurfaceState(SettingsPage.Group("settings-animation")))
+      .withDrilledSettingsSurface(SettingsSurfaceState(SettingsPage.Group("settings-look")))
     val submenuState = editorState.copy(
       persisted = editorState.persisted.copy(
         focus = Focus.Surface(SurfaceId("command-runner"))

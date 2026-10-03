@@ -89,7 +89,7 @@ class PanelTransitionsSpec extends AnyFlatSpec with Matchers:
   }
 
   "panelChange" should "record the pre-change panel layout as an undo entry in the same model" in {
-    val model = Model(focusedMaximisedPreview, UndoState(), Map.empty)
+    val model = Model(focusedMaximisedPreview, UndoState())
 
     val next = PanelTransitions.panelChange(
       model,
@@ -102,7 +102,7 @@ class PanelTransitionsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "record nothing when the change is a no-op" in {
-    val model = Model(AppState.initial, UndoState(), Map.empty)
+    val model = Model(AppState.initial, UndoState())
 
     val next = PanelTransitions.panelChange(
       model,

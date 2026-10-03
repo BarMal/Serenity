@@ -229,7 +229,7 @@ class FileWorkflowModalRenderingSpec extends AnyFlatSpec with Matchers:
     overlay.x shouldBe (contentRect.x + math.max(0, (contentRect.width - overlay.width) / 2))
   }
 
-  it should "dim the workspace behind a blocking modal without depending on motion settings" in {
+  it should "dim the workspace behind a blocking modal" in {
     val close = ModalDialog(
       SurfaceId("close-confirmation"),
       Modal.Confirm(ConfirmPrompt.closeUnsaved("notes.scala")),

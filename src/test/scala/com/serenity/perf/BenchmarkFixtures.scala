@@ -51,8 +51,8 @@ private[perf] object BenchmarkFixtures:
       ),
       // AppState.initial seeds runtime.nextBufferId = BufferId(1) to follow its own initial buffer 0. This fixture
       // replaces the buffer map wholesale with a hand-picked BufferId(1), so nextBufferId must move past it too --
-      // otherwise AppStateValidation.validationErrors (#1697 Wave 4's AnimationTickBenchmarks is the first benchmark
-      // fixture to actually call AppStateValidation.validated) reports "Next buffer ID collides with an existing
+      // otherwise AppStateValidation.validationErrors (the validated-commit benchmark fixtures call
+      // AppStateValidation.validated) reports "Next buffer ID collides with an existing
       // buffer: 1".
       runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
     )

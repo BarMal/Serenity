@@ -6,8 +6,8 @@ import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, Wor
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** The state-update path's measurements -- viewport placement, caret glide seeding and the navigation geometry window
-  * -- must not change when they read wrapped lines through a shared [[WrappedLineCache]].
+/** The state-update path's measurements -- viewport placement and the navigation geometry window -- must not change
+  * when they read wrapped lines through a shared [[WrappedLineCache]].
   */
 class WrapCacheEquivalenceSpec extends AnyFlatSpec with Matchers:
 

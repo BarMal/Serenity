@@ -7,8 +7,6 @@ import scala.concurrent.duration.*
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
-import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.CursorMode
 import com.serenity.frontend.GuiFrontend
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId, Damage}
@@ -40,36 +38,11 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
   "AppRuntime" should "toggle blink cursor visibility for idle frames" in {
     val program = for
       cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
-      first         <- AppRuntimeRenderLoops.computeIdleCursorFrame(AppState.initial, cursorVisible, breathIndex)
-      second        <- AppRuntimeRenderLoops.computeIdleCursorFrame(AppState.initial, cursorVisible, breathIndex)
+      first         <- AppRuntimeRenderLoops.computeIdleCursorFrame(cursorVisible)
+      second        <- AppRuntimeRenderLoops.computeIdleCursorFrame(cursorVisible)
     yield
       first shouldBe ((false, None))
       second shouldBe ((true, None))
-
-    program.unsafeRunTimed(10.seconds) shouldBe defined
-  }
-
-  it should "derive breathing cursor colours for idle frames" in {
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(config = AppState.initial.persisted.config.withCursorMode(CursorMode.Breathe))
-    )
-    val expectedBaseColor = state.persisted.config.cursorColors.activeOr(state.persisted.theme.cursor)
-    val expectedAlpha     = ((math.sin(math.Pi / 24) + 1.0) / 2.0 * 255).toInt
-
-    val program = for
-      cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
-      frame         <- AppRuntimeRenderLoops.computeIdleCursorFrame(state, cursorVisible, breathIndex)
-      nextIndex     <- breathIndex.get
-    yield
-      frame._1 shouldBe true
-      nextIndex shouldBe 1
-      val cursor = frame._2.getOrElse(fail("Expected breathing cursor colour"))
-      cursor.getRed shouldBe expectedBaseColor.getRed
-      cursor.getGreen shouldBe expectedBaseColor.getGreen
-      cursor.getBlue shouldBe expectedBaseColor.getBlue
-      cursor.getAlpha shouldBe expectedAlpha
 
     program.unsafeRunTimed(10.seconds) shouldBe defined
   }
@@ -102,35 +75,28 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "skip idle cursor rendering when the cursor idle interval is disabled" in {
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        config = AppState.initial.persisted.config.withCursorTransitionSpeedScale(Some(0.0))
-      )
-    )
+    val state = AppState.initial
 
     val program = for
       cursorVisible      <- Ref.of[IO, Boolean](true)
-      breathIndex        <- Ref.of[IO, Int](0)
       pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
       renderCalls        <- Ref.of[IO, Int](0)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntimeRenderLoops.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
-        loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty)),
+        loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState())),
         pendingPaintDamage = pendingPaintDamage,
         checkResizeAndHandle = IO.unit,
         cursorVisible = cursorVisible,
-        breathIndex = breathIndex,
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
           _: Option[Color],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState],
           _: com.serenity.state.manager.RenderCaches
         ) => renderCalls.update(_ + 1),
         requestFastRender = IO.unit,
-        cursorIdleInterval = GuiFrontend.cursorIdleInterval,
+        cursorIdleInterval = _ => None,
         renderCaches = com.serenity.state.manager.RenderCaches.create()
       )
       calls <- renderCalls.get
@@ -145,22 +111,19 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       cursorVisible      <- Ref.of[IO, Boolean](true)
-      breathIndex        <- Ref.of[IO, Int](0)
       pendingPaintDamage <- Ref.of[IO, Damage](damage)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntimeRenderLoops.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
-        loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty)),
+        loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState())),
         pendingPaintDamage = pendingPaintDamage,
         checkResizeAndHandle = IO.unit,
         cursorVisible = cursorVisible,
-        breathIndex = breathIndex,
         renderCursorOnly = (
           _: AppState,
           _: Boolean,
           _: Option[Color],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState],
           _: com.serenity.state.manager.RenderCaches
         ) => IO.unit,
         requestFastRender = IO.unit,
@@ -178,23 +141,20 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       cursorVisible      <- Ref.of[IO, Boolean](true)
-      breathIndex        <- Ref.of[IO, Int](0)
       pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
       rendered           <- Ref.of[IO, Vector[(Boolean, Option[Color])]](Vector.empty)
       given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
       _ <- AppRuntimeRenderLoops.runIdleRenderStep(
         currentStateForDiagnostics = IO.pure(Some(state)),
-        loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty)),
+        loadModel = IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState())),
         pendingPaintDamage = pendingPaintDamage,
         checkResizeAndHandle = IO.unit,
         cursorVisible = cursorVisible,
-        breathIndex = breathIndex,
         renderCursorOnly = (
           _: AppState,
           visible: Boolean,
           cursor: Option[Color],
           _: Damage,
-          _: Map[BufferId, com.serenity.animation.AnimationState],
           _: com.serenity.state.manager.RenderCaches
         ) => rendered.update(_ :+ (visible -> cursor)),
         requestFastRender = IO.unit,

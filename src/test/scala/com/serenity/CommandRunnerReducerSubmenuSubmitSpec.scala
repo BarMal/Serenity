@@ -2,7 +2,6 @@ package com.serenity
 
 import com.serenity.command.*
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer}
@@ -38,11 +37,8 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
   ): AppState =
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val effectiveConfig =
-      if itemId == "animation-duration" || itemId == "animation-steps" then config.withMotionPreset(MotionPreset.Custom)
-      else config
     val searchedRunner = CommandRunner.empty
-      .activate(registry, effectiveConfig)
+      .activate(registry, config)
       .openSettings
       .updateSearchTerm(settingsGroupSearchTerm(groupId))
     val selectedIndex = searchedRunner.visibleItems.indexWhere(_.id == groupId) match
@@ -77,7 +73,7 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
 
   "CommandRunnerReducer" should "leave a selected submenu input item unchanged when enter is pressed before typing" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-motion-advanced", "animation-duration")
+    val state    = settingsStateOnItem("settings-look-advanced", "ui-outline-thickness")
 
     val submitted = CommandRunnerReducer.reduce(RunnerSubmit, state, registry)
     val runner    = runnerFrom(submitted.state)
@@ -138,11 +134,11 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
       Some("move-status-position-later")
   }
 
-  it should "fire SetAnimationSteps intent on Enter with valid value" in {
+  it should "fire SetUiOutlineThicknessPx intent on Enter with valid value" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-motion-advanced", "animation-steps")
+    val state    = settingsStateOnItem("settings-look-advanced", "ui-outline-thickness")
 
-    val typed = List('2', '0').foldLeft(state) { (s, c) =>
+    val typed = List('6').foldLeft(state) { (s, c) =>
       val r = CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry)
       s.copy(runtime =
         s.runtime.copy(uiSurfaces =
@@ -154,7 +150,9 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
     val result = CommandRunnerReducer.reduce(RunnerSubmit, typed, registry)
     result.effects.exists {
       case AppEffect.ExecuteCommand(command) =>
-        command.intent == CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetAnimationSteps(20)))
+        command.intent == CommandIntent.Settings(
+          SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiOutlineThicknessPx(6))
+        )
       case _ =>
         false
     } shouldBe true
@@ -182,7 +180,7 @@ class CommandRunnerReducerSubmenuSubmitSpec extends AnyFlatSpec with Matchers:
 
   it should "be a no-op on Enter when the value is out of bounds" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-motion-advanced", "animation-steps")
+    val state    = settingsStateOnItem("settings-look-advanced", "ui-outline-thickness")
 
     val typedOutOfBounds = List('9', '9', '9').foldLeft(state) { (s, c) =>
       val r = CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry)

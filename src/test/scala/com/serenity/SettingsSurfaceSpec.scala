@@ -38,7 +38,7 @@ class SettingsSurfaceSpec extends AnyFlatSpec with Matchers:
 
     runner.settingsSurfaceItems.collect {
       case group: CommandSurfaceItem.GroupItem => group.label
-    } should contain allOf ("Workspace", "Editor", "Typography", "Look", "Motion", "Language Tools", "Keys")
+    } should contain allOf ("Workspace", "Editor", "Typography", "Look", "Language Tools", "Keys")
 
     val searched = runner.updateSettingsSearch("default document")
     val result = searched.settingsSurfaceItems

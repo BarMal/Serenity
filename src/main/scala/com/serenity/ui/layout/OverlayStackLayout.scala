@@ -39,12 +39,9 @@ object OverlayStackLayout:
                 case _                                                             => false
             }.toList
 
-  /** Nearest the cursor first. Ghosts (closing surfaces) are left out: they paint at their cached rect, not a slot. */
+  /** Nearest the cursor first. */
   private[layout] def orderedAboveCursorSurfaces(state: AppState): List[UiSurface] =
-    state.floatingSurfaces.filter(surface => isAboveCursorSurface(surface) && !isGhost(surface)).sortBy(aboveCursorRank)
-
-  private[layout] def aboveCursorGhostSurfaces(state: AppState): List[UiSurface] =
-    state.floatingSurfaces.filter(surface => isAboveCursorSurface(surface) && isGhost(surface))
+    state.floatingSurfaces.filter(isAboveCursorSurface).sortBy(aboveCursorRank)
 
   /** The lens annotates the text under the cursor and sits against it; a peek explains the symbol there and sits just
     * above; anything else (the command runner's cursor peek) floats beyond both.
@@ -59,11 +56,6 @@ object OverlayStackLayout:
     surface.presentation match
       case SurfacePresentation.Floating(_, SurfacePlacement.AboveCursor) => true
       case _                                                             => false
-
-  private def isGhost(surface: UiSurface): Boolean =
-    surface.content match
-      case SurfaceContent.GhostOverlay(_, _) => true
-      case _                                 => false
 
   private def isBelowCursorSurface(surface: UiSurface): Boolean =
     surface.presentation match
@@ -185,7 +177,7 @@ object OverlayStackLayout:
     paneLayouts: Map[PaneId, EditorPaneLayout]
   ): Map[SurfaceId, Double] =
     val aboveById       = aboveSurfaces.map(surface => surface.id -> surface).toMap
-    val stackedAboveIds = aboveSurfaces.filterNot(isGhost).map(_.id)
+    val stackedAboveIds = aboveSurfaces.map(_.id)
     val aboveStackRemainder = FloatingSurfaceLayout.floatingStackGapRows(state) -
       FloatingSurfaceLayout.wholeRowOrigin(FloatingSurfaceLayout.floatingStackGapRows(state))
     val aboveOffsets = aboveRects.flatMap { (surfaceId, rect) =>

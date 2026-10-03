@@ -2,8 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.{IO, Ref}
 import cats.syntax.foldable.*
-import com.serenity.animation.AnimationState
-import com.serenity.state.models.{AppState, BufferId}
+import com.serenity.state.models.AppState
 import com.serenity.state.reducers.{AppEffect, UndoEffect}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.layout.WrappedLineCache
@@ -69,37 +68,9 @@ final private[manager] class ModelCommit(
           case Left(errors) => (current, operations.logRejectedCommit(errors))
     }
 
-  // Undo history and buffer animations are not app state: `AppStateValidation` has nothing to check in them.
+  // Undo history is not app state: `AppStateValidation` has nothing to check in them.
   def updateUndo(update: UndoState => UndoState): IO[Unit] =
     modelRef.update(current => current.copy(undo = update(current.undo)))
-
-  def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit] =
-    modelRef.update(current => current.copy(bufferAnimations = update(current.bufferAnimations)))
-
-  /** Commits the render tick's animation advance (#1697): a message like any other, validated like any other, through
-    * the same `StateManagerOperationBoundary.prepareCommit` every write uses -- so a surface `update` drops whose exit
-    * animation finished (`AnimationChoreography`, `uiSurfaces.filterNot`) can never commit a dangling reference (e.g. a
-    * workspace-tree node still naming it) unnoticed, the way the old unvalidated write could.
-    *
-    * Deliberately skips `afterCommit`'s follow-up work -- scheduling document analysis and logging a modal transition
-    * -- unlike every other commit: `update` only ever advances animation progress (cursor glide, panel geometry,
-    * surface fades, ...), so it can never change spell-check-relevant content or open/close a modal, and running that
-    * work every frame would be pure waste for no observable effect. `update` is pure, geometry-preserving animation
-    * math, so validation itself is cheap and exists as a correctness backstop, not because a well-behaved tick is
-    * expected to fail it; a tick that would (a bug) is rejected and logged like any other invalid commit, leaving
-    * animation progress where it was so the next frame retries.
-    */
-  def advanceTick(update: Model => Model): IO[Model] =
-    modelRef.flatModify { current =>
-      val next = update(current)
-      if next.app eq current.app then (current, IO.pure(current))
-      else
-        StateManagerOperationBoundary.prepareCommit(next.app, current.app) match
-          case Right(committed) =>
-            val committedModel = next.copy(app = committed)
-            (committedModel, IO.pure(committedModel))
-          case Left(errors) => (current, operations.logRejectedCommit(errors).as(current))
-    }
 
   private def commit(transition: Model => Option[(Model, AppState)]): IO[Unit] =
     modelRef.flatModify { current =>
@@ -115,14 +86,11 @@ final private[manager] class ModelCommit(
 
 private[manager] object ModelCommit:
 
-  /** Folds the reducer effects that only change the model itself -- buffer animations and undo bookkeeping -- into
-    * `model`, so they commit in the same write as the state they came with. Every other effect is left to the effect
-    * interpreter, in order.
+  /** Folds the reducer effects that only change the model itself -- undo bookkeeping -- into `model`, so they commit in
+    * the same write as the state they came with. Every other effect is left to the effect interpreter, in order.
     */
   def applyModelEffects(model: Model, effects: List[AppEffect]): Model =
     effects.foldLeft(model) {
-      case (current, AppEffect.Animation(effect)) =>
-        current.copy(bufferAnimations = AnimationEffectHandler.applied(current.bufferAnimations, effect))
       case (current, AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable))) =>
         current.copy(undo = UndoRecording.recorded(current.undo, entry, groupable))
       case (current, _) => current
@@ -130,5 +98,5 @@ private[manager] object ModelCommit:
 
   def isModelEffect(effect: AppEffect): Boolean =
     effect match
-      case AppEffect.Animation(_) | AppEffect.Undo(_) => true
-      case _                                          => false
+      case AppEffect.Undo(_) => true
+      case _                 => false

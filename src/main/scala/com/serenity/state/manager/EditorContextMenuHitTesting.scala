@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.{CommandRegistry, scope}
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ReducerResult, Transition}

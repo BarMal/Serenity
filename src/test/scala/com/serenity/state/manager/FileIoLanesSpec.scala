@@ -93,7 +93,7 @@ class FileIoLanesSpec extends AnyFlatSpec with Matchers with Eventually:
       for
         gates               <- Ref.of[IO, List[Deferred[IO, Unit]]](Nil)
         log                 <- Ref.of[IO, Vector[String]](Vector.empty)
-        modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+        modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))
         themeNamesRef       <- Ref.of[IO, List[String]](Nil)
         quitSignal          <- Deferred[IO, Unit]
         lspQueue            <- LspEffectQueue.create

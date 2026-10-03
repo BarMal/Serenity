@@ -95,21 +95,6 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.pinnedSurfaces.exists(_.content == SurfaceContent.Outline(Nil)) shouldBe true
   }
 
-  it should "cap animation cells generated for a very tall pinned panel open" in {
-    val stateManager = createStateManager()
-    stateManager
-      .updateState(state => state.copy(runtime = state.runtime.copy(viewportSize = Some(ViewportSize(80, 3000)))))
-      .unsafeRunSync()
-
-    executeCommandThroughRunner(stateManager, "toggle-outline-panel", "toggle-outline-panel")
-
-    val updatedState = stateManager.getCurrentState.unsafeRunSync()
-    val surfaceId    = updatedState.pinnedSurfaces.find(_.content == SurfaceContent.Outline(Nil)).get.id
-    // +1 for the single fixed border/frame cell, which is separate from the capped content cells.
-    updatedState.runtime.motion.surfaceAnimations(surfaceId).animationState.animations.size should be <=
-      com.serenity.state.manager.VisibleBufferAnimationCells.DefaultMaxAnimatedCells + 1
-  }
-
   it should "pin the comments panel from the command runner" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)

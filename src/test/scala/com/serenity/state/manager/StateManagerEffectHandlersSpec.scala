@@ -7,7 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.AppMode
 import com.serenity.io.FileDialog
 import com.serenity.lsp.LspEffect

@@ -1,7 +1,6 @@
 package com.serenity.command
 
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.frontend.FrontendCapabilities
 
 /** Builds the flat list of command-runner settings input items from the current config.
@@ -27,8 +26,6 @@ object CommandRunnerSettingsInputItems:
     */
   final private case class DerivedValues(
       inputConfig: InputConfig,
-      durationValue: String,
-      stepsValue: String,
       codeFontSizeValue: String,
       textFontSizeValue: String,
       uiFontSizeValue: String,
@@ -37,11 +34,6 @@ object CommandRunnerSettingsInputItems:
       textAreaRightValue: String,
       textAreaTopValue: String,
       textAreaBottomValue: String,
-      editorTextSpeedScaleValue: String,
-      commandRunnerSpeedScaleValue: String,
-      uiSpeedScaleValue: String,
-      cursorSpeedScaleValue: String,
-      speedScaleValue: String,
       elementGapValue: String,
       outlineThicknessValue: String,
       lineNumberMarginLeftValue: String,
@@ -59,8 +51,6 @@ object CommandRunnerSettingsInputItems:
     val languageToolsConfig = config.languageToolsConfig
     DerivedValues(
       inputConfig = config.inputConfig,
-      durationValue = editorConfig.characterAnimation.map(_.durationMs.toString).getOrElse("0"),
-      stepsValue = editorConfig.characterAnimation.map(_.steps.toString).getOrElse("0"),
       codeFontSizeValue = editorConfig.fontConfig.codeFontSize.toString,
       textFontSizeValue = editorConfig.fontConfig.textFontSize.toString,
       uiFontSizeValue = editorConfig.fontConfig.uiFontSize.toString,
@@ -69,11 +59,6 @@ object CommandRunnerSettingsInputItems:
       textAreaRightValue = f"${surfaceConfig.textAreaInsets.rightPercent}%.1f",
       textAreaTopValue = f"${surfaceConfig.textAreaInsets.topPercent}%.1f",
       textAreaBottomValue = f"${surfaceConfig.textAreaInsets.bottomPercent}%.1f",
-      editorTextSpeedScaleValue = f"${config.effectiveEditorTextTransitionSpeedScale}%.2f",
-      commandRunnerSpeedScaleValue = f"${config.effectiveCommandRunnerTransitionSpeedScale}%.2f",
-      uiSpeedScaleValue = f"${config.effectiveUiTransitionSpeedScale}%.2f",
-      cursorSpeedScaleValue = f"${config.effectiveCursorTransitionSpeedScale}%.2f",
-      speedScaleValue = f"${surfaceConfig.elementTransitionSpeedScale}%.2f",
       // Unset resolves to the same surface-specific number `AppState.effectiveUiElementGap` and its
       // `effectiveLineNumberMarginLeft`/`effectiveLineNumberPadding` siblings would show -- a GUI cell of breathing
       // room, or the TUI's existing zero -- rather than the literal string "auto" (issue #1621 carve-out).
@@ -153,17 +138,6 @@ object CommandRunnerSettingsInputItems:
       ) ++
       CommandRunnerSettingsInputItemsTextAreaAndSpellCheck.columnItems(v.columnCountValue, v.columnGapValue) ++
       CommandRunnerSettingsInputItemsTextAreaAndSpellCheck.spellCheckItems(v.spellCheck) ++
-      CommandRunnerSettingsInputItemsMotion.animationTimingItems(
-        v.durationValue,
-        v.stepsValue,
-        v.speedScaleValue,
-        v.editorTextSpeedScaleValue
-      ) ++
-      CommandRunnerSettingsInputItemsMotion.speedScaleItems(
-        v.commandRunnerSpeedScaleValue,
-        v.uiSpeedScaleValue,
-        v.cursorSpeedScaleValue
-      ) ++
       CommandRunnerSettingsInputItemsUiLayout.uiSpacingItems(
         v.elementGapValue,
         v.outlineThicknessValue

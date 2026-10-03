@@ -16,7 +16,7 @@ import com.serenity.keystroke.translators.{TextEntryTranslator, Translator}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
-import com.serenity.state.models.{AppState, BufferId, Damage}
+import com.serenity.state.models.{AppState, Damage}
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
@@ -48,13 +48,11 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
   "AppRuntime" should "reset the cursor activity phase to visible after user input" in {
     val result = (for
       cursorVisible <- Ref.of[IO, Boolean](false)
-      breathIndex   <- Ref.of[IO, Int](17)
-      _             <- AppRuntime.resetCursorActivity(cursorVisible, breathIndex)
+      _             <- AppRuntime.resetCursorActivity(cursorVisible)
       visible       <- cursorVisible.get
-      breathe       <- breathIndex.get
-    yield (visible, breathe)).unsafeRunSync()
+    yield visible).unsafeRunSync()
 
-    result shouldBe (true, 0)
+    result shouldBe true
   }
 
   it should "refresh the focused translator after every input event" in {
@@ -62,7 +60,6 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       refreshes     <- Ref.of[IO, Int](0)
       resizeChecks  <- Ref.of[IO, Int](0)
       cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
       router = new InputRouter[IO, Event]:
         private val initialTranslator = new TextEntryTranslator(AppConfig.default)
 
@@ -72,17 +69,10 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState] = IO.pure(AppState.initial)
         def getModel: IO[com.serenity.state.manager.Model] =
-          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState(), Map.empty))
-        def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
-        def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
-        def updateStateValidated(update: AppState => AppState): IO[Unit]                  = IO.unit
-        def updateBufferAnimations(
-          update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
-            BufferId,
-            com.serenity.animation.AnimationState
-          ]
-        ): IO[Unit] = IO.unit
-        def applyEvent(event: Event): IO[Unit] = IO.unit
+          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState()))
+        def updateState(update: AppState => AppState): IO[Unit]          = IO.unit
+        def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit]                           = IO.unit
       clipboard = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
       _ <- AppRuntimeRenderLoops
         .inputEventPhase(
@@ -91,7 +81,6 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
           clipboard,
           resizeChecks.update(_ + 1),
           cursorVisible,
-          breathIndex,
           (_: Damage) => IO.unit
         )(
           Stream.emits(List(InsertChar('a'), DeleteBackward, MoveLeft, InsertChar('b')))
@@ -109,7 +98,6 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
     val timings = com.serenity.diagnostics.FrameTimings()
     val program = for
       cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
       router = new InputRouter[IO, Event]:
         private val initialTranslator = new TextEntryTranslator(AppConfig.default)
 
@@ -119,17 +107,10 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState] = IO.pure(AppState.initial)
         def getModel: IO[com.serenity.state.manager.Model] =
-          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState(), Map.empty))
-        def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
-        def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
-        def updateStateValidated(update: AppState => AppState): IO[Unit]                  = IO.unit
-        def updateBufferAnimations(
-          update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
-            BufferId,
-            com.serenity.animation.AnimationState
-          ]
-        ): IO[Unit] = IO.unit
-        def applyEvent(event: Event): IO[Unit] = IO.unit
+          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState()))
+        def updateState(update: AppState => AppState): IO[Unit]          = IO.unit
+        def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit]                           = IO.unit
       clipboard = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
       _ <- AppRuntimeRenderLoops
         .inputEventPhase(
@@ -138,7 +119,6 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
           clipboard,
           IO.unit,
           cursorVisible,
-          breathIndex,
           (_: Damage) => IO.unit,
           frameTimings = timings
         )(Stream.emits(List(InsertChar('a'), MoveLeft, InsertChar('b'))))
@@ -155,7 +135,6 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
     val program = for
       resizeChecks  <- Ref.of[IO, Int](0)
       cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
       router = new InputRouter[IO, Event]:
         private val initialTranslator = new TextEntryTranslator(AppConfig.default)
 
@@ -165,17 +144,10 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState] = IO.pure(AppState.initial)
         def getModel: IO[com.serenity.state.manager.Model] =
-          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState(), Map.empty))
-        def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
-        def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
-        def updateStateValidated(update: AppState => AppState): IO[Unit]                  = IO.unit
-        def updateBufferAnimations(
-          update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
-            BufferId,
-            com.serenity.animation.AnimationState
-          ]
-        ): IO[Unit] = IO.unit
-        def applyEvent(event: Event): IO[Unit] = IO.unit
+          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState()))
+        def updateState(update: AppState => AppState): IO[Unit]          = IO.unit
+        def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit]                           = IO.unit
       clipboard = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
       _ <- AppRuntimeRenderLoops
         .inputEventPhase(
@@ -184,7 +156,6 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
           clipboard,
           resizeChecks.update(_ + 1),
           cursorVisible,
-          breathIndex,
           (_: Damage) => IO.unit
         )(Stream.emit(MousePress(0, 0)))
         .compile
@@ -221,7 +192,6 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
               _: Boolean,
               _: Option[Color],
               _: Damage,
-              _: Map[BufferId, com.serenity.animation.AnimationState],
               _: com.serenity.state.manager.RenderCaches
             ) => initialRenderStarted.complete(()).flatMap(_ => allowInitialRender.get),
             renderCursorOnly = (
@@ -229,7 +199,6 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
               _: Boolean,
               _: Option[Color],
               _: Damage,
-              _: Map[BufferId, com.serenity.animation.AnimationState],
               _: com.serenity.state.manager.RenderCaches
             ) => IO.unit
           ),
@@ -277,7 +246,6 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
               _: Boolean,
               _: Option[Color],
               _: Damage,
-              _: Map[BufferId, com.serenity.animation.AnimationState],
               _: com.serenity.state.manager.RenderCaches
             ) => inputStarted.get >> IO.raiseError(RuntimeException("initial render failed")),
             renderCursorOnly = (
@@ -285,7 +253,6 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
               _: Boolean,
               _: Option[Color],
               _: Damage,
-              _: Map[BufferId, com.serenity.animation.AnimationState],
               _: com.serenity.state.manager.RenderCaches
             ) => IO.unit
           ),
@@ -306,7 +273,6 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
     val program = for
       refreshes     <- Ref.of[IO, Int](0)
       cursorVisible <- Ref.of[IO, Boolean](true)
-      breathIndex   <- Ref.of[IO, Int](0)
       router = new InputRouter[IO, Event]:
         private val initialTranslator = new TextEntryTranslator(AppConfig.default)
 
@@ -316,20 +282,13 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
       stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState] = IO.pure(AppState.initial)
         def getModel: IO[com.serenity.state.manager.Model] =
-          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState(), Map.empty))
-        def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
-        def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
-        def updateStateValidated(update: AppState => AppState): IO[Unit]                  = IO.unit
-        def updateBufferAnimations(
-          update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
-            BufferId,
-            com.serenity.animation.AnimationState
-          ]
-        ): IO[Unit] = IO.unit
-        def applyEvent(event: Event): IO[Unit] = IO.unit
+          IO.pure(com.serenity.state.manager.Model(AppState.initial, com.serenity.state.undo.UndoState()))
+        def updateState(update: AppState => AppState): IO[Unit]          = IO.unit
+        def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit]                           = IO.unit
       clipboard = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
       _ <- AppRuntimeRenderLoops
-        .inputEventPhase(stateManager, router, clipboard, IO.unit, cursorVisible, breathIndex, (_: Damage) => IO.unit)(
+        .inputEventPhase(stateManager, router, clipboard, IO.unit, cursorVisible, (_: Damage) => IO.unit)(
           Stream.emit(OpenFind)
         )
         .compile

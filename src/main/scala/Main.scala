@@ -174,16 +174,16 @@ object Main extends IOApp:
                     frameTimings
                   )
                 ),
-              renderFull = (state, vis, cc, damage, bufferAnimations, caches) =>
+              renderFull = (state, vis, cc, damage, caches) =>
                 timedFrame(frameTimings, FrameKind.Full, paintEc)(
                   syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
-                  IO(paintFullFrame(state, vis, cc, swingWin, displayState.snapshot, damage, bufferAnimations, caches))
+                  IO(paintFullFrame(state, vis, cc, swingWin, displayState.snapshot, damage, caches))
                 ),
-              renderCursorOnly = (state, vis, cc, damage, bufferAnimations, caches) =>
+              renderCursorOnly = (state, vis, cc, damage, caches) =>
                 timedFrame(frameTimings, FrameKind.CursorOnly, paintEc)(
                   syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
                   IO(
-                    paintCursorFrame(state, vis, cc, swingWin, displayState.snapshot, damage, bufferAnimations, caches)
+                    paintCursorFrame(state, vis, cc, swingWin, displayState.snapshot, damage, caches)
                   )
                 ),
               frameTimings = frameTimings
@@ -234,9 +234,9 @@ object Main extends IOApp:
 
   /** Applies the eco overlay (if requested via `--eco` or `SERENITY_ECO=1`) and the alpha overlay (if requested via
     * `--alpha`) before the auto text-scale resolution that follows every config load, so their changes are visible to
-    * that step just like any other loaded setting. Eco touches only the render fps target and motion accessibility;
-    * alpha touches only the currently-gated experimental prototype flags (command-runner cursor-peek today) -- the two
-    * overlays don't share any field, so application order between them doesn't matter.
+    * that step just like any other loaded setting. Eco touches only the render fps target; alpha touches only the
+    * currently-gated experimental prototype flags (command-runner cursor-peek today) -- the two overlays don't share
+    * any field, so application order between them doesn't matter.
     */
   private def resolveAppConfig(loadedConfig: AppConfig, launchOptions: LaunchOptions): AppConfig =
     resolveAutoTextScale(
@@ -257,7 +257,6 @@ object Main extends IOApp:
     window: SwingWindow,
     display: RuntimeDisplayState.Snapshot,
     damage: com.serenity.state.models.Damage,
-    bufferAnimations: Map[com.serenity.state.models.BufferId, com.serenity.animation.AnimationState],
     caches: com.serenity.state.manager.RenderCaches
   ): Unit =
     if cursorVisible then
@@ -270,7 +269,6 @@ object Main extends IOApp:
         display.uiMetrics,
         cursorColor,
         damage,
-        bufferAnimations,
         caches
       )
       ()
@@ -286,7 +284,6 @@ object Main extends IOApp:
         None,
         repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible),
         damage = damage,
-        bufferAnimations = bufferAnimations,
         caches = caches
       )
 
@@ -298,7 +295,6 @@ object Main extends IOApp:
     window: SwingWindow,
     display: RuntimeDisplayState.Snapshot,
     damage: com.serenity.state.models.Damage,
-    bufferAnimations: Map[com.serenity.state.models.BufferId, com.serenity.animation.AnimationState],
     caches: com.serenity.state.manager.RenderCaches
   ): Unit =
     val rendered = RendererCursorOverlay.renderCursorOnly(
@@ -310,7 +306,6 @@ object Main extends IOApp:
       display.uiFont,
       display.uiMetrics,
       cursorColor,
-      bufferAnimations,
       caches
     )
     if !rendered then
@@ -325,6 +320,5 @@ object Main extends IOApp:
         cursorColor,
         repaintOnFlush = true,
         damage = damage,
-        bufferAnimations = bufferAnimations,
         caches = caches
       )

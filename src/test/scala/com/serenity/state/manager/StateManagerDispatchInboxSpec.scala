@@ -41,8 +41,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
   final private case class PipelineHarness(
       stateRef: Ref[IO, AppState],
       operations: StateManagerOperationBoundary,
-      pipeline: StateManagerEventPipeline,
-      ticker: AnimationTicker
+      pipeline: StateManagerEventPipeline
   )
 
   final private case class DispatchGate(entered: Deferred[IO, Unit], release: Deferred[IO, Unit])
@@ -53,7 +52,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
   /** Every interpreted effect reads the state, waits on `gate`, then commits what it read. */
   private def snapshotCommittingPipeline(initialState: AppState, gate: DispatchGate): IO[PipelineHarness] =
     for
-      sharedModelRef <- Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty))
+      sharedModelRef <- Ref.of[IO, Model](Model(initialState, UndoState()))
       sharedStateRef = ModelViews.appRef(sharedModelRef)
       cacheRef   <- Ref.of[IO, Option[MouseTargetCache]](None)
       lspQueue   <- LspEffectQueue.create
@@ -90,15 +89,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
         operations,
         undoRecording
       )
-      animations = new AnimationChoreography(new AnimationChoreographyPort:
-        def currentState: IO[AppState] = sharedStateRef.get
-        export operations.modelCommit.commitState)
-      editor = new StateManagerEditorCapability(
-        operations.modelCommit,
-        animations,
-        operations
-      )
-    yield PipelineHarness(sharedStateRef, operations, pipeline, editor.animationTicker)
+    yield PipelineHarness(sharedStateRef, operations, pipeline)
 
   private def previewEditedTo(generation: Long): AppState =
     AppState.initial.copy(persisted =
@@ -124,40 +115,6 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       yield after.persisted.buffers.get(bufferId).map(_.markdownPreviewCommittedGeneration)
 
     runVirtual(program) shouldBe Some(7L)
-  }
-
-  it should "skip a render tick that arrives mid-dispatch, report it still active, and advance on the next one" in {
-    // A burst whose quiet window has already lapsed, holding a floating status line hidden: the next tick that runs
-    // clears it, which is what shows whether a tick ran.
-    val typing = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(config =
-        AppState.initial.persisted.config
-          .withStatusLineSegments(List(com.serenity.config.StatusSegment.Position))
-          .withStatusLinePlacement(com.serenity.config.StatusLinePlacement.Floating)
-      ),
-      runtime = AppState.initial.runtime.copy(typingActivity = TypingActivity(quietUntilNanos = Some(0L)))
-    )
-    val program =
-      for
-        gate        <- newGate
-        harness     <- snapshotCommittingPipeline(typing, gate)
-        dispatch    <- harness.pipeline.applyEvent(FileSearch).start
-        _           <- gate.entered.get
-        beforeTick  <- harness.stateRef.get
-        stillActive <- harness.ticker.advanceAnimationsOnTick.timeout(10.seconds)
-        midDispatch <- harness.stateRef.get
-        _           <- gate.release.complete(())
-        _           <- dispatch.joinWithNever
-        committed   <- harness.stateRef.get
-        _           <- harness.ticker.advanceAnimationsOnTick
-        nextFrame   <- harness.stateRef.get
-      yield
-        stillActive shouldBe true
-        midDispatch.runtime.typingActivity shouldBe beforeTick.runtime.typingActivity
-        committed.runtime.typingActivity.isActive shouldBe true
-        nextFrame.runtime.typingActivity shouldBe TypingActivity.idle
-
-    runVirtual(program)
   }
 
   /** Saves the buffer to disk for real, then holds the save open -- after the disk write, before the state records the
@@ -190,7 +147,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       directory    <- IO.blocking(Files.createTempDirectory("state-manager-dispatch-inbox-spec"))
       file = directory.resolve("notes.txt")
       _                   <- IO.blocking(Files.writeString(file, "draft"))
-      modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+      modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))
       themeNamesRef       <- Ref.of[IO, List[String]](Nil)
       quitSignal          <- Deferred[IO, Unit]
       lspQueue            <- LspEffectQueue.create

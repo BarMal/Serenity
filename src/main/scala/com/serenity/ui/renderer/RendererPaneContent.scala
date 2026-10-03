@@ -76,7 +76,6 @@ object RendererPaneContent:
                 state.persisted.config,
                 context,
                 placement.snapshot,
-                state.runtime.capabilities.pixelMotion,
                 paintsCursor = RendererCursorGlyphs.owningColumn(columnPlacements, _).exists(_ eq placement)
               )
             }.toList
@@ -90,8 +89,7 @@ object RendererPaneContent:
                   state.persisted.theme,
                   state.persisted.config,
                   context,
-                  snapshot,
-                  state.runtime.capabilities.pixelMotion
+                  snapshot
                 )
               )
               .getOrElse(Nil)
@@ -166,14 +164,6 @@ object RendererPaneContent:
             annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty, SemanticTokensAvailability.Pending)),
             dirtyRows
           )
-          // Column-based document layout (issue #1338, Phase 1 animation): while a column-to-column sweep is
-          // mid-flight for this buffer, paint the outgoing column's receding sliver on top of the incoming column's
-          // content `renderBufferContent` just painted in full. Skipped for the markdown lens, whose content isn't
-          // plain wrapped text to begin with.
-          if !RendererMarkdownLens.isInlineMarkdownLens(buf, state) then
-            state.runtime.motion.columnTransitions.get(buf.id).foreach { transition =>
-              RendererColumnTransition.render(buf, contentRect, state, context, snap, transition)
-            }
         }
       case None =>
         RendererStartPage.renderEmptyPane(contentRect, state.persisted.theme, context)
@@ -193,8 +183,7 @@ object RendererPaneContent:
             state.persisted.theme,
             state.persisted.config,
             cursorContext,
-            placement.snapshot,
-            state.runtime.capabilities.pixelMotion
+            placement.snapshot
           )
         }
       case (Some(buf), Some(snap)) =>
@@ -217,8 +206,7 @@ object RendererPaneContent:
             state.persisted.theme,
             state.persisted.config,
             cursorContext,
-            snap,
-            state.runtime.capabilities.pixelMotion
+            snap
           )
       case _ => ()
 
@@ -397,17 +385,14 @@ object RendererPaneContent:
                 lineSemanticTokens
               )
             else
-              CharacterRenderer.renderStringWithAnimation(
+              CharacterRenderer.renderStyledString(
                 context.surface,
                 screenX,
                 screenY,
                 visualLine.text,
                 lineTheme,
-                context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                 state.syntaxHighlightingEnabled,
                 buffer.document.language,
-                bufferLine = visualLine.bufferLine,
-                bufferStartColumn = visualLine.startColumn,
                 styledSegments = styledSegments,
                 semanticTokens = lineSemanticTokens,
                 maxColumn = Some(rect.right),
@@ -455,21 +440,6 @@ object RendererPaneContent:
               snapshot,
               styledSegments
             )
-
-            val stringEnd = visualLine.startColumn + visualLine.text.length
-            val lineAnims = context.bufferAnimations
-              .getOrElse(buffer.id, com.serenity.animation.AnimationState.empty)
-              .getLineAnimations(visualLine.bufferLine)
-            lineAnims.foreach { (col, cell) =>
-              cell.currentBackground.foreach { bg =>
-                if col >= stringEnd then
-                  val bgScreenX = rect.x + visualLineCellOffset(visualLine, context) + (col - visualLine.startColumn)
-                  if bgScreenX >= 0 && bgScreenX < rect.right then
-                    context.surface.setForegroundColor(state.persisted.theme.foreground)
-                    context.surface.setBackgroundColor(bg)
-                    context.surface.putString(bgScreenX, screenY, " ")
-              }
-            }
     }
 
   def visualLineFits(

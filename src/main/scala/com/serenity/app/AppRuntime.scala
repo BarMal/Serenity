@@ -5,7 +5,8 @@ import java.nio.file.Path
 import scala.concurrent.duration.*
 
 import cats.effect.*
-import cats.effect.std.Dispatcher
+import cats.effect.std.{Dispatcher, Supervisor}
+import cats.syntax.apply.*
 import cats.syntax.foldable.*
 import cats.syntax.parallel.*
 import cats.syntax.semigroup.*
@@ -50,12 +51,12 @@ object AppRuntime:
   ): FiniteDuration =
     previousFrameStart.fold(Duration.Zero)(previous => (previous + frameInterval - now).max(Duration.Zero))
 
-  private[serenity] def resetCursorActivity(cursorVisible: Ref[IO, Boolean], breathIndex: Ref[IO, Int]): IO[Unit] =
-    cursorVisible.set(true) >> breathIndex.set(0)
+  private[serenity] def resetCursorActivity(cursorVisible: Ref[IO, Boolean]): IO[Unit] =
+    cursorVisible.set(true)
 
   /** React to a Swing window focus transition. Losing focus parks the cursor visible-and-steady (reset to the start of
-    * its blink/breathe cycle) and forces one fast render so the steady caret paints immediately, regardless of where
-    * the idle loop was in its own cadence. Regaining focus flips the signal the idle loop is waiting on --
+    * its blink cycle) and forces one fast render so the steady caret paints immediately, regardless of where the idle
+    * loop was in its own cadence. Regaining focus flips the signal the idle loop is waiting on --
     * `awaitFocusedIdleTick` picks that up and resumes the normal cadence on its own -- and runs `onFocusGained` (#1623:
     * re-checking the focused buffer's file for external changes), defaulted to a no-op for callers that don't need it
     * (most existing tests).
@@ -64,17 +65,16 @@ object AppRuntime:
     focused: Boolean,
     windowFocused: SignallingRef[IO, Boolean],
     cursorVisible: Ref[IO, Boolean],
-    breathIndex: Ref[IO, Int],
     requestFastRender: IO[Unit],
     onFocusGained: IO[Unit] = IO.unit
   ): IO[Unit] =
     if focused then windowFocused.set(true) >> onFocusGained
-    else windowFocused.set(false) >> resetCursorActivity(cursorVisible, breathIndex) >> requestFastRender
+    else windowFocused.set(false) >> resetCursorActivity(cursorVisible) >> requestFastRender
 
   /** The idle loop's per-tick wait: the normal cursor idle cadence while the window is focused, or an indefinite,
     * wakeup-free wait otherwise -- the mechanism that actually stops idle wakeups, rather than merely skipping the
     * render they'd otherwise trigger. Two things can make focused waiting indefinite instead of cadenced:
-    * `cursorIdleInterval` returning `None` (motion disabled, or #1170's TUI-blink caret delegation --
+    * `cursorIdleInterval` returning `None` (#1170's TUI-blink caret delegation --
     * [[com.serenity.frontend.Frontend.cursorIdleInterval]]), racing here against [[Stream.interruptWhen]]'s
     * `fastModeSignal` in [[idleRenderPhase]] so a real input event still wakes it immediately -- and losing focus
     * entirely, which waits on `windowFocused` turning true again instead.
@@ -95,12 +95,12 @@ object AppRuntime:
         windowFocused.discrete.find(identity).compile.drain
     }
 
-  /** The fast phase may stand down once nothing is animating and no fresh damage arrived while it was running --
-    * `pendingDamage` is drained to `Damage.Nothing` when the phase starts, so any non-`Nothing` value here means
-    * `emitDamage` was called again since, and the phase should carry straight on rather than idle even one tick.
+  /** The fast phase stands down once no fresh damage arrived while it was running -- `pendingDamage` is drained to
+    * `Damage.Nothing` when the phase starts, so any non-`Nothing` value here means `emitDamage` was called again since,
+    * and the loop should carry straight on to another frame rather than idle.
     */
-  private[serenity] def shouldClearFastMode(stillActive: Boolean, pendingDamage: Damage): Boolean =
-    !stillActive && pendingDamage == Damage.Nothing
+  private[serenity] def shouldClearFastMode(pendingDamage: Damage): Boolean =
+    pendingDamage == Damage.Nothing
 
   /** Only input, resize and focus changes call `emitDamage` themselves; this covers every other commit -- language
     * server diagnostics, an async open, task output, find results -- so it shows without waiting for the next key. A
@@ -112,24 +112,6 @@ object AppRuntime:
     (before, after) =>
       val damage = DamageProducer.forTransition(before, after)
       IO.whenA(damage != Damage.Nothing)(emitDamage(damage))
-
-  final private[serenity] case class AnimationTickCadence(remainderNanos: Long):
-
-    def advance(elapsed: FiniteDuration, frameInterval: FiniteDuration): (AnimationTickCadence, Int) =
-      // The tick bucket follows the configured renderFpsTarget's interval rather than a fixed 60Hz constant, so
-      // lowering render FPS also lowers animation-tick CPU cost. Advancing by elapsed time rather than one bucket per
-      // frame keeps animations at their designed speed when frames run late; the clamp stops a stall (a GC pause, a
-      // suspended laptop) from fast-forwarding every animation to its end in one frame.
-      val animationNanos = math.max(1L, frameInterval.toNanos)
-      val elapsedNanos   = elapsed.toNanos.max(0L).min(animationNanos * AnimationTickCadence.MaxTicksPerFrame)
-      val totalNanos     = remainderNanos + elapsedNanos
-      val ticks          = (totalNanos / animationNanos).toInt
-      val nextRemainder  = totalNanos % animationNanos
-      (AnimationTickCadence(nextRemainder), ticks)
-
-  private[serenity] object AnimationTickCadence:
-    val empty: AnimationTickCadence = AnimationTickCadence(0L)
-    val MaxTicksPerFrame: Long      = 4L
 
   final private[serenity] case class RuntimeFailure(
       loopName: String,
@@ -153,7 +135,7 @@ object AppRuntime:
     frontend: Frontend = com.serenity.frontend.GuiFrontend,
     configNotice: Option[String] = None
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
-    Dispatcher.parallel[IO].use { resizeCallbackDispatcher =>
+    (Dispatcher.parallel[IO], Supervisor[IO](await = false)).tupled.use { (resizeCallbackDispatcher, timerSupervisor) =>
       for
         _ <- logger.info("Starting Serenity text editor")
         themeManager = com.serenity.ui.theme.config.AppThemeManager.create
@@ -176,28 +158,28 @@ object AppRuntime:
         _              <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
         fastModeSignal <- SignallingRef.of[IO, Boolean](false)
         pendingDamage  <- Ref.of[IO, Damage](Damage.Nothing)
-        // Separate from pendingDamage: that ref answers "should the fast loop keep running," reset once per phase and
-        // deliberately blind to the phase's own animation ticks (see shouldClearFastMode). This one answers "what has
-        // changed since the last frame was actually drawn," fed by both input events and animation ticks alike, and
-        // drained by every render call rather than once per phase -- the render-surface-side accumulator #999 is
-        // building keeps this from growing unbounded, since a real render drains it dozens of times a second.
+        // Separate from pendingDamage: that ref answers "did more damage arrive while the fast phase ran" (see
+        // shouldClearFastMode). This one answers "what has changed since the last frame was actually drawn," and is
+        // drained by every render call.
         pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
         emitDamage = (damage: Damage) =>
           pendingDamage.update(_ |+| damage) >> pendingPaintDamage.update(_ |+| damage) >> fastModeSignal.set(true)
         // The resize/idle-recovery paths don't have a before/after AppState to diff, so they report the coarsest
         // damage rather than none -- inputEventPhase is the one caller that reports real per-event damage.
         requestFastRender = emitDamage(Damage.Everything)
-        _             <- stateManager.runtimeLifecycle.observeCommits(wakeRenderLoopOnCommit(emitDamage))
+        typingQuietTimer <- TypingQuietTimer.create(timerSupervisor, TypingQuietTimer.expireIn(stateManager))
+        wakeOnCommit = wakeRenderLoopOnCommit(emitDamage)
+        _ <- stateManager.runtimeLifecycle.observeCommits((before, after) =>
+          wakeOnCommit(before, after) >> typingQuietTimer.onCommit(before, after)
+        )
         _             <- IO(registerResizeCallback(resizeCallbackBridge(requestFastRender, resizeCallbackDispatcher)))
         cursorVisible <- Ref.of[IO, Boolean](true)
-        breathIndex   <- Ref.of[IO, Int](0)
         windowFocused <- SignallingRef.of[IO, Boolean](true)
         _ <- IO(
           registerFocusCallback(
             focusCallbackBridge(
               windowFocused,
               cursorVisible,
-              breathIndex,
               requestFastRender,
               resizeCallbackDispatcher,
               stateManager.fileService.checkExternalChangesOnFocus
@@ -209,9 +191,8 @@ object AppRuntime:
             markdownPreviewCloseCallbackBridge(stateManager, resizeCallbackDispatcher)
           )
         )
-        animationTickCadence <- Ref.of[IO, AnimationTickCadence](AnimationTickCadence.empty)
-        lastFastFrameStart   <- Ref.of[IO, Option[FiniteDuration]](None)
-        translatorCache      <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
+        lastFastFrameStart <- Ref.of[IO, Option[FiniteDuration]](None)
+        translatorCache    <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
         currentStateForDiagnostics = stateManager.getCurrentState.map(Some(_))
         checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, requestFastRender))
         inputFunnel = AppRuntimeRenderLoops.inputEventPhase(
@@ -220,7 +201,6 @@ object AppRuntime:
           systemClipboard,
           checkResizeAndHandle,
           cursorVisible,
-          breathIndex,
           emitDamage,
           translatorCache,
           runtime.frameTimings
@@ -228,7 +208,7 @@ object AppRuntime:
         inputLoop = runInputLoop(stateManager, inputHandler, inputFunnel)
         _ <-
           Resource.make(inputLoop.start)(_.cancel).use { inputFiber =>
-            runtime.renderFull(initialState, true, None, Damage.Everything, Map.empty, stateManager.renderCaches) >>
+            runtime.renderFull(initialState, true, None, Damage.Everything, stateManager.renderCaches) >>
               logger.info("Initial render completed, starting main loop") >>
               {
                 val idlePhase = AppRuntimeRenderLoops.idleRenderPhase(
@@ -239,7 +219,6 @@ object AppRuntime:
                   currentStateForDiagnostics = currentStateForDiagnostics,
                   checkResizeAndHandle = checkResizeAndHandle,
                   cursorVisible = cursorVisible,
-                  breathIndex = breathIndex,
                   renderCursorOnly = runtime.renderCursorOnly,
                   requestFastRender = requestFastRender,
                   cursorIdleInterval = frontend.cursorIdleInterval,
@@ -248,11 +227,9 @@ object AppRuntime:
 
                 val fastPhase = AppRuntimeRenderLoops.fastRenderPhase(
                   stateManager,
-                  stateManager.animationTicker,
                   fastModeSignal,
                   pendingDamage,
                   pendingPaintDamage,
-                  animationTickCadence,
                   currentStateForDiagnostics,
                   checkResizeAndHandle,
                   runtime.renderFull,
@@ -260,8 +237,7 @@ object AppRuntime:
                   lastFrameStart = lastFastFrameStart
                 )
 
-                val renderLoop: Stream[IO, Unit] =
-                  Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
+                val renderLoop = AppRuntimeRenderLoops.renderLoop(idlePhase, fastPhase)
 
                 com.serenity.io.FileChangeWatcher.create.use(watcher =>
                   runRuntimeLoops(
@@ -440,14 +416,13 @@ object AppRuntime:
   private[serenity] def focusCallbackBridge(
     windowFocused: SignallingRef[IO, Boolean],
     cursorVisible: Ref[IO, Boolean],
-    breathIndex: Ref[IO, Int],
     requestFastRender: IO[Unit],
     dispatcher: Dispatcher[IO],
     onFocusGained: IO[Unit] = IO.unit
   )(using logger: Logger[IO]): Boolean => Unit =
     focused =>
       dispatchIfRunning(dispatcher)(
-        onWindowFocusChanged(focused, windowFocused, cursorVisible, breathIndex, requestFastRender, onFocusGained)
+        onWindowFocusChanged(focused, windowFocused, cursorVisible, requestFastRender, onFocusGained)
           .handleErrorWith(error => logger.error(error)("[RUNTIME] focus callback failed"))
       )
 
@@ -497,7 +472,5 @@ object AppRuntime:
       s"panes=${state.persisted.layout.editorPanes.size}",
       s"surfaces=${state.runtime.uiSurfaces.size}",
       s"activePane=${activePane.map(_.toString).getOrElse("none")}",
-      activeBufferSummary,
-      s"themeTransition=${state.runtime.themeDiscovery.transition.isDefined}",
-      s"surfaceAnimations=${state.runtime.motion.surfaceAnimations.size}"
+      activeBufferSummary
     ).mkString(" ")

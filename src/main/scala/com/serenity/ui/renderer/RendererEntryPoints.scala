@@ -2,27 +2,18 @@ package com.serenity.ui.renderer
 
 import java.util.concurrent.atomic.AtomicReference
 
-import com.serenity.animation.ThemeInterpolator
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
 /** The package's entry point for painting a whole frame: a full frame either on a `SwingWindow` or a surface-generic
-  * [[RenderSurface]], plus the startup-page and theme-blend plumbing every frame goes through first. Cursor-only and
-  * cursor-overlay frames are a separate entry point, [[RendererCursorOverlay]]; it composes the same plumbing exposed
-  * here ([[withEffectiveTheme]], [[withSceneIfNeeded]], [[renderStartPageFrame]]), which is why those are public rather
-  * than private to this object -- both entry points must resolve a theme transition, a start page and a scene the same
-  * way or the two paths disagree about what frame they are painting.
+  * [[RenderSurface]], plus the startup-page plumbing every frame goes through first. Cursor-only and cursor-overlay
+  * frames are a separate entry point, [[RendererCursorOverlay]]; it composes the same plumbing exposed here
+  * ([[withSceneIfNeeded]], [[renderStartPageFrame]]), which is why those are public rather than private to this object
+  * -- both entry points must resolve a start page and a scene the same way or the two paths disagree about what frame
+  * they are painting.
   */
 object RendererEntryPoints:
-
-  def withEffectiveTheme(state: AppState): AppState =
-    state.runtime.themeDiscovery.transition match
-      case None => state
-      case Some(t) =>
-        state.copy(persisted =
-          state.persisted.copy(theme = ThemeInterpolator.blend(t.previousTheme, state.persisted.theme, t.progress))
-        )
 
   private def startPageOnly(state: AppState): Option[StartupPage] =
     // A blocking dialog (#814) painted from the startup page (#1289) needs the full frame path, since that's the one
@@ -75,10 +66,8 @@ object RendererEntryPoints:
     cursorColor: Option[java.awt.Color],
     repaintOnFlush: Boolean,
     damage: Damage = Damage.Everything,
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty,
     caches: RenderCaches = RenderCaches.create()
   ): Unit =
-    val state0 = withEffectiveTheme(state)
     // Set while the frame is drawn, read when it is flushed: None asks for a whole-canvas repaint, Some(rect) for a
     // repaint bounded to the pane rows this frame actually changed.
     val repaintRegion = new AtomicReference[Option[PixelRect]](None)
@@ -101,13 +90,13 @@ object RendererEntryPoints:
     // with no real font rendering at all, i.e. TUI's `TerminalRenderSurface`, reached only through the
     // surface-generic entry points below).
     val _ = withSceneIfNeeded(
-      state0,
-      caches.authoritativeScene.forState(state0, viewportSize, codeFont, textFont)
+      state,
+      caches.authoritativeScene.forState(state, viewportSize, codeFont, textFont)
     )(page =>
-      renderStartPageFrame(state0, page, surface, viewportSize, uiFont, swingWin.metrics, uiMetrics, output, caches)
+      renderStartPageFrame(state, page, surface, viewportSize, uiFont, swingWin.metrics, uiMetrics, output, caches)
     ) { scene =>
       RendererFramePlanner.renderFrame(
-        state0,
+        state,
         cursorVisible,
         surface,
         viewportSize,
@@ -120,7 +109,6 @@ object RendererEntryPoints:
         cursorColor,
         output,
         damage,
-        bufferAnimations,
         caches
       )
     }
@@ -255,34 +243,32 @@ object RendererEntryPoints:
     damage: Damage = Damage.Everything,
     caches: RenderCaches = RenderCaches.create()
   ): Option[PixelRect] =
-    val state0        = withEffectiveTheme(state)
     val repaintRegion = new AtomicReference[Option[PixelRect]](None)
     val output        = Some(FrameOutput(ScreenIdentity(surface), repaintRegion))
     // #1105/#1215: see the surface-generic renderCursorOnly in RendererCursorOverlay for why this is scoped to a
     // surface with no real FontRenderContext.
     val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
     val _ = withSceneIfNeeded(
-      state0,
-      caches.authoritativeScene.forState(state0, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
-    )(page =>
-      renderStartPageFrame(state0, page, surface, viewportSize, uiFont, cellMetrics, uiMetrics, output, caches)
-    ) { scene =>
-      RendererFramePlanner.renderFrame(
-        state0,
-        cursorVisible,
-        surface,
-        viewportSize,
-        scene,
-        codeFont,
-        textFont,
-        uiFont,
-        cellMetrics,
-        uiMetrics,
-        cursorColor,
-        output,
-        damage,
-        caches = caches
-      )
+      state,
+      caches.authoritativeScene.forState(state, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
+    )(page => renderStartPageFrame(state, page, surface, viewportSize, uiFont, cellMetrics, uiMetrics, output, caches)) {
+      scene =>
+        RendererFramePlanner.renderFrame(
+          state,
+          cursorVisible,
+          surface,
+          viewportSize,
+          scene,
+          codeFont,
+          textFont,
+          uiFont,
+          cellMetrics,
+          uiMetrics,
+          cursorColor,
+          output,
+          damage,
+          caches = caches
+        )
     }
     repaintRegion.get()
 
@@ -302,16 +288,15 @@ object RendererEntryPoints:
     cursorColor: Option[java.awt.Color],
     caches: RenderCaches = RenderCaches.create()
   ): List[PixelRect] =
-    val state0 = withEffectiveTheme(state)
     // #1105/#1215: see the surface-generic renderCursorOnly in RendererCursorOverlay for why this is scoped to a
     // surface with no real FontRenderContext.
     val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
     withSceneIfNeeded(
-      state0,
-      caches.authoritativeScene.forState(state0, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
+      state,
+      caches.authoritativeScene.forState(state, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
     )(_ => Nil) { scene =>
       val prepared = RendererFramePlanner.prepareScene(
-        state0,
+        state,
         surface,
         viewportSize,
         scene,
@@ -336,7 +321,7 @@ object RendererEntryPoints:
         uiMetrics,
         caches = caches
       )
-      RendererPaneContent.renderEditorCursors(state0, context, prepared.renderPlan)
+      RendererPaneContent.renderEditorCursors(state, context, prepared.renderPlan)
     }
 
   def render(

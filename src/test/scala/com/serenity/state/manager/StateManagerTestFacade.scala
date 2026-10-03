@@ -3,7 +3,6 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import cats.effect.{Deferred, IO, Ref}
-import com.serenity.animation.AnimationState
 import com.serenity.command.{Command, CommandCategory, CommandIntent, SessionIntent}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.rope.Balance
@@ -27,7 +26,7 @@ object StateManagerTestFacade:
     * `fromRuntime` seam other specs use to substitute infrastructure.
     */
   def seededStateManager(seed: AppState => AppState)(using Balance): IO[StateManager] =
-    stateManagerOver(Model(seed(AppState.initial), UndoState(), Map.empty))
+    stateManagerOver(Model(seed(AppState.initial), UndoState()))
 
   private def stateManagerOver(model: Model)(using Balance): IO[StateManager] =
     for
@@ -59,19 +58,6 @@ object StateManagerTestFacade:
     yield stateManager
 
   extension (stateManager: StateManager)
-
-    def getBufferAnimations: IO[Map[BufferId, AnimationState]] =
-      stateManager.getModel.map(_.bufferAnimations)
-
-    /** A new state manager over this one's model with `update` applied to its buffer animations: nothing outside the
-      * dispatcher writes buffer animations, so a spec that needs specific ones seeds them at construction.
-      */
-    def reseededWithBufferAnimations(
-      update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]
-    )(using Balance): IO[StateManager] =
-      stateManager.getModel.flatMap(model =>
-        stateManagerOver(model.copy(bufferAnimations = update(model.bufferAnimations)))
-      )
 
     /** Commits through validation like any other write, but fails instead of silently keeping the previous state, so a
       * fixture that seeds an invalid state is caught where it is built. A spec that needs an invalid state seeds it at

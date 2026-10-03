@@ -1,13 +1,11 @@
 package com.serenity.state.manager
 
 import cats.effect.IO
-import com.serenity.animation.CharacterKey
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
 final private[manager] class StateManagerEditorCapability(
     modelCommit: ModelCommit,
-    animations: AnimationChoreography,
     operations: StateManagerOperationBoundary
 ):
 
@@ -17,130 +15,6 @@ final private[manager] class StateManagerEditorCapability(
 
   def updateStateValidated(update: AppState => AppState): IO[Unit] =
     operations.dispatch(modelCommit.currentState.flatMap(state => modelCommit.commitState(update(state), state)))
-
-  val animationTicker: AnimationTicker = AnimationTicker(advanceAnimationsOnTick = advanceAnimationsOnTick())
-
-  private def advanceAnimationsOnTick(): IO[Boolean] =
-    for
-      model <- modelCommit.model
-      state            = model.app
-      bufferAnimations = model.bufferAnimations
-      hasBufferAnimations = state.persisted.buffers.keys.exists(id =>
-        bufferAnimations.get(id).exists(_.hasActiveAnimations)
-      )
-      hasThemeTransition   = state.runtime.themeDiscovery.transition.isDefined
-      hasSurfaceAnimations = state.runtime.motion.surfaceAnimations.nonEmpty
-      hasColumnTransitions = state.runtime.motion.columnTransitions.nonEmpty
-      hasPanelGeometry     = state.runtime.motion.panelGeometry.nonEmpty
-      hasCursorGlide       = state.persisted.buffers.values.exists(hasInFlightGlide)
-      hasSelectionGeometry = state.persisted.buffers.values.exists(hasInFlightSelectionGeometry)
-      hasTypingActivity    = state.typingHidesFloatingStatusLine
-      stillActive <-
-        if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations && !hasColumnTransitions &&
-            !hasPanelGeometry && !hasCursorGlide && !hasSelectionGeometry && !hasTypingActivity
-        then IO.pure(false)
-        else
-          // A dispatch in flight would commit a state built from its own earlier snapshot over this tick's write
-          // (#1564), and waiting for it would stall the render loop behind its I/O -- so skip this tick and report
-          // still-active so the next frame retries.
-          for
-            now      <- IO.monotonic
-            advanced <- operations.runIfDispatcherIdle(advanceOneTick(now.toNanos))
-          yield advanced.getOrElse(true)
-    yield stillActive
-
-  private def advanceOneTick(nowNanos: Long): IO[Boolean] =
-    // An atomic, validated update rather than a `set`: writers outside the dispatcher (`updateState`, the
-    // buffer/panel records) still exist, and this keeps the tick atomic with them. It may retry, so everything it
-    // reads is passed in.
-    modelCommit
-      .advanceTick(advanceModel(_, nowNanos))
-      .map { next =>
-        val newState = next.app
-        newState.persisted.buffers.keys.exists(id => next.bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
-        newState.runtime.themeDiscovery.transition.isDefined ||
-        newState.runtime.motion.surfaceAnimations.nonEmpty ||
-        newState.runtime.motion.columnTransitions.nonEmpty ||
-        newState.runtime.motion.panelGeometry.nonEmpty ||
-        newState.persisted.buffers.values.exists(hasInFlightGlide) ||
-        newState.persisted.buffers.values.exists(hasInFlightSelectionGeometry) ||
-        newState.typingHidesFloatingStatusLine
-      }
-
-  private def advanceModel(current: Model, nowNanos: Long): Model =
-    val state             = current.app
-    val updatedTransition = state.runtime.themeDiscovery.transition.map(_.advance).filterNot(_.isComplete)
-    val updatedColumnTransitions =
-      state.runtime.motion.columnTransitions.view.mapValues(_.advance).toMap.filterNot(_._2.isComplete)
-    val stateWithAdvancedBuffers = state.copy(
-      persisted = state.persisted.copy(
-        buffers = state.persisted.buffers.view
-          .mapValues(advanceCursorGlides andThen advanceSelectionGeometries)
-          .toMap
-      ),
-      runtime = state.runtime.copy(
-        themeDiscovery = state.runtime.themeDiscovery.copy(transition = updatedTransition),
-        typingActivity = state.runtime.typingActivity.advance(nowNanos),
-        motion = state.runtime.motion.copy(columnTransitions = updatedColumnTransitions)
-      )
-    )
-    val newState = animations.advancePanelGeometry(animations.advanceSurfaceAnimations(stateWithAdvancedBuffers))
-    val advancedBufferAnimations = current.bufferAnimations.map {
-      case (id, bufferAnimations) =>
-        val advanced = newState.persisted.buffers.get(id) match
-          case Some(buffer) => bufferAnimations.advanceAllAnimations(isWithinViewport(buffer.viewport))
-          case None         => bufferAnimations
-        id -> advanced
-    }
-    current.copy(app = newState, bufferAnimations = advancedBufferAnimations)
-
-  /** Caret-glide (issue #1085 phase 2): whether `buffer` has any cursor with a glide still mid-flight -- checked before
-    * paying the cost of advancing every buffer's cursors on a tick that has nothing else to do either.
-    */
-  private def hasInFlightGlide(buffer: Buffer): Boolean =
-    buffer.editing.cursors.exists(_.glide.exists(!_.isComplete))
-
-  /** Selection grow/settle (issue #1085 phase 3): whether `buffer` has any cursor with a selection geometry still
-    * mid-flight -- the same early-out `hasInFlightGlide` gives caret glide.
-    */
-  private def hasInFlightSelectionGeometry(buffer: Buffer): Boolean =
-    buffer.editing.cursors.exists(_.selectionGeometry.exists(!_.isComplete))
-
-  /** Advances every cursor's `glide` by one tick, dropping it once complete -- the per-cursor equivalent of
-    * `Runtime.motion.columnTransitions`'/`Runtime.motion.panelGeometry`'s tick-driven advance, except this state lives
-    * on `Cursor` inside `Buffer.editing.cursors` (`#1577`) rather than a top-level `Runtime` map, so it advances by
-    * rebuilding each buffer's cursor list instead of updating a `Runtime` field.
-    */
-  private def advanceCursorGlides(buffer: Buffer): Buffer =
-    val advancedCursors = buffer.editing.cursors.map { cursor =>
-      cursor.glide match
-        case Some(glide) =>
-          val advanced = glide.advance
-          if advanced.isComplete then cursor.copy(glide = None) else cursor.copy(glide = Some(advanced))
-        case None => cursor
-    }
-    if advancedCursors == buffer.editing.cursors then buffer else buffer.withCursorList(advancedCursors)
-
-  /** Selection grow/settle (issue #1085 phase 3): advances every cursor's `selectionGeometry` by one tick, dropping it
-    * once every line's tween completes -- the per-cursor equivalent of `advanceCursorGlides` just above.
-    */
-  private def advanceSelectionGeometries(buffer: Buffer): Buffer =
-    val advancedCursors = buffer.editing.cursors.map { cursor =>
-      cursor.selectionGeometry match
-        case Some(geometry) =>
-          val advanced = geometry.advance
-          if advanced.isComplete then cursor.copy(selectionGeometry = None)
-          else cursor.copy(selectionGeometry = Some(advanced))
-        case None => cursor
-    }
-    if advancedCursors == buffer.editing.cursors then buffer else buffer.withCursorList(advancedCursors)
-
-  /** A cell outside the buffer's currently visible viewport isn't rendered, so there's no need to pay its
-    * interpolation/allocation cost on every tick -- it simply resumes advancing once scrolled back into view.
-    */
-  private def isWithinViewport(viewport: Viewport)(key: CharacterKey): Boolean =
-    key.line >= viewport.topLine && key.line < viewport.topLine + viewport.visibleLines &&
-      key.column >= viewport.leftColumn && key.column < viewport.leftColumn + viewport.visibleColumns
 
   def createPane(bufferId: Option[BufferId] = None): IO[PaneId] =
     modelCommit.currentState.flatMap { state =>

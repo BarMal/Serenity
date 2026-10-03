@@ -6,7 +6,6 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -67,7 +66,6 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val preset = UiPreset(
       name = "Drafting",
       config = AppConfig.default
-        .withMotionPreset(com.serenity.config.MotionPreset.Reduced)
         .withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact),
       themeName = Theme.dark.name,
       dockedPanels = List(
@@ -108,7 +106,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
       CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Drafting"))
     )
     presetPicker.options.find(_.label == "Drafting").flatMap(_.hint) shouldBe Some(
-      "plain text default; dark; reduced motion; fade text reveal; compact density; SansSerif 12pt prose; Right outline 34"
+      "plain text default; dark; compact density; SansSerif 12pt prose; Right outline 34"
     )
   }
 
@@ -253,7 +251,6 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
 
     List(
       CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown)),
-      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Subtle))),
       CommandIntent.Settings(
         SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetInterfaceDensity(InterfaceDensity.Spacious))
       ),
@@ -267,7 +264,6 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
 
     state.persisted.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
-    state.persisted.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
     state.persisted.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     state.persisted.config.editorConfig.fontConfig.textFontSize shouldBe 18.0f
     store.find("Drafting").unsafeRunSync() shouldBe Some(savedBefore)

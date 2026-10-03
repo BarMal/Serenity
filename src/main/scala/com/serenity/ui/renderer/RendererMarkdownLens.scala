@@ -251,7 +251,7 @@ object RendererMarkdownLens:
               context.surface.setForegroundColor(state.persisted.theme.foreground)
               context.surface.setBackgroundColor(lensBackground)
               if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
-                CharacterRenderer.renderMeasuredLineWithAnimation(
+                CharacterRenderer.renderMeasuredLine(
                   context.surface,
                   context.cellMetrics.toPixelX(rect.x).toFloat,
                   context.cellMetrics.toPixelY(screenY),
@@ -259,7 +259,6 @@ object RendererMarkdownLens:
                   snapshot.ascentPx,
                   visualLine,
                   lensTheme,
-                  context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                   syntaxHighlightingEnabled = false,
                   language = None,
                   clipRightXPx = Some(context.cellMetrics.toPixelX(rect.right).toFloat),
@@ -267,17 +266,14 @@ object RendererMarkdownLens:
                   graphemeCache = context.caches.graphemeSegmentationCache
                 )
               else
-                CharacterRenderer.renderStringWithAnimation(
+                CharacterRenderer.renderStyledString(
                   context.surface,
                   rect.x,
                   screenY,
                   visualLine.text,
                   lensTheme,
-                  context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                   syntaxHighlightingEnabled = false,
                   language = None,
-                  bufferLine = visualLine.bufferLine,
-                  bufferStartColumn = visualLine.startColumn,
                   maxColumn = Some(rect.right),
                   highlightCache = context.caches.themeHighlightCache
                 )

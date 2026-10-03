@@ -1,6 +1,5 @@
 package com.serenity.command
 
-import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.config.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
@@ -16,26 +15,8 @@ object CommandRunnerOptionSelections:
     val languageToolsConfig = config.languageToolsConfig
 
     Map(
-      "motion-preset" -> motionPresetIndex(surfaceConfig.motionPreset),
-      "motion-accessibility" -> motionAccessibilityIndex(
-        surfaceConfig.motionConfiguration.fold(MotionAccessibility.Standard)(_.accessibility)
-      ),
-      "command-runner-fade"       -> commandRunnerFadeIndex(surfaceConfig.commandRunnerAnimation),
-      "ui-animation"              -> animationPresetIndex(surfaceConfig.uiAnimation),
-      "render-fps"                -> renderFpsTargetIndex(surfaceConfig.renderFpsTarget),
-      "render-damage-granularity" -> renderDamageGranularityIndex(surfaceConfig.renderDamageGranularity),
-      "editor-text-transition" -> editorTextTransitionIndex(
-        configuredTransitionKind(surfaceConfig, MotionFamily.EditorText, TransitionScope.EditorInsertion)
-      ),
-      "command-runner-transition" -> panelTransitionIndex(
-        configuredTransitionKind(surfaceConfig, MotionFamily.CommandSurfaces, TransitionScope.CommandRunner)
-      ),
-      "panel-open-transition" -> panelTransitionIndex(
-        configuredTransitionKind(surfaceConfig, MotionFamily.PinnedPanels, TransitionScope.PanelOpen)
-      ),
-      "panel-close-transition" -> panelTransitionIndex(
-        configuredTransitionKind(surfaceConfig, MotionFamily.PinnedPanels, TransitionScope.PanelClose)
-      ),
+      "render-fps"                 -> renderFpsTargetIndex(surfaceConfig.renderFpsTarget),
+      "render-damage-granularity"  -> renderDamageGranularityIndex(surfaceConfig.renderDamageGranularity),
       "cursor-mode"                -> cursorModeIndex(cursorConfig.mode),
       "status-placement"           -> statusPlacementIndex(config.statusLine.placement),
       "status-position"            -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Position)),
@@ -73,33 +54,9 @@ object CommandRunnerOptionSelections:
       "ui-ligatures"               -> ligaturesIndex(editorConfig.fontConfig.uiLigatures)
     )
 
-  private def configuredTransitionKind(
-    surfaceConfig: SurfaceConfig,
-    family: MotionFamily,
-    scope: TransitionScope
-  ): TransitionKind =
-    surfaceConfig.motionConfiguration.fold {
-      family match
-        case MotionFamily.EditorText      => surfaceConfig.editorInsertionTransitionKind
-        case MotionFamily.CommandSurfaces => surfaceConfig.commandRunnerTransitionKind.getOrElse(TransitionKind.Fade)
-        case MotionFamily.PinnedPanels =>
-          scope match
-            case TransitionScope.PanelOpen =>
-              surfaceConfig.panelOpenTransitionKind.getOrElse(TransitionKind.OutlineThenContent)
-            case TransitionScope.PanelClose => surfaceConfig.panelCloseTransitionKind.getOrElse(TransitionKind.Fade)
-            case _                          => TransitionKind.Fade
-        case _ => TransitionKind.Fade
-    } { configuration =>
-      configuration
-        .withFallback(MotionConfig.fromLegacy(surfaceConfig, configuration.baseline))
-        .families(family)
-        .transitionKindFor(scope)
-    }
-
   private def cursorModeIndex(mode: CursorMode): Int =
     mode match
-      case CursorMode.Blink   => 0
-      case CursorMode.Breathe => 1
+      case CursorMode.Blink => 0
 
   private def statusPlacementIndex(placement: StatusLinePlacement): Int =
     placement match
@@ -126,31 +83,6 @@ object CommandRunnerOptionSelections:
       case WindowChromeMode.NativeThemed => 2
       case WindowChromeMode.Custom       => 3
 
-  private def motionPresetIndex(preset: MotionPreset): Int =
-    preset match
-      case MotionPreset.Reduced    => 0
-      case MotionPreset.Subtle     => 1
-      case MotionPreset.Smooth     => 2
-      case MotionPreset.Expressive => 3
-      case MotionPreset.Custom     => 4
-
-  private def motionAccessibilityIndex(accessibility: MotionAccessibility): Int =
-    accessibility match
-      case MotionAccessibility.Standard => 0
-      case MotionAccessibility.Reduced  => 1
-      case MotionAccessibility.Off      => 2
-
-  private def commandRunnerFadeIndex(animation: Option[AnimationConfig]): Int =
-    animationPresetIndex(animation)
-
-  private def animationPresetIndex(animation: Option[AnimationConfig]): Int =
-    animation match
-      case None                                                  => 0
-      case Some(value) if AnimationConfig.subtle.contains(value) => 1
-      case Some(value) if AnimationConfig.smooth.contains(value) => 2
-      case Some(value) if AnimationConfig.quick.contains(value)  => 3
-      case Some(_)                                               => 2
-
   private def renderFpsTargetIndex(target: RenderFpsTarget): Int =
     target match
       case RenderFpsTarget.Fps30    => 0
@@ -163,24 +95,6 @@ object CommandRunnerOptionSelections:
     granularity match
       case RenderDamageGranularity.Rows  => 0
       case RenderDamageGranularity.Cells => 1
-
-  private def editorTextTransitionIndex(kind: TransitionKind): Int =
-    kind match
-      case TransitionKind.Fade                   => 0
-      case TransitionKind.TypedText              => 1
-      case TransitionKind.DirectionalSweep       => 2
-      case TransitionKind.LineAndCharacterTandem => 3
-      case TransitionKind.Disabled               => 4
-      case TransitionKind.OutlineThenContent     => 0
-
-  private def panelTransitionIndex(kind: TransitionKind): Int =
-    kind match
-      case TransitionKind.Fade                   => 0
-      case TransitionKind.DirectionalSweep       => 1
-      case TransitionKind.LineAndCharacterTandem => 2
-      case TransitionKind.OutlineThenContent     => 3
-      case TransitionKind.Disabled               => 4
-      case TransitionKind.TypedText              => 1
 
   private def markdownViewModeIndex(mode: MarkdownViewMode): Int =
     mode match

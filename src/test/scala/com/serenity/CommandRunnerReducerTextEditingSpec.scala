@@ -2,7 +2,6 @@ package com.serenity
 
 import com.serenity.command.*
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.CommandRunnerReducer
@@ -58,11 +57,8 @@ class CommandRunnerReducerTextEditingSpec extends AnyFlatSpec with Matchers:
   ): AppState =
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val effectiveConfig =
-      if itemId == "animation-duration" || itemId == "animation-steps" then config.withMotionPreset(MotionPreset.Custom)
-      else config
     val searchedRunner = CommandRunner.empty
-      .activate(registry, effectiveConfig)
+      .activate(registry, config)
       .openSettings
       .updateSearchTerm(settingsGroupSearchTerm(groupId))
     val selectedIndex = searchedRunner.visibleItems.indexWhere(_.id == groupId) match
@@ -119,7 +115,7 @@ class CommandRunnerReducerTextEditingSpec extends AnyFlatSpec with Matchers:
 
   it should "select an input item without auto-entering edit mode" in {
     CommandRegistry.default
-    val state  = settingsStateOnItem("settings-motion-advanced", "animation-duration")
+    val state  = settingsStateOnItem("settings-look-advanced", "ui-outline-thickness")
     val runner = runnerFrom(state)
 
     runner.activeSubmenuEditingItemId shouldBe None
@@ -128,16 +124,16 @@ class CommandRunnerReducerTextEditingSpec extends AnyFlatSpec with Matchers:
 
   it should "start editing on first typed digit and replace the saved value" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-motion-advanced", "animation-steps")
+    val state    = settingsStateOnItem("settings-look-advanced", "ui-outline-thickness")
 
     val result = CommandRunnerReducer.reduce(RunnerInsertChar('5'), state, registry)
-    runnerFrom(result.state).activeSubmenuEditingItemId shouldBe Some("animation-steps")
+    runnerFrom(result.state).activeSubmenuEditingItemId shouldBe Some("ui-outline-thickness")
     runnerFrom(result.state).activeSubmenuEditingText shouldBe Some("5")
   }
 
   it should "reject non-numeric characters silently" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-motion-advanced", "animation-steps")
+    val state    = settingsStateOnItem("settings-look-advanced", "ui-outline-thickness")
 
     val result = CommandRunnerReducer.reduce(RunnerInsertChar('x'), state, registry)
     runnerFrom(result.state).activeSubmenuEditingText shouldBe runnerFrom(state).activeSubmenuEditingText
@@ -145,7 +141,7 @@ class CommandRunnerReducerTextEditingSpec extends AnyFlatSpec with Matchers:
 
   it should "reject a decimal point on an integer InputItem" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-motion-advanced", "animation-steps")
+    val state    = settingsStateOnItem("settings-look-advanced", "ui-outline-thickness")
 
     val result = CommandRunnerReducer.reduce(RunnerInsertChar('.'), state, registry)
     runnerFrom(result.state).activeSubmenuEditingText shouldBe runnerFrom(state).activeSubmenuEditingText
@@ -193,7 +189,7 @@ class CommandRunnerReducerTextEditingSpec extends AnyFlatSpec with Matchers:
     val state = CommandRunnerReducer
       .reduce(
         RunnerInsertChar('5'),
-        settingsStateOnItem("settings-motion-advanced", "animation-steps"),
+        settingsStateOnItem("settings-look-advanced", "ui-outline-thickness"),
         registry
       )
       .state
@@ -209,7 +205,7 @@ class CommandRunnerReducerTextEditingSpec extends AnyFlatSpec with Matchers:
   // shape for the dedicated Settings surface).
   it should "be a no-op on backspace when there is no text to delete, never navigating up a level" in {
     val registry = CommandRegistry.default
-    val state    = settingsStateOnItem("settings-motion-advanced", "animation-steps")
+    val state    = settingsStateOnItem("settings-look-advanced", "ui-outline-thickness")
     val before   = runnerFrom(state).activeSettingsSurface
 
     before.flatMap(_.current.editingItemId) shouldBe None
@@ -253,7 +249,7 @@ class CommandRunnerReducerTextEditingSpec extends AnyFlatSpec with Matchers:
   it should "discard editing text when navigating to a different item" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val state             = settingsStateOnItem("settings-motion-advanced", "animation-steps")
+    val state             = settingsStateOnItem("settings-look-advanced", "ui-outline-thickness")
 
     val typedState = List('5').foldLeft(state) { (s, c) =>
       val r = CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry)
@@ -267,13 +263,13 @@ class CommandRunnerReducerTextEditingSpec extends AnyFlatSpec with Matchers:
     val navigated = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Down), typedState, registry)
     val runner    = runnerFrom(navigated.state)
 
-    runner.activeSubmenuEditingItemId shouldNot be(Some("animation-steps"))
+    runner.activeSubmenuEditingItemId shouldNot be(Some("ui-outline-thickness"))
     runner.activeSubmenuEditingText shouldNot be(runnerFrom(typedState).activeSubmenuEditingText)
   }
 
   it should "restore the saved value when escape cancels a pending submenu edit" in {
     val registry = CommandRegistry.default
-    val state = List('5').foldLeft(settingsStateOnItem("settings-motion-advanced", "animation-steps")) { (s, c) =>
+    val state = List('5').foldLeft(settingsStateOnItem("settings-look-advanced", "ui-outline-thickness")) { (s, c) =>
       val r = CommandRunnerReducer.reduce(RunnerInsertChar(c), s, registry)
       s.copy(runtime =
         s.runtime.copy(uiSurfaces =
@@ -285,10 +281,12 @@ class CommandRunnerReducerTextEditingSpec extends AnyFlatSpec with Matchers:
     val cancelled = CommandRunnerReducer.reduce(Escape, state, registry)
     val runner    = runnerFrom(cancelled.state)
     val restoredValue = runner
-      .submenuItems("settings-motion-advanced")
-      .collectFirst { case item: CommandSurfaceItem.InputItem if item.id == "animation-steps" => item.currentValue }
+      .submenuItems("settings-look-advanced")
+      .collectFirst {
+        case item: CommandSurfaceItem.InputItem if item.id == "ui-outline-thickness" => item.currentValue
+      }
 
     runner.activeSubmenuEditingItemId shouldBe None
     runner.activeSubmenuEditingText shouldBe Some("")
-    restoredValue shouldBe Some("0")
+    restoredValue shouldBe Some(AppConfig.default.interfaceConfig.outlineThicknessPx.toString)
   }

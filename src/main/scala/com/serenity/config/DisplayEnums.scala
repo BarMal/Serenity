@@ -1,30 +1,5 @@
 package com.serenity.config
 
-import com.serenity.animation.*
-
-enum MotionPreset(val configKey: String):
-  case Reduced    extends MotionPreset("reduced")
-  case Subtle     extends MotionPreset("subtle")
-  case Smooth     extends MotionPreset("smooth")
-  case Expressive extends MotionPreset("expressive")
-  case Custom     extends MotionPreset("custom")
-
-  def animationConfig: Option[AnimationConfig] =
-    this match
-      case Reduced    => AnimationConfig.none
-      case Subtle     => AnimationConfig.subtle
-      case Smooth     => AnimationConfig.smooth
-      case Expressive => AnimationConfig.quick
-      case Custom     => AnimationConfig.smooth
-
-  def elementTransitionSettings: ElementTransitionSettings =
-    this match
-      case Reduced    => ElementTransitionSettings.disabled
-      case Subtle     => ElementTransitionSettings.subtle
-      case Smooth     => ElementTransitionSettings.smooth
-      case Expressive => ElementTransitionSettings.expressive
-      case Custom     => ElementTransitionSettings.smooth
-
 enum RenderFpsTarget(val configKey: String, val framesPerSecond: Int):
   case Fps30    extends RenderFpsTarget("30", 30)
   case Fps60    extends RenderFpsTarget("60", 60)
@@ -60,16 +35,15 @@ object RenderDamageGranularity:
       case _                => None
 
 enum CursorMode(val configKey: String):
-  case Blink   extends CursorMode("blink")
-  case Breathe extends CursorMode("breathe")
+  case Blink extends CursorMode("blink")
 
 object CursorMode:
 
+  /** `breathe`/`breathing` name a mode that no longer exists; configs and sessions still carrying it load as blink. */
   def fromConfigKey(value: String): Option[CursorMode] =
     value.trim.toLowerCase match
-      case "blink"                 => Some(CursorMode.Blink)
-      case "breathe" | "breathing" => Some(CursorMode.Breathe)
-      case _                       => None
+      case "blink" | "breathe" | "breathing" => Some(CursorMode.Blink)
+      case _                                 => None
 
 /** Selects how a buffer's `DocumentComment`s become visible (#1222).
   *

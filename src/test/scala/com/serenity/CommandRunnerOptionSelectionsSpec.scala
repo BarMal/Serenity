@@ -1,23 +1,14 @@
 package com.serenity
 
-import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.command.CommandRunnerOptionSelections
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
-
-  it should "select the current global motion accessibility override" in {
-    val selections = CommandRunnerOptionSelections.default(
-      AppConfig.default.withMotionAccessibility(MotionAccessibility.Off)
-    )
-
-    selections("motion-accessibility") shouldBe 2
-  }
 
   it should "select the command runner key-hints footer state" in {
     val enabled = CommandRunnerOptionSelections.default(AppConfig.default)
@@ -41,19 +32,12 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     val uiFont   = FontLoader.availableUiFamilies.drop(1).headOption.getOrElse("missing-ui-font")
     val config = AppConfig.default.copy(
       surfaceConfig = AppConfig.default.surfaceConfig.copy(
-        motionPreset = MotionPreset.Expressive,
-        commandRunnerAnimation = AnimationConfig.quick,
-        uiAnimation = AnimationConfig.subtle,
-        editorInsertionTransitionKind = TransitionKind.Disabled,
-        commandRunnerTransitionKind = Some(TransitionKind.OutlineThenContent),
-        panelOpenTransitionKind = Some(TransitionKind.OutlineThenContent),
-        panelCloseTransitionKind = Some(TransitionKind.DirectionalSweep),
         contextualToolbarDisplayMode = ToolbarDisplayMode.TextOnly,
         showLineNumbers = false,
         wordWrapEnabled = false,
         contextualToolbarEnabled = false
       ),
-      cursorConfig = CursorConfig(mode = CursorMode.Breathe),
+      cursorConfig = CursorConfig(mode = CursorMode.Blink),
       statusLine = StatusLineConfig(List(StatusSegment.Position, StatusSegment.Title), StatusLinePlacement.Pinned),
       documentConfig = DocumentConfig(
         markdownViewMode = MarkdownViewMode.InlineLens,
@@ -63,7 +47,6 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
       windowConfig = WindowConfig(chromeMode = WindowChromeMode.NativeThemed),
       languageToolsConfig = LanguageToolsConfig(spellCheck = SpellCheckConfig(enabled = true)),
       editorConfig = EditorConfig(
-        characterAnimation = AnimationConfig.subtle,
         fontConfig = AppConfig.default.editorConfig.fontConfig.copy(
           codeFontFamily = codeFont,
           textFontFamily = textFont,
@@ -78,14 +61,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
 
     val selections = CommandRunnerOptionSelections.default(config)
 
-    selections("motion-preset") shouldBe 3
-    selections("command-runner-fade") shouldBe 3
-    selections("ui-animation") shouldBe 1
-    selections("editor-text-transition") shouldBe 4
-    selections("command-runner-transition") shouldBe 3
-    selections("panel-open-transition") shouldBe 3
-    selections("panel-close-transition") shouldBe 1
-    selections("cursor-mode") shouldBe 1
+    selections("cursor-mode") shouldBe 0
     selections("status-title") shouldBe 0
     selections("status-position") shouldBe 0
     selections("status-word-count") shouldBe 1
@@ -133,20 +109,13 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("ui-font") shouldBe 0
   }
 
-  it should "show custom as the selected motion preset for manually edited motion settings" in {
-    val config = AppConfig.default.copy(
-      surfaceConfig = AppConfig.default.surfaceConfig.copy(
-        motionPreset = MotionPreset.Custom,
-        commandRunnerAnimation = None,
-        commandRunnerTransitionKind = Some(TransitionKind.TypedText),
-        editorInsertionTransitionKind = TransitionKind.TypedText
-      )
+  it should "select the configured render fps target and repaint granularity" in {
+    val selections = CommandRunnerOptionSelections.default(
+      AppConfig.default
+        .withRenderFpsTarget(RenderFpsTarget.Uncapped)
+        .withRenderDamageGranularity(RenderDamageGranularity.Cells)
     )
 
-    val selections = CommandRunnerOptionSelections.default(config)
-
-    selections("motion-preset") shouldBe 4
-    selections("command-runner-fade") shouldBe 0
-    selections("command-runner-transition") shouldBe 1
-    selections("editor-text-transition") shouldBe 1
+    selections("render-fps") shouldBe 4
+    selections("render-damage-granularity") shouldBe 1
   }

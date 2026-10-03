@@ -15,20 +15,13 @@ final case class Runtime(
     nextBufferId: BufferId = BufferId(0),
     nextPaneId: PaneId = PaneId(0),
     nextSurfaceId: SurfaceIdSupply = SurfaceIdSupply.initial,
-    // Surface/panel/column motion state (issue #1693): the per-surface fade animation, the per-buffer column-to-column
-    // transition, and the per-surface panel scale-in/out geometry are grouped into their own sub-record since all
-    // three are written from the same handful of reducers/effects and read back together by
-    // `DamageProducer.fullRenderDamage`/`StateManagerEditorCapability`'s tick-active check/advance. See
-    // `MotionState`'s own doc comment.
-    motion: MotionState = MotionState(),
     clipboard: Option[String] = None,
     focusHistory: List[Focus] = List.empty,
     navigation: NavigationHistory = NavigationHistory(),
     typingActivity: TypingActivity = TypingActivity.idle,
-    // Theme discovery/loading/transition state (issue #1693): grouped into its own sub-record since the available
-    // theme names, the most recently requested theme, and the in-flight transition are all written together from
-    // `ThemeStateReducer`/`StateManagerSurfacePopupEffects`'s theme-listing effect and read back together by the
-    // render/tick paths. See `ThemeDiscoveryState`'s own doc comment.
+    // Theme discovery/loading state (issue #1693): grouped into its own sub-record since the available
+    // theme names and the most recently requested theme are written together from
+    // `ThemeStateReducer`/`StateManagerSurfacePopupEffects`'s theme-listing effect. See `ThemeDiscoveryState`'s own doc comment.
     themeDiscovery: ThemeDiscoveryState = ThemeDiscoveryState(),
     // LSP diagnostics and semantic tokens (issue #1693): grouped into their own sub-record since both are written
     // from the same `SystemEventReducer` LSP handling and read back together by `AppState.annotationIndex`/

@@ -60,7 +60,7 @@ class FileWorkflowLanesSpec extends AnyFlatSpec with Matchers:
       for
         gate                <- Deferred[IO, Unit]
         started             <- Ref.of[IO, Int](0)
-        modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+        modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))
         themeNamesRef       <- Ref.of[IO, List[String]](Nil)
         quitSignal          <- Deferred[IO, Unit]
         lspQueue            <- LspEffectQueue.create

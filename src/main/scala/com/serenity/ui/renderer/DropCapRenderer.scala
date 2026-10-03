@@ -16,10 +16,10 @@ import com.serenity.ui.theme.{RichTextStyling, StyledText, TextStyle, Theme}
   * of those files.
   *
   * Measured (GUI) drawing only: [[renderGlyphPx]] draws one pixel-run spanning the glyph's full multi-line height, the
-  * same `surface.text.drawRunPx` primitive `CharacterRenderer.renderMeasuredLineWithAnimation` uses per run. The
-  * fixed-cell (TUI) grid has no font-size concept to spread a glyph across rows with, so [[renderGlyphCell]] instead
-  * marks the one cell the first character already occupies as bold in a highlighted colour -- never attempting
-  * multi-row spanning there, per this codebase's TUI degradation convention.
+  * same `surface.text.drawRunPx` primitive `CharacterRenderer.renderMeasuredLine` uses per run. The fixed-cell (TUI)
+  * grid has no font-size concept to spread a glyph across rows with, so [[renderGlyphCell]] instead marks the one cell
+  * the first character already occupies as bold in a highlighted colour -- never attempting multi-row spanning there,
+  * per this codebase's TUI degradation convention.
   */
 object DropCapRenderer:
 
@@ -222,8 +222,8 @@ object DropCapRenderer:
     )).getOrElse((visualLine, styledSegments))
 
   /** `RendererPaneContent`'s single call for the measured (GUI) path: computes the drop-cap-adjusted line/segments
-    * ([[adjustHomeLineDraw]]) and paints them via `CharacterRenderer.renderMeasuredLineWithAnimation` -- keeping that
-    * whole call out of `RendererPaneContent`, which is already at this codebase's size ceiling.
+    * ([[adjustHomeLineDraw]]) and paints them via `CharacterRenderer.renderMeasuredLine` -- keeping that whole call out
+    * of `RendererPaneContent`, which is already at this codebase's size ceiling.
     */
   def renderMeasuredHomeAware(
     snapshot: TextLayoutSnapshot,
@@ -254,7 +254,7 @@ object DropCapRenderer:
       lineTopPx,
       lineHeightPx
     )
-    CharacterRenderer.renderMeasuredLineWithAnimation(
+    CharacterRenderer.renderMeasuredLine(
       context.surface,
       xOriginPx,
       lineTopPx,
@@ -262,7 +262,6 @@ object DropCapRenderer:
       ascentPx,
       drawLine,
       theme,
-      context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
       state.syntaxHighlightingEnabled,
       buffer.document.language,
       drawSegments,

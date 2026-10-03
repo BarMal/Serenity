@@ -1,7 +1,7 @@
 package com.serenity.state.manager
 
 import com.serenity.command.*
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.{AppConfig, HotkeyAction}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*

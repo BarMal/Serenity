@@ -22,7 +22,6 @@ import org.typelevel.log4cats.Logger
 /** Operations emitted by capabilities for ordered interpretation at the event boundary. */
 private[manager] enum StateManagerOperation:
   case Event(event: com.serenity.keystroke.events.Event)
-  case ApplyAnimationHooks(previousState: AppState)
 
 /** One-directional hand-off for operations emitted while interpreting effects. */
 final private[manager] class StateManagerOperationBoundary private (
@@ -61,9 +60,6 @@ final private[manager] class StateManagerOperationBoundary private (
   def enqueueEvent(event: com.serenity.keystroke.events.Event): IO[Unit] =
     pendingOperations.update(_ :+ StateManagerOperation.Event(event))
 
-  def enqueueAnimationHooks(previousState: AppState): IO[Unit] =
-    pendingOperations.update(_ :+ StateManagerOperation.ApplyAnimationHooks(previousState))
-
   def takeOperations: IO[List[StateManagerOperation]] = pendingOperations.getAndSet(Nil)
 
   /** Runs `request` on the single state dispatcher and waits for it (#1570, #1697): a dispatch commits a state built
@@ -71,9 +67,6 @@ final private[manager] class StateManagerOperationBoundary private (
     * running on the dispatcher -- see `StateManagerDispatcher.submit`.
     */
   def dispatch[A](request: IO[A]): IO[A] = dispatcher.submit(request)
-
-  /** Runs `request` only if no dispatch is in flight -- the render tick's way to stay off a slow dispatch. */
-  def runIfDispatcherIdle[A](request: IO[A]): IO[Option[A]] = dispatcher.runIfIdle(request)
 
   def ensureCommandRunnerSurface(state: AppState): AppState =
     val registry = CommandRegistry.default

@@ -177,8 +177,6 @@ object SurfaceContentResolver:
         )
       case SurfaceContent.MarkdownPreview(_, title) =>
         ResolvedSurfaceContent(title = titleFor(mode, s"Preview: $title"))
-      case SurfaceContent.GhostOverlay(originalContent, cachedRect) =>
-        resolve(originalContent, cachedRect, mode, itemGapRows)
 
   private[layout] def titleFor(mode: SurfaceRenderMode, title: String): Option[String] =
     mode match
@@ -221,11 +219,10 @@ object SurfaceContentResolver:
   /** `cache` defaults to a freshly constructed [[MarkdownPreviewCache]] (issue #1677) rather than threading a
     * per-`StateManager` instance down from [[com.serenity.state.manager.RenderCaches]]: this method is reached from
     * pure layout/geometry computation with no render-cache instance in scope -- `EditorLayoutContract.pinnedGeometry`
-    * (itself called from `AnimationChoreography`, `PinnedPanelAnimations` and `PinnedPanelMouseHitTesting`, none of
-    * which carry a `RenderContext`) -- as well as from the one paint-time caller that does,
-    * [[com.serenity.ui.renderer.PinnedPanelViewModel.resolve]]. The cache here is pure memoization of inline line
-    * splitting with no bearing on correctness, so a caller without a real instance to pass loses only the caching
-    * benefit for this one text-preview path, never a wrong result.
+    * (itself called from `PinnedPanelMouseHitTesting`, which carries no `RenderContext`) -- as well as from the one
+    * paint-time caller that does, [[com.serenity.ui.renderer.PinnedPanelViewModel.resolve]]. The cache here is pure
+    * memoization of inline line splitting with no bearing on correctness, so a caller without a real instance to pass
+    * loses only the caching benefit for this one text-preview path, never a wrong result.
     */
   def resolveMarkdownPreview(
     title: String,

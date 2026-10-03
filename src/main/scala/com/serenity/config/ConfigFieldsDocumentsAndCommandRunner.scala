@@ -3,7 +3,7 @@ package com.serenity.config
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
 
-import AppConfigMotionOps.*
+import AppConfigOps.*
 
 /** Document defaults, editor basics and the command runner's own knobs. */
 private[config] object ConfigFieldsDocumentsAndCommandRunner:

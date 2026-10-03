@@ -58,7 +58,6 @@ object UiPreset:
     case Appearance(config: AppConfig, themeName: Option[String] = None)
     case DocumentDefaults(config: AppConfig)
     case LanguageTools(config: AppConfig)
-    case Motion(config: AppConfig)
     case TextDisplay(config: AppConfig)
     case Typography(config: AppConfig)
 
@@ -73,8 +72,6 @@ object UiPreset:
           preset.copy(config = patchDocumentDefaultsConfig(preset.config, config))
         case LanguageTools(config) =>
           preset.copy(config = patchLanguageToolsConfig(preset.config, config))
-        case Motion(config) =>
-          preset.copy(config = patchMotionConfig(preset.config, config))
         case TextDisplay(config) =>
           preset.copy(config = patchTextDisplayConfig(preset.config, config))
         case Typography(config) =>
@@ -90,27 +87,6 @@ object UiPreset:
 
   private def patchLanguageToolsConfig(base: AppConfig, source: AppConfig): AppConfig =
     base.withLanguageToolsConfig(source.languageToolsConfig)
-
-  private def patchMotionConfig(base: AppConfig, source: AppConfig): AppConfig =
-    base
-      .withEditorConfig(base.editorConfig.copy(characterAnimation = source.editorConfig.characterAnimation))
-      .withSurfaceConfig(
-        base.surfaceConfig.copy(
-          motionPreset = source.surfaceConfig.motionPreset,
-          elementTransitionSpeedScale = source.surfaceConfig.elementTransitionSpeedScale,
-          editorTextTransitionSpeedScale = source.surfaceConfig.editorTextTransitionSpeedScale,
-          commandRunnerTransitionSpeedScale = source.surfaceConfig.commandRunnerTransitionSpeedScale,
-          uiTransitionSpeedScale = source.surfaceConfig.uiTransitionSpeedScale,
-          cursorTransitionSpeedScale = source.surfaceConfig.cursorTransitionSpeedScale,
-          commandRunnerAnimation = source.surfaceConfig.commandRunnerAnimation,
-          uiAnimation = source.surfaceConfig.uiAnimation,
-          editorInsertionTransitionKind = source.surfaceConfig.editorInsertionTransitionKind,
-          commandRunnerTransitionKind = source.surfaceConfig.commandRunnerTransitionKind,
-          panelOpenTransitionKind = source.surfaceConfig.panelOpenTransitionKind,
-          panelCloseTransitionKind = source.surfaceConfig.panelCloseTransitionKind,
-          motionConfiguration = source.surfaceConfig.motionConfiguration
-        )
-      )
 
   private def patchTextDisplayConfig(base: AppConfig, source: AppConfig): AppConfig =
     base
@@ -159,8 +135,7 @@ object UiPreset:
     // The workflow's app mode travels with it: a prose workflow on a code workspace would otherwise leave the
     // settings tree filtering out exactly the prose groups the workflow just made relevant.
     val withMode       = base.withAppMode(source.appMode)
-    val withMotion     = patchMotionConfig(withMode, source)
-    val withTypography = patchTypographyConfig(withMotion, source)
+    val withTypography = patchTypographyConfig(withMode, source)
 
     nameKey(preset.name) match
       case "writing" =>
@@ -314,12 +289,7 @@ object UiPreset:
       ),
       runtime = state.runtime.copy(
         uiSurfaces = unpinnedSurfaces ++ restoredPanels,
-        nextSurfaceId = reservedNextSurfaceId,
-        motion = state.runtime.motion.copy(surfaceAnimations =
-          state.runtime.motion.surfaceAnimations.filterNot((surfaceId, _) =>
-            state.pinnedSurfaces.exists(_.id == surfaceId)
-          )
-        )
+        nextSurfaceId = reservedNextSurfaceId
       )
     )
 

@@ -26,8 +26,8 @@ trait EventApplier:
 trait StateReader:
   def getCurrentState: IO[AppState]
 
-  /** One consistent snapshot of everything the dispatcher owns: use it wherever app state and buffer animations are
-    * read together, since two separate reads can straddle a write.
+  /** One consistent snapshot of everything the dispatcher owns: use it wherever app state and undo history are read
+    * together, since two separate reads can straddle a write.
     */
   def getModel: IO[Model]
 
@@ -49,13 +49,6 @@ trait StateUpdater:
   * anonymous intersection. This is the record-of-records epic's one deliberate hot-core exception.
   */
 trait StateEngine extends StateReader, StateUpdater, EventApplier
-
-/** Advances renderer-visible animation state.
-  *
-  * A capability record per #1017 -- see `FileService` below for the shape rationale. `StateManager` holds one of these
-  * as a field instead of mixing this trait in directly.
-  */
-final case class AnimationTicker(advanceAnimationsOnTick: IO[Boolean])
 
 /** Owns application shutdown and periodic session persistence.
   *
@@ -144,7 +137,6 @@ trait StateManager extends StateEngine:
   def lspEffectSource: LspEffectSource
   def runtimeLifecycle: RuntimeLifecycle
   def sessionService: SessionService
-  def animationTicker: AnimationTicker
   def fileOpener: FileOpener
   def fileService: FileService
 
@@ -210,8 +202,7 @@ object StateManager:
             initialState.runtime
               .copy(themeDiscovery = initialState.runtime.themeDiscovery.copy(availableThemeNames = themeNames))
           ),
-          undo = UndoState(maxUndoDepth = policy.maxUndoDepth),
-          bufferAnimations = Map.empty
+          undo = UndoState(maxUndoDepth = policy.maxUndoDepth)
         )
       )
       mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)

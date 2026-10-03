@@ -2,6 +2,8 @@ package com.serenity.ui.renderer
 
 import java.awt.{Color, Font}
 
+import scala.util.chaining.*
+
 import com.serenity.config.AppConfig
 import com.serenity.state.models.UiSurface
 import com.serenity.ui.layout.*
@@ -49,19 +51,15 @@ object TextOverlayRenderer:
     val statusForegroundOverride: Option[Color] = Option.when(isStatusLine)(statusColors.foreground).flatten
     val statusBackgroundOverride: Option[Color] = Option.when(isStatusLine)(statusColors.background).flatten
 
-    def rowColors(rowOffset: Int): (Color, Color) =
-      val animatedCell = overlay.animationState.getCell(0, rowOffset)
-      val defaultFg    = animatedCell.flatMap(_.currentForeground).getOrElse(theme.panel.foreground)
-      val defaultBg    = animatedCell.flatMap(_.currentBackground).getOrElse(theme.panel.background)
-      val fg           = statusForegroundOverride.getOrElse(defaultFg)
-      val bg           = statusBackgroundOverride.getOrElse(defaultBg)
-      (fg, statusBackgroundAlphaOverride.fold(bg)(bg.withAlpha))
+    val fg = statusForegroundOverride.getOrElse(theme.panel.foreground)
+    val bg = statusBackgroundOverride
+      .getOrElse(theme.panel.background)
+      .pipe(color => statusBackgroundAlphaOverride.fold(color)(color.withAlpha))
 
     surface.effects.foreach(_.setAlpha(overlay.alphaMultiplier))
 
     withOptionalRectClip(surface, rect.x, rect.y, rect.width, rect.height) {
-      for (y, rowOffset) <- (rect.y until rect.bottom).zipWithIndex do
-        val (fg, bg) = rowColors(rowOffset)
+      for y <- rect.y until rect.bottom do
         surface.setForegroundColor(fg)
         surface.setBackgroundColor(bg)
         surface.putString(rect.x, y, " " * rect.width)
@@ -71,7 +69,7 @@ object TextOverlayRenderer:
       // paint (no bespoke composition and no rows/header/footer/key-hint given at construction) simply has none, and
       // there is no separate plain-rows path left to fall back to.
       overlay.composition.foreach(
-        drawComposition(surface, _, theme, cursorVisible, rowColors, font, cellMetrics, textInsetPx, overlay.rect.y)
+        drawComposition(surface, _, theme, cursorVisible, fg, bg, font, cellMetrics, textInsetPx)
       )
     }
     // The status row and the tab strip are both quiet single lines, not floating panels: no border.
@@ -109,21 +107,19 @@ object TextOverlayRenderer:
     composition: ResolvedSurfaceComposition,
     theme: Theme,
     cursorVisible: Boolean,
-    rowColors: Int => (Color, Color),
+    fg: Color,
+    bg: Color,
     font: Font,
     cellMetrics: CellMetrics,
-    textInsetPx: Double,
-    frameY: Int
+    textInsetPx: Double
   ): Unit =
     composition.paintBoxes.foreach { box =>
       box.text.foreach { text =>
-        val rect      = box.rect
-        val x         = math.round(rect.x).toInt
-        val y         = math.round(rect.y).toInt
-        val width     = math.round(rect.width).toInt
-        val rowOffset = y - frameY
-        val (fg, bg)  = rowColors(rowOffset)
-        val row       = overlayRowFor(box, text)
+        val rect  = box.rect
+        val x     = math.round(rect.x).toInt
+        val y     = math.round(rect.y).toInt
+        val width = math.round(rect.width).toInt
+        val row   = overlayRowFor(box, text)
         OverlayRowPainter.renderRow(
           surface,
           x,

@@ -5,8 +5,8 @@ import java.nio.file.{Files, Path}
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.*
-import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.{AppConfig, AppMode, MotionAccessibility, PanelEscapeTarget, PerMode}
+import com.serenity.config.AppConfigOps.*
+import com.serenity.config.{AppConfig, AppMode, PanelEscapeTarget, PerMode}
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
@@ -53,7 +53,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
   ): Harness =
     val root       = Files.createTempDirectory("config-effects-spec")
     val configPath = Option.when(persistConfig)(root.resolve("config.json"))
-    val modelRef   = Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty)).unsafeRunSync()
+    val modelRef   = Ref.of[IO, Model](Model(initialState, UndoState())).unsafeRunSync()
     val stateRef   = ModelViews.appRef(modelRef)
     val triggers   = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
     val fonts      = Ref.of[IO, List[FontLoader.FontConfig]](Nil).unsafeRunSync()
@@ -69,12 +69,6 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
         modelRef.get.flatMap(model =>
           transition(model).fold(IO.unit)(next => committed.update(_ :+ next.app) >> modelRef.set(next))
         )
-      def updateBufferAnimations(
-        update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
-          BufferId,
-          com.serenity.animation.AnimationState
-        ]
-      ): IO[Unit] = ModelViews.bufferAnimationsRef(modelRef).update(update)
       def scheduleDocumentAnalysis(): IO[Unit]                                               = analyses.update(_ + 1)
       def scheduleFindSearch(request: FindSearchRequest): IO[Unit]                           = IO.unit
       def submitEffect(lane: com.serenity.state.effects.Lane.Keyed, job: IO[Unit]): IO[Unit] = job
@@ -243,35 +237,6 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
 
     fixture.events.get.unsafeRunSync() shouldBe List(com.serenity.keystroke.events.ToggleContextualToolbar)
     fixture.sessionTriggers.get.unsafeRunSync() shouldBe Nil
-  }
-
-  it should "discard live motion state when motion accessibility is turned off" in {
-    val ghostId = SurfaceId("ghost")
-    val motionState = AppState.initial.copy(
-      runtime = AppState.initial.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            ghostId,
-            SurfaceContent
-              .GhostOverlay(SurfaceContent.Diagnostics(Nil), com.serenity.ui.layout.LayoutRect(0, 0, 10, 10)),
-            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-          )
-        )
-      )
-    )
-    val fixture = harness(motionState)
-
-    fixture.config
-      .interpret(
-        SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(MotionAccessibility.Off)),
-        motionState
-      )
-      .unsafeRunSync()
-
-    val after = fixture.stateRef.get.unsafeRunSync()
-    after.runtime.uiSurfaces.map(_.id) should not contain ghostId
-    after.runtime.themeDiscovery.transition shouldBe None
-    after.runtime.motion.surfaceAnimations shouldBe Map.empty
   }
 
   it should "propagate a contextual toolbar display mode change into the live toolbar surface" in {

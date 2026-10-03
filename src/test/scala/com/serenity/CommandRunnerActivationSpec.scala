@@ -2,10 +2,9 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.TransitionKind
 import com.serenity.command.*
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.keystroke.KeyboardFidelityTier
 import com.serenity.rope.Balance
@@ -249,97 +248,21 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       }) should contain(List("Floating" -> List("Pinned", "Floating", "Off")))
   }
 
-  it should "expose motion presets with current selections" in {
+  it should "expose the render cadence options with current selections" in {
     val config = AppConfig.default
-      .withMotionPreset(MotionPreset.Reduced)
-      .withEditorInsertionTransitionKind(TransitionKind.TypedText)
-      .withElementTransitionSpeedScale(1.5)
-      .withEditorTextTransitionSpeedScale(Some(0.5))
-      .withCommandRunnerTransitionSpeedScale(Some(2.25))
-      .withUiTransitionSpeedScale(Some(1.25))
-      .withCursorTransitionSpeedScale(Some(0.75))
-      .withPanelOpenTransitionKind(Some(TransitionKind.DirectionalSweep))
-      .withPanelCloseTransitionKind(Some(TransitionKind.Disabled))
-      .withCommandRunnerTransitionKind(Some(TransitionKind.OutlineThenContent))
+      .withRenderFpsTarget(RenderFpsTarget.Fps120)
+      .withRenderDamageGranularity(RenderDamageGranularity.Cells)
     val runner = CommandRunner.empty.activate(registry, config)
 
-    val motionGroup = settingsGroup(runner, "settings-animation").getOrElse {
-      fail("Expected motion and animation settings group")
-    }
-    motionGroup.children.collectFirst {
-      case item: CommandSurfaceItem.OptionItem if item.id == "motion-preset" =>
+    val children = settingsGroup(runner, "settings-look-advanced").toList.flatMap(_.children)
+    children.collectFirst {
+      case item: CommandSurfaceItem.OptionItem if item.id == "render-fps" =>
         (item.selectedOption, item.options.map(_.label))
-    } shouldBe Some("Reduced" -> List("Reduced", "Subtle", "Smooth", "Expressive", "Custom"))
-    settingsGroup(runner, "settings-motion-advanced").toList.flatMap(_.children).collectFirst {
-      case item: CommandSurfaceItem.InputItem if item.id == "element-transition-speed-scale" =>
-        (item.currentValue, item.hint, item.parse("2.25"))
-    } shouldBe Some(
-      (
-        "1.50",
-        "Scale (0.0-4.0)",
-        Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetElementTransitionSpeedScale(2.25))))
-      )
-    )
-    settingsGroup(runner, "settings-motion-advanced").toList.flatMap(_.children).collectFirst {
-      case item: CommandSurfaceItem.InputItem if item.id == "editor-text-speed-scale" =>
-        (item.currentValue, item.hint, item.parse("0.75"))
-    } shouldBe Some(
-      (
-        "0.50",
-        "Editor text scale (0.0-4.0)",
-        Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetEditorTextTransitionSpeedScale(0.75))))
-      )
-    )
-    settingsGroup(runner, "settings-motion-advanced").toList.flatMap(_.children).collectFirst {
-      case item: CommandSurfaceItem.InputItem if item.id == "command-runner-speed-scale" =>
-        (item.currentValue, item.hint, item.parse("1.75"))
-    } shouldBe Some(
-      (
-        "2.25",
-        "Command runner scale (0.0-4.0)",
-        Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCommandRunnerTransitionSpeedScale(1.75))))
-      )
-    )
-    settingsGroup(runner, "settings-motion-advanced").toList.flatMap(_.children).collectFirst {
-      case item: CommandSurfaceItem.InputItem if item.id == "ui-speed-scale" =>
-        (item.currentValue, item.hint, item.parse("1.00"))
-    } shouldBe Some(
-      (
-        "1.25",
-        "Panel/UI scale (0.0-4.0)",
-        Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetUiTransitionSpeedScale(1.0))))
-      )
-    )
-    motionGroup.children.collectFirst {
-      case item: CommandSurfaceItem.OptionItem if item.id == "editor-text-transition" =>
+    } shouldBe Some("120 FPS" -> List("30 FPS", "60 FPS", "90 FPS", "120 FPS", "Uncapped"))
+    children.collectFirst {
+      case item: CommandSurfaceItem.OptionItem if item.id == "render-damage-granularity" =>
         (item.selectedOption, item.options.map(_.label))
-    } shouldBe Some("Typed" -> List("Fade", "Typed", "Directional", "Tandem", "Off"))
-    motionGroup.children.collectFirst {
-      case item: CommandSurfaceItem.OptionItem if item.id == "panel-open-transition" =>
-        (item.selectedOption, item.options.map(_.label))
-    } shouldBe Some("Directional" -> List("Fade", "Directional", "Tandem", "Outline", "Off"))
-    motionGroup.children.collectFirst {
-      case item: CommandSurfaceItem.OptionItem if item.id == "panel-close-transition" =>
-        (item.selectedOption, item.options.map(_.label))
-    } shouldBe Some("Off" -> List("Fade", "Directional", "Tandem", "Outline", "Off"))
-    motionGroup.children.collectFirst {
-      case item: CommandSurfaceItem.OptionItem if item.id == "command-runner-transition" =>
-        (item.selectedOption, item.options.map(_.label))
-    } shouldBe Some("Outline" -> List("Fade", "Directional", "Tandem", "Outline", "Off"))
-    motionGroup.children.collectFirst {
-      case item: CommandSurfaceItem.OptionItem if item.id == "command-runner-fade" =>
-        (item.selectedOption, item.options.map(_.label))
-    } shouldBe Some("Off" -> List("Off", "Subtle", "Smooth", "Expressive"))
-    settingsGroup(runner, "settings-motion-advanced").toList.flatMap(_.children).collectFirst {
-      case item: CommandSurfaceItem.InputItem if item.id == "cursor-speed-scale" =>
-        (item.currentValue, item.hint, item.parse("0.25"))
-    } shouldBe Some(
-      (
-        "0.75",
-        "Cursor scale (0.0-4.0)",
-        Some(CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetCursorTransitionSpeedScale(0.25))))
-      )
-    )
+    } shouldBe Some("Cells" -> List("Rows", "Cells"))
   }
 
   "ensureCommandRunnerSurface (via closePane)" should "use the current config, not defaults" in {

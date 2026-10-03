@@ -2,7 +2,6 @@ package com.serenity
 
 import com.serenity.app.{AlphaMode, LaunchOptions}
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -13,7 +12,7 @@ class AlphaModeSpec extends AnyFlatSpec with Matchers:
     .withUiElementGap(Some(4.0))
     .withInterfaceDensity(InterfaceDensity.Compact)
     .withWindowChromeMode(WindowChromeMode.Native)
-    .withMotionPreset(MotionPreset.Expressive)
+    .withWordWrap(false)
     .withHotkeyOverride(HotkeyAction.Save, "ctrl+shift+s")
 
   "AlphaMode.overlay" should "enable the command-runner cursor-peek prototype" in {

@@ -7,8 +7,8 @@ import com.serenity.ui.theme.Theme
 /** One setting a [[UiPreset]] would change, named and rendered for a UI to list as a toggle.
   *
   * `key` is a [[ConfigField.key]] for a scalar setting, or one of this module's own coarser group keys (`"theme"`,
-  * `"motion"`, `"hotkey"`, ...) for a setting [[ConfigRegistry]] does not cover on its own. Either way it is stable
-  * across calls, so a UI can use it to remember which changes a person toggled off.
+  * `"hotkey"`, ...) for a setting [[ConfigRegistry]] does not cover on its own. Either way it is stable across calls,
+  * so a UI can use it to remember which changes a person toggled off.
   */
 final case class PresetChange(key: String, label: String, currentValue: String, newValue: String)
 
@@ -58,18 +58,10 @@ object UiPresetDiff:
 
   /** The composite settings [[ConfigRegistry]] leaves out because they are not one key to one value (see
     * `ConfigRegistry.scala`'s comment on why). Each is reported as a single coarse entry rather than one per underlying
-    * key -- a preset that changes a motion family's speed scale does not need forty toggles, one that says "motion"
-    * changes does.
+    * key -- a preset that rebinds hotkeys does not need a toggle per binding, one that says "hotkey" changes does.
     */
   private def groupChanges(current: AppConfig, resolved: AppConfig): List[PresetChange] =
     List(
-      groupChange("motion", "Motion & animation", ConfigGroups.motion(current), ConfigGroups.motion(resolved)),
-      groupChange(
-        "motion.character",
-        "Character animation",
-        ConfigGroups.characterAnimation(current),
-        ConfigGroups.characterAnimation(resolved)
-      ),
       groupChange("hotkey", "Keyboard shortcuts", ConfigGroups.hotkeys(current), ConfigGroups.hotkeys(resolved)),
       groupChange("keymap", "Focused keymap", ConfigGroups.keymaps(current), ConfigGroups.keymaps(resolved)),
       groupChange(
@@ -159,37 +151,10 @@ object UiPresetDiff:
     val withScalars = ConfigRegistry.fields.foldLeft(current) { (acc, field) =>
       if selectedKeys.contains(field.key) then field.restoreDefault(acc, resolved) else acc
     }
-    val withMotion = if selectedKeys.contains("motion") then applyMotionGroup(withScalars, resolved) else withScalars
-    val withCharacterAnimation =
-      if selectedKeys.contains("motion.character") then applyCharacterAnimationGroup(withMotion, resolved)
-      else withMotion
     val withHotkeys =
-      if selectedKeys.contains("hotkey") then applyHotkeyGroup(withCharacterAnimation, resolved)
-      else withCharacterAnimation
+      if selectedKeys.contains("hotkey") then applyHotkeyGroup(withScalars, resolved) else withScalars
     val withKeymaps = if selectedKeys.contains("keymap") then applyKeymapGroup(withHotkeys, resolved) else withHotkeys
     if selectedKeys.contains("lsp") then applyLspGroup(withKeymaps, resolved) else withKeymaps
-
-  private def applyMotionGroup(base: AppConfig, resolved: AppConfig): AppConfig =
-    base.withSurfaceConfig(
-      base.surfaceConfig.copy(
-        motionPreset = resolved.surfaceConfig.motionPreset,
-        elementTransitionSpeedScale = resolved.surfaceConfig.elementTransitionSpeedScale,
-        editorTextTransitionSpeedScale = resolved.surfaceConfig.editorTextTransitionSpeedScale,
-        commandRunnerTransitionSpeedScale = resolved.surfaceConfig.commandRunnerTransitionSpeedScale,
-        uiTransitionSpeedScale = resolved.surfaceConfig.uiTransitionSpeedScale,
-        cursorTransitionSpeedScale = resolved.surfaceConfig.cursorTransitionSpeedScale,
-        commandRunnerAnimation = resolved.surfaceConfig.commandRunnerAnimation,
-        uiAnimation = resolved.surfaceConfig.uiAnimation,
-        editorInsertionTransitionKind = resolved.surfaceConfig.editorInsertionTransitionKind,
-        commandRunnerTransitionKind = resolved.surfaceConfig.commandRunnerTransitionKind,
-        panelOpenTransitionKind = resolved.surfaceConfig.panelOpenTransitionKind,
-        panelCloseTransitionKind = resolved.surfaceConfig.panelCloseTransitionKind,
-        motionConfiguration = resolved.surfaceConfig.motionConfiguration
-      )
-    )
-
-  private def applyCharacterAnimationGroup(base: AppConfig, resolved: AppConfig): AppConfig =
-    base.withEditorConfig(base.editorConfig.copy(characterAnimation = resolved.editorConfig.characterAnimation))
 
   private def applyHotkeyGroup(base: AppConfig, resolved: AppConfig): AppConfig =
     base.withHotkeyConfig(resolved.inputConfig.hotkeyConfig)

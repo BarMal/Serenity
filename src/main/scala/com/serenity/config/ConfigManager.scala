@@ -9,14 +9,11 @@ import scala.util.Try
 import scala.util.control.NonFatal
 
 import cats.effect.IO
-import com.serenity.animation.AnimationConfig
 import com.serenity.io.AtomicFileWriter
 import com.serenity.lsp.config.{LanguageId, LspServerOverride, LspUserConfig}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigParseOptions, ConfigValue, ConfigValueType}
 import org.slf4j.LoggerFactory
-
-import AppConfigMotionOps.*
 
 /** Manages loading and saving application configuration */
 object ConfigManager:
@@ -72,68 +69,18 @@ object ConfigManager:
     ConfigLoadResult(parseConfig(source), inspectConfig(source))
 
   private def parseConfig(source: Config): AppConfig =
-    // A motion family's `enabled = false` must always win over that same family's `transition` setting, regardless
-    // of which key HOCON happens to enumerate first -- `entrySet()` order isn't guaranteed to match file order.
-    // Processing every `.enabled` key last (after every other key, including `transition`) makes that override
-    // deterministic instead of depending on source-file key ordering.
-    val entries                 = hoconEntries(source)
-    val (ordinary, enabledLast) = entries.partition(entry => !entry.key.endsWith(".enabled"))
+    val entries = hoconEntries(source)
 
-    val parsed = (ordinary ++ enabledLast).foldLeft(AppConfig.default) { (config, entry) =>
+    val parsed = entries.foldLeft(AppConfig.default) { (config, entry) =>
       val HoconEntry(key, value, _, raw) = entry
       // The registry knows every setting that is one key to one value, in both directions at once. Only the settings
-      // that are not -- the animation presets, the motion families, the key groups, and the spellings that set more
-      // than one field -- are still spelled out below.
+      // that are not -- the key groups, and the spellings that set more than one field -- are still spelled out below.
       ConfigRegistry
         .find(key)
         .flatMap(field => field.readValue(config, raw))
         .getOrElse(key match
-          case "motion.character.preset" | "character.animation" | "character.animation.preset" |
-              "character_animation" =>
-            value.trim.toLowerCase match
-              case "none" | "false" | "off" | "disabled" =>
-                config.withCharacterAnimationSetting(None)
-              case "quick" =>
-                config.withCharacterAnimationSetting(Some(AnimationConfig.Enabled.quick))
-              case "smooth" =>
-                config.withCharacterAnimationSetting(Some(AnimationConfig.Enabled.smooth))
-              case "subtle" =>
-                config.withCharacterAnimationSetting(Some(AnimationConfig.Enabled.subtle))
-              case "custom" =>
-                config.withCharacterAnimationSetting(
-                  Some(config.editorConfig.characterAnimation.getOrElse(AnimationConfig.Enabled.smooth))
-                )
-              case _ =>
-                config // Unknown value, keep current config
-          case "motion.character.duration_ms" | "character.animation.duration_ms" | "character.animation.duration.ms" |
-              "character_animation_duration_ms" =>
-            value.trim.toIntOption
-              .filter(_ > 0)
-              .map(ms =>
-                config.withCharacterAnimationSetting(
-                  Some(
-                    config.editorConfig.characterAnimation
-                      .getOrElse(AnimationConfig.Enabled.smooth)
-                      .copy(totalDuration = scala.concurrent.duration.Duration.fromNanos(ms * 1_000_000L))
-                  )
-                )
-              )
-              .getOrElse(config)
-          case "motion.character.steps" | "character.animation.steps" | "character_animation_steps" =>
-            value.trim.toIntOption
-              .filter(_ > 0)
-              .map(steps =>
-                config.withCharacterAnimationSetting(
-                  Some(
-                    config.editorConfig.characterAnimation.getOrElse(AnimationConfig.Enabled.smooth).copy(steps = steps)
-                  )
-                )
-              )
-              .getOrElse(config)
           case "editor.minimum_pane_width" | "editor.minimum.pane.width" | "editor_minimum_pane_width" =>
             value.trim.toIntOption.map(config.withMinimumPaneWidth).getOrElse(config)
-          case key if SurfaceConfigSchemaKeys.handles(key) =>
-            SurfaceConfigSchemaParser.parse(config, key, value).getOrElse(config)
           case lspKey if lspKey.startsWith("lsp.") =>
             parseLspConfigEntry(config, lspKey, value.trim)
           case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
@@ -315,23 +262,18 @@ object ConfigManager:
 
   final private case class HoconEntry(key: String, value: String, valueType: ConfigValueType, raw: ConfigValue)
 
-  /** Entries in the order they are applied: the motion preset first, then shallower paths, then alphabetically.
+  /** Entries in the order they are applied: shallower paths first, then alphabetically.
     *
-    * The parse is a fold, so a broader setting has to be applied before the narrower ones that refine it --
-    * `motion.preset` rebuilds every motion family, and `motion.family.command_surfaces.transition` or the legacy
-    * `motion.command_runner` then adjusts one of them. Sorting on the key alone made that ordering an accident of the
-    * alphabet, and depth alone stopped saying it once the preset and its legacy per-family overrides shared a depth, so
-    * the preset is ranked explicitly.
+    * The parse is a fold, so a broader setting has to be applied before the narrower ones that refine it.
     */
   private def hoconEntries(source: Config): List[HoconEntry] =
-    def rank(key: String): Int = if SurfaceConfigSchemaKeys.motionPresetKeys.contains(key) then 0 else 1
     source
       .entrySet()
       .asScala
       .toList
       .sortBy { entry =>
         val key = entry.getKey.stripPrefix("\"").stripSuffix("\"").toLowerCase(Locale.ROOT)
-        (rank(key), key.count(_ == '.'), key)
+        (key.count(_ == '.'), key)
       }
       .map { entry =>
         val key = entry.getKey.stripPrefix("\"").stripSuffix("\"").toLowerCase(Locale.ROOT)
@@ -385,29 +327,19 @@ object ConfigManager:
   /** Whether an entry names a setting this can read but carries a value it cannot.
     *
     * A registered setting answers for itself: its codec is what the parser would use, so a value the codec refuses is
-    * exactly a value that would be dropped. Only the settings with no single field left -- the animation presets, the
-    * motion families, the key and LSP groups -- still need a rule written out here.
+    * exactly a value that would be dropped. Only the settings with no single field left -- the key and LSP groups --
+    * still need a rule written out here.
     */
   private def invalidEntry(
     key: String,
     value: String,
     valueType: ConfigValueType
   ): Option[InvalidConfigEntry] =
-    val normalizedValue = value.trim.toLowerCase
     val invalid =
       ConfigRegistry.find(key) match
         case Some(field) => field.codec.parse(value).isEmpty
         case None =>
           key match
-            case "motion.character.preset" | "character.animation" | "character.animation.preset" |
-                "character_animation" =>
-              !Set("none", "false", "off", "disabled", "quick", "smooth", "subtle", "custom").contains(normalizedValue)
-            case "motion.character.duration_ms" | "motion.character.steps" | "character.animation.duration_ms" |
-                "character.animation.duration.ms" | "character_animation_duration_ms" | "character.animation.steps" |
-                "character_animation_steps" =>
-              value.trim.toIntOption.forall(_ <= 0)
-            case key if SurfaceConfigSchemaKeys.handles(key) =>
-              SurfaceConfigSchemaParser.invalidValue(key, value)
             case key if LegacyStatusLineKeys.handles(key) =>
               LegacyStatusLineKeys.rejects(key, value)
             case key if key.startsWith("hotkey.") || key.startsWith("keymap.") =>

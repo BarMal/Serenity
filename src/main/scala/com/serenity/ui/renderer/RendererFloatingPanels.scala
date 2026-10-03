@@ -39,10 +39,8 @@ object RendererFloatingPanels:
         )
       overlay.surfaceId match
         case Some(surfaceId) =>
-          def clippedPaint(layerContext: RenderContext): Unit =
-            withPanelGeometryClip(state, surfaceId, layerContext)(paint(layerContext))
           RendererFramePlanner.paintPanelLayer(state, context, surfaceId, overlay.rect, panelIsDirty(surfaceId))(
-            clippedPaint
+            paint
           )
         case None => paint(context)
 
@@ -69,31 +67,6 @@ object RendererFloatingPanels:
     val leftPx = cellMetrics.toPixelX(rect.x)
     val topPx  = cellMetrics.toPixelY(rect.y)
     PixelRect(leftPx, topPx, cellMetrics.toPixelX(rect.right) - leftPx, cellMetrics.toPixelY(rect.bottom) - topPx)
-
-  /** Falls back to running `render` unclipped when the surface can't clip -- content still draws. */
-  private def withOptionalRectClip(surface: RenderSurface, x: Int, y: Int, width: Int, height: Int)(
-    render: => Unit
-  ): Unit =
-    surface.panelOutlines match
-      case Some(outlines) => outlines.withRectClip(x, y, width, height)(render)
-      case None           => render
-
-  /** Panel scale-in/out (issue #1085 phase 1): a new render step alongside the existing colour-cell motion model
-    * (`ElementTransitionLowerer`/`AnimatedCell`, which never touches geometry). Reads `surfaceId`'s in-flight
-    * `Tween[LayoutRect].currentValue` from `Runtime.motion.panelGeometry` and clips `render`'s output to it,
-    * constraining the panel's already-computed content -- laid out for its full, final rect either way -- to whatever
-    * fraction of that rect the animation has grown or shrunk to so far. A no-op once the geometry is gone (not
-    * animating, or the family is disabled), or when the surface can't clip at all (falls through to
-    * [[withOptionalRectClip]]'s own unclipped fallback).
-    */
-  private def withPanelGeometryClip(state: AppState, surfaceId: SurfaceId, context: RenderContext)(
-    render: => Unit
-  ): Unit =
-    state.runtime.motion.panelGeometry.get(surfaceId) match
-      case None => render
-      case Some(geometry) =>
-        val rect = geometry.currentRect
-        withOptionalRectClip(context.surface, rect.x, rect.y, rect.width, rect.height)(render)
 
   private val ModalBackdropEffect = LayerEffect(0.4f)
 
@@ -135,24 +108,10 @@ object RendererFloatingPanels:
     pinnedAndExpandedSurfaces(state).foreach { surface =>
       surfaceNodes.get(surface.id).foreach { node =>
         val rect = node.frameRect
-        val animationState =
-          state.runtime.motion.surfaceAnimations
-            .get(surface.id)
-            .map(_.animationState)
-            .getOrElse(com.serenity.animation.AnimationState.empty)
-
         def paintContent(layerContext: RenderContext): Unit =
           surface.content match
             case SurfaceContent.MarkdownPreview(bufferId, title) =>
-              renderMarkdownPreviewPanel(
-                bufferId,
-                title,
-                rect,
-                node.contentRect,
-                state,
-                layerContext,
-                animationState
-              )
+              renderMarkdownPreviewPanel(bufferId, title, rect, node.contentRect, state, layerContext)
             case _ =>
               PinnedPanelRenderer.render(
                 layerContext.surface,
@@ -161,15 +120,11 @@ object RendererFloatingPanels:
                   .copy(contentRect = Some(node.contentRect)),
                 state.persisted.theme,
                 state.persisted.config,
-                layerContext.cellMetrics,
-                animationState
+                layerContext.cellMetrics
               )
 
-        def paint(layerContext: RenderContext): Unit =
-          withPanelGeometryClip(state, surface.id, layerContext)(paintContent(layerContext))
-
         val isDirty = RendererFramePlanner.panelDirtyCheck(damage)(surface.id)
-        RendererFramePlanner.paintPanelLayer(state, context, surface.id, rect, isDirty)(paint)
+        RendererFramePlanner.paintPanelLayer(state, context, surface.id, rect, isDirty)(paintContent)
       }
     }
 
@@ -188,8 +143,7 @@ object RendererFloatingPanels:
     rect: LayoutRect,
     contentRect: LayoutRect,
     state: AppState,
-    context: RenderContext,
-    animationState: com.serenity.animation.AnimationState
+    context: RenderContext
   ): Unit =
     val shell = TextPanelView(rect = rect, contentRect = Some(contentRect), title = s"Preview: $title", rows = Nil)
     PinnedPanelRenderer.render(
@@ -197,8 +151,7 @@ object RendererFloatingPanels:
       shell,
       state.persisted.theme,
       state.persisted.config,
-      context.cellMetrics,
-      animationState
+      context.cellMetrics
     )
 
     val imageRect          = markdownPreviewImageRect(rect, contentRect, context)

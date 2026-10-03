@@ -70,8 +70,6 @@ final private[manager] class StateManagerEffectHandlers(
       def completeQuit: IO[Unit] = quitSignal.complete(()).attempt.void
   )
 
-  private val animationEffects = new AnimationEffectHandler(updateBufferAnimations)
-
   private val configEffects = new StateManagerConfigEffects(
     currentState,
     logger,
@@ -164,7 +162,6 @@ final private[manager] class StateManagerEffectHandlers(
       interpretExplorerEffect,
       interpretWorkflowEffect,
       interpretLspQueueEffect,
-      animationEffects.interpret,
       scheduleCommandRunnerBindingExpiry
     )
   )

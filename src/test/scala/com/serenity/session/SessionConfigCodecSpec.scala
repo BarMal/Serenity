@@ -53,8 +53,8 @@ class SessionConfigCodecSpec extends AnyFlatSpec with Matchers with ScalaCheckPr
       encoded.asObject
         .getOrElse(fail("SessionConfigCodec.encode did not produce a JSON object"))
         .add(
-          "motionPreset",
-          Json.fromString("not-a-real-motion-preset")
+          "textAreaInsets",
+          Json.fromString("not-real-insets")
         )
     )
 
@@ -64,8 +64,8 @@ class SessionConfigCodecSpec extends AnyFlatSpec with Matchers with ScalaCheckPr
 
     val messages = appender.list.asScala.toList.filter(_.getLevel == Level.WARN).map(_.getFormattedMessage)
     messages should not be empty
-    messages.exists(_.contains("motionPreset")) shouldBe true
-    messages.exists(_.contains("not-a-real-motion-preset")) shouldBe true
+    messages.exists(_.contains("textAreaInsets")) shouldBe true
+    messages.exists(_.contains("not-real-insets")) shouldBe true
   }
 
   it should "leave the config field untouched, not just logged, when a composite field is missing entirely" in {
@@ -74,7 +74,7 @@ class SessionConfigCodecSpec extends AnyFlatSpec with Matchers with ScalaCheckPr
       encoded.asObject
         .getOrElse(fail("SessionConfigCodec.encode did not produce a JSON object"))
         .remove(
-          "motionPreset"
+          "textAreaInsets"
         )
     )
 

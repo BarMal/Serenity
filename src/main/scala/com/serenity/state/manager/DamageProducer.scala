@@ -1,7 +1,6 @@
 package com.serenity.state.manager
 
 import cats.syntax.all.*
-import com.serenity.animation.AnimationState
 import com.serenity.config.RenderDamageGranularity
 import com.serenity.lsp.model.Diagnostic
 import com.serenity.rope.{Balance, RopeDiff}
@@ -22,10 +21,8 @@ import com.serenity.state.models.*
   * tree structure rather than comparing text, so its cost tracks how much of the document an edit actually touched
   * rather than the document's size.
   *
-  * Called from two funnel points: `AppRuntime.inputEventPhase` around each input event, and
-  * `AppRuntime.fastRenderPhase` (via `advanceAnimationsForCadence`) around each animation tick -- the latter mutates
-  * state entirely outside `inputEventPhase`, so it needs its own before/after diff to report
-  * `animationDamage`/`fullRenderDamage` at all.
+  * Called from two funnel points: `AppRuntime.inputEventPhase` around each input event, and the commit observer
+  * (`AppRuntime.wakeRenderLoopOnCommit`) for every other commit, such as the typing quiet window expiring.
   *
   * `#1000` retires `RendererFramePlanner.planFrame`'s `overlaysMayCoverPanes` stand-down in favour of
   * `fullRenderDamage`'s `uiSurfaces`/`focus` checks below, rather than reasoning about each overlay's precise pixel
@@ -37,9 +34,7 @@ object DamageProducer:
 
   def forTransition(
     before: AppState,
-    after: AppState,
-    beforeAnimations: Map[BufferId, AnimationState] = Map.empty,
-    afterAnimations: Map[BufferId, AnimationState] = Map.empty
+    after: AppState
   )(using Balance): Damage =
     val granularity = after.persisted.config.surfaceConfig.renderDamageGranularity
     val bufferDamage = after.persisted.buffers.foldLeft(Damage.Nothing: Damage) {
@@ -53,9 +48,7 @@ object DamageProducer:
               after,
               beforeBuffer,
               afterBuffer,
-              granularity,
-              beforeAnimations.getOrElse(bufferId, AnimationState.empty),
-              afterAnimations.getOrElse(bufferId, AnimationState.empty)
+              granularity
             )
     }
     bufferDamage |+| chromeDamage(before, after) |+| fullRenderDamage(before, after) |+|
@@ -73,9 +66,7 @@ object DamageProducer:
     after: AppState,
     beforeBuffer: Buffer,
     afterBuffer: Buffer,
-    granularity: RenderDamageGranularity,
-    beforeAnimations: AnimationState,
-    afterAnimations: AnimationState
+    granularity: RenderDamageGranularity
   )(using Balance): Damage =
     contentDamage(bufferId, beforeBuffer, afterBuffer, granularity) |+|
       cursorDamage(bufferId, beforeBuffer, afterBuffer) |+|
@@ -84,7 +75,6 @@ object DamageProducer:
       diagnosticDamage(bufferId, before, after, beforeBuffer, afterBuffer) |+|
       languageDamage(bufferId, beforeBuffer, afterBuffer) |+|
       viewportDamage(bufferId, beforeBuffer, afterBuffer) |+|
-      animationDamage(bufferId, beforeAnimations, afterAnimations) |+|
       focusDimmingDamage(bufferId, after, beforeBuffer, afterBuffer)
 
   private def contentDamage(
@@ -203,14 +193,6 @@ object DamageProducer:
     if before.viewport == after.viewport then Damage.Nothing
     else Damage.BufferRows(bufferId, (0 until after.document.content.lineCount).toSet)
 
-  /** Character-reveal (and other per-cell) animation ticks report exactly the rows whose cells changed, read off
-    * `AnimationState.animations`'s `CharacterKey`s -- a direct structural read rather than a coarsening, feeding the
-    * same `Damage`-based row-reuse bookkeeping `RendererFrameState` now keeps (replacing the retired `PaneRowKey`).
-    */
-  private def animationDamage(bufferId: BufferId, before: AnimationState, after: AnimationState): Damage =
-    if before == after then Damage.Nothing
-    else Damage.BufferRows(bufferId, changedAnimationLines(before, after))
-
   /** `RendererPaneContent.focusedTextBodyLines` dims every row outside the active paragraph/markdown-block around the
     * cursor. Moving the cursor within the same block changes nothing this needs to report beyond what [[cursorDamage]]
     * already covers, but crossing into a different block flips the dimmed state of every row in the old block that
@@ -237,12 +219,6 @@ object DamageProducer:
         val afterLines  = afterRange.map(_.toSet).getOrElse((0 until afterBuffer.document.content.lineCount).toSet)
         Damage.BufferRows(bufferId, beforeLines.diff(afterLines) ++ afterLines.diff(beforeLines))
 
-  private def changedAnimationLines(before: AnimationState, after: AnimationState): Set[Int] =
-    (before.animations.keySet ++ after.animations.keySet).iterator
-      .filter(key => before.animations.get(key) != after.animations.get(key))
-      .map(_.line)
-      .toSet
-
   /** The theme, or *any* config change, forces a full repaint. Config covers far more than the syntax-highlighting
     * toggle this used to check individually -- word wrap, fonts, margins, blur radius, and dozens of other fields this
     * producer has no per-field model for, each of which can reshape or recolor pane content in ways a narrower check
@@ -255,11 +231,7 @@ object DamageProducer:
       Damage.Everything
     else Damage.Nothing
 
-  /** Transitions that touch every visible glyph rather than any one buffer's rows, matching what
-    * `AppRuntime.needsFullContentRender` already treats as requiring a full canvas repaint: a theme transition
-    * cross-fades every glyph and background colour in flight, and a surface animation composites through the same
-    * full-render path as any other overlay (see that function's doc comment for why the window sitter alone is exempt
-    * -- it never touches the canvas at all, so it contributes no damage here).
+  /** Transitions that touch every visible glyph rather than any one buffer's rows.
     *
     * `uiSurfaces` changing covers a floating, pinned, modal or expanded surface appearing, moving, resizing or changing
     * content -- `Renderer`'s retired `overlaysMayCoverPanes` stand-down disabled row reuse outright whenever any such
@@ -281,9 +253,7 @@ object DamageProducer:
     * isolated buffer, never the live frame surface directly, and no layer reads back the pixels behind it.
     */
   private def fullRenderDamage(before: AppState, after: AppState): Damage =
-    if before.runtime.themeDiscovery.transition != after.runtime.themeDiscovery.transition ||
-        before.runtime.motion != after.runtime.motion ||
-        before.runtime.chapterGhostsVisible != after.runtime.chapterGhostsVisible ||
+    if before.runtime.chapterGhostsVisible != after.runtime.chapterGhostsVisible ||
         before.persisted.focus != after.persisted.focus
     then Damage.Everything
     else

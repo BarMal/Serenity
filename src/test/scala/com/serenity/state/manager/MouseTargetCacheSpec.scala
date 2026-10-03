@@ -211,15 +211,10 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     MouseTargetCache.fromState(state, size, caches.authoritativeScene).scene should be theSameInstanceAs scene
   }
 
-  it should "share a scene when rendering uses an effective theme copy" in {
+  it should "share the rendered scene with mouse targeting across a theme change" in {
     val baseState = stateWith(Buffer.fromString(bufferId, "alpha beta"))
-    val state = baseState.copy(runtime =
-      baseState.runtime.copy(themeDiscovery =
-        baseState.runtime.themeDiscovery
-          .copy(transition = Some(ThemeTransition(com.serenity.ui.theme.Theme.light, currentStep = 1, totalSteps = 4)))
-      )
-    )
-    val size = ViewportSize(80, 24)
+    val state     = baseState
+    val size      = ViewportSize(80, 24)
     val codeFont =
       com.serenity.ui.fonts.FontLoader
         .previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code)

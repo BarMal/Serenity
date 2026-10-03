@@ -14,7 +14,7 @@ private[config] object ConfigFieldsCursorAndWindow:
   val fields: List[ConfigField[?]] = List(
     // -- Cursor ----------------------------------------------------------------------------------------------------------
     named("editor.cursor.mode", "cursorMode", "cursor.mode", "cursor_mode")(
-      enumerated(CursorMode.fromConfigKey, _.configKey, text => CursorMode.values.find(_.toString == text))
+      enumerated(CursorMode.fromConfigKey, _.configKey)
     )(
       _.cursorMode,
       (config, value) => config.withCursorMode(value)

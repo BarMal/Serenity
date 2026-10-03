@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.command.*
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.rope.Balance
 import com.serenity.ui.fonts.FontLoader
 import org.scalatest.flatspec.AnyFlatSpec
@@ -52,7 +52,6 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "settings-editor",
       "settings-typography",
       "settings-look",
-      "settings-animation",
       "settings-language-tools",
       "settings-keymap"
     )
@@ -121,25 +120,6 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "ui-outline-thickness",
       "render-fps",
       "render-damage-granularity"
-    )
-    group("settings-animation").label shouldBe "Motion"
-    group("settings-animation").children.map(_.id) shouldBe List(
-      "motion-accessibility",
-      "motion-preset",
-      "editor-text-transition",
-      "panel-open-transition",
-      "panel-close-transition",
-      "command-runner-transition",
-      "command-runner-fade",
-      "ui-animation",
-      "settings-motion-advanced"
-    )
-    nestedGroup("settings-motion-advanced").children.map(_.id) shouldBe List(
-      "cursor-speed-scale",
-      "element-transition-speed-scale",
-      "editor-text-speed-scale",
-      "command-runner-speed-scale",
-      "ui-speed-scale"
     )
     group("settings-language-tools").children.map(_.id) shouldBe List("buffer-language", "settings-spellcheck")
     nestedGroup("settings-text-display").label shouldBe "Text Display"

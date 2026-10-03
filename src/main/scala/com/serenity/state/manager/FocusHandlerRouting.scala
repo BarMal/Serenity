@@ -30,9 +30,8 @@ final private[manager] class FocusHandlerRouting(wrapCache: WrappedLineCache):
   /** Handler for floating "peek" content: read-only info popups and previews that only respond to dismiss/navigate (see
     * `PeekOverlayComponent`), plus content that is only ever presented Docked (`DirectoryTree`, `Terminal`, `Outline`,
     * `Comments`, `Diagnostics` -- see `UiSurface.fromPanelContent`, which is their only construction site) and so never
-    * actually reaches this table in practice, and the transient `GhostOverlay` fade-out surface, which is allocated
-    * under a fresh id that is never pushed onto the focus stack. All are routed here to match this codebase's prior
-    * behaviour, where every one of them fell through a wildcard to `PeekOverlayComponent`.
+    * actually reaches this table in practice. All are routed here to match this codebase's prior behaviour, where every
+    * one of them fell through a wildcard to `PeekOverlayComponent`.
     */
   private val peekOverlay: LocalEventHandler = new PeekOverlayComponent()
   private val contextMenu: LocalEventHandler = new ContextMenuComponent()
@@ -95,7 +94,6 @@ final private[manager] class FocusHandlerRouting(wrapCache: WrappedLineCache):
       case SurfaceContent.Outline(_, _)             => peekOverlay
       case SurfaceContent.Comments(_, _)            => peekOverlay
       case SurfaceContent.Diagnostics(_, _)         => peekOverlay
-      case SurfaceContent.GhostOverlay(_, _)        => peekOverlay
       // Cursor-peek prototype: never focused in practice (look-but-don't-touch), but routed as a read-only peek
       // overlay rather than left unhandled, matching every other passive preview content case above.
       case SurfaceContent.CommandRunnerPeek(_) => peekOverlay

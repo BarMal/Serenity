@@ -61,7 +61,7 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
       CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Research Notes"))
     )
     presetPicker.options.headOption.flatMap(_.hint) shouldBe Some(
-      "rich text default; dark; subtle motion; typed text reveal; spacious density; Serif 18pt prose; 1 editor pane"
+      "rich text default; dark; spacious density; Serif 18pt prose; 1 editor pane"
     )
     presetPicker.options.takeRight(2).map(_.hint) shouldBe List(
       Some("Saved workspace setup"),
@@ -80,7 +80,7 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("missing edit preset group"))
 
     // issue #1058: editing/creating a preset used to walk a hand-maintained parallel clone tree (Active Panels,
-    // Theme & Surface > Surface Material, Animations > Cursor/Text Entry/UI Surface Motion, Fonts > Editor/Code/UI
+    // Theme & Surface > Surface Material, Fonts > Editor/Code/UI
     // Typography, Document Defaults > New Documents/Markdown Preview/Spelling) that re-sliced the same canonical
     // items several levels deeper than their top-level counterparts. It now reuses the same canonical settings
     // groups directly (see `presetScopedGroups` in `CommandRunnerSettingsGroups`), just re-tagged with
@@ -88,7 +88,6 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
     val presetScopedGroupIds = List(
       "settings-preset-workspace-layout",
       "settings-preset-cursor",
-      "settings-preset-animation",
       "settings-preset-prose-font",
       "settings-preset-code-font",
       "settings-preset-ui-font",
@@ -137,13 +136,6 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
     val workspaceItems = descendants(activePanels)
     workspaceItems.collect { case CommandSurfaceItem.CommandItem(command, _) => command.intent } shouldBe
       List(CommandIntent.View(ViewIntent.ArrangePanels))
-    val animation = groupByIdRecursive(List(editPreset), "settings-preset-animation")
-    animation.label shouldBe "Motion"
-    descendants(animation).map(_.id) should contain allOf (
-      "motion-preset",
-      "cursor-speed-scale",
-      "editor-text-transition"
-    )
     val proseFont = groupByIdRecursive(List(editPreset), "settings-preset-prose-font")
     proseFont.label shouldBe "Prose Font"
     proseFont.children.map(_.id) should contain allOf ("text-font", "text-ligatures", "text-font-size")

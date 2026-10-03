@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.InterfaceDensityMetrics
 import com.serenity.state.models.*
 
@@ -112,8 +112,6 @@ private[layout] object FloatingSurfaceSizing:
         math.min(maxHeight - 1, math.max(4, entries.size + 2))
       case SurfaceContent.RecentFilesInMode(_, paths) =>
         math.min(maxHeight - 1, math.max(4, paths.size + 2))
-      case SurfaceContent.GhostOverlay(_, cachedRect) =>
-        cachedRect.height
       case SurfaceContent.TabBar(_, _) =>
         // A single always-visible strip row, the same "quiet single line" sizing as StatusLine below -- see also
         // the matching `floor` case for it just below.

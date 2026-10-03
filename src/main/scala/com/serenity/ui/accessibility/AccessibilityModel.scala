@@ -1,7 +1,7 @@
 package com.serenity.ui.accessibility
 
 import com.serenity.command.CommandSurfaceItem
-import com.serenity.config.AppConfigMotionOps.*
+import com.serenity.config.AppConfigOps.*
 import com.serenity.config.InterfaceDensity
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -553,7 +553,6 @@ object AccessibilitySnapshot:
       case SurfaceContent.TabList(_, _)                => "Open tabs"
       case SurfaceContent.TabBar(_, _)                 => "Tab bar"
       case SurfaceContent.RecentFilesInMode(mode, _)   => s"Recent in ${mode.toString} mode"
-      case SurfaceContent.GhostOverlay(original, _)    => surfaceName(original)
 
   private def surfaceValue(content: SurfaceContent): Option[String] =
     content match

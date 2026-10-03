@@ -55,7 +55,7 @@ private[command] object CommandRunnerSettingsPresetGroups:
     val editPresetGroup = group(
       "settings-preset-edit",
       editingPreset.fold("Edit Preset")(name => s"Edit Preset: $name"),
-      editingPreset.fold("Document, layout, typography, motion")(name => s"Editing $name"),
+      editingPreset.fold("Document, layout, typography")(name => s"Editing $name"),
       List(
         group(
           "settings-preset-name",

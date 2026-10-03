@@ -5,7 +5,6 @@ import java.awt.{Color, Font}
 import scala.concurrent.duration.FiniteDuration
 
 import cats.syntax.all.*
-import com.serenity.animation.{AnimationConfig, EasingCurve, TransitionKind, TransitionScope}
 import com.serenity.config.*
 import com.serenity.lsp.config.{LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
@@ -19,61 +18,6 @@ import io.circe.syntax.given
 // First encode the basic dependencies
 given Encoder[FiniteDuration] = Encoder.encodeLong.contramap(_.toNanos)
 given Decoder[FiniteDuration] = Decoder.decodeLong.map(scala.concurrent.duration.Duration.fromNanos)
-
-// Tagged rather than derived: `EasingCurve.CubicBezier` carries data the named cases don't, so a plain
-// `deriveEncoder`/`deriveDecoder` sum-type encoding (Scala 3's default: the case name as the sole object key) would
-// work too, but this spells out the tag explicitly so a session file stays readable and the shape doesn't shift
-// silently if a future case is added with different field names.
-given Encoder[EasingCurve] = Encoder.instance {
-  case EasingCurve.Linear    => Json.obj("type" -> Json.fromString("linear"))
-  case EasingCurve.EaseIn    => Json.obj("type" -> Json.fromString("easeIn"))
-  case EasingCurve.EaseOut   => Json.obj("type" -> Json.fromString("easeOut"))
-  case EasingCurve.EaseInOut => Json.obj("type" -> Json.fromString("easeInOut"))
-  case EasingCurve.CubicBezier(p1x, p1y, p2x, p2y) =>
-    Json.obj(
-      "type" -> Json.fromString("cubicBezier"),
-      "p1x"  -> p1x.asJson,
-      "p1y"  -> p1y.asJson,
-      "p2x"  -> p2x.asJson,
-      "p2y"  -> p2y.asJson
-    )
-}
-
-given Decoder[EasingCurve] = Decoder.instance { cursor =>
-  cursor.get[String]("type").flatMap {
-    case "linear"    => Right(EasingCurve.Linear)
-    case "easeIn"    => Right(EasingCurve.EaseIn)
-    case "easeOut"   => Right(EasingCurve.EaseOut)
-    case "easeInOut" => Right(EasingCurve.EaseInOut)
-    case "cubicBezier" =>
-      for
-        p1x <- cursor.get[Double]("p1x")
-        p1y <- cursor.get[Double]("p1y")
-        p2x <- cursor.get[Double]("p2x")
-        p2y <- cursor.get[Double]("p2y")
-      yield EasingCurve.CubicBezier(p1x, p1y, p2x, p2y)
-    case other => Left(DecodingFailure(s"Unknown EasingCurve: $other", cursor.history))
-  }
-}
-
-// A manual instance rather than `deriveEncoder`/`deriveDecoder`, so that a session file written before `curve`
-// existed (issues #1082/#1083) keeps loading: `getOrElse` defaults the missing field to `EasingCurve.Linear`, the
-// same default `AnimationConfig` itself uses in code, rather than failing to decode the whole animation.
-given Encoder[AnimationConfig] = Encoder.instance { config =>
-  Json.obj(
-    "steps"         -> config.steps.asJson,
-    "totalDuration" -> config.totalDuration.asJson,
-    "curve"         -> config.curve.asJson
-  )
-}
-
-given Decoder[AnimationConfig] = Decoder.instance { cursor =>
-  for
-    steps         <- cursor.get[Int]("steps")
-    totalDuration <- cursor.get[FiniteDuration]("totalDuration")
-    curve         <- cursor.getOrElse[EasingCurve]("curve")(EasingCurve.Linear)
-  yield AnimationConfig(steps, totalDuration, curve)
-}
 
 /** Builds the codec for an enum that carries a `configKey` -- the same spelling `ConfigManager` already writes to the
   * config file. The encoder always writes `configKey`, so a value looks identical whether it came from a session file
@@ -135,7 +79,8 @@ given Decoder[FontConfig] = Decoder.instance { cursor =>
 }
 
 given Encoder[CursorMode] = configKeyEncoder(_.configKey)
-given Decoder[CursorMode] = configKeyDecoder("CursorMode", CursorMode.values, _.configKey)
+given Decoder[CursorMode] =
+  Decoder.decodeString.emap(value => CursorMode.fromConfigKey(value).toRight(s"Unknown CursorMode: $value"))
 
 given Encoder[StatusSegment] = configKeyEncoder(_.configKey)
 given Decoder[StatusSegment] = configKeyDecoder("StatusSegment", StatusSegment.values, _.configKey)
@@ -183,84 +128,6 @@ given Decoder[InterfaceConfig]     = deriveDecoder
 
 given Encoder[TextAreaInsets] = deriveEncoder
 given Decoder[TextAreaInsets] = deriveDecoder
-
-given Encoder[MotionPreset] = configKeyEncoder(_.configKey)
-given Decoder[MotionPreset] = configKeyDecoder("MotionPreset", MotionPreset.values, _.configKey)
-
-given Encoder[MotionAccessibility] = configKeyEncoder(_.configKey)
-given Decoder[MotionAccessibility] = configKeyDecoder("MotionAccessibility", MotionAccessibility.values, _.configKey)
-
-given Encoder[MotionFamily] = configKeyEncoder(_.configKey)
-given Decoder[MotionFamily] = configKeyDecoder("MotionFamily", MotionFamily.values, _.configKey)
-
-// TransitionKind has no configKey of its own -- ConfigManager keeps a separate ad hoc string mapping
-// (`transitionKindConfigKey`) rather than a field on the enum, so there is nothing here to generalize onto. Left
-// on toString deliberately.
-given Encoder[TransitionKind] = Encoder.encodeString.contramap(_.toString)
-
-given Decoder[TransitionKind] = Decoder.decodeString.emap {
-  case "Disabled"               => Right(TransitionKind.Disabled)
-  case "Fade"                   => Right(TransitionKind.Fade)
-  case "TypedText"              => Right(TransitionKind.TypedText)
-  case "DirectionalSweep"       => Right(TransitionKind.DirectionalSweep)
-  case "OutlineThenContent"     => Right(TransitionKind.OutlineThenContent)
-  case "LineAndCharacterTandem" => Right(TransitionKind.LineAndCharacterTandem)
-  case other                    => Left(s"Unknown TransitionKind: $other")
-}
-
-given Encoder[MotionFamilyConfig] = Encoder.instance { config =>
-  Json.obj(
-    "enabled"        -> config.enabled.asJson,
-    "transitionKind" -> config.transitionKind.asJson,
-    "animation"      -> config.animation.asJson,
-    "speedScale"     -> config.speedScale.asJson,
-    // TransitionScope has no configKey (see the TransitionKind note above), so its toString spelling is the only
-    // one that has ever existed here -- no format divergence to fix for this map's keys.
-    "transitionOverrides" -> config.transitionOverrides.map { case (scope, kind) => scope.toString -> kind }.asJson
-  )
-}
-
-given Decoder[MotionFamilyConfig] = Decoder.instance { cursor =>
-  // "enabled" is read-and-discarded rather than decoded into the model: it is derived from `transitionKind` (see
-  // `MotionFamilyConfig`), so an old session file whose stored `enabled` disagrees with its `transitionKind` should
-  // not resurrect that contradiction on load.
-  for
-    transitionKind <- cursor.get[TransitionKind]("transitionKind")
-    animation      <- cursor.get[Option[AnimationConfig]]("animation")
-    speedScale     <- cursor.get[Double]("speedScale")
-    encoded        <- cursor.getOrElse[Map[String, TransitionKind]]("transitionOverrides")(Map.empty)
-    transitionOverrides <- encoded.toList.traverse {
-      case (name, kind) =>
-        TransitionScope.values
-          .find(_.toString == name)
-          .toRight(DecodingFailure(s"Unknown TransitionScope: $name", cursor.history))
-          .map(_ -> kind)
-    }
-  yield MotionFamilyConfig(transitionKind, animation, speedScale, transitionOverrides.toMap)
-}
-
-given Encoder[MotionConfig] = Encoder.instance { config =>
-  Json.obj(
-    "accessibility" -> config.accessibility.asJson,
-    "baseline"      -> config.baseline.asJson,
-    "families"      -> config.families.map { case (family, settings) => family.configKey -> settings }.asJson
-  )
-}
-
-given Decoder[MotionConfig] = Decoder.instance { cursor =>
-  for
-    accessibility <- cursor.get[MotionAccessibility]("accessibility")
-    baseline      <- cursor.get[MotionPreset]("baseline")
-    encoded       <- cursor.get[Map[String, MotionFamilyConfig]]("families")
-    families <- encoded.toList.traverse {
-      case (name, settings) =>
-        MotionFamily.values
-          .find(family => family.configKey == name || family.toString == name)
-          .toRight(DecodingFailure(s"Unknown MotionFamily: $name", cursor.history))
-          .map(_ -> settings)
-    }
-  yield MotionConfig(accessibility, baseline, families.toMap)
-}
 
 given Encoder[Color] = Encoder.encodeString.contramap(formatColor)
 

@@ -56,18 +56,17 @@ private[manager] trait StateManagerEffectHandlersHarness:
     saveExistingBufferHook: BufferId => IO[Unit] = _ => IO.unit,
     loadSessionResult: IO[Option[AppState]] = IO.pure(None)
   ): Harness =
-    val modelRefVar            = Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty)).unsafeRunSync()
-    val stateRefVar            = ModelViews.appRef(modelRefVar)
-    val committedVar           = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
-    val eventsVar              = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
-    val callsVar               = Ref.of[IO, List[String]](Nil).unsafeRunSync()
-    val fontConfigsVar         = Ref.of[IO, List[com.serenity.ui.fonts.FontLoader.FontConfig]](Nil).unsafeRunSync()
-    val sessionRoot            = Files.createTempDirectory("effect-handlers-spec")
-    val sessionTriggersVar     = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
-    val themeNamesRefVar       = Ref.of[IO, List[String]](Nil).unsafeRunSync()
-    val bufferAnimationsRefVar = ModelViews.bufferAnimationsRef(modelRefVar)
-    val quitSignalVar          = Deferred[IO, Unit].unsafeRunSync()
-    val lspQueueVar            = LspEffectQueue.create.unsafeRunSync()
+    val modelRefVar        = Ref.of[IO, Model](Model(initialState, UndoState())).unsafeRunSync()
+    val stateRefVar        = ModelViews.appRef(modelRefVar)
+    val committedVar       = Ref.of[IO, List[AppState]](Nil).unsafeRunSync()
+    val eventsVar          = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
+    val callsVar           = Ref.of[IO, List[String]](Nil).unsafeRunSync()
+    val fontConfigsVar     = Ref.of[IO, List[com.serenity.ui.fonts.FontLoader.FontConfig]](Nil).unsafeRunSync()
+    val sessionRoot        = Files.createTempDirectory("effect-handlers-spec")
+    val sessionTriggersVar = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
+    val themeNamesRefVar   = Ref.of[IO, List[String]](Nil).unsafeRunSync()
+    val quitSignalVar      = Deferred[IO, Unit].unsafeRunSync()
+    val lspQueueVar        = LspEffectQueue.create.unsafeRunSync()
 
     val runtime = new EffectRuntimePort:
       val currentState                        = stateRefVar.get
@@ -94,12 +93,6 @@ private[manager] trait StateManagerEffectHandlersHarness:
         modelRefVar.get.flatMap(model =>
           transition(model).fold(IO.unit)(next => committedVar.update(_ :+ next.app) >> modelRefVar.set(next))
         )
-      def updateBufferAnimations(
-        update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
-          BufferId,
-          com.serenity.animation.AnimationState
-        ]
-      ): IO[Unit] = bufferAnimationsRefVar.update(update)
       def scheduleDocumentAnalysis(): IO[Unit] = IO.unit
       def scheduleFindSearch(request: FindSearchRequest): IO[Unit] =
         callsVar.update(_ :+ s"scheduleFindSearch:$request")

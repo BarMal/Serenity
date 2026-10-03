@@ -1,6 +1,5 @@
 package com.serenity.state.manager
 
-import com.serenity.animation.SweepDirection
 import com.serenity.keystroke.events.{Event, InsertChar, ResizeEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId, Focus, SurfaceContent, replacedWhere}
@@ -22,12 +21,9 @@ private[manager] object EventPipelineTransitions:
   def withCursorPeekAnchorResolved(result: ReducerResult): ReducerResult =
     result.copy(state = CursorPeekAnchorResolution.resolve(result.state))
 
-  /** `result`'s state with its model-only effects (animations, undo bookkeeping) folded in. */
+  /** `result`'s state with its model-only effects (undo bookkeeping) folded in. */
   def committed(model: Model, result: ReducerResult): Model =
     ModelCommit.applyModelEffects(model.copy(app = result.state), result.effects)
-
-  def withPaneFlow(model: Model, sweep: SweepDirection): Model =
-    model.copy(bufferAnimations = AnimationChoreography.withPaneFlowAnimation(model.app, sweep)(model.bufferAnimations))
 
   /** Focus handed back to an open command runner that lost it -- unless a modal raised over the runner holds it, in
     * which case the runner gets it back once that modal closes.
