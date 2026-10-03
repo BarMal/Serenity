@@ -90,14 +90,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
         operations,
         undoRecording
       )
-      animations = new AnimationChoreography(new AnimationChoreographyPort:
-        def currentState: IO[AppState] = sharedStateRef.get
-        export operations.modelCommit.commitState)
-      editor = new StateManagerEditorCapability(
-        operations.modelCommit,
-        animations,
-        operations
-      )
+      editor = new StateManagerEditorCapability(operations.modelCommit, operations)
     yield PipelineHarness(sharedStateRef, operations, pipeline, editor.animationTicker)
 
   private def previewEditedTo(generation: Long): AppState =

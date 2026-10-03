@@ -55,7 +55,6 @@ object PanelId:
       case SurfaceContent.TabList(_, _)             => None
       case SurfaceContent.RecentFilesInMode(_, _)   => None
       case SurfaceContent.TabBar(_, _)              => None
-      case SurfaceContent.GhostOverlay(_, _)        => None
 
 /** A display mode a registered panel can be shown through (issue #1310). Shortcut-summoned (mode 2) is deliberately
   * absent until #1311's chord system exposes a `Command`-typed completion to register against -- adding a case nothing

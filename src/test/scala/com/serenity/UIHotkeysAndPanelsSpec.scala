@@ -3,8 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandIntent, CommandRegistry, ViewIntent}
-import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.{AppConfig, MotionPreset, PanelEscapeTarget}
+import com.serenity.config.PanelEscapeTarget
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -156,27 +155,6 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     com.serenity.state.reducers.PanelStateReducer.currentSize(diagnostics.id, updated) shouldBe Some(20)
     updated.persisted.layout.workspaceTree.map(_.dockedSurfaceIds) shouldBe Some(List(diagnostics.id))
 
-  it should "start an element transition animation when pinning a panel" in new UIFixture:
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
-
-    val state     = stateManager.getCurrentState.unsafeRunSync()
-    val panel     = state.pinnedSurfaces.headOption.getOrElse(fail("Expected pinned panel"))
-    val animation = state.runtime.motion.surfaceAnimations.get(panel.id).getOrElse(fail("Expected panel animation"))
-
-    animation.animationState.activeAnimationCount should be > 0
-    animation.overlayHeight should be > 0
-
-  it should "skip panel transition animation when reduced motion is enabled" in new UIFixture:
-    stateManager
-      .updateState(state =>
-        state.copy(persisted = state.persisted.copy(config = AppConfig.default.withMotionPreset(MotionPreset.Reduced)))
-      )
-      .unsafeRunSync()
-
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Left, 28).unsafeRunSync()
-
-    stateManager.getCurrentState.unsafeRunSync().runtime.motion.surfaceAnimations shouldBe empty
-
   it should "hide only the toggled panel, leaving another panel on the same edge" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
     stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 30).unsafeRunSync()
@@ -213,48 +191,6 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     after.searchInOpenFilesSurface.map(_.id) shouldBe Some(floatingSurfaceId)
 
   // ── Panel resize ─────────────────────────────────────────────────────────
-
-  it should "create an exiting ghost overlay when unpinning a panel" in new UIFixture:
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
-    advanceAnimations(80)
-
-    stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Outline))).unsafeRunSync()
-
-    val state = stateManager.getCurrentState.unsafeRunSync()
-    val ghost = state.runtime.uiSurfaces.collectFirst {
-      case surface @ UiSurface(_, SurfaceContent.GhostOverlay(SurfaceContent.Outline(_, _), _), _, _) => surface
-    }
-    ghost shouldBe defined
-    ghost.flatMap(surface => state.runtime.motion.surfaceAnimations.get(surface.id).map(_.phase)) shouldBe Some(
-      SurfacePhase.Exiting
-    )
-
-  it should "remove a panel ghost overlay when its close animation completes" in new UIFixture:
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
-    advanceAnimations(80)
-    stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Outline))).unsafeRunSync()
-
-    advanceAnimations(120)
-
-    stateManager.getCurrentState.unsafeRunSync().runtime.uiSurfaces.exists {
-      _.content match
-        case SurfaceContent.GhostOverlay(SurfaceContent.Outline(_, _), _) => true
-        case _                                                            => false
-    } shouldBe false
-
-  it should "skip panel close ghosts when reduced motion is enabled" in new UIFixture:
-    stateManager
-      .updateState(state =>
-        state.copy(persisted = state.persisted.copy(config = AppConfig.default.withMotionPreset(MotionPreset.Reduced)))
-      )
-      .unsafeRunSync()
-    stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()
-
-    stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Outline))).unsafeRunSync()
-
-    val state = stateManager.getCurrentState.unsafeRunSync()
-    state.runtime.motion.surfaceAnimations shouldBe empty
-    state.runtime.uiSurfaces.exists(_.content.isInstanceOf[SurfaceContent.GhostOverlay]) shouldBe false
 
   it should "resize a pinned panel to a new size" in new UIFixture:
     stateManager.pinPanel(PanelContent.Outline(Nil), PanelPosition.Right, 30).unsafeRunSync()

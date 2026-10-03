@@ -259,8 +259,7 @@ final class UiScenarioDriver private (
       drawnItems,
       recordingSurface.drawnImages.map(_.bounds),
       renderedContentRows,
-      animationComplete = state.runtime.motion.surfaceAnimations.values.forall(_.animationState.animations.isEmpty) &&
-        bufferAnimations.values.forall(_.animations.isEmpty),
+      animationComplete = bufferAnimations.values.forall(_.animations.isEmpty),
       contract.violations
     )
 

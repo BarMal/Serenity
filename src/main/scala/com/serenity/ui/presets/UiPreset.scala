@@ -314,12 +314,7 @@ object UiPreset:
       ),
       runtime = state.runtime.copy(
         uiSurfaces = unpinnedSurfaces ++ restoredPanels,
-        nextSurfaceId = reservedNextSurfaceId,
-        motion = state.runtime.motion.copy(surfaceAnimations =
-          state.runtime.motion.surfaceAnimations.filterNot((surfaceId, _) =>
-            state.pinnedSurfaces.exists(_.id == surfaceId)
-          )
-        )
+        nextSurfaceId = reservedNextSurfaceId
       )
     )
 

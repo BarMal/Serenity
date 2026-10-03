@@ -56,9 +56,7 @@ object AccessibilitySync:
           .toMap
       ),
       runtime = state.runtime.copy(
-        typingActivity = TypingActivity.idle,
-        themeDiscovery = state.runtime.themeDiscovery.copy(transition = None),
-        motion = state.runtime.motion.copy(surfaceAnimations = Map.empty)
+        typingActivity = TypingActivity.idle
       )
     )
 

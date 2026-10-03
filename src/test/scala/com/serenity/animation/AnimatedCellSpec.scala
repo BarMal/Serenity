@@ -90,19 +90,6 @@ class AnimatedCellSpec extends AnyFlatSpec with Matchers:
 
   // ── Smart constructors ────────────────────────────────────────────────────
 
-  "AnimatedCell.fromThemeTransition" should "interpolate both foreground and background" in {
-    val cell = AnimatedCell.fromThemeTransition(
-      oldForeground = black,
-      newForeground = white,
-      oldBackground = red,
-      newBackground = blue,
-      steps = 4
-    )
-    cell.content shouldEqual None
-    cell.foregroundAnimation shouldEqual Some(Tween(black, white, EasingCurve.Linear, steps = 4))
-    cell.backgroundAnimation shouldEqual Some(Tween(red, blue, EasingCurve.Linear, steps = 4))
-  }
-
   "AnimatedCell.completed" should "produce a cell with a single static foreground step" in {
     val cell = AnimatedCell.completed('z', white)
     cell.content shouldEqual Some('z')

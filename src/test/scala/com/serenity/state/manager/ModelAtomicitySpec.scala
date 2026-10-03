@@ -180,15 +180,8 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     all(writes.map(model => content(model, bufferId).contains("Hello") == model.undo.redoStack.nonEmpty)) shouldBe true
   }
 
-  "Disabling motion" should "cancel buffer animations and in-flight app motion in one write" in {
+  "Disabling motion" should "cancel buffer animations in one write" in {
     val bufferId = BufferId(0)
-    val ghost = UiSurface(
-      SurfaceId("ghost"),
-      SurfaceContent.GhostOverlay(SurfaceContent.Diagnostics(Nil), com.serenity.ui.layout.LayoutRect(0, 0, 10, 10)),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-    )
-    val fading = AppState.initial.copy(runtime = AppState.initial.runtime.copy(uiSurfaces = List(ghost)))
-    def hasGhost(model: Model): Boolean = model.app.runtime.uiSurfaces.exists(_.id == ghost.id)
     val animations =
       Map(bufferId -> AnimationState.empty.addCharacterAnimation('a', 0, 0, Color.BLACK, Color.WHITE, 5))
     val disableMotion = Command.typed(
@@ -199,7 +192,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     )
     val program =
       for
-        recorded     <- recording(Model(fading, UndoState(), animations))
+        recorded     <- recording(Model(AppState.initial, UndoState(), animations))
         stateManager <- stateManagerOver(recorded.modelRef)
         _            <- stateManager.executeCommand(disableMotion)
         writes       <- recorded.recordedWrites
@@ -208,10 +201,8 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
 
     val (writes, after) = program.unsafeRunSync()
 
-    hasGhost(after) shouldBe false
     hasAnimations(after, bufferId) shouldBe false
     writes should not be empty
-    all(writes.map(model => hasGhost(model) == hasAnimations(model, bufferId))) shouldBe true
   }
 
   "A validated model write" should "leave every part of the model unchanged when the app state it carries is invalid" in {

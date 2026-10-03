@@ -151,7 +151,7 @@ private[manager] object EffectResult:
       case ThemeLoaded(requestedName, theme) =>
         ThemeStateReducer.applyRequestedTheme(requestedName, theme, state)
       case ThemeReloaded(requestedName, theme) =>
-        ThemeStateReducer.replaceRequestedTheme(requestedName, theme, state)
+        ThemeStateReducer.applyRequestedTheme(requestedName, theme, state)
       case ThemeNamesListed(names) =>
         ThemeStateReducer.withAvailableThemeNames(names, state).state
       // ---- end explorer and theme results ----

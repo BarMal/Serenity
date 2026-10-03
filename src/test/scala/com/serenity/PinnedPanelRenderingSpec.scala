@@ -2,7 +2,6 @@ package com.serenity
 
 import java.awt.{Color, Font}
 
-import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey, EasingCurve, Tween}
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.ui.layout.*
@@ -149,33 +148,6 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
     surface.getRow(panel.titleRect.y).slice(panel.titleRect.x, panel.titleRect.right) shouldBe "tit"
     surface.getRow(3).slice(4, 7) shouldBe "abc"
     surface.getRow(2).slice(4, 7) shouldBe "   "
-  }
-
-  it should "apply active animation foreground colors to panel text" in {
-    val surface            = new MockRenderSurface(40, 12)
-    val animatedForeground = new Color(10, 20, 30, 96)
-    val panel = TextPanelView(
-      rect = LayoutRect(2, 2, 20, 6),
-      title = "outline",
-      rows = List(TextPanelRow("Item 1"))
-    )
-    val animationState = AnimationState(
-      Map(
-        CharacterKey(-1, -1) -> AnimatedCell(
-          None,
-          foregroundAnimation = Some(Tween(animatedForeground, animatedForeground, EasingCurve.Linear, steps = 1))
-        ),
-        CharacterKey(0, 1) -> AnimatedCell(
-          Some('I'),
-          foregroundAnimation = Some(Tween(animatedForeground, animatedForeground, EasingCurve.Linear, steps = 1))
-        )
-      )
-    )
-
-    PinnedPanelRenderer.render(surface, panel, Theme.light, AppConfig.default, cellMetrics, animationState)
-
-    surface.strokeRectCalls.map(_.color) should contain(animatedForeground)
-    surface.getFg(panel.rect.x + 1, panel.rect.y + 1) shouldBe animatedForeground
   }
 
   it should "paint from a composition when present, taking priority over the plain rows" in {

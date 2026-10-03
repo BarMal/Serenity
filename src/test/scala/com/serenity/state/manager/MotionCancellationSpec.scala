@@ -3,71 +3,19 @@ package com.serenity.state.manager
 import java.awt.Color
 
 import com.serenity.animation.{AnimatedCell, AnimationOwner, AnimationState, CharacterKey, EasingCurve, Tween}
-import com.serenity.command.CommandRunner
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{AppConfig, MotionAccessibility, MotionFamily}
-import com.serenity.rope.Balance
-import com.serenity.state.models.*
-import com.serenity.state.reducers.PanelStateReducer
-import com.serenity.ui.layout.{LayoutRect, PanelContent, PanelPosition}
+import com.serenity.state.models.BufferId
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Pure motion cancellation (#1697 wave 2): which in-flight motion a config change cancels, and what cancelling it
-  * leaves behind -- plain values in and out, each result checked against `AppStateValidation` because these used to be
-  * unvalidated `stateRef.update` writes (#1183).
-  */
+/** Pure motion cancellation (#1697 wave 2): which in-flight buffer motion a config change cancels. */
 class MotionCancellationSpec extends AnyFlatSpec with Matchers:
 
-  given Balance = Balance.default
-
-  private val bufferId     = BufferId(0)
-  private val paletteId    = SurfaceId("palette")
-  private val paletteGhost = SurfaceId("palette-ghost")
-  private val panelGhost   = SurfaceId("panel-ghost")
+  private val bufferId = BufferId(0)
 
   private def tween(steps: Int): Tween[Color] =
     Tween(new Color(0, 0, 0), new Color(255, 255, 255), EasingCurve.Linear, steps)
-
-  private def fadeFor(phase: SurfacePhase): SurfaceAnimationState =
-    SurfaceAnimationState(
-      phase = phase,
-      animationState = AnimationState(
-        Map(CharacterKey(0, 0) -> AnimatedCell(None, Some(tween(4)), Some(tween(4)), AnimationOwner.UiTransitions))
-      ),
-      overlayHeight = 1,
-      bufferFadeLength = 0,
-      phaseTick = 0
-    )
-
-  /** Every cancellable motion family in flight at once, on an otherwise ordinary (valid) initial state. */
-  private val inFlight: AppState =
-    val base   = AppState.initial(AppConfig.default)
-    val buffer = Buffer.fromString(bufferId, "hello world")
-    val surfaces = List(
-      UiSurface(
-        paletteGhost,
-        SurfaceContent.GhostOverlay(SurfaceContent.CommandPalette(CommandRunner.empty), LayoutRect(0, 0, 20, 4)),
-        SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-      ),
-      UiSurface(
-        panelGhost,
-        SurfaceContent.GhostOverlay(SurfaceContent.Outline(Nil), LayoutRect(0, 0, 20, 10)),
-        SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-      )
-    )
-    base.copy(
-      persisted = base.persisted.copy(buffers = base.persisted.buffers.updated(bufferId, buffer)),
-      runtime = base.runtime.copy(
-        uiSurfaces = base.runtime.uiSurfaces ++ surfaces,
-        themeDiscovery =
-          base.runtime.themeDiscovery.copy(transition = Some(ThemeTransition(base.persisted.theme, 0, 2))),
-        motion = MotionState(
-          surfaceAnimations =
-            Map(paletteId -> fadeFor(SurfacePhase.Visible), paletteGhost -> fadeFor(SurfacePhase.Exiting))
-        )
-      )
-    )
 
   private val bufferAnimations: Map[BufferId, AnimationState] =
     Map(
@@ -81,10 +29,6 @@ class MotionCancellationSpec extends AnyFlatSpec with Matchers:
 
   private def ownersOf(animations: Map[BufferId, AnimationState]): Set[AnimationOwner] =
     animations(bufferId).animations.values.map(_.owner).toSet
-
-  "the in-flight fixture" should "itself be a valid state" in {
-    AppStateValidation.validated(inFlight).isRight shouldBe true
-  }
 
   "MotionCancellation.between" should "cancel everything when motion as a whole goes from on to off" in {
     val previous = AppConfig.default
@@ -104,62 +48,26 @@ class MotionCancellationSpec extends AnyFlatSpec with Matchers:
     MotionCancellation.between(AppConfig.default, AppConfig.default).isEmpty shouldBe true
   }
 
-  "cancelling everything" should "clear every family's in-flight state and still validate" in {
-    val cancelled = MotionCancellation.Everything.cancelState(inFlight)
-
-    cancelled.runtime.themeDiscovery.transition shouldBe None
-    cancelled.runtime.motion shouldBe MotionState()
-    cancelled.runtime.uiSurfaces.map(_.id) should not contain paletteGhost
-    cancelled.runtime.uiSurfaces.map(_.id) should not contain panelGhost
-    AppStateValidation.validated(cancelled).isRight shouldBe true
-  }
-
-  it should "clear every buffer animation regardless of owner" in {
+  "cancelling everything" should "clear every buffer animation regardless of owner" in {
     val cancelled = MotionCancellation.Everything.cancelBufferAnimations(bufferAnimations)
 
     cancelled(bufferId).hasActiveAnimations shouldBe false
   }
 
-  "cancelling the EditorText family" should "clear only EditorText-owned buffer animations and leave state alone" in {
+  "cancelling the EditorText family" should "clear only EditorText-owned buffer animations" in {
     val cancellation = MotionCancellation.Families(List(MotionFamily.EditorText))
 
     ownersOf(cancellation.cancelBufferAnimations(bufferAnimations)) shouldBe Set(AnimationOwner.UiTransitions)
-    cancellation.cancelState(inFlight) shouldBe inFlight
   }
 
-  "cancelling the CommandSurfaces family" should "drop command ghosts and command-surface fades and still validate" in {
-    val cancelled = MotionCancellation.Families(List(MotionFamily.CommandSurfaces)).cancelState(inFlight)
-
-    cancelled.runtime.uiSurfaces.map(_.id) should not contain paletteGhost
-    cancelled.runtime.uiSurfaces.map(_.id) should contain(panelGhost)
-    cancelled.runtime.motion.surfaceAnimations.keySet should not contain paletteGhost
-    AppStateValidation.validated(cancelled).isRight shouldBe true
-  }
-
-  "cancelling the PinnedPanels family" should "drop a docked panel's fade and still validate" in {
-    val pinned   = PanelStateReducer.pin(PanelContent.Outline(Nil), PanelPosition.Left, 24, inFlight).state
-    val panelIds = pinned.pinnedSurfaces.map(_.id).filterNot(inFlight.pinnedSurfaces.map(_.id).contains)
-    val seeded = pinned.copy(runtime =
-      pinned.runtime.copy(motion =
-        pinned.runtime.motion.copy(surfaceAnimations =
-          pinned.runtime.motion.surfaceAnimations ++ panelIds.map(_ -> fadeFor(SurfacePhase.Visible))
-        )
-      )
-    )
-
-    val cancelled = MotionCancellation.Families(List(MotionFamily.PinnedPanels)).cancelState(seeded)
-
-    panelIds should not be empty
-    cancelled.runtime.motion.surfaceAnimations.keySet.intersect(panelIds.toSet) shouldBe empty
-    cancelled.runtime.motion.surfaceAnimations.keySet should contain(paletteGhost)
-    AppStateValidation.validated(cancelled).isRight shouldBe true
-  }
-
-  "cancelling the UiTransitions family" should "clear the theme transition and UiTransitions buffer animations" in {
+  "cancelling the UiTransitions family" should "clear only UiTransitions-owned buffer animations" in {
     val cancellation = MotionCancellation.Families(List(MotionFamily.UiTransitions))
-    val cancelled    = cancellation.cancelState(inFlight)
 
-    cancelled.runtime.themeDiscovery.transition shouldBe None
     ownersOf(cancellation.cancelBufferAnimations(bufferAnimations)) shouldBe Set(AnimationOwner.EditorText)
-    AppStateValidation.validated(cancelled).isRight shouldBe true
+  }
+
+  "cancelling a family with no buffer animations" should "leave buffer animations alone" in {
+    val cancellation = MotionCancellation.Families(List(MotionFamily.CommandSurfaces, MotionFamily.PinnedPanels))
+
+    cancellation.cancelBufferAnimations(bufferAnimations) shouldBe bufferAnimations
   }

@@ -297,16 +297,12 @@ object LayoutEngine:
 
     val paneLayouts = calculateEditorPaneLayouts(state, baseLayout)
 
-    val stackedAboveSurfaces = OverlayStackLayout.orderedAboveCursorSurfaces(state)
-    val ghostAboveSurfaces   = OverlayStackLayout.aboveCursorGhostSurfaces(state)
-    val aboveSurfaces        = stackedAboveSurfaces ++ ghostAboveSurfaces
-    val belowSurfaces        = OverlayStackLayout.orderedBelowCursorSurfaces(state)
+    val aboveSurfaces = OverlayStackLayout.orderedAboveCursorSurfaces(state)
+    val belowSurfaces = OverlayStackLayout.orderedBelowCursorSurfaces(state)
     val aboveLayout =
-      OverlayStackLayout.calculateAboveCursorOverlayStack(stackedAboveSurfaces, state, paneLayouts)
-    val aboveCursorOverlayStack = aboveLayout.stack ++ ghostAboveSurfaces.flatMap(surface =>
-      FloatingSurfaceLayout.calculateFloatingSurfaceRect(surface, state, paneLayouts).map(surface.id -> _)
-    )
-    val belowLayout = OverlayStackLayout.calculateBelowCursorOverlayStack(belowSurfaces, state, paneLayouts)
+      OverlayStackLayout.calculateAboveCursorOverlayStack(aboveSurfaces, state, paneLayouts)
+    val aboveCursorOverlayStack = aboveLayout.stack
+    val belowLayout             = OverlayStackLayout.calculateBelowCursorOverlayStack(belowSurfaces, state, paneLayouts)
     val floatingOffsets = OverlayStackLayout.floatingOverlayOffsets(
       aboveSurfaces,
       aboveCursorOverlayStack,

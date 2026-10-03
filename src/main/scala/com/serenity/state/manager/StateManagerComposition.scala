@@ -77,18 +77,7 @@ private[manager] class StateManagerComposition(
       wrapCache = runtimeRenderCaches.wrappedLines
     )
 
-  // Stateless facade over the model, reused by `editor` (`events` builds its own
-  // separate instance over the same `ModelCommit` in `StateManagerEventPipeline`). `editor` used to reach it
-  // through `events` instead (the only forward edge in the effects -> workflow -> editor -> events ->
-  // effects cycle this used to close); extracting it here removed that edge. What's left below is a DAG,
-  // not a cycle -- `effects` has no dependency on `events` at all (#1389), so building it in dependency
-  // order needs correct `val` placement, not a `lazy val` or deferred `def` port.
-  private val animations = new AnimationChoreography(new AnimationChoreographyPort:
-    def currentState: IO[AppState] = modelCommit.currentState
-    def commitState(newState: AppState, fallbackState: AppState): IO[Unit] =
-      modelCommit.commitState(newState, fallbackState))
-
-  // Built here, before `effects` and `events`, same reasoning as `animations` above: `StateManagerPanelEffects`
+  // Built here, before `effects` and `events`, `StateManagerPanelEffects`
   // (owned by `effects`) and `StateManagerSurfaceCapability` (`surfaces`, below) both need to record undo boundaries
   // for panel pin/unpin (#1016 PR4), and `events` already needed `UndoRecording` for Undo/Redo dispatch -- a single
   // instance shared by all three, rather than `events` building its own as it used to.
@@ -140,7 +129,6 @@ private[manager] class StateManagerComposition(
 
   private[manager] val editor = new StateManagerEditorCapability(
     modelCommit,
-    animations,
     operations
   )
 
@@ -309,8 +297,7 @@ private[manager] class StateManagerComposition(
       case Nil => IO.unit
       case pendingOperations =>
         pendingOperations.traverse_ {
-          case StateManagerOperation.Event(event)                       => events.applyEvent(event)
-          case StateManagerOperation.ApplyAnimationHooks(previousState) => events.applyAnimationHooks(previousState)
+          case StateManagerOperation.Event(event) => events.applyEvent(event)
         } >> drainPendingOperations
     }
 
@@ -319,9 +306,6 @@ private[manager] class StateManagerComposition(
 
   def scheduleDocumentAnalysis(): IO[Unit]                  = events.scheduleDocumentAnalysis()
   def ensureCommandRunnerSurface(state: AppState): AppState = operations.ensureCommandRunnerSurface(state)
-  def applyAnimationHooks(previousState: AppState): IO[Unit] =
-    events.applyAnimationHooks(previousState)
-  def advanceSurfaceAnimations(state: AppState): AppState = events.advanceSurfaceAnimations(state)
   def interpretEffect(effect: com.serenity.state.reducers.AppEffect): IO[Unit] =
     effects.interpretEffect(effect) >> drainPendingOperations
   def interpretCommand(command: com.serenity.command.Command, state: AppState): IO[Unit] =

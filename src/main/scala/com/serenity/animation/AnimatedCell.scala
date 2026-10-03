@@ -36,19 +36,6 @@ final case class AnimatedCell(
 
 object AnimatedCell:
 
-  def fromThemeTransition(
-    oldForeground: Color,
-    newForeground: Color,
-    oldBackground: Color,
-    newBackground: Color,
-    steps: Int
-  ): AnimatedCell =
-    AnimatedCell(
-      content = None,
-      foregroundAnimation = Option.when(steps > 0)(Tween(oldForeground, newForeground, EasingCurve.Linear, steps)),
-      backgroundAnimation = Option.when(steps > 0)(Tween(oldBackground, newBackground, EasingCurve.Linear, steps))
-    )
-
   def completed(char: Char, color: Color): AnimatedCell =
     AnimatedCell(
       content = Some(char),

@@ -16,6 +16,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.{TextEntryTranslator, Translator}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId, Damage}
+import com.serenity.testkit.ActiveAnimationFixtures
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -70,14 +71,6 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         config = AppState.initial.persisted.config.withRenderFpsTarget(RenderFpsTarget.Fps30)
-      ),
-      runtime = AppState.initial.runtime.copy(
-        motion = AppState.initial.runtime.motion.copy(surfaceAnimations =
-          Map(
-            com.serenity.state.models.SurfaceId("fast-render-regression") -> com.serenity.state.models
-              .SurfaceAnimationState()
-          )
-        )
       )
     )
 
@@ -94,7 +87,10 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
       stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState] = IO.pure(state)
         def getModel: IO[com.serenity.state.manager.Model] =
-          IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty))
+          IO.pure(
+            com.serenity.state.manager
+              .Model(state, com.serenity.state.undo.UndoState(), ActiveAnimationFixtures.bufferAnimations(state))
+          )
         def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
         def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
         def updateStateValidated(update: AppState => AppState): IO[Unit]                  = IO.unit
@@ -251,11 +247,6 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         config = AppState.initial.persisted.config.withRenderFpsTarget(RenderFpsTarget.Fps60)
-      ),
-      runtime = AppState.initial.runtime.copy(
-        motion = AppState.initial.runtime.motion.copy(surfaceAnimations =
-          Map(com.serenity.state.models.SurfaceId("paced") -> com.serenity.state.models.SurfaceAnimationState())
-        )
       )
     )
     val program = for
@@ -271,7 +262,10 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
       stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState] = IO.pure(state)
         def getModel: IO[com.serenity.state.manager.Model] =
-          IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty))
+          IO.pure(
+            com.serenity.state.manager
+              .Model(state, com.serenity.state.undo.UndoState(), ActiveAnimationFixtures.bufferAnimations(state))
+          )
         def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
         def applyEvent(event: Event): IO[Unit]                           = IO.unit
       animationTicker = com.serenity.state.manager.AnimationTicker(

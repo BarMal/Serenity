@@ -41,8 +41,6 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
   private val comments: SurfaceContent        = SurfaceContent.Comments(Nil, None)
   private val diagnostics: SurfaceContent     = SurfaceContent.Diagnostics(Nil, None)
   private val startPage: SurfaceContent       = SurfaceContent.StartPage(StartupPage("title"))
-  private val ghostOverlay: SurfaceContent =
-    SurfaceContent.GhostOverlay(quickInfo, LayoutRect(0, 0, 1, 1))
 
   /** Every [[SurfaceContent]] case, so a case added to the enum without a corresponding fixture here shows up as a
     * mismatch against `SurfaceContent.values`-style coverage rather than silently passing.
@@ -65,8 +63,7 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
     outline,
     comments,
     diagnostics,
-    startPage,
-    ghostOverlay
+    startPage
   )
 
   "FocusHandlerRouting.forSurfaceContent" should "return a real handler, never a null or missing routing, for every SurfaceContent case" in
@@ -120,8 +117,7 @@ class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
       terminal,
       outline,
       comments,
-      diagnostics,
-      ghostOverlay
+      diagnostics
     )
     val reference = routing.forSurfaceContent(quickInfo)
     reference.getClass.getSimpleName shouldBe "PeekOverlayComponent"

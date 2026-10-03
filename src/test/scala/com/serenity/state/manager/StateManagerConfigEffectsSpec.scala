@@ -6,7 +6,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.command.*
 import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.{AppConfig, AppMode, MotionAccessibility, PanelEscapeTarget, PerMode}
+import com.serenity.config.{AppConfig, AppMode, PanelEscapeTarget, PerMode}
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, SessionPersistence, SessionSaveTrigger}
@@ -243,35 +243,6 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
 
     fixture.events.get.unsafeRunSync() shouldBe List(com.serenity.keystroke.events.ToggleContextualToolbar)
     fixture.sessionTriggers.get.unsafeRunSync() shouldBe Nil
-  }
-
-  it should "discard live motion state when motion accessibility is turned off" in {
-    val ghostId = SurfaceId("ghost")
-    val motionState = AppState.initial.copy(
-      runtime = AppState.initial.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            ghostId,
-            SurfaceContent
-              .GhostOverlay(SurfaceContent.Diagnostics(Nil), com.serenity.ui.layout.LayoutRect(0, 0, 10, 10)),
-            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-          )
-        )
-      )
-    )
-    val fixture = harness(motionState)
-
-    fixture.config
-      .interpret(
-        SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(MotionAccessibility.Off)),
-        motionState
-      )
-      .unsafeRunSync()
-
-    val after = fixture.stateRef.get.unsafeRunSync()
-    after.runtime.uiSurfaces.map(_.id) should not contain ghostId
-    after.runtime.themeDiscovery.transition shouldBe None
-    after.runtime.motion.surfaceAnimations shouldBe Map.empty
   }
 
   it should "propagate a contextual toolbar display mode change into the live toolbar surface" in {

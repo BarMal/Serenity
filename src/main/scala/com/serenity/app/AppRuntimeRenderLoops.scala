@@ -333,11 +333,7 @@ private[serenity] object AppRuntimeRenderLoops:
     needsFullContentRender(state, bufferAnimations)
 
   /** Whether the fast render loop's current frame needs a full content repaint, as opposed to the cheaper cursor-only
-    * overlay path. Character-reveal animations paint into document glyphs, and a theme transition cross-fades every
-    * visible glyph/background colour (see RendererEntryPoints.withEffectiveTheme) -- both require the full canvas.
-    * Surface animations (command palette, panel fades) are drawn through the same overlay-scene machinery as full
-    * renders, not the cursor-only path, so they need it too. A column-to-column sweep (issue #1338) repaints the whole
-    * pane's content for as long as it is mid-flight, for the same reason.
+    * overlay path. Character-reveal animations paint into document glyphs, which requires the full canvas.
     *
     * The retired window sitter (issue #934 v2) used to be the one exception here: its glyph lived entirely in the
     * window chrome and never touched the canvas, so `canStandDownToCursorOnly` could skip a full repaint while it alone
@@ -354,6 +350,4 @@ private[serenity] object AppRuntimeRenderLoops:
     bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
   ): Boolean =
     state.persisted.buffers.keys.exists(id => bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
-      state.runtime.themeDiscovery.transition.isDefined ||
-      state.runtime.motion.surfaceAnimations.nonEmpty ||
       state.typingHidesFloatingStatusLine

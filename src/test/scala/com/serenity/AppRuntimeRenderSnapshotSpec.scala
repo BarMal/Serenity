@@ -11,8 +11,9 @@ import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
 import com.serenity.state.manager.{AnimationTicker, Model, StateEngine}
-import com.serenity.state.models.{AppState, BufferId, Damage, SurfaceAnimationState, SurfaceId}
+import com.serenity.state.models.{AppState, BufferId, Damage}
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.ActiveAnimationFixtures
 import fs2.concurrent.SignallingRef
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -28,12 +29,7 @@ class AppRuntimeRenderSnapshotSpec extends AnyFlatSpec with Matchers:
   given Balance    = Balance.default
   given Logger[IO] = NoOpLogger.impl[IO]
 
-  private val animating: AppState = AppState.initial.copy(runtime =
-    AppState.initial.runtime.copy(motion =
-      AppState.initial.runtime.motion
-        .copy(surfaceAnimations = Map(SurfaceId("render-snapshot") -> SurfaceAnimationState()))
-    )
-  )
+  private val animating: AppState = AppState.initial
 
   private def modelAt(version: Int): Model =
     Model(
@@ -42,13 +38,13 @@ class AppRuntimeRenderSnapshotSpec extends AnyFlatSpec with Matchers:
           .copy(themeDiscovery = animating.runtime.themeDiscovery.copy(availableThemeNames = List(version.toString)))
       ),
       UndoState(),
-      Map(BufferId(version) -> AnimationState.empty)
+      ActiveAnimationFixtures.bufferAnimations(animating) + (BufferId(version) -> AnimationState.empty)
     )
 
   private def versionOf(state: AppState): List[String] = state.runtime.themeDiscovery.availableThemeNames
 
   private def versionOf(animations: Map[BufferId, AnimationState]): List[String] =
-    animations.keys.map(_.value.toString).toList
+    animations.keys.filterNot(ActiveAnimationFixtures.bufferAnimations(animating).contains).map(_.value.toString).toList
 
   private def committingBetweenReads(version: Ref[IO, Int]): StateEngine =
     new StateEngine:

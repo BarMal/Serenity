@@ -502,7 +502,5 @@ object AppRuntime:
       s"panes=${state.persisted.layout.editorPanes.size}",
       s"surfaces=${state.runtime.uiSurfaces.size}",
       s"activePane=${activePane.map(_.toString).getOrElse("none")}",
-      activeBufferSummary,
-      s"themeTransition=${state.runtime.themeDiscovery.transition.isDefined}",
-      s"surfaceAnimations=${state.runtime.motion.surfaceAnimations.size}"
+      activeBufferSummary
     ).mkString(" ")

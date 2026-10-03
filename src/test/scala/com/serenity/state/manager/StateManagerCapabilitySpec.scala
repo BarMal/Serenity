@@ -8,7 +8,6 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.AppRuntimeRenderLoops
 import com.serenity.config.AppConfig
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.input.{InputRouter, SystemClipboard}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
@@ -212,21 +211,6 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       StateManagerOperation.Event(Paste)
     )
     operations.takeOperations.unsafeRunSync() shouldBe Nil
-  }
-
-  it should "skip surface animation hooks when motion is disabled" in {
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        config = AppConfig.default.withMotionAccessibility(com.serenity.config.MotionAccessibility.Off)
-      )
-    )
-    val modelRef = Ref.of[IO, Model](Model(state, UndoState(), Map.empty)).unsafeRunSync()
-    val operations = StateManagerOperationBoundary
-      .create(modelRef, org.typelevel.log4cats.noop.NoOpLogger.impl[IO])
-      .unsafeRunSync()
-    val pipeline = composedPipeline(modelRef, operations, _ => IO.unit)
-
-    pipeline.shouldApplySurfaceAnimationHooks(state) shouldBe false
   }
 
   it should "coordinate document analysis scheduling with shutdown" in {

@@ -3,7 +3,6 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import cats.effect.IO
-import cats.syntax.all.*
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{
@@ -21,23 +20,17 @@ final private[manager] class StateManagerSurfaceCapability(
     modelCommit: ModelCommit
 ):
 
-  private def applyAnimationHooks(previousState: AppState): IO[Unit] =
-    operations.enqueueAnimationHooks(previousState)
-
   /** Commits the reducer's state together with the undo boundary (and any animation) it declares in one validated model
-    * write -- a rejected state records no undo entry -- then queues the pipeline's animation hooks.
+    * write -- a rejected state records no undo entry.
     */
-  private def commit(reduce: AppState => ReducerResult, withAnimationHooks: Boolean): IO[Unit] =
-    modelCommit.currentState.flatMap { state =>
-      modelCommit.updateValidated(model => Some(EventPipelineTransitions.committed(model, reduce(model.app)))) >>
-        applyAnimationHooks(state).whenA(withAnimationHooks)
-    }
+  private def commit(reduce: AppState => ReducerResult): IO[Unit] =
+    modelCommit.updateValidated(model => Some(EventPipelineTransitions.committed(model, reduce(model.app))))
 
   def showPeek(content: PeekContent, at: CursorPosition): IO[Unit] =
-    commit(PeekStateReducer.show(content, at, _), withAnimationHooks = false)
+    commit(PeekStateReducer.show(content, at, _))
 
   def pinPanel(content: PanelContent, position: PanelPosition, size: Int): IO[Unit] =
-    commit(PanelStateReducer.pin(content, position, size, _), withAnimationHooks = true)
+    commit(PanelStateReducer.pin(content, position, size, _))
 
   // A target that resolves to no panel (a `ByPosition` side holding nothing pinned, or an `ById` surface that isn't
   // a pinned panel) is a deliberate no-op: the reducer returns the unchanged state we handed it, so callers asking
@@ -49,34 +42,34 @@ final private[manager] class StateManagerSurfaceCapability(
     * `ProjectTaskTransitions`.
     */
   def pinOrUpdateTerminalPanel(text: String, position: PanelPosition, size: Int): IO[Unit] =
-    commit(PinnedPanelContentReducer.pinOrUpdateTerminal(text, position, size, _), withAnimationHooks = true)
+    commit(PinnedPanelContentReducer.pinOrUpdateTerminal(text, position, size, _))
 
   def unpinPanel(target: PanelTarget): IO[Unit] =
-    commit(PanelStateReducer.unpin(target, _), withAnimationHooks = true)
+    commit(PanelStateReducer.unpin(target, _))
 
   def movePinnedPanel(surfaceId: SurfaceId, position: PanelPosition): IO[Unit] =
-    commit(PanelStateReducer.move(surfaceId, position, _), withAnimationHooks = true)
+    commit(PanelStateReducer.move(surfaceId, position, _))
 
   def expandPinnedPanel(target: PanelTarget): IO[Unit] =
-    commit(PanelStateReducer.expand(target, _), withAnimationHooks = false)
+    commit(PanelStateReducer.expand(target, _))
 
   def collapseExpandedPanel(): IO[Unit] =
-    commit(PanelStateReducer.collapseExpandedPanel, withAnimationHooks = true)
+    commit(PanelStateReducer.collapseExpandedPanel)
 
   def showModal(modal: Modal): IO[Unit] =
-    commit(ModalStateReducer.show(modal, _), withAnimationHooks = false)
+    commit(ModalStateReducer.show(modal, _))
 
   def switchToPinnedPanel(target: PanelTarget): IO[Unit] =
-    commit(PanelStateReducer.focus(target, _), withAnimationHooks = false)
+    commit(PanelStateReducer.focus(target, _))
 
   def loadDirectoryTree(rootPath: Path, files: List[String]): IO[Unit] =
-    commit(PinnedPanelContentReducer.loadDirectoryTree(rootPath, files, _), withAnimationHooks = true)
+    commit(PinnedPanelContentReducer.loadDirectoryTree(rootPath, files, _))
 
   def selectFileInExplorer(targetPath: Path): IO[Unit] =
-    commit(PinnedPanelContentReducer.selectFileInExplorer(targetPath, _), withAnimationHooks = false)
+    commit(PinnedPanelContentReducer.selectFileInExplorer(targetPath, _))
 
   def resizePinnedPanel(target: PanelTarget, newSize: Int): IO[Unit] =
-    commit(PanelStateReducer.resize(target, newSize, _), withAnimationHooks = false)
+    commit(PanelStateReducer.resize(target, newSize, _))
 
   // On the source file's lane, so the move waits for any save of that file still queued there.
   def dragFileToDirectory(src: Path, targetDir: Path): IO[Unit] =

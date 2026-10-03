@@ -272,32 +272,6 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
     ) shouldBe Damage.Nothing
   }
 
-  it should "report Everything when a theme transition advances, since it cross-fades every visible glyph" in {
-    val before = stateWithContent("alpha")
-    val after = before.copy(runtime =
-      before.runtime.copy(themeDiscovery =
-        before.runtime.themeDiscovery
-          .copy(transition = Some(ThemeTransition(before.persisted.theme, currentStep = 1, totalSteps = 10)))
-      )
-    )
-
-    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
-  }
-
-  it should "report Everything when a surface animation advances, since it composites through the full-render path" in {
-    val before = stateWithContent("alpha")
-    val after =
-      before.copy(runtime =
-        before.runtime.copy(motion =
-          before.runtime.motion.copy(surfaceAnimations =
-            before.runtime.motion.surfaceAnimations.updated(SurfaceId("palette"), SurfaceAnimationState())
-          )
-        )
-      )
-
-    DamageProducer.forTransition(before, after) shouldBe Damage.Everything
-  }
-
   it should "report Everything when a floating/pinned surface appears" in {
     val before = stateWithContent("alpha")
     val surface = UiSurface(

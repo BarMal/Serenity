@@ -463,9 +463,6 @@ object EditorLayoutContract:
     calculatedLayout: CalculatedLayout
   ): Option[SurfaceGeometry] =
     val collapsed = calculatedLayout.collapsedFloatingSurfaceIds.contains(surface.id)
-    val geometryFrame = surface.content match
-      case SurfaceContent.GhostOverlay(_, cachedRect) => cachedRect
-      case _                                          => frameRect
     val resolved =
       if collapsed then collapsedFloatingContent(surface.content)
       else
@@ -474,22 +471,13 @@ object EditorLayoutContract:
             SurfaceContentResolver.resolveContextualToolbar(
               toolbarState,
               state,
-              geometryFrame,
+              frameRect,
               SurfaceRenderMode.Floating
-            )
-          case SurfaceContent.GhostOverlay(originalContent, _) =>
-            SurfaceContentResolver.resolve(
-              originalContent,
-              geometryFrame,
-              SurfaceRenderMode.Floating,
-              itemGapRowsFor(originalContent, state),
-              itemTargetRowsFor(originalContent, state),
-              showKeyHintsFor(originalContent, state)
             )
           case content =>
             SurfaceContentResolver.resolve(
               content,
-              geometryFrame,
+              frameRect,
               SurfaceRenderMode.Floating,
               itemGapRowsFor(content, state),
               itemTargetRowsFor(content, state),
@@ -500,7 +488,7 @@ object EditorLayoutContract:
     )(
       surfaceGeometry(
         surface.content,
-        geometryFrame,
+        frameRect,
         resolved,
         itemGapRowsFor(surface.content, state),
         itemTargetRowsFor(surface.content, state)
@@ -554,11 +542,7 @@ object EditorLayoutContract:
         state.persisted.config.effectiveCommandRunnerItemGapRows
       case SurfaceContent.ContextualToolbar(_) =>
         state.effectiveUiElementGap
-      case SurfaceContent.GhostOverlay(originalContent, _) =>
-        itemGapRowsFor(originalContent, state)
       case _ => 0.0
 
   private def itemTargetRowsFor(content: SurfaceContent, state: AppState): Int =
-    content match
-      case SurfaceContent.GhostOverlay(originalContent, _) => itemTargetRowsFor(originalContent, state)
-      case other => SurfaceFrameLayout.itemTargetRowsFor(other, state.persisted.config.interfaceDensity)
+    SurfaceFrameLayout.itemTargetRowsFor(content, state.persisted.config.interfaceDensity)

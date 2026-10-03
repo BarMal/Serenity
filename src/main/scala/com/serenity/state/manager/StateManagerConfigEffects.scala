@@ -390,7 +390,8 @@ final private[manager] class StateManagerConfigEffects(
 private[manager] object StateManagerConfigEffects:
 
   /** The whole state change of a config update: the new config, the live command runner and contextual toolbar
-    * refreshed for it, `syncState`, and -- for a motion change -- in-flight motion of families it switched off.
+    * refreshed for it, `syncState`, and -- for a motion change -- in-flight buffer animations of families it switched
+    * off.
     */
   def configTransition(
     model: Model,
@@ -404,11 +405,7 @@ private[manager] object StateManagerConfigEffects:
     val cancellation =
       if cancelsDisabledMotion then MotionCancellation.between(previous, config) else MotionCancellation.Families(Nil)
     if cancellation.isEmpty then model.copy(app = app)
-    else
-      model.copy(
-        app = cancellation.cancelState(app),
-        bufferAnimations = cancellation.cancelBufferAnimations(model.bufferAnimations)
-      )
+    else model.copy(app = app, bufferAnimations = cancellation.cancelBufferAnimations(model.bufferAnimations))
 
   def configUpdated(state: AppState, update: AppConfig => AppConfig): AppState =
     val config = update(state.persisted.config)

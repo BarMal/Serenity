@@ -108,24 +108,10 @@ object RendererFloatingPanels:
     pinnedAndExpandedSurfaces(state).foreach { surface =>
       surfaceNodes.get(surface.id).foreach { node =>
         val rect = node.frameRect
-        val animationState =
-          state.runtime.motion.surfaceAnimations
-            .get(surface.id)
-            .map(_.animationState)
-            .getOrElse(com.serenity.animation.AnimationState.empty)
-
         def paintContent(layerContext: RenderContext): Unit =
           surface.content match
             case SurfaceContent.MarkdownPreview(bufferId, title) =>
-              renderMarkdownPreviewPanel(
-                bufferId,
-                title,
-                rect,
-                node.contentRect,
-                state,
-                layerContext,
-                animationState
-              )
+              renderMarkdownPreviewPanel(bufferId, title, rect, node.contentRect, state, layerContext)
             case _ =>
               PinnedPanelRenderer.render(
                 layerContext.surface,
@@ -134,8 +120,7 @@ object RendererFloatingPanels:
                   .copy(contentRect = Some(node.contentRect)),
                 state.persisted.theme,
                 state.persisted.config,
-                layerContext.cellMetrics,
-                animationState
+                layerContext.cellMetrics
               )
 
         val isDirty = RendererFramePlanner.panelDirtyCheck(damage)(surface.id)
@@ -158,8 +143,7 @@ object RendererFloatingPanels:
     rect: LayoutRect,
     contentRect: LayoutRect,
     state: AppState,
-    context: RenderContext,
-    animationState: com.serenity.animation.AnimationState
+    context: RenderContext
   ): Unit =
     val shell = TextPanelView(rect = rect, contentRect = Some(contentRect), title = s"Preview: $title", rows = Nil)
     PinnedPanelRenderer.render(
@@ -167,8 +151,7 @@ object RendererFloatingPanels:
       shell,
       state.persisted.theme,
       state.persisted.config,
-      context.cellMetrics,
-      animationState
+      context.cellMetrics
     )
 
     val imageRect          = markdownPreviewImageRect(rect, contentRect, context)

@@ -7,7 +7,6 @@ import com.serenity.ui.layout.*
 
 final private[manager] class StateManagerEditorCapability(
     modelCommit: ModelCommit,
-    animations: AnimationChoreography,
     operations: StateManagerOperationBoundary
 ):
 
@@ -28,11 +27,9 @@ final private[manager] class StateManagerEditorCapability(
       hasBufferAnimations = state.persisted.buffers.keys.exists(id =>
         bufferAnimations.get(id).exists(_.hasActiveAnimations)
       )
-      hasThemeTransition   = state.runtime.themeDiscovery.transition.isDefined
-      hasSurfaceAnimations = state.runtime.motion.surfaceAnimations.nonEmpty
-      hasTypingActivity    = state.typingHidesFloatingStatusLine
+      hasTypingActivity = state.typingHidesFloatingStatusLine
       stillActive <-
-        if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations && !hasTypingActivity
+        if !hasBufferAnimations && !hasTypingActivity
         then IO.pure(false)
         else
           // A dispatch in flight would commit a state built from its own earlier snapshot over this tick's write
@@ -53,21 +50,13 @@ final private[manager] class StateManagerEditorCapability(
       .map { next =>
         val newState = next.app
         newState.persisted.buffers.keys.exists(id => next.bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
-        newState.runtime.themeDiscovery.transition.isDefined ||
-        newState.runtime.motion.surfaceAnimations.nonEmpty ||
         newState.typingHidesFloatingStatusLine
       }
 
   private def advanceModel(current: Model, nowNanos: Long): Model =
-    val state             = current.app
-    val updatedTransition = state.runtime.themeDiscovery.transition.map(_.advance).filterNot(_.isComplete)
-    val stateWithAdvancedTransitions = state.copy(
-      runtime = state.runtime.copy(
-        themeDiscovery = state.runtime.themeDiscovery.copy(transition = updatedTransition),
-        typingActivity = state.runtime.typingActivity.advance(nowNanos)
-      )
-    )
-    val newState = animations.advanceSurfaceAnimations(stateWithAdvancedTransitions)
+    val state = current.app
+    val newState =
+      state.copy(runtime = state.runtime.copy(typingActivity = state.runtime.typingActivity.advance(nowNanos)))
     val advancedBufferAnimations = current.bufferAnimations.map {
       case (id, bufferAnimations) =>
         val advanced = newState.persisted.buffers.get(id) match

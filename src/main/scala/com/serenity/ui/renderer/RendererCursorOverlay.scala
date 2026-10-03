@@ -177,7 +177,6 @@ object RendererCursorOverlay:
     bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState],
     caches: RenderCaches
   ): Boolean =
-    val state0 = RendererEntryPoints.withEffectiveTheme(state)
     // #1105/#1215: a surface reporting no FontRenderContext (a terminal) has no real font rendering to measure
     // against at all -- its own declared cellMetrics must reach this scene's cell-based layout, and must force it,
     // rather than being silently discarded by the font's own measured-vs-cell auto-detection. A surface that does
@@ -185,11 +184,11 @@ object RendererCursorOverlay:
     // long-standing auto-detected behaviour untouched.
     val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
     RendererEntryPoints.withSceneIfNeeded(
-      state0,
-      caches.authoritativeScene.forState(state0, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
+      state,
+      caches.authoritativeScene.forState(state, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
     )(_ => false) { authoritativeScene =>
       val (layout, renderPlan) = resolveCursorRenderPlan(
-        state0,
+        state,
         authoritativeScene,
         surface,
         viewportSize,
@@ -203,7 +202,7 @@ object RendererCursorOverlay:
         caches
       )
       val _ = paintCursorsOnly(
-        state0,
+        state,
         surface,
         layout,
         renderPlan,
@@ -232,20 +231,19 @@ object RendererCursorOverlay:
     bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty,
     caches: RenderCaches = RenderCaches.create()
   ): Boolean =
-    val state0       = RendererEntryPoints.withEffectiveTheme(state)
     val viewportSize = swingWin.viewportSize
     // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
     // point in RendererEntryPoints.
     RendererEntryPoints.withSceneIfNeeded(
-      state0,
-      caches.authoritativeScene.forState(state0, viewportSize, codeFont, textFont)
+      state,
+      caches.authoritativeScene.forState(state, viewportSize, codeFont, textFont)
     )(_ => false) { authoritativeScene =>
       // No base content is redrawn by this call, so the base frame contributes nothing to the repaint bound --
       // only the cursor's own old and new pixel rects can have changed on screen.
       swingWin.onCursorOverlayReady(Some(new java.awt.Rectangle(0, 0, 0, 0))) {
         val surface = CaretRecordingSurface.forCanvas(swingWin.metrics, codeFont, swingWin.canvas)
         val (layout, renderPlan) = resolveCursorRenderPlan(
-          state0,
+          state,
           authoritativeScene,
           surface,
           viewportSize,
@@ -259,7 +257,7 @@ object RendererCursorOverlay:
           caches
         )
         val _ = paintCursorsOnly(
-          state0,
+          state,
           surface,
           layout,
           renderPlan,
@@ -322,18 +320,17 @@ object RendererCursorOverlay:
     damage: Damage,
     caches: RenderCaches
   ): Boolean =
-    val state0        = RendererEntryPoints.withEffectiveTheme(state)
     val repaintRegion = new AtomicReference[Option[PixelRect]](None)
     val output        = Some(FrameOutput(ScreenIdentity(surface), repaintRegion))
     // #1105/#1215: see the surface-generic renderCursorOnly above for why this is scoped to a surface with no real
     // FontRenderContext.
     val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
     RendererEntryPoints.withSceneIfNeeded(
-      state0,
-      caches.authoritativeScene.forState(state0, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
+      state,
+      caches.authoritativeScene.forState(state, viewportSize, codeFont, textFont, cellMetrics = cellMetricsOverride)
     ) { page =>
       RendererEntryPoints.renderStartPageFrame(
-        state0,
+        state,
         page,
         surface,
         viewportSize,
@@ -347,7 +344,7 @@ object RendererCursorOverlay:
     } { scene =>
       RendererFramePlanner
         .renderFrame(
-          state0,
+          state,
           cursorVisible = false,
           surface,
           viewportSize,
@@ -364,7 +361,7 @@ object RendererCursorOverlay:
         )
         .fold(false) { renderPlan =>
           val _ = paintCursorsOnly(
-            state0,
+            state,
             surface,
             scene.calculatedLayout,
             renderPlan,
@@ -394,7 +391,6 @@ object RendererCursorOverlay:
     bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty,
     caches: RenderCaches = RenderCaches.create()
   ): Boolean =
-    val state0       = RendererEntryPoints.withEffectiveTheme(state)
     val viewportSize = swingWin.viewportSize
     // The window fills the carets over the presented frame, so this base frame is repainted whole every time; the
     // record is still kept up to date so the next frame knows what the screen is showing.
@@ -412,11 +408,11 @@ object RendererCursorOverlay:
     // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
     // point in RendererEntryPoints.
     RendererEntryPoints.withSceneIfNeeded(
-      state0,
-      caches.authoritativeScene.forState(state0, viewportSize, codeFont, textFont)
+      state,
+      caches.authoritativeScene.forState(state, viewportSize, codeFont, textFont)
     ) { page =>
       RendererEntryPoints.renderStartPageFrame(
-        state0,
+        state,
         page,
         surface,
         viewportSize,
@@ -434,7 +430,7 @@ object RendererCursorOverlay:
     } { scene =>
       RendererFramePlanner
         .renderFrame(
-          state0,
+          state,
           cursorVisible = false,
           surface,
           viewportSize,
@@ -455,7 +451,7 @@ object RendererCursorOverlay:
           swingWin.onCursorOverlayReady(baseDirtyRegion) {
             val cursorSurface = CaretRecordingSurface.forCanvas(swingWin.metrics, codeFont, swingWin.canvas)
             val _ = paintCursorsOnly(
-              state0,
+              state,
               cursorSurface,
               scene.calculatedLayout,
               renderPlan,

@@ -7,7 +7,7 @@ import cats.data.Kleisli
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.keystroke.events.{Event, MouseButton}
-import com.serenity.state.models.{AppState, Buffer, SurfaceContent, UiSurface}
+import com.serenity.state.models.{AppState, Buffer, UiSurface}
 import com.serenity.ui.layout.ViewportSize
 
 /** A scripted interaction with a running TUI session, composed as a for-comprehension.
@@ -123,15 +123,7 @@ trait TuiScriptSyntax:
   val documentText: TuiScript[Option[String]] =
     state.map(focusedBuffer(_).map(_.document.content.toString))
 
-  /** The surfaces actually open, excluding the transient ghost a closing surface leaves behind while it fades out
-    * (`SurfaceContent.GhostOverlay`) -- which is what "is the palette closed?" means to a user.
-    */
-  val openSurfaces: TuiScript[List[UiSurface]] =
-    state.map(_.runtime.uiSurfaces.filter {
-      _.content match
-        case SurfaceContent.GhostOverlay(_, _) => false
-        case _                                 => true
-    })
+  val openSurfaces: TuiScript[List[UiSurface]] = state.map(_.runtime.uiSurfaces)
 
   val eventsApplied: TuiScript[Vector[Event]] = step(_.eventsApplied)
 

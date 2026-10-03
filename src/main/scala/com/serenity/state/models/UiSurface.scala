@@ -309,9 +309,6 @@ enum SurfaceContent:
     */
   case RecentFilesInMode(mode: AppMode, paths: List[java.nio.file.Path])
 
-  /** Transient ghost surface used during close-fade-out animation; never persisted in sessions. */
-  case GhostOverlay(originalContent: SurfaceContent, cachedRect: LayoutRect)
-
 final case class UiSurface(
     id: SurfaceId,
     content: SurfaceContent,

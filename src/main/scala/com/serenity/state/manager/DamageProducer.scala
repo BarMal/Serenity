@@ -281,9 +281,7 @@ object DamageProducer:
     * isolated buffer, never the live frame surface directly, and no layer reads back the pixels behind it.
     */
   private def fullRenderDamage(before: AppState, after: AppState): Damage =
-    if before.runtime.themeDiscovery.transition != after.runtime.themeDiscovery.transition ||
-        before.runtime.motion != after.runtime.motion ||
-        before.runtime.chapterGhostsVisible != after.runtime.chapterGhostsVisible ||
+    if before.runtime.chapterGhostsVisible != after.runtime.chapterGhostsVisible ||
         before.persisted.focus != after.persisted.focus
     then Damage.Everything
     else

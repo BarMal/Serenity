@@ -65,8 +65,7 @@ final private[manager] class StateManagerEventPipeline(
         pendingOperations.traverse_ {
           // Already on the dispatcher: offering through the public `applyEvent` would queue behind this very dispatch
           // and deadlock waiting for it.
-          case StateManagerOperation.Event(event)                       => applyEventOnDispatcher(event)
-          case StateManagerOperation.ApplyAnimationHooks(previousState) => applyAnimationHooks(previousState)
+          case StateManagerOperation.Event(event) => applyEventOnDispatcher(event)
         } >> drainPendingOperations
     }
 
@@ -93,11 +92,6 @@ final private[manager] class StateManagerEventPipeline(
       candidateLspBufferIds = StateManagerEventPipeline.candidateLspBufferIds
     )
   )
-
-  private val animations = new AnimationChoreography(new AnimationChoreographyPort:
-    def currentState: cats.effect.IO[AppState] = modelCommit.currentState
-    def commitState(newState: AppState, fallbackState: AppState): cats.effect.IO[Unit] =
-      modelCommit.commitState(newState, fallbackState))
 
   private val editorMouseTargeting = new EditorMouseTargeting(
     EditorMouseTargetingPort(
@@ -204,8 +198,7 @@ final private[manager] class StateManagerEventPipeline(
           Trace.timed(s"$eventLabel.enqueueChangedLspDocuments")(
             lspDocumentSync.enqueueChangedLspDocuments(prevState)
           ) >>
-          Trace.timed(s"$eventLabel.scheduleMarkdownPreviewCommits")(scheduleMarkdownPreviewCommits(prevState)) >>
-          Trace.timed(s"$eventLabel.applyAnimationHooks")(applyAnimationHooks(prevState))
+          Trace.timed(s"$eventLabel.scheduleMarkdownPreviewCommits")(scheduleMarkdownPreviewCommits(prevState))
       }
     }
 
@@ -411,15 +404,6 @@ final private[manager] class StateManagerEventPipeline(
       .list()
       .map(_.map(UiPreset.Preview.fromPreset))
       .handleErrorWith(error => logger.error(error)("[PRESET] Failed to list UI presets").map(_ => Nil))
-
-  private[manager] def applyAnimationHooks(prevState: AppState): cats.effect.IO[Unit] =
-    animations.applyAnimationHooks(prevState)
-
-  private[manager] def shouldApplySurfaceAnimationHooks(state: AppState): Boolean =
-    animations.shouldApplySurfaceAnimationHooks(state)
-
-  private[manager] def advanceSurfaceAnimations(state: AppState): AppState =
-    animations.advanceSurfaceAnimations(state)
 
   private[manager] def applyComponentResult(result: ComponentResult, state: AppState): cats.effect.IO[AppState] =
     result match

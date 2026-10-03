@@ -22,7 +22,6 @@ import org.typelevel.log4cats.Logger
 /** Operations emitted by capabilities for ordered interpretation at the event boundary. */
 private[manager] enum StateManagerOperation:
   case Event(event: com.serenity.keystroke.events.Event)
-  case ApplyAnimationHooks(previousState: AppState)
 
 /** One-directional hand-off for operations emitted while interpreting effects. */
 final private[manager] class StateManagerOperationBoundary private (
@@ -60,9 +59,6 @@ final private[manager] class StateManagerOperationBoundary private (
 
   def enqueueEvent(event: com.serenity.keystroke.events.Event): IO[Unit] =
     pendingOperations.update(_ :+ StateManagerOperation.Event(event))
-
-  def enqueueAnimationHooks(previousState: AppState): IO[Unit] =
-    pendingOperations.update(_ :+ StateManagerOperation.ApplyAnimationHooks(previousState))
 
   def takeOperations: IO[List[StateManagerOperation]] = pendingOperations.getAndSet(Nil)
 
