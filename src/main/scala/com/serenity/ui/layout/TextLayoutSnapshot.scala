@@ -73,7 +73,8 @@ object TextLayoutSnapshot:
   ): Vector[Float] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
-    caretXs(text, 0, singleFontResolver(font), fontRenderContext, measuredLayout, cellMetrics)
+    val xs             = caretXs(text, 0, singleFontResolver(font), fontRenderContext, measuredLayout, cellMetrics)
+    Vector.tabulate(xs.length)(xs(_))
 
   def visualLineForText(
     text: String,
@@ -118,9 +119,10 @@ object TextLayoutSnapshot:
         math.max(0, safeColumn - visibleColumns + 1)
       else
         val xs        = caretXs(lineText, 0, singleFontResolver(font), fontRenderContext, measuredLayout, cellMetrics)
-        val cursorXPx = xs.lift(safeColumn).getOrElse(xs.lastOption.getOrElse(0.0f))
+        val cursorXPx = xs(math.min(safeColumn, xs.length - 1))
         val targetLeftXPx = math.max(0.0f, cursorXPx - visibleWidthPx.toFloat + 1.0f)
-        xs.zipWithIndex.takeWhile { case (x, _) => x <= targetLeftXPx }.map(_._2).lastOption.getOrElse(0)
+        val firstPast     = xs.indexWhere(_ > targetLeftXPx)
+        if firstPast < 0 then xs.length - 1 else math.max(0, firstPast - 1)
 
   def visualLineIndexForCursor(
     lineText: String,
@@ -398,19 +400,19 @@ object TextLayoutSnapshot:
       )
     else
       @annotation.tailrec
-      def loop(startColumn: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
+      def loop(startColumn: Int, measured: ParagraphMeasurement, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
         if startColumn >= text.length || acc.length >= maxVisualLines then acc
         else
           val lineWithinParagraph = acc.length
+          val paragraph           = measured.coveringRowAt(startColumn, maxVisualLines - lineWithinParagraph)
           val insetPx             = DropCapLayout.leftInsetPx(paragraphRole, lineWithinParagraph, dropCapGlyphWidthPx)
           val wrapWidthPx         = math.max(1, spec.panelWidthPx - math.round(insetPx))
           val segmentStart        = baseColumn + startColumn
-          val fit                 = fittingSegment(text, startColumn, wrapWidthPx, segmentStart, spec)
+          val fit                 = fittingSegment(paragraph, text, startColumn, wrapWidthPx, segmentStart, spec)
           val segmentLength       = wordBoundarySegmentLength(text, startColumn, fit.length)
           val endColumnInSlice    = startColumn + segmentLength
-          val segment             = text.substring(startColumn, endColumnInSlice)
           val visualLine = shapeSegment(
-            segment,
+            text.substring(startColumn, endColumnInSlice),
             bufferLine,
             segmentStart,
             baseColumn + endColumnInSlice,
@@ -418,13 +420,14 @@ object TextLayoutSnapshot:
             frc,
             measuredLayout,
             cellMetrics,
-            fit.caretXsForPrefix(segmentLength)
+            fit.caretXsForPrefix(segmentLength),
+            Some(paragraph.graphemeOffsets(startColumn, endColumnInSlice))
           )
           val insetLine =
             DropCapLayout.applyInset(visualLine, paragraphRole, lineWithinParagraph, dropCapGlyphWidthPx)
-          loop(endColumnInSlice, acc :+ insetLine)
+          loop(endColumnInSlice, paragraph, acc :+ insetLine)
 
-      loop(0, Vector.empty)
+      loop(0, ParagraphMeasurement(spec, 0, maxVisualLines), Vector.empty)
 
   /** Where to break `text` once `fittingLength` characters have used up the available pixel width: the last legal
     * UAX#14 line-break boundary at or before `fittingLength`, per `BreakIterator.getLineInstance` -- covering no-break
@@ -462,20 +465,15 @@ object TextLayoutSnapshot:
     frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics,
-    measuredXs: Option[Vector[Float]] = None
+    measuredXs: Option[IArray[Float]] = None,
+    graphemeOffsets: Option[IArray[Int]] = None
   ): TextVisualLine =
-    val xs              = measuredXs.getOrElse(caretXs(text, startColumn, resolver, frc, measuredLayout, cellMetrics))
-    val boundaryOffsets = graphemeBoundaryOffsets(text)
-    val caretStops = boundaryOffsets.map { offset =>
-      TextCaretStop(startColumn + offset, xs.lift(offset).getOrElse(xs.lastOption.getOrElse(0.0f)))
-    }.toVector
-    val xSortedCaretStops =
-      if caretStops.sliding(2).forall {
-            case Vector(first, second) => first.xPx <= second.xPx
-            case _                     => true
-          }
-      then caretStops
-      else caretStops.sortBy(_.xPx)
+    val xs      = measuredXs.getOrElse(caretXs(text, startColumn, resolver, frc, measuredLayout, cellMetrics))
+    val offsets = graphemeOffsets.getOrElse(ParagraphMeasurement.graphemeBoundaryOffsets(text))
+    val caretStops = Vector.tabulate(offsets.length) { index =>
+      TextCaretStop(startColumn + offsets(index), xs(math.min(offsets(index), xs.length - 1)))
+    }
+    val ascending = (1 until caretStops.length).forall(index => caretStops(index - 1).xPx <= caretStops(index).xPx)
     val (heightPx, ascentPx) =
       if measuredLayout then resolver.lineMetrics(frc, startColumn, endColumn) else (0, 0)
     TextVisualLine(
@@ -483,9 +481,9 @@ object TextLayoutSnapshot:
       startColumn = startColumn,
       endColumn = endColumn,
       text = text,
-      widthPx = xs.lastOption.getOrElse(0.0f),
+      widthPx = xs(xs.length - 1),
       caretStops = caretStops,
-      xSortedCaretStops = xSortedCaretStops,
+      xSortedCaretStops = if ascending then caretStops else caretStops.sortBy(_.xPx),
       heightPx = heightPx,
       ascentPx = ascentPx
     )
@@ -542,11 +540,14 @@ object TextLayoutSnapshot:
       // CellMetricsOne).
       val fontCellMetrics = CellMetrics.fromFont(font)
       val measuredXs = caretXs(sampleText, 0, singleFontResolver(font), frc, measuredLayout = true, fontCellMetrics)
-      val measuredAdvance = measuredXs.lastOption.getOrElse(0.0f)
+      val measuredAdvance = measuredXs(measuredXs.length - 1)
       val cellAdvance     = fontCellMetrics.charWidth.toFloat * sampleText.length
       math.abs(measuredAdvance - cellAdvance) > 0.5f
 
-  def defaultFontRenderContext(): FontRenderContext =
+  def defaultFontRenderContext(): FontRenderContext = sharedDefaultFontRenderContext
+
+  // `FontRenderContext` is immutable, so one instance serves every caller instead of a scratch image per call.
+  private lazy val sharedDefaultFontRenderContext: FontRenderContext =
     val image = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
     val g     = image.createGraphics()
     try
