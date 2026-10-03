@@ -211,6 +211,7 @@ object ConfigGenerators:
       )
       layerCaching <- Gen.oneOf(true, false)
       frameTiming  <- Gen.oneOf(true, false)
+      warmUp       <- Gen.oneOf(true, false)
       diagnosticBlendWeight <- double(
         AppConfig.MinDiagnosticHighlightBlendWeight,
         AppConfig.MaxDiagnosticHighlightBlendWeight
@@ -245,6 +246,7 @@ object ConfigGenerators:
       rendererFrameStateCacheCapacity = frameStateCacheCapacity,
       layerCachingEnabled = layerCaching,
       frameTimingEnabled = frameTiming,
+      startupWarmUpEnabled = warmUp,
       diagnosticHighlightBlendWeight = diagnosticBlendWeight,
       columnModeEnabled = columnMode,
       columnTargetWidthCells = columnTargetWidth,

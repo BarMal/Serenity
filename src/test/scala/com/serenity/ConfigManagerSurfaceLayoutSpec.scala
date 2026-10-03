@@ -205,6 +205,22 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
     ConfigManager.configToString(config) should include("ui.render.frame_timing = true")
   }
 
+  it should "default the startup warm-up to on, then load and write it" in {
+    AppConfig.default.surfaceConfig.startupWarmUpEnabled shouldBe true
+
+    val configFile = Files.createTempFile("serenity-startup-warm-up-config", ".conf")
+    Files.writeString(
+      configFile,
+      """startup.warm_up = false
+        |""".stripMargin
+    )
+
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    config.surfaceConfig.startupWarmUpEnabled shouldBe false
+    ConfigManager.configToString(config) should include("startup.warm_up = false")
+  }
+
   it should "load and write the cursor info bar background alpha override" in {
     val configFile = Files.createTempFile("serenity-cursor-info-bar-alpha-config", ".conf")
     Files.writeString(

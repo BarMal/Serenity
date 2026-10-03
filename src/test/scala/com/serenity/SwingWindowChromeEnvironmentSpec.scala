@@ -43,4 +43,20 @@ class SwingWindowChromeEnvironmentSpec extends AnyFlatSpec with Matchers:
     SwingWindow.shouldUseCustomChrome(WindowChromeMode.Native, "Linux", hyprland) shouldBe false
     SwingWindow.shouldUseCustomChrome(WindowChromeMode.NativeThemed, "Linux", hyprland) shouldBe false
   }
+
+  it should "hand Auto chrome to the compositor under the native Wayland toolkit, which cannot move its own window" in {
+    val gnome = Map("WAYLAND_DISPLAY" -> "wayland-0", "XDG_CURRENT_DESKTOP" -> "GNOME")
+    SwingWindow.shouldUseCustomChrome(WindowChromeMode.Auto, "Linux", gnome, nativeWaylandToolkit = true) shouldBe false
+    SwingWindow.shouldUseCustomChrome(
+      WindowChromeMode.Custom,
+      "Linux",
+      gnome,
+      nativeWaylandToolkit = true
+    ) shouldBe true
+  }
+
+  "SwingWindow.isNativeWaylandToolkit" should "recognise the JetBrains Runtime Wayland toolkit by class" in {
+    SwingWindow.isNativeWaylandToolkit("sun.awt.wl.WLToolkit") shouldBe true
+    SwingWindow.isNativeWaylandToolkit("sun.awt.X11.XToolkit") shouldBe false
+  }
 end SwingWindowChromeEnvironmentSpec

@@ -33,16 +33,19 @@ object Main extends IOApp:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   def run(args: List[String]): IO[ExitCode] =
-    // An unparseable command line is reported and nothing is started. `Help.errors` is empty for a `--help` request
-    // and non-empty for a rejected argument, which is the difference between exiting zero and exiting non-zero.
-    LaunchOptions.parse(args) match
-      case Left(help) =>
-        IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
-      case Right(options) if options.showVersion =>
-        IO(println(s"Serenity ${BuildInfo.version} (${BuildInfo.commit})")).as(ExitCode.Success)
-      case Right(options) => launch(options)
+    // Before anything else: the toolkit is fixed the moment the first java.awt class initialises.
+    ToolkitSelection.install.flatMap { toolkit =>
+      // An unparseable command line is reported and nothing is started. `Help.errors` is empty for a `--help` request
+      // and non-empty for a rejected argument, which is the difference between exiting zero and exiting non-zero.
+      LaunchOptions.parse(args) match
+        case Left(help) =>
+          IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
+        case Right(options) if options.showVersion =>
+          IO(println(s"Serenity ${BuildInfo.version} (${BuildInfo.commit})")).as(ExitCode.Success)
+        case Right(options) => launch(options, toolkit)
+    }
 
-  private def launch(launchOptionsForLogging: LaunchOptions): IO[ExitCode] =
+  private def launch(launchOptionsForLogging: LaunchOptions, toolkit: ToolkitSelection.Decision): IO[ExitCode] =
     // #1215/#1669: must run before the `given logger` below, which triggers logback's one-time console-appender setup
     // on its first call -- `TuiConsoleLogFilter` checks this per log event, but it still has to be configured before
     // the very first event a TUI launch could otherwise leak onto the terminal surface it is about to take over. The
@@ -56,6 +59,7 @@ object Main extends IOApp:
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
 
     for
+      _ <- logger.info(s"[TOOLKIT] ${toolkit.choice} (${toolkit.reason})")
       _ <- Java2DPipeline.installSafeDefaults()
       _ <- IO(CrashReporter.install())
       launchOptions = launchOptionsForLogging
@@ -186,7 +190,14 @@ object Main extends IOApp:
                     paintCursorFrame(state, vis, cc, swingWin, displayState.snapshot, damage, caches)
                   )
                 ),
-              frameTimings = frameTimings
+              frameTimings = frameTimings,
+              offscreenFrames = Some(
+                OffscreenWarmUpFrames.forCanvas(
+                  swingWin.canvas,
+                  () => swingWin.viewportSize,
+                  () => displayState.snapshot
+                )
+              )
             )
 
             initialScaleSync >> AppRuntime.run(

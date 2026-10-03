@@ -110,6 +110,16 @@ jobs:
           if [ "${RUNNER_OS:-}" = "Windows" ]; then
             APP_ARGS+=(--icon "$GITHUB_WORKSPACE/src/main/resources/icons/serenity.ico")
           fi
+          # AppCDS (see DEVELOPMENT.md): the launcher maps a class-data archive kept beside the jar and written on the
+          # first exit. A dynamic archive needs the runtime's own base archive, and jlink needs the java launcher left
+          # in the image to generate one. Not on macOS, where writing into the signed bundle would break its signature.
+          if [ "$(uname -s)" != "Darwin" ]; then
+            APP_ARGS+=(
+              --jlink-options "--strip-debug --no-man-pages --no-header-files --generate-cds-archive"
+              --java-options '-XX:SharedArchiveFile=$APPDIR/serenity.jsa'
+              --java-options '-XX:+AutoCreateSharedArchive'
+            )
+          fi
           cp package-input/Serenity.jar dist/Serenity.jar
           jpackage "${APP_ARGS[@]}"
 

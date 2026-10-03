@@ -50,6 +50,10 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.frameTimingEnabled,
       (config, value) => config.withFrameTiming(value)
     ),
+    field("startup.warm_up", "startup_warm_up")(boolean)(
+      _.surfaceConfig.startupWarmUpEnabled,
+      (config, value) => config.withStartupWarmUp(value)
+    ),
     named("editor.word_wrap", "wordWrapEnabled", "display.word_wrap", "display.word.wrap", "display_word_wrap")(
       boolean
     )(
