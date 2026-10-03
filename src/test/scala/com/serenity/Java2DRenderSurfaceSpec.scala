@@ -189,7 +189,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val image = provided.get().getOrElse(fail("frame image provider was not called"))
     image.getWidth shouldBe 640
     image.getHeight shouldBe 480
-    image.getType shouldBe BufferedImage.TYPE_INT_ARGB
+    image.getType shouldBe BufferedImage.TYPE_INT_RGB
   }
 
   "RendererEntryPoints.render" should "clear pixels outside the whole-cell grid to the theme background" in {

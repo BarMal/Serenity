@@ -133,13 +133,14 @@ class Java2DRenderSurface(
     * default SRC_OVER composite gives a zero-alpha fill against a buffer that may already carry opaque pixels from a
     * previous frame (this surface's backing image can be pooled/reused across frames, see `contentPersists`). Restores
     * whatever composite (e.g. an active `setAlpha` translucency scale) was in effect before the fill, so this only
-    * affects the one fill call, never anything drawn after it.
+    * affects the one fill call, never anything drawn after it. A frame image has no alpha, and the canvas shows black
+    * through a transparent pixel, so it gets that black.
     */
   private def fillBackground(color: Color, px: Int, py: Int, pw: Int, ph: Int): Unit =
     if color.getAlpha == 0 then
       val savedComposite = g.getComposite
       g.setComposite(AlphaComposite.Src)
-      g.setColor(color)
+      g.setColor(if image.getColorModel.hasAlpha then color else Color.BLACK)
       g.fillRect(px, py, pw, ph)
       g.setComposite(savedComposite)
     else
@@ -307,6 +308,9 @@ object Java2DRenderSurface:
     * that same image instance previously is still there. Callers pass a pooled acquirer together with `true`; a
     * single-use image must stay `false` so nothing downstream tries to reuse pixels that were never kept.
     *
+    * The image is `TYPE_INT_RGB`: the window is opaque, and Java2D blends glyphs into it markedly faster than into
+    * ARGB.
+    *
     * Every frame built over the same `canvas` shares one [[RenderSurface.layerCacheOwner]].
     */
   def forFrame(
@@ -323,7 +327,7 @@ object Java2DRenderSurface:
     val image = acquireImage(
       deviceImageDimension(logicalWidth, scale.x),
       deviceImageDimension(logicalHeight, scale.y),
-      BufferedImage.TYPE_INT_ARGB
+      BufferedImage.TYPE_INT_RGB
     )
     new Java2DRenderSurface(
       image,

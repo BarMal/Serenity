@@ -342,19 +342,18 @@ object RendererPaneContent:
     val xOriginPx       = context.cellMetrics.toPixelX(rect.x).toFloat
     val contentRightXPx = context.cellMetrics.toPixelX(rect.right).toFloat
     val activeBodyLines = focusedTextBodyLines(buffer, state)
+    val rowMetrics      = textRowMetrics(rect, context, snapshot)
 
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
-        if dirtyRows.forall(_.contains(screenLineIndex)) &&
-            visualLineFits(rect, screenLineIndex, context, snapshot)
-        then
+        if dirtyRows.forall(_.contains(screenLineIndex)) && rowMetrics.lineFits(screenLineIndex) then
           val screenY   = rect.y + screenLineIndex
-          val lineTopPx = visualLineTopPx(rect, screenLineIndex, context, snapshot)
+          val lineTopPx = rowMetrics.lineTopPx(screenLineIndex)
           val screenX   = rect.x + visualLineCellOffset(visualLine, context)
 
           context.surface.setForegroundColor(state.persisted.theme.foreground)
 
-          if visualLineVisible(rect, screenLineIndex, context, snapshot) &&
+          if rowMetrics.lineVisible(screenLineIndex, context.surface.viewportHeight) &&
               screenY >= 0 &&
               screenX < context.surface.viewportWidth &&
               screenX >= 0 &&
