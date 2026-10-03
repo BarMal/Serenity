@@ -2,7 +2,7 @@ package com.serenity.animation
 
 import java.awt.Color
 
-import com.serenity.ui.theme.{InteractionStates, NormalizedAlpha, SyntaxElement, Theme, ThemeColor}
+import com.serenity.ui.theme.{InteractionStates, SyntaxElement, Theme, ThemeColor}
 
 object ThemeInterpolator:
 
@@ -38,8 +38,7 @@ object ThemeInterpolator:
     ThemeColor(
       foreground = blendColor(from.foreground, to.foreground, t),
       background = blendColor(from.background, to.background, t),
-      style = to.style,
-      alpha = NormalizedAlpha(from.alpha.value + (to.alpha.value - from.alpha.value) * t)
+      style = to.style
     )
 
   private def blendSyntaxColors(

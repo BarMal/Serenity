@@ -30,7 +30,6 @@ object CommandRunnerSettingsInputItems:
       inputConfig: InputConfig,
       durationValue: String,
       stepsValue: String,
-      blurValue: String,
       codeFontSizeValue: String,
       textFontSizeValue: String,
       uiFontSizeValue: String,
@@ -45,7 +44,6 @@ object CommandRunnerSettingsInputItems:
       cursorSpeedScaleValue: String,
       speedScaleValue: String,
       elementGapValue: String,
-      cornerRadiusValue: String,
       outlineThicknessValue: String,
       lineNumberMarginLeftValue: String,
       lineNumberMarginRightValue: String,
@@ -65,7 +63,6 @@ object CommandRunnerSettingsInputItems:
       inputConfig = config.inputConfig,
       durationValue = editorConfig.characterAnimation.map(_.durationMs.toString).getOrElse("0"),
       stepsValue = editorConfig.characterAnimation.map(_.steps.toString).getOrElse("0"),
-      blurValue = surfaceConfig.blurRadius.toString,
       codeFontSizeValue = editorConfig.fontConfig.codeFontSize.toString,
       textFontSizeValue = editorConfig.fontConfig.textFontSize.toString,
       uiFontSizeValue = editorConfig.fontConfig.uiFontSize.toString,
@@ -84,7 +81,6 @@ object CommandRunnerSettingsInputItems:
       // room, or the TUI's existing zero -- rather than the literal string "auto" (issue #1621 carve-out).
       elementGapValue =
         interfaceConfig.elementGap.fold(formatDecimal(if capabilities.isCellGrid then 0.0 else 1.0))(formatDecimal),
-      cornerRadiusValue = interfaceConfig.cornerRadiusPx.toString,
       outlineThicknessValue = interfaceConfig.outlineThicknessPx.toString,
       lineNumberMarginLeftValue =
         surfaceConfig.lineNumberLayout.marginLeft.fold(if capabilities.isCellGrid then "0" else "1")(_.toString),
@@ -169,12 +165,10 @@ object CommandRunnerSettingsInputItems:
       CommandRunnerSettingsInputItemsMotion.speedScaleItems(
         v.commandRunnerSpeedScaleValue,
         v.uiSpeedScaleValue,
-        v.cursorSpeedScaleValue,
-        v.blurValue
+        v.cursorSpeedScaleValue
       ) ++
       CommandRunnerSettingsInputItemsUiLayout.uiSpacingItems(
         v.elementGapValue,
-        v.cornerRadiusValue,
         v.outlineThicknessValue
       ) ++
       CommandRunnerSettingsInputItemsUiLayout.lineNumberSpacingItems(

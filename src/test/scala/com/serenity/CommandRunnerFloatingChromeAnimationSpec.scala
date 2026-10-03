@@ -1,18 +1,15 @@
 package com.serenity
 
-import java.awt.image.BufferedImage
-import java.awt.{Color, Font}
-
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey}
 import com.serenity.command.*
-import com.serenity.config.{AppConfig, BackgroundStyle}
+import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{Java2DRenderSurface, RendererEntryPoints}
+import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -136,13 +133,11 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
     selectedForeground.getAlpha shouldBe 0
   }
 
-  it should "draw the floating border with the rounded stroke even while animating" in {
+  it should "draw the floating border even while animating" in {
     val commands       = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val preConfigState = stateWithRunner(Theme.light, "op", commands)
-    val baseState = preConfigState.copy(
-      persisted = preConfigState.persisted.copy(config = AppConfig.default.withUiCornerRadiusPx(12))
-    )
-    val surfaceId = SurfaceId("command-runner")
+    val baseState      = preConfigState
+    val surfaceId      = SurfaceId("command-runner")
     val animationState = AnimationState.empty.mergeAnimations(
       Map(
         CharacterKey(0, 0) -> AnimatedCell.fromThemeTransition(
@@ -173,8 +168,7 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    surface.strokeRoundRectCalls should not be empty
-    surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(12)
+    surface.strokeRectCalls should not be empty
   }
 
   it should "draw the floating border with the configured outline thickness" in {
@@ -194,45 +188,15 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    surface.strokeRoundRectCalls should not be empty
-    surface.strokeRoundRectCalls.headOption.map(_.strokeWidth) shouldBe Some(4.0f)
+    surface.strokeRectCalls should not be empty
+    surface.strokeRectCalls.headOption.map(_.strokeWidth) shouldBe Some(4.0f)
   }
 
-  it should "draw a shadow behind the command runner only when UI shadows are enabled" in {
-    val commands     = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
-    val enabledState = stateWithRunner(Theme.light, "op", commands)
-    val disabledState = enabledState.copy(
-      persisted = enabledState.persisted.copy(config = AppConfig.default.withUiShadowsEnabled(false))
-    )
-    val enabledSurface  = new MockRenderSurface(100, 30)
-    val disabledSurface = new MockRenderSurface(100, 30)
-
-    RendererEntryPoints.render(
-      enabledState,
-      cursorVisible = true,
-      enabledSurface,
-      ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
-    )
-    RendererEntryPoints.render(
-      disabledState,
-      cursorVisible = true,
-      disabledSurface,
-      ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
-    )
-
-    enabledSurface.roundRectShadowCalls should not be empty
-    disabledSurface.roundRectShadowCalls shouldBe empty
-  }
-
-  it should "preserve the rounded command runner after its animation has materialised" in {
+  it should "preserve the command runner border after its animation has materialised" in {
     val commands       = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val preConfigState = stateWithRunner(Theme.light, "op", commands)
-    val state = preConfigState.copy(
-      persisted = preConfigState.persisted.copy(config = AppConfig.default.withUiCornerRadiusPx(12))
-    )
-    val surface = new MockRenderSurface(100, 30)
+    val state          = preConfigState
+    val surface        = new MockRenderSurface(100, 30)
 
     RendererEntryPoints.render(
       state,
@@ -242,108 +206,11 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(12)
+    surface.strokeRectCalls should not be empty
     surface.putStringCalls.map(_.s) should not contain "."
   }
 
-  it should "leave the rounded command runner's fully materialised corner unpainted" in {
-    val commands       = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
-    val preConfigState = stateWithRunner(Theme.light, "op", commands)
-    val state = preConfigState.copy(
-      persisted = preConfigState.persisted.copy(
-        config = AppConfig.default
-          .withBackgroundStyle(BackgroundStyle.Solid)
-          .withUiCornerRadiusPx(12)
-      )
-    )
-    val viewport = ViewportSize(100, 30)
-    val layout   = LayoutEngine.calculateLayout(state, viewport)
-    val overlay  = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
-    val widthPx  = viewport.width * cellMetrics.charWidth
-    val heightPx = viewport.height * cellMetrics.lineHeight
-
-    def renderedImage(renderState: AppState): BufferedImage =
-      val image   = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_ARGB)
-      val surface = new Java2DRenderSurface(image, cellMetrics, codeFont, _ => ())
-      RendererEntryPoints.render(
-        renderState,
-        cursorVisible = true,
-        surface,
-        viewport,
-        codeFont,
-        Font(Font.SANS_SERIF, Font.PLAIN, 12),
-        cellMetrics,
-        None,
-        com.serenity.state.manager.RenderCaches.create()
-      )
-      image
-
-    val withoutRunner = renderedImage(
-      state.copy(
-        persisted = state.persisted.copy(focus = Focus.EditorPane(paneId)),
-        runtime = state.runtime.copy(uiSurfaces = Nil)
-      )
-    )
-    val withRunner = renderedImage(state)
-    val cornerX    = cellMetrics.toPixelX(overlay.x)
-    val cornerY    = cellMetrics.toPixelY(overlay.y)
-
-    new Color(withRunner.getRGB(cornerX, cornerY), true) shouldBe new Color(
-      withoutRunner.getRGB(cornerX, cornerY),
-      true
-    )
-  }
-
-  it should "leave the rounded command runner's frosted corner unblurred" in {
-    val commands       = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
-    val preConfigState = stateWithRunner(Theme.light, "op", commands)
-    val state = preConfigState.copy(
-      persisted = preConfigState.persisted.copy(
-        config = AppConfig.default
-          .withBackgroundStyle(BackgroundStyle.GlassLike)
-          .withBlurRadius(0.6f)
-          .withUiCornerRadiusPx(12)
-      )
-    )
-    val viewport = ViewportSize(100, 30)
-    val layout   = LayoutEngine.calculateLayout(state, viewport)
-    val overlay  = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
-    val widthPx  = viewport.width * cellMetrics.charWidth
-    val heightPx = viewport.height * cellMetrics.lineHeight
-
-    def renderedImage(renderState: AppState): BufferedImage =
-      val image   = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_ARGB)
-      val surface = new Java2DRenderSurface(image, cellMetrics, codeFont, _ => ())
-      RendererEntryPoints.render(
-        renderState,
-        cursorVisible = true,
-        surface,
-        viewport,
-        codeFont,
-        Font(Font.SANS_SERIF, Font.PLAIN, 12),
-        cellMetrics,
-        None,
-        com.serenity.state.manager.RenderCaches.create()
-      )
-      image
-
-    val withoutRunner = renderedImage(
-      state.copy(
-        persisted = state.persisted.copy(focus = Focus.EditorPane(paneId)),
-        runtime = state.runtime.copy(uiSurfaces = Nil)
-      )
-    )
-    val withRunner = renderedImage(state)
-    val cornerX    = cellMetrics.toPixelX(overlay.x)
-    val cornerY    = cellMetrics.toPixelY(overlay.y)
-
-    new Color(withRunner.getRGB(cornerX, cornerY), true) shouldBe new Color(
-      withoutRunner.getRGB(cornerX, cornerY),
-      true
-    )
-  }
-
-  it should "preserve rounded context menus after their animation has materialised" in {
+  it should "preserve context menu borders after their animation has materialised" in {
     val copyCommand = Command.typed("copy", "Copy", CommandIntent.Edit(EditIntent.Copy), label = "Copy")
     val menu = ContextMenu(
       title = "editor",
@@ -353,7 +220,6 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
     val preMenuState = stateWithRunner(Theme.light, "", Nil)
     val state = preMenuState.copy(
       persisted = preMenuState.persisted.copy(
-        config = AppConfig.default.withUiCornerRadiusPx(12),
         focus = Focus.Surface(SurfaceId("context-menu"))
       ),
       runtime = preMenuState.runtime.copy(
@@ -376,7 +242,7 @@ class CommandRunnerFloatingChromeAnimationSpec extends AnyFlatSpec with Matchers
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    surface.strokeRoundRectCalls.headOption.map(_.arcPx) shouldBe Some(12)
+    surface.strokeRectCalls should not be empty
     surface.putStringCalls.map(_.s) should not contain "."
   }
 

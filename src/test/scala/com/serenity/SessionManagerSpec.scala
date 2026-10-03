@@ -305,14 +305,14 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync()
   }
 
-  it should "preserve config fields including blurRadius through full disk save/load" in {
+  it should "preserve config fields including the diagnostic highlight blend weight through full disk save/load" in {
     val sessionManager = createManager()
 
     val initial = AppState.initial
     val state =
       initial.copy(persisted =
         initial.persisted.copy(config =
-          AppConfig(surfaceConfig = SurfaceConfig(blurRadius = 0.75f, showLineNumbers = false))
+          AppConfig(surfaceConfig = SurfaceConfig(diagnosticHighlightBlendWeight = 0.75, showLineNumbers = false))
         )
       )
 
@@ -320,7 +320,7 @@ class SessionManagerSpec extends AnyFlatSpec with Matchers:
       _      <- sessionManager.saveSession(state)
       loaded <- sessionManager.loadSession()
     yield
-      loaded.map(_.persisted.config.surfaceConfig.blurRadius) shouldBe Some(0.75f)
+      loaded.map(_.persisted.config.surfaceConfig.diagnosticHighlightBlendWeight) shouldBe Some(0.75)
       loaded.map(_.persisted.config.surfaceConfig.showLineNumbers) shouldBe Some(false)
 
     program.unsafeRunSync()

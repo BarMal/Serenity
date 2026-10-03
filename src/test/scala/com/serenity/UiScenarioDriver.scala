@@ -22,10 +22,10 @@ import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.renderer.{
   Effects,
   Java2DRenderSurface,
+  PanelOutlineDrawing,
   PixelDrawing,
   RenderSurface,
   RendererEntryPoints,
-  RoundedRectDrawing,
   SurfaceContentIdentity,
   TextDrawing
 }
@@ -67,7 +67,7 @@ final case class ScenarioDrawnText(text: String, bounds: LayoutRect)
 /** A renderer region paired with the semantic colours active while it was painted. */
 final case class ScenarioPaintedRegion(bounds: LayoutRect, foreground: Color, background: Color)
 
-/** A rounded surface border submitted with its semantic focus or elevation colour. */
+/** A surface border submitted with its semantic focus colour. */
 final case class ScenarioBorder(bounds: LayoutRect, color: Color)
 
 /** A text-style transition submitted while rendering a scenario frame. */
@@ -438,29 +438,16 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
   override def effects: Option[Effects] = delegate.effects.map { delegateEffects =>
     new Effects:
       def setAlpha(alpha: Float): Unit = delegateEffects.setAlpha(alpha)
-      def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
-        delegateEffects.blurRegion(x, y, width, height, radius)
   }
 
-  override def roundedRects: Option[RoundedRectDrawing] = delegate.roundedRects.map { delegateRoundedRects =>
-    new RoundedRectDrawing:
-      def strokeRoundRect(
-        x: Int,
-        y: Int,
-        width: Int,
-        height: Int,
-        arcPx: Int,
-        color: Color,
-        strokeWidth: Float = 1.5f
-      ): Unit =
+  override def panelOutlines: Option[PanelOutlineDrawing] = delegate.panelOutlines.map { delegateOutlines =>
+    new PanelOutlineDrawing:
+      def strokeRect(x: Int, y: Int, width: Int, height: Int, color: Color, strokeWidth: Float): Unit =
         bordersBuffer += ScenarioBorder(LayoutRect(x, y, width, height), color)
-        delegateRoundedRects.strokeRoundRect(x, y, width, height, arcPx, color, strokeWidth)
+        delegateOutlines.strokeRect(x, y, width, height, color, strokeWidth)
 
-      def drawRoundRectShadow(x: Int, y: Int, width: Int, height: Int, arcPx: Int, color: Color): Unit =
-        delegateRoundedRects.drawRoundRectShadow(x, y, width, height, arcPx, color)
-
-      def withRoundRectClip(x: Int, y: Int, width: Int, height: Int, arcPx: Int)(render: => Unit): Unit =
-        delegateRoundedRects.withRoundRectClip(x, y, width, height, arcPx)(render)
+      def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
+        delegateOutlines.withRectClip(x, y, width, height)(render)
   }
 
   def hideCursor(): Unit  = delegate.hideCursor()

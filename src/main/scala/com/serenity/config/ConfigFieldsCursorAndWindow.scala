@@ -45,9 +45,6 @@ private[config] object ConfigFieldsCursorAndWindow:
         .filtered(gap => gap.isFinite && gap >= AppConfig.MinUiElementGap && gap <= AppConfig.MaxUiElementGap)
         .orAuto
     )(_.uiElementGap, (config, value) => config.withUiElementGap(value)),
-    named("ui.corner_radius", "uiCornerRadiusPx", "ui.corner.radius", "ui_corner_radius")(
-      int.filtered(radius => radius >= AppConfig.MinUiCornerRadiusPx && radius <= AppConfig.MaxUiCornerRadiusPx)
-    )(_.uiCornerRadiusPx, (config, value) => config.withUiCornerRadiusPx(value)),
     named("ui.outline_thickness", "uiOutlineThicknessPx", "ui.outline.thickness", "ui_outline_thickness")(
       int.filtered(thickness =>
         thickness >= AppConfig.MinUiOutlineThicknessPx && thickness <= AppConfig.MaxUiOutlineThicknessPx

@@ -23,7 +23,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     val root = Files.createTempDirectory("ui-preset-root")
     val config = AppConfig.default
       .withFontConfig(FontConfig(codeFontFamily = "Monospaced", fontSize = 18.0f))
-      .withBackgroundStyle(BackgroundStyle.GlassLike)
+      .withInterfaceDensity(InterfaceDensity.Spacious)
     val baseState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(config = config, theme = Theme.light)
     )
@@ -40,7 +40,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     preset.name shouldBe "Writing"
     preset.config.editorConfig.fontConfig.codeFontFamily shouldBe "Monospaced"
     preset.config.editorConfig.fontConfig.codeFontSize shouldBe 18.0f
-    preset.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    preset.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     preset.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1440, 960))
     preset.themeName shouldBe Theme.light.name
     preset.pinnedPanels.map(panel => panel.position -> panel.size) shouldBe List(PanelPosition.Left -> 32)
@@ -187,7 +187,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
 
     UiPreset.Preview.fromPreset(writing) shouldBe UiPreset.Preview(
       "Writing",
-      "rich text default; dark; subtle motion; typed text reveal; frosted material; frosted background; spacious density; Serif 18pt prose; 1 editor pane"
+      "rich text default; dark; subtle motion; typed text reveal; spacious density; Serif 18pt prose; 1 editor pane"
     )
   }
 
@@ -252,7 +252,7 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     )
 
     UiPreset.Preview.fromPreset(preset).hint shouldBe
-      "plain text default; dark; smooth motion; fade text reveal; frosted material; frosted background; comfortable density; SansSerif 12pt prose; 2 editor panes"
+      "plain text default; dark; smooth motion; fade text reveal; comfortable density; SansSerif 12pt prose; 2 editor panes"
   }
 
   it should "name every pinnable panel content kind in its preview summary" in {
@@ -275,21 +275,18 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("outline should be capturable"))
     val preset = UiPreset(
       name = "Drafting",
-      config =
-        AppConfig.default.withBackgroundStyle(BackgroundStyle.Solid).withInterfaceDensity(InterfaceDensity.Compact),
+      config = AppConfig.default.withInterfaceDensity(InterfaceDensity.Compact),
       themeName = Theme.dark.name,
       dockedPanels = List(SessionDockedPanel("panel-1", panel)),
       targetEditorPaneCount = Some(1)
     )
     val sourceConfig = AppConfig.default
-      .withBackgroundStyle(BackgroundStyle.GlassLike)
       .withInterfaceDensity(InterfaceDensity.Spacious)
       .withUiElementGap(Some(4))
       .withUiOutlineThicknessPx(5)
 
     val patched = UiPreset.Patch.Appearance(sourceConfig, themeName = Some(Theme.light.name)).applyTo(preset)
 
-    patched.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
     patched.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     patched.config.uiElementGap shouldBe Some(4)
     patched.config.uiOutlineThicknessPx shouldBe 5

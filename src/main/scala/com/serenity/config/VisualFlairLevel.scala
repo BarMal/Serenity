@@ -1,9 +1,9 @@
 package com.serenity.config
 
-/** Performance/battery tier for purely decorative visual flourishes (currently: the companion sprite pane, and
-  * background blur -- see `SurfaceMaterials.effectiveBlurRadius`). Deliberately separate from [[MotionAccessibility]]:
-  * that setting is an accessibility control over motion itself, while this one is a cost control a viewer reaches for
-  * on a slow link or a battery-powered machine, independent of whether they want motion reduced.
+/** Performance/battery tier for purely decorative visual flourishes (currently: the companion sprite pane).
+  * Deliberately separate from [[MotionAccessibility]]: that setting is an accessibility control over motion itself,
+  * while this one is a cost control a viewer reaches for on a slow link or a battery-powered machine, independent of
+  * whether they want motion reduced.
   */
 enum VisualFlairLevel(val configKey: String):
   case Full    extends VisualFlairLevel("full")

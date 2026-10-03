@@ -171,9 +171,8 @@ object ConfigGenerators:
     for
       density   <- oneOfEnum(InterfaceDensity.values)
       gap       <- Gen.option(double(AppConfig.MinUiElementGap, AppConfig.MaxUiElementGap))
-      radius    <- Gen.choose(AppConfig.MinUiCornerRadiusPx, AppConfig.MaxUiCornerRadiusPx)
       thickness <- Gen.choose(AppConfig.MinUiOutlineThicknessPx, AppConfig.MaxUiOutlineThicknessPx)
-    yield InterfaceConfig(density, gap, radius, thickness)
+    yield InterfaceConfig(density, gap, thickness)
 
   val genInputConfig: Gen[InputConfig] =
     for
@@ -249,7 +248,6 @@ object ConfigGenerators:
       focusedTextBody     <- Gen.oneOf(true, false)
       toolbar             <- Gen.oneOf(true, false)
       toolbarMode         <- oneOfEnum(ToolbarDisplayMode.values)
-      shadows             <- Gen.oneOf(true, false)
       visibleRows <- Gen.option(
         Gen.choose(AppConfig.MinCommandRunnerVisibleRows, AppConfig.MaxCommandRunnerVisibleRows)
       )
@@ -299,7 +297,6 @@ object ConfigGenerators:
       focusedTextBodyEnabled = focusedTextBody,
       contextualToolbarEnabled = toolbar,
       contextualToolbarDisplayMode = toolbarMode,
-      uiShadowsEnabled = shadows,
       commandRunnerVisibleRows = visibleRows,
       commandRunnerItemGapRows = itemGap,
       commandRunnerCursorGapRows = cursorGap,
@@ -322,20 +319,6 @@ object ConfigGenerators:
       columnGap = columnGap,
       columnCount = columnCount
     )
-
-  /** The material settings, applied through the setters for the same reason as the motion ones: choosing a blur or a
-    * background style of your own is what makes the material preset `Custom`, so setting them independently of the
-    * preset describes a config the application never produces.
-    */
-  val genMaterialEdit: Gen[AppConfig => AppConfig] =
-    for
-      preset     <- oneOfEnum(MaterialPreset.values)
-      blur       <- double(0.0, 1.0).map(_.toFloat)
-      background <- oneOfEnum(BackgroundStyle.values)
-      custom     <- Gen.oneOf(true, false)
-    yield (config: AppConfig) =>
-      val withPreset = config.withMaterialPreset(preset)
-      if custom then withPreset.withBlurRadius(blur).withBackgroundStyle(background) else withPreset
 
   /** The motion settings, applied the way the settings surface applies them: through `AppConfig`'s setters, which keep
     * the authoritative hierarchy and the legacy fields that mirror it in step.
@@ -392,8 +375,7 @@ object ConfigGenerators:
       appMode          <- genAppModeConfig
       status           <- genStatusLineConfig
       motion           <- genMotionEdit
-      material         <- genMaterialEdit
-    yield (motion andThen material)(
+    yield motion(
       AppConfig(
         editorConfig = editor,
         inputConfig = input,

@@ -52,7 +52,7 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default.withCommandRunnerItemGapRows(Some(1))
     val driver = UiScenarioDriver.create("command-runner-settings", initialConfig = config).unsafeRunSync()
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
-    "blur radius".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
+    "ui element gap".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
     driver.dispatch(Enter).unsafeRunSync()
     driver.dispatch(InsertChar('0')).unsafeRunSync()
     driver.dispatch(InsertChar('.')).unsafeRunSync()
@@ -72,7 +72,7 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     }
     frame.evidence.visibleText.mkString(" ") should not include "/home/"
     driver.dispatch(Enter).unsafeRunSync()
-    driver.state.unsafeRunSync().persisted.config.surfaceConfig.blurRadius shouldBe 0.5f
+    driver.state.unsafeRunSync().persisted.config.uiElementGap shouldBe Some(0.5)
   }
 
   it should "render two-row command targets in comfortable and spacious density" in
@@ -104,12 +104,12 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
     opened.isSettingsSurface shouldBe true
     driver.state.unsafeRunSync().runtime.uiSurfaces should have size 1
 
-    "blur radius".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
+    "ui element gap".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
     driver.dispatch(Enter).unsafeRunSync()
     "0.5".foreach(char => driver.dispatch(InsertChar(char)).unsafeRunSync())
     driver.dispatch(Enter).unsafeRunSync()
 
-    driver.state.unsafeRunSync().persisted.config.surfaceConfig.blurRadius shouldBe 0.5f
+    driver.state.unsafeRunSync().persisted.config.uiElementGap shouldBe Some(0.5)
 
     // issue #1059: Escape now pops one settings level at a time here too, matching the settings-tab-in-palette path
     // -- the dedicated Settings surface previously fully closed on a single Escape regardless of depth, which was

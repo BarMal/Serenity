@@ -184,21 +184,6 @@ given Decoder[InterfaceConfig]     = deriveDecoder
 given Encoder[TextAreaInsets] = deriveEncoder
 given Decoder[TextAreaInsets] = deriveDecoder
 
-// BackgroundStyle has no configKey: it is never written to the config file on its own (ConfigManager derives it
-// from MaterialPreset), so there is no config-file spelling to converge on. Left on toString deliberately.
-given Encoder[BackgroundStyle] = Encoder.encodeString.contramap(_.toString)
-
-given Decoder[BackgroundStyle] = Decoder.decodeString.emap {
-  case "Solid"       => Right(BackgroundStyle.Solid)
-  case "Transparent" => Right(BackgroundStyle.Transparent)
-  case "Frosted"     => Right(BackgroundStyle.Frosted)
-  case "GlassLike"   => Right(BackgroundStyle.GlassLike)
-  case other         => Left(s"Unknown BackgroundStyle: $other")
-}
-
-given Encoder[MaterialPreset] = configKeyEncoder(_.configKey)
-given Decoder[MaterialPreset] = configKeyDecoder("MaterialPreset", MaterialPreset.values, _.configKey)
-
 given Encoder[MotionPreset] = configKeyEncoder(_.configKey)
 given Decoder[MotionPreset] = configKeyDecoder("MotionPreset", MotionPreset.values, _.configKey)
 

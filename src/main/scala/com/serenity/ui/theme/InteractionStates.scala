@@ -13,9 +13,8 @@ object InteractionStates:
   /** How far the background leans toward the foreground for hover/pressed. Blending toward the foreground -- rather
     * than a fixed lighten/darken -- works on both light and dark themes: a theme's foreground is already chosen to
     * contrast with its background in whichever direction that theme needs, so leaning the background toward it makes
-    * the surface stand out a little regardless of which way that is. `SurfaceMaterials.blend` uses the same idiom for
-    * painting; `pressed` reuses `hover`'s direction at roughly twice the strength, so pressed always reads as a deeper
-    * version of hover rather than an unrelated treatment.
+    * the surface stand out a little regardless of which way that is. `pressed` reuses `hover`'s direction at roughly
+    * twice the strength, so pressed always reads as a deeper version of hover rather than an unrelated treatment.
     */
   private val HoverBlend: Double   = 0.12
   private val PressedBlend: Double = 0.24

@@ -39,10 +39,6 @@ final case class SurfaceConfig(
     focusedTextBodyEnabled: Boolean = false,
     contextualToolbarEnabled: Boolean = true,
     contextualToolbarDisplayMode: ToolbarDisplayMode = ToolbarDisplayMode.IconAndText,
-    blurRadius: Float = 0.18f,
-    backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
-    materialPreset: MaterialPreset = MaterialPreset.Frosted,
-    uiShadowsEnabled: Boolean = true,
     motionPreset: MotionPreset = MotionPreset.Reduced,
     elementTransitionSpeedScale: Double = 1.0,
     editorTextTransitionSpeedScale: Option[Double] = None,
@@ -100,7 +96,6 @@ final case class SurfaceConfig(
 
   def normalized: SurfaceConfig =
     copy(
-      blurRadius = blurRadius.max(0.0f).min(1.0f),
       rendererFrameStateCacheCapacity = AppConfig.clampRendererFrameStateCacheCapacity(rendererFrameStateCacheCapacity),
       columnGap = columnGap.max(0),
       columnTargetWidthCells = columnTargetWidthCells.max(1),

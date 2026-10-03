@@ -250,7 +250,7 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
   it should "ignore a legacy UI preset draft field when restoring a session" in {
     val state = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
-        config = AppConfig.default.withBackgroundStyle(BackgroundStyle.GlassLike)
+        config = AppConfig.default.withInterfaceDensity(InterfaceDensity.Compact)
       )
     )
     val legacy = SessionState.fromAppState(state).asJson.mapObject { session =>
@@ -269,7 +269,7 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
     val decoded  = legacy.as[SessionState].toOption.getOrElse(fail("legacy session should decode"))
     val restored = SessionState.toAppState(decoded, Theme.dark)
 
-    restored.persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    restored.persisted.config.interfaceDensity shouldBe InterfaceDensity.Compact
   }
 
   it should "decode a session file written by the current release using old toString enum spellings" in {
@@ -281,7 +281,6 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
       .withMarkdownViewMode(MarkdownViewMode.InlineLens)
       .withDefaultDocumentMode(DefaultDocumentMode.RichText)
       .withInterfaceDensity(InterfaceDensity.Spacious)
-      .withMaterialPreset(MaterialPreset.Crystal)
       .withMotionPreset(MotionPreset.Expressive)
       .withMotionConfiguration(
         MotionConfig(
@@ -346,7 +345,6 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.get.config.markdownViewMode shouldBe MarkdownViewMode.InlineLens
     decoded.toOption.get.config.defaultDocumentMode shouldBe DefaultDocumentMode.RichText
     decoded.toOption.get.config.interfaceDensity shouldBe InterfaceDensity.Spacious
-    decoded.toOption.get.config.surfaceConfig.materialPreset shouldBe MaterialPreset.Crystal
     decoded.toOption.get.config.surfaceConfig.motionPreset shouldBe MotionPreset.Expressive
     decoded.toOption.get.config.surfaceConfig.motionConfiguration shouldBe Some(
       MotionConfig(
@@ -377,6 +375,6 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
     rewrittenConfigObject("markdownViewMode") shouldBe Some(Json.fromString("inline-lens"))
     rewrittenConfigObject("defaultDocumentMode") shouldBe Some(Json.fromString("rich-text"))
     rewrittenConfigObject("interfaceDensity") shouldBe Some(Json.fromString("spacious"))
-    rewrittenConfigObject("materialPreset") shouldBe Some(Json.fromString("crystal"))
+    rewrittenConfigObject("materialPreset") shouldBe None
     rewrittenConfigObject("motionPreset") shouldBe Some(Json.fromString("expressive"))
   }

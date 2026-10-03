@@ -62,13 +62,13 @@ class WindowChromeModeSpec extends AnyFlatSpec with Matchers:
 
   it should "change window chrome mode without disturbing other config fields" in {
     val config = AppConfig.default
-      .withBlurRadius(0.55f)
+      .withDiagnosticHighlightBlendWeight(0.55)
       .withWindowChromeMode(WindowChromeMode.Custom)
 
     config.windowChromeMode shouldBe WindowChromeMode.Custom
     config.windowConfig shouldBe WindowConfig(chromeMode = WindowChromeMode.Custom)
-    config.surfaceConfig.blurRadius shouldBe 0.55f
-    config.surfaceConfig.backgroundStyle shouldBe AppConfig.default.surfaceConfig.backgroundStyle
+    config.surfaceConfig.diagnosticHighlightBlendWeight shouldBe 0.55
+    config.surfaceConfig.showLineNumbers shouldBe AppConfig.default.surfaceConfig.showLineNumbers
     config.cursorMode shouldBe AppConfig.default.cursorMode
   }
 

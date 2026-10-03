@@ -53,7 +53,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
     sm.updateState(state =>
       state.copy(
         persisted = state.persisted.copy(
-          config = state.persisted.config.withBackgroundStyle(BackgroundStyle.GlassLike),
+          config = state.persisted.config.withInterfaceDensity(InterfaceDensity.Spacious),
           theme = Theme.light
         )
       )
@@ -71,7 +71,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
     val saved = store.find("Workbench").unsafeRunSync()
 
     saved.map(_.themeName) shouldBe Some(Theme.light.name)
-    saved.map(_.config.surfaceConfig.backgroundStyle) shouldBe Some(BackgroundStyle.GlassLike)
+    saved.map(_.config.interfaceDensity) shouldBe Some(InterfaceDensity.Spacious)
     saved.flatMap(_.config.preferredWindowSize) shouldBe Some(size)
     saved.map(_.pinnedPanels.map(panel => panel.position -> panel.size)) shouldBe Some(List(PanelPosition.Bottom -> 12))
   }
@@ -87,7 +87,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
     val preset = com.serenity.ui.presets.UiPreset(
       name = "Review Custom",
       config = AppConfig.default
-        .withBackgroundStyle(BackgroundStyle.Solid)
+        .withInterfaceDensity(InterfaceDensity.Compact)
         .withPreferredWindowSize(PreferredWindowSize(1280, 720)),
       themeName = Theme.dark.name,
       dockedPanels = List(
@@ -117,7 +117,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
 
     val state = sm.getCurrentState.unsafeRunSync()
 
-    state.persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.Solid
+    state.persisted.config.interfaceDensity shouldBe InterfaceDensity.Compact
     state.persisted.config.preferredWindowSize shouldBe Some(PreferredWindowSize(1280, 720))
     state.runtime.viewportSize shouldBe Some(ViewportSize(90, 28))
     state.persisted.theme.name shouldBe Theme.dark.name

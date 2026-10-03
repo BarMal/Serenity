@@ -68,7 +68,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
       name = "Drafting",
       config = AppConfig.default
         .withMotionPreset(com.serenity.config.MotionPreset.Reduced)
-        .withMaterialPreset(com.serenity.config.MaterialPreset.Solid),
+        .withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact),
       themeName = Theme.dark.name,
       dockedPanels = List(
         SessionDockedPanel(
@@ -108,7 +108,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
       CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Drafting"))
     )
     presetPicker.options.find(_.label == "Drafting").flatMap(_.hint) shouldBe Some(
-      "plain text default; dark; reduced motion; fade text reveal; solid material; solid background; comfortable density; SansSerif 12pt prose; Right outline 34"
+      "plain text default; dark; reduced motion; fade text reveal; compact density; SansSerif 12pt prose; Right outline 34"
     )
   }
 
@@ -255,7 +255,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
       CommandIntent.View(ViewIntent.SetDefaultDocumentMode(DefaultDocumentMode.Markdown)),
       CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Subtle))),
       CommandIntent.Settings(
-        SettingsIntent.General(GeneralSettingsIntent.SetBackgroundStyle(BackgroundStyle.GlassLike))
+        SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetInterfaceDensity(InterfaceDensity.Spacious))
       ),
       CommandIntent.Settings(SettingsIntent.Font(FontIntent.SetTextFontSize(18.0f))),
       CommandIntent.View(ViewIntent.TogglePanelShown(com.serenity.state.models.PanelId.Outline))
@@ -268,7 +268,7 @@ class StateManagerUiPresetWorkbenchSpec extends AnyFlatSpec with Matchers:
 
     state.persisted.config.defaultDocumentMode shouldBe DefaultDocumentMode.Markdown
     state.persisted.config.surfaceConfig.motionPreset shouldBe MotionPreset.Subtle
-    state.persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
+    state.persisted.config.interfaceDensity shouldBe InterfaceDensity.Spacious
     state.persisted.config.editorConfig.fontConfig.textFontSize shouldBe 18.0f
     store.find("Drafting").unsafeRunSync() shouldBe Some(savedBefore)
   }

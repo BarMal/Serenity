@@ -61,13 +61,12 @@ trait PixelDrawing:
   /** Translate drawing in device-independent logical pixels for fractional-cell floating geometry. */
   def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit
 
-/** Alpha compositing and region blur. Genuinely optional: a surface that can't do any of this (or a headless test
-  * double) simply skips the polish rather than degrading a required drawing operation, so [[RenderSurface.effects]]
-  * exposes it as an `Option` and callers decide whether skipping the effect is safe.
+/** Alpha compositing. Genuinely optional: a surface that can't do it (or a headless test double) simply skips the fade
+  * rather than degrading a required drawing operation, so [[RenderSurface.effects]] exposes it as an `Option` and
+  * callers decide whether skipping the effect is safe.
   */
 trait Effects:
   def setAlpha(alpha: Float): Unit
-  def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit
 
 /** A fresh, independently-paintable surface shaped exactly like the surface this capability came from -- same cell
   * metrics, font, logical size and device scale -- for a layer (a pinned panel, a modal, a floating overlay) to own its
@@ -84,11 +83,9 @@ trait LayerBufferSupport:
     * surface (e.g. via `RenderSurface.pixels.compositeFullSurfaceLayer`) is the caller's job, not this surface's; a
     * layer surface never publishes itself anywhere on its own.
     *
-    * `Effects.blurRegion` on the layer samples the surface this capability came from, not the layer's own (still
-    * transparent) pixels, so a translucent panel's backdrop blur comes out exactly as painting it directly would, while
-    * everything the panel didn't paint stays transparent. That is what makes compositing the whole layer back over a
-    * frame whose content has since changed correct (#1798) -- a layer seeded with a full copy of the frame would paste
-    * that stale copy back over everything.
+    * Everything the layer's owner didn't paint stays transparent. That is what makes compositing the whole layer back
+    * over a frame whose content has since changed correct (#1798) -- a layer seeded with a full copy of the frame would
+    * paste that stale copy back over everything.
     *
     * `recycled` is a previous layer image the caller is done with; it is cleared and painted into instead of
     * allocating, when its size still matches.
@@ -136,58 +133,12 @@ trait HardwareCursor:
     */
   def hide(): Unit
 
-/** Rounded-rectangle chrome: borders, drop shadows, and clipping content to a rounded rect. Genuinely optional
-  * decoration -- panels and overlays still read correctly with square corners and no border/shadow -- so
-  * [[RenderSurface.roundedRects]] exposes it as an `Option`.
+/** Panel chrome: a square border and clipping content to the panel's rect. Genuinely optional decoration -- panels
+  * still read correctly without a border -- so [[RenderSurface.panelOutlines]] exposes it as an `Option`.
   */
-trait RoundedRectDrawing:
+trait PanelOutlineDrawing:
 
-  def strokeRoundRect(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int,
-    color: Color,
-    strokeWidth: Float = 1.5f
-  ): Unit
+  def strokeRect(x: Int, y: Int, width: Int, height: Int, color: Color, strokeWidth: Float): Unit
 
-  /** Draw a soft shadow behind a rounded UI surface. */
-  def drawRoundRectShadow(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int,
-    color: Color
-  ): Unit
-
-  /** Restrict drawing performed by `render` to a rounded rectangle in cell coordinates. */
-  def withRoundRectClip(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int
-  )(render: => Unit): Unit
-
-/** A panel body: `colour` at `alpha` over the whole panel rect. `opaqueBeneath` is the opaque colour the caller knows
-  * lies under the panel, if any, so the parts nothing else shows through can be precomputed as one opaque colour.
-  */
-final case class PanelBodyFill(colour: Color, alpha: Float, opaqueBeneath: Option[Color])
-
-/** A panel's drop shadow and translucent body painted in one step, so a raster surface can composite each pixel once
-  * instead of stacking full-area alpha fills. Optional: without it, callers draw the shadow through
-  * [[RoundedRectDrawing]] and the body as ordinary background fills. Leaves the surface's alpha as it found it.
-  */
-trait PanelBodyDrawing:
-
-  def fillPanelBody(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int,
-    shadow: Option[Color],
-    body: PanelBodyFill
-  ): Unit
+  /** Restrict drawing performed by `render` to a rectangle in cell coordinates. */
+  def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit

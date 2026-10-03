@@ -52,24 +52,7 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
     decoded.toOption.get.config.languageToolsConfig.spellCheck.dictionaryPaths shouldBe Nil
   }
 
-  it should "default backgroundStyle to Frosted when loading older JSON without the field" in {
-    val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
-      .asJson
-    val configObject =
-      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
-    val jsonWithoutBackgroundStyle =
-      originalJson.mapObject(
-        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("backgroundStyle")))
-      )
-
-    val decoded = jsonWithoutBackgroundStyle.as[SessionState]
-
-    decoded.isRight shouldBe true
-    decoded.toOption.get.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.Frosted
-  }
-
-  it should "default material and motion presets when loading older JSON without the fields" in {
+  it should "default the motion preset when loading older JSON without the field" in {
     val originalJson = SessionState
       .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
       .asJson
@@ -79,14 +62,13 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
       originalJson.mapObject(
         _.add(
           "config",
-          _root_.io.circe.Json.fromJsonObject(configObject.remove("materialPreset").remove("motionPreset"))
+          _root_.io.circe.Json.fromJsonObject(configObject.remove("motionPreset"))
         )
       )
 
     val decoded = jsonWithoutPresets.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.surfaceConfig.materialPreset shouldBe MaterialPreset.Frosted
     decoded.toOption.get.config.surfaceConfig.motionPreset shouldBe MotionPreset.Smooth
   }
 
@@ -284,23 +266,6 @@ class SessionStateConfigMigrationSpec extends AnyFlatSpec with Matchers:
 
     decoded.isRight shouldBe true
     decoded.toOption.get.config.uiElementGap shouldBe None
-  }
-
-  it should "default UI corner radius to the existing panel radius when loading older JSON without the field" in {
-    val originalJson = SessionState
-      .fromAppState(AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.default)))
-      .asJson
-    val configObject =
-      originalJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
-    val jsonWithoutUiCornerRadius =
-      originalJson.mapObject(
-        _.add("config", _root_.io.circe.Json.fromJsonObject(configObject.remove("uiCornerRadiusPx")))
-      )
-
-    val decoded = jsonWithoutUiCornerRadius.as[SessionState]
-
-    decoded.isRight shouldBe true
-    decoded.toOption.get.config.uiCornerRadiusPx shouldBe 8
   }
 
   it should "default UI outline thickness when loading older JSON without the field" in {

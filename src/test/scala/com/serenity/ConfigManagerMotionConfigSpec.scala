@@ -18,8 +18,7 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
     val configFile = Files.createTempFile("serenity-surface-motion-invalid-config", ".conf")
     Files.writeString(
       configFile,
-      """ui.material = neon
-        |motion.preset = turbo
+      """motion.preset = turbo
         |motion.speed_scale = 5
         |motion.command_runner_reveal = sideways
         |""".stripMargin
@@ -27,7 +26,6 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
 
     val result = ConfigManagerTestSupport.loadConfigResult(Some(configFile.toString))
 
-    result.report.invalidEntries.map(_.key) should contain("ui.material")
     result.report.invalidEntries.map(_.key) should contain("motion.preset")
     result.report.invalidEntries.map(_.key) should contain("motion.speed_scale")
     result.report.invalidEntries.map(_.key) should contain("motion.command_runner_reveal")
@@ -158,12 +156,11 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
     )
   }
 
-  it should "load and write material and motion presets" in {
+  it should "load and write motion presets" in {
     val configFile = Files.createTempFile("serenity-material-motion-config", ".conf")
     Files.writeString(
       configFile,
-      """ui.material = crystal
-        |motion.preset = reduced
+      """motion.preset = reduced
         |motion.speed_scale = 1.75
         |motion.editor_text.speed_scale = 0.50
         |motion.command_runner.speed_scale = 2.25
@@ -180,9 +177,6 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
-    config.surfaceConfig.materialPreset shouldBe MaterialPreset.Crystal
-    config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
-    config.surfaceConfig.blurRadius shouldBe 0.42f
     config.surfaceConfig.motionPreset shouldBe MotionPreset.Reduced
     config.surfaceConfig.elementTransitionSpeedScale shouldBe 1.75
     config.surfaceConfig.editorTextTransitionSpeedScale shouldBe Some(0.5)
@@ -197,7 +191,6 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
     config.surfaceConfig.uiAnimation shouldBe com.serenity.animation.AnimationConfig.smooth
     config.editorConfig.characterAnimation shouldBe None
     val serialized = ConfigManager.configToString(config)
-    serialized should include("ui.material = crystal")
     serialized should include("motion.preset = reduced")
     serialized should include("motion.accessibility = standard")
     serialized should include("motion.family.editor_text.transition = typed")
@@ -209,16 +202,6 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
     serialized should include("motion.family.pinned_panels.close_transition = off")
     serialized should include("motion.family.ui_transitions.animation.preset = smooth")
     serialized should include("motion.family.cursor.speed_scale = 0.75")
-  }
-
-  it should "load and write the UI shadows setting" in {
-    val configFile = Files.createTempFile("serenity-ui-shadows-config", ".conf")
-    Files.writeString(configFile, "ui.shadows = false\n")
-
-    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
-
-    config.surfaceConfig.uiShadowsEnabled shouldBe false
-    ConfigManager.configToString(config) should include("ui.shadows = false")
   }
 
   it should "round-trip custom character animation duration and steps" in {

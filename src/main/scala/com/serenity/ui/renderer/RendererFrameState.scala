@@ -61,12 +61,11 @@ final case class CachedModalLayer(
 )
 
 /** What [[RendererFramePlanner.paintPanelLayer]] cached the last time it painted a given pinned/expanded/floating panel
-  * into its own buffer (#1100 stage 3): the [[CachedModalLayer]] pattern generalised to every panel kind that reads
-  * pixels back off the frame surface via `blurRegion`, keyed by [[SurfaceId]] rather than held as a single slot, since
-  * -- unlike the modal -- more than one of these panels can be on screen at once. `frameRect` is remembered alongside
-  * viewport shape and cursor-blink state because a panel's own rect can shift (another panel appearing/disappearing
-  * reflows pinned layout) without the panel's own `UiSurface` fields changing, which [[Damage.Surface]] narrowing alone
-  * would not catch.
+  * into its own buffer (#1100 stage 3): the [[CachedModalLayer]] pattern generalised to every panel kind, keyed by
+  * [[SurfaceId]] rather than held as a single slot, since -- unlike the modal -- more than one of these panels can be
+  * on screen at once. `frameRect` is remembered alongside viewport shape and cursor-blink state because a panel's own
+  * rect can shift (another panel appearing/disappearing reflows pinned layout) without the panel's own `UiSurface`
+  * fields changing, which [[Damage.Surface]] narrowing alone would not catch.
   */
 final case class CachedPanelLayer(
     image: BufferedImage,
