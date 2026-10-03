@@ -8,8 +8,8 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
 /** Cursor-only redraws (blink ticks that don't need a full layout) and cursor-overlay frames (a base frame painted
-  * without the caret, then the caret composited on top so blinking never has to redraw the base). Both flavours reuse
-  * the cached [[PreparedScene]] from the last full layout via [[resolveCursorRenderPlan]] when it is still valid.
+  * without the caret, then the caret drawn on top so blinking never has to redraw the base). Both flavours reuse the
+  * cached [[PreparedScene]] from the last full layout via [[resolveCursorRenderPlan]] when it is still valid.
   */
 object RendererCursorOverlay:
 
@@ -242,9 +242,8 @@ object RendererCursorOverlay:
     )(_ => false) { authoritativeScene =>
       // No base content is redrawn by this call, so the base frame contributes nothing to the repaint bound --
       // only the cursor's own old and new pixel rects can have changed on screen.
-      swingWin.onCursorOverlayReady(Some(new java.awt.Rectangle(0, 0, 0, 0))) { image =>
-        val surface =
-          Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
+      swingWin.onCursorOverlayReady(Some(new java.awt.Rectangle(0, 0, 0, 0))) {
+        val surface = CaretRecordingSurface.forCanvas(swingWin.metrics, codeFont, swingWin.canvas)
         val (layout, renderPlan) = resolveCursorRenderPlan(
           state0,
           authoritativeScene,
@@ -259,7 +258,7 @@ object RendererCursorOverlay:
           uiMetrics,
           caches
         )
-        paintCursorsOnly(
+        val _ = paintCursorsOnly(
           state0,
           surface,
           layout,
@@ -273,13 +272,14 @@ object RendererCursorOverlay:
           uiMetrics,
           bufferAnimations,
           caches
-        ).map(RendererFrameState.toAwtRectangle)
+        )
+        caretPaints(surface)
       }
     }
 
   /** Surface-generic form of [[renderWithCursorOverlay]]: renders a base frame with the cursor left out, then draws the
-    * cursor directly on top of the same surface and flushes again. Unlike the Swing form, which composites the cursor
-    * into a separate overlay image so blinking never has to redraw the base, this issues two flushes -- fine for any
+    * cursor directly on top of the same surface and flushes again. Unlike the Swing form, whose window fills the carets
+    * over the presented frame so blinking never has to redraw the base, this issues two flushes -- fine for any
     * `RenderSurface`, and inexpensive on a damage-diffed one, where the second flush only ever touches the handful of
     * cells the cursor occupies.
     */
@@ -396,12 +396,12 @@ object RendererCursorOverlay:
   ): Boolean =
     val state0       = RendererEntryPoints.withEffectiveTheme(state)
     val viewportSize = swingWin.viewportSize
-    // The caret is composited from a separate overlay image, so this base frame is repainted whole every time; the
+    // The window fills the carets over the presented frame, so this base frame is repainted whole every time; the
     // record is still kept up to date so the next frame knows what the screen is showing.
     val repaintRegion = new AtomicReference[Option[PixelRect]](None)
     val output        = Some(FrameOutput(ScreenIdentity(swingWin.canvas), repaintRegion))
     // The pooled acquirer is what lets this frame reuse the pixels of the last frame drawn into the same image; the
-    // cursor rides on a separate overlay image, so the base frame here is pure pane content and chrome.
+    // carets are filled over it separately, so the base frame here is pure pane content and chrome.
     val surface = Java2DRenderSurface.forFrame(
       swingWin.metrics,
       codeFont,
@@ -431,7 +431,7 @@ object RendererCursorOverlay:
       // itself -- only onCursorOverlayReady does. The editor branch below reaches it naturally via its cursor
       // composite step; the startup page has no cursor to draw, but still needs this call to actually get painted.
       // A start page also has no persisted content to reason about, so this always forces a full repaint.
-      swingWin.onCursorOverlayReady(None)(_ => Nil)
+      swingWin.onCursorOverlayReady(None)(Nil)
     } { scene =>
       RendererFramePlanner
         .renderFrame(
@@ -453,10 +453,9 @@ object RendererCursorOverlay:
         )
         .fold(false) { renderPlan =>
           val baseDirtyRegion = repaintRegion.get().map(RendererFrameState.toAwtRectangle)
-          swingWin.onCursorOverlayReady(baseDirtyRegion) { image =>
-            val cursorSurface =
-              Java2DRenderSurface.forImage(image, swingWin.metrics, codeFont, swingWin.canvas, _ => ())
-            paintCursorsOnly(
+          swingWin.onCursorOverlayReady(baseDirtyRegion) {
+            val cursorSurface = CaretRecordingSurface.forCanvas(swingWin.metrics, codeFont, swingWin.canvas)
+            val _ = paintCursorsOnly(
               state0,
               cursorSurface,
               scene.calculatedLayout,
@@ -470,7 +469,13 @@ object RendererCursorOverlay:
               uiMetrics,
               bufferAnimations,
               caches
-            ).map(RendererFrameState.toAwtRectangle)
+            )
+            caretPaints(cursorSurface)
           }
         }
     }
+
+  private def caretPaints(surface: CaretRecordingSurface): List[com.serenity.ui.terminal.SwingWindow.CaretPaint] =
+    surface.recordedFills.map(fill =>
+      com.serenity.ui.terminal.SwingWindow.CaretPaint(RendererFrameState.toAwtRectangle(fill.rect), fill.color)
+    )

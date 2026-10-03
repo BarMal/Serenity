@@ -46,12 +46,46 @@ private[terminal] trait SwingWindowChromeSupport:
     private def scaledInt(value: Int, scale: Double): Int =
       math.round(value.toDouble * scale).toInt.max(1)
 
+  /** Under a tiling compositor `Auto` falls back to native decorations: the compositor manages, borders and rounds (or
+    * deliberately doesn't round) every window itself, and normally draws no title bar at all.
+    */
   private[serenity] def shouldUseCustomChrome(
     chromeMode: WindowChromeMode,
-    osName: String = System.getProperty("os.name", "")
+    osName: String,
+    env: Map[String, String]
   ): Boolean =
     chromeMode == WindowChromeMode.Custom ||
-      (chromeMode == WindowChromeMode.Auto && osName.toLowerCase(java.util.Locale.ROOT).contains("linux"))
+      (chromeMode == WindowChromeMode.Auto &&
+        osName.toLowerCase(java.util.Locale.ROOT).contains("linux") &&
+        !isTilingCompositor(env))
+
+  private val TilingCompositorSockets =
+    scala.List("HYPRLAND_INSTANCE_SIGNATURE", "SWAYSOCK", "I3SOCK", "NIRI_SOCKET")
+
+  private val TilingDesktopNames =
+    Set("hyprland", "sway", "i3", "niri", "river", "bspwm", "qtile", "xmonad")
+
+  private[serenity] def isTilingCompositor(env: Map[String, String]): Boolean =
+    TilingCompositorSockets.exists(key => isSet(env, key)) ||
+      env
+        .get("XDG_CURRENT_DESKTOP")
+        .exists(_.split(':').exists(name => TilingDesktopNames.contains(name.trim.toLowerCase(java.util.Locale.ROOT))))
+
+  private[serenity] def isWaylandSession(env: Map[String, String]): Boolean =
+    isSet(env, "WAYLAND_DISPLAY")
+
+  private def isSet(env: Map[String, String], key: String): Boolean =
+    env.get(key).exists(_.trim.nonEmpty)
+
+  /** A translucent window repaints through a translucent back buffer and makes the compositor blend the whole window,
+    * so on Wayland (running through XWayland) it is opt-in; elsewhere it stays on unless the setting turns it off.
+    */
+  private[serenity] def usesTranslucentWindow(
+    setting: Option[Boolean],
+    env: Map[String, String],
+    perPixelTranslucencySupported: Boolean
+  ): Boolean =
+    perPixelTranslucencySupported && setting.getOrElse(!isWaylandSession(env))
 
   private[serenity] def shouldUsePerPixelRoundedCorners(
     usesCustomChrome: Boolean,
@@ -87,21 +121,22 @@ private[terminal] trait SwingWindowChromeSupport:
   ): Boolean =
     usesCustomChrome && perPixelTranslucencySupported && backgroundAlpha == 0
 
-  /** Paint `canvas`'s own background into `g` (sized `width` x `height`): genuinely transparent pixels when
-    * `transparent`, replacing whatever the backing buffer already held (`AlphaComposite.Src`, not the default
-    * `SrcOver`, so this actually clears stale opaque pixels rather than leaving a zero-alpha fill's no-op) -- otherwise
-    * an ordinary opaque black fill, the graceful fallback for when [[shouldPaintTransparentContent]] is false. `g`
-    * should be a scratch `Graphics2D` the caller disposes (`Graphics.create()`), since this permanently changes its
-    * composite.
+  /** Paint `canvas`'s own background into `g`, limited to its clip within `width` x `height`: genuinely transparent
+    * pixels when `transparent`, replacing whatever the backing buffer already held (`AlphaComposite.Src`, not the
+    * default `SrcOver`, so this actually clears stale opaque pixels rather than leaving a zero-alpha fill's no-op) --
+    * otherwise an ordinary opaque black fill, the graceful fallback for when [[shouldPaintTransparentContent]] is
+    * false. `g` should be a scratch `Graphics2D` the caller disposes (`Graphics.create()`), since this permanently
+    * changes its composite.
     */
   private[serenity] def paintCanvasBackground(g: Graphics2D, width: Int, height: Int, transparent: Boolean): Unit =
-    if transparent then
-      g.setComposite(AlphaComposite.Src)
-      g.setColor(SwingWindow.Transparent)
-      g.fillRect(0, 0, width, height)
-    else
-      g.setColor(Color.BLACK)
-      g.fillRect(0, 0, width, height)
+    val panel  = new Rectangle(0, 0, width, height)
+    val region = Option(g.getClipBounds).fold(panel)(_.intersection(panel))
+    if !region.isEmpty then
+      if transparent then
+        g.setComposite(AlphaComposite.Src)
+        g.setColor(SwingWindow.Transparent)
+      else g.setColor(Color.BLACK)
+      g.fillRect(region.x, region.y, region.width, region.height)
 
   private[serenity] def setAccessibleNameIfAvailable(component: JComponent, name: String): Unit =
     Option(component.getAccessibleContext).foreach(_.setAccessibleName(name))

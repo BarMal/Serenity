@@ -1,7 +1,7 @@
 package com.serenity.perf
 
-import java.awt.Font
 import java.awt.image.BufferedImage
+import java.awt.{Color, Font, Rectangle}
 import java.nio.file.Files
 import javax.swing.SwingUtilities
 
@@ -112,7 +112,7 @@ private[perf] object LaptopFrameBenchmarks:
     )
 
   def benchmarks(presentWindow: SwingWindow)(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    renderBenchmarks ++ inputBenchmarks ++ List(presentBenchmark(presentWindow))
+    renderBenchmarks ++ inputBenchmarks ++ List(presentBenchmark(presentWindow), presentCaretBenchmark(presentWindow))
 
   private def renderBenchmarks: List[BenchmarkRunner.Benchmark] =
     val caches     = RenderCaches.create()
@@ -205,5 +205,27 @@ private[perf] object LaptopFrameBenchmarks:
         SwingUtilities.invokeAndWait { () =>
           presentWindow.onBaseImageReady(frame)
           canvas.paintImmediately(0, 0, canvas.getWidth, canvas.getHeight)
+        }
+    )
+
+  /** A blink-tick repaint: only the caret's own rectangle is repainted over an unchanged base frame. */
+  private def presentCaretBenchmark(presentWindow: SwingWindow): BenchmarkRunner.Benchmark =
+    val canvas = presentWindow.canvas
+    val frame  = new BufferedImage(canvas.getWidth.max(1), canvas.getHeight.max(1), BufferedImage.TYPE_INT_ARGB)
+    val caret  = SwingWindow.CaretPaint(new Rectangle(700, 500, 2, 18), Color.WHITE)
+    def publishCaret(): Boolean = presentWindow.onCursorOverlayReady(Some(new Rectangle(0, 0, 0, 0)))(List(caret))
+    BenchmarkRunner.Benchmark(
+      "laptop.present.swing_paint_caret_1500x1000",
+      2,
+      8,
+      () =>
+        SwingUtilities.invokeAndWait { () =>
+          presentWindow.onBaseImageReady(frame)
+          assert(publishCaret(), "no base frame to fill the caret over")
+        },
+      () =>
+        SwingUtilities.invokeAndWait { () =>
+          val _ = publishCaret()
+          canvas.paintImmediately(caret.rect)
         }
     )

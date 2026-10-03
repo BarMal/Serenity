@@ -225,6 +225,8 @@ object ConfigFileFormat:
         "uses Windows system chrome colours; custom is themed and applies after restart"
     ),
     field("window.chrome"),
+    comment("See-through window background and soft rounded corners; auto is off on Wayland, on elsewhere"),
+    field("window.translucent"),
     comment("Preferred desktop window size. Leave empty to use the default."),
     field("window.preferred.width"),
     field("window.preferred.height"),
