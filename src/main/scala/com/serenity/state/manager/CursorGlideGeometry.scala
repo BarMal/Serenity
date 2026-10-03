@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import com.serenity.config.AppConfig
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, PixelPoint, TextLayoutSnapshot}
+import com.serenity.ui.layout.{CellMetrics, PixelPoint, TextLayoutSnapshot, WrappedLineCache}
 
 /** Caret-glide (issue #1085 phase 2): the caret's pixel position *within its own pane's content area* -- relative to
   * the pane's top-left content origin, not the pane's absolute on-screen rect.
@@ -29,7 +29,12 @@ import com.serenity.ui.layout.{CellMetrics, PixelPoint, TextLayoutSnapshot}
   */
 private[manager] object CursorGlideGeometry:
 
-  def paneRelativePosition(buffer: Buffer, config: AppConfig, cursor: CursorPosition): PixelPoint =
+  def paneRelativePosition(
+    buffer: Buffer,
+    config: AppConfig,
+    cursor: CursorPosition,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  ): PixelPoint =
     val viewport        = buffer.viewport
     val fontConfig      = config.editorConfig.fontConfig
     val font            = FontLoader.previewFontForRole(fontConfig, buffer.typographyRole)
@@ -39,9 +44,17 @@ private[manager] object CursorGlideGeometry:
 
     def lineText(lineIndex: Int): String = buffer.document.content.getLine(lineIndex).getOrElse("")
 
+    def wrappedRows(lineIndex: Int): Vector[TextVisualLine] =
+      TextLayoutSnapshot.boundedVisualLinesForText(
+        lineText(lineIndex),
+        lineIndex,
+        wrapWidthPx,
+        font,
+        wrapCache = wrapCache
+      )
+
     def visualRowCountForLine(lineIndex: Int): Int =
-      if !wordWrapEnabled then 1
-      else TextLayoutSnapshot.boundedVisualLinesForText(lineText(lineIndex), lineIndex, wrapWidthPx, font).length.max(1)
+      if !wordWrapEnabled then 1 else wrappedRows(lineIndex).length.max(1)
 
     val cursorVisualLineWithinItsLine =
       if !wordWrapEnabled then 0
@@ -52,7 +65,8 @@ private[manager] object CursorGlideGeometry:
           wrapWidthPx,
           font,
           wordWrapEnabled = true,
-          rowAffinity = cursor.rowAffinity
+          rowAffinity = cursor.rowAffinity,
+          wrapCache = wrapCache
         )
 
     val rowsBetweenTopAndCursorLine =
@@ -67,8 +81,7 @@ private[manager] object CursorGlideGeometry:
     val safeColumn = cursor.column.max(0)
     val xPxRaw =
       if wordWrapEnabled then
-        TextLayoutSnapshot
-          .boundedVisualLinesForText(lineText(cursor.line), cursor.line, wrapWidthPx, font)
+        wrappedRows(cursor.line)
           .lift(cursorVisualLineWithinItsLine)
           .flatMap(_.xForColumn(cursor.column))
           .getOrElse(0.0f)

@@ -4,7 +4,7 @@ import com.serenity.keystroke.events.TextEntryEvent
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot, ViewportSize, WrappedLineCache}
 
 /** Builds, at the effect boundary, the immutable navigation geometry a vertical cursor move needs. This is the font
   * lookup, cell-metric and text-layout-snapshot work the reducer used to do inline; keeping it here leaves the reducer
@@ -32,13 +32,14 @@ object EditorGeometryProducer:
   def forPane(
     state: AppState,
     paneId: PaneId,
-    rowsAbove: Int = NavigationWindowMarginRows
+    rowsAbove: Int = NavigationWindowMarginRows,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): Option[EditorGeometry] =
     state.persisted.layout.editorPanes
       .get(paneId)
       .flatMap(_.bufferId)
       .flatMap(state.persisted.buffers.get)
-      .map(buffer => forBuffer(state, buffer, rowsAbove))
+      .map(buffer => forBuffer(state, buffer, rowsAbove, wrapCache))
 
   /** The one place production code decides whether/how much geometry a `TextEntryEvent` dispatch needs, so the shell
     * (`EditorPaneComponent`) and its test-only stand-in (`VerticalNavSupport`) build it identically instead of each
@@ -46,10 +47,15 @@ object EditorGeometryProducer:
     * and a page-sized window versus the smaller default -- is [[EditorEventReducer.geometryRequirement]], pure reducer
     * logic that never touches AWT or the layout engine; only the actual measurement happens here, at the boundary.
     */
-  def forEvent(event: TextEntryEvent, state: AppState, paneId: PaneId): Option[EditorGeometry] =
+  def forEvent(
+    event: TextEntryEvent,
+    state: AppState,
+    paneId: PaneId,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  ): Option[EditorGeometry] =
     EditorEventReducer.geometryRequirement(event, state) match
       case EditorEventReducer.GeometryRequirement.NotNeeded => None
-      case EditorEventReducer.GeometryRequirement.Default   => forPane(state, paneId)
+      case EditorEventReducer.GeometryRequirement.Default   => forPane(state, paneId, wrapCache = wrapCache)
       case EditorEventReducer.GeometryRequirement.PageSized =>
         val visibleRows =
           state.persisted.layout.editorPanes
@@ -58,9 +64,14 @@ object EditorGeometryProducer:
             .flatMap(state.persisted.buffers.get)
             .map(buffer => math.max(1, buffer.viewport.visibleLines))
             .getOrElse(1)
-        forPane(state, paneId, rowsAbove = visibleRows)
+        forPane(state, paneId, rowsAbove = visibleRows, wrapCache = wrapCache)
 
-  private def forBuffer(state: AppState, buffer: Buffer, rowsAbove: Int): EditorGeometry =
+  private def forBuffer(
+    state: AppState,
+    buffer: Buffer,
+    rowsAbove: Int,
+    wrapCache: WrappedLineCache
+  ): EditorGeometry =
     val font    = FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, buffer.typographyRole)
     val isTui   = state.runtime.capabilities.isCellGrid
     val metrics = if isTui then CellMetrics.cellUnit else CellMetrics.fromFont(font)
@@ -100,7 +111,8 @@ object EditorGeometryProducer:
           panelWidthPx,
           font,
           cellMetricsOverride = cellMetricsOverride,
-          forceCellLayout = isTui
+          forceCellLayout = isTui,
+          wrapCache = wrapCache
         )
         .length
         .max(1)
@@ -115,7 +127,8 @@ object EditorGeometryProducer:
             font,
             wordWrapEnabled = true,
             cellMetricsOverride = cellMetricsOverride,
-            forceCellLayout = isTui
+            forceCellLayout = isTui,
+            wrapCache = wrapCache
           )
     val windowTopVisualLine = math.max(0, cursorRowInWindow - rowsAbove)
     val snapshot =
@@ -135,7 +148,8 @@ object EditorGeometryProducer:
         forceCellLayout = isTui,
         // Same prose zoom as the render path so navigation caret advances match the drawn glyphs.
         proseScale = com.serenity.ui.theme.RichTextStyling.proseZoom(font.getSize2D),
-        dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled
+        dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
+        wrapCache = wrapCache
       )
     EditorGeometry(snapshot.navigationGeometry, metrics.charWidth, panelWidthColumns)
 

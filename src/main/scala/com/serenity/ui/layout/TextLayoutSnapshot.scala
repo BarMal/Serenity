@@ -3,6 +3,7 @@ package com.serenity.ui.layout
 import java.awt.font.*
 import java.awt.image.BufferedImage
 import java.awt.{Font, RenderingHints}
+import java.text.StringCharacterIterator
 import java.util.Locale
 
 import com.ibm.icu.text.BreakIterator
@@ -130,7 +131,8 @@ object TextLayoutSnapshot:
     wordWrapEnabled: Boolean = true,
     cellMetricsOverride: Option[CellMetrics] = None,
     forceCellLayout: Boolean = false,
-    rowAffinity: RowAffinity = RowAffinity.Downstream
+    rowAffinity: RowAffinity = RowAffinity.Downstream,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): Int =
     if !wordWrapEnabled then 0
     else
@@ -146,7 +148,8 @@ object TextLayoutSnapshot:
         singleFontResolver(font),
         fontRenderContext,
         measuredLayout,
-        cellMetrics
+        cellMetrics,
+        wrapCache = wrapCache
       ).zipWithIndex
         .filter { case (line, _) => cursorColumn >= line.startColumn && cursorColumn <= line.endColumn }
       val resolved = rowAffinity match
@@ -163,7 +166,8 @@ object TextLayoutSnapshot:
     baseColumn: Int = 0,
     maxVisualLines: Int = Int.MaxValue,
     cellMetricsOverride: Option[CellMetrics] = None,
-    forceCellLayout: Boolean = false
+    forceCellLayout: Boolean = false,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): Vector[TextVisualLine] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
@@ -176,7 +180,8 @@ object TextLayoutSnapshot:
       measuredLayout,
       cellMetrics,
       baseColumn,
-      maxVisualLines
+      maxVisualLines,
+      wrapCache = wrapCache
     )
 
   /** `forceCellLayout` bypasses the font-driven measured-vs-cell auto-detection (`shouldUseMeasuredLayout`) entirely,
@@ -200,7 +205,8 @@ object TextLayoutSnapshot:
     proseScale: Float = 1.0f,
     // `document.drop_caps_enabled` config toggle (`RichTextStyling.effectiveRole`'s gate). Defaults to the config's
     // own default so callers that predate drop caps keep measuring exactly as before.
-    dropCapsEnabled: Boolean = true
+    dropCapsEnabled: Boolean = true,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): TextLayoutSnapshot =
     val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout =
@@ -235,7 +241,8 @@ object TextLayoutSnapshot:
         richDocument,
         wordWrapEnabled,
         proseScale,
-        dropCapsEnabled
+        dropCapsEnabled,
+        wrapCache
       ).drop(viewportTopVisualLine).take(buffer.viewport.visibleLines)
 
     TextLayoutSnapshot(
@@ -266,7 +273,8 @@ object TextLayoutSnapshot:
     richDocument: Option[RichTextDocument],
     wordWrapEnabled: Boolean,
     proseScale: Float,
-    dropCapsEnabled: Boolean = true
+    dropCapsEnabled: Boolean,
+    wrapCache: WrappedLineCache
   ): Vector[TextVisualLine] =
     @annotation.tailrec
     def loop(lines: Vector[(Int, String)], acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
@@ -310,7 +318,8 @@ object TextLayoutSnapshot:
                   startColumn,
                   remainingVisualLines,
                   paragraphRole,
-                  glyphWidthPx
+                  glyphWidthPx,
+                  wrapCache
                 )
               else
                 Vector(
@@ -358,10 +367,27 @@ object TextLayoutSnapshot:
     // `acc.length`) reserve `dropCapGlyphWidthPx` of left margin so wrapping leaves room for the glyph beside them --
     // `ParagraphRole.Body` (every non-drop-cap caller's default) makes both branches below exactly today's behaviour.
     paragraphRole: ParagraphRole = ParagraphRole.Body,
-    dropCapGlyphWidthPx: Float = 0.0f
+    dropCapGlyphWidthPx: Float = 0.0f,
+    wrapCache: WrappedLineCache
   ): Vector[TextVisualLine] =
     if maxVisualLines <= 0 then Vector.empty
-    else if line.isEmpty then
+    else
+      val spec = WrappedLineKey(
+        line,
+        panelWidthPx,
+        resolver,
+        frc,
+        measuredLayout,
+        cellMetrics,
+        baseColumn,
+        paragraphRole,
+        dropCapGlyphWidthPx
+      )
+      wrapCache.wrapped(spec, bufferLine, maxVisualLines)(limit => wrapRows(spec, bufferLine, limit))
+
+  private def wrapRows(spec: WrappedLineKey, bufferLine: Int, maxVisualLines: Int): Vector[TextVisualLine] =
+    import spec.{baseColumn, cellMetrics, dropCapGlyphWidthPx, frc, measuredLayout, paragraphRole, resolver, text}
+    if text.isEmpty then
       Vector(
         DropCapLayout.applyInset(
           shapeSegment("", bufferLine, baseColumn, baseColumn, resolver, frc, measuredLayout, cellMetrics),
@@ -371,68 +397,34 @@ object TextLayoutSnapshot:
         )
       )
     else
+      @annotation.tailrec
       def loop(startColumn: Int, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
-        if startColumn >= line.length || acc.length >= maxVisualLines then acc
+        if startColumn >= text.length || acc.length >= maxVisualLines then acc
         else
           val lineWithinParagraph = acc.length
           val insetPx             = DropCapLayout.leftInsetPx(paragraphRole, lineWithinParagraph, dropCapGlyphWidthPx)
-          val wrapWidthPx         = math.max(1, panelWidthPx - math.round(insetPx))
-          val remaining           = line.substring(startColumn)
+          val wrapWidthPx         = math.max(1, spec.panelWidthPx - math.round(insetPx))
           val segmentStart        = baseColumn + startColumn
-          val fittingLength =
-            fittingSegmentLength(remaining, wrapWidthPx, segmentStart, resolver, frc, measuredLayout, cellMetrics)
-          val segmentLength    = wordBoundarySegmentLength(remaining, fittingLength)
-          val endColumnInSlice = startColumn + segmentLength
-          val segment          = line.substring(startColumn, endColumnInSlice)
-          val segmentEnd       = baseColumn + endColumnInSlice
-          val visualLine =
-            shapeSegment(segment, bufferLine, segmentStart, segmentEnd, resolver, frc, measuredLayout, cellMetrics)
+          val fit                 = fittingSegment(text, startColumn, wrapWidthPx, segmentStart, spec)
+          val segmentLength       = wordBoundarySegmentLength(text, startColumn, fit.length)
+          val endColumnInSlice    = startColumn + segmentLength
+          val segment             = text.substring(startColumn, endColumnInSlice)
+          val visualLine = shapeSegment(
+            segment,
+            bufferLine,
+            segmentStart,
+            baseColumn + endColumnInSlice,
+            resolver,
+            frc,
+            measuredLayout,
+            cellMetrics,
+            fit.caretXsForPrefix(segmentLength)
+          )
           val insetLine =
             DropCapLayout.applyInset(visualLine, paragraphRole, lineWithinParagraph, dropCapGlyphWidthPx)
           loop(endColumnInSlice, acc :+ insetLine)
 
       loop(0, Vector.empty)
-
-  private def fittingSegmentLength(
-    text: String,
-    panelWidthPx: Int,
-    absoluteStartColumn: Int,
-    resolver: LineFontResolver,
-    frc: FontRenderContext,
-    measuredLayout: Boolean,
-    cellMetrics: CellMetrics
-  ): Int =
-    if !measuredLayout then
-      val charWidth = math.max(1, cellMetrics.charWidth)
-      if cellMetrics.displayWidthAware then fittingDisplayWidthSegmentLength(text, panelWidthPx, charWidth)
-      else math.max(1, math.min(text.length, panelWidthPx / charWidth))
-    else
-      fittingMeasuredSegmentLength(text, panelWidthPx, absoluteStartColumn, resolver, frc, measuredLayout, cellMetrics)
-
-  private def fittingMeasuredSegmentLength(
-    text: String,
-    panelWidthPx: Int,
-    absoluteStartColumn: Int,
-    resolver: LineFontResolver,
-    frc: FontRenderContext,
-    measuredLayout: Boolean,
-    cellMetrics: CellMetrics
-  ): Int =
-    val cellWidth    = math.max(1, cellMetrics.charWidth)
-    val initialLimit = math.min(text.length, math.max(16, panelWidthPx / cellWidth + 32))
-
-    @annotation.tailrec
-    def loop(limit: Int): Int =
-      val candidate = text.take(limit)
-      val carets    = caretXs(candidate, absoluteStartColumn, resolver, frc, measuredLayout, cellMetrics)
-      val maxFitting =
-        carets.zipWithIndex.takeWhile { case (x, _) => x <= panelWidthPx.toFloat }.map(_._2).lastOption.getOrElse(0)
-      val candidateExhausted = limit >= text.length
-      val panelFilled        = carets.lastOption.exists(_ > panelWidthPx.toFloat)
-      if candidateExhausted || panelFilled || maxFitting < candidate.length then math.max(1, maxFitting)
-      else loop(math.min(text.length, math.max(limit + 1, limit * 2)))
-
-    loop(initialLimit)
 
   /** Where to break `text` once `fittingLength` characters have used up the available pixel width: the last legal
     * UAX#14 line-break boundary at or before `fittingLength`, per `BreakIterator.getLineInstance` -- covering no-break
@@ -450,12 +442,15 @@ object TextLayoutSnapshot:
   private val threadLocalLineBreakIterator: ThreadLocal[BreakIterator] =
     ThreadLocal.withInitial(() => BreakIterator.getLineInstance(Locale.ROOT))
 
-  private def wordBoundarySegmentLength(text: String, fittingLength: Int): Int =
-    if fittingLength >= text.length then text.length
+  /** Reads `line` from `from` on through a character iterator rather than a per-row substring of the paragraph's
+    * remainder, which made wrapping one long paragraph quadratic in its length.
+    */
+  private def wordBoundarySegmentLength(line: String, from: Int, fittingLength: Int): Int =
+    if fittingLength >= line.length - from then line.length - from
     else
       val boundary = threadLocalLineBreakIterator.get()
-      boundary.setText(text)
-      val candidate = boundary.preceding(fittingLength + 1)
+      boundary.setText(StringCharacterIterator(line, from, line.length, from))
+      val candidate = boundary.preceding(from + fittingLength + 1) - from
       if candidate > 0 then candidate else fittingLength
 
   private def shapeSegment(
@@ -466,9 +461,10 @@ object TextLayoutSnapshot:
     resolver: LineFontResolver,
     frc: FontRenderContext,
     measuredLayout: Boolean,
-    cellMetrics: CellMetrics
+    cellMetrics: CellMetrics,
+    measuredXs: Option[Vector[Float]] = None
   ): TextVisualLine =
-    val xs              = caretXs(text, startColumn, resolver, frc, measuredLayout, cellMetrics)
+    val xs              = measuredXs.getOrElse(caretXs(text, startColumn, resolver, frc, measuredLayout, cellMetrics))
     val boundaryOffsets = graphemeBoundaryOffsets(text)
     val caretStops = boundaryOffsets.map { offset =>
       TextCaretStop(startColumn + offset, xs.lift(offset).getOrElse(xs.lastOption.getOrElse(0.0f)))

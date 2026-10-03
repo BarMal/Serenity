@@ -8,10 +8,10 @@ import javax.swing.SwingUtilities
 import cats.effect.unsafe.IORuntime
 import cats.effect.{IO, Resource}
 import com.serenity.config.{AppConfig, PreferredWindowSize}
-import com.serenity.keystroke.events.{DeleteBackward, Event, InsertChar, MoveDown, MoveUp}
+import com.serenity.keystroke.events.{DeleteBackward, Event, InsertChar, MoveDown, MoveUp, ResizeEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
-import com.serenity.state.manager.{RenderCaches, StateManager}
+import com.serenity.state.manager.{CursorViewport, RenderCaches, StateManager}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, PanelPosition, ViewportSize}
 import com.serenity.ui.renderer.{Java2DRenderSurface, RendererEntryPoints}
@@ -138,7 +138,9 @@ private[perf] object LaptopFrameBenchmarks:
     )
 
   /** A live `StateManager` holding the prose, set up the way the StateManager specs do it: a hand-built `AppState`
-    * swapped in wholesale can fail validation, and then every applied event is rejected and nothing is measured.
+    * swapped in wholesale can fail validation, and then every applied event is rejected and nothing is measured. It is
+    * resized to the laptop grid (the StateManager otherwise wraps at its 80x24 default) and scrolled so the cursor is
+    * on screen, since off-screen editing skips work a real session pays for.
     */
   private def proseStateManager(using IORuntime): (StateManager, BufferId) =
     given LoggerFactory[IO] = NoOpFactory[IO]
@@ -150,9 +152,18 @@ private[perf] object LaptopFrameBenchmarks:
       state   <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, created)
+      _ <- stateManager.applyEvent(ResizeEvent(viewport))
       _ <- stateManager.setCursorPosition(paneId, 150, 40)
+      _ <- stateManager.updateState(scrolledToCursor(created))
     yield created).unsafeRunSync()
     (stateManager, proseBufferId)
+
+  private def scrolledToCursor(id: BufferId)(state: AppState): AppState =
+    state.persisted.buffers.get(id).flatMap(buffer => buffer.editing.cursorPositions.headOption.map(buffer -> _)) match
+      case Some((buffer, cursor)) =>
+        val placed = buffer.copy(viewport = CursorViewport.adjustForCursor(buffer, state, cursor))
+        state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(id, placed)))
+      case None => state
 
   private def inputBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
     val (stateManager, proseBufferId) = proseStateManager
@@ -161,6 +172,10 @@ private[perf] object LaptopFrameBenchmarks:
     def length: Option[Int]            = buffer.map(_.document.content.weight)
     def roundTrip(there: Event, back: Event): Unit =
       (stateManager.applyEvent(there) >> stateManager.applyEvent(back)).unsafeRunSync()
+    def cursorOnScreen: Boolean =
+      buffer.zip(cursor).exists((b, c) => c.line >= b.viewport.topLine && b.viewport.visibleLines > 24)
+    // A fresh letter each keystroke, so the edited line's text is new every time and never served from a cache.
+    val typedLetters = Iterator.continually('a' to 'z').flatten
     List(
       BenchmarkRunner.Benchmark(
         "laptop.input.state_manager.move_down_up",
@@ -172,8 +187,8 @@ private[perf] object LaptopFrameBenchmarks:
           val moved = cursor
           stateManager.applyEvent(MoveUp).unsafeRunSync()
           assert(
-            moved != before && cursor == before,
-            s"cursor did not move down and back: $before -> $moved -> $cursor"
+            moved != before && cursor == before && cursorOnScreen,
+            s"cursor did not move down and back on screen: $before -> $moved -> $cursor, viewport ${buffer.map(_.viewport)}"
           )
         ,
         () => roundTrip(MoveDown, MoveUp)
@@ -188,6 +203,17 @@ private[perf] object LaptopFrameBenchmarks:
           assert(length == before, s"type-and-delete changed the document length: $before -> $length")
         ,
         () => roundTrip(InsertChar('x'), DeleteBackward)
+      ),
+      BenchmarkRunner.Benchmark(
+        "laptop.input.state_manager.continuous_typing",
+        3,
+        20,
+        () =>
+          val before = length
+          stateManager.applyEvent(InsertChar(typedLetters.next())).unsafeRunSync()
+          assert(length == before.map(_ + 1) && cursorOnScreen, s"typing did not grow the document: $before -> $length")
+        ,
+        () => stateManager.applyEvent(InsertChar(typedLetters.next())).unsafeRunSync()
       )
     )
 
