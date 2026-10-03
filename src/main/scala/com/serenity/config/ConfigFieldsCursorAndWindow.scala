@@ -1,11 +1,6 @@
 package com.serenity.config
 
-import java.util.Locale
-
-import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig, SpriteFrameCycle}
-import com.serenity.ui.layout.PanelPosition
-
-/** Cursor, interface density, window chrome and companion sprite. */
+/** Cursor, interface density and window chrome. */
 private[config] object ConfigFieldsCursorAndWindow:
 
   import ConfigFieldSyntax.*
@@ -61,60 +56,6 @@ private[config] object ConfigFieldsCursorAndWindow:
       _.windowTranslucent,
       (config, value) => config.withWindowTranslucent(value)
     ),
-    // -- Companion sprite ------------------------------------------------------------------------------------------------
-    // motion.window_sitter.* (#934) is gone: the companion sprite panel absorbed the window sitter's
-    // typing-reactivity (#934 v2), so those keys are no longer registered here. An old config file naming them reads
-    // as unknown keys (`ConfigKeySchema.isKnownKey`) rather than erroring -- the same precedent this feature's own
-    // now-removed `frames` field set.
-    field("ui.companion_sprite.enabled", "companion.sprite.enabled")(boolean)(
-      _.companionSpriteConfig.enabled,
-      (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(enabled = value))
-    ),
-    field("ui.companion_sprite.character", "companion.sprite.character")(
-      enumerated(CompanionCharacter.fromConfigKey, _.id)
-    )(
-      _.companionSpriteConfig.character,
-      (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(character = value))
-    ),
-    field("ui.companion_sprite.position", "companion.sprite.position")(
-      enumeratedValues(PanelPosition.values, _.toString.toLowerCase(Locale.ROOT))
-    )(
-      _.companionSpriteConfig.position,
-      (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(position = value))
-    ),
-    field("ui.companion_sprite.size", "companion.sprite.size")(
-      int.filtered(size => size >= CompanionSpriteConfig.MinSize && size <= CompanionSpriteConfig.MaxSize)
-    )(
-      _.companionSpriteConfig.size,
-      (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(size = value))
-    ),
-    field("ui.companion_sprite.typing_cycle", "companion.sprite.typing.cycle")(
-      enumerated(
-        SpriteFrameCycle.fromConfigKey,
-        _.configKey,
-        text => SpriteFrameCycle.values.find(_.toString == text)
-      )
-    )(
-      _.companionSpriteConfig.typingCycle,
-      (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(typingCycle = value))
-    ),
-    field("ui.companion_sprite.typing_active_ticks", "companion.sprite.typing.active_ticks")(int)(
-      _.companionSpriteConfig.typingActiveTicks,
-      (config, value) => config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(typingActiveTicks = value))
-    ),
-    field("ui.companion_sprite.typing_fast_active_ticks", "companion.sprite.typing.fast_active_ticks")(int)(
-      _.companionSpriteConfig.typingFastActiveTicks,
-      (config, value) =>
-        config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(typingFastActiveTicks = value))
-    ),
-    field("ui.companion_sprite.typing_fast_threshold_ms", "companion.sprite.typing.fast_threshold_ms")(int)(
-      _.companionSpriteConfig.typingFastThresholdMs,
-      (config, value) =>
-        config.withCompanionSpriteConfig(config.companionSpriteConfig.copy(typingFastThresholdMs = value))
-    ),
-    field("ui.visual_flair", "visual.flair.level")(
-      enumerated(VisualFlairLevel.fromConfigKey, _.configKey)
-    )(_.visualFlairLevel, (config, value) => config.withVisualFlairLevel(value)),
     // #1316: no preferred size to update yet means there is nothing to update -- inventing the other dimension made a
     // width-only edit fabricate a height nobody asked for.
     named("window.preferred.width", "preferredWindowWidth", "window_preferred_width")(int.orEmpty)(

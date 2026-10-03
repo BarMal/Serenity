@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import com.serenity.command.*
 import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.{AppConfig, HotkeyAction, VisualFlairLevel}
+import com.serenity.config.{AppConfig, HotkeyAction}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.presets.UiPreset
@@ -47,22 +47,6 @@ class PersistenceTransitionsSpec extends AnyFlatSpec with Matchers:
 
     updated.persisted.config.inputConfig.wheelScrollLines shouldBe 11
     shouldValidate(updated)
-  }
-
-  "The companion sprite panel sync" should "dock the panel when enabled and remove it when flair is off, validly" in {
-    val enabledConfig =
-      AppConfig.default.withCompanionSpriteConfig(AppConfig.default.companionSpriteConfig.copy(enabled = true))
-    val shown = StateManagerConfigEffects.withCompanionSpritePanel(
-      AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = enabledConfig)),
-      enabledConfig
-    )
-    val flairOff = enabledConfig.withVisualFlairLevel(VisualFlairLevel.Off)
-    val hidden   = StateManagerConfigEffects.withCompanionSpritePanel(shown, flairOff)
-
-    shown.surfaceById(SurfaceId.CompanionSprite) should not be empty
-    hidden.surfaceById(SurfaceId.CompanionSprite) shouldBe empty
-    shouldValidate(shown)
-    shouldValidate(hidden)
   }
 
   private def drilledRunner(itemId: String): CommandRunner =

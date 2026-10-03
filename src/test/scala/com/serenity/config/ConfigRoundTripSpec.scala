@@ -6,7 +6,6 @@ import java.nio.file.{Files, Path}
 import scala.concurrent.duration.DurationInt
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig, SpriteFrameCycle}
 import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.config.{StatusLineColors, StatusLinePlacement, StatusSegment}
@@ -14,7 +13,6 @@ import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.PanelPosition
 import com.typesafe.config.ConfigFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -169,19 +167,6 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withWheelScrollLines(5)
     .withPanelEscapeTarget(AppMode.Code, PanelEscapeTarget.Previous)
     .withPanelEscapeTarget(AppMode.Prose, PanelEscapeTarget.Previous)
-    .withCompanionSpriteConfig(
-      CompanionSpriteConfig(
-        enabled = true,
-        character = CompanionCharacter.PixelWizard,
-        position = PanelPosition.Bottom,
-        size = 14,
-        typingCycle = SpriteFrameCycle.Blink,
-        typingActiveTicks = 9,
-        typingFastActiveTicks = 17,
-        typingFastThresholdMs = 175
-      )
-    )
-    .withVisualFlairLevel(VisualFlairLevel.Reduced)
 
   /** Fields that are mirrors of the motion hierarchy rather than settings in their own right: `motionConfiguration` and
     * its families are what the file carries, and `AppConfig`'s `effectiveMotion*` accessors resolve behaviour from
@@ -238,10 +223,6 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     "inputConfig.focusedKeymapConfig.panel.bindings",
     "inputConfig.focusedKeymapConfig.peek.bindings",
     "inputConfig.hotkeyConfig.bindings",
-    // CompanionCharacter has exactly one bundled value today (the placeholder sprite sheet), so there is no other
-    // value `mutated` could move this field to -- CompanionCharacterSpec covers fromConfigKey/id round-tripping
-    // directly instead.
-    "companionSpriteConfig.character",
     // `AnimationConfig.curve` (issues #1082/#1083): nothing in the settings surface can choose a curve yet (see
     // `ConfigFileFormat`/`ConfigGroups.animationEntries`, which only ever write a preset name or `steps`/
     // `duration_ms`) -- wiring a curve picker into settings is separate follow-up work, not part of adding the

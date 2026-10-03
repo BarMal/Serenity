@@ -1,14 +1,12 @@
 package com.serenity.ui.renderer
 
-import com.serenity.animation.sprite.{CompanionSpriteAssets, CompanionSpriteFrames}
-import com.serenity.config.VisualFlairLevel
 import com.serenity.markdown.MarkdownDocumentPreview
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
 /** Paints every surface that floats above or is pinned within the editor workspace: cursor-anchored overlays
   * (completion popups, hovers, ...), the modal backdrop + modal surface, and pinned/expanded panels (outline, markdown
-  * split-preview, the companion sprite panel). Panel-level layer caching is delegated to
+  * split-preview). Panel-level layer caching is delegated to
   * [[RendererFramePlanner.paintPanelLayer]]/[[RendererFramePlanner.panelDirtyCheck]], which decide reuse from
   * frame-wide damage this object never sees.
   *
@@ -155,8 +153,6 @@ object RendererFloatingPanels:
                 layerContext,
                 animationState
               )
-            case SurfaceContent.CompanionSprite =>
-              renderCompanionSpritePanel(rect, node.contentRect, state, layerContext, animationState)
             case _ =>
               PinnedPanelRenderer.render(
                 layerContext.surface,
@@ -235,36 +231,6 @@ object RendererFloatingPanels:
         buffer.exists(b => b.markdownPreviewEditGeneration != b.markdownPreviewCommittedGeneration)
     )
     context.surface.pixels.drawImage(image, imageRect.x, imageRect.y, contentWidthCells, contentHeightCells)
-
-  /** Paints the companion sprite pane: the same pinned-panel chrome every other panel gets, then the current sprite
-    * frame drawn directly via `surface.pixels.drawImage` -- on the GUI surface a real bitmap blit, on the TUI surface
-    * `TerminalRenderSurface`'s half-block conversion -- filling the panel's whole content rect. Gated on
-    * `VisualFlairLevel` here as well as by `StateManagerEffectHandlers.syncCompanionSpritePanel` removing the surface
-    * entirely at `Off`: a defensive second check, not a second source of truth, so this paint step alone can never draw
-    * the sprite once flair is turned all the way off.
-    */
-  private def renderCompanionSpritePanel(
-    rect: LayoutRect,
-    contentRect: LayoutRect,
-    state: AppState,
-    context: RenderContext,
-    animationState: com.serenity.animation.AnimationState
-  ): Unit =
-    val shell = TextPanelView(rect = rect, contentRect = Some(contentRect), title = "Companion", rows = Nil)
-    PinnedPanelRenderer.render(
-      context.surface,
-      shell,
-      state.persisted.theme,
-      state.persisted.config,
-      context.cellMetrics,
-      animationState
-    )
-
-    if state.persisted.config.visualFlairLevel != VisualFlairLevel.Off then
-      val frames = CompanionSpriteAssets.loadFrames(state.persisted.config.companionSpriteConfig.character)
-      CompanionSpriteFrames.currentFrame(frames, state.runtime.companionSprite).foreach { frame =>
-        context.surface.pixels.drawImage(frame, contentRect.x, contentRect.y, contentRect.width, contentRect.height)
-      }
 
   private def markdownPreviewImageRect(
     rect: LayoutRect,

@@ -21,7 +21,11 @@ object RemovedConfigKeys:
     "ui_blur_radius",
     "ui.corner_radius",
     "ui.corner.radius",
-    "ui_corner_radius"
+    "ui_corner_radius",
+    "ui.visual_flair",
+    "visual.flair.level"
   )
 
-  def isRemoved(key: String): Boolean = keys.contains(key)
+  private val prefixes: List[String] = List("ui.companion_sprite.", "companion.sprite.")
+
+  def isRemoved(key: String): Boolean = keys.contains(key) || prefixes.exists(key.startsWith)

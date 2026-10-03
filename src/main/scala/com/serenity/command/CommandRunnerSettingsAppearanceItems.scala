@@ -1,10 +1,9 @@
 package com.serenity.command
 
-import com.serenity.animation.sprite.SpriteFrameCycle
 import com.serenity.config.*
 
-/** Interface-density, window-chrome, and companion-sprite appearance settings items. Split out of
-  * `CommandRunnerSettingsItems` to keep both under the architecture size targets -- see that object's doc.
+/** Interface-density and window-chrome appearance settings items. Split out of `CommandRunnerSettingsItems` to keep
+  * both under the architecture size targets -- see that object's doc.
   */
 private[command] object CommandRunnerSettingsAppearanceItems:
 
@@ -80,89 +79,4 @@ private[command] object CommandRunnerSettingsAppearanceItems:
       selectedIndex = optionSelections.getOrElse("window-chrome", 0),
       category = CommandCategory.Settings,
       hint = Some("Applies after restart; auto uses Serenity chrome on Linux")
-    )
-
-  private[command] def companionSpriteEnabledOptionItem(
-    optionSelections: Map[String, Int]
-  ): CommandSurfaceItem.OptionItem =
-    CommandSurfaceItem.OptionItem(
-      id = "companion-sprite-enabled",
-      label = "Companion Sprite",
-      options = List(
-        CommandOption(
-          "On",
-          CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteEnabled(true)))
-        ),
-        CommandOption(
-          "Off",
-          CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteEnabled(false)))
-        )
-      ),
-      selectedIndex = optionSelections.getOrElse("companion-sprite-enabled", 1),
-      category = CommandCategory.Settings,
-      hint = Some(
-        "A small pixel-art companion pane, idling, occasionally performing a trick, and reacting to typing"
-      )
-    )
-
-  private[command] def visualFlairLevelOptionItem(
-    optionSelections: Map[String, Int]
-  ): CommandSurfaceItem.OptionItem =
-    CommandSurfaceItem.OptionItem(
-      id = "visual-flair-level",
-      label = "Visual Flair",
-      options = List(
-        CommandOption(
-          "Full",
-          CommandIntent.Settings(
-            SettingsIntent.Decoration(DecorationIntent.SetVisualFlairLevel(VisualFlairLevel.Full))
-          )
-        ),
-        CommandOption(
-          "Reduced",
-          CommandIntent.Settings(
-            SettingsIntent.Decoration(DecorationIntent.SetVisualFlairLevel(VisualFlairLevel.Reduced))
-          )
-        ),
-        CommandOption(
-          "Off",
-          CommandIntent.Settings(
-            SettingsIntent.Decoration(DecorationIntent.SetVisualFlairLevel(VisualFlairLevel.Off))
-          )
-        )
-      ),
-      selectedIndex = optionSelections.getOrElse("visual-flair-level", 0),
-      category = CommandCategory.Settings,
-      hint = Some("Performance/battery tier for purely decorative extras -- the companion sprite, background blur")
-    )
-
-  private[command] def companionSpriteTypingCycleOptionItem(
-    optionSelections: Map[String, Int]
-  ): CommandSurfaceItem.OptionItem =
-    CommandSurfaceItem.OptionItem(
-      id = "companion-sprite-typing-cycle",
-      label = "Typing Cycle",
-      options = List(
-        CommandOption(
-          "Cycle",
-          CommandIntent.Settings(
-            SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingCycle(SpriteFrameCycle.Cycle))
-          )
-        ),
-        CommandOption(
-          "Pulse",
-          CommandIntent.Settings(
-            SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingCycle(SpriteFrameCycle.Pulse))
-          )
-        ),
-        CommandOption(
-          "Blink",
-          CommandIntent.Settings(
-            SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingCycle(SpriteFrameCycle.Blink))
-          )
-        )
-      ),
-      selectedIndex = optionSelections.getOrElse("companion-sprite-typing-cycle", 1),
-      category = CommandCategory.Settings,
-      hint = Some("Frame cycle style while the companion sprite reacts to typing")
     )

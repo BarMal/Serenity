@@ -120,10 +120,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "ui-element-gap",
       "ui-outline-thickness",
       "render-fps",
-      "render-damage-granularity",
-      "visual-flair-level",
-      "companion-sprite-enabled",
-      "companion-sprite-typing-cycle"
+      "render-damage-granularity"
     )
     group("settings-animation").label shouldBe "Motion"
     group("settings-animation").children.map(_.id) shouldBe List(
@@ -142,10 +139,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "element-transition-speed-scale",
       "editor-text-speed-scale",
       "command-runner-speed-scale",
-      "ui-speed-scale",
-      "companion-sprite-typing-active-ticks",
-      "companion-sprite-typing-fast-active-ticks",
-      "companion-sprite-typing-fast-threshold-ms"
+      "ui-speed-scale"
     )
     group("settings-language-tools").children.map(_.id) shouldBe List("buffer-language", "settings-spellcheck")
     nestedGroup("settings-text-display").label shouldBe "Text Display"

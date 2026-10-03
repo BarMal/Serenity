@@ -1,6 +1,5 @@
 package com.serenity.command
 
-import com.serenity.animation.sprite.SpriteFrameCycle
 import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.config.*
 import com.serenity.ui.fonts.FontLoader
@@ -37,44 +36,41 @@ object CommandRunnerOptionSelections:
       "panel-close-transition" -> panelTransitionIndex(
         configuredTransitionKind(surfaceConfig, MotionFamily.PinnedPanels, TransitionScope.PanelClose)
       ),
-      "cursor-mode"                   -> cursorModeIndex(cursorConfig.mode),
-      "status-placement"              -> statusPlacementIndex(config.statusLine.placement),
-      "status-position"               -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Position)),
-      "status-title"                  -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Title)),
-      "status-language"               -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Language)),
-      "status-mode"                   -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Mode)),
-      "status-word-count"             -> enabledIndex(config.statusLine.segments.contains(StatusSegment.WordCount)),
-      "status-char-count"             -> enabledIndex(config.statusLine.segments.contains(StatusSegment.CharCount)),
-      "status-reading-time"           -> enabledIndex(config.statusLine.segments.contains(StatusSegment.ReadingTime)),
-      "interface-density"             -> interfaceDensityIndex(interfaceConfig.density),
-      "window-chrome"                 -> windowChromeModeIndex(config.windowChromeMode),
-      "companion-sprite-enabled"      -> enabledIndex(config.companionSpriteConfig.enabled),
-      "companion-sprite-typing-cycle" -> spriteFrameCycleIndex(config.companionSpriteConfig.typingCycle),
-      "visual-flair-level"            -> visualFlairLevelIndex(config.visualFlairLevel),
-      "markdown-view"                 -> markdownViewModeIndex(documentConfig.markdownViewMode),
-      "default-document-mode"         -> defaultDocumentModeIndex(documentConfig.defaultMode),
-      "drop-caps-enabled"             -> enabledIndex(documentConfig.dropCapsEnabled),
-      "spellcheck-enabled"            -> enabledIndex(languageToolsConfig.spellCheck.enabled),
-      "app-mode"                      -> appModeIndex(config.appMode),
-      "settings-show-all"             -> enabledIndex(config.showAllSettingsRegardlessOfMode),
-      "panel-escape-code"             -> panelEscapeTargetIndex(config.inputConfig.panelEscapeReturnsTo.code),
-      "panel-escape-prose"            -> panelEscapeTargetIndex(config.inputConfig.panelEscapeReturnsTo.prose),
-      "line-numbers"                  -> enabledIndex(surfaceConfig.showLineNumbers),
-      "line-number-side"              -> lineNumberSideIndex(surfaceConfig.lineNumberLayout.side),
-      "line-wrap"                     -> enabledIndex(surfaceConfig.wordWrapEnabled),
-      "visual-line-navigation"        -> enabledIndex(surfaceConfig.visualLineCursorNavigation),
-      "typewriter-scrolling"          -> enabledIndex(surfaceConfig.typewriterScrollingEnabled),
-      "focused-text-body"             -> enabledIndex(surfaceConfig.focusedTextBodyEnabled),
-      "contextual-toolbar"            -> enabledIndex(surfaceConfig.contextualToolbarEnabled),
-      "contextual-toolbar-display"    -> contextualToolbarDisplayModeIndex(surfaceConfig.contextualToolbarDisplayMode),
-      "command-runner-key-hints"      -> enabledIndex(surfaceConfig.commandRunnerShowKeyHints),
-      "code-font"                     -> codeFontIndex(editorConfig.fontConfig.codeFontFamily),
-      "text-font"                     -> textFontIndex(editorConfig.fontConfig.textFontFamily),
-      "ui-font"                       -> uiFontIndex(editorConfig.fontConfig.uiFontFamily),
-      "text-scale-mode"               -> textScaleModeIndex(editorConfig.fontConfig.textScaleMode),
-      "code-ligatures"                -> ligaturesIndex(editorConfig.fontConfig.codeLigatures),
-      "text-ligatures"                -> ligaturesIndex(editorConfig.fontConfig.textLigatures),
-      "ui-ligatures"                  -> ligaturesIndex(editorConfig.fontConfig.uiLigatures)
+      "cursor-mode"                -> cursorModeIndex(cursorConfig.mode),
+      "status-placement"           -> statusPlacementIndex(config.statusLine.placement),
+      "status-position"            -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Position)),
+      "status-title"               -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Title)),
+      "status-language"            -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Language)),
+      "status-mode"                -> enabledIndex(config.statusLine.segments.contains(StatusSegment.Mode)),
+      "status-word-count"          -> enabledIndex(config.statusLine.segments.contains(StatusSegment.WordCount)),
+      "status-char-count"          -> enabledIndex(config.statusLine.segments.contains(StatusSegment.CharCount)),
+      "status-reading-time"        -> enabledIndex(config.statusLine.segments.contains(StatusSegment.ReadingTime)),
+      "interface-density"          -> interfaceDensityIndex(interfaceConfig.density),
+      "window-chrome"              -> windowChromeModeIndex(config.windowChromeMode),
+      "markdown-view"              -> markdownViewModeIndex(documentConfig.markdownViewMode),
+      "default-document-mode"      -> defaultDocumentModeIndex(documentConfig.defaultMode),
+      "drop-caps-enabled"          -> enabledIndex(documentConfig.dropCapsEnabled),
+      "spellcheck-enabled"         -> enabledIndex(languageToolsConfig.spellCheck.enabled),
+      "app-mode"                   -> appModeIndex(config.appMode),
+      "settings-show-all"          -> enabledIndex(config.showAllSettingsRegardlessOfMode),
+      "panel-escape-code"          -> panelEscapeTargetIndex(config.inputConfig.panelEscapeReturnsTo.code),
+      "panel-escape-prose"         -> panelEscapeTargetIndex(config.inputConfig.panelEscapeReturnsTo.prose),
+      "line-numbers"               -> enabledIndex(surfaceConfig.showLineNumbers),
+      "line-number-side"           -> lineNumberSideIndex(surfaceConfig.lineNumberLayout.side),
+      "line-wrap"                  -> enabledIndex(surfaceConfig.wordWrapEnabled),
+      "visual-line-navigation"     -> enabledIndex(surfaceConfig.visualLineCursorNavigation),
+      "typewriter-scrolling"       -> enabledIndex(surfaceConfig.typewriterScrollingEnabled),
+      "focused-text-body"          -> enabledIndex(surfaceConfig.focusedTextBodyEnabled),
+      "contextual-toolbar"         -> enabledIndex(surfaceConfig.contextualToolbarEnabled),
+      "contextual-toolbar-display" -> contextualToolbarDisplayModeIndex(surfaceConfig.contextualToolbarDisplayMode),
+      "command-runner-key-hints"   -> enabledIndex(surfaceConfig.commandRunnerShowKeyHints),
+      "code-font"                  -> codeFontIndex(editorConfig.fontConfig.codeFontFamily),
+      "text-font"                  -> textFontIndex(editorConfig.fontConfig.textFontFamily),
+      "ui-font"                    -> uiFontIndex(editorConfig.fontConfig.uiFontFamily),
+      "text-scale-mode"            -> textScaleModeIndex(editorConfig.fontConfig.textScaleMode),
+      "code-ligatures"             -> ligaturesIndex(editorConfig.fontConfig.codeLigatures),
+      "text-ligatures"             -> ligaturesIndex(editorConfig.fontConfig.textLigatures),
+      "ui-ligatures"               -> ligaturesIndex(editorConfig.fontConfig.uiLigatures)
     )
 
   private def configuredTransitionKind(
@@ -129,18 +125,6 @@ object CommandRunnerOptionSelections:
       case WindowChromeMode.Native       => 1
       case WindowChromeMode.NativeThemed => 2
       case WindowChromeMode.Custom       => 3
-
-  private def spriteFrameCycleIndex(cycle: SpriteFrameCycle): Int =
-    cycle match
-      case SpriteFrameCycle.Cycle => 0
-      case SpriteFrameCycle.Pulse => 1
-      case SpriteFrameCycle.Blink => 2
-
-  private def visualFlairLevelIndex(level: VisualFlairLevel): Int =
-    level match
-      case VisualFlairLevel.Full    => 0
-      case VisualFlairLevel.Reduced => 1
-      case VisualFlairLevel.Off     => 2
 
   private def motionPresetIndex(preset: MotionPreset): Int =
     preset match

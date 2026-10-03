@@ -65,4 +65,3 @@ private[presets] object UiPresetSummary:
       case SessionPanelContent.Comments(_)            => "comments"
       case SessionPanelContent.Diagnostics(_)         => "diagnostics"
       case SessionPanelContent.MarkdownPreview(_, _)  => "markdown preview"
-      case SessionPanelContent.CompanionSprite        => "companion sprite"

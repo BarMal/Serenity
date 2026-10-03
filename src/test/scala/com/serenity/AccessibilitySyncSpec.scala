@@ -72,26 +72,6 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync() shouldBe 1
   }
 
-  it should "not recompute when only the decorative companion sprite ticked" in {
-    val stateA = AppState.initial
-    val stateB =
-      stateA.copy(runtime = stateA.runtime.copy(companionSprite = stateA.runtime.companionSprite.copy(frameIndex = 2)))
-    val program = for
-      sync      <- AccessibilitySync.empty
-      callCount <- IO.ref(0)
-      compute = (state: AppState) =>
-        (previous: Option[AccessibilitySnapshot]) =>
-          callCount.update(_ + 1).as(AccessibilitySnapshot.from(state, viewport, previous))
-      first  <- sync.sync(stateA)(compute(stateA))
-      second <- sync.sync(stateB)(compute(stateB))
-      calls  <- callCount.get
-    yield (first, second, calls)
-
-    val (first, second, calls) = program.unsafeRunSync()
-    (second eq first) shouldBe true
-    calls shouldBe 1
-  }
-
   it should "not recompute when only a theme transition or surface animation ticked" in {
     val stateA = AppState.initial
     val stateB = stateA.copy(
@@ -174,13 +154,12 @@ class AccessibilitySyncSpec extends AnyFlatSpec with Matchers:
     program.unsafeRunSync() shouldBe 1
   }
 
-  it should "still recompute a real change even while the companion sprite is also ticking" in {
+  it should "still recompute a real change even while typing activity also changed" in {
     val stateA = AppState.initial
     val stateB = AppState.initial
       .copy(
         persisted = AppState.initial.persisted.copy(focus = Focus.Surface(SurfaceId("changed"))),
-        runtime =
-          AppState.initial.runtime.copy(companionSprite = AppState.initial.runtime.companionSprite.copy(frameIndex = 2))
+        runtime = AppState.initial.runtime.copy(typingActivity = TypingActivity(quietUntilNanos = Some(5L)))
       )
     val program = for
       sync      <- AccessibilitySync.empty

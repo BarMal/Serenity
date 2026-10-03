@@ -5,7 +5,7 @@ import java.nio.file.Path
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.ViewIntent
-import com.serenity.config.{AppConfig, AppMode, MarkdownViewMode, VisualFlairLevel}
+import com.serenity.config.{AppConfig, AppMode, MarkdownViewMode}
 import com.serenity.frontend.MarkdownPreviewWindowAvailability
 import com.serenity.io.FileUtils
 import com.serenity.keystroke.events.Event
@@ -30,8 +30,7 @@ final private[manager] class StateManagerPanelEffects(
     expandPinnedPanel: PanelTarget => IO[Unit],
     collapseExpandedPanel: () => IO[Unit],
     switchToPinnedPanel: PanelTarget => IO[Unit],
-    resizePinnedPanel: (PanelTarget, Int) => IO[Unit],
-    setCompanionSpriteEnabled: Boolean => IO[Unit]
+    resizePinnedPanel: (PanelTarget, Int) => IO[Unit]
 )(using com.serenity.rope.Balance):
 
   /** Floor for command/keyboard panel resize (issue #1310) -- prevents a panel from shrinking to zero or negative
@@ -110,13 +109,11 @@ final private[manager] class StateManagerPanelEffects(
       case MarkdownViewMode.Source | MarkdownViewMode.InlineLens =>
         updateConfigEffect >> commitApp(PanelTransitions.removePanel(PanelId.MarkdownPreview))
 
-  // Hidden through the same animated, undoable unpin a drag-off uses. The companion's visibility is the
-  // `ui.companion_sprite.enabled` setting, so hiding it turns that off too -- otherwise it would return at next start.
+  // Hidden through the same animated, undoable unpin a drag-off uses.
   private def hidePanel(id: PanelId, state: AppState): IO[Unit] =
     state.pinnedSurfaces
       .find(surface => PanelId.forContent(surface.content).contains(id))
-      .traverse_(surface => unpinPanel(PanelTarget.ById(surface.id))) >>
-      setCompanionSpriteEnabled(false).whenA(id == PanelId.Companion)
+      .traverse_(surface => unpinPanel(PanelTarget.ById(surface.id)))
 
   private def isShown(id: PanelId, state: AppState): Boolean =
     state.pinnedSurfaces.exists(surface => PanelId.forContent(surface.content).contains(id))
@@ -154,15 +151,9 @@ final private[manager] class StateManagerPanelEffects(
   private def setPanelPin(id: PanelId, position: Option[PanelPosition]): IO[Unit] =
     position match
       case None =>
-        commitModel(PanelTransitions.panelChange(_, PanelTransitions.removePanel(id))) >>
-          setCompanionSpriteEnabled(false).whenA(id == PanelId.Companion)
+        commitModel(PanelTransitions.panelChange(_, PanelTransitions.removePanel(id)))
       case Some(targetPosition) =>
-        currentState.flatMap { state =>
-          val showsCompanion =
-            id == PanelId.Companion && state.persisted.config.visualFlairLevel != VisualFlairLevel.Off
-          setCompanionSpriteEnabled(true)
-            .whenA(showsCompanion) >> pinPanel(id, targetPosition)
-        }
+        pinPanel(id, targetPosition)
 
   /** The command/keyboard resize entry point (issue #1310) onto the same `resizePinnedPanel` -- and, through it,
     * `PanelStateReducer.resize` -- the existing mouse-drag path already uses: one shared resize state fed by all three

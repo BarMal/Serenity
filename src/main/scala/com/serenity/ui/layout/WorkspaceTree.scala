@@ -63,8 +63,8 @@ final case class WorkspaceTree(root: WorkspaceNode):
     WorkspaceTree.dockedSurface(root, surfaceId).map(_.position)
 
   /** Fresh, collision-free split/leaf node IDs for docking a not-yet-docked surface (issue #817) -- the one place every
-    * pin path (`PanelStateReducer`, `UiPreset`, `SessionLayout`, the companion sprite panel) derives the IDs it hands
-    * to [[dock]], so they can't drift out of sync with each other.
+    * pin path (`PanelStateReducer`, `UiPreset`, `SessionLayout`) derives the IDs it hands to [[dock]], so they can't
+    * drift out of sync with each other.
     */
   def nextDockIds(surfaceId: SurfaceId): (WorkspaceNodeId, WorkspaceNodeId) =
     (WorkspaceNodeId(s"dock-split-${surfaceId.value}-${nodeIds.size}"), WorkspaceNodeId(s"dock-${surfaceId.value}"))

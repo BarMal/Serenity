@@ -1,22 +1,14 @@
 package com.serenity.state.manager
 
-import scala.util.Random
-
 import cats.effect.IO
 import com.serenity.animation.CharacterKey
-import com.serenity.config.VisualFlairLevel
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
 final private[manager] class StateManagerEditorCapability(
     modelCommit: ModelCommit,
     animations: AnimationChoreography,
-    operations: StateManagerOperationBoundary,
-    // Seeds the companion sprite's pseudo-random idle-to-action rolls (see `CompanionSpriteState`'s transition
-    // policy). A single mutable source threaded through every tick, same as a real hardware RNG would be -- the pure
-    // transition logic itself never touches unseeded randomness directly, only what this IO-boundary constructor
-    // passes it. Tests construct this class with a seeded `Random` for a deterministic trace.
-    companionSpriteRandom: Random = new Random()
+    operations: StateManagerOperationBoundary
 ):
 
   def getModel: IO[Model] = modelCommit.model
@@ -43,37 +35,26 @@ final private[manager] class StateManagerEditorCapability(
       hasCursorGlide       = state.persisted.buffers.values.exists(hasInFlightGlide)
       hasSelectionGeometry = state.persisted.buffers.values.exists(hasInFlightSelectionGeometry)
       hasTypingActivity    = state.typingHidesFloatingStatusLine
-      flairLevel           = state.persisted.config.visualFlairLevel
-      hasCompanionSprite   = state.persisted.config.companionSpriteConfig.enabled && flairLevel != VisualFlairLevel.Off
       stillActive <-
         if !hasBufferAnimations && !hasThemeTransition && !hasSurfaceAnimations && !hasColumnTransitions &&
-            !hasPanelGeometry && !hasCursorGlide && !hasSelectionGeometry && !hasCompanionSprite &&
-            !hasTypingActivity
+            !hasPanelGeometry && !hasCursorGlide && !hasSelectionGeometry && !hasTypingActivity
         then IO.pure(false)
         else
           // A dispatch in flight would commit a state built from its own earlier snapshot over this tick's write
           // (#1564), and waiting for it would stall the render loop behind its I/O -- so skip this tick and report
           // still-active so the next frame retries.
           for
-            companionSpriteSeed <- IO(companionSpriteRandom.nextLong())
-            now                 <- IO.monotonic
-            advanced <- operations.runIfDispatcherIdle(
-              advanceOneTick(hasCompanionSprite, flairLevel, companionSpriteSeed, now.toNanos)
-            )
+            now      <- IO.monotonic
+            advanced <- operations.runIfDispatcherIdle(advanceOneTick(now.toNanos))
           yield advanced.getOrElse(true)
     yield stillActive
 
-  private def advanceOneTick(
-    hasCompanionSprite: Boolean,
-    flairLevel: VisualFlairLevel,
-    companionSpriteSeed: Long,
-    nowNanos: Long
-  ): IO[Boolean] =
+  private def advanceOneTick(nowNanos: Long): IO[Boolean] =
     // An atomic, validated update rather than a `set`: writers outside the dispatcher (`updateState`, the
     // buffer/panel records) still exist, and this keeps the tick atomic with them. It may retry, so everything it
     // reads is passed in.
     modelCommit
-      .advanceTick(advanceModel(_, hasCompanionSprite, flairLevel, companionSpriteSeed, nowNanos))
+      .advanceTick(advanceModel(_, nowNanos))
       .map { next =>
         val newState = next.app
         newState.persisted.buffers.keys.exists(id => next.bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
@@ -83,24 +64,12 @@ final private[manager] class StateManagerEditorCapability(
         newState.runtime.motion.panelGeometry.nonEmpty ||
         newState.persisted.buffers.values.exists(hasInFlightGlide) ||
         newState.persisted.buffers.values.exists(hasInFlightSelectionGeometry) ||
-        newState.typingHidesFloatingStatusLine ||
-        hasCompanionSprite
+        newState.typingHidesFloatingStatusLine
       }
 
-  private def advanceModel(
-    current: Model,
-    hasCompanionSprite: Boolean,
-    flairLevel: VisualFlairLevel,
-    companionSpriteSeed: Long,
-    nowNanos: Long
-  ): Model =
+  private def advanceModel(current: Model, nowNanos: Long): Model =
     val state             = current.app
     val updatedTransition = state.runtime.themeDiscovery.transition.map(_.advance).filterNot(_.isComplete)
-    val advancedCompanionSprite =
-      if hasCompanionSprite then
-        state.runtime.companionSprite
-          .tick(new Random(companionSpriteSeed), reducedRate = flairLevel == VisualFlairLevel.Reduced)
-      else state.runtime.companionSprite
     val updatedColumnTransitions =
       state.runtime.motion.columnTransitions.view.mapValues(_.advance).toMap.filterNot(_._2.isComplete)
     val stateWithAdvancedBuffers = state.copy(
@@ -112,7 +81,6 @@ final private[manager] class StateManagerEditorCapability(
       runtime = state.runtime.copy(
         themeDiscovery = state.runtime.themeDiscovery.copy(transition = updatedTransition),
         typingActivity = state.runtime.typingActivity.advance(nowNanos),
-        companionSprite = advancedCompanionSprite,
         motion = state.runtime.motion.copy(columnTransitions = updatedColumnTransitions)
       )
     )

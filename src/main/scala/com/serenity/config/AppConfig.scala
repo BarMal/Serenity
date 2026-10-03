@@ -1,7 +1,6 @@
 package com.serenity.config
 
 import com.serenity.animation.*
-import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.config.LspUserConfig
@@ -15,8 +14,6 @@ final case class AppConfig(
     surfaceConfig: SurfaceConfig = SurfaceConfig(),
     cursorConfig: CursorConfig = CursorConfig(),
     windowConfig: WindowConfig = WindowConfig(),
-    companionSpriteConfig: CompanionSpriteConfig = CompanionSpriteConfig.default,
-    visualFlairLevel: VisualFlairLevel = VisualFlairLevel.default,
     documentConfig: DocumentConfig = DocumentConfig(),
     interfaceConfig: InterfaceConfig = InterfaceConfig(),
     languageToolsConfig: LanguageToolsConfig = LanguageToolsConfig(),
@@ -328,12 +325,6 @@ final case class AppConfig(
 
   def withPreferredWindowSize(size: PreferredWindowSize): AppConfig =
     withWindowConfig(windowConfig.copy(preferredSize = Some(size.normalized)))
-
-  def withCompanionSpriteConfig(config: CompanionSpriteConfig): AppConfig =
-    copy(companionSpriteConfig = config.normalized)
-
-  def withVisualFlairLevel(level: VisualFlairLevel): AppConfig =
-    copy(visualFlairLevel = level)
 
   def withLspUserConfig(config: LspUserConfig): AppConfig =
     withLanguageToolsConfig(languageToolsConfig.copy(lspUserConfig = config))

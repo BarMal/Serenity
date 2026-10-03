@@ -51,7 +51,7 @@ class PanelArrangementSpec extends AnyFlatSpec with Matchers:
   it should "leave out hidden panels the current mode has no use for" in {
     val prose = PanelArrangement.of(inMode(AppMode.Prose)).panelsIn(Hidden)
 
-    prose should contain allOf (PanelId.Outline, PanelId.Companion)
+    prose should contain(PanelId.Outline)
     prose should contain noneOf (PanelId.Diagnostics, PanelId.ProjectOutput)
   }
 
