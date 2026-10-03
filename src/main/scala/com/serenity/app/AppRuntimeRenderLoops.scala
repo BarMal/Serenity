@@ -117,51 +117,52 @@ private[serenity] object AppRuntimeRenderLoops:
     for
       _           <- context.markInputPending
       _           <- IO.whenA(inputs.exists(isPointerInput))(context.checkResizeAndHandle)
+      _           <- AppRuntime.resetCursorActivity(context.cursorVisible, context.breathIndex)
       config      <- context.stateManager.getCurrentState.map(_.persisted.config)
       translators <- cachedTranslators(config, context.translatorCache)
       steps = EventBatchSteps[PendingInput](
         decode = decodeInput(config, translators),
         prepare = companionSpriteTyping,
-        isolate = ClipboardEventSync.touchesSystemClipboard
+        isolate = ClipboardEventSync.touchesSystemClipboard,
+        slice = AppRuntime.fastFrameInterval(config.surfaceConfig.renderFpsTarget) / 2
       )
-      damage <- dispatchInputs(context, steps, inputs, Damage.Nothing)
-      _      <- refreshFocusedInputTranslator(context.stateManager, context.inputRouter, context.translatorCache)
-      _      <- AppRuntime.resetCursorActivity(context.cursorVisible, context.breathIndex)
-      _      <- context.emitDamage(damage)
+      _ <- dispatchInputs(context, steps, inputs)
+      _ <- refreshFocusedInputTranslator(context.stateManager, context.inputRouter, context.translatorCache)
     yield ()
 
+  /** Each dispatch's damage is published as soon as it lands, so the oldest input of a long batch shows in the next
+    * frame instead of waiting for the inputs queued behind it.
+    */
   private def dispatchInputs(
     context: InputBatchContext,
     steps: EventBatchSteps[PendingInput],
-    inputs: List[PendingInput],
-    damage: Damage
-  )(using com.serenity.rope.Balance): IO[Damage] =
+    inputs: List[PendingInput]
+  )(using com.serenity.rope.Balance): IO[Unit] =
     for
       _     <- IO(context.frameTimings.inputApplyStarted())
       batch <- context.stateManager.applyEventBatch(inputs, steps)
       _     <- IO(context.frameTimings.inputApplyFinished())
       _     <- batch.applied.traverse_(context.logEvent(_, batch.after.app.persisted.focus))
-      applied = damage |+| DamageProducer.forTransition(
-        batch.before.app,
-        batch.after.app,
-        batch.before.bufferAnimations,
-        batch.after.bufferAnimations
-      )
-      total <- batch.isolated match
-        case None => IO.pure(applied)
-        case Some((event, rest)) =>
-          applyIsolated(context, steps, event).flatMap(isolatedDamage =>
-            if rest.isEmpty then IO.pure(applied |+| isolatedDamage)
-            else dispatchInputs(context, steps, rest, applied |+| isolatedDamage)
+      _ <- IO.whenA(batch.applied.nonEmpty)(
+        context.emitDamage(
+          DamageProducer.forTransition(
+            batch.before.app,
+            batch.after.app,
+            batch.before.bufferAnimations,
+            batch.after.bufferAnimations
           )
-    yield total
+        )
+      )
+      _ <- batch.isolated.fold(IO.unit)(applyIsolated(context, steps, _))
+      _ <- IO.whenA(batch.remaining.nonEmpty)(dispatchInputs(context, steps, batch.remaining))
+    yield ()
 
   private def applyIsolated(context: InputBatchContext, steps: EventBatchSteps[PendingInput], event: Event)(using
     com.serenity.rope.Balance
-  ): IO[Damage] =
+  ): IO[Unit] =
     ClipboardEventSync.beforeEvent(event, context.stateManager, context.systemClipboard) >>
-      dispatchInputs(context, steps.copy(isolate = _ => false), List(PendingInput.Ready(event)), Damage.Nothing)
-        .flatTap(_ => ClipboardEventSync.afterEvent(event, context.stateManager, context.systemClipboard))
+      dispatchInputs(context, steps.copy(isolate = _ => false), List(PendingInput.Ready(event))) >>
+      ClipboardEventSync.afterEvent(event, context.stateManager, context.systemClipboard)
 
   private def isPointerInput(input: PendingInput): Boolean =
     input match

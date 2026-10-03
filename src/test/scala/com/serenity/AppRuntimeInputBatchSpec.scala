@@ -1,9 +1,12 @@
 package com.serenity
 
+import scala.concurrent.duration.*
+
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.AppConfig
+import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.input.{InputRouter, PendingInput, SystemClipboard}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
@@ -106,7 +109,7 @@ class AppRuntimeInputBatchSpec extends AnyFlatSpec with Matchers:
       )
       _ <- runBatches(
         stateManager,
-        List(List(key('a'), key('b'))),
+        List(List(key('a'))),
         emitDamage = damage => emitted.update(_ :+ damage)
       )
       fromObserver <- observed.get
@@ -173,4 +176,54 @@ class AppRuntimeInputBatchSpec extends AnyFlatSpec with Matchers:
     val events = program.unsafeRunSync()
     events.headOption shouldBe Some(OpenFind)
     events.lift(1) shouldBe Some(ModalInsertChar('x'))
+  }
+
+  it should "split a batch that outlasts half a frame, publishing each slice's damage before applying the next" in {
+    val state = AppState.initial.copy(persisted =
+      AppState.initial.persisted
+        .copy(config = AppState.initial.persisted.config.withRenderFpsTarget(com.serenity.config.RenderFpsTarget.Fps60))
+    )
+    val program = for
+      timeline <- Ref.of[IO, Vector[String]](Vector.empty)
+      stateManager = new com.serenity.state.manager.StateEngine:
+        def getCurrentState: IO[AppState] = IO.pure(state)
+        def getModel: IO[com.serenity.state.manager.Model] =
+          IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState(), Map.empty))
+        def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
+        // Each event takes 4ms, so half of a 60fps frame (8.3ms) fits three of them.
+        def applyEvent(event: Event): IO[Unit] =
+          IO.sleep(4.millis) >> timeline.update(_ :+ event.toString)
+      router          <- InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default))
+      cursorVisible   <- Ref.of[IO, Boolean](true)
+      breathIndex     <- Ref.of[IO, Int](0)
+      translatorCache <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
+      context = AppRuntimeRenderLoops.InputBatchContext(
+        stateManager,
+        router,
+        SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit),
+        IO.unit,
+        cursorVisible,
+        breathIndex,
+        _ => timeline.update(_ :+ "damage"),
+        translatorCache,
+        com.serenity.diagnostics.FrameTimings()
+      )
+      _ <- Stream
+        .emit(Chunk.from("abcdef".toList.map(char => PendingInput.Ready(InsertChar(char)))))
+        .through(AppRuntimeRenderLoops.inputBatchPhase(context))
+        .compile
+        .drain
+      result <- timeline.get
+    yield result
+
+    com.serenity.testkit.VirtualTime.runVirtual(program) shouldBe Vector(
+      "InsertChar(a)",
+      "InsertChar(b)",
+      "InsertChar(c)",
+      "damage",
+      "InsertChar(d)",
+      "InsertChar(e)",
+      "InsertChar(f)",
+      "damage"
+    )
   }
