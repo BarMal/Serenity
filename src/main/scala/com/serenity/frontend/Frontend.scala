@@ -61,8 +61,8 @@ object Frontend:
   /** The TUI counterpart to [[guiLogRouting]], read the same way before a `TuiFrontend` exists. */
   val tuiLogRouting: LogRouting = LogRouting(suppressConsole = true)
 
-/** The GUI frontend: a real font-measured pixel grid, full typography, and a fixed cursor-blink cadence -- a focused Swing window has no hardware cursor to delegate blink timing to, unlike
-  * a real terminal (see [[TuiFrontend]]).
+/** The GUI frontend: a real font-measured pixel grid, full typography, and a fixed cursor-blink cadence -- a focused
+  * Swing window has no hardware cursor to delegate blink timing to, unlike a real terminal (see [[TuiFrontend]]).
   */
 case object GuiFrontend extends Frontend:
   val capabilities: FrontendCapabilities                       = FrontendCapabilities.gui

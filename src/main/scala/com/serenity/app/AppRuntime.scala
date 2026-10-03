@@ -5,7 +5,8 @@ import java.nio.file.Path
 import scala.concurrent.duration.*
 
 import cats.effect.*
-import cats.effect.std.Dispatcher
+import cats.effect.std.{Dispatcher, Supervisor}
+import cats.syntax.apply.*
 import cats.syntax.foldable.*
 import cats.syntax.parallel.*
 import cats.syntax.semigroup.*
@@ -153,7 +154,7 @@ object AppRuntime:
     frontend: Frontend = com.serenity.frontend.GuiFrontend,
     configNotice: Option[String] = None
   )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
-    Dispatcher.parallel[IO].use { resizeCallbackDispatcher =>
+    (Dispatcher.parallel[IO], Supervisor[IO](await = false)).tupled.use { (resizeCallbackDispatcher, timerSupervisor) =>
       for
         _ <- logger.info("Starting Serenity text editor")
         themeManager = com.serenity.ui.theme.config.AppThemeManager.create
@@ -187,7 +188,11 @@ object AppRuntime:
         // The resize/idle-recovery paths don't have a before/after AppState to diff, so they report the coarsest
         // damage rather than none -- inputEventPhase is the one caller that reports real per-event damage.
         requestFastRender = emitDamage(Damage.Everything)
-        _             <- stateManager.runtimeLifecycle.observeCommits(wakeRenderLoopOnCommit(emitDamage))
+        typingQuietTimer <- TypingQuietTimer.create(timerSupervisor, TypingQuietTimer.expireIn(stateManager))
+        wakeOnCommit = wakeRenderLoopOnCommit(emitDamage)
+        _ <- stateManager.runtimeLifecycle.observeCommits((before, after) =>
+          wakeOnCommit(before, after) >> typingQuietTimer.onCommit(before, after)
+        )
         _             <- IO(registerResizeCallback(resizeCallbackBridge(requestFastRender, resizeCallbackDispatcher)))
         cursorVisible <- Ref.of[IO, Boolean](true)
         breathIndex   <- Ref.of[IO, Int](0)

@@ -16,7 +16,9 @@ class AppRuntimeCursorCadenceSpec extends AnyFlatSpec with Matchers:
   "GuiFrontend.cursorIdleInterval" should "blink at the fixed interval whatever the motion settings say" in {
     GuiFrontend.cursorIdleInterval(AppConfig.default) shouldBe Some(500.millis)
     GuiFrontend.cursorIdleInterval(AppConfig.default.withElementTransitionSpeedScale(2.0)) shouldBe Some(500.millis)
-    GuiFrontend.cursorIdleInterval(AppConfig.default.withCursorTransitionSpeedScale(Some(0.0))) shouldBe Some(500.millis)
+    GuiFrontend.cursorIdleInterval(AppConfig.default.withCursorTransitionSpeedScale(Some(0.0))) shouldBe Some(
+      500.millis
+    )
     GuiFrontend.cursorIdleInterval(
       AppConfig.default.withMotionAccessibility(MotionAccessibility.Off)
     ) shouldBe Some(500.millis)
