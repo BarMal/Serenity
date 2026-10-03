@@ -31,7 +31,13 @@ class SwingWindow(
 ):
 
   private val usesCustomChrome =
-    SwingWindow.shouldUseCustomChrome(chromeMode, System.getProperty("os.name", ""), env)
+    SwingWindow.shouldUseCustomChrome(
+      chromeMode,
+      System.getProperty("os.name", ""),
+      env,
+      SwingWindow.isNativeWaylandToolkit(Toolkit.getDefaultToolkit.getClass.getName)
+    )
+
   private val effectiveChromeMode        = if usesCustomChrome then WindowChromeMode.Custom else chromeMode
   private val usesNativeThemedChrome     = chromeMode == WindowChromeMode.NativeThemed
   private val initialChromeLayoutMetrics = SwingWindow.ChromeMetrics.fromCellMetrics(initialChromeMetrics)
@@ -74,6 +80,8 @@ class SwingWindow(
   private val translucentWindow =
     SwingWindow.usesTranslucentWindow(translucentSetting, env, SwingWindow.perPixelTranslucencySupported)
   private val shapeUpdateCoalescer = new SwingWindow.CoalescedEdtUpdate(() => updateShape())
+  // `setShape` throws where the toolkit cannot shape windows, which the native Wayland toolkit need not support.
+  private val windowShapingSupported = SwingWindow.perPixelTransparencySupported
 
   /** Whether `canvas` should paint its own background as genuinely transparent this frame -- see
     * [[SwingWindow.shouldPaintTransparentContent]]. Kept up to date by [[updateChromeTheme]], which already runs once
@@ -193,7 +201,7 @@ class SwingWindow(
 
     if roundedCornerMask.nonEmpty
     then frame.setShape(null)
-    else if usesCustomChrome && !maximizedRef.get() then
+    else if usesCustomChrome && !maximizedRef.get() && windowShapingSupported then
       val d      = frame.getSize
       val chrome = chromeMetricsRef.get()
       frame.setShape(new RoundRectangle2D.Double(0, 0, d.width, d.height, chrome.cornerArc, chrome.cornerArc))
@@ -464,6 +472,10 @@ object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport
   private[serenity] def perPixelTranslucencySupported: Boolean =
     GraphicsEnvironment.getLocalGraphicsEnvironment.getDefaultScreenDevice
       .isWindowTranslucencySupported(GraphicsDevice.WindowTranslucency.PERPIXEL_TRANSLUCENT)
+
+  private[serenity] def perPixelTransparencySupported: Boolean =
+    GraphicsEnvironment.getLocalGraphicsEnvironment.getDefaultScreenDevice
+      .isWindowTranslucencySupported(GraphicsDevice.WindowTranslucency.PERPIXEL_TRANSPARENT)
 
   def resource(
     metrics: CellMetrics = DefaultMetrics,

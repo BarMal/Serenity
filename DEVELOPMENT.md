@@ -100,6 +100,62 @@ The baseline may shrink, never grow. If you must add to it, explain the entry in
 `architecture` job fails a PR whose baseline entry count or total measured lines/hits grows unless the
 diff also adds a `# paydown: <why, issue link>` comment line to `project/architecture-baseline.tsv`.
 
+## Running the app
+
+### Faster startup with a class-data archive
+
+Most of a cold start is spent loading and verifying classes. JDK 19+ can keep them in a class-data sharing (AppCDS)
+archive that it writes on the first exit and maps on every later start:
+
+```bash
+mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}/serenity"
+java -XX:SharedArchiveFile="${XDG_CACHE_HOME:-$HOME/.cache}/serenity/serenity.jsa" -XX:+AutoCreateSharedArchive \
+  -jar target/scala-3.9.0/Serenity.jar
+```
+
+The first run with a missing or stale archive (a rebuilt jar, a different JDK) starts normally and writes the archive
+as it exits, printing a few `[warning][cds] Skipping ...` lines for classes CDS cannot store; later runs start from it.
+The archive is about 65 MB.
+
+The desktop packages pass the same flags through jpackage's `--java-options`, with the archive next to the jar in the
+app image (`$APPDIR/serenity.jsa`), and build their runtime with `--generate-cds-archive` because a dynamic archive
+needs the runtime's own base archive. macOS is left out: writing into a signed `.app` would break its signature.
+
+### Startup warm-up
+
+Once the first frame is drawn, Serenity types, deletes and moves through a throwaway editor drawn off-screen, so the
+JIT compiles those paths before the first real keystrokes. It never touches your buffers, session, undo history or
+language servers, and stops at the first key press or click. Turn it off with `startup.warm_up = false`; the log
+reports how it ended (`[WARMUP] Completed(...)` or `[WARMUP] Interrupted`).
+
+### JetBrains Runtime and native Wayland
+
+On a Wayland desktop, a stock JDK draws through XWayland. The [JetBrains Runtime](https://github.com/JetBrains/JetBrainsRuntime/releases)
+(JBR 21 or later; the `jbr` or `jbrsdk` build for your platform) also has a native Wayland toolkit, and Serenity selects
+it automatically when it runs on JBR with `WAYLAND_DISPLAY` set:
+
+```bash
+tar -xzf jbr-21*-linux-x64-*.tar.gz -C ~/.local/share
+export JAVA_HOME=~/.local/share/jbr-21...   # the extracted directory
+"$JAVA_HOME/bin/java" -jar target/scala-3.9.0/Serenity.jar
+```
+
+The startup log names the choice: `[TOOLKIT] Wayland (Wayland session on JetBrains s.r.o.)`. To override it, set
+`SERENITY_TOOLKIT`:
+
+| Value | Effect |
+| --- | --- |
+| `auto` (or unset) | Native Wayland on JBR in a Wayland session; the JVM's default otherwise |
+| `wayland` | Native Wayland whenever the runtime has it, even without `WAYLAND_DISPLAY` |
+| `x11` | X11, through XWayland on a Wayland desktop |
+
+Passing `-Dawt.toolkit.name=...` yourself always wins over both. The choice has to be made before any AWT class loads,
+which is why it is an environment variable rather than a config setting. Under the native toolkit, `window.chrome = auto`
+uses the compositor's decorations, since Wayland does not let an application move its own window from a custom title bar.
+
+JBR's Vulkan renderer is opt-in and experimental; try it with `-Dsun.java2d.vulkan=true`. The AppCDS flags above work
+on JBR too, but keep a separate archive per runtime or each switch will rewrite it.
+
 ## Codex CLI
 
 Codex CLI is installed in the Codespace image. Start it from the repository root:

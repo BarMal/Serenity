@@ -225,12 +225,13 @@ object AppRuntime:
           translatorCache,
           runtime.frameTimings
         )
-        inputLoop = runInputLoop(stateManager, inputHandler, inputFunnel)
+        firstInput <- Deferred[IO, Unit]
+        inputLoop = runInputLoop(stateManager, inputHandler, inputFunnel, firstInput.complete(()).void)
         _ <-
           Resource.make(inputLoop.start)(_.cancel).use { inputFiber =>
             runtime.renderFull(initialState, true, None, Damage.Everything, Map.empty, stateManager.renderCaches) >>
               logger.info("Initial render completed, starting main loop") >>
-              {
+              startupWarmUp(runtime, initialState, initialViewportSize, firstInput).surround {
                 val idlePhase = AppRuntimeRenderLoops.idleRenderPhase(
                   loadModel = stateManager.getModel,
                   fastModeSignal = fastModeSignal,
@@ -387,14 +388,36 @@ object AppRuntime:
       yield ()
     )
 
+  /** Runs [[StartupWarmUp]] in the background for as long as the main loop does, if the frontend can draw off-screen
+    * and `startup.warm_up` is on.
+    */
+  private def startupWarmUp(
+    runtime: FrontendRuntime,
+    initialState: AppState,
+    viewport: ViewportSize,
+    firstInput: Deferred[IO, Unit]
+  )(using logger: Logger[IO], balance: com.serenity.rope.Balance): Resource[IO, Unit] =
+    runtime.offscreenFrames.filter(_ => initialState.persisted.config.surfaceConfig.startupWarmUpEnabled) match
+      case None => Resource.unit
+      case Some(frames) =>
+        StartupWarmUp
+          .run(initialState.persisted.config, initialState.persisted.theme, viewport, frames, firstInput)
+          .timed
+          .flatMap((elapsed, outcome) => logger.info(s"[WARMUP] $outcome after ${elapsed.toMillis}ms"))
+          .handleErrorWith(error => logger.warn(error)("[WARMUP] Startup warm-up failed"))
+          .background
+          .map(_ => ())
+
   private def runInputLoop(
     stateManager: StateManager,
     inputHandler: InputHandler[IO],
-    inputFunnel: Stream[IO, Event] => Stream[IO, Unit]
+    inputFunnel: Stream[IO, Event] => Stream[IO, Unit],
+    onUserInput: IO[Unit]
   )(using logger: Logger[IO]): IO[Unit] =
     val quitSignal = stateManager.runtimeLifecycle.awaitQuit.attempt
     AppRuntimeRenderLoops.superviseLoop("input loop", stateManager.runtimeLifecycle.forceQuit)(
       inputHandler.eventStream
+        .evalTap(event => IO.whenA(StartupWarmUp.interruptsWarmUp(event))(onUserInput))
         .evalTap(event =>
           stateManager.getCurrentState.flatMap(s =>
             AppRuntimeLogging.logSelectiveEvents(event, s.persisted.focus, logger)

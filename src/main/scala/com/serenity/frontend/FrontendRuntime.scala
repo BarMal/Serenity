@@ -2,7 +2,7 @@ package com.serenity.frontend
 
 import java.awt.Color
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 import com.serenity.diagnostics.FrameTimings
 import com.serenity.input.{InputHandler, InputRouter}
 import com.serenity.keystroke.events.Event
@@ -30,6 +30,14 @@ object FrontendRuntime:
       RenderCaches
     ) => IO[Unit]
 
+  /** Draws into a surface that is never presented, so the startup warm-up can exercise the renderer without touching
+    * the visible frame.
+    */
+  final case class OffscreenFrames(
+      full: (AppState, Damage, RenderCaches) => IO[Unit],
+      cursorOnly: (AppState, RenderCaches) => IO[Unit]
+  )
+
 /** The rendering/input bundle a concrete launch builds once its real Swing or terminal resource is acquired
   * (`Main.runGui`/`TuiRuntime.run`), and `AppRuntime.run` takes to get its rendering and input behaviour from -- issue
   * #1669's remaining scope: `AppRuntime.run` used to take `makeInputHandler`/`renderFull`/`renderCursorOnly` as three
@@ -52,5 +60,6 @@ final case class FrontendRuntime(
     inputHandler: InputRouter[IO, Event] => IO[InputHandler[IO]],
     renderFull: FrontendRuntime.RenderFn,
     renderCursorOnly: FrontendRuntime.RenderFn,
-    frameTimings: FrameTimings = FrameTimings()
+    frameTimings: FrameTimings = FrameTimings(),
+    offscreenFrames: Option[Resource[IO, FrontendRuntime.OffscreenFrames]] = None
 )

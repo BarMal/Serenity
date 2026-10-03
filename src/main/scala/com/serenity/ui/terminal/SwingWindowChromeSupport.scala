@@ -47,17 +47,23 @@ private[terminal] trait SwingWindowChromeSupport:
       math.round(value.toDouble * scale).toInt.max(1)
 
   /** Under a tiling compositor `Auto` falls back to native decorations: the compositor manages, borders and rounds (or
-    * deliberately doesn't round) every window itself, and normally draws no title bar at all.
+    * deliberately doesn't round) every window itself, and normally draws no title bar at all. So does the native
+    * Wayland toolkit: Wayland never lets a client place its own window, so the custom title bar could not be dragged.
     */
   private[serenity] def shouldUseCustomChrome(
     chromeMode: WindowChromeMode,
     osName: String,
-    env: Map[String, String]
+    env: Map[String, String],
+    nativeWaylandToolkit: Boolean = false
   ): Boolean =
     chromeMode == WindowChromeMode.Custom ||
       (chromeMode == WindowChromeMode.Auto &&
         osName.toLowerCase(java.util.Locale.ROOT).contains("linux") &&
-        !isTilingCompositor(env))
+        !isTilingCompositor(env) &&
+        !nativeWaylandToolkit)
+
+  private[serenity] def isNativeWaylandToolkit(toolkitClassName: String): Boolean =
+    toolkitClassName == "sun.awt.wl.WLToolkit"
 
   private val TilingCompositorSockets =
     scala.List("HYPRLAND_INSTANCE_SIGNATURE", "SWAYSOCK", "I3SOCK", "NIRI_SOCKET")
