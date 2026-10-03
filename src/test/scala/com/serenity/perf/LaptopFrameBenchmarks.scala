@@ -3,6 +3,7 @@ package com.serenity.perf
 import java.awt.image.BufferedImage
 import java.awt.{Color, Font, Rectangle}
 import java.nio.file.Files
+import java.util.concurrent.atomic.AtomicReference
 import javax.swing.SwingUtilities
 
 import cats.effect.unsafe.IORuntime
@@ -19,14 +20,21 @@ import com.serenity.keystroke.events.{
   OpenGotoLine,
   PageDown,
   PageUp,
-  ResizeEvent
+  ResizeEvent,
+  ScrollDown
 }
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
-import com.serenity.state.manager.{CursorViewport, RenderCaches, StateManager}
+import com.serenity.state.manager.{CursorViewport, DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, PanelPosition, ViewportSize}
-import com.serenity.ui.renderer.{Java2DRenderSurface, RendererEntryPoints}
+import com.serenity.ui.renderer.{
+  FrameOutput,
+  Java2DRenderSurface,
+  RendererEntryPoints,
+  RendererFramePlanner,
+  ScreenIdentity
+}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.{DockedPanelFixtures, setBufferForPane, setCursorPosition}
 import org.typelevel.log4cats.LoggerFactory
@@ -80,15 +88,22 @@ private[perf] object LaptopFrameBenchmarks:
       40
     )
 
-  /** A frame buffer at the window's device size; reused across iterations, as the app's own image pool does. */
+  /** A frame buffer at the window's device size; reused across iterations, as the app's own image pool does. Opaque,
+    * like every frame `Java2DRenderSurface.forFrame` draws.
+    */
   def frameImage(): BufferedImage =
     new BufferedImage(
       math.ceil(LogicalWidthPx * DeviceScale).toInt,
       math.ceil(LogicalHeightPx * DeviceScale).toInt,
-      BufferedImage.TYPE_INT_ARGB
+      BufferedImage.TYPE_INT_RGB
     )
 
-  def renderedFrame(state: AppState, caches: RenderCaches, image: BufferedImage): BufferedImage =
+  def renderedFrame(
+    state: AppState,
+    caches: RenderCaches,
+    image: BufferedImage,
+    cursorVisible: Boolean = true
+  ): BufferedImage =
     val surface = new Java2DRenderSurface(
       image,
       cellMetrics,
@@ -101,7 +116,7 @@ private[perf] object LaptopFrameBenchmarks:
     )
     RendererEntryPoints.render(
       state,
-      cursorVisible = true,
+      cursorVisible,
       surface,
       viewport,
       codeFont,
@@ -113,7 +128,8 @@ private[perf] object LaptopFrameBenchmarks:
     image
 
   private def hasPixels(image: BufferedImage): Boolean =
-    ((image.getRGB(image.getWidth / 2, image.getHeight / 2) >>> 24) & 0xff) > 0
+    val row = image.getHeight / 2
+    (0 until image.getWidth).exists(x => image.getRGB(x, row) != image.getRGB(0, row))
 
   /** The laptop-sized window [[presentBenchmark]] paints into. */
   def presentWindowResource(metrics: CellMetrics, chromeMetrics: CellMetrics): Resource[IO, SwingWindow] =
@@ -124,7 +140,8 @@ private[perf] object LaptopFrameBenchmarks:
     )
 
   def benchmarks(presentWindow: SwingWindow)(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    renderBenchmarks ++ inputBenchmarks ++ List(presentBenchmark(presentWindow), presentCaretBenchmark(presentWindow))
+    renderBenchmarks ++ interactionBenchmarks ++ inputBenchmarks ++
+      List(presentBenchmark(presentWindow), presentCaretBenchmark(presentWindow))
 
   private def renderBenchmarks: List[BenchmarkRunner.Benchmark] =
     val caches     = RenderCaches.create()
@@ -299,6 +316,134 @@ private[perf] object LaptopFrameBenchmarks:
           assert(jumped.contains(2899) && cursorLine.contains(99), s"go to line landed on $jumped then $cursorLine")
         ,
         () => jumpAndBack()
+      )
+    )
+
+  private val uiFont    = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
+  private val uiMetrics = CellMetrics.fromFont(uiFont)
+
+  /** A window's frame loop over one persisting image: one screen, and every frame told what the transition into it
+    * damaged, as `AppRuntime` reports it, so only damaged rows are redrawn and the rest of the image is kept. Like the
+    * app's base frames it leaves the caret out; the window fills carets over the presented frame.
+    */
+  final private class PersistingFrames:
+    private val image  = frameImage()
+    private val caches = RenderCaches.create()
+    private val screen = ScreenIdentity(this)
+
+    def render(state: AppState, damage: Damage): BufferedImage =
+      val surface = new Java2DRenderSurface(
+        image,
+        cellMetrics,
+        codeFont,
+        _ => (),
+        logicalWidthPx = LogicalWidthPx,
+        logicalHeightPx = LogicalHeightPx,
+        deviceScaleX = DeviceScale,
+        deviceScaleY = DeviceScale,
+        contentPersists = true,
+        layerCacheOwnerOverride = Some(screen)
+      )
+      val _ = RendererFramePlanner.renderFrame(
+        state,
+        cursorVisible = false,
+        surface,
+        viewport,
+        caches.authoritativeScene.forState(state, viewport, codeFont, textFont),
+        codeFont,
+        textFont,
+        uiFont,
+        cellMetrics,
+        uiMetrics,
+        None,
+        Some(FrameOutput(screen, new AtomicReference(None))),
+        damage,
+        caches = caches
+      )
+      image
+
+  /** One step of a transition and back again, each frame carrying the damage `DamageProducer` reports for its step --
+    * computed once up front, so the benchmark times the frame alone.
+    */
+  final private class AlternatingTransition(before: AppState, after: AppState):
+    private val frames   = PersistingFrames()
+    private val forward  = DamageProducer.forTransition(before, after)
+    private val backward = DamageProducer.forTransition(after, before)
+    private val steps    = Iterator.continually(List(after -> forward, before -> backward)).flatten
+    val _                = frames.render(before, Damage.Everything)
+
+    def forwardDamage: Damage = forward
+
+    def nextFrame(): BufferedImage =
+      val (state, damage) = steps.next()
+      frames.render(state, damage)
+
+    /** Both damaged frames must match a frame drawn from scratch for the same state. A few antialiased pixels of
+      * line-number ink bleed into the first text column and are not restored on a damaged frame; that predates these
+      * benchmarks, so it is tolerated up to [[ToleratedStalePixels]] rather than hidden.
+      */
+    def verify(name: String): Unit =
+      List(after, before).foreach { expected =>
+        val drawn = nextFrame()
+        val diff =
+          differingPixels(drawn, renderedFrame(expected, RenderCaches.create(), frameImage(), cursorVisible = false))
+        assert(
+          diff.size <= ToleratedStalePixels,
+          s"$name: the damaged frame differs from a full frame in ${diff.size} pixels: ${diff.take(8).mkString(" ")}"
+        )
+      }
+
+  private val ToleratedStalePixels = 32
+
+  /** The device pixels where `a` and `b` differ, as `(x, y)`. */
+  private def differingPixels(a: BufferedImage, b: BufferedImage): IndexedSeq[(Int, Int)] =
+    val width   = a.getWidth
+    val pixelsA = a.getRGB(0, 0, width, a.getHeight, null, 0, width)
+    val pixelsB = b.getRGB(0, 0, width, b.getHeight, null, 0, width)
+    pixelsA.indices.filter(index => pixelsA(index) != pixelsB(index)).map(index => (index % width, index / width))
+
+  /** Typing and wheel-scrolling as a session at this size meets them. The states come from a live `StateManager` (see
+    * [[proseStateManager]]), so the damage is what the app itself reports for the step. Typing alternates one inserted
+    * letter with its removal, so the edited row's wrapped layout is served from cache, unlike a real new keystroke.
+    */
+  private def interactionBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
+    val (stateManager, _) = proseStateManager()
+    def current: AppState = stateManager.getCurrentState.unsafeRunSync()
+    val beforeTyping      = current
+    stateManager.applyEvent(InsertChar('x')).unsafeRunSync()
+    val afterTyping = current
+    stateManager.applyEvent(ScrollDown(3)).unsafeRunSync()
+    val afterScroll = current
+    val typing      = AlternatingTransition(beforeTyping, afterTyping)
+    val scroll      = AlternatingTransition(afterTyping, afterScroll)
+    List(
+      BenchmarkRunner.Benchmark(
+        "laptop.render.typing_frame_2x",
+        2,
+        12,
+        () =>
+          assert(typing.forwardDamage != Damage.Everything, "typing damaged the whole frame")
+          typing.verify("typing")
+        ,
+        () => typing.nextFrame()
+      ),
+      BenchmarkRunner.Benchmark(
+        "laptop.render.scroll_frame_2x",
+        2,
+        12,
+        () =>
+          assert(scroll.forwardDamage != Damage.Everything, "scrolling damaged the whole frame")
+          scroll.verify("scroll")
+        ,
+        () => scroll.nextFrame()
+      ),
+      BenchmarkRunner.Benchmark(
+        "laptop.damage.typing_transition",
+        3,
+        20,
+        () =>
+          assert(DamageProducer.forTransition(beforeTyping, afterTyping) != Damage.Nothing, "typing damaged nothing"),
+        () => DamageProducer.forTransition(beforeTyping, afterTyping)
       )
     )
 

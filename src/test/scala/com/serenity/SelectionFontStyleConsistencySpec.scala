@@ -19,7 +19,7 @@ import org.scalatest.matchers.should.Matchers
 
 /** #1482: regular (unselected) prose rendered at a different font size than the same text once selected. The two paint
   * passes shared one `RenderSurface` and one active buffer font, but only the normal glyph pass
-  * ([[com.serenity.ui.renderer.CharacterRenderer.renderMeasuredLineWithAnimation]]) ever applied a run's own
+  * ([[com.serenity.ui.renderer.CharacterRenderer.renderMeasuredLine]]) ever applied a run's own
   * [[com.serenity.ui.theme.TextStyle]] (font family/size/weight) via `enableStyle`/`disableStyle` before painting --
   * the selection/comment/diagnostic highlight overlays in [[com.serenity.ui.renderer.RendererHighlights]] repainted the
   * same glyphs with whatever style the surface happened to be left at, silently dropping the run's own style. For a
