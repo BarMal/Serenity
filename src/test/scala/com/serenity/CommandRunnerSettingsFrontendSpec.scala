@@ -21,7 +21,6 @@ class CommandRunnerSettingsFrontendSpec extends AnyFlatSpec with Matchers:
   private val guiOnlyRowIds = List(
     "window-chrome",
     "background-style",
-    "post-processing",
     "ui-shadows",
     "blur-radius",
     "ui-corner-radius",

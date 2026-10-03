@@ -211,15 +211,13 @@ class ConfigManagerMotionConfigSpec extends AnyFlatSpec with Matchers with Optio
     serialized should include("motion.family.cursor.speed_scale = 0.75")
   }
 
-  it should "load and write the post-processing effect" in {
-    val configFile = Files.createTempFile("serenity-post-processing-config", ".conf")
-    Files.writeString(configFile, "ui.post_processing = scanlines-glow\nui.shadows = false\n")
+  it should "load and write the UI shadows setting" in {
+    val configFile = Files.createTempFile("serenity-ui-shadows-config", ".conf")
+    Files.writeString(configFile, "ui.shadows = false\n")
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
-    config.surfaceConfig.postProcessingEffect shouldBe PostProcessingEffect.ScanlinesAndGlow
     config.surfaceConfig.uiShadowsEnabled shouldBe false
-    ConfigManager.configToString(config) should include("ui.post_processing = scanlines-glow")
     ConfigManager.configToString(config) should include("ui.shadows = false")
   }
 

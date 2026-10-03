@@ -24,10 +24,6 @@ class FrontendCapabilitiesSpec extends AnyFlatSpec with Matchers:
     FrontendCapabilities.gui.typography shouldBe true
   }
 
-  it should "support glow/blur post-processing effects" in {
-    FrontendCapabilities.gui.postProcessing shouldBe true
-  }
-
   it should "default to full keyboard fidelity, since a focused Swing window decodes AWT key events directly" in {
     FrontendCapabilities.gui.keyboardFidelityTier shouldBe KeyboardFidelityTier.Full
   }
@@ -43,10 +39,6 @@ class FrontendCapabilitiesSpec extends AnyFlatSpec with Matchers:
 
   it should "make font family/size/ligature settings inert -- nothing paints differently on a fixed-cell surface" in {
     FrontendCapabilities.tui().typography shouldBe false
-  }
-
-  it should "not support glow/blur post-processing effects" in {
-    FrontendCapabilities.tui().postProcessing shouldBe false
   }
 
   it should "default to full keyboard fidelity, but accept a narrower negotiated tier" in {

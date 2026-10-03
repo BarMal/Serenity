@@ -50,7 +50,6 @@ class CommandRegistry(private val commands: List[Command]):
         List(
           CommandRunnerSettingsCursorItems.cursorModeOptionItem(optionSelections),
           CommandRunnerSettingsAppearanceItems.backgroundStyleOptionItem(optionSelections),
-          CommandRunnerSettingsAppearanceItems.postProcessingOptionItem(optionSelections),
           CommandRunnerSettingsAppearanceItems.uiShadowsOptionItem(optionSelections)
         )
       else Nil
@@ -66,7 +65,6 @@ class CommandRegistry(private val commands: List[Command]):
     val optionItems = List(
       CommandRunnerSettingsCursorItems.cursorModeOptionItem(optionSelections),
       CommandRunnerSettingsAppearanceItems.backgroundStyleOptionItem(optionSelections),
-      CommandRunnerSettingsAppearanceItems.postProcessingOptionItem(optionSelections),
       CommandRunnerSettingsAppearanceItems.uiShadowsOptionItem(optionSelections)
     ).filter { item =>
       val lowerTerm = term.toLowerCase

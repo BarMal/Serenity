@@ -64,8 +64,8 @@ trait RenderSurface:
     */
   def pixels: PixelDrawing
 
-  /** Alpha compositing, region blur, and post-processing, when this surface supports them. `None` means callers must
-    * skip the effect rather than assume it happened.
+  /** Alpha compositing and region blur, when this surface supports them. `None` means callers must skip the effect
+    * rather than assume it happened.
     */
   def effects: Option[Effects] = None
 

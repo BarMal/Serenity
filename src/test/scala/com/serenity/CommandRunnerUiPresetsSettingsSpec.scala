@@ -169,7 +169,7 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
     // (CommandRunnerOneShotActionsSpec), not part of this settings subtree.
     val surfaceAppearance = groupByIdRecursive(List(editPreset), "settings-preset-surface-appearance")
     surfaceAppearance.label shouldBe "Surface Appearance"
-    surfaceAppearance.children.map(_.id) should contain allOf ("background-style", "material-preset", "post-processing")
+    surfaceAppearance.children.map(_.id) should contain allOf ("background-style", "material-preset", "ui-shadows")
 
     // issue #1060: Apply/Overwrite/Delete/Reset now pick from the existing-preset catalog instead of requiring a
     // typed exact name -- Duplicate/Rename/Save-As-New still need typed input since each needs a *new* name.

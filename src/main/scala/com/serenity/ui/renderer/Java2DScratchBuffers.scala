@@ -3,8 +3,8 @@ package com.serenity.ui.renderer
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
-/** Pixel buffers a window's frames borrow for per-frame effects (region blur, glow) instead of allocating fresh ones
-  * every frame. Frame-sized arrays are large enough that the JVM allocates them straight into the old generation, so
+/** Pixel buffers a window's frames borrow for per-frame effects (region blur) instead of allocating fresh ones every
+  * frame. Frame-sized arrays are large enough that the JVM allocates them straight into the old generation, so
   * per-frame allocation alone was enough to keep the GC thrashing (#1798).
   *
   * Borrowing takes a buffer out of the pool and returning puts it back, so two frames rendering at once never share
@@ -12,7 +12,6 @@ import java.util.concurrent.atomic.AtomicReference
   */
 final class Java2DScratchBuffers:
   private val images = new AtomicReference[Map[(Int, Int), BufferedImage]](Map.empty)
-  private val glow   = new AtomicReference[Option[GlowBuffers]](None)
   private val shadows =
     new AtomicReference[Map[Java2DPanelChrome.ShadowSpriteKey, BufferedImage]](Map.empty)
 
@@ -30,11 +29,6 @@ final class Java2DScratchBuffers:
           else pooled.drop(1)
         room.updated(key, image)
       }
-
-  def withGlowBuffers[A](width: Int, height: Int)(use: GlowBuffers => A): A =
-    val buffers = take(glow)(_.filter(_.matches(width, height)), _ => None).getOrElse(GlowBuffers(width, height))
-    try use(buffers)
-    finally glow.set(Some(buffers))
 
   /** A shadow sprite is only ever read once rendered, so frames share it rather than borrowing it. */
   def shadowSprite(key: Java2DPanelChrome.ShadowSpriteKey)(render: => BufferedImage): BufferedImage =
@@ -61,16 +55,3 @@ object Java2DScratchBuffers:
 
   /** One per panel geometry on screen, with room for a resize or scale-in animation to churn through. */
   private val MaxCachedShadowSprites = 8
-
-/** The working set [[Java2DPostProcessingEffects.applyGlow]] needs for one frame size. */
-final class GlowBuffers(val width: Int, val height: Int):
-  private val pixelCount          = width * height
-  val basePixels: Array[Int]      = new Array[Int](pixelCount)
-  val sourcePixels: Array[Int]    = new Array[Int](pixelCount)
-  val sourceMask: Array[Boolean]  = new Array[Boolean](pixelCount)
-  val blurredPixels: Array[Int]   = new Array[Int](pixelCount)
-  val result: Array[Int]          = new Array[Int](pixelCount)
-  val sourceImage: BufferedImage  = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
-  val blurredImage: BufferedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
-
-  def matches(otherWidth: Int, otherHeight: Int): Boolean = width == otherWidth && height == otherHeight

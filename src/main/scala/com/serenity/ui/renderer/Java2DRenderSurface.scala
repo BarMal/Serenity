@@ -6,7 +6,6 @@ import java.awt.geom.{Rectangle2D, RoundRectangle2D}
 import java.awt.image.*
 import java.util.concurrent.atomic.AtomicReference
 
-import com.serenity.config.PostProcessingEffect
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.theme.TextStyle
 
@@ -259,17 +258,6 @@ class Java2DRenderSurface(
             finally rawGraphics.dispose()
           }
         }
-
-  override def applyPostProcessing(effect: PostProcessingEffect, animationPhase: Long): Unit =
-    effect match
-      case PostProcessingEffect.Off => ()
-      case PostProcessingEffect.Scanlines =>
-        Java2DPostProcessingEffects.applyScanlines(image, animationPhase)
-      case PostProcessingEffect.Glow =>
-        Java2DPostProcessingEffects.applyGlow(image, scratch)
-      case PostProcessingEffect.ScanlinesAndGlow =>
-        Java2DPostProcessingEffects.applyGlow(image, scratch)
-        Java2DPostProcessingEffects.applyScanlines(image, animationPhase)
 
   override def drawRoundRectShadow(
     x: Int,

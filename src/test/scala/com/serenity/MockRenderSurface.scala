@@ -275,17 +275,6 @@ class MockRenderSurface(
   override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
     drawImageCallsBuffer += DrawImageCall(image, x, y, width, height)
 
-  final case class PostProcessingCall(effect: com.serenity.config.PostProcessingEffect, animationPhase: Long)
-  private val postProcessingCallsBuffer = scala.collection.mutable.ListBuffer.empty[PostProcessingCall]
-
-  override def applyPostProcessing(
-    effect: com.serenity.config.PostProcessingEffect,
-    animationPhase: Long
-  ): Unit =
-    postProcessingCallsBuffer += PostProcessingCall(effect, animationPhase)
-
-  def postProcessingCalls: List[PostProcessingCall] = postProcessingCallsBuffer.toList
-
   def currentAlphaValue: Float                           = currentAlpha.get()
   def blurRegionCalls: List[BlurRegionCall]              = blurRegionCallsBuffer.toList
   def blurRegionTranslations: List[PixelTranslationCall] = blurRegionTranslationsBuffer.toList
@@ -340,7 +329,6 @@ class MockRenderSurface(
     roundRectClipCallsBuffer.clear()
     blurRegionCallsBuffer.clear()
     blurRegionTranslationsBuffer.clear()
-    postProcessingCallsBuffer.clear()
     fillPixelRectCallsBuffer.clear()
     drawImageCallsBuffer.clear()
     alphaCallsBuffer.clear()

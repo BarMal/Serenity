@@ -177,7 +177,6 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
     resolved.rows.flatMap(_.segments.headOption.map(_.text)) shouldBe List(
       "Background Style",
       "Material Preset",
-      "Post-processing",
       "Menu & Panel Shadows"
     )
   }

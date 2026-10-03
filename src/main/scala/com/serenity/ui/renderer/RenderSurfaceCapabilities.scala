@@ -4,8 +4,6 @@ import java.awt.font.FontRenderContext
 import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
 
-import com.serenity.config.PostProcessingEffect
-
 /** Character- and pixel-run text drawing. Every real [[RenderSurface]] implements this -- a surface that cannot draw
   * text cannot render Serenity's UI -- so [[RenderSurface.text]] exposes it directly rather than as an `Option`: the
   * type itself guarantees the capability instead of pushing a check onto every call site that draws a line of text.
@@ -63,18 +61,13 @@ trait PixelDrawing:
   /** Translate drawing in device-independent logical pixels for fractional-cell floating geometry. */
   def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit
 
-/** Alpha compositing, region blur, and CRT-style post-processing. Genuinely optional: a surface that can't do any of
-  * this (or a headless test double) simply skips the polish rather than degrading a required drawing operation, so
-  * [[RenderSurface.effects]] exposes it as an `Option` and callers decide whether skipping the effect is safe.
+/** Alpha compositing and region blur. Genuinely optional: a surface that can't do any of this (or a headless test
+  * double) simply skips the polish rather than degrading a required drawing operation, so [[RenderSurface.effects]]
+  * exposes it as an `Option` and callers decide whether skipping the effect is safe.
   */
 trait Effects:
   def setAlpha(alpha: Float): Unit
   def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit
-
-  /** Apply `effect` to the whole surface. `animationPhase` drives time-varying effects (e.g. scanline scroll); it
-    * defaults to a wall-clock tick so callers that don't care about a specific phase don't need to compute one.
-    */
-  def applyPostProcessing(effect: PostProcessingEffect, animationPhase: Long = System.nanoTime() / 50000000L): Unit
 
 /** A fresh, independently-paintable surface shaped exactly like the surface this capability came from -- same cell
   * metrics, font, logical size and device scale -- for a layer (a pinned panel, a modal, a floating overlay) to own its

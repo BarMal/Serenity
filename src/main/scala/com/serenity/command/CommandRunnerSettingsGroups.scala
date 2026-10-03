@@ -18,7 +18,7 @@ object CommandRunnerSettingsGroups:
   /** Rows with no visible effect on the running frontend (`capabilities`) are hidden, the same way the app mode hides
     * the other mode's rows; Show All Settings brings both back. Which rows are [[FrontendSupport.GuiOnly]] follows epic
     * #1103's accepted cell-space degradations: fonts, text scale, and pixel effects (blur, alpha, shadows, rounded
-    * corners, outlines, post-processing, window chrome).
+    * corners, outlines, window chrome).
     */
   def build(
     optionSelections: Map[String, Int],
@@ -160,7 +160,6 @@ object CommandRunnerSettingsGroups:
       List(
         onFrontend.row(guiOnly, CommandRunnerSettingsAppearanceItems.backgroundStyleOptionItem(optionSelections)),
         Some(CommandRunnerSettingsAppearanceItems.materialPresetOptionItem(optionSelections)),
-        onFrontend.row(guiOnly, CommandRunnerSettingsAppearanceItems.postProcessingOptionItem(optionSelections)),
         onFrontend.row(guiOnly, CommandRunnerSettingsAppearanceItems.uiShadowsOptionItem(optionSelections))
       ).flatten
     )

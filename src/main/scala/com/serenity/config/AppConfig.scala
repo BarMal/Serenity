@@ -250,9 +250,6 @@ final case class AppConfig(
           )
         )
 
-  def withPostProcessingEffect(effect: PostProcessingEffect): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(postProcessingEffect = effect))
-
   def withUiShadowsEnabled(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(uiShadowsEnabled = enabled))
 

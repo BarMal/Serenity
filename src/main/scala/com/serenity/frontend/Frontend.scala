@@ -75,9 +75,9 @@ object Frontend:
   /** The TUI counterpart to [[guiLogRouting]], read the same way before a `TuiFrontend` exists. */
   val tuiLogRouting: LogRouting = LogRouting(suppressConsole = true)
 
-/** The GUI frontend: a real font-measured pixel grid, full motion/typography/post-processing, and a cursor-blink
-  * cadence driven purely by the configured motion family -- a focused Swing window has no hardware cursor to delegate
-  * blink timing to, unlike a real terminal (see [[TuiFrontend]]).
+/** The GUI frontend: a real font-measured pixel grid, full motion/typography, and a cursor-blink cadence driven purely
+  * by the configured motion family -- a focused Swing window has no hardware cursor to delegate blink timing to, unlike
+  * a real terminal (see [[TuiFrontend]]).
   */
 case object GuiFrontend extends Frontend:
   val capabilities: FrontendCapabilities                       = FrontendCapabilities.gui
@@ -87,8 +87,8 @@ case object GuiFrontend extends Frontend:
   def cursorIdleInterval(config: AppConfig): Option[FiniteDuration] =
     Frontend.motionDrivenIdleInterval(config)
 
-/** The TUI frontend: the terminal's own fixed cell grid, no sub-cell motion/typography/post-processing (epic #1103's
-  * accepted degradations), and whatever keyboard fidelity the terminal actually negotiated (issue #1194/#1320).
+/** The TUI frontend: the terminal's own fixed cell grid, no sub-cell motion/typography (epic #1103's accepted
+  * degradations), and whatever keyboard fidelity the terminal actually negotiated (issue #1194/#1320).
   *
   * `keyboardFidelityTier` is the one thing that varies per session -- resolved once from `TerminalShell`'s negotiated
   * protocol tier before this is constructed (see `TuiRuntime.run`/`TuiRuntime.keyboardFidelityTier`).

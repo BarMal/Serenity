@@ -39,7 +39,7 @@ final case class Runtime(
     languageService: LanguageServiceState = LanguageServiceState(),
     // Never persisted -- set once at startup from the selected `Frontend` (see AppRuntime.run/AppStartup.initializeState,
     // issue #1669) so settings-surface rendering can hide or annotate controls that are inert in cell space
-    // (post-processing effects, typography), geometry can be measured on the right grid, and
+    // (typography), geometry can be measured on the right grid, and
     // `CommandRunnerReducer.assignRecordedBinding` can warn when a just-recorded bare-modifier chord can't fire at the
     // negotiated keyboard tier (issue #1194) -- all without threading a `Frontend` instance itself, or `AppConfig`,
     // into the pure core.

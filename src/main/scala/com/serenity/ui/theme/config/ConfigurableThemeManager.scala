@@ -25,7 +25,6 @@ object ConfigurableThemeManager:
       placeholder       <- ColorParser.parseColor(ThemeFieldSchema.uiPlaceholderField.select(config.ui))
       syntaxColors      <- convertSyntaxColors(config.syntax, background)
       interactionStates <- convertInteractionStates(config.interactionStates, InteractionStates.derive(menuItem))
-      elevation         <- convertElevation(config.elevation, ElevationLevels.derive(foreground, background))
     yield Theme(
       name = config.name,
       foreground = foreground,
@@ -43,8 +42,7 @@ object ConfigurableThemeManager:
       placeholder = placeholder,
       textStyle = TextStyle.normal,
       syntaxColors = syntaxColors,
-      interactionStates = interactionStates,
-      elevation = elevation
+      interactionStates = interactionStates
     )
 
   private def parseOptionalColor(value: Option[String], default: Color): Either[String, Color] =
@@ -103,31 +101,6 @@ object ConfigurableThemeManager:
       pressed  <- resolve(fields.pressed, default.pressed)
       disabled <- resolve(fields.disabled, default.disabled)
     yield InteractionStates(hover, pressed, disabled)
-
-  private def convertElevation(
-    configOpt: Option[ElevationConfig],
-    default: ElevationLevels
-  ): Either[String, ElevationLevels] =
-    val fields = configOpt.getOrElse(ElevationConfig())
-    for
-      base     <- convertElevationTreatment(fields.base, default.base)
-      raised   <- convertElevationTreatment(fields.raised, default.raised)
-      floating <- convertElevationTreatment(fields.floating, default.floating)
-      modal    <- convertElevationTreatment(fields.modal, default.modal)
-    yield ElevationLevels(base, raised, floating, modal)
-
-  private def convertElevationTreatment(
-    configOpt: Option[ElevationTreatmentConfig],
-    default: ElevationTreatment
-  ): Either[String, ElevationTreatment] =
-    configOpt match
-      case None => Right(default)
-      case Some(fields) =>
-        val shadowOpacity = fields.shadowOpacity.map(NormalizedAlpha(_)).getOrElse(default.shadowOpacity)
-        fields.surfaceTint match
-          case None => Right(ElevationTreatment(shadowOpacity, default.surfaceTint))
-          case Some(colorStr) =>
-            ColorParser.parseColor(colorStr).map(color => ElevationTreatment(shadowOpacity, Some(color)))
 
   private def convertSyntaxElementConfig(
     config: SyntaxElementConfig,

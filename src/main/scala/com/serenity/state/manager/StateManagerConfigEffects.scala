@@ -382,8 +382,6 @@ final private[manager] class StateManagerConfigEffects(
         persistConfigFile(state.persisted.config)
       case GeneralSettingsIntent.SetMaterialPreset(preset) =>
         updateAppearanceConfig(_.withMaterialPreset(preset)).void
-      case GeneralSettingsIntent.SetPostProcessingEffect(effect) =>
-        updateAppearanceConfig(_.withPostProcessingEffect(effect)).void
       case GeneralSettingsIntent.SetUiShadowsEnabled(enabled) =>
         updateAppearanceConfig(_.withUiShadowsEnabled(enabled)).void
       case GeneralSettingsIntent.SetRenderFpsTarget(target) =>
