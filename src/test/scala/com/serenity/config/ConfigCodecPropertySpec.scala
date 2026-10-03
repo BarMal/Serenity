@@ -78,9 +78,6 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
     "inputConfig.focusedKeymapConfig.modal.bindings",
     "inputConfig.focusedKeymapConfig.panel.bindings",
     "inputConfig.focusedKeymapConfig.peek.bindings",
-    // CompanionCharacter has exactly one bundled value today (the placeholder sprite sheet), so a generator has
-    // nothing else to pick -- CompanionCharacterSpec covers fromConfigKey/id round-tripping directly instead.
-    "companionSpriteConfig.character",
     // `AnimationConfig.curve` (issues #1082/#1083): the text config format only ever writes a preset name
     // (quick/smooth/subtle) or, under "custom", `steps`/`duration_ms` -- there is no `animation.curve` key in the
     // schema, because nothing in the settings surface can choose a curve yet (wiring a curve picker into settings is

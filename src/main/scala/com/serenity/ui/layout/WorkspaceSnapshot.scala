@@ -20,7 +20,6 @@ enum SessionPanelContent:
   case Comments(symbols: List[Symbol])
   case Diagnostics(issues: List[Diagnostic])
   case MarkdownPreview(bufferId: Int, title: String)
-  case CompanionSprite
 
   def toSurfaceContent: SurfaceContent =
     this match
@@ -43,8 +42,6 @@ enum SessionPanelContent:
         SurfaceContent.Diagnostics(issues)
       case MarkdownPreview(bufferId, title) =>
         SurfaceContent.MarkdownPreview(BufferId(bufferId), title)
-      case CompanionSprite =>
-        SurfaceContent.CompanionSprite
 
 /** Persisted form of a docked panel's content and last-known placement, restored via [[toUiSurface]]. Shared by session
   * persistence and UI presets (issue #820) so both restore docked panels through the same snapshot model. Distinct from
@@ -116,8 +113,6 @@ object SessionPinnedPanel:
         SessionPanelContent.Diagnostics(issues)
       case PanelContent.MarkdownPreview(bufferId, title) =>
         SessionPanelContent.MarkdownPreview(bufferId.value, title)
-      case PanelContent.CompanionSprite =>
-        SessionPanelContent.CompanionSprite
 
 /** Versioned representation of one workspace-tree node, decoupled from live identifiers ([[WorkspaceNodeId]]/
   * [[com.serenity.state.models.PaneId]] wrapped as raw strings/ints) so it can be persisted and migrated independently
@@ -224,9 +219,9 @@ object SessionDockedPanel:
     }
 
   /** Moves each saved panel onto its [[PanelId]]'s fixed surface id, renaming the workspace tree's reference to it in
-    * step: panels saved before panels had fixed ids carry an allocated `surface-N` id (or, for the companion, its old
-    * reserved one). Of two saved panels of the same kind only the first is kept -- the second's tree node then no
-    * longer resolves, which restore already handles by falling back to a rebuilt tree.
+    * step: panels saved before panels had fixed ids carry an allocated `surface-N` id. Of two saved panels of the same
+    * kind only the first is kept -- the second's tree node then no longer resolves, which restore already handles by
+    * falling back to a rebuilt tree.
     */
   def withPanelIds(
     panels: List[SessionDockedPanel],
@@ -248,7 +243,6 @@ object SessionDockedPanel:
       case SessionPanelContent.Comments(_)            => PanelId.Comments
       case SessionPanelContent.Diagnostics(_)         => PanelId.Diagnostics
       case SessionPanelContent.MarkdownPreview(_, _)  => PanelId.MarkdownPreview
-      case SessionPanelContent.CompanionSprite        => PanelId.Companion
 
   private def renamed(node: SessionWorkspaceNode, renames: Map[String, String]): SessionWorkspaceNode =
     node match

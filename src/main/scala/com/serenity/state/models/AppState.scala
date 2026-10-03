@@ -478,17 +478,15 @@ object AppState:
       activeEditorPaneId = Some(PaneId(0)),
       workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-0"), PaneId(0))))
     )
-    val layout = dockCompanionSprite(baseLayout, config)
     AppState(
       persisted = Persisted(
-        layout = layout,
+        layout = baseLayout,
         buffers = Map(initialBufferId -> initialBuffer),
         bufferOrder = List(initialBufferId),
         focus = Focus.EditorPane(PaneId(0)),
         config = config
       ),
       runtime = Runtime(
-        uiSurfaces = companionSpriteSurfaces(config),
         nextBufferId = BufferId(1),
         nextPaneId = PaneId(1),
         nextSurfaceId = SurfaceIdSupply.initial
@@ -500,53 +498,13 @@ object AppState:
   def empty(config: AppConfig): AppState =
     AppState(
       persisted = Persisted(
-        layout = dockCompanionSprite(Layout.empty, config),
+        layout = Layout.empty,
         buffers = Map.empty,
         focus = Focus.EditorPane(PaneId(0)),
         config = config
       ),
-      runtime = Runtime(uiSurfaces = companionSpriteSurfaces(config))
+      runtime = Runtime()
     )
-
-  /** The companion sprite's pinned panel surface, present exactly when a freshly-started or freshly-restored session
-    * should show it -- enabled in config, and visual flair not `Off`. Mirrors
-    * `StateManagerEffectHandlers.syncCompanionSpritePanel`'s same visibility rule, so a session that starts with the
-    * setting already on shows the pane immediately rather than only after the toggle is next flipped during the
-    * session.
-    */
-  def companionSpriteSurfaces(config: AppConfig): List[UiSurface] =
-    Option
-      .when(config.companionSpriteConfig.enabled && config.visualFlairLevel != VisualFlairLevel.Off) {
-        UiSurface(
-          id = SurfaceId.CompanionSprite,
-          content = SurfaceContent.CompanionSprite,
-          presentation = SurfacePresentation.Docked
-        )
-      }
-      .toList
-
-  /** Docks the companion sprite surface (if enabled) into `layout`'s workspace tree at its configured edge and size --
-    * the tree is the sole record of a docked surface's position and size (issue #817), so a surface built with
-    * `SurfacePresentation.Docked` needs an explicit tree entry, not just a place in `uiSurfaces`. A no-op when the
-    * sprite is disabled, `layout` carries no tree yet (`Layout.empty`), or it's already docked (idempotent, so a caller
-    * that isn't sure which applies -- e.g. `AppStartup.initializeState`'s open-path-at-startup flow, where
-    * `AppState.empty`'s companion sprite surface predates the real workspace tree `fileOpener.openFile` builds -- can
-    * call it unconditionally once that tree exists).
-    */
-  def dockCompanionSprite(layout: Layout, config: AppConfig): Layout =
-    companionSpriteSurfaces(config).headOption match
-      case None => layout
-      case Some(surface) =>
-        layout.workspaceTree match
-          case None => layout
-          case Some(tree) =>
-            val position          = config.companionSpriteConfig.position
-            val (splitId, leafId) = tree.nextDockIds(surface.id)
-            // No viewport is known this early in startup -- `dockSized` (via `allocationRatio`) falls back to an
-            // assumed total, the same fallback a `pin` call would hit in the same no-viewport-yet situation.
-            val docked =
-              tree.dockSized(surface.id, position, splitId, leafId, config.companionSpriteConfig.size, None)
-            layout.copy(workspaceTree = docked.orElse(layout.workspaceTree))
 
 enum AppAction:
   case CloseWorkflow(workflow: CloseWorkflowState)

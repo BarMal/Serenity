@@ -1,7 +1,5 @@
 package com.serenity.state.models
 
-import com.serenity.animation.sprite.CompanionSpriteState
-import com.serenity.config.{AppConfig, MotionFamily}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.project.ProjectPresence
 import com.serenity.ui.layout.ViewportSize
@@ -32,7 +30,6 @@ final case class Runtime(
     // `ThemeStateReducer`/`StateManagerSurfacePopupEffects`'s theme-listing effect and read back together by the
     // render/tick paths. See `ThemeDiscoveryState`'s own doc comment.
     themeDiscovery: ThemeDiscoveryState = ThemeDiscoveryState(),
-    companionSprite: CompanionSpriteState = CompanionSpriteState.default,
     // LSP diagnostics and semantic tokens (issue #1693): grouped into their own sub-record since both are written
     // from the same `SystemEventReducer` LSP handling and read back together by `AppState.annotationIndex`/
     // `semanticTokensAvailability`.
@@ -66,14 +63,6 @@ final case class Runtime(
     notesPane: Option[NotesPane] = None
 ):
 
-  /** A typed character: the quiet window for cursor-adjacent surfaces always restarts; the companion sprite panel
-    * reacts (issue #934 v2, merged in from the retired window sitter) only when its motion family and its own switch
-    * are on.
-    */
-  def observeTyping(nowNanos: Long, config: AppConfig): Runtime =
-    val motion = config.surfaceConfig.effectiveMotionConfiguration.family(MotionFamily.UiTransitions)
-    val sprite =
-      if motion.enabled && config.companionSpriteConfig.enabled then
-        companionSprite.observeTyping(nowNanos, config.companionSpriteConfig)
-      else companionSprite
-    copy(companionSprite = sprite, typingActivity = typingActivity.observed(nowNanos))
+  /** A typed character restarts the quiet window for cursor-adjacent surfaces. */
+  def observeTyping(nowNanos: Long): Runtime =
+    copy(typingActivity = typingActivity.observed(nowNanos))

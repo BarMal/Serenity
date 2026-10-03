@@ -271,7 +271,7 @@ object PanelStateReducer:
           SurfaceContent.CommentLens(_) | SurfaceContent.ModalWorkflow(_) | SurfaceContent.QuickInfo(_) |
           SurfaceContent.FilePreview(_, _) | SurfaceContent.SymbolDefinition(_, _) | SurfaceContent.StatusLine(_) |
           SurfaceContent.GhostOverlay(_, _) | SurfaceContent.ShortcutsHelp(_) | SurfaceContent.TabList(_, _) |
-          SurfaceContent.RecentFilesInMode(_, _) | SurfaceContent.TabBar(_, _) | SurfaceContent.CompanionSprite =>
+          SurfaceContent.RecentFilesInMode(_, _) | SurfaceContent.TabBar(_, _) =>
         None
 
   private def replaceSurface(surfaces: List[UiSurface], updated: UiSurface): List[UiSurface] =

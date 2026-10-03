@@ -57,7 +57,6 @@ private[manager] object MotionCancellation:
       runtime = state.runtime.copy(
         themeDiscovery = state.runtime.themeDiscovery.copy(transition = None),
         uiSurfaces = state.runtime.uiSurfaces.filterNot(isGhostOverlay),
-        companionSprite = state.runtime.companionSprite.resetTyping,
         motion = MotionState()
       )
     )
@@ -68,12 +67,7 @@ private[manager] object MotionCancellation:
       case MotionFamily.CommandSurfaces => cancelSurfaceMotion(isCommandSurface, state)
       case MotionFamily.PinnedPanels    => cancelSurfaceMotion(isDockedSurface, state)
       case MotionFamily.UiTransitions =>
-        state.copy(runtime =
-          state.runtime.copy(
-            themeDiscovery = state.runtime.themeDiscovery.copy(transition = None),
-            companionSprite = state.runtime.companionSprite.resetTyping
-          )
-        )
+        state.copy(runtime = state.runtime.copy(themeDiscovery = state.runtime.themeDiscovery.copy(transition = None)))
       case MotionFamily.Cursor =>
         // Caret-glide (issue #1085 phase 2): clears every buffer's in-flight `Cursor.glide` -- the one piece of
         // `Cursor`-family state that is actually cancellable (unlike blink/breathe cadence, which has no state to

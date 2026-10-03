@@ -76,7 +76,6 @@ private[serenity] object AppRuntimeRenderLoops:
         _ <-
           checkResizeBeforeInput(event, checkResizeAndHandle) >>
             ClipboardEventSync.beforeEvent(event, stateManager, systemClipboard) >>
-            observeCompanionSpriteTyping(event, stateManager) >>
             IO(frameTimings.inputApplyStarted()) >>
             stateManager.applyEvent(event) >>
             IO(frameTimings.inputApplyFinished()) >>
@@ -94,19 +93,6 @@ private[serenity] object AppRuntimeRenderLoops:
     * far less often than every keystroke/mouse-move that flows through `refreshFocusedInputTranslator` (issue #1409).
     */
   private[serenity] type FocusedTranslatorCacheEntry = (AppConfig, FocusedInputTranslator.TranslatorSet)
-
-  private[serenity] def observeCompanionSpriteTyping(
-    event: Event,
-    stateManager: StateUpdater
-  ): IO[Unit] =
-    event match
-      case _: com.serenity.keystroke.events.InsertChar =>
-        IO.monotonic.flatMap(now =>
-          stateManager.updateStateValidated(state =>
-            state.copy(runtime = state.runtime.observeTyping(now.toNanos, state.persisted.config))
-          )
-        )
-      case _ => IO.unit
 
   private def checkResizeBeforeInput(event: Event, checkResizeAndHandle: IO[Unit]): IO[Unit] =
     event match

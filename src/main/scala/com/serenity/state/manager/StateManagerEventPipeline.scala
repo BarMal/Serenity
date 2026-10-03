@@ -191,10 +191,12 @@ final private[manager] class StateManagerEventPipeline(
     given org.typelevel.log4cats.Logger[cats.effect.IO] = logger
     def eventLabel                                      = s"event.${event.getClass.getSimpleName}"
     Trace.timed(eventLabel) {
-      modelCommit.currentState.flatMap { rawState =>
-        // Not written back on its own: every handler builds on `prevState`, so the normalised focus lands in the
-        // event's own commit (and `prepareCommit` normalises every commit anyway).
-        val prevState = EventPipelineTransitions.commandRunnerFocusNormalized(rawState)
+      cats.effect.IO.monotonic.product(modelCommit.currentState).flatMap { (now, rawState) =>
+        // Not written back on its own: every handler builds on `prevState`, so the normalised focus and any typing
+        // activity land in the event's own commit (and `prepareCommit` normalises every commit anyway).
+        val prevState = EventPipelineTransitions.typingObserved(event, now.toNanos)(
+          EventPipelineTransitions.commandRunnerFocusNormalized(rawState)
+        )
         val handleEvent: cats.effect.IO[Unit] =
           if prevState.hasBlockingModal && !allowedWhileBlockingModal(event) then cats.effect.IO.unit
           else Trace.timed(s"$eventLabel.dispatch")(dispatchEvent(event, prevState))

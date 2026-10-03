@@ -413,10 +413,13 @@ object UiPreset:
     */
   private def decodeDockedPanels(cursor: HCursor): Decoder.Result[List[SessionDockedPanel]] =
     cursor.downField("dockedPanels").focus match
+      // A panel whose content no longer decodes (a kind since removed) is dropped, as session restore does, rather
+      // than losing the whole preset.
       case Some(_) =>
-        cursor.get[List[SessionDockedPanel]]("dockedPanels")
+        cursor.get[List[Json]]("dockedPanels").map(_.flatMap(_.as[SessionDockedPanel].toOption))
       case None =>
-        cursor.getOrElse[List[SessionPinnedPanel]]("pinnedPanels")(Nil).map { legacyPanels =>
+        cursor.getOrElse[List[Json]]("pinnedPanels")(Nil).map { legacyJson =>
+          val legacyPanels = legacyJson.flatMap(_.as[SessionPinnedPanel].toOption)
           legacyPanels.zipWithIndex.map { case (panel, index) => SessionDockedPanel(s"legacy-panel-$index", panel) }
         }
 

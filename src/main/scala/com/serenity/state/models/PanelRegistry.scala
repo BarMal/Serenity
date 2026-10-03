@@ -1,6 +1,5 @@
 package com.serenity.state.models
 
-import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.command.{CommandFamily, FrontendSupport}
 import com.serenity.ui.layout.{PanelContent, PanelPosition}
 
@@ -15,7 +14,6 @@ enum PanelId(val key: String):
   case Diagnostics     extends PanelId("diagnostics")
   case MarkdownPreview extends PanelId("markdown-preview")
   case ProjectOutput   extends PanelId("project-output")
-  case Companion       extends PanelId("companion")
 
   /** The surface id this panel is always docked under, so there is at most one of each. */
   def surfaceId: SurfaceId = SurfaceId(s"panel-$key")
@@ -30,7 +28,6 @@ object PanelId:
       case PanelContent.Diagnostics(_, _)     => Diagnostics
       case PanelContent.MarkdownPreview(_, _) => MarkdownPreview
       case PanelContent.Terminal(_, _)        => ProjectOutput
-      case PanelContent.CompanionSprite       => Companion
 
   /** Exhaustive over [[SurfaceContent]] on purpose: a new kind of content has to decide whether it is a panel. */
   def forContent(content: SurfaceContent): Option[PanelId] =
@@ -59,7 +56,6 @@ object PanelId:
       case SurfaceContent.RecentFilesInMode(_, _)   => None
       case SurfaceContent.TabBar(_, _)              => None
       case SurfaceContent.GhostOverlay(_, _)        => None
-      case SurfaceContent.CompanionSprite           => Some(Companion)
 
 /** A display mode a registered panel can be shown through (issue #1310). Shortcut-summoned (mode 2) is deliberately
   * absent until #1311's chord system exposes a `Command`-typed completion to register against -- adding a case nothing
@@ -127,9 +123,6 @@ object PanelRegistry:
       case PanelId.ProjectOutput =>
         docked(id, "Project Output", "Output from the latest build, test or run task.", PanelPosition.Bottom)
           .copy(defaultSize = _ => 14, family = CommandFamily.Code)
-      case PanelId.Companion =>
-        docked(id, "Companion", "A small pixel-art companion that reacts to your typing.", PanelPosition.Right)
-          .copy(defaultSize = _ => CompanionSpriteConfig.DefaultSize, focusable = false)
 
   private def docked(id: PanelId, label: String, description: String, position: PanelPosition): PanelRegistration =
     PanelRegistration(

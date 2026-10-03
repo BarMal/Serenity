@@ -38,12 +38,10 @@ class DockedPanelIdMigrationSpec extends AnyFlatSpec with Matchers:
     tree.toList.flatMap(dockedSurfaceIds) should not contain "surface-3"
   }
 
-  it should "move project output and the companion, including the companion's old reserved id" in {
-    val companion = docked("companion-sprite", PanelPosition.Right, SessionPanelContent.CompanionSprite)
-    val (panels, tree) =
-      SessionDockedPanel.withPanelIds(List(legacyOutline, legacyTerminal, companion), Some(legacyTree))
+  it should "move project output onto its fixed id" in {
+    val (panels, tree) = SessionDockedPanel.withPanelIds(List(legacyOutline, legacyTerminal), Some(legacyTree))
 
-    panels.map(_.surfaceId) shouldBe List("panel-outline", "panel-project-output", "panel-companion")
+    panels.map(_.surfaceId) shouldBe List("panel-outline", "panel-project-output")
     tree.toList.flatMap(dockedSurfaceIds) should contain allOf ("panel-outline", "panel-project-output")
   }
 

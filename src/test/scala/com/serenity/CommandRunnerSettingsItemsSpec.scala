@@ -7,15 +7,14 @@ import org.scalatest.matchers.should.Matchers
 
 class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
 
-  // issue #1299/#1044: boolean settings toggles such as "Show All Settings" and "Spell Check" were built inline with their options ordered Off/On, the one encoding in the settings tree that
-  // disagreed with `CommandRunnerSettingsOptionItemHelpers.enabledOptionItem`'s On/Off convention every other
-  // boolean toggle follows (`companion-sprite-enabled`, `code-ligatures`, the three `enabledOptionItem`-built
-  // toggles, etc). All three are normalized onto that one shared pattern now.
+  // issue #1299/#1044: boolean settings toggles such as "Show All Settings" and "Spell Check" were built inline with
+  // their options ordered Off/On, the one encoding in the settings tree that disagreed with
+  // `CommandRunnerSettingsOptionItemHelpers.enabledOptionItem`'s On/Off convention every other boolean toggle follows
+  // (`code-ligatures`, the `enabledOptionItem`-built toggles, etc). They are normalized onto that one pattern now.
   "boolean toggle settings" should "all order their options On, Off, matching the shared enabledOptionItem convention" in {
     val onOffToggles = List(
       CommandRunnerSettingsItems.showAllSettingsOptionItem(Map.empty),
-      CommandRunnerSettingsItems.spellCheckOptionItem(Map.empty),
-      CommandRunnerSettingsAppearanceItems.companionSpriteEnabledOptionItem(Map.empty)
+      CommandRunnerSettingsItems.spellCheckOptionItem(Map.empty)
     )
 
     onOffToggles.foreach { toggle =>

@@ -81,19 +81,6 @@ class DirectionalFocusSpec extends AnyFlatSpec with Matchers:
     DirectionalFocus.moved(state, Direction.Down).persisted.focus shouldBe Focus.Surface(PanelId.Diagnostics.surfaceId)
   }
 
-  it should "pass over the companion, which cannot take focus" in {
-    val companionOnly = focusedOn(
-      docked(base, PanelId.Companion, SurfaceContent.CompanionSprite, PanelPosition.Right),
-      Focus.EditorPane(firstPane)
-    )
-    DirectionalFocus.moved(companionOnly, Direction.Right) shouldBe companionOnly
-
-    val withOutline = docked(companionOnly, PanelId.Outline, SurfaceContent.Outline(Nil), PanelPosition.Right)
-    DirectionalFocus.moved(withOutline, Direction.Right).persisted.focus shouldBe Focus.Surface(
-      PanelId.Outline.surfaceId
-    )
-  }
-
   it should "leave focus alone when nothing lies in that direction" in {
     val state = focusedOn(base, Focus.EditorPane(firstPane))
 

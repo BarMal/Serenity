@@ -3,7 +3,6 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path}
 
 import scala.concurrent.duration.*
-import scala.util.Random
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
@@ -97,8 +96,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       editor = new StateManagerEditorCapability(
         operations.modelCommit,
         animations,
-        operations,
-        new Random(0L)
+        operations
       )
     yield PipelineHarness(sharedStateRef, operations, pipeline, editor.animationTicker)
 

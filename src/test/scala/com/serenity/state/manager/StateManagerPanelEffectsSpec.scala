@@ -71,8 +71,7 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
         target => calls.update(_ :+ s"expand:$target"),
         () => calls.update(_ :+ "collapse"),
         target => calls.update(_ :+ s"switch:$target"),
-        (target, size) => calls.update(_ :+ s"resize:$target:$size"),
-        enabled => calls.update(_ :+ s"companion-enabled:$enabled")
+        (target, size) => calls.update(_ :+ s"resize:$target:$size")
       )
     )
 
@@ -176,56 +175,6 @@ class StateManagerPanelEffectsSpec extends AnyFlatSpec with Matchers:
 
     fixture.calls.get.unsafeRunSync() shouldBe List(s"unpin:${PanelTarget.ById(PanelId.ProjectOutput.surfaceId)}")
     fixture.stateRef.get.unsafeRunSync().runtime.projectTasks shouldBe state.runtime.projectTasks
-  }
-
-  it should "turn the companion on and dock it at the chosen edge when it is pinned" in {
-    val fixture = harness()
-
-    fixture.panels
-      .interpret(ViewIntent.SetPanelPin(PanelId.Companion, Some(PanelPosition.Left)), AppState.initial)
-      .unsafeRunSync()
-
-    fixture.calls.get.unsafeRunSync() shouldBe List("companion-enabled:true")
-    val state = fixture.stateRef.get.unsafeRunSync()
-    state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(PanelId.Companion.surfaceId)) shouldBe
-      Some(PanelPosition.Left)
-  }
-
-  it should "turn the companion off when it is hidden" in {
-    val state   = pinnedState(PanelId.Companion.surfaceId, SurfaceContent.CompanionSprite, PanelPosition.Right, 10)
-    val fixture = harness(state)
-
-    fixture.panels.interpret(ViewIntent.SetPanelPin(PanelId.Companion, None), state).unsafeRunSync()
-
-    fixture.calls.get.unsafeRunSync() shouldBe List("companion-enabled:false")
-    fixture.currentSurfaces.map(_.id) should not contain PanelId.Companion.surfaceId
-  }
-
-  it should "turn the companion off when it is toggled hidden" in {
-    val state   = pinnedState(PanelId.Companion.surfaceId, SurfaceContent.CompanionSprite, PanelPosition.Right, 10)
-    val fixture = harness(state)
-
-    fixture.panels.interpret(ViewIntent.TogglePanelShown(PanelId.Companion), state).unsafeRunSync()
-
-    fixture.calls.get.unsafeRunSync() shouldBe
-      List(s"unpin:${PanelTarget.ById(PanelId.Companion.surfaceId)}", "companion-enabled:false")
-  }
-
-  it should "not show the companion while visual flair is off" in {
-    val flairOff = AppState.initial.copy(persisted =
-      AppState.initial.persisted
-        .copy(config = AppState.initial.persisted.config.withVisualFlairLevel(com.serenity.config.VisualFlairLevel.Off))
-    )
-    val fixture = harness(flairOff)
-
-    fixture.panels
-      .interpret(ViewIntent.SetPanelPin(PanelId.Companion, Some(PanelPosition.Left)), flairOff)
-      .unsafeRunSync()
-
-    fixture.currentSurfaces.map(_.id) should not contain PanelId.Companion.surfaceId
-    fixture.peeks.get.unsafeRunSync() shouldBe List(
-      PeekContent.QuickInfo("The companion is hidden while visual flair is off.")
-    )
   }
 
   it should "show a hidden panel at its default edge when it is toggled" in {

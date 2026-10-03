@@ -1,7 +1,7 @@
 package com.serenity.state.manager
 
 import com.serenity.animation.SweepDirection
-import com.serenity.keystroke.events.ResizeEvent
+import com.serenity.keystroke.events.{Event, InsertChar, ResizeEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId, Focus, SurfaceContent, replacedWhere}
 import com.serenity.state.reducers.{AppEventReducer, ReducerResult, SystemEventReducer}
@@ -38,6 +38,14 @@ private[manager] object EventPipelineTransitions:
         state.copy(persisted = state.persisted.copy(focus = focus))
       )
     else state
+
+  /** A typed character opens the typing quiet window. Folded into the state the event's own handler builds on, so it
+    * lands in that event's commit rather than costing a commit of its own per keystroke.
+    */
+  def typingObserved(event: Event, nowNanos: Long)(state: AppState): AppState =
+    event match
+      case _: InsertChar => state.copy(runtime = state.runtime.observeTyping(nowNanos))
+      case _             => state
 
   def withCommandRunnerUiPresetPreviews(model: Model, previews: List[UiPreset.Preview]): Model =
     val state = model.app
