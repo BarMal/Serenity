@@ -8,7 +8,6 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.frontend.{FrontendCapabilities, FrontendRuntime, GuiFrontend, TuiFrontend}
 import com.serenity.input.InputHandler
 import com.serenity.keystroke.KeyStrokeInfo
@@ -166,14 +165,14 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "sleep for the cursor idle interval, not block, while the window is focused" in {
-    val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02)
+    val fastConfig = AppConfig.default
     val state      = AppState.initial(fastConfig)
 
     val program = for
       windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
       result <- IO.race(
         AppRuntime.awaitFocusedIdleTick(IO.pure(state), windowFocused, GuiFrontend.cursorIdleInterval),
-        IO.sleep(500.millis)
+        IO.sleep(1.second)
       )
     yield result shouldBe Left(())
 
@@ -200,7 +199,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "still wake the idle tick in TUI breathe mode -- breathe stays the documented app-painted exception" in {
-    val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02).withCursorMode(CursorMode.Breathe)
+    val fastConfig = AppConfig.default.withCursorMode(CursorMode.Breathe)
     val tuiBreatheState =
       AppState
         .initial(fastConfig)
@@ -210,7 +209,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
       windowFocused <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
       result <- IO.race(
         AppRuntime.awaitFocusedIdleTick(IO.pure(tuiBreatheState), windowFocused, tuiFrontend.cursorIdleInterval),
-        IO.sleep(500.millis)
+        IO.sleep(1.second)
       )
     yield result shouldBe Left(())
 
@@ -218,7 +217,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "skip idle cursor rendering entirely while unfocused, then resume once focus returns" in {
-    val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02)
+    val fastConfig = AppConfig.default
     val state      = AppState.initial(fastConfig)
 
     val program = for
@@ -254,10 +253,10 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
         .compile
         .drain
         .start
-      _                   <- IO.sleep(150.millis)
+      _                   <- IO.sleep(1.second)
       callsWhileUnfocused <- renderCalls.get
       _                   <- windowFocused.set(true)
-      _                   <- IO.sleep(150.millis)
+      _                   <- IO.sleep(1.second)
       callsAfterFocus     <- renderCalls.get
       _                   <- fiber.cancel
     yield
@@ -268,7 +267,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "never render an idle cursor frame in TUI blink mode -- zero idle wakeups, terminal owns the caret" in {
-    val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02)
+    val fastConfig = AppConfig.default
     val state = AppState
       .initial(fastConfig)
       .copy(runtime = AppState.initial(fastConfig).runtime.copy(capabilities = FrontendCapabilities.tui()))
@@ -306,7 +305,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
         .compile
         .drain
         .start
-      _     <- IO.sleep(300.millis) // several multiples of what would have been a 500ms*0.02=10ms idle cadence
+      _     <- IO.sleep(1.second) // several multiples of what would have been a 500ms*0.02=10ms idle cadence
       calls <- renderCalls.get
       _     <- fiber.cancel
     yield calls shouldBe 0
@@ -315,7 +314,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep rendering idle breathe frames in TUI mode -- breathe is app-painted, not delegated to the terminal" in {
-    val fastConfig = AppConfig.default.withElementTransitionSpeedScale(0.02).withCursorMode(CursorMode.Breathe)
+    val fastConfig = AppConfig.default.withCursorMode(CursorMode.Breathe)
     val state = AppState
       .initial(fastConfig)
       .copy(runtime = AppState.initial(fastConfig).runtime.copy(capabilities = FrontendCapabilities.tui()))
@@ -353,7 +352,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
         .compile
         .drain
         .start
-      _     <- IO.sleep(150.millis)
+      _     <- IO.sleep(1.second)
       calls <- renderCalls.get
       _     <- fiber.cancel
     yield calls should be > 0
@@ -364,7 +363,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
   it should "pause idle cursor rendering while unfocused and resume once focus returns, via registerFocusCallback wiring" in {
     given Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeFocusWiringSpec"))
 
-    val fastConfig          = AppConfig.default.withElementTransitionSpeedScale(0.02)
+    val fastConfig          = AppConfig.default
     val focusCallbackHolder = new java.util.concurrent.atomic.AtomicReference[Option[Boolean => Unit]](None)
 
     val program = for
@@ -405,15 +404,15 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
           registerFocusCallback = cb => focusCallbackHolder.set(Some(cb))
         )
         .start
-      _                   <- IO.sleep(200.millis)
+      _                   <- IO.sleep(1.second)
       callsBeforeBlur     <- idleRenderCalls.get
       _                   <- IO(focusCallbackHolder.get().foreach(_.apply(false)))
       _                   <- IO.sleep(100.millis)
       _                   <- idleRenderCalls.set(0)
-      _                   <- IO.sleep(300.millis)
+      _                   <- IO.sleep(1.second)
       callsWhileUnfocused <- idleRenderCalls.get
       _                   <- IO(focusCallbackHolder.get().foreach(_.apply(true)))
-      _                   <- IO.sleep(300.millis)
+      _                   <- IO.sleep(1.second)
       callsAfterRefocus   <- idleRenderCalls.get
       _                   <- closeRequested.complete(())
       _                   <- fiber.joinWithNever

@@ -49,21 +49,7 @@ sealed trait Frontend:
   def markdownPreviewWindow: MarkdownPreviewWindowAvailability
 
 object Frontend:
-  private[frontend] val DefaultCursorIdleInterval: FiniteDuration = 500.millis
-
-  /** The cursor-motion-driven idle cadence shared by both frontends: `None` when cursor motion is disabled or scaled to
-    * zero (accessibility, the `Reduced` preset), otherwise the default interval scaled by the configured speed.
-    */
-  private[frontend] def motionDrivenIdleInterval(config: AppConfig): Option[FiniteDuration] =
-    val cursorMotion =
-      config.surfaceConfig.effectiveMotionConfiguration.family(com.serenity.config.MotionFamily.Cursor)
-    val scale = AppConfig.clampElementTransitionSpeedScale(cursorMotion.speedScale)
-    Option.when(cursorMotion.enabled && scale > 0.0)(
-      FiniteDuration(
-        math.max(1L, math.round(DefaultCursorIdleInterval.toNanos.toDouble * scale)),
-        NANOSECONDS
-      )
-    )
+  val BlinkInterval: FiniteDuration = 500.millis
 
   /** The `LogRouting` a GUI launch configures the console filter with, before a `GuiFrontend` instance necessarily
     * exists yet -- `Main.launch` sets this ahead of the first SLF4J `getLogger` call, well before the Swing window (and
@@ -75,8 +61,7 @@ object Frontend:
   /** The TUI counterpart to [[guiLogRouting]], read the same way before a `TuiFrontend` exists. */
   val tuiLogRouting: LogRouting = LogRouting(suppressConsole = true)
 
-/** The GUI frontend: a real font-measured pixel grid, full motion/typography, and a cursor-blink cadence driven purely
-  * by the configured motion family -- a focused Swing window has no hardware cursor to delegate blink timing to, unlike
+/** The GUI frontend: a real font-measured pixel grid, full typography, and a fixed cursor-blink cadence -- a focused Swing window has no hardware cursor to delegate blink timing to, unlike
   * a real terminal (see [[TuiFrontend]]).
   */
 case object GuiFrontend extends Frontend:
@@ -85,7 +70,7 @@ case object GuiFrontend extends Frontend:
   val markdownPreviewWindow: MarkdownPreviewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable
 
   def cursorIdleInterval(config: AppConfig): Option[FiniteDuration] =
-    Frontend.motionDrivenIdleInterval(config)
+    Some(Frontend.BlinkInterval)
 
 /** The TUI frontend: the terminal's own fixed cell grid, no sub-cell motion/typography (epic #1103's accepted
   * degradations), and whatever keyboard fidelity the terminal actually negotiated (issue #1194/#1320).
@@ -103,7 +88,7 @@ final case class TuiFrontend(
   /** Issue #1170: in TUI blink mode the caret is delegated to the terminal's own hardware cursor
     * (`RendererCursorOverlay.presentHardwareCursor`), which owns blink timing entirely, so there is no idle work left
     * to do -- breathe mode is the documented exception, since it animates colour/opacity over time, which a terminal
-    * cursor style can't represent, so it keeps the normal motion-driven cadence.
+    * cursor style can't represent, so it keeps the fixed blink cadence.
     */
   def cursorIdleInterval(config: AppConfig): Option[FiniteDuration] =
-    if config.cursorMode == CursorMode.Blink then None else Frontend.motionDrivenIdleInterval(config)
+    if config.cursorMode == CursorMode.Blink then None else Some(Frontend.BlinkInterval)

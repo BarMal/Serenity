@@ -23,10 +23,21 @@ class FrontendSpec extends AnyFlatSpec with Matchers:
     GuiFrontend.logRouting shouldBe LogRouting(suppressConsole = false)
   }
 
-  it should "tick the idle cursor cadence purely from the configured motion speed, regardless of cursor mode" in {
-    GuiFrontend.cursorIdleInterval(AppConfig.default) shouldBe Some(500.millis)
-    GuiFrontend.cursorIdleInterval(AppConfig.default.withCursorMode(CursorMode.Blink)) shouldBe Some(500.millis)
-    GuiFrontend.cursorIdleInterval(AppConfig.default.withCursorTransitionSpeedScale(Some(0.0))) shouldBe None
+  it should "tick the idle cursor cadence at the fixed blink interval, regardless of cursor mode" in {
+    GuiFrontend.cursorIdleInterval(AppConfig.default) shouldBe Some(Frontend.BlinkInterval)
+    GuiFrontend.cursorIdleInterval(AppConfig.default.withCursorMode(CursorMode.Blink)) shouldBe Some(
+      Frontend.BlinkInterval
+    )
+  }
+
+  it should "keep blinking when the cursor motion speed is zero, since blink is not a motion setting" in {
+    GuiFrontend.cursorIdleInterval(AppConfig.default.withCursorTransitionSpeedScale(Some(0.0))) shouldBe Some(
+      Frontend.BlinkInterval
+    )
+  }
+
+  "Frontend.BlinkInterval" should "stay at the long-standing 500ms" in {
+    Frontend.BlinkInterval shouldBe 500.millis
   }
 
   "TuiFrontend" should "publish TUI capabilities carrying the negotiated keyboard tier" in {
@@ -48,7 +59,9 @@ class FrontendSpec extends AnyFlatSpec with Matchers:
   it should "keep ticking in breathe mode, since a terminal cursor style can't represent colour/opacity animation" in {
     val frontend = TuiFrontend(KeyboardFidelityTier.Full)
 
-    frontend.cursorIdleInterval(AppConfig.default.withCursorMode(CursorMode.Breathe)) shouldBe Some(500.millis)
+    frontend.cursorIdleInterval(AppConfig.default.withCursorMode(CursorMode.Breathe)) shouldBe Some(
+      Frontend.BlinkInterval
+    )
   }
 
   "Frontend.guiLogRouting/tuiLogRouting" should "match what a constructed instance's own logRouting answers" in {

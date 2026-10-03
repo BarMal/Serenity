@@ -13,18 +13,13 @@ class AppRuntimeCursorCadenceSpec extends AnyFlatSpec with Matchers:
 
   private val tui = TuiFrontend(KeyboardFidelityTier.Full)
 
-  "GuiFrontend.cursorIdleInterval" should "derive cursor idle cadence from the cursor motion speed scale" in {
+  "GuiFrontend.cursorIdleInterval" should "blink at the fixed interval whatever the motion settings say" in {
     GuiFrontend.cursorIdleInterval(AppConfig.default) shouldBe Some(500.millis)
-    GuiFrontend.cursorIdleInterval(AppConfig.default.withElementTransitionSpeedScale(2.0)) shouldBe Some(1000.millis)
-    GuiFrontend.cursorIdleInterval(
-      AppConfig.default
-        .withElementTransitionSpeedScale(2.0)
-        .withCursorTransitionSpeedScale(Some(0.5))
-    ) shouldBe Some(250.millis)
-    GuiFrontend.cursorIdleInterval(AppConfig.default.withCursorTransitionSpeedScale(Some(0.0))) shouldBe None
+    GuiFrontend.cursorIdleInterval(AppConfig.default.withElementTransitionSpeedScale(2.0)) shouldBe Some(500.millis)
+    GuiFrontend.cursorIdleInterval(AppConfig.default.withCursorTransitionSpeedScale(Some(0.0))) shouldBe Some(500.millis)
     GuiFrontend.cursorIdleInterval(
       AppConfig.default.withMotionAccessibility(MotionAccessibility.Off)
-    ) shouldBe None
+    ) shouldBe Some(500.millis)
   }
 
   it should "never delegate the caret to a hardware cursor, since a GUI canvas paints its own caret" in {
