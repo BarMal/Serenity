@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import com.serenity.config.AppConfig
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{LayoutRect, TextLayoutSnapshot}
+import com.serenity.ui.layout.{LayoutRect, TextLayoutSnapshot, WrappedLineCache}
 
 /** Selection grow/settle (issue #1085 phase 3): `rectsForSelection` is the one place a [[Selection]] is turned into the
   * per-visual-line column extents [[SelectionGeometryState.diff]] tweens between -- reusing the same word-wrap
@@ -19,7 +19,8 @@ private[manager] object SelectionGeometry:
   def rectsForSelection(
     buffer: Buffer,
     config: AppConfig,
-    selection: Selection
+    selection: Selection,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): Map[SelectionLineKey, LayoutRect] =
     val fontConfig      = config.editorConfig.fontConfig
     val font            = FontLoader.previewFontForRole(fontConfig, buffer.typographyRole)
@@ -30,7 +31,8 @@ private[manager] object SelectionGeometry:
 
     def visualLinesForLine(lineIndex: Int): Vector[TextVisualLine] =
       val text = buffer.document.content.getLine(lineIndex).getOrElse("")
-      if wordWrapEnabled then TextLayoutSnapshot.boundedVisualLinesForText(text, lineIndex, wrapWidthPx, font)
+      if wordWrapEnabled then
+        TextLayoutSnapshot.boundedVisualLinesForText(text, lineIndex, wrapWidthPx, font, wrapCache = wrapCache)
       else
         Vector(
           TextVisualLine(

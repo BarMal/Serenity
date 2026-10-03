@@ -242,7 +242,7 @@ final private[manager] class MouseTargetLayoutKeyCache:
   * can render and hit-test concurrently in one JVM without one's prepared scenes leaking into, or being evicted by, the
   * other's.
   */
-final private[serenity] class AuthoritativeUiScene:
+final private[serenity] class AuthoritativeUiScene(val wrappedLines: WrappedLineCache):
   import AuthoritativeUiScene.{SceneFontKey, SceneKey}
 
   private val layoutKeyCache = new MouseTargetLayoutKeyCache
@@ -394,7 +394,8 @@ final private[serenity] class AuthoritativeUiScene:
                 forceCellLayout = cellMetrics.isDefined,
                 proseScale = proseScale,
                 columnCount = columnCount,
-                dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled
+                dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
+                wrapCache = wrappedLines
               )
               // Only a genuinely multi-column page carries per-column placements. A single fitted column is fully
               // served by `textSnapshots` alone (identical to the pre-multi-column render path, including its
@@ -425,7 +426,8 @@ final private[serenity] class AuthoritativeUiScene:
                     cellMetricsOverride = Some(fontMetrics),
                     forceCellLayout = cellMetrics.isDefined,
                     proseScale = proseScale,
-                    dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled
+                    dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
+                    wrapCache = wrappedLines
                   )
                 )
               paneId -> (activeSnapshot, placements)
@@ -439,7 +441,8 @@ final private[serenity] class AuthoritativeUiScene:
                 forceCellLayout = cellMetrics.isDefined,
                 // Match the render path's prose zoom so hit-testing rows/advances line up with what was drawn.
                 proseScale = proseScale,
-                dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled
+                dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
+                wrapCache = wrappedLines
               )
               paneId -> (single, Vector.empty[ColumnSnapshotPlacement])
       }
@@ -477,7 +480,8 @@ private[serenity] object AuthoritativeUiScene:
       cellMetrics: Option[CellMetrics]
   )
 
-  def apply(): AuthoritativeUiScene = new AuthoritativeUiScene
+  def apply(wrappedLines: WrappedLineCache = WrappedLineCache.bounded()): AuthoritativeUiScene =
+    new AuthoritativeUiScene(wrappedLines)
 
 final private[manager] case class MouseTargetCache(
     layoutKey: MouseTargetLayoutKey,

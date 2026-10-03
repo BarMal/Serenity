@@ -1,14 +1,16 @@
 package com.serenity.state.manager
 
 import com.serenity.markdown.MarkdownPreviewCache
+import com.serenity.ui.layout.WrappedLineCache
 import com.serenity.ui.renderer.{GraphemeSegmentationCache, RendererFrameState}
 import com.serenity.ui.theme.ThemeHighlightCache
 
 /** Every render/mouse-hit-testing cache that issue #1677 found still living as a JVM-wide singleton `object`, bundled
   * into one instance-scoped owner: [[RendererFrameState]]'s per-frame caches, [[ThemeHighlightCache]]'s syntax
   * highlight memoization, [[GraphemeSegmentationCache]]'s grapheme-boundary memoization, [[AuthoritativeUiScene]]'s
-  * prepared-scene cache (with its own lock, now scoped to this instance rather than the JVM), and
-  * [[MarkdownPreviewCache]]'s markdown-preview HTML/image/inline-document caches.
+  * prepared-scene cache (with its own lock, now scoped to this instance rather than the JVM),
+  * [[MarkdownPreviewCache]]'s markdown-preview HTML/image/inline-document caches, and [[WrappedLineCache]]'s wrapped
+  * lines, which the scene and the state-update path (through the scene it is handed) both read.
   *
   * One instance is created per render-owning entity -- today, once per [[StateManager]] (see `StateManager.apply`) --
   * and threaded explicitly: down through [[com.serenity.ui.renderer.RenderContext]] to every render entry point and
@@ -22,7 +24,8 @@ final class RenderCaches private (
     val graphemeSegmentationCache: GraphemeSegmentationCache,
     val authoritativeScene: AuthoritativeUiScene,
     val markdownPreviewCache: MarkdownPreviewCache,
-    val chapterGhosts: ChapterGhostCache
+    val chapterGhosts: ChapterGhostCache,
+    val wrappedLines: WrappedLineCache
 )
 
 object RenderCaches:
@@ -32,11 +35,13 @@ object RenderCaches:
     * is loaded (or that don't care) get the same 64-entry default that module has always used.
     */
   def create(rendererFrameStateCacheCapacity: Int = 64): RenderCaches =
+    val wrappedLines = WrappedLineCache.bounded()
     new RenderCaches(
       RendererFrameState(rendererFrameStateCacheCapacity),
       ThemeHighlightCache(),
       GraphemeSegmentationCache(),
-      AuthoritativeUiScene(),
+      AuthoritativeUiScene(wrappedLines),
       MarkdownPreviewCache(),
-      ChapterGhostCache()
+      ChapterGhostCache(),
+      wrappedLines
     )

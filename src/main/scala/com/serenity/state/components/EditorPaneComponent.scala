@@ -4,9 +4,11 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.manager.{CursorViewport, EditorGeometryProducer}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{EditorEventReducer, ReducerResult}
+import com.serenity.ui.layout.WrappedLineCache
 
 class EditorPaneComponent(
-    paneId: PaneId
+    paneId: PaneId,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
 )(using balance: com.serenity.rope.Balance)
     extends TypedFocusedComponent[TextEntryEvent]:
 
@@ -40,7 +42,7 @@ class EditorPaneComponent(
   ): ComponentResult =
     // Measured once here, at the effect boundary, rather than by the reducer reaching for
     // `EditorGeometryProducer` itself (#1676) -- `reduce` stays a pure function of state and this geometry.
-    val geometry     = EditorGeometryProducer.forEvent(event, currentState, paneId)
+    val geometry     = EditorGeometryProducer.forEvent(event, currentState, paneId, wrapCache)
     val reduced      = EditorEventReducer.reduce(event, paneId, currentState, geometry)
-    val visibleState = CursorViewport.ensureVisibleCursors(currentState, reduced.state)
+    val visibleState = CursorViewport.ensureVisibleCursors(currentState, reduced.state, wrapCache)
     ComponentResult.reducerResult(ReducerResult(visibleState, reduced.effects))

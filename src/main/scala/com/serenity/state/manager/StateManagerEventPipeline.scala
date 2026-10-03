@@ -53,6 +53,9 @@ final private[manager] class StateManagerEventPipeline(
 
   private val modelCommit = operations.modelCommit
 
+  // The same cache the scene wraps with, so a keystroke and the frame that follows it measure each line once.
+  private val wrappedLines = authoritativeScene.wrappedLines
+
   private def drainPendingOperations: cats.effect.IO[Unit] =
     operations.takeOperations.flatMap {
       case Nil => cats.effect.IO.unit
@@ -236,7 +239,7 @@ final private[manager] class StateManagerEventPipeline(
       case vertical: VerticalNavigationEvent =>
         prevState.persisted.focus match
           case Focus.EditorPane(paneId) =>
-            EditorGeometryProducer.forPane(prevState, paneId) match
+            EditorGeometryProducer.forPane(prevState, paneId, wrapCache = wrappedLines) match
               case Some(geometry) =>
                 val reducedState =
                   EditorEventReducer.reduceVerticalNavigation(vertical, paneId, prevState, geometry).state
@@ -244,7 +247,10 @@ final private[manager] class StateManagerEventPipeline(
                 // dispatchToFocusedHandler/EditorPaneComponent, which is the only place that otherwise applies this
                 // pass -- without it, MoveUp/MoveDown/ExtendSelectionUp/ExtendSelectionDown move the cursor but never
                 // scroll the viewport to follow it.
-                modelCommit.commitState(CursorViewport.ensureVisibleCursors(prevState, reducedState), prevState)
+                modelCommit.commitState(
+                  CursorViewport.ensureVisibleCursors(prevState, reducedState, wrappedLines),
+                  prevState
+                )
               case None => dispatchToFocusedHandler(vertical, prevState)
           case _ => dispatchToFocusedHandler(vertical, prevState)
 
@@ -359,7 +365,7 @@ final private[manager] class StateManagerEventPipeline(
     */
   private def getLocalHandlerForFocus(focus: Focus, state: AppState): LocalEventHandler =
     focus match
-      case Focus.EditorPane(paneId) => new EditorPaneComponent(paneId)(using balance)
+      case Focus.EditorPane(paneId) => new EditorPaneComponent(paneId, wrappedLines)(using balance)
       case Focus.Modal =>
         state.topModal match
           case None         => NoOpLocalEventHandler

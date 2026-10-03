@@ -32,7 +32,8 @@ object TextLayoutSnapshotColumnMode:
     proseScale: Float = 1.0f,
     columnCount: Int = 1,
     // `document.drop_caps_enabled` config toggle -- see `TextLayoutSnapshot.fromBuffer`'s own parameter.
-    dropCapsEnabled: Boolean = true
+    dropCapsEnabled: Boolean = true,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): Vector[Vector[TextVisualLine]] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
@@ -55,7 +56,8 @@ object TextLayoutSnapshotColumnMode:
       richDocument,
       wordWrapEnabled = true,
       proseScale,
-      dropCapsEnabled
+      dropCapsEnabled,
+      wrapCache
     ).drop(topVisualLine).take(totalRowsNeeded)
 
     allVisualLines.grouped(visibleLines).toVector
@@ -76,7 +78,8 @@ object TextLayoutSnapshotColumnMode:
     cellMetricsOverride: Option[CellMetrics] = None,
     forceCellLayout: Boolean = false,
     proseScale: Float = 1.0f,
-    dropCapsEnabled: Boolean = true
+    dropCapsEnabled: Boolean = true,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): TextLayoutSnapshot =
     fromBufferColumns(
       buffer,
@@ -87,7 +90,8 @@ object TextLayoutSnapshotColumnMode:
       forceCellLayout,
       proseScale,
       columnCount = 1,
-      dropCapsEnabled
+      dropCapsEnabled,
+      wrapCache
     ).headOption.getOrElse(
       emptyColumnSnapshot(columnWidthPx, font, fontRenderContext, cellMetricsOverride, forceCellLayout, proseScale)
     )
@@ -109,7 +113,8 @@ object TextLayoutSnapshotColumnMode:
     forceCellLayout: Boolean = false,
     proseScale: Float = 1.0f,
     columnCount: Int = 1,
-    dropCapsEnabled: Boolean = true
+    dropCapsEnabled: Boolean = true,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): Vector[TextLayoutSnapshot] =
     val cellMetrics    = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout = !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext)
@@ -134,7 +139,8 @@ object TextLayoutSnapshotColumnMode:
       forceCellLayout,
       proseScale,
       columnCount,
-      dropCapsEnabled
+      dropCapsEnabled,
+      wrapCache
     ).map { chunk =>
       TextLayoutSnapshot(
         visualLines = chunk,
