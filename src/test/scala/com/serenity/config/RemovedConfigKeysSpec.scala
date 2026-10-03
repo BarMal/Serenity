@@ -91,3 +91,33 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
       "blurRadius"       -> Json.fromDoubleOrNull(0.42),
       "uiCornerRadiusPx" -> Json.fromInt(12)
     )
+
+  "A config file naming the removed companion sprite and visual flair settings" should "load and report each once" in
+    assertRemovedAndIgnored(
+      "ui.companion_sprite.enabled"                  -> "true",
+      "ui.companion_sprite.character"                -> "pixel-wizard",
+      "ui.companion_sprite.position"                 -> "left",
+      "ui.companion_sprite.size"                     -> "12",
+      "ui.companion_sprite.typing_cycle"             -> "pulse",
+      "ui.companion_sprite.typing_active_ticks"      -> "4",
+      "ui.companion_sprite.typing_fast_active_ticks" -> "2",
+      "ui.companion_sprite.typing_fast_threshold_ms" -> "90",
+      "ui.visual_flair"                              -> "reduced"
+    )
+
+  it should "treat their older spellings as removed too" in
+    assertRemovedAndIgnored(
+      "companion.sprite.enabled"      -> "true",
+      "companion.sprite.typing.cycle" -> "blink",
+      "companion.sprite.size"         -> "8",
+      "visual.flair.level"            -> "off",
+      "ui.companion_sprite.frames"    -> "4"
+    )
+
+  "A session saved with companion sprite settings" should "still decode, ignoring them" in
+    assertSessionIgnores(
+      "ui.companion_sprite.enabled"   -> Json.True,
+      "ui.companion_sprite.character" -> Json.fromString("pixel-wizard"),
+      "ui.companion_sprite.size"      -> Json.fromInt(12),
+      "ui.visual_flair"               -> Json.fromString("reduced")
+    )

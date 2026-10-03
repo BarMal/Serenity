@@ -287,18 +287,6 @@ enum InterfaceChromeIntent:
   case SetWheelScrollLines(lines: Int)
   case SetPanelEscapeTarget(mode: AppMode, target: PanelEscapeTarget)
 
-/** Purely decorative extras (companion sprite, flair tier) that never change what is edited. The companion sprite panel
-  * absorbed the retired window sitter's typing-reactivity (issue #934 v2), so its typing-cadence settings live here
-  * alongside the panel's own enabled toggle instead of a separate sitter config surface.
-  */
-enum DecorationIntent:
-  case SetCompanionSpriteEnabled(enabled: Boolean)
-  case SetCompanionSpriteTypingCycle(cycle: com.serenity.animation.sprite.SpriteFrameCycle)
-  case SetCompanionSpriteTypingActiveTicks(ticks: Int)
-  case SetCompanionSpriteTypingFastActiveTicks(ticks: Int)
-  case SetCompanionSpriteTypingFastThresholdMs(ms: Int)
-  case SetVisualFlairLevel(level: VisualFlairLevel)
-
 enum SpellCheckIntent:
   case SetSpellCheckEnabled(enabled: Boolean)
   case SetSpellCheckLanguages(languages: List[String])
@@ -328,7 +316,6 @@ enum SettingsIntent:
   case StatusLine(intent: StatusLineIntent)
   case TextDisplay(intent: TextDisplayIntent)
   case InterfaceChrome(intent: InterfaceChromeIntent)
-  case Decoration(intent: DecorationIntent)
   case SpellCheck(intent: SpellCheckIntent)
   case General(intent: GeneralSettingsIntent)
 

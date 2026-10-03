@@ -1,6 +1,5 @@
 package com.serenity.command
 
-import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.frontend.FrontendCapabilities
@@ -50,8 +49,7 @@ object CommandRunnerSettingsInputItems:
       lineNumberPaddingValue: String,
       columnCountValue: String,
       columnGapValue: String,
-      spellCheck: SpellCheckConfig,
-      companionSpriteConfig: CompanionSpriteConfig
+      spellCheck: SpellCheckConfig
   )
 
   private def derivedValues(config: AppConfig, capabilities: FrontendCapabilities): DerivedValues =
@@ -89,8 +87,7 @@ object CommandRunnerSettingsInputItems:
         surfaceConfig.lineNumberLayout.padding.fold(if capabilities.isCellGrid then "0" else "1")(_.toString),
       columnCountValue = surfaceConfig.columnCount.fold("auto")(_.toString),
       columnGapValue = surfaceConfig.columnGap.toString,
-      spellCheck = languageToolsConfig.spellCheck.normalized,
-      companionSpriteConfig = config.companionSpriteConfig
+      spellCheck = languageToolsConfig.spellCheck.normalized
     )
 
   def build(
@@ -176,11 +173,8 @@ object CommandRunnerSettingsInputItems:
         v.lineNumberMarginRightValue,
         v.lineNumberPaddingValue
       ) ++
-      CommandRunnerSettingsInputItemsCompanionSpriteAndFont.companionSpriteAndInputItems(
-        v.companionSpriteConfig,
-        v.inputConfig.wheelScrollLines
-      ) ++
-      CommandRunnerSettingsInputItemsCompanionSpriteAndFont.fontSizeItems(
+      CommandRunnerSettingsInputItemsInputAndFont.inputItems(v.inputConfig.wheelScrollLines) ++
+      CommandRunnerSettingsInputItemsInputAndFont.fontSizeItems(
         v.codeFontSizeValue,
         v.textFontSizeValue,
         v.uiFontSizeValue,

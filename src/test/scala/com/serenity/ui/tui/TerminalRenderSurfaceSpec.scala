@@ -121,7 +121,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
   // fillPixelRect stays the historical no-op deliberately (see its doc comment in TerminalRenderSurface): the caret
   // full-frame paint path calls it with real-font pixel coordinates regardless of surface, and making it real on a
   // cell surface silently overwrote live buffer text -- confirmed empirically while implementing this feature. Only
-  // drawImage (used by the companion sprite pane and Markdown preview/modal-layer caching, none of which ever call
+  // drawImage (used by Markdown preview/modal-layer caching, none of which ever call
   // fillPixelRect) gets a real implementation.
   "pixels.fillPixelRect" should "remain the historical no-op, not painting anything" in {
     val (rs, writer) = surface(width = 5, height = 3)

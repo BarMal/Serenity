@@ -177,14 +177,11 @@ object CommandRunnerSettingsGroups:
     val lookAdvancedGroup = group(
       "settings-look-advanced",
       "Advanced",
-      "Spacing, outlines, render cadence, decorative extras",
+      "Spacing, outlines, render cadence",
       input("ui-element-gap") ++
         onFrontend.rows(guiOnly, input("ui-outline-thickness")) ++ List(
           CommandRunnerSettingsMotionItems.renderFpsOptionItem(optionSelections),
-          CommandRunnerSettingsMotionItems.renderDamageGranularityOptionItem(optionSelections),
-          CommandRunnerSettingsAppearanceItems.visualFlairLevelOptionItem(optionSelections),
-          CommandRunnerSettingsAppearanceItems.companionSpriteEnabledOptionItem(optionSelections),
-          CommandRunnerSettingsAppearanceItems.companionSpriteTypingCycleOptionItem(optionSelections)
+          CommandRunnerSettingsMotionItems.renderDamageGranularityOptionItem(optionSelections)
         )
     )
     val customMotionInputIds =
@@ -192,18 +189,14 @@ object CommandRunnerSettingsGroups:
     val motionAdvancedGroup = group(
       "settings-motion-advanced",
       "Advanced",
-      "Per-family speed, custom timing, companion sprite typing tuning",
+      "Per-family speed, custom timing",
       input(
         "cursor-speed-scale",
         "element-transition-speed-scale",
         "editor-text-speed-scale",
         "command-runner-speed-scale",
         "ui-speed-scale"
-      ) ++ input(customMotionInputIds*) ++ input(
-        "companion-sprite-typing-active-ticks",
-        "companion-sprite-typing-fast-active-ticks",
-        "companion-sprite-typing-fast-threshold-ms"
-      )
+      ) ++ input(customMotionInputIds*)
     )
     val motionGroup = group(
       "settings-animation",

@@ -1,70 +1,14 @@
 package com.serenity.command
 
-import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.config.AppConfig
 import com.serenity.ui.fonts.FontLoader
 
-/** Companion sprite typing-reactivity and font-size input items. Split out of `CommandRunnerSettingsInputItems.build`
-  * to keep both under the architecture size targets -- see that object's doc. The typing-cadence items absorbed the
-  * retired `com.serenity.animation.WindowSitterConfig`'s own input items (issue #934 v2).
+/** Mouse-input and font-size input items. Split out of `CommandRunnerSettingsInputItems.build` to keep both under the
+  * architecture size targets -- see that object's doc.
   */
-private[command] object CommandRunnerSettingsInputItemsCompanionSpriteAndFont:
+private[command] object CommandRunnerSettingsInputItemsInputAndFont:
 
-  private[command] def companionSpriteAndInputItems(
-    companionSpriteConfig: CompanionSpriteConfig,
-    wheelScrollLines: Int
-  ): List[CommandSurfaceItem.InputItem] = List(
-    CommandSurfaceItem.InputItem(
-      id = "companion-sprite-typing-active-ticks",
-      label = "Typing Reaction Duration",
-      hint = "Animation ticks (1-120)",
-      currentValue = companionSpriteConfig.typingActiveTicks.toString,
-      kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
-      parse = text =>
-        text.toIntOption
-          .filter(value => value >= 1 && value <= 120)
-          .map(commandIntentArg =>
-            CommandIntent.Settings(
-              SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingActiveTicks(commandIntentArg))
-            )
-          ),
-      category = CommandCategory.Settings,
-      defaultValue = Some(CompanionSpriteConfig.default.typingActiveTicks.toString)
-    ),
-    CommandSurfaceItem.InputItem(
-      id = "companion-sprite-typing-fast-active-ticks",
-      label = "Fast Typing Reaction Duration",
-      hint = "Fast-typing ticks (1-240)",
-      currentValue = companionSpriteConfig.typingFastActiveTicks.toString,
-      kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
-      parse = text =>
-        text.toIntOption
-          .filter(value => value >= 1 && value <= 240)
-          .map(commandIntentArg =>
-            CommandIntent.Settings(
-              SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingFastActiveTicks(commandIntentArg))
-            )
-          ),
-      category = CommandCategory.Settings,
-      defaultValue = Some(CompanionSpriteConfig.default.typingFastActiveTicks.toString)
-    ),
-    CommandSurfaceItem.InputItem(
-      id = "companion-sprite-typing-fast-threshold-ms",
-      label = "Fast Typing Threshold",
-      hint = "Milliseconds (1-5000)",
-      currentValue = companionSpriteConfig.typingFastThresholdMs.toString,
-      kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
-      parse = text =>
-        text.toIntOption
-          .filter(value => value >= 1 && value <= 5000)
-          .map(commandIntentArg =>
-            CommandIntent.Settings(
-              SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingFastThresholdMs(commandIntentArg))
-            )
-          ),
-      category = CommandCategory.Settings,
-      defaultValue = Some(CompanionSpriteConfig.default.typingFastThresholdMs.toString)
-    ),
+  private[command] def inputItems(wheelScrollLines: Int): List[CommandSurfaceItem.InputItem] = List(
     CommandSurfaceItem.InputItem(
       id = "wheel-scroll-lines",
       label = "Wheel Scroll Lines",

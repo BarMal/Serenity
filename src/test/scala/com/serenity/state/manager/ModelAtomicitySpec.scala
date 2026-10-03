@@ -8,7 +8,6 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.StateManagerTestFixtures
 import com.serenity.animation.AnimationState
-import com.serenity.animation.sprite.CompanionSpriteState
 import com.serenity.command.{
   Command,
   CommandCategory,
@@ -183,9 +182,13 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
 
   "Disabling motion" should "cancel buffer animations and in-flight app motion in one write" in {
     val bufferId = BufferId(0)
-    val typing = AppState.initial.copy(runtime =
-      AppState.initial.runtime.copy(companionSprite = CompanionSpriteState.default.observeTyping(1_000_000_000L))
+    val ghost = UiSurface(
+      SurfaceId("ghost"),
+      SurfaceContent.GhostOverlay(SurfaceContent.Diagnostics(Nil), com.serenity.ui.layout.LayoutRect(0, 0, 10, 10)),
+      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
+    val fading = AppState.initial.copy(runtime = AppState.initial.runtime.copy(uiSurfaces = List(ghost)))
+    def hasGhost(model: Model): Boolean = model.app.runtime.uiSurfaces.exists(_.id == ghost.id)
     val animations =
       Map(bufferId -> AnimationState.empty.addCharacterAnimation('a', 0, 0, Color.BLACK, Color.WHITE, 5))
     val disableMotion = Command.typed(
@@ -196,7 +199,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     )
     val program =
       for
-        recorded     <- recording(Model(typing, UndoState(), animations))
+        recorded     <- recording(Model(fading, UndoState(), animations))
         stateManager <- stateManagerOver(recorded.modelRef)
         _            <- stateManager.executeCommand(disableMotion)
         writes       <- recorded.recordedWrites
@@ -205,12 +208,10 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
 
     val (writes, after) = program.unsafeRunSync()
 
-    after.app.runtime.companionSprite.isTypingActive shouldBe false
+    hasGhost(after) shouldBe false
     hasAnimations(after, bufferId) shouldBe false
     writes should not be empty
-    all(
-      writes.map(model => model.app.runtime.companionSprite.isTypingActive == hasAnimations(model, bufferId))
-    ) shouldBe true
+    all(writes.map(model => hasGhost(model) == hasAnimations(model, bufferId))) shouldBe true
   }
 
   "A validated model write" should "leave every part of the model unchanged when the app state it carries is invalid" in {

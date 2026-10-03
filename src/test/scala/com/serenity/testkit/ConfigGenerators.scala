@@ -4,7 +4,6 @@ import java.awt.Color
 
 import scala.concurrent.duration.DurationInt
 
-import com.serenity.animation.sprite.{CompanionCharacter, CompanionSpriteConfig, SpriteFrameCycle}
 import com.serenity.animation.{AnimationConfig, TransitionKind, TransitionScope}
 import com.serenity.config.*
 import com.serenity.config.AppConfigMotionOps.*
@@ -12,7 +11,6 @@ import com.serenity.keystroke.Modifier
 import com.serenity.state.models.SurfacePlacement
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.PanelPosition
 import org.scalacheck.Gen
 
 /** Generators over [[AppConfig]], for properties about the config file format.
@@ -131,27 +129,6 @@ object ConfigGenerators:
       size <- Gen.option(for w <- Gen.choose(400, 4000); h <- Gen.choose(300, 4000) yield PreferredWindowSize(w, h))
       translucent <- Gen.option(Gen.oneOf(true, false))
     yield WindowConfig(chrome, size, translucent)
-
-  val genCompanionSpriteConfig: Gen[CompanionSpriteConfig] =
-    for
-      enabled         <- Gen.oneOf(true, false)
-      character       <- oneOfEnum(CompanionCharacter.values)
-      position        <- oneOfEnum(PanelPosition.values)
-      size            <- Gen.choose(CompanionSpriteConfig.MinSize, CompanionSpriteConfig.MaxSize)
-      typingCycle     <- oneOfEnum(SpriteFrameCycle.values)
-      typingTicks     <- Gen.choose(1, 120)
-      typingFastTicks <- Gen.choose(1, 240)
-      typingThreshold <- Gen.choose(1, 5000)
-    yield CompanionSpriteConfig(
-      enabled,
-      character,
-      position,
-      size,
-      typingCycle,
-      typingTicks,
-      typingFastTicks,
-      typingThreshold
-    )
 
   val genDocumentConfig: Gen[DocumentConfig] =
     for
@@ -364,8 +341,6 @@ object ConfigGenerators:
       surface          <- genSurfaceConfig
       cursor           <- genCursorConfig
       window           <- genWindowConfig
-      companion        <- genCompanionSpriteConfig
-      flair            <- oneOfEnum(VisualFlairLevel.values)
       document         <- genDocumentConfig
       interface        <- genInterfaceConfig
       input            <- genInputConfig
@@ -382,8 +357,6 @@ object ConfigGenerators:
         surfaceConfig = surface,
         cursorConfig = cursor,
         windowConfig = window,
-        companionSpriteConfig = companion,
-        visualFlairLevel = flair,
         documentConfig = document,
         interfaceConfig = interface,
         languageToolsConfig = LanguageToolsConfig(

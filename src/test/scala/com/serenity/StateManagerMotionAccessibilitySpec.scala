@@ -4,13 +4,11 @@ import java.nio.file.Files
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.sprite.{CompanionSpriteState, SpriteFrameCycle}
 import com.serenity.animation.{AnimationConfig, TransitionKind}
 import com.serenity.command.{
   Command,
   CommandCategory,
   CommandIntent,
-  DecorationIntent,
   GeneralSettingsIntent,
   MotionIntent,
   SettingsIntent
@@ -86,97 +84,6 @@ class StateManagerMotionAccessibilitySpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("Expected authoritative motion configuration"))
     motion.accessibility shouldBe MotionAccessibility.Off
     motion.baseline shouldBe MotionPreset.Expressive
-  }
-
-  it should "settle the companion sprite's typing reaction when accessibility disables UI motion" in {
-    val stateManager = createStateManager()
-    stateManager
-      .updateState(state =>
-        state.copy(runtime =
-          state.runtime.copy(companionSprite = CompanionSpriteState.default.observeTyping(1_000_000_000L))
-        )
-      )
-      .unsafeRunSync()
-
-    stateManager
-      .executeCommand(
-        Command.typed(
-          "motion-accessibility",
-          "Set motion accessibility",
-          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(MotionAccessibility.Off))),
-          CommandCategory.Settings
-        )
-      )
-      .unsafeRunSync()
-
-    val sprite = stateManager.getCurrentState.unsafeRunSync().runtime.companionSprite
-    sprite.isTypingActive shouldBe false
-    sprite.action shouldBe com.serenity.animation.sprite.CompanionSpriteAction.Idle
-  }
-
-  it should "react to typing again once UI motion is re-enabled" in {
-    val stateManager = createStateManager(
-      AppConfig.default.withCompanionSpriteConfig(
-        AppConfig.default.companionSpriteConfig.copy(enabled = true)
-      )
-    )
-
-    stateManager
-      .executeCommand(
-        Command.typed(
-          "motion-accessibility-off",
-          "Disable motion",
-          CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(MotionAccessibility.Off))),
-          CommandCategory.Settings
-        )
-      )
-      .unsafeRunSync()
-    stateManager
-      .executeCommand(
-        Command.typed(
-          "motion-accessibility-standard",
-          "Enable motion",
-          CommandIntent.Settings(
-            SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(MotionAccessibility.Standard))
-          ),
-          CommandCategory.Settings
-        )
-      )
-      .unsafeRunSync()
-
-    val stateBefore = stateManager.getCurrentState.unsafeRunSync()
-    val observed    = stateBefore.runtime.observeTyping(1_000_000_000L, stateBefore.persisted.config)
-    observed.companionSprite.isTypingActive shouldBe true
-  }
-
-  it should "update persisted companion sprite typing-reactivity controls through settings commands" in {
-    val stateManager = createStateManager()
-    val commands = List(
-      CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteEnabled(false))),
-      CommandIntent.Settings(
-        SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingCycle(SpriteFrameCycle.Blink))
-      ),
-      CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingActiveTicks(4))),
-      CommandIntent.Settings(SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingFastActiveTicks(9))),
-      CommandIntent.Settings(
-        SettingsIntent.Decoration(DecorationIntent.SetCompanionSpriteTypingFastThresholdMs(275))
-      )
-    )
-    commands.zipWithIndex.foreach {
-      case (intent, index) =>
-        stateManager
-          .executeCommand(
-            Command.typed(s"companion-sprite-$index", "Set companion sprite option", intent, CommandCategory.Settings)
-          )
-          .unsafeRunSync()
-    }
-
-    val companionSpriteConfig = stateManager.getCurrentState.unsafeRunSync().persisted.config.companionSpriteConfig
-    companionSpriteConfig.enabled shouldBe false
-    companionSpriteConfig.typingCycle shouldBe SpriteFrameCycle.Blink
-    companionSpriteConfig.typingActiveTicks shouldBe 4
-    companionSpriteConfig.typingFastActiveTicks shouldBe 9
-    companionSpriteConfig.typingFastThresholdMs shouldBe 275
   }
 
   it should "mark the motion preset custom when an explicit motion speed is edited" in {

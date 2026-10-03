@@ -124,8 +124,7 @@ final private[manager] class StateManagerEffectHandlers(
     expandPinnedPanel,
     () => collapseExpandedPanel(),
     switchToPinnedPanel,
-    resizePinnedPanel,
-    enabled => configEffects.updateCompanionSpriteConfig(_.copy(enabled = enabled))
+    resizePinnedPanel
   )
 
   private val uiPresetEffects = new StateManagerUiPresetEffects(

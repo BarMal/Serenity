@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import com.serenity.config.{CommentDisplayMode, VisualFlairLevel}
+import com.serenity.config.CommentDisplayMode
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
 import com.serenity.state.undo.HistoryEntry
@@ -45,10 +45,6 @@ private[manager] object PanelTransitions:
         )(upsert)
       case PanelId.ProjectOutput =>
         upsert(ProjectTaskTransitions.terminalContent(state))
-      case PanelId.Companion =>
-        if state.persisted.config.visualFlairLevel == VisualFlairLevel.Off then
-          PanelPinPlan.Report("The companion is hidden while visual flair is off.")
-        else upsert(SurfaceContent.CompanionSprite)
 
   /** `update` applied to the model's state, declared as an undo boundary (#1016 PR4) in the same model when it changed
     * anything. A no-op records nothing, mirroring `AppEventReducer.closePaneResult`'s guard for pane close.

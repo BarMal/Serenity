@@ -92,33 +92,13 @@ object AppStartup:
             val base = AppState.empty(appConfig)
             base.copy(
               persisted = base.persisted.copy(theme = theme),
-              // The companion sprite surface is added together with its tree dock below, once `openFile` has built a
-              // real workspace tree to dock it into -- adding it here (as `AppState.empty` otherwise would) leaves
-              // uiSurfaces carrying a `Docked` surface the tree doesn't have yet, which fails `openFile`'s own state
-              // validation (issue #817) and silently discards the newly-opened buffer entirely.
               runtime = base.runtime.copy(
-                uiSurfaces = Nil,
                 viewportSize = Some(initialViewportSize),
                 capabilities = capabilities
               )
             )
           }
-          _ <- stateManager.fileOpener.openFile(path)
-          // Now that `openFile` has built a real workspace tree for the newly-opened buffer's pane, add the
-          // companion sprite surface (if enabled) and dock it in the same update, so uiSurfaces and the tree change
-          // together instead of passing through an inconsistent intermediate state (issue #817: idempotent/no-op if
-          // it's already present, already docked, or the sprite is disabled).
-          _ <- stateManager.updateStateValidated { state =>
-            state.copy(
-              persisted = state.persisted
-                .copy(layout = AppState.dockCompanionSprite(state.persisted.layout, state.persisted.config)),
-              runtime = state.runtime.copy(uiSurfaces =
-                state.runtime.uiSurfaces ++ AppState
-                  .companionSpriteSurfaces(state.persisted.config)
-                  .filterNot(surface => state.runtime.uiSurfaces.exists(_.id == surface.id))
-              )
-            )
-          }
+          _     <- stateManager.fileOpener.openFile(path)
           state <- stateManager.getCurrentState
         yield state
       case None =>

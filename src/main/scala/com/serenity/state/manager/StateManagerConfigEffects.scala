@@ -3,18 +3,9 @@ package com.serenity.state.manager
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.animation.AnimationConfig
-import com.serenity.animation.sprite.CompanionSpriteConfig
 import com.serenity.command.*
 import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.{
-  AppConfig,
-  ConfigError,
-  ConfigManager,
-  LineNumberLayout,
-  StatusLinePlacement,
-  StatusSegment,
-  VisualFlairLevel
-}
+import com.serenity.config.{AppConfig, ConfigError, ConfigManager, LineNumberLayout, StatusLinePlacement, StatusSegment}
 import com.serenity.session.{SessionPersistence, SessionSaveTrigger}
 import com.serenity.spellcheck.{DictionaryWord, SpellChecker}
 import com.serenity.state.models.*
@@ -48,18 +39,6 @@ final private[manager] class StateManagerConfigEffects(
 
   private def updateMotionAccessibility(accessibility: com.serenity.config.MotionAccessibility): IO[AppConfig] =
     updateMotionConfig(_.withMotionAccessibility(accessibility))
-
-  private[manager] def updateCompanionSpriteConfig(update: CompanionSpriteConfig => CompanionSpriteConfig): IO[Unit] =
-    applyConfigUpdate(
-      config => config.withCompanionSpriteConfig(update(config.companionSpriteConfig)),
-      syncState = StateManagerConfigEffects.withCompanionSpritePanel
-    ).void
-
-  private[manager] def updateVisualFlairLevel(level: VisualFlairLevel): IO[Unit] =
-    applyConfigUpdate(
-      _.withVisualFlairLevel(level),
-      syncState = StateManagerConfigEffects.withCompanionSpritePanel
-    ).void
 
   private def updateCustomMotionConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     updateMotionConfig(config => update(config).withCustomMotionBaseline)
@@ -122,7 +101,6 @@ final private[manager] class StateManagerConfigEffects(
       case SettingsIntent.TextDisplay(textDisplayIntent) => interpretTextDisplayIntent(textDisplayIntent)
       case SettingsIntent.InterfaceChrome(interfaceChromeIntent) =>
         interpretInterfaceChromeIntent(interfaceChromeIntent)
-      case SettingsIntent.Decoration(decorationIntent) => interpretDecorationIntent(decorationIntent)
       case SettingsIntent.SpellCheck(spellCheckIntent) => interpretSpellCheckIntent(spellCheckIntent, state)
       case SettingsIntent.General(generalIntent)       => interpretGeneralSettingsIntent(generalIntent, state)
 
@@ -330,21 +308,6 @@ final private[manager] class StateManagerConfigEffects(
       case InterfaceChromeIntent.SetPanelEscapeTarget(mode, target) =>
         updateConfig(_.withPanelEscapeTarget(mode, target)).void
 
-  private def interpretDecorationIntent(intent: DecorationIntent): IO[Unit] =
-    intent match
-      case DecorationIntent.SetCompanionSpriteEnabled(enabled) =>
-        updateCompanionSpriteConfig(_.copy(enabled = enabled))
-      case DecorationIntent.SetCompanionSpriteTypingCycle(cycle) =>
-        updateCompanionSpriteConfig(_.copy(typingCycle = cycle))
-      case DecorationIntent.SetCompanionSpriteTypingActiveTicks(ticks) =>
-        updateCompanionSpriteConfig(_.copy(typingActiveTicks = ticks))
-      case DecorationIntent.SetCompanionSpriteTypingFastActiveTicks(ticks) =>
-        updateCompanionSpriteConfig(_.copy(typingFastActiveTicks = ticks))
-      case DecorationIntent.SetCompanionSpriteTypingFastThresholdMs(ms) =>
-        updateCompanionSpriteConfig(_.copy(typingFastThresholdMs = ms))
-      case DecorationIntent.SetVisualFlairLevel(level) =>
-        updateVisualFlairLevel(level)
-
   private def interpretSpellCheckIntent(intent: SpellCheckIntent, state: AppState): IO[Unit] =
     intent match
       case SpellCheckIntent.SetSpellCheckEnabled(enabled) =>
@@ -476,38 +439,3 @@ private[manager] object StateManagerConfigEffects:
         other
     }
     state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces))
-
-  /** Adds or removes the companion sprite's pinned panel surface to match the config: visible exactly when the
-    * companion sprite is enabled and visual flair is not `Off` (matching item 8/9's "Off = don't render" rule). Called
-    * after either setting changes, since either can flip the panel's visibility.
-    */
-  def withCompanionSpritePanel(state: AppState, config: AppConfig): AppState =
-    val shouldShow = config.companionSpriteConfig.enabled && config.visualFlairLevel != VisualFlairLevel.Off
-    val exists     = state.runtime.uiSurfaces.exists(_.id == SurfaceId.CompanionSprite)
-    if shouldShow && !exists then
-      val surface = UiSurface(
-        id = SurfaceId.CompanionSprite,
-        content = SurfaceContent.CompanionSprite,
-        presentation = SurfacePresentation.Docked
-      )
-      // Docking is the tree's job alone (issue #817) -- `AppState.dockCompanionSprite` is the one place that seeds a
-      // companion sprite's position/ratio, reused here so startup and this runtime toggle can't drift apart.
-      state.copy(
-        persisted = state.persisted.copy(layout = AppState.dockCompanionSprite(state.persisted.layout, config)),
-        runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces :+ surface)
-      )
-    else if !shouldShow && exists then
-      val prunedTree = state.persisted.layout.workspaceTree.flatMap(_.removeSurface(SurfaceId.CompanionSprite))
-      val maximized = state.persisted.layout.maximizedWorkspaceNodeId.filterNot(nodeId =>
-        state.persisted.layout.workspaceTree.flatMap(_.surfaceIdForNode(nodeId)).contains(SurfaceId.CompanionSprite)
-      )
-      state.copy(
-        persisted = state.persisted.copy(layout =
-          state.persisted.layout.copy(
-            workspaceTree = prunedTree.orElse(state.persisted.layout.workspaceTree),
-            maximizedWorkspaceNodeId = maximized
-          )
-        ),
-        runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == SurfaceId.CompanionSprite))
-      )
-    else state
