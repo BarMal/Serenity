@@ -14,11 +14,11 @@ import org.scalatest.matchers.should.Matchers
   * `FileWorkflowModalRenderingSpec` ("dim the workspace behind a blocking modal..."), and every modal/floating
   * overlay's *content* is exercised end-to-end by the many `*ModalRenderingSpec`/`*OverlaySpec` specs -- this spec
   * targets the two things about this object those specs pass through without pinning: the trivial
-  * `pinnedAndExpandedSurfaces` delegation, blur being applied to a docked panel's backdrop when the surface material
-  * calls for it, and floating panels having their *exact* on-screen pixel rect remembered on `RendererFrameState` (the
-  * fact [[RendererFrameState.previousFloatingSurfaceRects]] itself round-trips a map is already covered by
-  * `RendererFrameStateSpec`; what is not covered anywhere else is that `RendererFloatingPanels` computes and hands it
-  * the *right* rect for a real floating overlay).
+  * `pinnedAndExpandedSurfaces` delegation, blur being skipped behind a docked panel even when the surface material
+  * calls for it (its slot holds only cleared background), and floating panels having their *exact* on-screen pixel rect
+  * remembered on `RendererFrameState` (the fact [[RendererFrameState.previousFloatingSurfaceRects]] itself round-trips
+  * a map is already covered by `RendererFrameStateSpec`; what is not covered anywhere else is that
+  * `RendererFloatingPanels` computes and hands it the *right* rect for a real floating overlay).
   */
 class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
 
@@ -58,9 +58,9 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
     RendererFloatingPanels.pinnedAndExpandedSurfaces(baseState()) shouldBe Nil
   }
 
-  "renderPinnedPanels" should "blur a docked panel's backdrop when the active surface material calls for a blur" in {
-    // `AppConfig.default`'s surface material (Frosted, blurRadius = 0.18) already yields a positive
-    // `SurfaceMaterials.effectiveBlurRadius` -- no config override needed to exercise this branch.
+  "renderPinnedPanels" should "not blur a docked panel's backdrop even when the surface material calls for a blur" in {
+    // `AppConfig.default`'s surface material (Frosted, blurRadius = 0.18) yields a positive
+    // `SurfaceMaterials.effectiveBlurRadius`, but a docked panel's slot holds only cleared background.
     val state = DockedPanelFixtures.dock(
       baseState(),
       SurfaceId("diagnostics"),
@@ -78,7 +78,7 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    surface.blurRegionCalls should not be empty
+    surface.blurRegionCalls shouldBe empty
   }
 
   it should "not blur a docked panel's backdrop once visual flair is turned off" in {

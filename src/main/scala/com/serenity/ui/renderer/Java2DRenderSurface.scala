@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.*
 import java.awt.font.FontRenderContext
-import java.awt.geom.{Area, Rectangle2D, RoundRectangle2D}
+import java.awt.geom.{Rectangle2D, RoundRectangle2D}
 import java.awt.image.*
 import java.util.concurrent.atomic.AtomicReference
 
@@ -36,11 +36,13 @@ class Java2DRenderSurface(
     with PixelDrawing
     with Effects
     with RoundedRectDrawing
+    with PanelBodyDrawing
     with LayerBufferSupport:
   def text: TextDrawing                                 = this
   def pixels: PixelDrawing                              = this
   override def effects: Option[Effects]                 = Some(this)
   override def roundedRects: Option[RoundedRectDrawing] = Some(this)
+  override def panelBodies: Option[PanelBodyDrawing]    = Some(this)
   override def layerBuffers: Option[LayerBufferSupport] = Some(this)
 
   override def layerCacheOwner: ScreenIdentity = layerCacheOwnerOverride.getOrElse(super.layerCacheOwner)
@@ -160,15 +162,9 @@ class Java2DRenderSurface(
     if preserved.isEmpty then clearViewport(color)
     else
       bgRef.set(color)
-      val clearable = new Area(new Rectangle(0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx))
-      preserved.foreach(rect =>
-        clearable.subtract(new Area(new Rectangle(rect.xPx, rect.yPx, rect.widthPx, rect.heightPx)))
-      )
-      val savedClip = g.getClip
-      try
-        g.clip(clearable)
-        fillBackground(color, 0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx)
-      finally g.setClip(savedClip)
+      PixelRect
+        .uncoveredWithin(PixelRect(0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx), preserved)
+        .foreach(rect => fillBackground(color, rect.xPx, rect.yPx, rect.widthPx, rect.heightPx))
 
   def putString(x: Int, y: Int, s: String): Unit =
     if s.nonEmpty then
@@ -283,18 +279,32 @@ class Java2DRenderSurface(
     arcPx: Int,
     color: Color
   ): Unit =
-    val px             = metrics.toPixelX(x)
-    val py             = metrics.toPixelY(y)
-    val pw             = width * metrics.charWidth
-    val ph             = height * metrics.lineHeight
-    val savedComposite = g.getComposite
-    try
-      scala.collection.immutable.List(6 -> 0.025f, 5 -> 0.035f, 4 -> 0.05f, 3 -> 0.07f).foreach { (offset, alpha) =>
-        g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha))
-        g.setColor(color)
-        g.fillRoundRect(px + offset, py + offset, pw, ph, arcPx * 2, arcPx * 2)
-      }
-    finally g.setComposite(savedComposite)
+    val placement = Java2DPanelChrome.Placement(g, image, metrics, x, y, width, height, arcPx)
+    if Java2DPanelChrome.paintsAtDeviceResolution(g.getTransform) then
+      Java2DPanelChrome.drawShadow(placement, color, scratch)
+    else Java2DPanelChrome.drawShadowLayers(g, placement.rect, arcPx, color)
+
+  override def fillPanelBody(
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    arcPx: Int,
+    shadow: Option[Color],
+    body: PanelBodyFill
+  ): Unit =
+    val placement = Java2DPanelChrome.Placement(g, image, metrics, x, y, width, height, arcPx)
+    Java2DPanelChrome.precomputableBeneath(body, g.getTransform) match
+      case Some(beneath) =>
+        Java2DPanelChrome.fillBodyOverOpaque(placement, shadow, body.colour, body.alpha, beneath, scratch)
+      case None =>
+        shadow.foreach(drawRoundRectShadow(x, y, width, height, arcPx, _))
+        val savedComposite = g.getComposite
+        try
+          setAlpha(body.alpha)
+          val rect = placement.rect
+          fillBackground(body.colour, rect.xPx, rect.yPx, rect.widthPx, rect.heightPx)
+        finally g.setComposite(savedComposite)
 
   override def strokeRoundRect(
     x: Int,

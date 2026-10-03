@@ -15,11 +15,11 @@ import org.scalatest.matchers.should.Matchers
   * it's safe to -- the generalisation of [[ModalLayerCompositingSpec]] beyond the modal layer.
   *
   * Unlike the modal, a panel's paint step samples the pixels behind it (`SurfaceMaterials.effectiveBlurRadius`'s
-  * `blurRegion` call), so its cache is safe to reuse only when either blur is off (the modal's own narrower per-surface
-  * rule applies unchanged) or the whole frame's damage is `Damage.Nothing` (see
-  * `RendererFramePlanner.panelDirtyCheck`). The `AppConfig.default` material preset (`Frosted`) has blur active, so
-  * most of these fixtures disable it explicitly to exercise the narrower per-surface reuse rule the same way
-  * [[ModalLayerCompositingSpec]] does for the modal.
+  * `blurRegion` call), so its cache is safe to reuse only when either blur is off or skipped (a docked panel's slot
+  * holds only cleared background, so the modal's own narrower per-surface rule applies unchanged) or the whole frame's
+  * damage is `Damage.Nothing` (see `RendererFramePlanner.panelDirtyCheck`). The `AppConfig.default` material preset
+  * (`Frosted`) has blur active, so most of these fixtures disable it explicitly to exercise the narrower per-surface
+  * reuse rule the same way [[ModalLayerCompositingSpec]] does for the modal.
   */
 class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
 
@@ -165,7 +165,22 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     surface.newLayerSurfaceCalls.get() shouldBe 2
   }
 
-  it should "repaint a pinned panel with active blur whenever anything elsewhere in the frame changed" in {
+  it should "not blur behind a docked panel, whose slot holds only cleared background, while blurring behind a floating panel over text" in {
+    val docked = new CountingLayerBufferSurface(120, 40)
+    val pinned = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = false, layerCaching = false)
+    val caches = com.serenity.state.manager.RenderCaches.create()
+    RendererEntryPoints.render(pinned, cursorVisible = false, docked, viewport, None, Damage.Everything, caches)
+
+    val floating = new CountingLayerBufferSurface(120, 40)
+    val overText = stateWith("alpha\nbeta\ngamma", List(floatingPanel), blurOff = false, layerCaching = false)
+    RendererEntryPoints.render(overText, cursorVisible = false, floating, viewport, None, Damage.Everything, caches)
+
+    docked.blurRegionCalls shouldBe empty
+    docked.roundRectShadowCalls should not be empty
+    floating.blurRegionCalls should not be empty
+  }
+
+  it should "not repaint a docked panel's buffer when only editor content changed, even with blur active" in {
     val surface = new CountingLayerBufferSurface(120, 40)
     val before  = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = false)
     val caches  = com.serenity.state.manager.RenderCaches.create()
@@ -195,7 +210,40 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       caches
     )
 
-    // Blur samples the live frame, so an unrelated content change still forces this panel to repaint.
+    surface.newLayerSurfaceCalls.get() shouldBe 1
+  }
+
+  it should "repaint a floating panel with active blur whenever anything elsewhere in the frame changed" in {
+    val surface = new CountingLayerBufferSurface(120, 40)
+    val before  = stateWith("alpha\nbeta\ngamma", List(floatingPanel), blurOff = false)
+    val caches  = com.serenity.state.manager.RenderCaches.create()
+
+    RendererEntryPoints.render(
+      before,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      Damage.Everything,
+      caches
+    )
+    surface.newLayerSurfaceCalls.get() shouldBe 1
+
+    val after            = editContent(before)
+    val transitionDamage = DamageProducer.forTransition(before, after)
+    transitionDamage should not be Damage.Nothing
+
+    RendererEntryPoints.render(
+      after,
+      cursorVisible = false,
+      surface,
+      viewport,
+      None,
+      transitionDamage,
+      caches
+    )
+
+    // Blur samples the live frame under the overlay, so an unrelated content change still forces it to repaint.
     surface.newLayerSurfaceCalls.get() shouldBe 2
   }
 

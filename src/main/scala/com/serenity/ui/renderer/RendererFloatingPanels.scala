@@ -172,11 +172,13 @@ object RendererFloatingPanels:
     val surfaceNodes = scene.workspace.collect {
       case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) => surfaceId -> node
     }.toMap
-    val blurRadius   = SurfaceMaterials.effectiveBlurRadius(state.persisted.config)
-    val panelIsDirty = RendererFramePlanner.panelDirtyCheck(damage, blurRadius)
+    val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.persisted.config)
     pinnedAndExpandedSurfaces(state).foreach { surface =>
       surfaceNodes.get(surface.id).foreach { node =>
-        val rect = node.frameRect
+        val rect              = node.frameRect
+        val backdropIsCleared = PanelBackdrop.isClearedBackground(scene, surface.id, rect)
+        val panelBlurRadius   = if backdropIsCleared then 0f else blurRadius
+        val opaqueBeneath = Option.when(backdropIsCleared)(state.persisted.theme.background).filter(_.getAlpha == 255)
         val animationState =
           state.runtime.motion.surfaceAnimations
             .get(surface.id)
@@ -184,13 +186,22 @@ object RendererFloatingPanels:
             .getOrElse(com.serenity.animation.AnimationState.empty)
 
         def paintContent(layerContext: RenderContext): Unit =
-          if blurRadius > 0f then
-            layerContext.surface.effects.foreach(_.blurRegion(rect.x, rect.y, rect.width, rect.height, blurRadius))
+          if panelBlurRadius > 0f then
+            layerContext.surface.effects.foreach(_.blurRegion(rect.x, rect.y, rect.width, rect.height, panelBlurRadius))
           surface.content match
             case SurfaceContent.MarkdownPreview(bufferId, title) =>
-              renderMarkdownPreviewPanel(bufferId, title, rect, node.contentRect, state, layerContext, animationState)
+              renderMarkdownPreviewPanel(
+                bufferId,
+                title,
+                rect,
+                node.contentRect,
+                state,
+                layerContext,
+                animationState,
+                opaqueBeneath
+              )
             case SurfaceContent.CompanionSprite =>
-              renderCompanionSpritePanel(rect, node.contentRect, state, layerContext, animationState)
+              renderCompanionSpritePanel(rect, node.contentRect, state, layerContext, animationState, opaqueBeneath)
             case _ =>
               PinnedPanelRenderer.render(
                 layerContext.surface,
@@ -200,13 +211,15 @@ object RendererFloatingPanels:
                 state.persisted.theme,
                 state.persisted.config,
                 layerContext.cellMetrics,
-                animationState
+                animationState,
+                opaqueBeneath
               )
 
         def paint(layerContext: RenderContext): Unit =
           withPanelGeometryClip(state, surface.id, layerContext)(paintContent(layerContext))
 
-        RendererFramePlanner.paintPanelLayer(state, context, surface.id, rect, panelIsDirty(surface.id))(paint)
+        val isDirty = RendererFramePlanner.panelDirtyCheck(damage, panelBlurRadius)(surface.id)
+        RendererFramePlanner.paintPanelLayer(state, context, surface.id, rect, isDirty)(paint)
       }
     }
 
@@ -226,7 +239,8 @@ object RendererFloatingPanels:
     contentRect: LayoutRect,
     state: AppState,
     context: RenderContext,
-    animationState: com.serenity.animation.AnimationState
+    animationState: com.serenity.animation.AnimationState,
+    opaqueBeneath: Option[java.awt.Color]
   ): Unit =
     val shell = TextPanelView(rect = rect, contentRect = Some(contentRect), title = s"Preview: $title", rows = Nil)
     PinnedPanelRenderer.render(
@@ -235,7 +249,8 @@ object RendererFloatingPanels:
       state.persisted.theme,
       state.persisted.config,
       context.cellMetrics,
-      animationState
+      animationState,
+      opaqueBeneath
     )
 
     val imageRect          = markdownPreviewImageRect(rect, contentRect, context)
@@ -281,7 +296,8 @@ object RendererFloatingPanels:
     contentRect: LayoutRect,
     state: AppState,
     context: RenderContext,
-    animationState: com.serenity.animation.AnimationState
+    animationState: com.serenity.animation.AnimationState,
+    opaqueBeneath: Option[java.awt.Color]
   ): Unit =
     val shell = TextPanelView(rect = rect, contentRect = Some(contentRect), title = "Companion", rows = Nil)
     PinnedPanelRenderer.render(
@@ -290,7 +306,8 @@ object RendererFloatingPanels:
       state.persisted.theme,
       state.persisted.config,
       context.cellMetrics,
-      animationState
+      animationState,
+      opaqueBeneath
     )
 
     if state.persisted.config.visualFlairLevel != VisualFlairLevel.Off then

@@ -13,6 +13,8 @@ import java.util.concurrent.atomic.AtomicReference
 final class Java2DScratchBuffers:
   private val images = new AtomicReference[Map[(Int, Int), BufferedImage]](Map.empty)
   private val glow   = new AtomicReference[Option[GlowBuffers]](None)
+  private val shadows =
+    new AtomicReference[Map[Java2DPanelChrome.ShadowSpriteKey, BufferedImage]](Map.empty)
 
   def withImage[A](width: Int, height: Int)(use: BufferedImage => A): A =
     val key = (width, height)
@@ -34,6 +36,17 @@ final class Java2DScratchBuffers:
     try use(buffers)
     finally glow.set(Some(buffers))
 
+  /** A shadow sprite is only ever read once rendered, so frames share it rather than borrowing it. */
+  def shadowSprite(key: Java2DPanelChrome.ShadowSpriteKey)(render: => BufferedImage): BufferedImage =
+    shadows.get().get(key).getOrElse {
+      val rendered = render
+      val _ = shadows.updateAndGet { cached =>
+        val room = if cached.size < Java2DScratchBuffers.MaxCachedShadowSprites then cached else cached.drop(1)
+        room.updated(key, rendered)
+      }
+      rendered
+    }
+
   @annotation.tailrec
   private def take[S, B](ref: AtomicReference[S])(find: S => Option[B], without: S => S): Option[B] =
     val current = ref.get()
@@ -45,6 +58,9 @@ final class Java2DScratchBuffers:
 object Java2DScratchBuffers:
   /** Blur regions are panel-sized, and a window shows a handful of panels at once. */
   private val MaxPooledImageSizes = 8
+
+  /** One per panel geometry on screen, with room for a resize or scale-in animation to churn through. */
+  private val MaxCachedShadowSprites = 8
 
 /** The working set [[Java2DPostProcessingEffects.applyGlow]] needs for one frame size. */
 final class GlowBuffers(val width: Int, val height: Int):
