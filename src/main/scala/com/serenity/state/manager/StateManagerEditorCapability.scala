@@ -16,38 +16,6 @@ final private[manager] class StateManagerEditorCapability(
   def updateStateValidated(update: AppState => AppState): IO[Unit] =
     operations.dispatch(modelCommit.currentState.flatMap(state => modelCommit.commitState(update(state), state)))
 
-  val animationTicker: AnimationTicker = AnimationTicker(advanceAnimationsOnTick = advanceAnimationsOnTick())
-
-  private def advanceAnimationsOnTick(): IO[Boolean] =
-    for
-      model <- modelCommit.model
-      hasTypingActivity = model.app.typingHidesFloatingStatusLine
-      stillActive <-
-        if !hasTypingActivity then IO.pure(false)
-        else
-          // A dispatch in flight would commit a state built from its own earlier snapshot over this tick's write
-          // (#1564), and waiting for it would stall the render loop behind its I/O -- so skip this tick and report
-          // still-active so the next frame retries.
-          for
-            now      <- IO.monotonic
-            advanced <- operations.runIfDispatcherIdle(advanceOneTick(now.toNanos))
-          yield advanced.getOrElse(true)
-    yield stillActive
-
-  private def advanceOneTick(nowNanos: Long): IO[Boolean] =
-    // An atomic, validated update rather than a `set`: writers outside the dispatcher (`updateState`, the
-    // buffer/panel records) still exist, and this keeps the tick atomic with them. It may retry, so everything it
-    // reads is passed in.
-    modelCommit
-      .advanceTick(advanceModel(_, nowNanos))
-      .map(_.app.typingHidesFloatingStatusLine)
-
-  private def advanceModel(current: Model, nowNanos: Long): Model =
-    val state = current.app
-    val newState =
-      state.copy(runtime = state.runtime.copy(typingActivity = state.runtime.typingActivity.advance(nowNanos)))
-    current.copy(app = newState)
-
   def createPane(bufferId: Option[BufferId] = None): IO[PaneId] =
     modelCommit.currentState.flatMap { state =>
       val (newState, paneId) = EditorTransitions.paneInserted(

@@ -5,13 +5,13 @@ import scala.concurrent.duration.*
 import cats.effect.std.Supervisor
 import cats.effect.{IO, Ref}
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, StatusLinePlacement}
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
-import com.serenity.state.models.{AppState, TypingActivity}
+import com.serenity.state.models.{AppState, Damage, TypingActivity}
 import com.serenity.testkit.VirtualTime.runVirtual
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -107,4 +107,50 @@ class TypingQuietTimerSpec extends AnyFlatSpec with Matchers:
         .unsafeRunSync()
 
     burstEnded shouldBe (true, false)
+  }
+
+  private val floatingStatusLine: AppState =
+    val state = AppState.initial
+    state.copy(persisted =
+      state.persisted.copy(config = state.persisted.config.withStatusLinePlacement(StatusLinePlacement.Floating))
+    )
+
+  it should "repaint the floating status row when the quiet window expires" in {
+    val typingNow =
+      floatingStatusLine.copy(runtime = floatingStatusLine.runtime.copy(typingActivity = TypingActivity(Some(1L))))
+    val expired = typingNow.copy(runtime = typingNow.runtime.copy(typingActivity = TypingActivity.idle))
+    val damage =
+      Ref
+        .of[IO, Damage](Damage.Nothing)
+        .flatMap(seen => AppRuntime.wakeRenderLoopOnCommit(d => seen.set(d))(typingNow, expired) >> seen.get)
+        .unsafeRunSync()
+
+    damage should not be Damage.Nothing
+  }
+
+  it should "emit that repaint damage when a real typing burst expires through the state manager" in {
+    val emitted =
+      Supervisor[IO](await = false)
+        .use { supervisor =>
+          for
+            sm <- StateManager(
+              LoggerFactory[IO].getLogger(using LoggerName("TypingQuietTimerSpec")),
+              initialConfig = floatingStatusLine.persisted.config
+            )
+            seen  <- Ref.of[IO, Vector[Damage]](Vector.empty)
+            timer <- TypingQuietTimer.create(supervisor, TypingQuietTimer.expireIn(sm))
+            wake = AppRuntime.wakeRenderLoopOnCommit(damage => seen.update(_ :+ damage))
+            _ <- sm.runtimeLifecycle
+              .observeCommits((before, after) => wake(before, after) >> timer.onCommit(before, after))
+            _      <- sm.applyEvent(InsertChar('a'))
+            during <- seen.get.map(_.size)
+            _      <- IO.sleep(TypingActivity.QuietWindow + 500.millis)
+            after  <- seen.get.map(_.size)
+            hidden <- sm.getCurrentState.map(_.floatingStatusLineSurface.isEmpty)
+          yield (during, after, hidden)
+        }
+        .unsafeRunSync()
+
+    val (during, after, _) = emitted
+    after should be > during
   }

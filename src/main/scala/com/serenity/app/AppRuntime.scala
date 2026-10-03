@@ -95,12 +95,12 @@ object AppRuntime:
         windowFocused.discrete.find(identity).compile.drain
     }
 
-  /** The fast phase may stand down once nothing is animating and no fresh damage arrived while it was running --
-    * `pendingDamage` is drained to `Damage.Nothing` when the phase starts, so any non-`Nothing` value here means
-    * `emitDamage` was called again since, and the phase should carry straight on rather than idle even one tick.
+  /** The fast phase stands down once no fresh damage arrived while it was running -- `pendingDamage` is drained to
+    * `Damage.Nothing` when the phase starts, so any non-`Nothing` value here means `emitDamage` was called again since,
+    * and the loop should carry straight on to another frame rather than idle.
     */
-  private[serenity] def shouldClearFastMode(stillActive: Boolean, pendingDamage: Damage): Boolean =
-    !stillActive && pendingDamage == Damage.Nothing
+  private[serenity] def shouldClearFastMode(pendingDamage: Damage): Boolean =
+    pendingDamage == Damage.Nothing
 
   /** Only input, resize and focus changes call `emitDamage` themselves; this covers every other commit -- language
     * server diagnostics, an async open, task output, find results -- so it shows without waiting for the next key. A
@@ -112,24 +112,6 @@ object AppRuntime:
     (before, after) =>
       val damage = DamageProducer.forTransition(before, after)
       IO.whenA(damage != Damage.Nothing)(emitDamage(damage))
-
-  final private[serenity] case class AnimationTickCadence(remainderNanos: Long):
-
-    def advance(elapsed: FiniteDuration, frameInterval: FiniteDuration): (AnimationTickCadence, Int) =
-      // The tick bucket follows the configured renderFpsTarget's interval rather than a fixed 60Hz constant, so
-      // lowering render FPS also lowers animation-tick CPU cost. Advancing by elapsed time rather than one bucket per
-      // frame keeps animations at their designed speed when frames run late; the clamp stops a stall (a GC pause, a
-      // suspended laptop) from fast-forwarding every animation to its end in one frame.
-      val animationNanos = math.max(1L, frameInterval.toNanos)
-      val elapsedNanos   = elapsed.toNanos.max(0L).min(animationNanos * AnimationTickCadence.MaxTicksPerFrame)
-      val totalNanos     = remainderNanos + elapsedNanos
-      val ticks          = (totalNanos / animationNanos).toInt
-      val nextRemainder  = totalNanos % animationNanos
-      (AnimationTickCadence(nextRemainder), ticks)
-
-  private[serenity] object AnimationTickCadence:
-    val empty: AnimationTickCadence = AnimationTickCadence(0L)
-    val MaxTicksPerFrame: Long      = 4L
 
   final private[serenity] case class RuntimeFailure(
       loopName: String,
@@ -176,11 +158,9 @@ object AppRuntime:
         _              <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
         fastModeSignal <- SignallingRef.of[IO, Boolean](false)
         pendingDamage  <- Ref.of[IO, Damage](Damage.Nothing)
-        // Separate from pendingDamage: that ref answers "should the fast loop keep running," reset once per phase and
-        // deliberately blind to the phase's own animation ticks (see shouldClearFastMode). This one answers "what has
-        // changed since the last frame was actually drawn," fed by both input events and animation ticks alike, and
-        // drained by every render call rather than once per phase -- the render-surface-side accumulator #999 is
-        // building keeps this from growing unbounded, since a real render drains it dozens of times a second.
+        // Separate from pendingDamage: that ref answers "did more damage arrive while the fast phase ran" (see
+        // shouldClearFastMode). This one answers "what has changed since the last frame was actually drawn," and is
+        // drained by every render call.
         pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
         emitDamage = (damage: Damage) =>
           pendingDamage.update(_ |+| damage) >> pendingPaintDamage.update(_ |+| damage) >> fastModeSignal.set(true)
@@ -211,9 +191,8 @@ object AppRuntime:
             markdownPreviewCloseCallbackBridge(stateManager, resizeCallbackDispatcher)
           )
         )
-        animationTickCadence <- Ref.of[IO, AnimationTickCadence](AnimationTickCadence.empty)
-        lastFastFrameStart   <- Ref.of[IO, Option[FiniteDuration]](None)
-        translatorCache      <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
+        lastFastFrameStart <- Ref.of[IO, Option[FiniteDuration]](None)
+        translatorCache    <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
         currentStateForDiagnostics = stateManager.getCurrentState.map(Some(_))
         checkResizeAndHandle = checkResize.flatMap(RenderController.handleResize(_, stateManager, requestFastRender))
         inputFunnel = AppRuntimeRenderLoops.inputEventPhase(
@@ -248,11 +227,9 @@ object AppRuntime:
 
                 val fastPhase = AppRuntimeRenderLoops.fastRenderPhase(
                   stateManager,
-                  stateManager.animationTicker,
                   fastModeSignal,
                   pendingDamage,
                   pendingPaintDamage,
-                  animationTickCadence,
                   currentStateForDiagnostics,
                   checkResizeAndHandle,
                   runtime.renderFull,
@@ -260,8 +237,7 @@ object AppRuntime:
                   lastFrameStart = lastFastFrameStart
                 )
 
-                val renderLoop: Stream[IO, Unit] =
-                  Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
+                val renderLoop = AppRuntimeRenderLoops.renderLoop(idlePhase, fastPhase)
 
                 com.serenity.io.FileChangeWatcher.create.use(watcher =>
                   runRuntimeLoops(

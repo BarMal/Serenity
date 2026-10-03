@@ -15,7 +15,7 @@ import com.serenity.input.{FocusedInputTranslator, InProcessClipboard, InputRout
 import com.serenity.keystroke.events.{Event, MousePress}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
-import com.serenity.state.manager.{DamageProducer, StateManager}
+import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
@@ -93,9 +93,7 @@ final class TuiSession private (
 
   def screenWithoutCaret: IO[TuiScreen] = renderFrame(cursorVisible = false)
 
-  /** One frame painted the way `AppRuntime`'s fast render phase paints it: always the full content path (issue #934 v2
-    * removed the fast phase's one cursor-only shortcut along with the window sitter it existed for -- see
-    * `AppRuntimeRenderLoops.needsFullContentRender`'s doc).
+  /** One frame painted the way `AppRuntime`'s fast render phase paints it: always the full content path.
     *
     * [[screen]] always paints the full frame too, which is what most scenarios want -- what is on screen once the
     * runtime has caught up. This one reproduces the runtime's own per-frame choice explicitly, so a future change to
@@ -134,39 +132,13 @@ final class TuiSession private (
       updated <- screenRef.get
     yield TuiScreen(updated, emitted)
 
-  /** Let the interface finish moving, then paint until the frame stops changing.
-    *
-    * Two things settle here. Surfaces animate in and out (`AppState.runtime.motion.surfaceAnimations`), so a dismissed
-    * command palette is still drawn for as many frames as its exit animation lasts -- exactly as in a real session,
-    * where the render loop advances one animation tick per painted frame. And a frame painted with `Damage.Everything`
-    * -- the first of a session, and the first after a resize -- is followed by one further frame that rewrites blank
-    * cells whose foreground colour differed invisibly.
+  /** Paint until the frame stops changing: a frame painted with `Damage.Everything` -- the first of a session, and the
+    * first after a resize -- is followed by one further frame that rewrites blank cells whose foreground colour
+    * differed invisibly.
     *
     * Scenarios that assert on what is finally on screen, or on emitted bytes, want this rather than a single frame.
     */
-  def settledScreen: IO[TuiScreen] =
-    advanceAnimationsToRest(AnimationTickLimit) >> repaintUntilQuiet(SettleAttempts)
-
-  /** Advance the animation clock by `ticks` frames, folding in the damage each one produces, exactly as the render
-    * loop's fast phase does per painted frame. Returns whether anything is still animating.
-    */
-  def advanceAnimations(ticks: Int): IO[Boolean] =
-    (0 until ticks).toList.foldLeft(IO.pure(false))((previous, _) => previous >> tickAnimations)
-
-  def animationsActive: IO[Boolean] =
-    state.map(AppRuntimeRenderLoops.hasActiveAnimations)
-
-  private def tickAnimations: IO[Boolean] =
-    for
-      before      <- state
-      stillActive <- stateManager.animationTicker.advanceAnimationsOnTick
-      after       <- state
-      _           <- damage.update(_ |+| DamageProducer.forTransition(before, after))
-    yield stillActive
-
-  private def advanceAnimationsToRest(remaining: Int): IO[Unit] =
-    if remaining <= 0 then IO.unit
-    else tickAnimations.flatMap(active => if active then advanceAnimationsToRest(remaining - 1) else IO.unit)
+  def settledScreen: IO[TuiScreen] = repaintUntilQuiet(SettleAttempts)
 
   private def repaintUntilQuiet(remaining: Int): IO[TuiScreen] =
     screen.flatMap { current =>
@@ -257,7 +229,6 @@ object TuiSession:
     * animations run for a fraction of a second at the configured frame rate; a scenario needing more than this is
     * either animating forever or waiting for something that is not an animation.
     */
-  private val AnimationTickLimit = 600
 
   /** A mouse press so far off-screen that nothing can be under it. It is the input barrier every [[TuiSession.feed]]
     * ends with: a mouse report is delivered as a direct event, never passed through a translator, so unlike any key it

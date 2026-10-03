@@ -35,8 +35,7 @@ class MotionUiScenarioSpec extends AnyFlatSpec with Matchers:
     execute(driver, CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionPreset(MotionPreset.Reduced))))
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
     val before = driver.renderFrame("reduced-open").unsafeRunSync().evidence.surfaceRects
-    driver.advanceToSettled().unsafeRunSync() shouldBe true
-    val after = driver.renderFrame("reduced-settled").unsafeRunSync()
+    val after  = driver.renderFrame("reduced-settled").unsafeRunSync()
     after.evidence.surfaceRects shouldBe before
   }
 

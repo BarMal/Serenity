@@ -5,7 +5,6 @@ import java.awt.Color
 import scala.concurrent.duration.*
 
 import cats.effect.*
-import cats.syntax.semigroup.*
 import com.serenity.config.AppConfig
 import com.serenity.diagnostics.{FrameTimings, Trace}
 import com.serenity.input.*
@@ -16,8 +15,8 @@ import fs2.Stream
 import fs2.concurrent.SignallingRef
 import org.typelevel.log4cats.Logger
 
-/** The render loop internals `AppRuntime.run` drives: the idle phase (cursor-only ticks while nothing is animating),
-  * the fast phase (full-content frames while something is), and the diagnostics/supervision wrappers both share. Split
+/** The render loop internals `AppRuntime.run` drives: the idle phase (cursor-only ticks while nothing changed), the
+  * fast phase (one full-content frame per burst of damage), and the diagnostics/supervision wrappers both share. Split
   * out of `AppRuntime.scala` (which stayed the orchestration entry point, buffer-load/quit wiring, and the background
   * loops) purely to keep both files under this repo's architecture-ratchet file-length limit -- no behavior changed by
   * this split.
@@ -113,13 +112,15 @@ private[serenity] object AppRuntimeRenderLoops:
         .flatMap(translators => inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state, translators)))
     }
 
+  /** One fast frame: waits out the frame deadline, paints the damage accumulated so far, and ends. The loop returns to
+    * idle afterwards unless more damage arrived while the frame was being painted, in which case fast mode stays set
+    * and the next frame follows (one frame interval after this one started).
+    */
   private[serenity] def fastRenderPhase(
     stateManager: StateReader,
-    animationTicker: AnimationTicker,
     fastModeSignal: SignallingRef[IO, Boolean],
     pendingDamage: Ref[IO, Damage],
     pendingPaintDamage: Ref[IO, Damage],
-    animationTickCadence: Ref[IO, AppRuntime.AnimationTickCadence],
     currentStateForDiagnostics: IO[Option[AppState]],
     checkResizeAndHandle: IO[Unit],
     renderFull: AppRuntime.RenderFn,
@@ -127,49 +128,41 @@ private[serenity] object AppRuntimeRenderLoops:
     sleep: FiniteDuration => IO[Unit] = IO.sleep,
     frameClock: IO[FiniteDuration] = IO.monotonic,
     lastFrameStart: Ref[IO, Option[FiniteDuration]] = Ref.unsafe[IO, Option[FiniteDuration]](None)
-  )(using logger: Logger[IO], balance: com.serenity.rope.Balance): Stream[IO, Unit] =
-    Stream.eval(pendingDamage.getAndSet(Damage.Nothing)).flatMap { _ =>
-      Stream
-        .repeatEval(stateManager.getCurrentState)
-        .zipWithIndex
-        .evalMap {
-          case (stateAtFrameStart, frameIndex) =>
-            for
-              isInitialFrame <- IO.pure(frameIndex == 0L)
-              interval <-
-                IO.pure(AppRuntime.fastFrameInterval(stateAtFrameStart.persisted.config.surfaceConfig.renderFpsTarget))
-              sincePreviousFrame <- awaitFrameDeadline(interval, lastFrameStart, frameClock, sleep)
-              _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(
-                checkResizeAndHandle
-              )
-              active <-
-                if isInitialFrame then stateManager.getModel.map(model => hasActiveAnimations(model.app))
-                else
-                  animationTickCadence.modify(_.advance(sincePreviousFrame, interval)).flatMap { animationTicks =>
-                    withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(
-                      advanceAnimationsForCadence(animationTicks, stateManager, animationTicker, pendingPaintDamage)
-                    )
-                  }
-              model <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
-                stateManager.getModel
-              )
-              paintDamage <- pendingPaintDamage.getAndSet(Damage.Nothing)
-              _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(model.app)))(
-                renderFull(model.app, true, None, paintDamage, renderCaches)
-              )
-            yield active
-        }
-        .takeWhile(identity)
-        .map(_ => ())
-        .onFinalize {
-          stateManager.getModel.flatMap { model =>
-            pendingDamage.get.flatMap { damage =>
-              if AppRuntime.shouldClearFastMode(hasActiveAnimations(model.app), damage) then fastModeSignal.set(false)
-              else IO.unit
-            }
-          }
-        }
+  )(using logger: Logger[IO]): Stream[IO, Unit] =
+    Stream
+      .eval(
+        for
+          _            <- pendingDamage.set(Damage.Nothing)
+          stateAtStart <- stateManager.getCurrentState
+          interval = AppRuntime.fastFrameInterval(stateAtStart.persisted.config.surfaceConfig.renderFpsTarget)
+          _ <- awaitFrameDeadline(interval, lastFrameStart, frameClock, sleep)
+          _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(checkResizeAndHandle)
+          model <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
+            stateManager.getModel
+          )
+          _           <- pendingDamage.set(Damage.Nothing)
+          paintDamage <- pendingPaintDamage.getAndSet(Damage.Nothing)
+          _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(model.app)))(
+            renderFull(model.app, true, None, paintDamage, renderCaches)
+          )
+        yield ()
+      )
+      .onFinalize(settleFastMode(fastModeSignal, pendingDamage))
+
+  /** Clears fast mode unless damage arrived since the phase drained it -- and re-raises it if damage lands between that
+    * check and the clear, so no wake-up is lost.
+    */
+  private def settleFastMode(fastModeSignal: SignallingRef[IO, Boolean], pendingDamage: Ref[IO, Damage]): IO[Unit] =
+    pendingDamage.get.flatMap { damage =>
+      IO.whenA(AppRuntime.shouldClearFastMode(damage))(
+        fastModeSignal.set(false) >>
+          pendingDamage.get.flatMap(late => IO.whenA(late != Damage.Nothing)(fastModeSignal.set(true)))
+      )
     }
+
+  /** Idle, then one fast frame, forever: the idle phase ends when damage raises fast mode, the fast phase paints it. */
+  private[serenity] def renderLoop(idlePhase: Stream[IO, Unit], fastPhase: Stream[IO, Unit]): Stream[IO, Unit] =
+    Stream.repeatEval(IO.unit).flatMap(_ => idlePhase ++ fastPhase)
 
   /** Waits out the rest of the frame interval measured from the previous fast frame's start (shared across fast phases,
     * so input landing just after a frame still waits for the next deadline), records this frame's start, and returns
@@ -287,41 +280,3 @@ private[serenity] object AppRuntimeRenderLoops:
         case None =>
           IO.unit
     yield ()
-
-  private def advanceAnimationsForCadence(
-    ticks: Int,
-    stateManager: StateReader,
-    animationTicker: AnimationTicker,
-    pendingPaintDamage: Ref[IO, Damage]
-  )(using balance: com.serenity.rope.Balance): IO[Boolean] =
-    if ticks <= 0 then stateManager.getModel.map(model => hasActiveAnimations(model.app))
-    else
-      for
-        before <- stateManager.getModel
-        stillActive <- (0 until ticks).toList.foldLeft(IO.pure(false)) { (previous, _) =>
-          previous.flatMap(_ => animationTicker.advanceAnimationsOnTick)
-        }
-        after <- stateManager.getModel
-        _ <- pendingPaintDamage.update(
-          _ |+| DamageProducer.forTransition(before.app, after.app)
-        )
-      yield stillActive
-
-  private[serenity] def hasActiveAnimations(state: AppState): Boolean =
-    needsFullContentRender(state)
-
-  /** Whether the fast render loop's current frame needs a full content repaint, as opposed to the cheaper cursor-only
-    * overlay path.
-    *
-    * The retired window sitter (issue #934 v2) used to be the one exception here: its glyph lived entirely in the
-    * window chrome and never touched the canvas, so `canStandDownToCursorOnly` could skip a full repaint while it alone
-    * was animating. Its typing-reactivity now lives in the companion sprite panel instead, which paints into panel
-    * content like any other pinned panel -- there is no longer a canvas-free animation source, so that cursor-only
-    * shortcut no longer applies to anything and has been removed rather than left checking a condition nothing can
-    * satisfy.
-    *
-    * A typing burst counts only while it is holding the floating status row hidden: that row is an overlay surface, so
-    * showing it again needs a full frame, but with any other placement typing activity changes nothing on screen.
-    */
-  private[serenity] def needsFullContentRender(state: AppState): Boolean =
-    state.typingHidesFloatingStatusLine

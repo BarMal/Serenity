@@ -353,6 +353,3 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     val stateManager: StateManager = StateManager
       .apply(logger)(using com.serenity.rope.Balance.default, LoggerFactory[IO])
       .unsafeRunSync()
-
-    def advanceAnimations(ticks: Int): Unit =
-      (1 to ticks).foreach(_ => stateManager.animationTicker.advanceAnimationsOnTick.unsafeRunSync())

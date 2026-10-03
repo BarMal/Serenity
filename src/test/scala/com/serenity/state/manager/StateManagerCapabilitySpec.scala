@@ -71,8 +71,6 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     // methods on `StateManager` via `StateManagerTestFacade.executeCommand`.
     val _: StateManager => (FileOpener, FileService) =
       sm => (sm.fileOpener, sm.fileService)
-    val _: StateManager => AnimationTicker =
-      sm => sm.animationTicker
     val _: StateManager => (RuntimeLifecycle, SessionService) =
       sm => (sm.runtimeLifecycle, sm.sessionService)
     summon[StateManager <:< StateEngine] // hot state engine: a mixed-in trait, not a record field (#1017)

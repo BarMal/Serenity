@@ -102,16 +102,11 @@ trait TuiScriptSyntax:
     */
   val settledScreen: TuiScript[TuiScreen] = step(_.settledScreen)
 
-  /** One frame as the runtime's own fast phase would paint it -- always the full-repaint path (issue #934 v2). */
+  /** One frame as the runtime's own fast phase would paint it -- always the full-repaint path. */
   val runtimeScreen: TuiScript[TuiScreen] = step(_.runtimeScreen)
 
   /** One tick of the idle cursor phase -- see [[TuiSession.idleCursorScreen]]. */
   val idleCursorScreen: TuiScript[TuiScreen] = step(_.idleCursorScreen)
-
-  /** Advance the animation clock by whole frames, for scenarios that assert on motion rather than its outcome. */
-  def advanceAnimations(ticks: Int): TuiScript[Boolean] = step(_.advanceAnimations(ticks))
-
-  val animationsActive: TuiScript[Boolean] = step(_.animationsActive)
 
   val state: TuiScript[AppState] = step(_.state)
 

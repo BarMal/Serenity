@@ -68,9 +68,6 @@ final private[manager] class StateManagerOperationBoundary private (
     */
   def dispatch[A](request: IO[A]): IO[A] = dispatcher.submit(request)
 
-  /** Runs `request` only if no dispatch is in flight -- the render tick's way to stay off a slow dispatch. */
-  def runIfDispatcherIdle[A](request: IO[A]): IO[Option[A]] = dispatcher.runIfIdle(request)
-
   def ensureCommandRunnerSurface(state: AppState): AppState =
     val registry = CommandRegistry.default
     val activatedRunner =

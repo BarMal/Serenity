@@ -72,31 +72,6 @@ final private[manager] class ModelCommit(
   def updateUndo(update: UndoState => UndoState): IO[Unit] =
     modelRef.update(current => current.copy(undo = update(current.undo)))
 
-  /** Commits the render tick's animation advance (#1697): a message like any other, validated like any other, through
-    * the same `StateManagerOperationBoundary.prepareCommit` every write uses -- so a surface `update` drops whose exit
-    * animation finished (`AnimationChoreography`, `uiSurfaces.filterNot`) can never commit a dangling reference (e.g. a
-    * workspace-tree node still naming it) unnoticed, the way the old unvalidated write could.
-    *
-    * Deliberately skips `afterCommit`'s follow-up work -- scheduling document analysis and logging a modal transition
-    * -- unlike every other commit: `update` only ever advances animation progress (surface fades, theme cross-fade,
-    * ...), so it can never change spell-check-relevant content or open/close a modal, and running that work every frame
-    * would be pure waste for no observable effect. `update` is pure, geometry-preserving animation math, so validation
-    * itself is cheap and exists as a correctness backstop, not because a well-behaved tick is expected to fail it; a
-    * tick that would (a bug) is rejected and logged like any other invalid commit, leaving animation progress where it
-    * was so the next frame retries.
-    */
-  def advanceTick(update: Model => Model): IO[Model] =
-    modelRef.flatModify { current =>
-      val next = update(current)
-      if next.app eq current.app then (current, IO.pure(current))
-      else
-        StateManagerOperationBoundary.prepareCommit(next.app, current.app) match
-          case Right(committed) =>
-            val committedModel = next.copy(app = committed)
-            (committedModel, IO.pure(committedModel))
-          case Left(errors) => (current, operations.logRejectedCommit(errors).as(current))
-    }
-
   private def commit(transition: Model => Option[(Model, AppState)]): IO[Unit] =
     modelRef.flatModify { current =>
       transition(current) match

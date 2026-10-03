@@ -50,13 +50,6 @@ trait StateUpdater:
   */
 trait StateEngine extends StateReader, StateUpdater, EventApplier
 
-/** Advances renderer-visible animation state.
-  *
-  * A capability record per #1017 -- see `FileService` below for the shape rationale. `StateManager` holds one of these
-  * as a field instead of mixing this trait in directly.
-  */
-final case class AnimationTicker(advanceAnimationsOnTick: IO[Boolean])
-
 /** Owns application shutdown and periodic session persistence.
   *
   * A capability record per #1017 -- see `FileService` below for the shape rationale. `StateManager` holds one of these
@@ -144,7 +137,6 @@ trait StateManager extends StateEngine:
   def lspEffectSource: LspEffectSource
   def runtimeLifecycle: RuntimeLifecycle
   def sessionService: SessionService
-  def animationTicker: AnimationTicker
   def fileOpener: FileOpener
   def fileService: FileService
 

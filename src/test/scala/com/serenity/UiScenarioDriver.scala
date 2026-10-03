@@ -98,15 +98,6 @@ final class UiScenarioDriver private (
   def state: IO[AppState] =
     stateManager.getCurrentState
 
-  def advanceToSettled(maxTicks: Int = 256): IO[Boolean] =
-    def loop(remaining: Int): IO[Boolean] =
-      stateManager.animationTicker.advanceAnimationsOnTick.flatMap { active =>
-        if !active then IO.pure(true)
-        else if remaining <= 0 then IO.pure(false)
-        else loop(remaining - 1)
-      }
-    loop(maxTicks)
-
   /** Render one frame and return state/layout evidence without consulting private renderer state. */
   def renderFrame(name: String): IO[ScenarioFrame] =
     state.map { current =>

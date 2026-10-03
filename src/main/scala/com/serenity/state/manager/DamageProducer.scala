@@ -21,10 +21,8 @@ import com.serenity.state.models.*
   * tree structure rather than comparing text, so its cost tracks how much of the document an edit actually touched
   * rather than the document's size.
   *
-  * Called from two funnel points: `AppRuntime.inputEventPhase` around each input event, and
-  * `AppRuntime.fastRenderPhase` (via `advanceAnimationsForCadence`) around each animation tick -- the latter mutates
-  * state entirely outside `inputEventPhase`, so it needs its own before/after diff to report
-  * `animationDamage`/`fullRenderDamage` at all.
+  * Called from two funnel points: `AppRuntime.inputEventPhase` around each input event, and the commit observer
+  * (`AppRuntime.wakeRenderLoopOnCommit`) for every other commit, such as the typing quiet window expiring.
   *
   * `#1000` retires `RendererFramePlanner.planFrame`'s `overlaysMayCoverPanes` stand-down in favour of
   * `fullRenderDamage`'s `uiSurfaces`/`focus` checks below, rather than reasoning about each overlay's precise pixel
@@ -233,11 +231,7 @@ object DamageProducer:
       Damage.Everything
     else Damage.Nothing
 
-  /** Transitions that touch every visible glyph rather than any one buffer's rows, matching what
-    * `AppRuntime.needsFullContentRender` already treats as requiring a full canvas repaint: a theme transition
-    * cross-fades every glyph and background colour in flight, and a surface animation composites through the same
-    * full-render path as any other overlay (see that function's doc comment for why the window sitter alone is exempt
-    * -- it never touches the canvas at all, so it contributes no damage here).
+  /** Transitions that touch every visible glyph rather than any one buffer's rows.
     *
     * `uiSurfaces` changing covers a floating, pinned, modal or expanded surface appearing, moving, resizing or changing
     * content -- `Renderer`'s retired `overlaysMayCoverPanes` stand-down disabled row reuse outright whenever any such
