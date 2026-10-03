@@ -30,13 +30,13 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
 
     cursor.label shouldBe "Cursor Style"
     cursor.selectedOption shouldBe "Breathe"
-    chrome.selectedOption shouldBe "Auto (Linux Rounded)"
+    chrome.selectedOption shouldBe "Auto (Linux Custom)"
     chrome.selectedIntent shouldBe Some(
       CommandIntent.Settings(
         SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetWindowChromeMode(WindowChromeMode.Auto))
       )
     )
-    chrome.options.map(_.label) shouldBe List("Auto (Linux Rounded)", "Native", "Native Themed (Windows)", "Custom")
+    chrome.options.map(_.label) shouldBe List("Auto (Linux Custom)", "Native", "Native Themed (Windows)", "Custom")
   }
 
   it should "offer the Arrange Panels list in place of a pin row per panel and separate order commands" in {

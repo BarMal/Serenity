@@ -52,7 +52,7 @@ private[command] object CommandRunnerSettingsAppearanceItems:
       label = "Window Chrome",
       options = List(
         CommandOption(
-          "Auto (Linux Rounded)",
+          "Auto (Linux Custom)",
           CommandIntent.Settings(
             SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetWindowChromeMode(WindowChromeMode.Auto))
           )

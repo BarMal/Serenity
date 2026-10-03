@@ -8,9 +8,9 @@ import com.serenity.config.WindowChromeMode
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.theme.Theme
 
-/** Pure geometry, palette, and control-layout logic for the custom window chrome (title bar, control buttons, rounded
-  * corners). Mixed into [[SwingWindow]]'s companion object so this stays `SwingWindow.XyzMetrics` etc. to every caller,
-  * while living in its own file to keep `SwingWindow.scala` within the architecture ratchet's line target.
+/** Pure geometry, palette, and control-layout logic for the custom window chrome (title bar, control buttons). Mixed
+  * into [[SwingWindow]]'s companion object so this stays `SwingWindow.XyzMetrics` etc. to every caller, while living in
+  * its own file to keep `SwingWindow.scala` within the architecture ratchet's line target.
   */
 private[terminal] trait SwingWindowChromeSupport:
 
@@ -18,7 +18,6 @@ private[terminal] trait SwingWindowChromeSupport:
       titleBarHeight: Int,
       buttonWidth: Int,
       margin: Int,
-      cornerArc: Int,
       minWidth: Int,
       minHeight: Int,
       titleFontSize: Int
@@ -28,7 +27,6 @@ private[terminal] trait SwingWindowChromeSupport:
     private val BaseTitleBarHeight = 32
     private val BaseButtonWidth    = 46
     private val BaseMargin         = 6
-    private val BaseCornerArc      = 12
     private val BaseTitleFontSize  = 13
 
     def fromCellMetrics(metrics: CellMetrics): ChromeMetrics =
@@ -37,7 +35,6 @@ private[terminal] trait SwingWindowChromeSupport:
         titleBarHeight = scaledInt(BaseTitleBarHeight, scale),
         buttonWidth = scaledInt(BaseButtonWidth, scale),
         margin = scaledInt(BaseMargin, scale),
-        cornerArc = scaledInt(BaseCornerArc, scale),
         minWidth = scaledInt(SwingWindow.BaseMinWidth, scale),
         minHeight = scaledInt(SwingWindow.BaseMinHeight, scale),
         titleFontSize = scaledInt(BaseTitleFontSize, scale)
@@ -71,71 +68,17 @@ private[terminal] trait SwingWindowChromeSupport:
         .get("XDG_CURRENT_DESKTOP")
         .exists(_.split(':').exists(name => TilingDesktopNames.contains(name.trim.toLowerCase(java.util.Locale.ROOT))))
 
-  private[serenity] def isWaylandSession(env: Map[String, String]): Boolean =
-    isSet(env, "WAYLAND_DISPLAY")
-
   private def isSet(env: Map[String, String], key: String): Boolean =
     env.get(key).exists(_.trim.nonEmpty)
 
-  /** A translucent window repaints through a translucent back buffer and makes the compositor blend the whole window,
-    * so on Wayland (running through XWayland) it is opt-in; elsewhere it stays on unless the setting turns it off.
+  /** Paint `canvas`'s opaque black background into `g`, limited to its clip within `width` x `height`, so a frame whose
+    * own background is alpha 0 still presents opaque pixels.
     */
-  private[serenity] def usesTranslucentWindow(
-    setting: Option[Boolean],
-    env: Map[String, String],
-    perPixelTranslucencySupported: Boolean
-  ): Boolean =
-    perPixelTranslucencySupported && setting.getOrElse(!isWaylandSession(env))
-
-  private[serenity] def shouldUsePerPixelRoundedCorners(
-    usesCustomChrome: Boolean,
-    maximized: Boolean,
-    perPixelTranslucencySupported: Boolean
-  ): Boolean =
-    usesCustomChrome && !maximized && perPixelTranslucencySupported
-
-  private[serenity] def roundedCornerMask(
-    usesCustomChrome: Boolean,
-    maximized: Boolean,
-    perPixelTranslucencySupported: Boolean,
-    cornerArc: Int
-  ): Option[Int] =
-    Option.when(shouldUsePerPixelRoundedCorners(usesCustomChrome, maximized, perPixelTranslucencySupported))(
-      cornerArc.max(0)
-    )
-
-  private[serenity] def shouldRefreshRoundedCornerMask(previous: Option[Int], current: Option[Int]): Boolean =
-    previous != current
-
-  /** A theme with an alpha-0 background (e.g. the built-in "Transparent" theme) should only make `canvas` paint its own
-    * background as genuinely see-through when the window can actually composite that against the desktop: custom chrome
-    * (the frame itself is undecorated with a transparent `Color` background, see `frame`'s construction) and per-pixel
-    * translucency support from the platform. Anywhere else -- native OS chrome, or a platform/window manager without
-    * translucency -- painting nothing would composite garbage (stale backbuffer pixels, or an opaque-but-undefined
-    * native surface) rather than the desktop, so that combination must fall back to an ordinary opaque paint instead.
-    */
-  private[serenity] def shouldPaintTransparentContent(
-    usesCustomChrome: Boolean,
-    perPixelTranslucencySupported: Boolean,
-    backgroundAlpha: Int
-  ): Boolean =
-    usesCustomChrome && perPixelTranslucencySupported && backgroundAlpha == 0
-
-  /** Paint `canvas`'s own background into `g`, limited to its clip within `width` x `height`: genuinely transparent
-    * pixels when `transparent`, replacing whatever the backing buffer already held (`AlphaComposite.Src`, not the
-    * default `SrcOver`, so this actually clears stale opaque pixels rather than leaving a zero-alpha fill's no-op) --
-    * otherwise an ordinary opaque black fill, the graceful fallback for when [[shouldPaintTransparentContent]] is
-    * false. `g` should be a scratch `Graphics2D` the caller disposes (`Graphics.create()`), since this permanently
-    * changes its composite.
-    */
-  private[serenity] def paintCanvasBackground(g: Graphics2D, width: Int, height: Int, transparent: Boolean): Unit =
+  private[serenity] def paintCanvasBackground(g: Graphics2D, width: Int, height: Int): Unit =
     val panel  = new Rectangle(0, 0, width, height)
     val region = Option(g.getClipBounds).fold(panel)(_.intersection(panel))
     if !region.isEmpty then
-      if transparent then
-        g.setComposite(AlphaComposite.Src)
-        g.setColor(SwingWindow.Transparent)
-      else g.setColor(Color.BLACK)
+      g.setColor(Color.BLACK)
       g.fillRect(region.x, region.y, region.width, region.height)
 
   private[serenity] def setAccessibleNameIfAvailable(component: JComponent, name: String): Unit =

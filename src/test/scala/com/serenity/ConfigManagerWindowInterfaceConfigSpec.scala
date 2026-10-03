@@ -43,23 +43,6 @@ class ConfigManagerWindowInterfaceConfigSpec extends AnyFlatSpec with Matchers w
     ConfigManager.configToString(config) should include("window.chrome = auto")
   }
 
-  it should "default window translucency to auto, then load and write it" in {
-    AppConfig.default.windowTranslucent shouldBe None
-    ConfigManager.configToString(AppConfig.default) should include("window.translucent = auto")
-
-    val configFile = Files.createTempFile("serenity-window-translucent-config", ".conf")
-    Files.writeString(
-      configFile,
-      """window.translucent = false
-        |""".stripMargin
-    )
-
-    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
-
-    config.windowTranslucent shouldBe Some(false)
-    ConfigManager.configToString(config) should include("window.translucent = false")
-  }
-
   it should "report invalid window config values through the window schema" in {
     val configFile = Files.createTempFile("serenity-window-invalid-config", ".conf")
     Files.writeString(

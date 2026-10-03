@@ -1,31 +1,35 @@
 package com.serenity
 
+import java.awt.Color
+
 import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.RendererEntryPoints
-import com.serenity.ui.theme.DefaultThemes
+import com.serenity.ui.theme.{DefaultThemes, Theme}
 import com.serenity.ui.tui.TerminalRenderSurface
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** End-to-end confirmation that the built-in "Transparent" theme actually reaches the terminal as SGR 49 (#1240),
-  * through the real production path -- `RendererEntryPoints.render` painting a `TerminalRenderSurface` -- rather than
-  * only at the `TerminalAnsiDiff.sgr` unit level.
+/** End-to-end confirmation that a theme whose background is the alpha-0 sentinel reaches the terminal as SGR 49
+  * (#1240), through the real production path -- `RendererEntryPoints.render` painting a `TerminalRenderSurface` --
+  * rather than only at the `TerminalAnsiDiff.sgr` unit level.
   */
-class TransparentThemeTuiIntegrationSpec extends AnyFlatSpec with Matchers:
+class TransparentBackgroundTuiIntegrationSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  "Renderer" should "emit SGR 49 for the editor body when the Transparent theme is active" in {
-    // Some chrome (the gutter, `menuItem` rows) keeps its own opaque background -- see `ThemeConfig.transparent`'s
-    // doc comment -- so this only asserts that SGR 49 (the alpha-0 sentinel) appears somewhere in the output, not
-    // that every cell avoids an explicit truecolor fill.
+  private val transparentBackground =
+    Theme.dark.copy(background = new Color(0, 0, 0, 0), margin = new Color(0, 0, 0, 0))
+
+  "Renderer" should "emit SGR 49 for the editor body when the theme background is transparent" in {
+    // Some chrome (the gutter, `menuItem` rows) keeps its own opaque background, so this only asserts that SGR 49
+    // appears somewhere in the output, not that every cell avoids an explicit truecolor fill.
     val writer  = new java.io.StringWriter()
     val metrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 13)
     val surface = new TerminalRenderSurface(20, 5, writer, metrics)
     val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(theme = DefaultThemes.transparent)
+      persisted = AppState.initial.persisted.copy(theme = transparentBackground)
     )
 
     RendererEntryPoints.render(
@@ -61,4 +65,4 @@ class TransparentThemeTuiIntegrationSpec extends AnyFlatSpec with Matchers:
     output should include("48;2;")
     output should not include ";49m"
   }
-end TransparentThemeTuiIntegrationSpec
+end TransparentBackgroundTuiIntegrationSpec
