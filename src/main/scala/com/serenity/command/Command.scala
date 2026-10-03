@@ -275,13 +275,12 @@ enum TextDisplayIntent:
   case SetTextAreaBottomInset(value: Double)
   case SetDropCapsEnabled(enabled: Boolean)
 
-/** How interface surfaces are sized and spaced -- density, gaps, corner radius, window chrome, key hints -- and where
-  * Escape from a focused panel returns focus.
+/** How interface surfaces are sized and spaced -- density, gaps, outlines, window chrome, key hints -- and where Escape
+  * from a focused panel returns focus.
   */
 enum InterfaceChromeIntent:
   case SetCommandRunnerShowKeyHints(enabled: Boolean)
   case SetUiElementGap(gap: Double)
-  case SetUiCornerRadiusPx(radius: Int)
   case SetUiOutlineThicknessPx(thickness: Int)
   case SetInterfaceDensity(density: InterfaceDensity)
   case SetWindowChromeMode(mode: WindowChromeMode)
@@ -310,18 +309,12 @@ enum SpellCheckIntent:
   // threaded through the command.
   case AddWordAtCursorToDictionary
 
-/** Settings with no more specific home: material/shadows, render tuning, background, and the settings surface's own
-  * open/save commands.
-  */
+/** Settings with no more specific home: render tuning and the settings surface's own open/save commands. */
 enum GeneralSettingsIntent:
   case OpenSettings
   case SaveConfig
-  case SetMaterialPreset(preset: MaterialPreset)
-  case SetUiShadowsEnabled(enabled: Boolean)
   case SetRenderFpsTarget(target: RenderFpsTarget)
   case SetRenderDamageGranularity(granularity: RenderDamageGranularity)
-  case SetBackgroundStyle(style: BackgroundStyle)
-  case SetBlurRadius(r: Float)
   case SetAnimationDuration(ms: Int)
   case SetAnimationSteps(n: Int)
 

@@ -31,7 +31,6 @@ private[presets] object BuiltInUiPresets:
         .withPaneHeaders(false)
         .withMotionPreset(MotionPreset.Subtle)
         .withEditorInsertionTransitionKind(TransitionKind.TypedText)
-        .withMaterialPreset(MaterialPreset.Frosted)
         .withDefaultDocumentMode(DefaultDocumentMode.RichText)
         .withInterfaceDensity(InterfaceDensity.Spacious)
         .withTextAreaInsets(TextAreaInsets.fromPercent(22.0, 22.0))

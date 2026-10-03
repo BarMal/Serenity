@@ -7,13 +7,13 @@ import com.serenity.command.{
   Command,
   CommandCategory,
   CommandIntent,
-  GeneralSettingsIntent,
+  InterfaceChromeIntent,
   MotionIntent,
   SessionIntent,
   SettingsIntent,
   UiPresetsIntent
 }
-import com.serenity.config.{BackgroundStyle, MaterialPreset, MotionPreset}
+import com.serenity.config.{InterfaceDensity, MotionPreset}
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
@@ -31,7 +31,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver
       .updateState(state =>
         state.copy(persisted =
-          state.persisted.copy(config = state.persisted.config.withBackgroundStyle(BackgroundStyle.Solid))
+          state.persisted.copy(config = state.persisted.config.withInterfaceDensity(InterfaceDensity.Compact))
         )
       )
       .unsafeRunSync()
@@ -48,7 +48,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     val saved = store.find("Scenario").unsafeRunSync()
     val frame = driver.renderFrame("saved").unsafeRunSync()
 
-    saved.map(_.config.surfaceConfig.backgroundStyle) shouldBe Some(BackgroundStyle.Solid)
+    saved.map(_.config.interfaceDensity) shouldBe Some(InterfaceDensity.Compact)
     frame.evidence.layoutViolations shouldBe empty
   }
 
@@ -60,7 +60,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver
       .updateState(state =>
         state.copy(persisted =
-          state.persisted.copy(config = state.persisted.config.withBackgroundStyle(BackgroundStyle.Solid))
+          state.persisted.copy(config = state.persisted.config.withInterfaceDensity(InterfaceDensity.Compact))
         )
       )
       .unsafeRunSync()
@@ -75,14 +75,14 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
 
     execute(driver, CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Scenario")))
     val reapplied = driver.state.unsafeRunSync()
-    reapplied.persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.Solid
+    reapplied.persisted.config.interfaceDensity shouldBe InterfaceDensity.Compact
     reapplied.persisted.config.surfaceConfig.motionPreset shouldBe savedMotion
     beforeChange.evidence.layoutViolations shouldBe empty
     driver.renderFrame("after-reapply").unsafeRunSync().evidence.layoutViolations shouldBe empty
 
     val restarted = UiScenarioDriver.create("ui-preset-restarted", uiPresetStore = Some(store)).unsafeRunSync()
     execute(restarted, CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Scenario")))
-    restarted.state.unsafeRunSync().persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.Solid
+    restarted.state.unsafeRunSync().persisted.config.interfaceDensity shouldBe InterfaceDensity.Compact
     restarted.renderFrame("restarted").unsafeRunSync().evidence.layoutViolations shouldBe empty
   }
 
@@ -123,7 +123,9 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     driver.dispatch(ToggleCommandRunner).unsafeRunSync()
     execute(
       driver,
-      CommandIntent.Settings(SettingsIntent.General(GeneralSettingsIntent.SetMaterialPreset(MaterialPreset.Solid)))
+      CommandIntent.Settings(
+        SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetInterfaceDensity(InterfaceDensity.Compact))
+      )
     )
     val changed = driver.renderFrame("changed-before-restart").unsafeRunSync()
     driver.stateManager.saveSession.unsafeRunSync()
@@ -141,7 +143,7 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
         case _                                      => None)
       .getOrElse(fail("command runner should reopen after session restore"))
 
-    reopened.persisted.config.surfaceConfig.materialPreset shouldBe MaterialPreset.Solid
+    reopened.persisted.config.interfaceDensity shouldBe InterfaceDensity.Compact
     store.find("Restart Draft").unsafeRunSync() shouldBe None
     // issue #1060: "ui-preset-overwrite" is a picker (OptionItem) now, not a typed InputItem.
     inputIds(runner.settingsGroups) should contain("ui-preset-save-as-new")

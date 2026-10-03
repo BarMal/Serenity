@@ -209,8 +209,7 @@ object RendererFramePlanner:
     * Painting `renderModalLayer` into a fresh, fully-transparent [[LayerBufferSupport.newLayerSurface]] instead of
     * `context.surface` directly, then compositing the result back at full opacity, is pixel-identical to painting
     * directly -- see [[Java2DRenderSurface.newLayerSurface]]'s doc comment for why, and for the one correctness
-    * precondition (`renderModalLayer` never reads pixels back off the surface it paints onto) that keeps this safe for
-    * the modal specifically while pinned/expanded panels (which do, via `blurRegion`) aren't yet covered.
+    * precondition (`renderModalLayer` never reads pixels back off the surface it paints onto) that keeps this safe.
     */
   private def paintModalLayer(
     state: AppState,
@@ -251,30 +250,20 @@ object RendererFramePlanner:
   /** Whether a pinned/expanded/floating panel identified by `surfaceId` must repaint this frame rather than reuse its
     * cached buffer -- the panel generalisation of [[paintModalLayer]]'s `isDirty` flag (#1100 stage 3).
     *
-    * `Damage.narrowToSurface(damage, surfaceId)` alone is exactly what makes the modal's own caching safe: it is
-    * `Damage.Nothing` whenever this frame's damage doesn't name this surface, even if it names something else entirely
-    * (editor content elsewhere, chrome, another surface). That is safe for the modal because `renderModalLayer` never
-    * reads pixels back off the frame it paints onto -- but a panel that blurs its own background
-    * (`SurfaceMaterials.effectiveBlurRadius > 0`) *does* read pixels back, via `blurRegion`, and those pixels can be
-    * exactly the ones some *other* damage (an edit under a translucent panel) just changed. Reusing a cached buffer in
-    * that case would composite a blur of stale content back onto a frame whose real content has since moved on --
-    * silently wrong output, not just a missed optimisation. So when blur is active, a panel is dirty unless the whole
-    * frame's damage is `Damage.Nothing` -- truly nothing changed anywhere, which is the one case a stale blur is
-    * provably still correct. When blur is inactive (`blurRadius <= 0f`), no panel reads pixels back, and the narrower,
-    * per-surface check applies exactly as it does for the modal: a panel only redraws when its own `Damage.Surface`
-    * entry says so.
+    * `Damage.narrowToSurface(damage, surfaceId)` is `Damage.Nothing` whenever this frame's damage doesn't name this
+    * surface, even if it names something else entirely (editor content elsewhere, chrome, another surface). That is
+    * safe because a panel, like the modal, never reads pixels back off the frame it paints onto: it only redraws when
+    * its own `Damage.Surface` entry says so.
     */
-  def panelDirtyCheck(damage: Damage, blurRadius: Float)(surfaceId: SurfaceId): Boolean =
-    Damage.narrowToSurface(damage, surfaceId) != Damage.Nothing || (blurRadius > 0f && damage != Damage.Nothing)
+  def panelDirtyCheck(damage: Damage)(surfaceId: SurfaceId): Boolean =
+    Damage.narrowToSurface(damage, surfaceId) != Damage.Nothing
 
   /** Paint one pinned/expanded/floating panel's own content into an isolated layer buffer, reusing its last-painted
     * pixels instead of repainting when [[panelDirtyCheck]] says it's safe to -- the panel generalisation of
     * [[paintModalLayer]] (#1100 stage 3).
     *
-    * Unlike the modal, a panel's own paint step (`paintPanel`) reads pixels back via `blurRegion`. The layer still
-    * starts transparent: its `blurRegion` samples the frame surface instead (see
-    * [[LayerBufferSupport.newLayerSurface]]), so everything the panel didn't paint stays transparent and compositing
-    * the whole layer back over a frame whose content has since changed is still correct.
+    * The layer starts transparent, so everything the panel didn't paint stays transparent and compositing the whole
+    * layer back over a frame whose content has since changed is still correct.
     *
     * No `layerBuffers` capability (TUI's `TerminalRenderSurface`), or layer caching switched off -> falls straight
     * through to `paintPanel`, painting directly into the shared surface every frame.

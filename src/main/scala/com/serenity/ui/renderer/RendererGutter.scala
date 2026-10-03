@@ -57,7 +57,7 @@ object RendererGutter:
     val railRect = LayoutRect(railX, contentRect.y, placement.gutterWidthCells, contentRect.height)
     val snapshot = placement.snapshot
 
-    surface.setBackgroundColor(gutterBackground(state, surface))
+    surface.setBackgroundColor(gutterBackground(state))
     surface.setForegroundColor(state.persisted.theme.muted)
     surface.fillRect(railRect.x, railRect.y, railRect.width, railRect.height, ' ')
 
@@ -93,7 +93,7 @@ object RendererGutter:
     dividerOnLeft: Boolean
   ): Unit =
     val surface    = context.surface
-    val background = gutterBackground(state, surface)
+    val background = gutterBackground(state)
 
     surface.setBackgroundColor(background)
     surface.setForegroundColor(state.persisted.theme.muted)
@@ -252,12 +252,12 @@ object RendererGutter:
         case Some(2) => state.persisted.theme.warning.foreground
         case _       => state.persisted.theme.muted
       surface.setForegroundColor(color)
-      surface.setBackgroundColor(gutterBackground(state, surface))
+      surface.setBackgroundColor(gutterBackground(state))
       val markerX = if dividerOnLeft then lineRect.x else lineRect.x + lineRect.width - 1
       surface.putString(markerX, screenY, "!")
 
-  private def gutterBackground(state: AppState, surface: RenderSurface): java.awt.Color =
-    SurfaceMaterials.panelBackground(state.persisted.config, state.persisted.theme, surface)
+  private def gutterBackground(state: AppState): java.awt.Color =
+    state.persisted.theme.panel.background
 
   def renderGutter(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =
     contract.gutterRect.foreach { gutterRect =>
@@ -265,7 +265,7 @@ object RendererGutter:
       val surface = context.surface
       val colors  = state.persisted.config.statusLine.colors
 
-      surface.setBackgroundColor(colors.backgroundOr(gutterBackground(state, surface)))
+      surface.setBackgroundColor(colors.backgroundOr(gutterBackground(state)))
       surface.setForegroundColor(colors.foregroundOr(state.persisted.theme.panel.foreground))
       surface.fillRect(gutterRect.x, gutterRect.y, gutterRect.width, gutterRect.height, ' ')
 

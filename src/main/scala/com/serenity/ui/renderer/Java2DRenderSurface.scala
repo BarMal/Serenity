@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.*
 import java.awt.font.FontRenderContext
-import java.awt.geom.{Rectangle2D, RoundRectangle2D}
+import java.awt.geom.Rectangle2D
 import java.awt.image.*
 import java.util.concurrent.atomic.AtomicReference
 
@@ -27,29 +27,24 @@ class Java2DRenderSurface(
     deviceScaleX: Double = 1.0,
     deviceScaleY: Double = 1.0,
     contentPersists: Boolean = false,
-    layerCacheOwnerOverride: Option[ScreenIdentity] = None,
-    backdrop: Option[BufferedImage] = None,
-    scratch: Java2DScratchBuffers = Java2DScratchBuffers()
+    layerCacheOwnerOverride: Option[ScreenIdentity] = None
 ) extends RenderSurface
     with TextDrawing
     with PixelDrawing
     with Effects
-    with RoundedRectDrawing
-    with PanelBodyDrawing
+    with PanelOutlineDrawing
     with LayerBufferSupport:
-  def text: TextDrawing                                 = this
-  def pixels: PixelDrawing                              = this
-  override def effects: Option[Effects]                 = Some(this)
-  override def roundedRects: Option[RoundedRectDrawing] = Some(this)
-  override def panelBodies: Option[PanelBodyDrawing]    = Some(this)
-  override def layerBuffers: Option[LayerBufferSupport] = Some(this)
+  def text: TextDrawing                                   = this
+  def pixels: PixelDrawing                                = this
+  override def effects: Option[Effects]                   = Some(this)
+  override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
+  override def layerBuffers: Option[LayerBufferSupport]   = Some(this)
 
   override def layerCacheOwner: ScreenIdentity = layerCacheOwnerOverride.getOrElse(super.layerCacheOwner)
 
   /** A fresh, fully transparent surface with this surface's own metrics/font/logical-size/device-scale -- derived
     * entirely from values this surface already computed, not from a `JPanel` (see [[Java2DRenderSurface.forLayer]] for
-    * why that matters). Its `blurRegion` samples this surface's pixels (see [[LayerBufferSupport.newLayerSurface]]),
-    * and it borrows this surface's scratch buffers.
+    * why that matters).
     */
   override def newLayerSurface(onFlush: BufferedImage => Unit, recycled: Option[BufferedImage]): RenderSurface =
     Java2DRenderSurface.forLayer(
@@ -60,9 +55,7 @@ class Java2DRenderSurface(
       deviceScaleX,
       deviceScaleY,
       onFlush,
-      backdrop = Some(image),
-      recycled = recycled,
-      scratch = scratch
+      recycled = recycled
     )
 
   private val g: Graphics2D = image.createGraphics()
@@ -216,93 +209,7 @@ class Java2DRenderSurface(
   override def setAlpha(alpha: Float): Unit =
     g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha.max(0f).min(1f)))
 
-  override def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
-    if radius > 0f then
-      val px         = metrics.toPixelX(x)
-      val py         = metrics.toPixelY(y)
-      val pw         = width * metrics.charWidth
-      val ph         = height * metrics.lineHeight
-      val transform  = g.getTransform
-      val activeClip = Option(g.getClip).map(transform.createTransformedShape)
-      val bounds = transform
-        .createTransformedShape(new Rectangle2D.Double(px, py, pw, ph))
-        .getBounds2D
-      val left   = math.floor(bounds.getMinX).toInt
-      val top    = math.floor(bounds.getMinY).toInt
-      val right  = math.ceil(bounds.getMaxX).toInt
-      val bottom = math.ceil(bounds.getMaxY).toInt
-      Java2DRenderSurface
-        .deviceRegionFor(
-          logicalX = left,
-          logicalY = top,
-          logicalWidth = right - left,
-          logicalHeight = bottom - top,
-          imageWidth = image.getWidth,
-          imageHeight = image.getHeight,
-          deviceScaleX = 1.0,
-          deviceScaleY = 1.0
-        )
-        .foreach { region =>
-          val size   = (radius * 10).toInt.max(1) * 2 + 1
-          val weight = 1.0f / (size * size)
-          val data   = Array.fill(size * size)(weight)
-          val kernel = new Kernel(size, size, data)
-          val op     = new ConvolveOp(kernel, ConvolveOp.EDGE_NO_OP, Java2DRenderSurface.defaultRenderingHints)
-          val src    = backdrop.getOrElse(image).getSubimage(region.xPx, region.yPx, region.widthPx, region.heightPx)
-          scratch.withImage(region.widthPx, region.heightPx) { destination =>
-            val blurred     = op.filter(src, destination)
-            val rawGraphics = image.createGraphics()
-            try
-              activeClip.foreach(rawGraphics.clip)
-              rawGraphics.drawImage(blurred, region.xPx, region.yPx, Java2DRenderSurface.NoOpImageObserver)
-            finally rawGraphics.dispose()
-          }
-        }
-
-  override def drawRoundRectShadow(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int,
-    color: Color
-  ): Unit =
-    val placement = Java2DPanelChrome.Placement(g, image, metrics, x, y, width, height, arcPx)
-    if Java2DPanelChrome.paintsAtDeviceResolution(g.getTransform) then
-      Java2DPanelChrome.drawShadow(placement, color, scratch)
-    else Java2DPanelChrome.drawShadowLayers(g, placement.rect, arcPx, color)
-
-  override def fillPanelBody(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int,
-    shadow: Option[Color],
-    body: PanelBodyFill
-  ): Unit =
-    val placement = Java2DPanelChrome.Placement(g, image, metrics, x, y, width, height, arcPx)
-    Java2DPanelChrome.precomputableBeneath(body, g.getTransform) match
-      case Some(beneath) =>
-        Java2DPanelChrome.fillBodyOverOpaque(placement, shadow, body.colour, body.alpha, beneath, scratch)
-      case None =>
-        shadow.foreach(drawRoundRectShadow(x, y, width, height, arcPx, _))
-        val savedComposite = g.getComposite
-        try
-          setAlpha(body.alpha)
-          val rect = placement.rect
-          fillBackground(body.colour, rect.xPx, rect.yPx, rect.widthPx, rect.heightPx)
-        finally g.setComposite(savedComposite)
-
-  override def strokeRoundRect(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int,
-    color: Color,
-    strokeWidth: Float = 1.5f
-  ): Unit =
+  override def strokeRect(x: Int, y: Int, width: Int, height: Int, color: Color, strokeWidth: Float): Unit =
     val px          = metrics.toPixelX(x)
     val py          = metrics.toPixelY(y)
     val pw          = width * metrics.charWidth
@@ -310,25 +217,18 @@ class Java2DRenderSurface(
     val inset       = math.ceil(strokeWidth / 2).toInt
     val savedStroke = g.getStroke
     g.setColor(color)
-    g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND))
-    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-    g.drawRoundRect(px + inset, py + inset, pw - 2 * inset, ph - 2 * inset, arcPx * 2, arcPx * 2)
+    g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_SQUARE, BasicStroke.JOIN_MITER))
+    g.drawRect(px + inset, py + inset, pw - 2 * inset, ph - 2 * inset)
     g.setStroke(savedStroke)
 
-  override def withRoundRectClip(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int
-  )(render: => Unit): Unit =
+  override def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
     val px        = metrics.toPixelX(x)
     val py        = metrics.toPixelY(y)
     val pw        = width * metrics.charWidth
     val ph        = height * metrics.lineHeight
     val savedClip = g.getClip
     try
-      g.clip(new RoundRectangle2D.Double(px, py, pw, ph, arcPx * 2.0, arcPx * 2.0))
+      g.clip(new Rectangle2D.Double(px, py, pw, ph))
       render
     finally g.setClip(savedClip)
 
@@ -378,7 +278,6 @@ class Java2DRenderSurface(
 object Java2DRenderSurface:
 
   final private[serenity] case class DeviceScale(x: Double, y: Double)
-  final private[serenity] case class DeviceRegion(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)
 
   /** `Graphics2D.drawImage`'s `ImageObserver` callback exists for images that may still be loading asynchronously (e.g.
     * from a URL); every image this class ever draws is an already-fully-materialised `BufferedImage`, so the callback
@@ -386,11 +285,6 @@ object Java2DRenderSurface:
     * no-op. Returning `false` tells the (never-invoked) caller not to bother scheduling further notifications.
     */
   private[serenity] val NoOpImageObserver: ImageObserver = (_, _, _, _, _, _) => false
-
-  /** Equivalent to passing `null` for `ConvolveOp`'s `RenderingHints` parameter -- per its Javadoc, `RenderingHints`
-    * constructed from a `null` (or here, empty) map behaves identically to Java2D's default rendering-hint choices.
-    */
-  private[serenity] def defaultRenderingHints: RenderingHints = new RenderingHints(java.util.Map.of())
 
   def forFrame(
     metrics: CellMetrics,
@@ -413,8 +307,7 @@ object Java2DRenderSurface:
     * that same image instance previously is still there. Callers pass a pooled acquirer together with `true`; a
     * single-use image must stay `false` so nothing downstream tries to reuse pixels that were never kept.
     *
-    * Every frame built over the same `canvas` shares one [[RenderSurface.layerCacheOwner]]. `scratch` should be the
-    * window's own, so effect buffers outlive the frame.
+    * Every frame built over the same `canvas` shares one [[RenderSurface.layerCacheOwner]].
     */
   def forFrame(
     metrics: CellMetrics,
@@ -422,8 +315,7 @@ object Java2DRenderSurface:
     canvas: javax.swing.JPanel,
     onFlush: BufferedImage => Unit,
     acquireImage: (Int, Int, Int) => BufferedImage,
-    contentPersists: Boolean = true,
-    scratch: Java2DScratchBuffers = Java2DScratchBuffers()
+    contentPersists: Boolean = true
   ): Java2DRenderSurface =
     val logicalWidth  = logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
     val logicalHeight = logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height)
@@ -443,8 +335,7 @@ object Java2DRenderSurface:
       deviceScaleX = scale.x,
       deviceScaleY = scale.y,
       contentPersists = contentPersists,
-      layerCacheOwnerOverride = Some(ScreenIdentity(canvas)),
-      scratch = scratch
+      layerCacheOwnerOverride = Some(ScreenIdentity(canvas))
     )
 
   def forImage(
@@ -473,7 +364,7 @@ object Java2DRenderSurface:
     * problem blocking per-surface buffering; this resolves it by deriving the same inputs from an existing
     * [[Java2DRenderSurface]] that already computed them (see [[Java2DRenderSurface.newLayerSurface]]) instead of from a
     * canvas. The image starts fully transparent: `recycled` is cleared and reused when its size matches, otherwise a
-    * new image is allocated. `backdrop` is what `blurRegion` samples instead of the layer's own pixels.
+    * new image is allocated.
     */
   def forLayer(
     metrics: CellMetrics,
@@ -483,9 +374,7 @@ object Java2DRenderSurface:
     deviceScaleX: Double,
     deviceScaleY: Double,
     onFlush: BufferedImage => Unit,
-    backdrop: Option[BufferedImage] = None,
-    recycled: Option[BufferedImage] = None,
-    scratch: Java2DScratchBuffers = Java2DScratchBuffers()
+    recycled: Option[BufferedImage] = None
   ): Java2DRenderSurface =
     val width  = deviceImageDimension(logicalWidthPx, deviceScaleX)
     val height = deviceImageDimension(logicalHeightPx, deviceScaleY)
@@ -502,9 +391,7 @@ object Java2DRenderSurface:
       logicalHeightPx = logicalHeightPx,
       deviceScaleX = deviceScaleX,
       deviceScaleY = deviceScaleY,
-      contentPersists = false,
-      backdrop = backdrop,
-      scratch = scratch
+      contentPersists = false
     )
 
   private def clearedForReuse(image: BufferedImage): BufferedImage =
@@ -521,28 +408,6 @@ object Java2DRenderSurface:
   private[serenity] def logicalCanvasDimension(currentPx: Int, preferredPx: Int): Int =
     if currentPx > 0 then currentPx
     else preferredPx.max(1)
-
-  private[serenity] def deviceRegionFor(
-    logicalX: Int,
-    logicalY: Int,
-    logicalWidth: Int,
-    logicalHeight: Int,
-    imageWidth: Int,
-    imageHeight: Int,
-    deviceScaleX: Double,
-    deviceScaleY: Double
-  ): Option[DeviceRegion] =
-    val x0 = scaledFloor(logicalX, deviceScaleX).max(0).min(imageWidth)
-    val y0 = scaledFloor(logicalY, deviceScaleY).max(0).min(imageHeight)
-    val x1 = scaledCeil(logicalX + logicalWidth, deviceScaleX).max(0).min(imageWidth)
-    val y1 = scaledCeil(logicalY + logicalHeight, deviceScaleY).max(0).min(imageHeight)
-    Option.when(x1 > x0 && y1 > y0)(DeviceRegion(x0, y0, x1 - x0, y1 - y0))
-
-  private def scaledFloor(logicalPx: Int, deviceScale: Double): Int =
-    math.floor(logicalPx.toDouble * deviceScale.max(1.0)).toInt
-
-  private def scaledCeil(logicalPx: Int, deviceScale: Double): Int =
-    math.ceil(logicalPx.toDouble * deviceScale.max(1.0)).toInt
 
   private[serenity] def deviceScaleFor(canvas: javax.swing.JPanel): DeviceScale =
     Option(canvas.getGraphicsConfiguration)

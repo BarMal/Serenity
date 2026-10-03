@@ -82,13 +82,6 @@ object UiPreset:
 
   private def patchAppearanceConfig(base: AppConfig, source: AppConfig): AppConfig =
     base
-      .withSurfaceConfig(
-        base.surfaceConfig.copy(
-          blurRadius = source.surfaceConfig.blurRadius,
-          backgroundStyle = source.surfaceConfig.backgroundStyle,
-          materialPreset = source.surfaceConfig.materialPreset
-        )
-      )
       .withInterfaceConfig(source.interfaceConfig)
       .withCursorConfig(source.cursorConfig)
 
@@ -173,13 +166,6 @@ object UiPreset:
       case "writing" =>
         val withChrome = patchWorkflowChrome(withTypography, source, includeTextAreaInsets = true)
         withChrome
-          .withSurfaceConfig(
-            withChrome.surfaceConfig.copy(
-              blurRadius = source.surfaceConfig.blurRadius,
-              backgroundStyle = source.surfaceConfig.backgroundStyle,
-              materialPreset = source.surfaceConfig.materialPreset
-            )
-          )
           .withDocumentConfig(source.documentConfig)
           .withInterfaceConfig(base.interfaceConfig.copy(density = source.interfaceDensity))
       case "documentation" =>

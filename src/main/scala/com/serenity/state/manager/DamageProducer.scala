@@ -277,12 +277,8 @@ object DamageProducer:
     * some `SurfaceId`, whose presentation is the same kind (`Modal`/`Docked`/`Floating`) on both sides, and nothing
     * else about `uiSurfaces`, reports `Damage.Surface` scoped to that surface instead of `Everything` (#1100 stage 2
     * for the modal only; stage 3 extends it to docked/floating panels). This is safe for every presentation kind
-    * because `Renderer`'s per-surface layer buffer (`LayerBufferSupport.newLayerSurface` for the modal,
-    * `newSeededLayerSurface` for panels that read pixels back via `blurRegion`) always paints into an isolated buffer
-    * seeded correctly for that kind, never the live frame surface directly -- see
-    * `RendererFramePlanner.paintPanelLayer`'s doc comment for why a panel that samples the pixels behind it
-    * additionally requires the *whole* frame to be undamaged (not just its own surface) before it may reuse a cached
-    * buffer, on top of the `Damage.Surface` narrowing this producer reports here.
+    * because `Renderer`'s per-surface layer buffer (`LayerBufferSupport.newLayerSurface`) always paints into an
+    * isolated buffer, never the live frame surface directly, and no layer reads back the pixels behind it.
     */
   private def fullRenderDamage(before: AppState, after: AppState): Damage =
     if before.runtime.themeDiscovery.transition != after.runtime.themeDiscovery.transition ||

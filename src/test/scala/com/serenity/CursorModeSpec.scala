@@ -66,11 +66,11 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
   it should "leave other fields unchanged when changing cursorMode" in {
     val config = AppConfig(
       editorConfig = EditorConfig(characterAnimation = AnimationConfig.quick),
-      surfaceConfig = SurfaceConfig(showLineNumbers = false, blurRadius = 0.5f)
+      surfaceConfig = SurfaceConfig(showLineNumbers = false, diagnosticHighlightBlendWeight = 0.5)
     ).withCursorMode(CursorMode.Breathe)
     config.editorConfig.characterAnimation shouldBe AnimationConfig.quick
     config.surfaceConfig.showLineNumbers shouldBe false
-    config.surfaceConfig.blurRadius shouldBe 0.5f
+    config.surfaceConfig.diagnosticHighlightBlendWeight shouldBe 0.5
   }
 
   // ── CommandRunner settings ───────────────────────────────────────────────
@@ -128,14 +128,6 @@ class CursorModeSpec extends AnyFlatSpec with Matchers:
     sm.applyEvent(MoveRight).unsafeRunSync() // Breathe → Blink (wrap)
 
     sm.getCurrentState.unsafeRunSync().persisted.config.cursorMode shouldBe CursorMode.Blink
-  }
-
-  "SetBackgroundStyle" should "update config.surfaceConfig.backgroundStyle via command runner navigation" in {
-    val sm = makeStateManager()
-    openSettingsGroup(sm, "surface")
-    sm.applyEvent(MoveRight).unsafeRunSync()
-
-    sm.getCurrentState.unsafeRunSync().persisted.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
   }
 
   // ── SessionState JSON round-trip ──────────────────────────────────────────

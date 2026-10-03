@@ -17,9 +17,7 @@ object CommandRunnerOptionSelections:
     val languageToolsConfig = config.languageToolsConfig
 
     Map(
-      "material-preset" -> materialPresetIndex(surfaceConfig.materialPreset),
-      "ui-shadows"      -> enabledIndex(surfaceConfig.uiShadowsEnabled),
-      "motion-preset"   -> motionPresetIndex(surfaceConfig.motionPreset),
+      "motion-preset" -> motionPresetIndex(surfaceConfig.motionPreset),
       "motion-accessibility" -> motionAccessibilityIndex(
         surfaceConfig.motionConfiguration.fold(MotionAccessibility.Standard)(_.accessibility)
       ),
@@ -48,7 +46,6 @@ object CommandRunnerOptionSelections:
       "status-word-count"             -> enabledIndex(config.statusLine.segments.contains(StatusSegment.WordCount)),
       "status-char-count"             -> enabledIndex(config.statusLine.segments.contains(StatusSegment.CharCount)),
       "status-reading-time"           -> enabledIndex(config.statusLine.segments.contains(StatusSegment.ReadingTime)),
-      "background-style"              -> backgroundStyleIndex(surfaceConfig.backgroundStyle),
       "interface-density"             -> interfaceDensityIndex(interfaceConfig.density),
       "window-chrome"                 -> windowChromeModeIndex(config.windowChromeMode),
       "companion-sprite-enabled"      -> enabledIndex(config.companionSpriteConfig.enabled),
@@ -114,13 +111,6 @@ object CommandRunnerOptionSelections:
       case StatusLinePlacement.Floating => 1
       case StatusLinePlacement.Off      => 2
 
-  private def backgroundStyleIndex(style: BackgroundStyle): Int =
-    style match
-      case BackgroundStyle.Solid       => 0
-      case BackgroundStyle.Transparent => 1
-      case BackgroundStyle.Frosted     => 2
-      case BackgroundStyle.GlassLike   => 3
-
   private def interfaceDensityIndex(density: InterfaceDensity): Int =
     density match
       case InterfaceDensity.Compact     => 0
@@ -151,14 +141,6 @@ object CommandRunnerOptionSelections:
       case VisualFlairLevel.Full    => 0
       case VisualFlairLevel.Reduced => 1
       case VisualFlairLevel.Off     => 2
-
-  private def materialPresetIndex(preset: MaterialPreset): Int =
-    preset match
-      case MaterialPreset.Solid   => 0
-      case MaterialPreset.Clear   => 1
-      case MaterialPreset.Frosted => 2
-      case MaterialPreset.Crystal => 3
-      case MaterialPreset.Custom  => 4
 
   private def motionPresetIndex(preset: MotionPreset): Int =
     preset match

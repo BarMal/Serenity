@@ -18,7 +18,7 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  "SessionState" should "preserve config fields including blurRadius and backgroundStyle through JSON round trip" in {
+  "SessionState" should "preserve config fields through JSON round trip" in {
     val appState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         config = AppConfig(
@@ -37,9 +37,6 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
             )
           ),
           surfaceConfig = SurfaceConfig(
-            blurRadius = 0.42f,
-            backgroundStyle = BackgroundStyle.GlassLike,
-            materialPreset = MaterialPreset.Crystal,
             motionPreset = MotionPreset.Reduced,
             elementTransitionSpeedScale = 1.75,
             editorTextTransitionSpeedScale = Some(0.5),
@@ -97,7 +94,6 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
           interfaceConfig = InterfaceConfig(
             density = InterfaceDensity.Spacious,
             elementGap = Some(3),
-            cornerRadiusPx = 12,
             outlineThicknessPx = 4
           ),
           languageToolsConfig = LanguageToolsConfig(
@@ -125,9 +121,6 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
 
     val decoded = SessionState.fromAppState(appState).asJson.as[SessionState].toOption.get
 
-    decoded.config.surfaceConfig.blurRadius shouldBe 0.42f
-    decoded.config.surfaceConfig.backgroundStyle shouldBe BackgroundStyle.GlassLike
-    decoded.config.surfaceConfig.materialPreset shouldBe MaterialPreset.Crystal
     decoded.config.surfaceConfig.motionPreset shouldBe MotionPreset.Reduced
     decoded.config.surfaceConfig.elementTransitionSpeedScale shouldBe 1.75
     decoded.config.surfaceConfig.editorTextTransitionSpeedScale shouldBe Some(0.5)
@@ -163,7 +156,6 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
     decoded.config.interfaceConfig shouldBe InterfaceConfig(
       density = InterfaceDensity.Spacious,
       elementGap = Some(3),
-      cornerRadiusPx = 12,
       outlineThicknessPx = 4
     )
     decoded.config.editorConfig.fontConfig.codeFontFamily shouldBe "Monospaced"

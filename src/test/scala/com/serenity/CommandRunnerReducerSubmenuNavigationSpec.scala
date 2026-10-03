@@ -340,7 +340,6 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
       "settings-preset-name",
       "settings-preset-actions",
       "settings-preset-workspace-layout",
-      "settings-preset-surface-appearance",
       "settings-preset-cursor",
       "settings-preset-animation",
       "settings-preset-prose-font",
@@ -357,7 +356,7 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
 
     val presetOptions = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
     val typographySelected = CommandRunnerReducer
-      .reduce(RunnerSelectSubmenuItem(6), presetOptions, registry)
+      .reduce(RunnerSelectSubmenuItem(5), presetOptions, registry)
       .state
     val typography = CommandRunnerReducer.reduce(RunnerSubmit, typographySelected, registry)
     val runner     = runnerFrom(typography.state)
@@ -383,7 +382,7 @@ class CommandRunnerReducerSubmenuNavigationSpec extends AnyFlatSpec with Matcher
     val state    = settingsStateOnItem("settings-ui-presets", "settings-preset-edit")
 
     val presetOptions      = CommandRunnerReducer.reduce(RunnerSubmit, state, registry).state
-    val typographySelected = CommandRunnerReducer.reduce(RunnerSelectSubmenuItem(6), presetOptions, registry).state
+    val typographySelected = CommandRunnerReducer.reduce(RunnerSelectSubmenuItem(5), presetOptions, registry).state
     val typography         = CommandRunnerReducer.reduce(RunnerSubmit, typographySelected, registry).state
     runnerFrom(typography).activeSubmenuGroupId shouldBe Some("settings-preset-prose-font")
 

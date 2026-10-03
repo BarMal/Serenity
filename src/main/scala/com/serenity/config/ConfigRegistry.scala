@@ -44,8 +44,7 @@ object ConfigRegistry:
 
   /** The order settings are applied in when a whole config is read at once: broader paths before narrower ones, then
     * alphabetically. It is the order the config file is folded in, and it matters because a handful of setters
-    * deliberately adjust a neighbouring setting -- a custom blur radius switches the material preset to custom, and the
-    * preset's own saved value has to come after that to have the last word.
+    * deliberately adjust a neighbouring setting, whose own saved value has to come after that to have the last word.
     */
   /** Every setting's default value, in the order the file writes them.
     *

@@ -74,7 +74,7 @@ class VisualStateThemeConfigSpec extends AnyFlatSpec with Matchers:
     theme.interactionStates.disabled shouldBe derivedInteractionStates.disabled
   }
 
-  it should "still load a theme file carrying the removed elevation block" in {
+  it should "still load a theme file carrying the removed elevation block and panel alpha" in {
     val withElevation =
       """theme {
         |  name = "elevation-test"
@@ -87,7 +87,7 @@ class VisualStateThemeConfigSpec extends AnyFlatSpec with Matchers:
         |    placeholder = "#52606D"
         |    highlighted { foreground = "#000000", background = "#5DADE2", style { bold = false, italic = false, underline = false } }
         |    menu-item { foreground = "#FFFFFF", background = "#1F2933", style { bold = false, italic = false, underline = false } }
-        |    panel { foreground = "#FFFFFF", background = "#111821", style { bold = false, italic = false, underline = false } }
+        |    panel { foreground = "#FFFFFF", background = "#111821", alpha = 0.94, style { bold = false, italic = false, underline = false } }
         |    error { foreground = "#FF6B6B", background = "#2B1215", style { bold = false, italic = false, underline = false } }
         |  }
         |  elevation {

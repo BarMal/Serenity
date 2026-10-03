@@ -110,7 +110,6 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       .withInterfaceDensity(InterfaceDensity.Compact)
       .withWindowChromeMode(WindowChromeMode.NativeThemed)
       .withUiElementGap(Some(2))
-      .withUiCornerRadiusPx(6)
       .withUiOutlineThicknessPx(3)
     val runner = CommandRunner.empty.activate(registry, config)
 
@@ -142,20 +141,6 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
         "2",
         "Cells, decimals supported (0.0-8.0)",
         Some(CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiElementGap(3)))),
-        None
-      )
-    )
-    settingsGroup(runner, "settings-look-advanced")
-      .flatMap(
-        _.children.collectFirst {
-          case item: CommandSurfaceItem.InputItem if item.id == "ui-corner-radius" =>
-            (item.currentValue, item.hint, item.parse("14"), item.parse("33"))
-        }
-      ) shouldBe Some(
-      (
-        "6",
-        "Pixels (0-32)",
-        Some(CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiCornerRadiusPx(14)))),
         None
       )
     )
@@ -264,9 +249,8 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       }) should contain(List("Floating" -> List("Pinned", "Floating", "Off")))
   }
 
-  it should "expose material and motion presets with current selections" in {
+  it should "expose motion presets with current selections" in {
     val config = AppConfig.default
-      .withMaterialPreset(MaterialPreset.Crystal)
       .withMotionPreset(MotionPreset.Reduced)
       .withEditorInsertionTransitionKind(TransitionKind.TypedText)
       .withElementTransitionSpeedScale(1.5)
@@ -279,16 +263,9 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
       .withCommandRunnerTransitionKind(Some(TransitionKind.OutlineThenContent))
     val runner = CommandRunner.empty.activate(registry, config)
 
-    val surfaceGroup = settingsGroup(runner, "settings-surface-appearance").getOrElse {
-      fail("Expected surface appearance settings group")
-    }
     val motionGroup = settingsGroup(runner, "settings-animation").getOrElse {
       fail("Expected motion and animation settings group")
     }
-    surfaceGroup.children.collectFirst {
-      case item: CommandSurfaceItem.OptionItem if item.id == "material-preset" =>
-        (item.selectedOption, item.options.map(_.label))
-    } shouldBe Some("Crystal" -> List("Solid", "Clear", "Frosted", "Crystal", "Custom"))
     motionGroup.children.collectFirst {
       case item: CommandSurfaceItem.OptionItem if item.id == "motion-preset" =>
         (item.selectedOption, item.options.map(_.label))

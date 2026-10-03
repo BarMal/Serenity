@@ -33,27 +33,11 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       .find(_.id == id)
       .getOrElse(fail(s"missing group $id"))
 
-  "CommandRunner state" should "surface visual appearance settings as an expandable group in settings browsing" in {
-    val registry          = CommandRegistry.default
-    given CommandRegistry = registry
-    val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
-
-    val appearanceGroup = groupByIdRecursive(runner.settingsGroups, "settings-surface-appearance")
-
-    appearanceGroup.label shouldBe "Surface Appearance"
-    appearanceGroup.children.map(_.id) shouldBe List(
-      "background-style",
-      "material-preset",
-      "ui-shadows"
-    )
-  }
-
   // issue #931: category tabs are retired -- browsing settings groups with no search now only happens via the
   // dedicated Settings surface (`.openSettings`), not by switching the palette's category. `visibleItems` still
   // routes to `settingsSurfaceItems` once `isSettingsSurface` is true, so this fixture change is the only one
   // needed.
-  it should "group related settings into expandable submenu rows" in {
+  "CommandRunner state" should "group related settings into expandable submenu rows" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     // "Show all settings" is on: this test inspects the full taxonomy, mode filtering (issue #1297) aside.
@@ -114,7 +98,6 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     group("settings-look").label shouldBe "Look"
     group("settings-look").children.map(_.id) shouldBe List(
       "theme",
-      "settings-surface-appearance",
       "settings-interface-layout",
       "settings-cursor",
       "settings-look-advanced"
@@ -123,12 +106,6 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-cursor").children.map(_.id) shouldBe List("cursor-mode")
     nestedGroup("settings-status-line").label shouldBe "Status Line"
     nestedGroup("settings-status-line").children.map(_.id) should contain allOf ("status-placement", "status-title")
-    nestedGroup("settings-surface-appearance").label shouldBe "Surface Appearance"
-    nestedGroup("settings-surface-appearance").children.map(_.id) shouldBe List(
-      "background-style",
-      "material-preset",
-      "ui-shadows"
-    )
     // issue #1046: command-runner visible-rows/item-gap-rows/cursor-gap-rows are no longer separate rows here --
     // Interface Density above is the one control governing all three now.
     nestedGroup("settings-interface-layout").label shouldBe "Interface Layout"
@@ -140,9 +117,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     // Blur, spacing, corners, outlines, render cadence and decorative extras are one Advanced leaf, not five groups.
     nestedGroup("settings-look-advanced").label shouldBe "Advanced"
     nestedGroup("settings-look-advanced").children.map(_.id) shouldBe List(
-      "blur-radius",
       "ui-element-gap",
-      "ui-corner-radius",
       "ui-outline-thickness",
       "render-fps",
       "render-damage-granularity",

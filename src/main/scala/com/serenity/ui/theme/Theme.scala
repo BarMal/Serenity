@@ -71,8 +71,7 @@ final case class Theme(
 final case class ThemeColor(
     foreground: Color,
     background: Color,
-    style: TextStyle = TextStyle.normal,
-    alpha: NormalizedAlpha = NormalizedAlpha.Opaque
+    style: TextStyle = TextStyle.normal
 )
 
 /** Semantic status treatments kept distinct from selection, focus, and regular text roles. */
@@ -113,8 +112,7 @@ object Theme:
   val EqualContrastLuminanceThreshold: Double = math.sqrt(1.05 * 0.05) - 0.05
 
   /** Component-wise linear blend from `from` toward `to`, clamped to `[0, 1]`; keeps `from`'s alpha. The one shared
-    * copy of the technique `InteractionStates.derive` uses for hover/pressed/disabled -- see `SurfaceMaterials.blend`
-    * in the renderer package for the same idiom applied to painting.
+    * copy of the technique `InteractionStates.derive` uses for hover/pressed/disabled.
     */
   private[theme] def blend(from: Color, to: Color, factor: Double): Color =
     val t = factor.max(0.0).min(1.0)

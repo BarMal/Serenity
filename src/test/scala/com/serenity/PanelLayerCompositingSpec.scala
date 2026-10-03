@@ -3,7 +3,6 @@ package com.serenity
 import java.awt.image.BufferedImage
 import java.nio.file.Paths
 
-import com.serenity.config.MaterialPreset
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -14,12 +13,8 @@ import org.scalatest.matchers.should.Matchers
 /** #1100 stage 3: pinned, expanded, and floating panels each own their own layer buffer and skip repainting it when
   * it's safe to -- the generalisation of [[ModalLayerCompositingSpec]] beyond the modal layer.
   *
-  * Unlike the modal, a panel's paint step samples the pixels behind it (`SurfaceMaterials.effectiveBlurRadius`'s
-  * `blurRegion` call), so its cache is safe to reuse only when either blur is off or skipped (a docked panel's slot
-  * holds only cleared background, so the modal's own narrower per-surface rule applies unchanged) or the whole frame's
-  * damage is `Damage.Nothing` (see `RendererFramePlanner.panelDirtyCheck`). The `AppConfig.default` material preset
-  * (`Frosted`) has blur active, so most of these fixtures disable it explicitly to exercise the narrower per-surface
-  * reuse rule the same way [[ModalLayerCompositingSpec]] does for the modal.
+  * Like the modal, a panel never reads back the pixels behind it, so the same per-surface reuse rule applies (see
+  * `RendererFramePlanner.panelDirtyCheck`).
   */
 class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
 
@@ -38,9 +33,9 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     * and everything the renderer paints from it, now reads the tree -- a surface merely appended to `uiSurfaces`
     * without a tree entry is invisible to it).
     */
-  private def stateWithPinnedPanel(content: String, blurOff: Boolean = true, layerCaching: Boolean = true): AppState =
+  private def stateWithPinnedPanel(content: String, layerCaching: Boolean = true): AppState =
     DockedPanelFixtures.dockExisting(
-      stateWith(content, List(pinnedPanel), blurOff, layerCaching),
+      stateWith(content, List(pinnedPanel), layerCaching),
       pinnedId,
       PanelPosition.Left,
       24
@@ -56,11 +51,10 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
   private def stateWith(
     content: String,
     surfaces: List[UiSurface],
-    blurOff: Boolean = true,
     layerCaching: Boolean = true
   ): AppState =
     val buffer = Buffer.fromString(bufferId, content)
-    val bare = AppState.initial.copy(
+    AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         config = AppState.initial.persisted.config.withLayerCaching(layerCaching),
         buffers = Map(bufferId -> buffer),
@@ -74,11 +68,6 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       ),
       runtime = AppState.initial.runtime.copy(uiSurfaces = surfaces)
     )
-    if blurOff then
-      bare.copy(persisted =
-        bare.persisted.copy(config = bare.persisted.config.withMaterialPreset(MaterialPreset.Solid))
-      )
-    else bare
 
   private def editContent(state: AppState): AppState =
     val edited = state.persisted
@@ -98,9 +87,9 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-  "RendererEntryPoints.render" should "not repaint a pinned panel's own buffer when only editor content changed and blur is off" in {
+  "RendererEntryPoints.render" should "not repaint a pinned panel's own buffer when only editor content changed" in {
     val surface = new CountingLayerBufferSurface(120, 40)
-    val before  = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = true)
+    val before  = stateWithPinnedPanel("alpha\nbeta\ngamma")
     // Shared across both render calls below (issue #1677): a real `StateManager` reuses one `RenderCaches` across
     // every frame it renders, and it's exactly that reuse -- not a JVM-wide singleton -- these panel-layer-buffer
     // reuse assertions depend on.
@@ -131,9 +120,9 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     surface.newLayerSurfaceCalls.get() shouldBe 1
   }
 
-  it should "repaint a pinned panel's buffer when only its own content changes and blur is off" in {
+  it should "repaint a pinned panel's buffer when only its own content changes" in {
     val surface = new CountingLayerBufferSurface(120, 40)
-    val before  = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = true)
+    val before  = stateWithPinnedPanel("alpha\nbeta\ngamma")
     val caches  = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
@@ -165,91 +154,9 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     surface.newLayerSurfaceCalls.get() shouldBe 2
   }
 
-  it should "not blur behind a docked panel, whose slot holds only cleared background, while blurring behind a floating panel over text" in {
-    val docked = new CountingLayerBufferSurface(120, 40)
-    val pinned = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = false, layerCaching = false)
-    val caches = com.serenity.state.manager.RenderCaches.create()
-    RendererEntryPoints.render(pinned, cursorVisible = false, docked, viewport, None, Damage.Everything, caches)
-
-    val floating = new CountingLayerBufferSurface(120, 40)
-    val overText = stateWith("alpha\nbeta\ngamma", List(floatingPanel), blurOff = false, layerCaching = false)
-    RendererEntryPoints.render(overText, cursorVisible = false, floating, viewport, None, Damage.Everything, caches)
-
-    docked.blurRegionCalls shouldBe empty
-    docked.roundRectShadowCalls should not be empty
-    floating.blurRegionCalls should not be empty
-  }
-
-  it should "not repaint a docked panel's buffer when only editor content changed, even with blur active" in {
+  it should "reuse a pinned panel's cached buffer on a truly clean re-render" in {
     val surface = new CountingLayerBufferSurface(120, 40)
-    val before  = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = false)
-    val caches  = com.serenity.state.manager.RenderCaches.create()
-
-    RendererEntryPoints.render(
-      before,
-      cursorVisible = false,
-      surface,
-      viewport,
-      None,
-      Damage.Everything,
-      caches
-    )
-    surface.newLayerSurfaceCalls.get() shouldBe 1
-
-    val after            = editContent(before)
-    val transitionDamage = DamageProducer.forTransition(before, after)
-    transitionDamage should not be Damage.Nothing
-
-    RendererEntryPoints.render(
-      after,
-      cursorVisible = false,
-      surface,
-      viewport,
-      None,
-      transitionDamage,
-      caches
-    )
-
-    surface.newLayerSurfaceCalls.get() shouldBe 1
-  }
-
-  it should "repaint a floating panel with active blur whenever anything elsewhere in the frame changed" in {
-    val surface = new CountingLayerBufferSurface(120, 40)
-    val before  = stateWith("alpha\nbeta\ngamma", List(floatingPanel), blurOff = false)
-    val caches  = com.serenity.state.manager.RenderCaches.create()
-
-    RendererEntryPoints.render(
-      before,
-      cursorVisible = false,
-      surface,
-      viewport,
-      None,
-      Damage.Everything,
-      caches
-    )
-    surface.newLayerSurfaceCalls.get() shouldBe 1
-
-    val after            = editContent(before)
-    val transitionDamage = DamageProducer.forTransition(before, after)
-    transitionDamage should not be Damage.Nothing
-
-    RendererEntryPoints.render(
-      after,
-      cursorVisible = false,
-      surface,
-      viewport,
-      None,
-      transitionDamage,
-      caches
-    )
-
-    // Blur samples the live frame under the overlay, so an unrelated content change still forces it to repaint.
-    surface.newLayerSurfaceCalls.get() shouldBe 2
-  }
-
-  it should "reuse a blurred pinned panel's cached buffer on a truly clean re-render" in {
-    val surface = new CountingLayerBufferSurface(120, 40)
-    val state   = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = false)
+    val state   = stateWithPinnedPanel("alpha\nbeta\ngamma")
     val caches  = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
@@ -278,11 +185,11 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     surface.drawImageCalls.size shouldBe firstDrawImageCalls + 1
   }
 
-  it should "not repaint an expanded panel's own buffer when only editor content changed and blur is off" in {
+  it should "not repaint an expanded panel's own buffer when only editor content changed" in {
     val surface    = new CountingLayerBufferSurface(120, 40)
     val expandedId = SurfaceId("expanded-outline")
     val docked = DockedPanelFixtures.dock(
-      stateWith("alpha\nbeta\ngamma", Nil, blurOff = true),
+      stateWith("alpha\nbeta\ngamma", Nil),
       expandedId,
       SurfaceContent.Outline(Nil),
       PanelPosition.Right,
@@ -323,7 +230,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     // execution alongside another spec painting a same-named panel. This reproduces that cross-surface interaction
     // deterministically, without depending on real thread scheduling.
     val surfaceA = new CountingLayerBufferSurface(120, 40)
-    val before   = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = true)
+    val before   = stateWithPinnedPanel("alpha\nbeta\ngamma")
     // surfaceA's own owner: shared across its two render calls below, the same as every other reuse assertion in
     // this file.
     val cachesA = com.serenity.state.manager.RenderCaches.create()
@@ -368,9 +275,9 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     surfaceA.newLayerSurfaceCalls.get() shouldBe 1
   }
 
-  it should "not repaint a floating panel's own buffer when only editor content changed and blur is off" in {
+  it should "not repaint a floating panel's own buffer when only editor content changed" in {
     val surface = new CountingLayerBufferSurface(120, 40)
-    val before  = stateWith("alpha\nbeta\ngamma", List(floatingPanel), blurOff = true)
+    val before  = stateWith("alpha\nbeta\ngamma", List(floatingPanel))
     val caches  = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
@@ -398,9 +305,9 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     surface.newLayerSurfaceCalls.get() shouldBe 1
   }
 
-  it should "repaint a floating panel's buffer when only its own content changes and blur is off" in {
+  it should "repaint a floating panel's buffer when only its own content changes" in {
     val surface = new CountingLayerBufferSurface(120, 40)
-    val before  = stateWith("alpha\nbeta\ngamma", List(floatingPanel), blurOff = true)
+    val before  = stateWith("alpha\nbeta\ngamma", List(floatingPanel))
     val caches  = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(
@@ -436,7 +343,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
     val window      = new Object
     val firstFrame  = new CountingLayerBufferSurface(120, 40, Some(window))
     val secondFrame = new CountingLayerBufferSurface(120, 40, Some(window))
-    val before      = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = true)
+    val before      = stateWithPinnedPanel("alpha\nbeta\ngamma")
     val caches      = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(before, cursorVisible = false, firstFrame, viewport, None, Damage.Everything, caches)
@@ -458,7 +365,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
 
   it should "paint panels straight onto the frame, with no layer buffer, when layer caching is off" in {
     val surface = new CountingLayerBufferSurface(120, 40)
-    val before  = stateWith("alpha\nbeta\ngamma", List(floatingPanel), blurOff = true, layerCaching = false)
+    val before  = stateWith("alpha\nbeta\ngamma", List(floatingPanel), layerCaching = false)
     val caches  = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything, caches)
@@ -481,7 +388,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
 
   it should "drop cached panel layers once layer caching is switched off" in {
     val surface = new CountingLayerBufferSurface(120, 40)
-    val cached  = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = true)
+    val cached  = stateWithPinnedPanel("alpha\nbeta\ngamma")
     val caches  = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(cached, cursorVisible = false, surface, viewport, None, Damage.Everything, caches)
@@ -496,7 +403,7 @@ class PanelLayerCompositingSpec extends AnyFlatSpec with Matchers:
 
   it should "repaint into the panel's previous image rather than allocating a new one" in {
     val surface = new CountingLayerBufferSurface(120, 40)
-    val before  = stateWithPinnedPanel("alpha\nbeta\ngamma", blurOff = true)
+    val before  = stateWithPinnedPanel("alpha\nbeta\ngamma")
     val caches  = com.serenity.state.manager.RenderCaches.create()
 
     RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything, caches)

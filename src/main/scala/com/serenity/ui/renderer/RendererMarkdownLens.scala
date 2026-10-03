@@ -221,11 +221,10 @@ object RendererMarkdownLens:
     snapshot: TextLayoutSnapshot,
     frame: MarkdownLensFrame
   ): Unit =
-    val lines         = frame.lines
-    val previewWindow = frame.previewWindow
-    val lensBackground =
-      SurfaceMaterials.panelBackground(state.persisted.config, state.persisted.theme, context.surface)
-    val lensTheme = state.persisted.theme.copy(background = lensBackground)
+    val lines          = frame.lines
+    val previewWindow  = frame.previewWindow
+    val lensBackground = state.persisted.theme.panel.background
+    val lensTheme      = state.persisted.theme.copy(background = lensBackground)
     frame.activeSourceRanges.foreach { blockRange =>
       val absoluteBlockRange = (blockRange.start + frame.firstSourceLine) to (blockRange.end + frame.firstSourceLine)
       val blockVisualLines   = snapshot.visualLines.filter(line => absoluteBlockRange.contains(line.bufferLine))

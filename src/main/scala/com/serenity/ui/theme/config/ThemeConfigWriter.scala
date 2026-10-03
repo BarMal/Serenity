@@ -5,7 +5,7 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import com.serenity.io.AtomicFileWriter
-import com.serenity.ui.theme.{ColorFormat, NormalizedAlpha, SyntaxElement, Theme, ThemeColor}
+import com.serenity.ui.theme.{ColorFormat, SyntaxElement, Theme, ThemeColor}
 
 object ThemeConfigWriter:
 
@@ -99,7 +99,6 @@ $mandatorySyntaxLines
     UiTokenConfig(
       foreground = hex(color.foreground),
       background = hex(color.background),
-      alpha = Option.when(color.alpha != NormalizedAlpha.Opaque)(color.alpha.value),
       style = StyleConfig(color.style.isBold, color.style.isItalic, color.style.isUnderlined)
     )
 
@@ -112,11 +111,10 @@ $mandatorySyntaxLines
     )
 
   private def renderToken(config: UiTokenConfig, indent: Int): String =
-    val pad       = " " * indent
-    val alphaLine = config.alpha.map(value => s"\n$pad  alpha = $value").getOrElse("")
+    val pad = " " * indent
     s"""{
        |$pad  foreground = "${config.foreground}"
-       |$pad  background = "${config.background}"$alphaLine
+       |$pad  background = "${config.background}"
        |$pad  style ${renderStyle(config.style, indent + 2)}
        |$pad}""".stripMargin
 

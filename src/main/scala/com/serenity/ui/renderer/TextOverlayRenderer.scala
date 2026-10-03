@@ -38,19 +38,6 @@ object TextOverlayRenderer:
     val isStatusLine = overlay.surfaceId.contains(UiSurface.StatusLineSurfaceId)
     val isQuietLine  = isStatusLine || overlay.surfaceId.contains(UiSurface.TabBarSurfaceId)
 
-    // The status row and the tab strip are both quiet single lines, not floating panels: no shadow and no border.
-    if config.surfaceConfig.uiShadowsEnabled && !isQuietLine then
-      surface.roundedRects.foreach(
-        _.drawRoundRectShadow(
-          rect.x,
-          rect.y,
-          rect.width,
-          rect.height,
-          config.scaledUiCornerRadiusPx,
-          new Color(0, 0, 0)
-        )
-      )
-
     // Scoped to the one surface the status line's colour overrides name -- every other floating panel keeps painting
     // with the theme's panel colours and alpha exactly as before, unmodified (#1295).
     val statusColors = config.statusLine.colors
@@ -62,30 +49,23 @@ object TextOverlayRenderer:
     val statusForegroundOverride: Option[Color] = Option.when(isStatusLine)(statusColors.foreground).flatten
     val statusBackgroundOverride: Option[Color] = Option.when(isStatusLine)(statusColors.background).flatten
 
-    // A status line's configured background is an explicit choice and wins over the material, as it does in the GUI.
-    val backdrop = SurfaceMaterials
-      .backdropShowingThrough(config, theme, surface)
-      .filterNot(_ => statusBackgroundOverride.isDefined || statusBackgroundAlphaOverride.isDefined)
-
     def rowColors(rowOffset: Int): (Color, Color) =
       val animatedCell = overlay.animationState.getCell(0, rowOffset)
       val defaultFg    = animatedCell.flatMap(_.currentForeground).getOrElse(theme.panel.foreground)
-      val defaultBg =
-        backdrop.getOrElse(animatedCell.flatMap(_.currentBackground).getOrElse(theme.panel.background))
-      val fg = statusForegroundOverride.getOrElse(defaultFg)
-      val bg = statusBackgroundOverride.getOrElse(defaultBg)
+      val defaultBg    = animatedCell.flatMap(_.currentBackground).getOrElse(theme.panel.background)
+      val fg           = statusForegroundOverride.getOrElse(defaultFg)
+      val bg           = statusBackgroundOverride.getOrElse(defaultBg)
       (fg, statusBackgroundAlphaOverride.fold(bg)(bg.withAlpha))
 
-    surface.effects.foreach(_.setAlpha(SurfaceMaterials.panelAlpha(config, theme) * overlay.alphaMultiplier))
+    surface.effects.foreach(_.setAlpha(overlay.alphaMultiplier))
 
-    withOptionalRoundRectClip(surface, rect.x, rect.y, rect.width, rect.height, config.scaledUiCornerRadiusPx) {
+    withOptionalRectClip(surface, rect.x, rect.y, rect.width, rect.height) {
       for (y, rowOffset) <- (rect.y until rect.bottom).zipWithIndex do
         val (fg, bg) = rowColors(rowOffset)
         surface.setForegroundColor(fg)
         surface.setBackgroundColor(bg)
         surface.putString(rect.x, y, " " * rect.width)
 
-      if backdrop.isEmpty then applyGlassSheen(surface, overlay, theme, config)
       val textInsetPx = SurfaceTextInset.px(config)
       // `composition` is `overlay`'s only content representation (issue #1683) -- a surface with genuinely nothing to
       // paint (no bespoke composition and no rows/header/footer/key-hint given at construction) simply has none, and
@@ -94,6 +74,7 @@ object TextOverlayRenderer:
         drawComposition(surface, _, theme, cursorVisible, rowColors, font, cellMetrics, textInsetPx, overlay.rect.y)
       )
     }
+    // The status row and the tab strip are both quiet single lines, not floating panels: no border.
     if !isQuietLine then drawBorder(surface, overlay, theme, config)
 
     surface.effects.foreach(_.setAlpha(1.0f))
@@ -111,32 +92,17 @@ object TextOverlayRenderer:
     // bar is kept out by its caller instead: it paints edge to edge although `borderCellsFor` gives its content kind
     // the default border.
     if overlay.borderCells > 0 && rect.width >= 2 && rect.height >= 2 then
-      surface.roundedRects.foreach(
-        _.strokeRoundRect(
-          rect.x,
-          rect.y,
-          rect.width,
-          rect.height,
-          config.scaledUiCornerRadiusPx,
-          theme.border,
-          config.scaledUiOutlineThicknessPx
-        )
+      surface.panelOutlines.foreach(
+        _.strokeRect(rect.x, rect.y, rect.width, rect.height, theme.border, config.scaledUiOutlineThicknessPx)
       )
 
-  /** Falls back to running `render` unclipped when the surface doesn't support rounded-rect clipping -- content still
-    * draws, just without the corner mask.
-    */
-  private def withOptionalRoundRectClip(
-    surface: RenderSurface,
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int
-  )(render: => Unit): Unit =
-    surface.roundedRects match
-      case Some(rounded) => rounded.withRoundRectClip(x, y, width, height, arcPx)(render)
-      case None          => render
+  /** Falls back to running `render` unclipped when the surface can't clip -- content still draws. */
+  private def withOptionalRectClip(surface: RenderSurface, x: Int, y: Int, width: Int, height: Int)(
+    render: => Unit
+  ): Unit =
+    surface.panelOutlines match
+      case Some(outlines) => outlines.withRectClip(x, y, width, height)(render)
+      case None           => render
 
   private def drawComposition(
     surface: RenderSurface,
@@ -201,20 +167,3 @@ object TextOverlayRenderer:
             case SurfacePaintLayout.Columns     => OverlayRowLayout.Columns
             case SurfacePaintLayout.Distributed => OverlayRowLayout.Distributed
     )
-
-  private def applyGlassSheen(
-    surface: RenderSurface,
-    overlay: TextOverlayView,
-    theme: Theme,
-    config: AppConfig
-  ): Unit =
-    SurfaceMaterials.glassSheenBackground(config, theme).foreach { sheenColor =>
-      val contentRect = overlay.resolvedContentRect
-      val sheenWidth  = contentRect.width
-      val sheenHeight = math.min(1, contentRect.height)
-      if sheenWidth > 0 && sheenHeight > 0 then
-        surface.setBackgroundColor(sheenColor)
-        (0 until sheenHeight).foreach { rowOffset =>
-          CharacterRenderer.renderStringPlain(surface, contentRect.x, contentRect.y + rowOffset, " " * sheenWidth)
-        }
-    }

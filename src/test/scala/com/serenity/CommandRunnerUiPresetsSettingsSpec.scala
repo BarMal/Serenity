@@ -61,7 +61,7 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
       CommandIntent.UiPresets(UiPresetsIntent.ApplyUiPreset("Research Notes"))
     )
     presetPicker.options.headOption.flatMap(_.hint) shouldBe Some(
-      "rich text default; dark; subtle motion; typed text reveal; frosted material; frosted background; spacious density; Serif 18pt prose; 1 editor pane"
+      "rich text default; dark; subtle motion; typed text reveal; spacious density; Serif 18pt prose; 1 editor pane"
     )
     presetPicker.options.takeRight(2).map(_.hint) shouldBe List(
       Some("Saved workspace setup"),
@@ -87,7 +87,6 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
     // `settings-preset-*` ids so they remain addressable as distinct pages.
     val presetScopedGroupIds = List(
       "settings-preset-workspace-layout",
-      "settings-preset-surface-appearance",
       "settings-preset-cursor",
       "settings-preset-animation",
       "settings-preset-prose-font",
@@ -167,9 +166,8 @@ class CommandRunnerUiPresetsSettingsSpec extends AnyFlatSpec with Matchers:
     // issue #1057: this used to also carry a "Theme Selection" child (Theme Chooser/Creator/Toggle/Reload) -- those
     // are one-shot actions with no preset-scoped value of their own, now ordinary CommandRegistry commands
     // (CommandRunnerOneShotActionsSpec), not part of this settings subtree.
-    val surfaceAppearance = groupByIdRecursive(List(editPreset), "settings-preset-surface-appearance")
-    surfaceAppearance.label shouldBe "Surface Appearance"
-    surfaceAppearance.children.map(_.id) should contain allOf ("background-style", "material-preset", "ui-shadows")
+    val cursor = groupByIdRecursive(List(editPreset), "settings-preset-cursor")
+    cursor.children.map(_.id) should contain("cursor-mode")
 
     // issue #1060: Apply/Overwrite/Delete/Reset now pick from the existing-preset catalog instead of requiring a
     // typed exact name -- Duplicate/Rename/Save-As-New still need typed input since each needs a *new* name.

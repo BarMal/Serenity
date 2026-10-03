@@ -152,16 +152,15 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
 
   // issue #1057: Theme Chooser/Creator/Toggle/Reload are one-shot actions with no preset-scoped value of their own,
   // so they are ordinary CommandRegistry commands, not part of this settings subtree.
-  // issue #1058: "Theme & Surface > Surface Material" is gone -- editing a preset's surface appearance now drills
-  // straight into the same canonical Surface Appearance group the top-level Settings screen uses.
-  it should "resolve preset surface appearance submenu as the canonical surface appearance rows" in {
+  // issue #1058: editing a preset drills straight into the same canonical groups the top-level Settings screen uses.
+  it should "resolve the preset cursor submenu as the canonical cursor rows" in {
     val runner = CommandRunner.empty
       .activate(CommandRegistry.default, AppConfig.default)
       .copy(
         surface = CommandRunnerSurface.Settings(drilled =
           Some(
             SettingsSurfaceState(
-              SettingsPage.Group("settings-preset-surface-appearance"),
+              SettingsPage.Group("settings-preset-cursor"),
               List(SettingsPage.Group("settings-preset-edit"), SettingsPage.Group("settings-ui-presets"))
             )
           )
@@ -174,11 +173,7 @@ class SurfaceContentResolverSettingsSurfaceSpec extends AnyFlatSpec with Matcher
       SurfaceRenderMode.Floating
     )
 
-    resolved.rows.flatMap(_.segments.headOption.map(_.text)) shouldBe List(
-      "Background Style",
-      "Material Preset",
-      "Menu & Panel Shadows"
-    )
+    resolved.rows.flatMap(_.segments.headOption.map(_.text)) shouldBe List("Cursor Style")
   }
 
   // issue #1058: "Document Defaults > New Documents/Markdown Preview/Spelling" is gone -- editing a preset's document

@@ -84,9 +84,6 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withFocusedTextBody(true)
     .withContextualToolbarEnabled(false)
     .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
-    .withBlurRadius(0.42f)
-    .withBackgroundStyle(BackgroundStyle.Solid)
-    .withUiShadowsEnabled(false)
     .withCommandRunnerVisibleRows(Some(11))
     .withCommandRunnerItemGapRows(Some(1.5))
     .withCommandRunnerCursorGapRows(Some(2.0))
@@ -112,7 +109,6 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withShowAllSettingsRegardlessOfMode(true)
     .withInterfaceDensity(InterfaceDensity.Compact)
     .withUiElementGap(Some(2.0))
-    .withUiCornerRadiusPx(6)
     .withUiOutlineThicknessPx(3)
     .withTextAreaLeftInset(12.0)
     .withTextAreaRightInset(13.0)
@@ -121,7 +117,6 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withMinimumPaneWidth(24)
     .withWindowChromeMode(WindowChromeMode.Native)
     .withWindowTranslucent(Some(false))
-    .withMaterialPreset(MaterialPreset.Clear)
     .withCharacterAnimation(AnimationConfig(steps = 9, totalDuration = 210.milliseconds))
     .withFontConfig(
       FontConfig(

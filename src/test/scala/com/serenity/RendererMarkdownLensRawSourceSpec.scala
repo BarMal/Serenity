@@ -299,7 +299,7 @@ class RendererMarkdownLensRawSourceSpec extends AnyFlatSpec with Matchers:
       com.serenity.state.manager.RenderCaches.create()
     )
 
-    surface.strokeRoundRectCalls shouldBe empty
+    surface.strokeRectCalls shouldBe empty
   }
 
   it should "reveal only a thematic break when the caret is on it" in {

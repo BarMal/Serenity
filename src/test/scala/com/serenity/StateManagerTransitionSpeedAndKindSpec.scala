@@ -413,23 +413,6 @@ class StateManagerTransitionSpeedAndKindSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync().persisted.config.uiElementGap shouldBe Some(3)
   }
 
-  it should "update the UI corner radius config" in {
-    val stateManager = createStateManager()
-
-    stateManager
-      .executeCommand(
-        Command.typed(
-          "ui-corner-radius",
-          "Set UI corner radius",
-          CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiCornerRadiusPx(14))),
-          CommandCategory.Settings
-        )
-      )
-      .unsafeRunSync()
-
-    stateManager.getCurrentState.unsafeRunSync().persisted.config.uiCornerRadiusPx shouldBe 14
-  }
-
   it should "update the UI outline thickness config" in {
     val stateManager = createStateManager()
 

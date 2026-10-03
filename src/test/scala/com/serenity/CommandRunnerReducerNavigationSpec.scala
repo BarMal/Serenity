@@ -138,63 +138,12 @@ class CommandRunnerReducerNavigationSpec extends AnyFlatSpec with Matchers:
       .shouldBe(Some("Standard"))
   }
 
-  it should "adjust the selected background style inside the surface appearance submenu with left and right" in {
-    val registry          = CommandRegistry.default
-    given CommandRegistry = registry
-    // "settings-surface-appearance" nests one level under the top-level "settings-appearance-motion" group, so it's
-    // reached directly here rather than through withSelectedItem/enterSelectedGroup (which only resolve a top-level
-    // selection) -- this test is about adjustSelectedSubmenuOption's Left/Right behavior once inside a group, not
-    // about the navigation path to reach it.
-    val runner = CommandRunner.empty
-      .activate(registry, AppConfig.default)
-      .openSettings
-      .withDrilledSettingsSurface(SettingsSurfaceState(SettingsPage.Group("settings-surface-appearance")))
-    val surface = UiSurface(
-      SurfaceId("command-runner"),
-      SurfaceContent.CommandPalette(runner),
-      SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
-    )
-    val state = AppState(
-      persisted = Persisted(
-        layout = Layout.empty,
-        buffers = Map.empty,
-        focus = Focus.Surface(surface.id)
-      ),
-      runtime = Runtime(uiSurfaces = List(surface))
-    )
-
-    val movedLeft = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Left), state, registry)
-    val runnerAfterLeft = movedLeft.state.commandRunnerSurface
-      .flatMap {
-        _.content match
-          case SurfaceContent.CommandPalette(updatedRunner) => Some(updatedRunner)
-          case _                                            => None
-      }
-      .getOrElse(fail("Expected command runner surface"))
-
-    runnerAfterLeft
-      .submenuItems("settings-surface-appearance")
-      .collectFirst {
-        case option: CommandSurfaceItem.OptionItem if option.id == "background-style" => option.selectedOption
-      }
-      .shouldBe(Some("Transparent"))
-
-    val movedRight = CommandRunnerReducer.reduce(RunnerNavigate(Direction.Right), movedLeft.state, registry)
-    movedRight.effects.exists {
-      case AppEffect.ExecuteCommand(command) =>
-        command.intent == CommandIntent.Settings(
-          SettingsIntent.General(GeneralSettingsIntent.SetBackgroundStyle(BackgroundStyle.Frosted))
-        )
-      case _ =>
-        false
-    } shouldBe true
-  }
-
   it should "adjust the selected interface density inside the interface layout submenu" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    // "settings-interface-layout" nests one level under the top-level "settings-appearance-motion" group -- see the
-    // same note on the background-style test above.
+    // "settings-interface-layout" nests one level under a top-level group, so it's reached directly here rather than
+    // through withSelectedItem/enterSelectedGroup (which only resolve a top-level selection) -- this test is about
+    // adjustSelectedSubmenuOption's Left/Right behavior once inside a group, not about the navigation path to reach it.
     val runner = CommandRunner.empty
       .activate(registry, AppConfig.default)
       .openSettings

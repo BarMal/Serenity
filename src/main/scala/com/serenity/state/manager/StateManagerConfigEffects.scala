@@ -319,8 +319,6 @@ final private[manager] class StateManagerConfigEffects(
         updateAppearanceConfig(_.withCommandRunnerShowKeyHints(enabled)).void
       case InterfaceChromeIntent.SetUiElementGap(gap) =>
         updateAppearanceConfig(_.withUiElementGap(Some(gap))).void
-      case InterfaceChromeIntent.SetUiCornerRadiusPx(radius) =>
-        updateAppearanceConfig(_.withUiCornerRadiusPx(radius)).void
       case InterfaceChromeIntent.SetUiOutlineThicknessPx(thickness) =>
         updateAppearanceConfig(_.withUiOutlineThicknessPx(thickness)).void
       case InterfaceChromeIntent.SetInterfaceDensity(density) =>
@@ -380,18 +378,10 @@ final private[manager] class StateManagerConfigEffects(
         }
       case GeneralSettingsIntent.SaveConfig =>
         persistConfigFile(state.persisted.config)
-      case GeneralSettingsIntent.SetMaterialPreset(preset) =>
-        updateAppearanceConfig(_.withMaterialPreset(preset)).void
-      case GeneralSettingsIntent.SetUiShadowsEnabled(enabled) =>
-        updateAppearanceConfig(_.withUiShadowsEnabled(enabled)).void
       case GeneralSettingsIntent.SetRenderFpsTarget(target) =>
         updateAppearanceConfig(_.withRenderFpsTarget(target)).void
       case GeneralSettingsIntent.SetRenderDamageGranularity(granularity) =>
         updateAppearanceConfig(_.withRenderDamageGranularity(granularity)).void
-      case GeneralSettingsIntent.SetBackgroundStyle(style) =>
-        updateAppearanceConfig(_.withBackgroundStyle(style)).void
-      case GeneralSettingsIntent.SetBlurRadius(r) =>
-        updateAppearanceConfig(_.withBlurRadius(r)).void
       case GeneralSettingsIntent.SetAnimationDuration(ms) =>
         updateCustomMotionConfig(withEditorTextAnimationDuration(_, ms)).void
       case GeneralSettingsIntent.SetAnimationSteps(n) =>

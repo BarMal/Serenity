@@ -9,9 +9,9 @@ import com.serenity.ui.layout.{CellMetrics, PixelRect, TextLayoutSnapshot}
 import com.serenity.ui.renderer.{
   Effects,
   HardwareCursor,
+  PanelOutlineDrawing,
   PixelDrawing,
   RenderSurface,
-  RoundedRectDrawing,
   SurfaceContentIdentity,
   TextDrawing
 }
@@ -40,13 +40,13 @@ class MockRenderSurface(
     with TextDrawing
     with PixelDrawing
     with Effects
-    with RoundedRectDrawing:
+    with PanelOutlineDrawing:
 
-  def text: TextDrawing                                 = this
-  def pixels: PixelDrawing                              = this
-  override def effects: Option[Effects]                 = Some(this)
-  override def roundedRects: Option[RoundedRectDrawing] = Some(this)
-  override def hardwareCursor: Option[HardwareCursor]   = hardwareCursorOverride
+  def text: TextDrawing                                   = this
+  def pixels: PixelDrawing                                = this
+  override def effects: Option[Effects]                   = Some(this)
+  override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
+  override def hardwareCursor: Option[HardwareCursor]     = hardwareCursorOverride
   final case class PixelTranslationCall(xPx: Double, yPx: Double)
   private val pixelTranslationCallsBuffer = scala.collection.mutable.ListBuffer.empty[PixelTranslationCall]
   private val currentPixelTranslation     = AtomicReference(PixelTranslationCall(0.0, 0.0))
@@ -211,63 +211,31 @@ class MockRenderSurface(
       CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12)).toPixelY(row)
     }
 
-  final case class StrokeRoundRectCall(x: Int, y: Int, w: Int, h: Int, arcPx: Int, color: Color, strokeWidth: Float)
-  private val strokeRoundRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[StrokeRoundRectCall]
-  final case class RoundRectShadowCall(rect: com.serenity.ui.layout.LayoutRect, arcPx: Int, color: Color)
-  private val roundRectShadowCallsBuffer = scala.collection.mutable.ListBuffer.empty[RoundRectShadowCall]
-  final case class BlurRegionCall(x: Int, y: Int, width: Int, height: Int, radius: Float)
-  private val blurRegionCallsBuffer        = scala.collection.mutable.ListBuffer.empty[BlurRegionCall]
-  private val blurRegionTranslationsBuffer = scala.collection.mutable.ListBuffer.empty[PixelTranslationCall]
+  final case class StrokeRectCall(x: Int, y: Int, w: Int, h: Int, color: Color, strokeWidth: Float)
+  private val strokeRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[StrokeRectCall]
   final case class FillPixelRectCall(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color)
   final case class DrawImageCall(image: BufferedImage, x: Int, y: Int, width: Int, height: Int)
   private val fillPixelRectCallsBuffer = scala.collection.mutable.ListBuffer.empty[FillPixelRectCall]
   private val drawImageCallsBuffer     = scala.collection.mutable.ListBuffer.empty[DrawImageCall]
   private val alphaCallsBuffer         = scala.collection.mutable.ListBuffer.empty[Float]
 
-  override def strokeRoundRect(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int,
-    color: Color,
-    strokeWidth: Float = 1.5f
-  ): Unit =
-    strokeRoundRectCallsBuffer += StrokeRoundRectCall(x, y, width, height, arcPx, color, strokeWidth)
+  override def strokeRect(x: Int, y: Int, width: Int, height: Int, color: Color, strokeWidth: Float): Unit =
+    strokeRectCallsBuffer += StrokeRectCall(x, y, width, height, color, strokeWidth)
 
-  def strokeRoundRectCalls: List[StrokeRoundRectCall] = strokeRoundRectCallsBuffer.toList
+  def strokeRectCalls: List[StrokeRectCall] = strokeRectCallsBuffer.toList
 
-  override def drawRoundRectShadow(x: Int, y: Int, width: Int, height: Int, arcPx: Int, color: Color): Unit =
-    roundRectShadowCallsBuffer += RoundRectShadowCall(
-      com.serenity.ui.layout.LayoutRect(x, y, width, height),
-      arcPx,
-      color
-    )
+  final case class RectClipCall(x: Int, y: Int, width: Int, height: Int)
+  private val rectClipCallsBuffer = scala.collection.mutable.ListBuffer.empty[RectClipCall]
 
-  def roundRectShadowCalls: List[RoundRectShadowCall] = roundRectShadowCallsBuffer.toList
-
-  final case class RoundRectClipCall(x: Int, y: Int, width: Int, height: Int, arcPx: Int)
-  private val roundRectClipCallsBuffer = scala.collection.mutable.ListBuffer.empty[RoundRectClipCall]
-
-  override def withRoundRectClip(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int
-  )(render: => Unit): Unit =
-    roundRectClipCallsBuffer += RoundRectClipCall(x, y, width, height, arcPx)
+  override def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
+    rectClipCallsBuffer += RectClipCall(x, y, width, height)
     render
 
-  def roundRectClipCalls: List[RoundRectClipCall] = roundRectClipCallsBuffer.toList
+  def rectClipCalls: List[RectClipCall] = rectClipCallsBuffer.toList
 
   override def setAlpha(alpha: Float): Unit =
     currentAlpha.set(alpha)
     alphaCallsBuffer += alpha
-
-  override def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
-    blurRegionCallsBuffer += BlurRegionCall(x, y, width, height, radius)
-    blurRegionTranslationsBuffer += currentPixelTranslation.get()
 
   override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit =
     fillPixelRectCallsBuffer += FillPixelRectCall(xPx, yPx, widthPx, heightPx, color)
@@ -275,15 +243,13 @@ class MockRenderSurface(
   override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
     drawImageCallsBuffer += DrawImageCall(image, x, y, width, height)
 
-  def currentAlphaValue: Float                           = currentAlpha.get()
-  def blurRegionCalls: List[BlurRegionCall]              = blurRegionCallsBuffer.toList
-  def blurRegionTranslations: List[PixelTranslationCall] = blurRegionTranslationsBuffer.toList
-  def fillPixelRectCalls: List[FillPixelRectCall]        = fillPixelRectCallsBuffer.toList
-  def drawImageCalls: List[DrawImageCall]                = drawImageCallsBuffer.toList
-  def alphaCalls: List[Float]                            = alphaCallsBuffer.toList
-  def putStringCalls: List[PutStringCall]                = putStringCallsBuffer.toList
-  def putStringPixelYCalls: List[PutStringPixelYCall]    = putStringPixelYCallsBuffer.toList
-  def pixelTranslationCalls: List[PixelTranslationCall]  = pixelTranslationCallsBuffer.toList
+  def currentAlphaValue: Float                          = currentAlpha.get()
+  def fillPixelRectCalls: List[FillPixelRectCall]       = fillPixelRectCallsBuffer.toList
+  def drawImageCalls: List[DrawImageCall]               = drawImageCallsBuffer.toList
+  def alphaCalls: List[Float]                           = alphaCallsBuffer.toList
+  def putStringCalls: List[PutStringCall]               = putStringCallsBuffer.toList
+  def putStringPixelYCalls: List[PutStringPixelYCall]   = putStringPixelYCallsBuffer.toList
+  def pixelTranslationCalls: List[PixelTranslationCall] = pixelTranslationCallsBuffer.toList
 
   def enableStyle(style: TextStyle): Unit =
     styleCallsBuffer += StyleCall("enable", style)
@@ -324,11 +290,8 @@ class MockRenderSurface(
     putStringCallsBuffer.clear()
     putStringPixelYCallsBuffer.clear()
     pixelTranslationCallsBuffer.clear()
-    strokeRoundRectCallsBuffer.clear()
-    roundRectShadowCallsBuffer.clear()
-    roundRectClipCallsBuffer.clear()
-    blurRegionCallsBuffer.clear()
-    blurRegionTranslationsBuffer.clear()
+    strokeRectCallsBuffer.clear()
+    rectClipCallsBuffer.clear()
     fillPixelRectCallsBuffer.clear()
     drawImageCallsBuffer.clear()
     alphaCallsBuffer.clear()

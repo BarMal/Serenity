@@ -25,14 +25,13 @@ class InteractionStatesSpec extends AnyFlatSpec with Matchers:
       states.pressed should not be states.disabled
     }
 
-  it should "leave hover/pressed's foreground, style, and alpha untouched -- only the background shifts" in
+  it should "leave hover/pressed's foreground and style untouched -- only the background shifts" in
     themes.foreach { theme =>
       val base   = theme.menuItem
       val states = theme.interactionStates
 
       states.hover.foreground shouldBe base.foreground
       states.hover.style shouldBe base.style
-      states.hover.alpha shouldBe base.alpha
       states.pressed.foreground shouldBe base.foreground
       states.pressed.style shouldBe base.style
     }

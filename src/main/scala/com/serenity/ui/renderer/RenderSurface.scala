@@ -64,18 +64,15 @@ trait RenderSurface:
     */
   def pixels: PixelDrawing
 
-  /** Alpha compositing and region blur, when this surface supports them. `None` means callers must skip the effect
-    * rather than assume it happened.
+  /** Alpha compositing, when this surface supports it. `None` means callers must skip the effect rather than assume it
+    * happened.
     */
   def effects: Option[Effects] = None
 
-  /** Rounded-rectangle borders, shadows, and clipping, when this surface supports them. `None` means callers must fall
-    * back to drawing without that chrome rather than assume it happened.
+  /** Panel borders and rectangular clipping, when this surface supports them. `None` means callers must fall back to
+    * drawing without that chrome rather than assume it happened.
     */
-  def roundedRects: Option[RoundedRectDrawing] = None
-
-  /** A panel's shadow and body painted together, when this surface can composite them more cheaply than separately. */
-  def panelBodies: Option[PanelBodyDrawing] = None
+  def panelOutlines: Option[PanelOutlineDrawing] = None
 
   /** Delegating the caret to this surface's own native cursor, when it has one. `None` means every caret this surface
     * draws is app-painted content -- the default, and what every GUI canvas keeps doing.

@@ -26,12 +26,10 @@ object RendererFloatingPanels:
   ): Unit =
     context.surface.text.setFont(context.uiFont)
     val overlays     = OverlayViewModel.fromState(state, scene)
-    val blurRadius   = SurfaceMaterials.effectiveBlurRadius(state.persisted.config)
-    val panelIsDirty = RendererFramePlanner.panelDirtyCheck(damage, blurRadius)
+    val panelIsDirty = RendererFramePlanner.panelDirtyCheck(damage)
 
     def paintOverlay(overlay: TextOverlayView): Unit =
       def paint(layerContext: RenderContext): Unit =
-        if blurRadius > 0f then renderFloatingBackdrop(overlay, blurRadius, state.persisted.config, layerContext)
         TextOverlayRenderer.render(
           layerContext.surface,
           overlay,
@@ -74,48 +72,13 @@ object RendererFloatingPanels:
     val topPx  = cellMetrics.toPixelY(rect.y)
     PixelRect(leftPx, topPx, cellMetrics.toPixelX(rect.right) - leftPx, cellMetrics.toPixelY(rect.bottom) - topPx)
 
-  private def renderFloatingBackdrop(
-    overlay: TextOverlayView,
-    blurRadius: Float,
-    config: com.serenity.config.AppConfig,
-    context: RenderContext
+  /** Falls back to running `render` unclipped when the surface can't clip -- content still draws. */
+  private def withOptionalRectClip(surface: RenderSurface, x: Int, y: Int, width: Int, height: Int)(
+    render: => Unit
   ): Unit =
-    val offsetPx = FloatingSurfaceGeometry.signedRowOffsetPixels(overlay.verticalOffsetRows, context.cellMetrics)
-    context.surface.pixels.withPixelTranslation(0.0, offsetPx) {
-      withOptionalRoundRectClip(
-        context.surface,
-        overlay.rect.x,
-        overlay.rect.y,
-        overlay.rect.width,
-        overlay.rect.height,
-        config.scaledUiCornerRadiusPx
-      ) {
-        context.surface.effects.foreach(
-          _.blurRegion(
-            overlay.rect.x,
-            overlay.rect.y,
-            overlay.rect.width,
-            overlay.rect.height,
-            blurRadius
-          )
-        )
-      }
-    }
-
-  /** Falls back to running `render` unclipped when the surface doesn't support rounded-rect clipping -- content still
-    * draws, just without the corner mask.
-    */
-  private def withOptionalRoundRectClip(
-    surface: RenderSurface,
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    arcPx: Int
-  )(render: => Unit): Unit =
-    surface.roundedRects match
-      case Some(rounded) => rounded.withRoundRectClip(x, y, width, height, arcPx)(render)
-      case None          => render
+    surface.panelOutlines match
+      case Some(outlines) => outlines.withRectClip(x, y, width, height)(render)
+      case None           => render
 
   /** Panel scale-in/out (issue #1085 phase 1): a new render step alongside the existing colour-cell motion model
     * (`ElementTransitionLowerer`/`AnimatedCell`, which never touches geometry). Reads `surfaceId`'s in-flight
@@ -123,7 +86,7 @@ object RendererFloatingPanels:
     * constraining the panel's already-computed content -- laid out for its full, final rect either way -- to whatever
     * fraction of that rect the animation has grown or shrunk to so far. A no-op once the geometry is gone (not
     * animating, or the family is disabled), or when the surface can't clip at all (falls through to
-    * [[withOptionalRoundRectClip]]'s own unclipped fallback).
+    * [[withOptionalRectClip]]'s own unclipped fallback).
     */
   private def withPanelGeometryClip(state: AppState, surfaceId: SurfaceId, context: RenderContext)(
     render: => Unit
@@ -131,9 +94,8 @@ object RendererFloatingPanels:
     state.runtime.motion.panelGeometry.get(surfaceId) match
       case None => render
       case Some(geometry) =>
-        val rect  = geometry.currentRect
-        val arcPx = state.persisted.config.scaledUiCornerRadiusPx
-        withOptionalRoundRectClip(context.surface, rect.x, rect.y, rect.width, rect.height, arcPx)(render)
+        val rect = geometry.currentRect
+        withOptionalRectClip(context.surface, rect.x, rect.y, rect.width, rect.height)(render)
 
   private val ModalBackdropEffect = LayerEffect(0.4f)
 
@@ -172,13 +134,9 @@ object RendererFloatingPanels:
     val surfaceNodes = scene.workspace.collect {
       case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) => surfaceId -> node
     }.toMap
-    val blurRadius = SurfaceMaterials.effectiveBlurRadius(state.persisted.config)
     pinnedAndExpandedSurfaces(state).foreach { surface =>
       surfaceNodes.get(surface.id).foreach { node =>
-        val rect              = node.frameRect
-        val backdropIsCleared = PanelBackdrop.isClearedBackground(scene, surface.id, rect)
-        val panelBlurRadius   = if backdropIsCleared then 0f else blurRadius
-        val opaqueBeneath = Option.when(backdropIsCleared)(state.persisted.theme.background).filter(_.getAlpha == 255)
+        val rect = node.frameRect
         val animationState =
           state.runtime.motion.surfaceAnimations
             .get(surface.id)
@@ -186,8 +144,6 @@ object RendererFloatingPanels:
             .getOrElse(com.serenity.animation.AnimationState.empty)
 
         def paintContent(layerContext: RenderContext): Unit =
-          if panelBlurRadius > 0f then
-            layerContext.surface.effects.foreach(_.blurRegion(rect.x, rect.y, rect.width, rect.height, panelBlurRadius))
           surface.content match
             case SurfaceContent.MarkdownPreview(bufferId, title) =>
               renderMarkdownPreviewPanel(
@@ -197,11 +153,10 @@ object RendererFloatingPanels:
                 node.contentRect,
                 state,
                 layerContext,
-                animationState,
-                opaqueBeneath
+                animationState
               )
             case SurfaceContent.CompanionSprite =>
-              renderCompanionSpritePanel(rect, node.contentRect, state, layerContext, animationState, opaqueBeneath)
+              renderCompanionSpritePanel(rect, node.contentRect, state, layerContext, animationState)
             case _ =>
               PinnedPanelRenderer.render(
                 layerContext.surface,
@@ -211,14 +166,13 @@ object RendererFloatingPanels:
                 state.persisted.theme,
                 state.persisted.config,
                 layerContext.cellMetrics,
-                animationState,
-                opaqueBeneath
+                animationState
               )
 
         def paint(layerContext: RenderContext): Unit =
           withPanelGeometryClip(state, surface.id, layerContext)(paintContent(layerContext))
 
-        val isDirty = RendererFramePlanner.panelDirtyCheck(damage, panelBlurRadius)(surface.id)
+        val isDirty = RendererFramePlanner.panelDirtyCheck(damage)(surface.id)
         RendererFramePlanner.paintPanelLayer(state, context, surface.id, rect, isDirty)(paint)
       }
     }
@@ -239,8 +193,7 @@ object RendererFloatingPanels:
     contentRect: LayoutRect,
     state: AppState,
     context: RenderContext,
-    animationState: com.serenity.animation.AnimationState,
-    opaqueBeneath: Option[java.awt.Color]
+    animationState: com.serenity.animation.AnimationState
   ): Unit =
     val shell = TextPanelView(rect = rect, contentRect = Some(contentRect), title = s"Preview: $title", rows = Nil)
     PinnedPanelRenderer.render(
@@ -249,8 +202,7 @@ object RendererFloatingPanels:
       state.persisted.theme,
       state.persisted.config,
       context.cellMetrics,
-      animationState,
-      opaqueBeneath
+      animationState
     )
 
     val imageRect          = markdownPreviewImageRect(rect, contentRect, context)
@@ -296,8 +248,7 @@ object RendererFloatingPanels:
     contentRect: LayoutRect,
     state: AppState,
     context: RenderContext,
-    animationState: com.serenity.animation.AnimationState,
-    opaqueBeneath: Option[java.awt.Color]
+    animationState: com.serenity.animation.AnimationState
   ): Unit =
     val shell = TextPanelView(rect = rect, contentRect = Some(contentRect), title = "Companion", rows = Nil)
     PinnedPanelRenderer.render(
@@ -306,8 +257,7 @@ object RendererFloatingPanels:
       state.persisted.theme,
       state.persisted.config,
       context.cellMetrics,
-      animationState,
-      opaqueBeneath
+      animationState
     )
 
     if state.persisted.config.visualFlairLevel != VisualFlairLevel.Off then
