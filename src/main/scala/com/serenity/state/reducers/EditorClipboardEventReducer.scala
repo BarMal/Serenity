@@ -47,8 +47,7 @@ private[reducers] object EditorClipboardEventReducer:
           persisted = currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updated)),
           runtime = currentState.runtime.copy(clipboard = Some(selectedTexts(buffer).mkString("\n")))
         ),
-        animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits) ++
-          undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+        undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
       )
     else
       val targetLines = distinctCursorLines(buffer)
@@ -60,8 +59,7 @@ private[reducers] object EditorClipboardEventReducer:
           persisted = currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updated)),
           runtime = currentState.runtime.copy(clipboard = Some(clipboardText))
         ),
-        animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits) ++
-          undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+        undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
       )
 
   private def reducePaste(ctx: CursorEventContext): ReducerResult =
@@ -71,8 +69,7 @@ private[reducers] object EditorClipboardEventReducer:
       val (updated, edits) = f(buffer)
       ReducerResult(
         Focused.replaceBuffer(currentState, updated),
-        animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits) ++
-          undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+        undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
       )
 
     currentState.runtime.clipboard.filter(_.nonEmpty) match
@@ -85,7 +82,7 @@ private[reducers] object EditorClipboardEventReducer:
         val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(buffer, head, text)
         val replacedCursor                    = replacedBuffer.editing.cursors.head
         val newCursor                         = replacedCursor.position
-        val withoutAnimations = buffer.copy(
+        val updatedBuffer = buffer.copy(
           document = buffer.document.copy(
             content = replacedBuffer.document.content,
             isDirty = replacedBuffer.document.isDirty,
@@ -97,17 +94,7 @@ private[reducers] object EditorClipboardEventReducer:
           annotations = replacedBuffer.annotations,
           richText = replacedBuffer.richText
         )
-        val (updatedBuffer, delta) = addInsertionAnimations(withoutAnimations, currentState, List(replacementEdit))
-        val edits                  = List(replacementEdit)
-        val effects =
-          animationRemapEffects(
-            buffer.id,
-            buffer.document.content,
-            updatedBuffer.document.content,
-            edits
-          ) ++
-            animationMergeEffects(buffer.id, delta) ++
-            undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+        val effects = undoBoundaryEffects(buffer.id, paneId, buffer, List(replacementEdit), groupable = false)
         ReducerResult(
           currentState.copy(persisted =
             currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))
@@ -135,8 +122,7 @@ private[reducers] object EditorClipboardEventReducer:
         currentState.copy(persisted =
           currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> withDarling))
         ),
-        animationRemapEffects(buffer.id, buffer.document.content, withDarling.document.content, edits) ++
-          undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+        undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
       )
     else ReducerResult.noEffects(currentState)
 
@@ -152,7 +138,7 @@ private[reducers] object EditorClipboardEventReducer:
         val (replacedBuffer, replacementEdit) = replaceSelectionOrInsert(bufferWithoutDarling, head, mostRecent.text)
         val replacedCursor                    = replacedBuffer.editing.cursors.head
         val newCursor                         = replacedCursor.position
-        val withoutAnimations = bufferWithoutDarling.copy(
+        val updatedBuffer = bufferWithoutDarling.copy(
           document = bufferWithoutDarling.document.copy(
             content = replacedBuffer.document.content,
             isDirty = replacedBuffer.document.isDirty,
@@ -164,12 +150,7 @@ private[reducers] object EditorClipboardEventReducer:
           annotations = replacedBuffer.annotations,
           richText = replacedBuffer.richText
         )
-        val (updatedBuffer, delta) = addInsertionAnimations(withoutAnimations, currentState, List(replacementEdit))
-        val edits                  = List(replacementEdit)
-        val effects =
-          animationRemapEffects(buffer.id, buffer.document.content, updatedBuffer.document.content, edits) ++
-            animationMergeEffects(buffer.id, delta) ++
-            undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+        val effects = undoBoundaryEffects(buffer.id, paneId, buffer, List(replacementEdit), groupable = false)
         ReducerResult(
           currentState.copy(persisted =
             currentState.persisted.copy(buffers = currentState.persisted.buffers + (buffer.id -> updatedBuffer))

@@ -171,7 +171,7 @@ object CommandRunnerSettingsGroups:
     val cursorGroup = group(
       "settings-cursor",
       "Cursor",
-      "Blink or breathe",
+      "Caret style",
       List(CommandRunnerSettingsCursorItems.cursorModeOptionItem(optionSelections))
     )
     val lookAdvancedGroup = group(

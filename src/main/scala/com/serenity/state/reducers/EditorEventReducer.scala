@@ -289,22 +289,16 @@ object EditorEventReducer:
         val buffer      = fresh.copy(document = fresh.document.copy(isDirty = true, isNewEmpty = false))
         val newCursor   = CursorPosition(0, 1)
         val updatedPane = pane.copy(bufferId = Some(bufferId), cursors = List(newCursor))
-        val (bufferWithAnimation, delta) = EditorEditSupport.addInsertionAnimations(
-          buffer,
-          currentState,
-          List(EditorEditSupport.MultiCursorEdit(0, 0, 0, char.toString))
-        )
-        ReducerResult(
+        ReducerResult.noEffects(
           currentState.copy(
             persisted = currentState.persisted.copy(
-              buffers = currentState.persisted.buffers + (bufferId -> bufferWithAnimation),
+              buffers = currentState.persisted.buffers + (bufferId -> buffer),
               layout = currentState.persisted.layout.copy(
                 editorPanes = currentState.persisted.layout.editorPanes + (paneId -> updatedPane)
               )
             ),
             runtime = currentState.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
-          ),
-          EditorEditSupport.animationMergeEffects(bufferId, delta)
+          )
         )
 
       case TabKey =>

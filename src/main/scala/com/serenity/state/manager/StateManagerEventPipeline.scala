@@ -1,7 +1,6 @@
 package com.serenity.state.manager
 
 import cats.syntax.foldable.*
-import com.serenity.animation.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.diagnostics.Trace
 import com.serenity.keystroke.events.*
@@ -284,8 +283,6 @@ final private[manager] class StateManagerEventPipeline(
     val registry = CommandRegistry.withToggleUI
     def result   = AppEventReducer.reduce(event, prevState, registry)(using balance)
     def reduced  = applyReducerResult(result, prevState)
-    def tabCycled(sweep: SweepDirection) =
-      commitReducerResult(result, prevState, EventPipelineTransitions.withPaneFlow(_, sweep))
     event match
       case CloseTab => beginCloseAction(CloseScope.Current, prevState)
       case Quit     => beginCloseAction(CloseScope.Quit, prevState)
@@ -300,10 +297,8 @@ final private[manager] class StateManagerEventPipeline(
             EventPipelineTransitions.withCommandRunnerUiPresetPreviews(_, previews)
           )
         yield ()
-      case NextTab     => tabCycled(SweepDirection.Backward)
-      case PreviousTab => tabCycled(SweepDirection.Forward)
-      case ToggleContextualToolbar | ToggleShortcutsHelp | ToggleTabList | ToggleRecentFilesInMode | NewTab |
-          FileSearch | GoToFile | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane |
+      case ToggleContextualToolbar | ToggleShortcutsHelp | ToggleTabList | ToggleRecentFilesInMode | NewTab | NextTab |
+          PreviousTab | FileSearch | GoToFile | TogglePanel(_) | SplitPaneHorizontal | SplitPaneVertical | ClosePane |
           _: CloseTabById | MoveTabLeft | MoveTabRight | _: FocusInDirection | ToggleChapterGhosts | OpenChapterNote |
           ToggleNotesPin =>
         reduced

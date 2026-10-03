@@ -135,7 +135,8 @@ given Decoder[FontConfig] = Decoder.instance { cursor =>
 }
 
 given Encoder[CursorMode] = configKeyEncoder(_.configKey)
-given Decoder[CursorMode] = configKeyDecoder("CursorMode", CursorMode.values, _.configKey)
+given Decoder[CursorMode] =
+  Decoder.decodeString.emap(value => CursorMode.fromConfigKey(value).toRight(s"Unknown CursorMode: $value"))
 
 given Encoder[StatusSegment] = configKeyEncoder(_.configKey)
 given Decoder[StatusSegment] = configKeyDecoder("StatusSegment", StatusSegment.values, _.configKey)

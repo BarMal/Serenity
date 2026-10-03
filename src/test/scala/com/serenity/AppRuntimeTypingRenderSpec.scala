@@ -27,16 +27,16 @@ class AppRuntimeTypingRenderSpec extends AnyFlatSpec with Matchers:
     val pinned = typingWith(AppConfig.default.withStatusLinePlacement(StatusLinePlacement.Pinned))
     val hidden = typingWith(AppConfig.default.withStatusLinePlacement(StatusLinePlacement.Off))
 
-    AppRuntimeRenderLoops.needsFullContentRender(pinned, Map.empty) shouldBe false
-    AppRuntimeRenderLoops.hasActiveAnimations(pinned, Map.empty) shouldBe false
-    AppRuntimeRenderLoops.needsFullContentRender(hidden, Map.empty) shouldBe false
+    AppRuntimeRenderLoops.needsFullContentRender(pinned) shouldBe false
+    AppRuntimeRenderLoops.hasActiveAnimations(pinned) shouldBe false
+    AppRuntimeRenderLoops.needsFullContentRender(hidden) shouldBe false
   }
 
   it should "count typing activity while it holds the floating status line hidden" in {
     val typing = typingWith(floating)
 
-    AppRuntimeRenderLoops.needsFullContentRender(typing, Map.empty) shouldBe true
-    AppRuntimeRenderLoops.hasActiveAnimations(typing, Map.empty) shouldBe true
+    AppRuntimeRenderLoops.needsFullContentRender(typing) shouldBe true
+    AppRuntimeRenderLoops.hasActiveAnimations(typing) shouldBe true
   }
 
   it should "not count a floating status line with no typing burst in progress" in {
@@ -45,5 +45,5 @@ class AppRuntimeTypingRenderSpec extends AnyFlatSpec with Matchers:
       settled.runtime.copy(typingActivity = settled.runtime.typingActivity.advance(Long.MaxValue))
     )
 
-    AppRuntimeRenderLoops.needsFullContentRender(idle, Map.empty) shouldBe false
+    AppRuntimeRenderLoops.needsFullContentRender(idle) shouldBe false
   }

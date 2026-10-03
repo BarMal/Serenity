@@ -88,7 +88,7 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
     ConfigManager.configToString(config) should include("editor.cursor.inactive_color = \"#CC663380\"")
   }
 
-  it should "load and write cursor mode" in {
+  it should "load a breathe cursor mode as blink and write it back as blink" in {
     val configFile = Files.createTempFile("serenity-cursor-mode-config", ".conf")
     Files.writeString(
       configFile,
@@ -98,8 +98,8 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
-    config.cursorMode shouldBe CursorMode.Breathe
-    ConfigManager.configToString(config) should include("editor.cursor.mode = breathe")
+    config.cursorMode shouldBe CursorMode.Blink
+    ConfigManager.configToString(config) should include("editor.cursor.mode = blink")
   }
 
   it should "load and write cursor information bar mode" in {

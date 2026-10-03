@@ -66,7 +66,6 @@ object RendererEntryPoints:
     cursorColor: Option[java.awt.Color],
     repaintOnFlush: Boolean,
     damage: Damage = Damage.Everything,
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty,
     caches: RenderCaches = RenderCaches.create()
   ): Unit =
     // Set while the frame is drawn, read when it is flushed: None asks for a whole-canvas repaint, Some(rect) for a
@@ -110,7 +109,6 @@ object RendererEntryPoints:
         cursorColor,
         output,
         damage,
-        bufferAnimations,
         caches
       )
     }

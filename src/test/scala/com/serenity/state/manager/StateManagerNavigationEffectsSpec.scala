@@ -2,10 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
-import com.serenity.animation.{AnimationConfig, AnimationOwner}
 import com.serenity.command.{CommentsIntent, NavigationIntent}
-import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.MotionPreset
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.AppEffect
@@ -23,7 +20,6 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
 
   final private class Harness(
       val stateRef: Ref[IO, AppState],
-      val bufferAnimationsRef: Ref[IO, Map[BufferId, com.serenity.animation.AnimationState]],
       val nav: StateManagerNavigationEffects
   ):
     def currentState: AppState = stateRef.get.unsafeRunSync()
@@ -31,17 +27,12 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
 
   private def harness(initialState: AppState): Harness =
     val stateRef = Ref.of[IO, AppState](initialState).unsafeRunSync()
-    val bufferAnimationsRef =
-      Ref.of[IO, Map[BufferId, com.serenity.animation.AnimationState]](Map.empty).unsafeRunSync()
     val validateAndUpdateState: (AppState, AppState) => IO[Unit] =
       (newState, fallbackState) => stateRef.set(AppStateValidation.validated(newState).getOrElse(fallbackState))
-    val animationEffects = new AnimationEffectHandler(bufferAnimationsRef.update)
     val interpretEffect: AppEffect => IO[Unit] =
-      case AppEffect.Animation(effect) => animationEffects.interpret(effect)
-      case other                       => IO.raiseError(new IllegalStateException(s"unexpected effect $other"))
+      other => IO.raiseError(new IllegalStateException(s"unexpected effect $other"))
     new Harness(
       stateRef,
-      bufferAnimationsRef,
       new StateManagerNavigationEffects(stateRef.get, NoOpLogger.impl[IO], validateAndUpdateState, interpretEffect)
     )
 
@@ -121,23 +112,6 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.nav.interpretNavigation(NavigationIntent.PreviousBookmark).unsafeRunSync()
 
     fixture.currentState.activeCursorPosition shouldBe Some(first)
-  }
-
-  it should "sweep UI transitions across the target buffer after a jump when UI transitions are enabled" in {
-    val first  = CursorPosition(0, 0)
-    val second = CursorPosition(2, 0)
-    val base   = stateWithBuffer("line0\nline1\nline2", cursor = first, bookmarks = List(first, second))
-    val state = base.copy(persisted =
-      base.persisted.copy(config =
-        base.persisted.config.withMotionPreset(MotionPreset.Smooth).withUiAnimation(AnimationConfig.subtle)
-      )
-    )
-    val fixture = harness(state)
-
-    fixture.nav.interpretNavigation(NavigationIntent.NextBookmark).unsafeRunSync()
-
-    val animations = fixture.bufferAnimationsRef.get.unsafeRunSync().get(BufferId(0)).map(_.animations.values)
-    animations.map(_.map(_.owner).toSet) shouldBe Some(Set(AnimationOwner.UiTransitions))
   }
 
   it should "keep the committed state when a transition's result fails validation" in {

@@ -74,7 +74,7 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
   /** A state manager over `initial` made invalid, seeded at construction since every write is validated. */
   private def invalidStateManager(initial: AppState = AppState.initial): IO[(StateManager, Ref[IO, Model], AppState)] =
     for
-      modelRef     <- Ref.of[IO, Model](Model(withStaleBufferOrder(initial), UndoState(), Map.empty))
+      modelRef     <- Ref.of[IO, Model](Model(withStaleBufferOrder(initial), UndoState()))
       stateManager <- stateManagerOver(modelRef)
       seeded       <- stateManager.getCurrentState
     yield (stateManager, modelRef, seeded)
@@ -193,7 +193,7 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
 
   private def pipelineOver(initial: AppState): IO[PipelineRig] =
     for
-      model      <- Ref.of[IO, Model](Model(initial, UndoState(), Map.empty))
+      model      <- Ref.of[IO, Model](Model(initial, UndoState()))
       seen       <- Ref.of[IO, List[AppState]](Nil)
       cacheRef   <- Ref.of[IO, Option[MouseTargetCache]](None)
       operations <- StateManagerOperationBoundary.create(model, quietLogger)

@@ -53,7 +53,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
         wordWrapEnabled = false,
         contextualToolbarEnabled = false
       ),
-      cursorConfig = CursorConfig(mode = CursorMode.Breathe),
+      cursorConfig = CursorConfig(mode = CursorMode.Blink),
       statusLine = StatusLineConfig(List(StatusSegment.Position, StatusSegment.Title), StatusLinePlacement.Pinned),
       documentConfig = DocumentConfig(
         markdownViewMode = MarkdownViewMode.InlineLens,
@@ -85,7 +85,7 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("command-runner-transition") shouldBe 3
     selections("panel-open-transition") shouldBe 3
     selections("panel-close-transition") shouldBe 1
-    selections("cursor-mode") shouldBe 1
+    selections("cursor-mode") shouldBe 0
     selections("status-title") shouldBe 0
     selections("status-position") shouldBe 0
     selections("status-word-count") shouldBe 1

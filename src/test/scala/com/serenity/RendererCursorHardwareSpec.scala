@@ -8,14 +8,10 @@ import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** #1170 left breathe mode as the documented app-painted exception to the hardware cursor -- correct for a GUI canvas,
-  * which really does composite the alpha-modulated caret as content. A cell-addressed terminal surface has no such
-  * content path (`TerminalRenderSurface.fillPixelRect` is necessarily a no-op, see #1012), so that exception left the
-  * caret invisible there for the whole of breathe mode. These pin the TUI-specific fallback: thresholding the
-  * already-computed breathe alpha into hardware-cursor show/hide, so the terminal's own cursor stands in for the
-  * app-painted glyph GUI surfaces use instead.
+/** #1170: on a surface with a hardware cursor (a terminal), the caret is delegated to it -- shown at the editing
+  * position on a visible frame, hidden on a frame whose caret is not visible.
   */
-class RendererBreatheCursorHardwareSpec extends AnyFlatSpec with Matchers:
+class RendererCursorHardwareSpec extends AnyFlatSpec with Matchers:
 
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
@@ -38,7 +34,7 @@ class RendererBreatheCursorHardwareSpec extends AnyFlatSpec with Matchers:
     def presentCallCount: Int = presentCallsBuffer.size
     def hideCallCount: Int    = hideCallsCounter.get()
 
-  private def breatheState(mode: CursorMode = CursorMode.Breathe): AppState =
+  private def editorState(mode: CursorMode = CursorMode.Blink): AppState =
     val buffer =
       Buffer.fromString(bufferId, "hello world").copy(editing = EditingState(List(CursorPosition(0, 3))))
     AppState.initial.copy(
@@ -56,11 +52,11 @@ class RendererBreatheCursorHardwareSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-  private def renderWith(hardwareCursor: HardwareCursor, cursorColor: Option[java.awt.Color]): Unit =
+  private def renderWith(hardwareCursor: HardwareCursor, cursorVisible: Boolean): Unit =
     val surface = new MockRenderSurface(80, 24, persistentContent = true, hardwareCursorOverride = Some(hardwareCursor))
     val _ = com.serenity.ui.renderer.RendererCursorOverlay.renderCursorOnly(
-      breatheState(),
-      cursorVisible = true,
+      editorState(),
+      cursorVisible = cursorVisible,
       surface,
       viewport,
       codeFont,
@@ -68,35 +64,22 @@ class RendererBreatheCursorHardwareSpec extends AnyFlatSpec with Matchers:
       codeFont,
       cellMetrics,
       cellMetrics,
-      cursorColor,
+      None,
       com.serenity.state.manager.RenderCaches.create()
     )
 
-  "Breathe mode on a surface with a hardware cursor" should "show the terminal cursor while the breathe alpha is at or above half brightness" in {
+  "A surface with a hardware cursor" should "show the terminal cursor on a visible frame" in {
     val hardwareCursor = new FakeHardwareCursor
-    renderWith(hardwareCursor, Some(new java.awt.Color(255, 255, 255, 200)))
+    renderWith(hardwareCursor, cursorVisible = true)
 
     hardwareCursor.presentCallCount shouldBe 1
     hardwareCursor.hideCallCount shouldBe 0
   }
 
-  it should "hide the terminal cursor while the breathe alpha is below half brightness" in {
+  it should "hide the terminal cursor on a frame whose caret is not visible" in {
     val hardwareCursor = new FakeHardwareCursor
-    renderWith(hardwareCursor, Some(new java.awt.Color(255, 255, 255, 60)))
+    renderWith(hardwareCursor, cursorVisible = false)
 
     hardwareCursor.presentCallCount shouldBe 0
     hardwareCursor.hideCallCount shouldBe 1
-  }
-
-  /** No colour means no idle frame has run, not a faded caret: only `AppRuntime.computeIdleCursorFrame` supplies one,
-    * and every content frame passes `None`. Hiding on those left the terminal's own cursor wherever the content diff
-    * last wrote -- the bottom of the screen -- for the whole time the reader was typing (#1215), which is the opposite
-    * of what this fallback exists to do.
-    */
-  it should "show the terminal cursor on a content frame, which carries no breathe colour at all" in {
-    val hardwareCursor = new FakeHardwareCursor
-    renderWith(hardwareCursor, None)
-
-    hardwareCursor.presentCallCount shouldBe 1
-    hardwareCursor.hideCallCount shouldBe 0
   }

@@ -1,7 +1,6 @@
 package com.serenity.state.manager
 
 import cats.syntax.all.*
-import com.serenity.animation.AnimationState
 import com.serenity.config.RenderDamageGranularity
 import com.serenity.lsp.model.Diagnostic
 import com.serenity.rope.{Balance, RopeDiff}
@@ -37,9 +36,7 @@ object DamageProducer:
 
   def forTransition(
     before: AppState,
-    after: AppState,
-    beforeAnimations: Map[BufferId, AnimationState] = Map.empty,
-    afterAnimations: Map[BufferId, AnimationState] = Map.empty
+    after: AppState
   )(using Balance): Damage =
     val granularity = after.persisted.config.surfaceConfig.renderDamageGranularity
     val bufferDamage = after.persisted.buffers.foldLeft(Damage.Nothing: Damage) {
@@ -53,9 +50,7 @@ object DamageProducer:
               after,
               beforeBuffer,
               afterBuffer,
-              granularity,
-              beforeAnimations.getOrElse(bufferId, AnimationState.empty),
-              afterAnimations.getOrElse(bufferId, AnimationState.empty)
+              granularity
             )
     }
     bufferDamage |+| chromeDamage(before, after) |+| fullRenderDamage(before, after) |+|
@@ -73,9 +68,7 @@ object DamageProducer:
     after: AppState,
     beforeBuffer: Buffer,
     afterBuffer: Buffer,
-    granularity: RenderDamageGranularity,
-    beforeAnimations: AnimationState,
-    afterAnimations: AnimationState
+    granularity: RenderDamageGranularity
   )(using Balance): Damage =
     contentDamage(bufferId, beforeBuffer, afterBuffer, granularity) |+|
       cursorDamage(bufferId, beforeBuffer, afterBuffer) |+|
@@ -84,7 +77,6 @@ object DamageProducer:
       diagnosticDamage(bufferId, before, after, beforeBuffer, afterBuffer) |+|
       languageDamage(bufferId, beforeBuffer, afterBuffer) |+|
       viewportDamage(bufferId, beforeBuffer, afterBuffer) |+|
-      animationDamage(bufferId, beforeAnimations, afterAnimations) |+|
       focusDimmingDamage(bufferId, after, beforeBuffer, afterBuffer)
 
   private def contentDamage(
@@ -203,14 +195,6 @@ object DamageProducer:
     if before.viewport == after.viewport then Damage.Nothing
     else Damage.BufferRows(bufferId, (0 until after.document.content.lineCount).toSet)
 
-  /** Character-reveal (and other per-cell) animation ticks report exactly the rows whose cells changed, read off
-    * `AnimationState.animations`'s `CharacterKey`s -- a direct structural read rather than a coarsening, feeding the
-    * same `Damage`-based row-reuse bookkeeping `RendererFrameState` now keeps (replacing the retired `PaneRowKey`).
-    */
-  private def animationDamage(bufferId: BufferId, before: AnimationState, after: AnimationState): Damage =
-    if before == after then Damage.Nothing
-    else Damage.BufferRows(bufferId, changedAnimationLines(before, after))
-
   /** `RendererPaneContent.focusedTextBodyLines` dims every row outside the active paragraph/markdown-block around the
     * cursor. Moving the cursor within the same block changes nothing this needs to report beyond what [[cursorDamage]]
     * already covers, but crossing into a different block flips the dimmed state of every row in the old block that
@@ -236,12 +220,6 @@ object DamageProducer:
         val beforeLines = beforeRange.map(_.toSet).getOrElse((0 until beforeBuffer.document.content.lineCount).toSet)
         val afterLines  = afterRange.map(_.toSet).getOrElse((0 until afterBuffer.document.content.lineCount).toSet)
         Damage.BufferRows(bufferId, beforeLines.diff(afterLines) ++ afterLines.diff(beforeLines))
-
-  private def changedAnimationLines(before: AnimationState, after: AnimationState): Set[Int] =
-    (before.animations.keySet ++ after.animations.keySet).iterator
-      .filter(key => before.animations.get(key) != after.animations.get(key))
-      .map(_.line)
-      .toSet
 
   /** The theme, or *any* config change, forces a full repaint. Config covers far more than the syntax-highlighting
     * toggle this used to check individually -- word wrap, fonts, margins, blur radius, and dozens of other fields this

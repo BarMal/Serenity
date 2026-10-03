@@ -31,16 +31,10 @@ class AppRuntimeCursorCadenceSpec extends AnyFlatSpec with Matchers:
 
   "TuiFrontend.cursorIdleInterval" should
     "delegate the caret to the terminal's own cursor in TUI blink mode, eliding the idle cadence entirely" in {
-      // #1170: the terminal owns blink timing for the normal (non-breathe) caret in TUI mode, so the idle phase has
+      // #1170: the terminal owns blink timing for the caret in TUI mode, so the idle phase has
       // nothing left to tick for -- outside TUI mode the same config still ticks, since a GUI caret is always
       // app-painted.
       tui.cursorIdleInterval(AppConfig.default) shouldBe None
       GuiFrontend.cursorIdleInterval(AppConfig.default) shouldBe Some(500.millis)
       tui.cursorIdleInterval(AppConfig.default.withCursorMode(CursorMode.Blink)) shouldBe None
     }
-
-  it should "keep the cursor idle cadence in TUI breathe mode, since breathe genuinely needs app ticks" in {
-    // Breathe animates color/opacity over time -- a terminal cursor style can't represent that -- so it stays the
-    // documented, explicit exception to #1170's terminal-delegated caret.
-    tui.cursorIdleInterval(AppConfig.default.withCursorMode(CursorMode.Breathe)) shouldBe Some(500.millis)
-  }

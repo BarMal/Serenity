@@ -3,7 +3,6 @@ package com.serenity.state.manager
 import java.nio.file.Path
 
 import cats.effect.{Deferred, IO, Ref}
-import com.serenity.animation.AnimationState
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
@@ -55,7 +54,6 @@ private[manager] trait EffectEditorPort extends EffectLanePort:
   def enqueueEvent(event: Event): IO[Unit]
   def commitState(newState: AppState, fallbackState: AppState): IO[Unit]
   def updateModelValidated(transition: Model => Option[Model]): IO[Unit]
-  def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit]
   def scheduleDocumentAnalysis(): IO[Unit]
   def scheduleFindSearch(request: FindSearchRequest): IO[Unit]
 

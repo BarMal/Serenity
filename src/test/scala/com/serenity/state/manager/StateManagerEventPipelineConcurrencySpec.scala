@@ -73,7 +73,7 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
 
     val program =
       for
-        modelRef <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+        modelRef <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))
         stateRef = ModelViews.appRef(modelRef)
         pipeline <- newPipeline(modelRef)
         before   <- stateRef.get
@@ -95,7 +95,7 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
   it should "not self-deadlock when an interpreted effect enqueues a follow-up event for drainPendingOperations (#1570)" in {
     val program =
       for
-        modelRef <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+        modelRef <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))
         stateRef = ModelViews.appRef(modelRef)
         pipeline <- newPipeline(modelRef, onEffect = (operations, _) => operations.enqueueEvent(NewTab))
         before   <- stateRef.get

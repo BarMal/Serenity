@@ -34,7 +34,6 @@ class StateManagerEffectDispatcherSpec extends AnyFlatSpec with Matchers:
           explorer = value => calls.update(_ :+ s"explorer:$value"),
           workflow = value => calls.update(_ :+ s"workflow:$value"),
           lspQueue = value => calls.update(_ :+ s"lspQueue:$value"),
-          animation = value => calls.update(_ :+ s"animation:$value"),
           scheduleCommandRunnerBindingExpiry =
             recordedAtMillis => calls.update(_ :+ s"scheduleCommandRunnerBindingExpiry:$recordedAtMillis")
         )
@@ -132,13 +131,4 @@ class StateManagerEffectDispatcherSpec extends AnyFlatSpec with Matchers:
     fixture.interpreter.interpret(AppEffect.LspQueue(effect)).unsafeRunSync()
 
     fixture.calls.get.unsafeRunSync() shouldBe List(s"lspQueue:$effect")
-  }
-
-  it should "route Animation to the animation dependency" in {
-    val fixture = harness()
-    val effect  = AnimationEffect.ClearAll(BufferId(1))
-
-    fixture.interpreter.interpret(AppEffect.Animation(effect)).unsafeRunSync()
-
-    fixture.calls.get.unsafeRunSync() shouldBe List(s"animation:$effect")
   }

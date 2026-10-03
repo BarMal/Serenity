@@ -35,7 +35,7 @@ final private[manager] class StateManagerConfigEffects(
     applyConfigUpdate(update)
 
   private def updateMotionConfig(update: AppConfig => AppConfig): IO[AppConfig] =
-    applyConfigUpdate(update, cancelsDisabledMotion = true)
+    applyConfigUpdate(update)
 
   private def updateMotionAccessibility(accessibility: com.serenity.config.MotionAccessibility): IO[AppConfig] =
     updateMotionConfig(_.withMotionAccessibility(accessibility))
@@ -46,18 +46,14 @@ final private[manager] class StateManagerConfigEffects(
   private[manager] def updateTextDisplayConfig(update: AppConfig => AppConfig): IO[AppConfig] =
     applyConfigUpdate(update)
 
-  /** Commits `update` (plus `syncState`, and cancelling motion it disabled) as one validated model write, then queues
-    * the config write and session auto-save on the Config lane. Returns the config live afterwards -- the old one if
-    * validation rejected the change.
+  /** Commits `update` (plus `syncState`) as one validated model write, then queues the config write and session
+    * auto-save on the Config lane. Returns the config live afterwards -- the old one if validation rejected the change.
     */
   private def applyConfigUpdate(
     update: AppConfig => AppConfig,
-    syncState: (AppState, AppConfig) => AppState = (state, _) => state,
-    cancelsDisabledMotion: Boolean = false
+    syncState: (AppState, AppConfig) => AppState = (state, _) => state
   ): IO[AppConfig] =
-    editor.updateModelValidated(model =>
-      Some(StateManagerConfigEffects.configTransition(model, update, syncState, cancelsDisabledMotion))
-    ) >>
+    editor.updateModelValidated(model => Some(StateManagerConfigEffects.configTransition(model, update, syncState))) >>
       currentState
         .map(_.persisted.config)
         .flatTap(config =>
@@ -390,22 +386,15 @@ final private[manager] class StateManagerConfigEffects(
 private[manager] object StateManagerConfigEffects:
 
   /** The whole state change of a config update: the new config, the live command runner and contextual toolbar
-    * refreshed for it, `syncState`, and -- for a motion change -- in-flight buffer animations of families it switched
-    * off.
+    * refreshed for it, and `syncState`.
     */
   def configTransition(
     model: Model,
     update: AppConfig => AppConfig,
-    syncState: (AppState, AppConfig) => AppState,
-    cancelsDisabledMotion: Boolean
+    syncState: (AppState, AppConfig) => AppState
   ): Model =
-    val previous = model.app.persisted.config
-    val config   = update(previous)
-    val app      = syncState(configUpdated(model.app, _ => config), config)
-    val cancellation =
-      if cancelsDisabledMotion then MotionCancellation.between(previous, config) else MotionCancellation.Families(Nil)
-    if cancellation.isEmpty then model.copy(app = app)
-    else model.copy(app = app, bufferAnimations = cancellation.cancelBufferAnimations(model.bufferAnimations))
+    val config = update(model.app.persisted.config)
+    model.copy(app = syncState(configUpdated(model.app, _ => config), config))
 
   def configUpdated(state: AppState, update: AppConfig => AppConfig): AppState =
     val config = update(state.persisted.config)

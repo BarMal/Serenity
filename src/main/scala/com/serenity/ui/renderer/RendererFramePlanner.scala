@@ -46,7 +46,6 @@ object RendererFramePlanner:
     cursorColor: Option[java.awt.Color],
     output: Option[FrameOutput],
     damage: Damage,
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState] = Map.empty,
     caches: com.serenity.state.manager.RenderCaches = com.serenity.state.manager.RenderCaches.create()
   ): Option[EditorPaneRenderPlan] =
     surface.hideCursor()
@@ -120,7 +119,6 @@ object RendererFramePlanner:
           uiFont,
           cellMetrics,
           uiMetrics,
-          bufferAnimations,
           caches
         )
         val framePlan = planFrame(state, context, editorRenderPlan, viewportSize, output, damage)

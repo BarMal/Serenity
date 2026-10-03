@@ -60,16 +60,15 @@ object RenderDamageGranularity:
       case _                => None
 
 enum CursorMode(val configKey: String):
-  case Blink   extends CursorMode("blink")
-  case Breathe extends CursorMode("breathe")
+  case Blink extends CursorMode("blink")
 
 object CursorMode:
 
+  /** `breathe`/`breathing` name a mode that no longer exists; configs and sessions still carrying it load as blink. */
   def fromConfigKey(value: String): Option[CursorMode] =
     value.trim.toLowerCase match
-      case "blink"                 => Some(CursorMode.Blink)
-      case "breathe" | "breathing" => Some(CursorMode.Breathe)
-      case _                       => None
+      case "blink" | "breathe" | "breathing" => Some(CursorMode.Blink)
+      case _                                 => None
 
 /** Selects how a buffer's `DocumentComment`s become visible (#1222).
   *

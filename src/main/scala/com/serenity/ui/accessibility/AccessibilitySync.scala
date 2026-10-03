@@ -8,14 +8,9 @@ import com.serenity.state.models.{AppState, TypingActivity}
   * paid once per distinct *accessibility-relevant* state instead of on every render frame.
   *
   * A plain `AppState` reference check only catches the case where nothing at all was dispatched (e.g. a caret-blink
-  * cursor-only tick with no pending animation). It's defeated the moment a decorative *state* animation is active
-  * (theme transition, surface fade), since advancing those always produces a new top-level `AppState` even though none
-  * of them are read by `AccessibilitySnapshot.from`. Per-character reveal animations don't have this problem at all --
-  * `AnimationState` lives in a `StateManager`-owned side table (`#1001`), not on `AppState`/`Buffer`, so advancing them
-  * never invalidates this cache's `eq` check in the first place. So a cache hit here is either an exact `AppState`
-  * match (cheapest), or a match on a normalized view with those known-irrelevant fields blanked out -- verified against
-  * `AccessibilityModel.scala` to read only `buffers` (content/filePath/cursors), `focus`, `layout`, `uiSurfaces`, and
-  * `config`.
+  * cursor-only tick). So a cache hit here is either an exact `AppState` match (cheapest), or a match on a normalized
+  * view with known-irrelevant fields blanked out -- verified against `AccessibilityModel.scala` to read only `buffers`
+  * (content/filePath/cursors), `focus`, `layout`, `uiSurfaces`, and `config`.
   */
 final class AccessibilitySync private (ref: Ref[IO, Option[AccessibilitySync.CacheEntry]]):
   import AccessibilitySync.{CacheEntry, normalize}

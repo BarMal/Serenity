@@ -69,6 +69,5 @@ private[reducers] object MarkdownFormattingReducer:
       .copy(editing = EditingState.fromCursors(cursors))
     ReducerResult(
       state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(buffer.id, edited))),
-      animationRemapEffects(buffer.id, buffer.document.content, content, edits) ++
-        undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
+      undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
     )

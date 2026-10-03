@@ -1,12 +1,9 @@
 package com.serenity.state.manager
 
-import com.serenity.animation.{AnimationConfig, AnimationOwner}
 import com.serenity.command.{CommentsIntent, NavigationIntent, PlaceholderIntent}
-import com.serenity.config.AppConfigMotionOps.*
-import com.serenity.config.MotionPreset
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AnimationEffect, AppEffect, ReducerResult}
+import com.serenity.state.reducers.ReducerResult
 import com.serenity.ui.layout.SplitAxis
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -35,13 +32,6 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
 
   private def withoutActiveEditor(state: AppState): AppState =
     state.copy(persisted = state.persisted.copy(layout = state.persisted.layout.copy(activeEditorPaneId = None)))
-
-  private def withUiTransitions(state: AppState, enabled: Boolean): AppState =
-    val config =
-      if enabled then
-        state.persisted.config.withMotionPreset(MotionPreset.Smooth).withUiAnimation(AnimationConfig.subtle)
-      else state.persisted.config.withUiAnimation(None)
-    state.copy(persisted = state.persisted.copy(config = config))
 
   private def withHistory(
     state: AppState,
@@ -130,31 +120,6 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
     val result = validApplied(NavigationTransitions.navigation(NavigationIntent.PreviousBookmark, state))
 
     result.state.activeCursorPosition shouldBe Some(first)
-  }
-
-  it should "restart the target buffer's UI transitions when UI transitions are enabled" in {
-    val first  = CursorPosition(0, 0)
-    val second = CursorPosition(2, 0)
-    val state  = withUiTransitions(stateWithBuffer(lines, cursor = first, bookmarks = List(first, second)), true)
-    state.persisted.config.scaledUiAnimation shouldBe defined
-
-    val result = validApplied(NavigationTransitions.navigation(NavigationIntent.NextBookmark, state))
-
-    result.effects match
-      case List(AppEffect.Animation(AnimationEffect.RestartUiTransitions(bufferId, cells))) =>
-        bufferId shouldBe BufferId(0)
-        cells should not be empty
-        cells.values.map(_.owner).toSet shouldBe Set(AnimationOwner.UiTransitions)
-      case other => fail(s"Expected a single UI-transition restart, got $other")
-  }
-
-  it should "emit no animation when UI transitions are disabled" in {
-    val first  = CursorPosition(0, 0)
-    val second = CursorPosition(2, 0)
-    val state  = withUiTransitions(stateWithBuffer(lines, cursor = first, bookmarks = List(first, second)), false)
-    state.persisted.config.scaledUiAnimation shouldBe None
-
-    validApplied(NavigationTransitions.navigation(NavigationIntent.NextBookmark, state)).effects shouldBe Nil
   }
 
   it should "ignore bookmark navigation when there are no bookmarks" in {

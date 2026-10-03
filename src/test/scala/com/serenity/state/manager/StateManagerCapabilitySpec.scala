@@ -334,7 +334,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val initialState   = AppState.initial
     val committedState = initialState.copy(runtime = initialState.runtime.copy(nextBufferId = BufferId(42)))
     val program = for
-      modelRef <- Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty))
+      modelRef <- Ref.of[IO, Model](Model(initialState, UndoState()))
       operations <- StateManagerOperationBoundary.create(
         modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
@@ -361,7 +361,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   it should "drain effect-triggered nested events through the pipeline in FIFO order" in {
     val initialState = AppState.initial
     val program = for
-      modelRef <- Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty))
+      modelRef <- Ref.of[IO, Model](Model(initialState, UndoState()))
       operations <- StateManagerOperationBoundary.create(
         modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
@@ -407,7 +407,6 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
           explorer = _ => observed.update(_ :+ "explorer"),
           workflow = _ => observed.update(_ :+ "workflow"),
           lspQueue = _ => observed.update(_ :+ "lsp"),
-          animation = _ => observed.update(_ :+ "animation"),
           scheduleCommandRunnerBindingExpiry = _ => observed.update(_ :+ "scheduleCommandRunnerBindingExpiry")
         )
       )
@@ -422,7 +421,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
   }
 
   "AppRuntime input phase" should "depend only on state read, update, and event application capabilities" in {
-    val modelRef = Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty)).unsafeRunSync()
+    val modelRef = Ref.of[IO, Model](Model(AppState.initial, UndoState())).unsafeRunSync()
     val stateRef = ModelViews.appRef(modelRef)
     val applied  = Ref.of[IO, List[Event]](Nil).unsafeRunSync()
     val capabilities = new StateEngine:
@@ -433,10 +432,9 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val router        = InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default)).unsafeRunSync()
     val clipboard     = SystemClipboard[IO](readText = IO.pure(Some("pasted")), writeText = _ => IO.unit)
     val cursorVisible = Ref.of[IO, Boolean](true).unsafeRunSync()
-    val breathIndex   = Ref.of[IO, Int](0).unsafeRunSync()
 
     AppRuntimeRenderLoops
-      .inputEventPhase(capabilities, router, clipboard, IO.unit, cursorVisible, breathIndex, (_: Damage) => IO.unit)(
+      .inputEventPhase(capabilities, router, clipboard, IO.unit, cursorVisible, (_: Damage) => IO.unit)(
         Stream.emit(Paste)
       )
       .compile
@@ -504,7 +502,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val modelRef = Ref.of[IO, Model](Model(state, UndoState(), Map.empty)).unsafeRunSync()
+    val modelRef = Ref.of[IO, Model](Model(state, UndoState())).unsafeRunSync()
     val operations = StateManagerOperationBoundary
       .create(modelRef, org.typelevel.log4cats.noop.NoOpLogger.impl[IO])
       .unsafeRunSync()
@@ -547,7 +545,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     )
     val currentState = prevState.copy(persisted = prevState.persisted.copy(buffers = Map(bufferId -> after)))
     val program = for
-      modelRef <- Ref.of[IO, Model](Model(currentState, UndoState(), Map.empty))
+      modelRef <- Ref.of[IO, Model](Model(currentState, UndoState()))
       operations <- StateManagerOperationBoundary.create(
         modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
@@ -577,7 +575,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     )
     val currentState = prevState.copy(persisted = prevState.persisted.copy(buffers = Map(bufferId -> after)))
     val program = for
-      modelRef <- Ref.of[IO, Model](Model(currentState, UndoState(), Map.empty))
+      modelRef <- Ref.of[IO, Model](Model(currentState, UndoState()))
       operations <- StateManagerOperationBoundary.create(
         modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]
@@ -609,7 +607,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       bufferId
     )
     val program = for
-      modelRef <- Ref.of[IO, Model](Model(prevState, UndoState(), Map.empty))
+      modelRef <- Ref.of[IO, Model](Model(prevState, UndoState()))
       operations <- StateManagerOperationBoundary.create(
         modelRef,
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO]

@@ -96,7 +96,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withLayerCaching(true)
     .withFrameTiming(true)
     .withDiagnosticHighlightBlendWeight(0.2)
-    .withCursorMode(CursorMode.Breathe)
+    .withCursorMode(CursorMode.Blink)
     .withStatusLineSegments(List(StatusSegment.Position, StatusSegment.WordCount))
     .withStatusLinePlacement(StatusLinePlacement.Floating)
     .withMarkdownViewMode(MarkdownViewMode.SplitPreview)
@@ -212,6 +212,9 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     * here rather than silently resetting on the user's next restart.
     */
   private val notExercised: Set[String] = Set(
+    // `CursorMode` has a single value, so there is nothing to move it to. Older files naming `breathe` still load, as
+    // blink (CursorConfigSpec).
+    "cursorConfig.mode",
     // Keyed maps with their own dedicated specs (LspUserConfigSpec, HotkeyConfigSpec, FocusedKeymapConfigSpec) and
     // their own dynamic key prefixes in the schema.
     "languageToolsConfig.lspUserConfig.servers",

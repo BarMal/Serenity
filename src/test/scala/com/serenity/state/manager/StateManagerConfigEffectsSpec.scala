@@ -53,7 +53,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
   ): Harness =
     val root       = Files.createTempDirectory("config-effects-spec")
     val configPath = Option.when(persistConfig)(root.resolve("config.json"))
-    val modelRef   = Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty)).unsafeRunSync()
+    val modelRef   = Ref.of[IO, Model](Model(initialState, UndoState())).unsafeRunSync()
     val stateRef   = ModelViews.appRef(modelRef)
     val triggers   = Ref.of[IO, List[SessionSaveTrigger]](Nil).unsafeRunSync()
     val fonts      = Ref.of[IO, List[FontLoader.FontConfig]](Nil).unsafeRunSync()
@@ -69,12 +69,6 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers:
         modelRef.get.flatMap(model =>
           transition(model).fold(IO.unit)(next => committed.update(_ :+ next.app) >> modelRef.set(next))
         )
-      def updateBufferAnimations(
-        update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
-          BufferId,
-          com.serenity.animation.AnimationState
-        ]
-      ): IO[Unit] = ModelViews.bufferAnimationsRef(modelRef).update(update)
       def scheduleDocumentAnalysis(): IO[Unit]                                               = analyses.update(_ + 1)
       def scheduleFindSearch(request: FindSearchRequest): IO[Unit]                           = IO.unit
       def submitEffect(lane: com.serenity.state.effects.Lane.Keyed, job: IO[Unit]): IO[Unit] = job

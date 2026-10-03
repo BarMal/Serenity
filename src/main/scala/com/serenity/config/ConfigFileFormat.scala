@@ -114,7 +114,7 @@ object ConfigFileFormat:
     field("editor.contextual_toolbar_mode"),
     comment("Lines one mouse-wheel notch scrolls"),
     field("editor.wheel_scroll_lines"),
-    comment("Cursor: blink or breathe; colour overrides leave empty to use the active theme cursor"),
+    comment("Cursor: blink; colour overrides leave empty to use the active theme cursor"),
     field("editor.cursor.mode"),
     field("editor.cursor.active_color"),
     field("editor.cursor.inactive_color"),

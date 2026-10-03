@@ -105,12 +105,10 @@ class AppRuntimeCallbackBridgeSpec extends AnyFlatSpec with Matchers:
       closedDispatcher <- Dispatcher.parallel[IO].use(IO.pure)
       windowFocused    <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
       cursorVisible    <- Ref.of[IO, Boolean](true)
-      breathIndex      <- Ref.of[IO, Int](0)
       requested        <- Ref.of[IO, Boolean](false)
       callback = AppRuntime.focusCallbackBridge(
         windowFocused,
         cursorVisible,
-        breathIndex,
         requested.set(true),
         closedDispatcher
       )

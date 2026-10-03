@@ -25,11 +25,11 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
   }
 
   "CommandRunnerSettingsItems" should "build typed option rows independently of runner state" in {
-    val cursor = CommandRunnerSettingsCursorItems.cursorModeOptionItem(Map("cursor-mode" -> 1))
+    val cursor = CommandRunnerSettingsCursorItems.cursorModeOptionItem(Map("cursor-mode" -> 0))
     val chrome = CommandRunnerSettingsAppearanceItems.windowChromeOptionItem(Map("window-chrome" -> 0))
 
     cursor.label shouldBe "Cursor Style"
-    cursor.selectedOption shouldBe "Breathe"
+    cursor.selectedOption shouldBe "Blink"
     chrome.selectedOption shouldBe "Auto (Linux Custom)"
     chrome.selectedIntent shouldBe Some(
       CommandIntent.Settings(

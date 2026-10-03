@@ -7,8 +7,6 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
-import cats.syntax.apply.*
-import com.serenity.animation.AnimationState
 import com.serenity.config.ConfigManagerTestSupport
 import com.serenity.keystroke.events.ResizeEvent
 import com.serenity.markdown.{MarkdownBlockLens, MarkdownDocumentPreview}
@@ -57,7 +55,6 @@ final case class ScenarioFrameEvidence(
     drawnItems: Map[SurfaceId, List[ScenarioDrawnItem]],
     drawnImageRects: List[LayoutRect],
     renderedContentRows: Set[Int],
-    animationComplete: Boolean,
     layoutViolations: List[LayoutContractViolation]
 )
 
@@ -112,7 +109,7 @@ final class UiScenarioDriver private (
 
   /** Render one frame and return state/layout evidence without consulting private renderer state. */
   def renderFrame(name: String): IO[ScenarioFrame] =
-    (state, stateManager.getBufferAnimations).mapN { (current, bufferAnimations) =>
+    state.map { current =>
       val logicalWidth  = environment.viewport.width * environment.cellMetrics.charWidth
       val logicalHeight = environment.viewport.height * environment.cellMetrics.lineHeight
       val image = new BufferedImage(
@@ -146,7 +143,7 @@ final class UiScenarioDriver private (
       )
       val layout   = LayoutEngine.calculateLayoutWithUI(current, environment.viewport)
       val contract = EditorLayoutContract.from(current, environment.viewport, layout)
-      val frame    = ScenarioFrame(image, evidenceFor(current, bufferAnimations, contract, image, recordingSurface))
+      val frame    = ScenarioFrame(image, evidenceFor(current, contract, image, recordingSurface))
       artifactDirectory.foreach { directory =>
         Files.createDirectories(directory)
         javax.imageio.ImageIO.write(image, "png", directory.resolve(s"$name.png").toFile)
@@ -169,7 +166,6 @@ final class UiScenarioDriver private (
 
   private def evidenceFor(
     state: AppState,
-    bufferAnimations: Map[BufferId, AnimationState],
     contract: EditorLayoutContract,
     image: BufferedImage,
     recordingSurface: ScenarioRecordingSurface
@@ -259,7 +255,6 @@ final class UiScenarioDriver private (
       drawnItems,
       recordingSurface.drawnImages.map(_.bounds),
       renderedContentRows,
-      animationComplete = bufferAnimations.values.forall(_.animations.isEmpty),
       contract.violations
     )
 

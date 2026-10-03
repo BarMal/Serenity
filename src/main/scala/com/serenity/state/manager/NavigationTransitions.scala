@@ -1,12 +1,10 @@
 package com.serenity.state.manager
 
-import com.serenity.animation.{AnimationOwner, FlowAnimationBuilder, FlowDirection, SweepDirection}
 import com.serenity.command.{CommentsIntent, NavigationIntent, PlaceholderIntent}
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.document.{CommentRendering, DocumentNavigation}
 import com.serenity.rope.*
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AnimationEffect, AppEffect, ModalStateReducer, ReducerResult}
+import com.serenity.state.reducers.{ModalStateReducer, ReducerResult}
 import com.serenity.ui.layout.{Symbol, WrappedLineCache}
 
 private[manager] enum NavigationOutcome:
@@ -148,7 +146,7 @@ private[manager] object NavigationTransitions:
           forwardStack = Nil
         )
         NavigationOutcome.Applied(
-          ReducerResult(onTargetResolved.fold(moved)(_(moved)), uiTransitionSweep(moved, after, sweep(before, after)))
+          ReducerResult.noEffects(onTargetResolved.fold(moved)(_(moved)))
         )
       case Some(_) =>
         onTargetResolved match
@@ -162,7 +160,6 @@ private[manager] object NavigationTransitions:
       case (target :: remaining, Some(point)) =>
         jumpThroughHistory(
           state,
-          point,
           target,
           backStack = remaining,
           forwardStack = pushNavigationPoint(point, state.runtime.navigation.forwardStack)
@@ -174,7 +171,6 @@ private[manager] object NavigationTransitions:
       case (target :: remaining, Some(point)) =>
         jumpThroughHistory(
           state,
-          point,
           target,
           backStack = pushNavigationPoint(point, state.runtime.navigation.backStack),
           forwardStack = remaining
@@ -202,19 +198,18 @@ private[manager] object NavigationTransitions:
             val recorded =
               withHistory(moved, pushNavigationPoint(origin, state.runtime.navigation.backStack), forwardStack = Nil)
             NavigationOutcome.Applied(
-              ReducerResult(recorded, uiTransitionSweep(recorded, target, sweep(origin, target)))
+              ReducerResult.noEffects(recorded)
             )
           case None => applied(moved)
 
   private def jumpThroughHistory(
     state: AppState,
-    from: NavigationPoint,
     target: NavigationPoint,
     backStack: List[NavigationPoint],
     forwardStack: List[NavigationPoint]
   )(using WrappedLineCache): NavigationOutcome =
     val moved = withHistory(moveToNavigationPoint(state, target), backStack, forwardStack)
-    NavigationOutcome.Applied(ReducerResult(moved, uiTransitionSweep(moved, target, sweep(from, target))))
+    NavigationOutcome.Applied(ReducerResult.noEffects(moved))
 
   private def withHistory(
     state: AppState,
@@ -222,29 +217,6 @@ private[manager] object NavigationTransitions:
     forwardStack: List[NavigationPoint]
   ): AppState =
     state.copy(runtime = state.runtime.copy(navigation = NavigationHistory(backStack, forwardStack)))
-
-  private def sweep(before: NavigationPoint, after: NavigationPoint): SweepDirection =
-    if after.cursor.line < before.cursor.line ||
-        (after.cursor.line == before.cursor.line && after.cursor.column < before.cursor.column)
-    then SweepDirection.Backward
-    else SweepDirection.Forward
-
-  private def uiTransitionSweep(state: AppState, point: NavigationPoint, sweep: SweepDirection): List[AppEffect] =
-    state.persisted.buffers.get(point.bufferId).toList.flatMap { buffer =>
-      val cells = VisibleBufferAnimationCells.fromBuffer(
-        buffer,
-        state.persisted.config.surfaceConfig.wordWrapEnabled,
-        state.persisted.theme.background,
-        state.persisted.theme.foreground
-      )
-      if cells.isEmpty then Nil
-      else
-        state.persisted.config.scaledUiAnimation.toList.map { config =>
-          val animated = FlowAnimationBuilder.build(cells, FlowDirection.ByRow, sweep, config.steps)
-          val uiCells  = animated.view.mapValues(_.copy(owner = AnimationOwner.UiTransitions)).toMap
-          AppEffect.Animation(AnimationEffect.RestartUiTransitions(point.bufferId, uiCells))
-        }
-    }
 
   private def currentNavigationPoint(state: AppState): Option[NavigationPoint] =
     activeEditorBuffer(state).flatMap {

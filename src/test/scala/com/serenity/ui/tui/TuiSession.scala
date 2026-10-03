@@ -15,7 +15,6 @@ import com.serenity.input.{FocusedInputTranslator, InProcessClipboard, InputRout
 import com.serenity.keystroke.events.{Event, MousePress}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.rope.Balance
-import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.manager.{DamageProducer, StateManager}
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.ui.layout.ViewportSize
@@ -50,7 +49,6 @@ final class TuiSession private (
     consumed: Ref[IO, Int],
     applied: Ref[IO, Vector[Event]],
     cursorVisible: Ref[IO, Boolean],
-    breathIndex: Ref[IO, Int],
     val stateManager: StateManager,
     val clipboard: SystemClipboard[IO],
     val workspace: Path
@@ -105,10 +103,9 @@ final class TuiSession private (
     */
   def runtimeScreen: IO[TuiScreen] =
     for
-      size       <- shell.viewportSize
-      current    <- state
-      animations <- stateManager.getBufferAnimations
-      pending    <- damage.getAndSet(Damage.Nothing)
+      size    <- shell.viewportSize
+      current <- state
+      pending <- damage.getAndSet(Damage.Nothing)
       surface = surfaces.forSize(size)
       _       <- IO(TuiRuntime.paintFrame(current, surface, size, true, None, pending, stateManager.renderCaches))
       emitted <- drainOutput
@@ -117,8 +114,8 @@ final class TuiSession private (
 
   /** One frame of the *idle* render phase: the cursor-only paint `AppRuntimeRenderLoops.runIdleRenderStep` makes on
     * each tick of the cursor's own cadence, with the visibility and colour
-    * `AppRuntimeRenderLoops.computeIdleCursorFrame` computes for that tick. Successive calls advance the same
-    * blink/breathe cycle a running session would, because they share the refs the input phase resets on a keystroke.
+    * `AppRuntimeRenderLoops.computeIdleCursorFrame` computes for that tick. Successive calls advance the same blink
+    * cycle a running session would, because they share the refs the input phase resets on a keystroke.
     *
     * This is the path that owns the caret while nothing else is happening, so it is the one that has to leave the
     * terminal's cursor where the editing position is (#1215).
@@ -126,13 +123,12 @@ final class TuiSession private (
   def idleCursorScreen: IO[TuiScreen] =
     for
       current <- state
-      frame   <- AppRuntimeRenderLoops.computeIdleCursorFrame(current, cursorVisible, breathIndex)
+      frame   <- AppRuntimeRenderLoops.computeIdleCursorFrame(cursorVisible)
       (visible, colour) = frame
       size <- shell.viewportSize
       surface = surfaces.forSize(size)
-      bufferAnimations <- stateManager.getBufferAnimations
       _ <- IO(
-        TuiRuntime.paintCursorOnly(current, surface, size, visible, colour, bufferAnimations, stateManager.renderCaches)
+        TuiRuntime.paintCursorOnly(current, surface, size, visible, colour, stateManager.renderCaches)
       )
       emitted <- drainOutput
       updated <- screenRef.get
@@ -158,16 +154,14 @@ final class TuiSession private (
     (0 until ticks).toList.foldLeft(IO.pure(false))((previous, _) => previous >> tickAnimations)
 
   def animationsActive: IO[Boolean] =
-    (state, stateManager.getBufferAnimations).mapN(AppRuntimeRenderLoops.hasActiveAnimations)
+    state.map(AppRuntimeRenderLoops.hasActiveAnimations)
 
   private def tickAnimations: IO[Boolean] =
     for
-      before           <- state
-      beforeAnimations <- stateManager.getBufferAnimations
-      stillActive      <- stateManager.animationTicker.advanceAnimationsOnTick
-      after            <- state
-      afterAnimations  <- stateManager.getBufferAnimations
-      _ <- damage.update(_ |+| DamageProducer.forTransition(before, after, beforeAnimations, afterAnimations))
+      before      <- state
+      stillActive <- stateManager.animationTicker.advanceAnimationsOnTick
+      after       <- state
+      _           <- damage.update(_ |+| DamageProducer.forTransition(before, after))
     yield stillActive
 
   private def advanceAnimationsToRest(remaining: Int): IO[Unit] =
@@ -369,7 +363,6 @@ object TuiSession:
       consumed       <- Ref.of[IO, Int](0)
       applied        <- Ref.of[IO, Vector[Event]](Vector.empty)
       cursorVisible  <- Ref.of[IO, Boolean](true)
-      breathIndex    <- Ref.of[IO, Int](0)
       session = new TuiSession(
         shell = shell,
         handler = handler,
@@ -384,7 +377,6 @@ object TuiSession:
         consumed = consumed,
         applied = applied,
         cursorVisible = cursorVisible,
-        breathIndex = breathIndex,
         stateManager = stateManager,
         clipboard = clipboard,
         workspace = workspace
@@ -395,7 +387,6 @@ object TuiSession:
         clipboard,
         session.checkResizeAndHandle,
         cursorVisible,
-        breathIndex,
         (next: Damage) => damage.update(_ |+| next)
       )
     yield Built(session, consume(handler, funnel, sentinels, applied, appliedSignals))

@@ -1,6 +1,5 @@
 package com.serenity.state.reducers
 
-import com.serenity.animation.*
 import com.serenity.document.ChapterRenumbering
 import com.serenity.keystroke.events.*
 import com.serenity.rope.*
@@ -19,16 +18,15 @@ private[reducers] object EditorTextEditReducer:
   def reduce(event: TextEntryEvent, ctx: CursorEventContext): ReducerResult =
     import ctx.*
 
-    /** Like a plain buffer update, but `f` also reports the edits it made, so their animations can be remapped in the
-      * presentation layer (`#1001`) instead of inside `Buffer` itself. `groupable` mirrors the calling event: whether a
-      * consecutive run of edits like this one coalesces into one undo step (#1016).
+    /** Like a plain buffer update, but `f` also reports the edits it made, so the undo boundary can record them.
+      * `groupable` mirrors the calling event: whether a consecutive run of edits like this one coalesces into one undo
+      * step (#1016).
       */
     def applyEditedBuffer(groupable: Boolean)(f: Buffer => (Buffer, List[MultiCursorEdit])): ReducerResult =
       val (updated, edits) = f(buffer)
       ReducerResult(
         Focused.replaceBuffer(currentState, updated),
-        animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits) ++
-          undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable)
+        undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable)
       )
 
     event match
@@ -44,12 +42,11 @@ private[reducers] object EditorTextEditReducer:
 
       case TabKey =>
         if hasSelection then
-          val (updated, edits, delta) = applyLineIndent(buffer, currentState, selectionLines(buffer))
-          val effects =
-            animationRemapEffects(buffer.id, buffer.document.content, updated.document.content, edits) ++
-              animationMergeEffects(buffer.id, delta) ++
-              undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = true)
-          ReducerResult(Focused.replaceBuffer(currentState, updated), effects)
+          val (updated, edits) = applyLineIndent(buffer, selectionLines(buffer))
+          ReducerResult(
+            Focused.replaceBuffer(currentState, updated),
+            undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = true)
+          )
         else if isMulti then applyEditedBuffer(groupable = true)(applyMultiCursorInsertion(_, TabInsertion))
         else insertAtCursor(buffer, head, TabInsertion, currentState, paneId, groupable = true)
 
@@ -106,11 +103,7 @@ private[reducers] object EditorTextEditReducer:
         result match
           case Some((updated, edit)) =>
             val edits = List(edit)
-            (
-              updated,
-              animationRemapEffects(buffer.id, current.document.content, updated.document.content, edits) ++
-                undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false)
-            )
+            (updated, undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable = false))
           case None => (current, Nil)
       }
     )
@@ -244,21 +237,13 @@ private[reducers] object EditorTextEditReducer:
             richTextDocumentAfterEdit(current, startOffset, endOffset, insertedText)
           )
         )
-        val (animated, delta) = addInsertionAnimations(replaced, currentState, List(edit))
-        val edits             = List(edit)
-        val effects =
-          animationRemapEffects(buffer.id, current.document.content, animated.document.content, edits) ++
-            animationMergeEffects(buffer.id, delta) ++
-            undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable)
-        (animated, effects)
+        (replaced, undoBoundaryEffects(buffer.id, paneId, buffer, List(edit), groupable))
       }
     )
 
   /** `NewLine`/`Enter`'s single-cursor, no-selection path: inserts the newline, then -- Markdown buffers only, and only
     * when a "Chapter <number>" heading is now out of sequence -- resequences every chapter heading's number in one more
-    * edit, folded into the same undo boundary as the newline itself. Two separate `animationRemapEffects` calls rather
-    * than one combined edit list: the renumbering edits' offsets are computed against the buffer *after* the newline
-    * lands, so they are only valid replayed against that same content, not the original.
+    * edit, folded into the same undo boundary as the newline itself.
     */
   private def insertNewlineWithChapterRenumbering(
     buffer: Buffer,
@@ -283,32 +268,7 @@ private[reducers] object EditorTextEditReducer:
             }
             applyTrackedEdits(afterNewline, List(newlineCursorOffset), edits)
 
-        val (_, delta1) = addInsertionAnimations(afterNewline, currentState, List(primaryEdit))
-        val (_, delta2) = addInsertionAnimations(contentBuffer, currentState, renumberEdits)
-
-        val renumberAnimationEffects =
-          if renumberEdits.isEmpty then Nil
-          else
-            animationRemapEffects(
-              buffer.id,
-              afterNewline.document.content,
-              contentBuffer.document.content,
-              renumberEdits
-            )
-
-        val effects =
-          animationRemapEffects(
-            buffer.id,
-            current.document.content,
-            afterNewline.document.content,
-            List(primaryEdit)
-          ) ++
-            renumberAnimationEffects ++
-            animationMergeEffects(buffer.id, delta1) ++
-            animationMergeEffects(buffer.id, delta2) ++
-            undoBoundaryEffects(buffer.id, paneId, buffer, primaryEdit :: renumberEdits, groupable = false)
-
-        (contentBuffer, effects)
+        (contentBuffer, undoBoundaryEffects(buffer.id, paneId, buffer, primaryEdit :: renumberEdits, groupable = false))
       }
     )
 
@@ -323,14 +283,8 @@ private[reducers] object EditorTextEditReducer:
     ReducerResult.fromTransition(
       currentState,
       Focused.modifyBufferWithIdAndEmit(buffer.id) { current =>
-        val (replaced, edit)  = replaceSelectionOrInsert(current, cursor, text)
-        val (animated, delta) = addInsertionAnimations(replaced, currentState, List(edit))
-        val edits             = List(edit)
-        val effects =
-          animationRemapEffects(buffer.id, current.document.content, animated.document.content, edits) ++
-            animationMergeEffects(buffer.id, delta) ++
-            undoBoundaryEffects(buffer.id, paneId, buffer, edits, groupable)
-        (animated, effects)
+        val (replaced, edit) = replaceSelectionOrInsert(current, cursor, text)
+        (replaced, undoBoundaryEffects(buffer.id, paneId, buffer, List(edit), groupable))
       }
     )
 
@@ -376,18 +330,10 @@ private[reducers] object EditorTextEditReducer:
     }
     applyMergedDeletionEdits(buffer, entries.map(_.offset), edits)
 
-  /** Returns the buffer with the indent applied and its own edits (for the caller's animation remap), plus the
-    * insertion-animation delta from `addInsertionAnimations` (for the caller's animation merge) -- two independent
-    * animation effects, since one shifts existing animations and the other adds new ones.
-    */
-  private def applyLineIndent(
-    buffer: Buffer,
-    currentState: AppState,
-    targetLines: List[Int]
-  ): (Buffer, List[MultiCursorEdit], Map[CharacterKey, AnimatedCell]) =
+  private def applyLineIndent(buffer: Buffer, targetLines: List[Int]): (Buffer, List[MultiCursorEdit]) =
     val targetSet = targetLines.filter(line => line >= 0 && line < buffer.document.content.lineCount).toSet
 
-    if targetSet.isEmpty then (buffer, Nil, Map.empty)
+    if targetSet.isEmpty then (buffer, Nil)
     else
       val edits = targetSet.toList.sorted.zipWithIndex.map {
         case (line, index) =>
@@ -402,7 +348,7 @@ private[reducers] object EditorTextEditReducer:
         if targetSet.contains(cursor.line) then cursor.copy(column = cursor.column + TabInsertion.length)
         else cursor
       }.distinct
-      val baseBuffer = buffer.withEditedContent(
+      val indented = buffer.withEditedContent(
         content = updatedContent,
         cursors = finalCursors,
         adjustedAnnotations = adjustAnnotations(
@@ -413,8 +359,7 @@ private[reducers] object EditorTextEditReducer:
         ),
         richTextDocument = updatedRichTextDocument
       )
-      val (animatedBuffer, delta) = addInsertionAnimations(baseBuffer, currentState, edits)
-      (animatedBuffer, edits, delta)
+      (indented, edits)
 
   private def applyLineUnindent(
     buffer: Buffer,

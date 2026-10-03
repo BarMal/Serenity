@@ -274,7 +274,7 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
 
   it should "decode a session file written by the current release using old toString enum spellings" in {
     val config = AppConfig.default
-      .withCursorMode(CursorMode.Breathe)
+      .withCursorMode(CursorMode.Blink)
       .withStatusLineSegments(List(StatusSegment.Position, StatusSegment.Title))
       .withStatusLinePlacement(StatusLinePlacement.Pinned)
       .withWindowChromeMode(WindowChromeMode.NativeThemed)
@@ -337,7 +337,7 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
     val decoded = legacyJson.as[SessionState]
 
     decoded.isRight shouldBe true
-    decoded.toOption.get.config.cursorMode shouldBe CursorMode.Breathe
+    decoded.toOption.get.config.cursorMode shouldBe CursorMode.Blink
     decoded.toOption.get.config.statusLine.segments shouldBe
       List(StatusSegment.Position, StatusSegment.Title, StatusSegment.Mode)
     decoded.toOption.get.config.statusLine.placement shouldBe StatusLinePlacement.Pinned
@@ -366,7 +366,7 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
     val rewrittenConfigObject =
       rewrittenJson.hcursor.downField("config").focus.flatMap(_.asObject).getOrElse(fail("Expected config object"))
 
-    rewrittenConfigObject("cursorMode") shouldBe Some(Json.fromString("breathe"))
+    rewrittenConfigObject("cursorMode") shouldBe Some(Json.fromString("blink"))
     rewrittenConfigObject("statusSegments") shouldBe Some(
       Json.arr(Json.fromString("position"), Json.fromString("title"), Json.fromString("mode"))
     )

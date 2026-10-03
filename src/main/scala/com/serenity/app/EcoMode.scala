@@ -14,9 +14,9 @@ object EcoMode:
   /** Overlays the eco profile onto an already-loaded config, touching only the render fps target and the motion
     * hierarchy's accessibility field -- every other setting (theme, keybindings, font, window chrome, ...) passes
     * through unchanged. `MotionAccessibility.Reduced` disables every motion family when resolved (see
-    * `MotionConfig.effective`), cursor included, so this alone delivers the "steady cursor, no blink/breathe ticks"
-    * half of the profile without a separate cursor-specific knob, while preserving the user's own motion baseline and
-    * per-family values underneath the override.
+    * `MotionConfig.effective`), cursor included, so this alone delivers the "steady cursor, no blink ticks" half of the
+    * profile without a separate cursor-specific knob, while preserving the user's own motion baseline and per-family
+    * values underneath the override.
     */
   def overlay(config: AppConfig): AppConfig =
     config

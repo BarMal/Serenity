@@ -53,7 +53,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
   /** Every interpreted effect reads the state, waits on `gate`, then commits what it read. */
   private def snapshotCommittingPipeline(initialState: AppState, gate: DispatchGate): IO[PipelineHarness] =
     for
-      sharedModelRef <- Ref.of[IO, Model](Model(initialState, UndoState(), Map.empty))
+      sharedModelRef <- Ref.of[IO, Model](Model(initialState, UndoState()))
       sharedStateRef = ModelViews.appRef(sharedModelRef)
       cacheRef   <- Ref.of[IO, Option[MouseTargetCache]](None)
       lspQueue   <- LspEffectQueue.create
@@ -183,7 +183,7 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       directory    <- IO.blocking(Files.createTempDirectory("state-manager-dispatch-inbox-spec"))
       file = directory.resolve("notes.txt")
       _                   <- IO.blocking(Files.writeString(file, "draft"))
-      modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState(), Map.empty))
+      modelRef            <- Ref.of[IO, Model](Model(AppState.initial, UndoState()))
       themeNamesRef       <- Ref.of[IO, List[String]](Nil)
       quitSignal          <- Deferred[IO, Unit]
       lspQueue            <- LspEffectQueue.create

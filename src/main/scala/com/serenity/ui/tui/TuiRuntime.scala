@@ -263,7 +263,6 @@ object TuiRuntime:
     size: ViewportSize,
     cursorVisible: Boolean,
     cursorColor: Option[java.awt.Color],
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState],
     caches: com.serenity.state.manager.RenderCaches
   ): Unit =
     val _ = RendererCursorOverlay.renderCursorOnly(
@@ -277,7 +276,6 @@ object TuiRuntime:
       CellMetricsOne,
       CellMetricsOne,
       cursorColor,
-      bufferAnimations,
       caches
     )
 
@@ -310,7 +308,7 @@ object TuiRuntime:
     accessibilitySync: AccessibilitySync,
     accessibilityBridge: TuiAccessibilityBridge
   ): AppRuntime.RenderFn =
-    (state, cursorVisible, cursorColor, damage, _, caches) =>
+    (state, cursorVisible, cursorColor, damage, caches) =>
       for
         size <- shell.viewportSize
         surface = surfaceHolder.forSize(size)
@@ -326,11 +324,11 @@ object TuiRuntime:
     accessibilitySync: AccessibilitySync,
     accessibilityBridge: TuiAccessibilityBridge
   ): AppRuntime.RenderFn =
-    (state, cursorVisible, cursorColor, _, bufferAnimations, caches) =>
+    (state, cursorVisible, cursorColor, _, caches) =>
       for
         size <- shell.viewportSize
         surface = surfaceHolder.forSize(size)
-        _ <- IO(paintCursorOnly(state, surface, size, cursorVisible, cursorColor, bufferAnimations, caches))
+        _ <- IO(paintCursorOnly(state, surface, size, cursorVisible, cursorColor, caches))
         _ <- syncAccessibility(state, size, accessibilitySync, accessibilityBridge)
         _ <- syncMarkdownPreviewWindow(state, previewWindowAvailability, caches)
       yield ()

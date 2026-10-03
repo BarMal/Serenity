@@ -61,6 +61,9 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
     * supposed to remove, not inherit.
     */
   private val notVaried: Set[String] = Set(
+    // `CursorMode` has a single value, so there is nothing to move it to. Older files naming `breathe` still load, as
+    // blink (CursorConfigSpec).
+    "cursorConfig.mode",
     // Legacy mirrors of the motion hierarchy, kept in the model for files written before it existed. A save writes the
     // hierarchy and a load restores it, leaving these at their defaults -- so what has to survive is the behaviour they
     // feed, which the effective-motion property below asserts directly.

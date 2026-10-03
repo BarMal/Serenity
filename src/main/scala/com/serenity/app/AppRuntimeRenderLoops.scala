@@ -6,13 +6,12 @@ import scala.concurrent.duration.*
 
 import cats.effect.*
 import cats.syntax.semigroup.*
-import com.serenity.config.{AppConfig, CursorMode}
+import com.serenity.config.AppConfig
 import com.serenity.diagnostics.{FrameTimings, Trace}
 import com.serenity.input.*
 import com.serenity.keystroke.events.Event
 import com.serenity.state.manager.*
-import com.serenity.state.models.{AppState, BufferId, Damage}
-import com.serenity.ui.theme.ColorFormat.withAlpha
+import com.serenity.state.models.{AppState, Damage}
 import fs2.Stream
 import fs2.concurrent.SignallingRef
 import org.typelevel.log4cats.Logger
@@ -33,7 +32,6 @@ private[serenity] object AppRuntimeRenderLoops:
     currentStateForDiagnostics: IO[Option[AppState]],
     checkResizeAndHandle: IO[Unit],
     cursorVisible: Ref[IO, Boolean],
-    breathIndex: Ref[IO, Int],
     renderCursorOnly: AppRuntime.RenderFn,
     requestFastRender: IO[Unit],
     cursorIdleInterval: AppConfig => Option[FiniteDuration],
@@ -49,7 +47,6 @@ private[serenity] object AppRuntimeRenderLoops:
           pendingPaintDamage,
           checkResizeAndHandle,
           cursorVisible,
-          breathIndex,
           renderCursorOnly,
           requestFastRender,
           cursorIdleInterval,
@@ -63,7 +60,6 @@ private[serenity] object AppRuntimeRenderLoops:
     systemClipboard: SystemClipboard[IO],
     checkResizeAndHandle: IO[Unit],
     cursorVisible: Ref[IO, Boolean],
-    breathIndex: Ref[IO, Int],
     emitDamage: Damage => IO[Unit],
     translatorCache: Ref[IO, Option[FocusedTranslatorCacheEntry]] = Ref.unsafe[IO, Option[FocusedTranslatorCacheEntry]](
       None
@@ -81,10 +77,10 @@ private[serenity] object AppRuntimeRenderLoops:
             IO(frameTimings.inputApplyFinished()) >>
             ClipboardEventSync.afterEvent(event, stateManager, systemClipboard) >>
             refreshFocusedInputTranslator(stateManager, inputRouter, translatorCache) >>
-            AppRuntime.resetCursorActivity(cursorVisible, breathIndex)
+            AppRuntime.resetCursorActivity(cursorVisible)
         after <- stateManager.getModel
         _ <- emitDamage(
-          DamageProducer.forTransition(before.app, after.app, before.bufferAnimations, after.bufferAnimations)
+          DamageProducer.forTransition(before.app, after.app)
         )
       yield ()
     }.drain
@@ -147,8 +143,7 @@ private[serenity] object AppRuntimeRenderLoops:
                 checkResizeAndHandle
               )
               active <-
-                if isInitialFrame then
-                  stateManager.getModel.map(model => hasActiveAnimations(model.app, model.bufferAnimations))
+                if isInitialFrame then stateManager.getModel.map(model => hasActiveAnimations(model.app))
                 else
                   animationTickCadence.modify(_.advance(sincePreviousFrame, interval)).flatMap { animationTicks =>
                     withRuntimeDiagnostics("render loop", "fast.animation-tick", currentStateForDiagnostics)(
@@ -160,7 +155,7 @@ private[serenity] object AppRuntimeRenderLoops:
               )
               paintDamage <- pendingPaintDamage.getAndSet(Damage.Nothing)
               _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(model.app)))(
-                renderFull(model.app, true, None, paintDamage, model.bufferAnimations, renderCaches)
+                renderFull(model.app, true, None, paintDamage, renderCaches)
               )
             yield active
         }
@@ -169,8 +164,7 @@ private[serenity] object AppRuntimeRenderLoops:
         .onFinalize {
           stateManager.getModel.flatMap { model =>
             pendingDamage.get.flatMap { damage =>
-              if AppRuntime.shouldClearFastMode(hasActiveAnimations(model.app, model.bufferAnimations), damage) then
-                fastModeSignal.set(false)
+              if AppRuntime.shouldClearFastMode(hasActiveAnimations(model.app), damage) then fastModeSignal.set(false)
               else IO.unit
             }
           }
@@ -235,20 +229,8 @@ private[serenity] object AppRuntimeRenderLoops:
         forceQuit.attempt.void
     }
 
-  private[serenity] def computeIdleCursorFrame(
-    state: AppState,
-    cursorVisible: Ref[IO, Boolean],
-    breathIndex: Ref[IO, Int]
-  ): IO[(Boolean, Option[Color])] =
-    state.persisted.config.cursorMode match
-      case CursorMode.Blink =>
-        cursorVisible.updateAndGet(!_).map(vis => (vis, None))
-      case CursorMode.Breathe =>
-        for
-          i <- breathIndex.updateAndGet(i => (i + 1) % 48)
-          c     = state.persisted.config.cursorColors.activeOr(state.persisted.theme.cursor)
-          alpha = ((math.sin(i * math.Pi / 24) + 1.0) / 2.0 * 255).toInt
-        yield (true, Some(c.withAlpha(alpha)))
+  private[serenity] def computeIdleCursorFrame(cursorVisible: Ref[IO, Boolean]): IO[(Boolean, Option[Color])] =
+    cursorVisible.updateAndGet(!_).map(visible => (visible, None))
 
   private[serenity] def recoverIdleCursorRenderFailure(
     error: Throwable,
@@ -269,7 +251,6 @@ private[serenity] object AppRuntimeRenderLoops:
     pendingPaintDamage: Ref[IO, Damage],
     checkResizeAndHandle: IO[Unit],
     cursorVisible: Ref[IO, Boolean],
-    breathIndex: Ref[IO, Int],
     renderCursorOnly: AppRuntime.RenderFn,
     requestFastRender: IO[Unit],
     cursorIdleInterval: AppConfig => Option[FiniteDuration],
@@ -290,7 +271,7 @@ private[serenity] object AppRuntimeRenderLoops:
               "render loop",
               "idle.cursor",
               IO.pure(Some(state))
-            )(computeIdleCursorFrame(state, cursorVisible, breathIndex))
+            )(computeIdleCursorFrame(cursorVisible))
             // Read without draining: this frame paints the cursor overlay, never content, so consuming content
             // damage here would lose it -- an input event that lands just as an idle tick fires would have its
             // glyphs dropped until something else damaged the same rows. The fast phase that same event wakes
@@ -300,7 +281,7 @@ private[serenity] object AppRuntimeRenderLoops:
               "render loop",
               "idle.cursor-render",
               IO.pure(Some(state))
-            )(renderCursorOnly(state, visible, cursor, paintDamage, model.bufferAnimations, renderCaches))
+            )(renderCursorOnly(state, visible, cursor, paintDamage, renderCaches))
               .handleErrorWith(recoverIdleCursorRenderFailure(_, requestFastRender))
           yield ()
         case None =>
@@ -313,7 +294,7 @@ private[serenity] object AppRuntimeRenderLoops:
     animationTicker: AnimationTicker,
     pendingPaintDamage: Ref[IO, Damage]
   )(using balance: com.serenity.rope.Balance): IO[Boolean] =
-    if ticks <= 0 then stateManager.getModel.map(model => hasActiveAnimations(model.app, model.bufferAnimations))
+    if ticks <= 0 then stateManager.getModel.map(model => hasActiveAnimations(model.app))
     else
       for
         before <- stateManager.getModel
@@ -322,18 +303,15 @@ private[serenity] object AppRuntimeRenderLoops:
         }
         after <- stateManager.getModel
         _ <- pendingPaintDamage.update(
-          _ |+| DamageProducer.forTransition(before.app, after.app, before.bufferAnimations, after.bufferAnimations)
+          _ |+| DamageProducer.forTransition(before.app, after.app)
         )
       yield stillActive
 
-  private[serenity] def hasActiveAnimations(
-    state: AppState,
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
-  ): Boolean =
-    needsFullContentRender(state, bufferAnimations)
+  private[serenity] def hasActiveAnimations(state: AppState): Boolean =
+    needsFullContentRender(state)
 
   /** Whether the fast render loop's current frame needs a full content repaint, as opposed to the cheaper cursor-only
-    * overlay path. Character-reveal animations paint into document glyphs, which requires the full canvas.
+    * overlay path.
     *
     * The retired window sitter (issue #934 v2) used to be the one exception here: its glyph lived entirely in the
     * window chrome and never touched the canvas, so `canStandDownToCursorOnly` could skip a full repaint while it alone
@@ -345,9 +323,5 @@ private[serenity] object AppRuntimeRenderLoops:
     * A typing burst counts only while it is holding the floating status row hidden: that row is an overlay surface, so
     * showing it again needs a full frame, but with any other placement typing activity changes nothing on screen.
     */
-  private[serenity] def needsFullContentRender(
-    state: AppState,
-    bufferAnimations: Map[BufferId, com.serenity.animation.AnimationState]
-  ): Boolean =
-    state.persisted.buffers.keys.exists(id => bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
-      state.typingHidesFloatingStatusLine
+  private[serenity] def needsFullContentRender(state: AppState): Boolean =
+    state.typingHidesFloatingStatusLine

@@ -385,17 +385,14 @@ object RendererPaneContent:
                 lineSemanticTokens
               )
             else
-              CharacterRenderer.renderStringWithAnimation(
+              CharacterRenderer.renderStyledString(
                 context.surface,
                 screenX,
                 screenY,
                 visualLine.text,
                 lineTheme,
-                context.bufferAnimations.getOrElse(buffer.id, com.serenity.animation.AnimationState.empty),
                 state.syntaxHighlightingEnabled,
                 buffer.document.language,
-                bufferLine = visualLine.bufferLine,
-                bufferStartColumn = visualLine.startColumn,
                 styledSegments = styledSegments,
                 semanticTokens = lineSemanticTokens,
                 maxColumn = Some(rect.right),
@@ -443,21 +440,6 @@ object RendererPaneContent:
               snapshot,
               styledSegments
             )
-
-            val stringEnd = visualLine.startColumn + visualLine.text.length
-            val lineAnims = context.bufferAnimations
-              .getOrElse(buffer.id, com.serenity.animation.AnimationState.empty)
-              .getLineAnimations(visualLine.bufferLine)
-            lineAnims.foreach { (col, cell) =>
-              cell.currentBackground.foreach { bg =>
-                if col >= stringEnd then
-                  val bgScreenX = rect.x + visualLineCellOffset(visualLine, context) + (col - visualLine.startColumn)
-                  if bgScreenX >= 0 && bgScreenX < rect.right then
-                    context.surface.setForegroundColor(state.persisted.theme.foreground)
-                    context.surface.setBackgroundColor(bg)
-                    context.surface.putString(bgScreenX, screenY, " ")
-              }
-            }
     }
 
   def visualLineFits(

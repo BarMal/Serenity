@@ -2,7 +2,7 @@ package com.serenity.frontend
 
 import scala.concurrent.duration.*
 
-import com.serenity.config.{AppConfig, CursorMode}
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.KeyboardFidelityTier
 
 /** Whether the console (STDOUT) log appender should be denied entirely -- issue #1215: in TUI mode stdout is the
@@ -85,10 +85,8 @@ final case class TuiFrontend(
   val capabilities: FrontendCapabilities = FrontendCapabilities.tui(keyboardFidelityTier)
   val logRouting: LogRouting             = Frontend.tuiLogRouting
 
-  /** Issue #1170: in TUI blink mode the caret is delegated to the terminal's own hardware cursor
+  /** Issue #1170: the caret is delegated to the terminal's own hardware cursor
     * (`RendererCursorOverlay.presentHardwareCursor`), which owns blink timing entirely, so there is no idle work left
-    * to do -- breathe mode is the documented exception, since it animates colour/opacity over time, which a terminal
-    * cursor style can't represent, so it keeps the fixed blink cadence.
+    * to do.
     */
-  def cursorIdleInterval(config: AppConfig): Option[FiniteDuration] =
-    if config.cursorMode == CursorMode.Blink then None else Some(Frontend.BlinkInterval)
+  def cursorIdleInterval(config: AppConfig): Option[FiniteDuration] = None

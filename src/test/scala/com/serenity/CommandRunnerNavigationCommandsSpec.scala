@@ -4,7 +4,6 @@ import java.nio.file.Path
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.animation.{AnimationState, CharacterKey}
 import com.serenity.command.*
 import com.serenity.io.FileDialog
 import com.serenity.keystroke.events.*
@@ -105,7 +104,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
     updatedBuffer.allSelections shouldBe updatedBuffer.primarySelection.toList
   }
 
-  it should "animate the target buffer after document symbol navigation" in {
+  it should "move to the target after document symbol navigation" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
 
@@ -135,8 +134,6 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
     val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     updatedBuffer.editing.cursorPositions shouldBe List(CursorPosition(10, 0))
     updatedBuffer.viewport.topLine should be > 0
-    val animations = stateManager.getBufferAnimations.unsafeRunSync().getOrElse(bufferId, AnimationState.empty)
-    animations.activeAnimationCount should be > 0
   }
 
   it should "navigate to the previous Markdown heading from a command" in {
@@ -275,7 +272,7 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "animate the target buffer after bookmark navigation" in {
+  it should "move to the target after bookmark navigation" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
 
@@ -300,11 +297,9 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
 
     val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
     updatedBuffer.editing.cursorPositions shouldBe List(CursorPosition(4, 1))
-    val animations = stateManager.getBufferAnimations.unsafeRunSync().getOrElse(bufferId, AnimationState.empty)
-    animations.activeAnimationCount should be > 0
   }
 
-  it should "animate the visible unwrapped slice after bookmark navigation" in {
+  it should "scroll the unwrapped slice horizontally after bookmark navigation" in {
     val stateManager = createStateManager()
     val bufferId     = BufferId(0)
 
@@ -333,11 +328,8 @@ class CommandRunnerNavigationCommandsSpec extends AnyFlatSpec with Matchers:
     executeCommandThroughRunner(stateManager, "next-bookmark", "next-bookmark")
 
     val updatedBuffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
-    val animations    = stateManager.getBufferAnimations.unsafeRunSync().getOrElse(bufferId, AnimationState.empty)
     updatedBuffer.editing.cursorPositions.shouldBe(List(CursorPosition(0, 12)))
     updatedBuffer.viewport.leftColumn.should(be > 0)
-    animations.animations.should(contain.key(CharacterKey(updatedBuffer.viewport.leftColumn, 0)))
-    animations.animations.shouldNot(contain.key(CharacterKey(0, 0)))
   }
 
   it should "record document jumps in navigation history and move backward and forward" in {

@@ -26,8 +26,8 @@ trait EventApplier:
 trait StateReader:
   def getCurrentState: IO[AppState]
 
-  /** One consistent snapshot of everything the dispatcher owns: use it wherever app state and buffer animations are
-    * read together, since two separate reads can straddle a write.
+  /** One consistent snapshot of everything the dispatcher owns: use it wherever app state and undo history are read
+    * together, since two separate reads can straddle a write.
     */
   def getModel: IO[Model]
 
@@ -210,8 +210,7 @@ object StateManager:
             initialState.runtime
               .copy(themeDiscovery = initialState.runtime.themeDiscovery.copy(availableThemeNames = themeNames))
           ),
-          undo = UndoState(maxUndoDepth = policy.maxUndoDepth),
-          bufferAnimations = Map.empty
+          undo = UndoState(maxUndoDepth = policy.maxUndoDepth)
         )
       )
       mouseTargetCacheRef <- Ref.of[IO, Option[MouseTargetCache]](None)

@@ -15,8 +15,7 @@ import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.{TextEntryTranslator, Translator}
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, BufferId, Damage}
-import com.serenity.testkit.ActiveAnimationFixtures
+import com.serenity.state.models.{AppState, Damage}
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -58,6 +57,16 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
     AppRuntime.fastFrameDelay(frameInterval, Some(1.second), 1.second + 10.millis) shouldBe frameInterval - 10.millis
   }
 
+  /** A state the fast loop treats as still active: a typing burst holding the floating status row hidden. */
+  private def typingState(target: RenderFpsTarget): AppState =
+    val initial = AppState.initial
+    initial.copy(
+      persisted = initial.persisted.copy(config =
+        initial.persisted.config.withRenderFpsTarget(target).withStatusLinePlacement(StatusLinePlacement.Floating)
+      ),
+      runtime = initial.runtime.copy(typingActivity = initial.runtime.typingActivity.observed(0L))
+    )
+
   it should "render the first fast frame, and any frame whose deadline has passed, without waiting" in {
     val frameInterval = AppRuntime.fastFrameInterval(RenderFpsTarget.Fps30)
 
@@ -68,11 +77,7 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
 
   it should "render an input-requested first fast frame immediately, pace its follow-up, and defer its animation tick" in {
     val frameInterval = AppRuntime.fastFrameInterval(RenderFpsTarget.Fps30)
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        config = AppState.initial.persisted.config.withRenderFpsTarget(RenderFpsTarget.Fps30)
-      )
-    )
+    val state         = typingState(RenderFpsTarget.Fps30)
 
     val program = for
       fastModeSignal       <- fs2.concurrent.SignallingRef.of[IO, Boolean](false)
@@ -83,25 +88,14 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
       rendered             <- Ref.of[IO, Vector[Int]](Vector.empty)
       requestedDelays      <- Ref.of[IO, Vector[FiniteDuration]](Vector.empty)
       cursorVisible        <- Ref.of[IO, Boolean](true)
-      breathIndex          <- Ref.of[IO, Int](0)
       stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState] = IO.pure(state)
         def getModel: IO[com.serenity.state.manager.Model] =
-          IO.pure(
-            com.serenity.state.manager
-              .Model(state, com.serenity.state.undo.UndoState(), ActiveAnimationFixtures.bufferAnimations(state))
-          )
-        def getBufferAnimations: IO[Map[BufferId, com.serenity.animation.AnimationState]] = IO.pure(Map.empty)
-        def updateState(update: AppState => AppState): IO[Unit]                           = IO.unit
-        def updateStateValidated(update: AppState => AppState): IO[Unit]                  = IO.unit
-        def updateBufferAnimations(
-          update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
-            BufferId,
-            com.serenity.animation.AnimationState
-          ]
-        ): IO[Unit] = IO.unit
-        def applyEvent(event: Event): IO[Unit] = IO.unit
-        def advanceAnimationFrames(): IO[Unit] = IO.unit
+          IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState()))
+        def updateState(update: AppState => AppState): IO[Unit]          = IO.unit
+        def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit]                           = IO.unit
+        def advanceAnimationFrames(): IO[Unit]                           = IO.unit
       animationTicker = com.serenity.state.manager.AnimationTicker(
         advanceAnimationsOnTick = animationTicks.updateAndGet(_ + 1).as(true)
       )
@@ -121,7 +115,6 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
           clipboard,
           IO.unit,
           cursorVisible,
-          breathIndex,
           emitDamage
         )(Stream.emit(InsertChar('a')))
         .compile
@@ -141,7 +134,6 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
             _: Boolean,
             _: Option[Color],
             _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState],
             _: com.serenity.state.manager.RenderCaches
           ) => animationTicks.get.flatMap(tickCount => rendered.update(_ :+ tickCount)),
           com.serenity.state.manager.RenderCaches.create(),
@@ -244,11 +236,7 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
     startAt: FiniteDuration,
     frames: Int
   ): PacedFrames =
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        config = AppState.initial.persisted.config.withRenderFpsTarget(RenderFpsTarget.Fps60)
-      )
-    )
+    val state = typingState(RenderFpsTarget.Fps60)
     val program = for
       clock                <- Ref.of[IO, FiniteDuration](startAt)
       lastStart            <- Ref.of[IO, Option[FiniteDuration]](lastFrameStart)
@@ -262,10 +250,7 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
       stateManager = new com.serenity.state.manager.StateEngine:
         def getCurrentState: IO[AppState] = IO.pure(state)
         def getModel: IO[com.serenity.state.manager.Model] =
-          IO.pure(
-            com.serenity.state.manager
-              .Model(state, com.serenity.state.undo.UndoState(), ActiveAnimationFixtures.bufferAnimations(state))
-          )
+          IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState()))
         def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
         def applyEvent(event: Event): IO[Unit]                           = IO.unit
       animationTicker = com.serenity.state.manager.AnimationTicker(
@@ -287,7 +272,6 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
             _: Boolean,
             _: Option[Color],
             _: Damage,
-            _: Map[BufferId, com.serenity.animation.AnimationState],
             _: com.serenity.state.manager.RenderCaches
           ) =>
             for

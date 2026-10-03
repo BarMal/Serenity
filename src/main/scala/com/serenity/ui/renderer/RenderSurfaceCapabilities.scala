@@ -99,10 +99,10 @@ enum HardwareCursorShape:
 /** A DECSCUSR-expressible caret style: shape plus whether the terminal should blink it itself.
   *
   * There is no cursor-shape setting in [[com.serenity.config.CursorConfig]] today (only
-  * [[com.serenity.config.CursorMode]]'s blink/breathe choice) -- callers that delegate the caret to the terminal
-  * (#1170) currently always ask for a blinking block, the shape every terminal defaults to. `decscusrParam` is kept as
-  * a total function of shape/blink regardless, so a future per-buffer shape setting has somewhere to plug in without
-  * touching the escape-emission code.
+  * [[com.serenity.config.CursorMode]]'s blink mode) -- callers that delegate the caret to the terminal (#1170)
+  * currently always ask for a blinking block, the shape every terminal defaults to. `decscusrParam` is kept as a total
+  * function of shape/blink regardless, so a future per-buffer shape setting has somewhere to plug in without touching
+  * the escape-emission code.
   */
 final case class HardwareCursorStyle(shape: HardwareCursorShape, blinking: Boolean):
 
@@ -126,10 +126,7 @@ trait HardwareCursor:
     */
   def present(cellX: Int, cellY: Int, style: HardwareCursorStyle): Unit
 
-  /** Hide the terminal's own cursor (`DECTCEM` hide) -- used when the caret is app-painted instead (breathe mode on a
-    * GUI canvas, #1170's documented exception; a cell-addressed terminal instead approximates breathe by thresholding
-    * its alpha into present/hide, see `RendererCursorOverlay.presentHardwareCursor`) or genuinely not visible this
-    * frame.
+  /** Hide the terminal's own cursor (`DECTCEM` hide) -- used when the caret is not visible this frame.
     */
   def hide(): Unit
 

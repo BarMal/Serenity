@@ -57,12 +57,6 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
         modelCommit.commitState(newState, fallbackState)
       def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
         modelCommit.updateValidated(transition)
-      def updateBufferAnimations(
-        update: Map[BufferId, com.serenity.animation.AnimationState] => Map[
-          BufferId,
-          com.serenity.animation.AnimationState
-        ]
-      ): IO[Unit] = modelCommit.updateBufferAnimations(update)
       def scheduleDocumentAnalysis(): IO[Unit]                     = IO.unit
       def scheduleFindSearch(request: FindSearchRequest): IO[Unit] = IO.unit
       def submitEffect(lane: Lane.Keyed, job: IO[Unit]): IO[Unit] =
@@ -83,7 +77,7 @@ class PersistenceEffectLanesSpec extends AnyFlatSpec with Matchers:
 
   private def rig(initial: AppState = AppState.initial): IO[Rig] =
     for
-      modelRef <- Ref.of[IO, Model](Model(initial, UndoState(), Map.empty))
+      modelRef <- Ref.of[IO, Model](Model(initial, UndoState()))
       listed   <- Ref.of[IO, List[Path]](Nil)
       // Virtual time never finishes a real blocking directory read, so listings are recorded instead.
       operations <- StateManagerOperationBoundary.create(

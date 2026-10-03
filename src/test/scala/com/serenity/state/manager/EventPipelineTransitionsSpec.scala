@@ -1,9 +1,7 @@
 package com.serenity.state.manager
 
-import com.serenity.animation.SweepDirection
 import com.serenity.command.CommandRegistry
 import com.serenity.config.AppConfig
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.keystroke.events.{NextTab, ResizeEvent, ToggleCommandRunner}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -81,33 +79,14 @@ class EventPipelineTransitionsSpec extends AnyFlatSpec with Matchers:
     EventPipelineTransitions.withCursorPeekAnchorResolved(result) shouldBe result
   }
 
-  "committed" should "fold a result's state and its animation effects into the model" in {
-    val model  = Model(twoPanes(), UndoState(), Map.empty)
+  "committed" should "fold a result's state and its undo effects into the model" in {
+    val model  = Model(twoPanes(), UndoState())
     val result = AppEventReducer.reduce(NextTab, model.app, CommandRegistry.withToggleUI)
 
     val next = EventPipelineTransitions.committed(model, result)
 
     next.app shouldBe result.state
     next.undo shouldBe model.undo
-  }
-
-  "withPaneFlow" should "sweep the active pane's buffer so the tab switch and its animation commit together" in {
-    val state     = twoPanes(AppConfig.withTestAnimations)
-    val switched  = AppEventReducer.reduce(NextTab, state, CommandRegistry.withToggleUI)
-    val committed = EventPipelineTransitions.committed(Model(state, UndoState(), Map.empty), switched)
-
-    val swept = EventPipelineTransitions.withPaneFlow(committed, SweepDirection.Backward)
-
-    val app = valid(swept.app)
-    app shouldBe switched.state
-    val sweptBuffer = app.focusedBufferId.getOrElse(fail("expected a focused buffer"))
-    swept.bufferAnimations.get(sweptBuffer).exists(_.hasActiveAnimations) shouldBe true
-  }
-
-  it should "leave buffer animations alone when UI transitions are off" in {
-    val model = Model(twoPanes(AppConfig.default.withUiAnimation(None)), UndoState(), Map.empty)
-
-    EventPipelineTransitions.withPaneFlow(model, SweepDirection.Forward) shouldBe model
   }
 
   "commandRunnerFocusNormalized" should "hand focus back to an open command runner that lost it" in {

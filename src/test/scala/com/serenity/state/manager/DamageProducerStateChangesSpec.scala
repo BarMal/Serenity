@@ -1,6 +1,5 @@
 package com.serenity.state.manager
 
-import com.serenity.animation.{AnimatedCell, AnimationState, CharacterKey, EasingCurve, Tween}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange}
 import com.serenity.rope.{Balance, Rope}
@@ -230,47 +229,6 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
 
       DamageProducer.forTransition(before, after) shouldBe Damage.Everything
     }
-
-  private val revealCell = AnimatedCell(
-    Some('x'),
-    foregroundAnimation = Some(Tween(java.awt.Color.WHITE, java.awt.Color.WHITE, EasingCurve.Linear, steps = 1))
-  )
-
-  it should "report the changed rows when a character-reveal animation tick advances" in {
-    val before   = stateWithContent("first\nsecond\nthird")
-    val animated = AnimationState(Map(CharacterKey(0, 1) -> revealCell))
-
-    DamageProducer.forTransition(
-      before,
-      before,
-      beforeAnimations = Map.empty,
-      afterAnimations = Map(bufferId -> animated)
-    ) shouldBe Damage.BufferRows(bufferId, Set(1))
-  }
-
-  it should "report the union of changed rows when several cells across different rows tick at once" in {
-    val before   = stateWithContent("first\nsecond\nthird")
-    val animated = AnimationState(Map(CharacterKey(0, 0) -> revealCell, CharacterKey(2, 2) -> revealCell))
-
-    DamageProducer.forTransition(
-      before,
-      before,
-      beforeAnimations = Map.empty,
-      afterAnimations = Map(bufferId -> animated)
-    ) shouldBe Damage.BufferRows(bufferId, Set(0, 2))
-  }
-
-  it should "report no damage when a transition changes nothing about the buffer's animations" in {
-    val before   = stateWithContent("first\nsecond\nthird")
-    val animated = AnimationState(Map(CharacterKey(0, 1) -> revealCell))
-
-    DamageProducer.forTransition(
-      before,
-      before,
-      beforeAnimations = Map(bufferId -> animated),
-      afterAnimations = Map(bufferId -> animated)
-    ) shouldBe Damage.Nothing
-  }
 
   it should "report Everything when a floating/pinned surface appears" in {
     val before = stateWithContent("alpha")

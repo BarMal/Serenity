@@ -1,24 +1,13 @@
 package com.serenity.state.manager
 
-import java.awt.Color
 import java.nio.file.{Files, Path}
 
 import cats.data.State
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.StateManagerTestFixtures
-import com.serenity.animation.AnimationState
-import com.serenity.command.{
-  Command,
-  CommandCategory,
-  CommandIntent,
-  FileIntent,
-  MotionIntent,
-  SessionIntent,
-  SettingsIntent,
-  ViewIntent
-}
-import com.serenity.config.{AppConfig, MotionAccessibility, PreferredWindowSize}
+import com.serenity.command.{Command, CommandCategory, CommandIntent, FileIntent, SessionIntent, ViewIntent}
+import com.serenity.config.PreferredWindowSize
 import com.serenity.keystroke.events.{Enter, InsertChar, NextTab, TabKey, ToggleCommandRunner, Undo}
 import com.serenity.project.{ProjectTaskCommand, ProjectTaskKind, ProjectTaskResult}
 import com.serenity.rope.Balance
@@ -36,8 +25,8 @@ import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.noop.NoOpLogger
 
-/** The dispatcher-owned model (#1697 F3): app state, undo history and buffer animations live in one `Ref`, so an
-  * operation that changes several of them commits them together.
+/** The dispatcher-owned model (#1697 F3): app state and undo history live in one `Ref`, so an operation that changes
+  * several of them commits them together.
   *
   * The model ref here records every value written to it. That record is exactly the set of snapshots a reader (the
   * renderer, `getModel`) could ever observe, so "no recorded write is torn" means no reader can see a torn model.
@@ -110,9 +99,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager.fromRuntime(runtime)
     yield stateManager
 
-  private val animatedInitial: Model =
-    val app = AppState.initial.copy(persisted = AppState.initial.persisted.copy(config = AppConfig.withTestAnimations))
-    Model(app, UndoState(), Map.empty)
+  private val initialModel: Model = Model(AppState.initial, UndoState())
 
   /** A fresh buffer holding "Hello", focused in the first pane with the cursor at its end. */
   private def focusedHelloBuffer(stateManager: StateManager): IO[BufferId] =
@@ -132,13 +119,10 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
   private def hasUndoHistory(model: Model): Boolean =
     model.undo.pendingGroup.nonEmpty || model.undo.undoStack.nonEmpty
 
-  private def hasAnimations(model: Model, bufferId: BufferId): Boolean =
-    model.bufferAnimations.get(bufferId).exists(_.hasActiveAnimations)
-
-  "An edit" should "commit its text, its undo entry and its character animation in one write" in {
+  "An edit" should "commit its text and its undo entry in one write" in {
     val program =
       for
-        recorded     <- recording(animatedInitial)
+        recorded     <- recording(initialModel)
         stateManager <- stateManagerOver(recorded.modelRef)
         bufferId     <- focusedHelloBuffer(stateManager)
         _            <- recorded.clear
@@ -151,18 +135,14 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
 
     content(after, bufferId) shouldBe Some("Helloa")
     hasUndoHistory(after) shouldBe true
-    hasAnimations(after, bufferId) shouldBe true
     writes should not be empty
     all(writes.map(model => content(model, bufferId).contains("Helloa") == hasUndoHistory(model))) shouldBe true
-    all(
-      writes.map(model => content(model, bufferId).contains("Helloa") == hasAnimations(model, bufferId))
-    ) shouldBe true
   }
 
   "Undo" should "restore the text and move its entry to the redo stack in one write" in {
     val program =
       for
-        recorded     <- recording(animatedInitial)
+        recorded     <- recording(initialModel)
         stateManager <- stateManagerOver(recorded.modelRef)
         bufferId     <- focusedHelloBuffer(stateManager)
         _            <- stateManager.applyEvent(InsertChar('a'))
@@ -180,35 +160,8 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     all(writes.map(model => content(model, bufferId).contains("Hello") == model.undo.redoStack.nonEmpty)) shouldBe true
   }
 
-  "Disabling motion" should "cancel buffer animations in one write" in {
-    val bufferId = BufferId(0)
-    val animations =
-      Map(bufferId -> AnimationState.empty.addCharacterAnimation('a', 0, 0, Color.BLACK, Color.WHITE, 5))
-    val disableMotion = Command.typed(
-      "disable-motion",
-      "Disable motion",
-      CommandIntent.Settings(SettingsIntent.Motion(MotionIntent.SetMotionAccessibility(MotionAccessibility.Off))),
-      CommandCategory.Settings
-    )
-    val program =
-      for
-        recorded     <- recording(Model(AppState.initial, UndoState(), animations))
-        stateManager <- stateManagerOver(recorded.modelRef)
-        _            <- stateManager.executeCommand(disableMotion)
-        writes       <- recorded.recordedWrites
-        after        <- stateManager.getModel
-      yield (writes, after)
-
-    val (writes, after) = program.unsafeRunSync()
-
-    hasAnimations(after, bufferId) shouldBe false
-    writes should not be empty
-  }
-
   "A validated model write" should "leave every part of the model unchanged when the app state it carries is invalid" in {
-    val animations =
-      Map(BufferId(0) -> AnimationState.empty.addCharacterAnimation('a', 0, 0, Color.BLACK, Color.WHITE, 5))
-    val before = Model(AppState.initial, UndoState(), animations)
+    val before = Model(AppState.initial, UndoState())
     val invalid =
       AppState.initial.copy(persisted = AppState.initial.persisted.copy(focus = Focus.EditorPane(PaneId(999))))
     val program =
@@ -216,17 +169,17 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
         recorded   <- recording(before)
         operations <- StateManagerOperationBoundary.create(recorded.modelRef, quietLogger)
         commit = operations.modelCommit
-        _     <- commit.updateValidated(_ => Some(Model(invalid, UndoState(maxUndoDepth = 3), Map.empty)))
+        _     <- commit.updateValidated(_ => Some(Model(invalid, UndoState(maxUndoDepth = 3))))
         after <- recorded.modelRef.get
       yield after
 
     program.unsafeRunSync() shouldBe before
   }
 
-  "Cycling to the next tab" should "commit the buffer switch and its pane-flow sweep in one write" in {
+  "Cycling to the next tab" should "commit the buffer switch in one write" in {
     val program =
       for
-        recorded     <- recording(animatedInitial)
+        recorded     <- recording(initialModel)
         stateManager <- stateManagerOver(recorded.modelRef)
         _            <- focusedHelloBuffer(stateManager)
         nextBufferId <- stateManager.createBuffer("World", None)
@@ -241,9 +194,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     def showsNext(model: Model): Boolean = model.app.focusedBufferId.contains(nextBufferId)
 
     showsNext(after) shouldBe true
-    hasAnimations(after, nextBufferId) shouldBe true
     writes should not be empty
-    all(writes.map(model => showsNext(model) == hasAnimations(model, nextBufferId))) shouldBe true
   }
 
   private def viewCommand(intent: ViewIntent): Command =
@@ -255,7 +206,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
   "Pinning a panel" should "commit the panel and its undo boundary in one write" in {
     val program =
       for
-        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        recorded     <- recording(Model(AppState.initial, UndoState()))
         stateManager <- stateManagerOver(recorded.modelRef)
         _            <- stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Diagnostics)))
         writes       <- recorded.recordedWrites
@@ -272,7 +223,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
   "Pinning a panel through the panel manager" should "commit the panel and its undo boundary in one write" in {
     val program =
       for
-        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        recorded     <- recording(Model(AppState.initial, UndoState()))
         stateManager <- stateManagerOver(recorded.modelRef)
         _            <- stateManager.pinPanel(PanelContent.Diagnostics(Nil), PanelPosition.Right, 30)
         writes       <- recorded.recordedWrites
@@ -291,7 +242,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     val unpin = ViewIntent.SetPanelPin(PanelId.Diagnostics, None)
     val program =
       for
-        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        recorded     <- recording(Model(AppState.initial, UndoState()))
         stateManager <- stateManagerOver(recorded.modelRef)
         _            <- stateManager.executeCommand(viewCommand(ViewIntent.TogglePanelShown(PanelId.Diagnostics)))
         _            <- recorded.clear
@@ -316,7 +267,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
       Command.typed("close-all", "Close all", CommandIntent.File(FileIntent.CloseAll), CommandCategory.File)
     val program =
       for
-        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        recorded     <- recording(Model(AppState.initial, UndoState()))
         stateManager <- stateManagerOver(recorded.modelRef)
         first        <- focusedHelloBuffer(stateManager)
         second       <- stateManager.createBuffer("World", None)
@@ -349,7 +300,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
     )
     val program =
       for
-        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        recorded     <- recording(Model(AppState.initial, UndoState()))
         stateManager <- stateManagerOver(recorded.modelRef)
         _            <- stateManager.executeCommand(restore)
         writes       <- recorded.recordedWrites
@@ -378,7 +329,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
         directory <- IO.blocking(Files.createTempDirectory("model-atomicity-presets"))
         store = UiPresetStore(directory.resolve("presets.json"))
         _            <- store.create(UiPreset.capture("Existing", AppState.initial, None))
-        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        recorded     <- recording(Model(AppState.initial, UndoState()))
         stateManager <- stateManagerOver(recorded.modelRef, Some(store))
         _            <- stateManager.applyEvent(ToggleCommandRunner)
         writes       <- recorded.recordedWrites
@@ -410,7 +361,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
   "Replace all" should "commit the replaced text and its undo entry in one write" in {
     val program =
       for
-        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        recorded     <- recording(Model(AppState.initial, UndoState()))
         stateManager <- stateManagerOver(recorded.modelRef)
         bufferId     <- focusedHelloBuffer(stateManager)
         _            <- recorded.clear
@@ -430,7 +381,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
   "Replace next" should "commit the replaced text, its undo entry and the prompt's status in one write" in {
     val program =
       for
-        recorded     <- recording(Model(AppState.initial, UndoState(), Map.empty))
+        recorded     <- recording(Model(AppState.initial, UndoState()))
         stateManager <- stateManagerOver(recorded.modelRef)
         bufferId     <- focusedHelloBuffer(stateManager)
         _            <- recorded.clear
@@ -469,8 +420,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
       AppState.initial.copy(runtime =
         AppState.initial.runtime.copy(projectTasks = ProjectTasks(nextId = 1L, running = Some(running)))
       ),
-      UndoState(),
-      Map.empty
+      UndoState()
     )
     val program =
       for

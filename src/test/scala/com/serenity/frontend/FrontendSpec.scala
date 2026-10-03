@@ -56,14 +56,6 @@ class FrontendSpec extends AnyFlatSpec with Matchers:
     frontend.cursorIdleInterval(AppConfig.default.withCursorMode(CursorMode.Blink)) shouldBe None
   }
 
-  it should "keep ticking in breathe mode, since a terminal cursor style can't represent colour/opacity animation" in {
-    val frontend = TuiFrontend(KeyboardFidelityTier.Full)
-
-    frontend.cursorIdleInterval(AppConfig.default.withCursorMode(CursorMode.Breathe)) shouldBe Some(
-      Frontend.BlinkInterval
-    )
-  }
-
   "Frontend.guiLogRouting/tuiLogRouting" should "match what a constructed instance's own logRouting answers" in {
     Frontend.guiLogRouting shouldBe GuiFrontend.logRouting
     Frontend.tuiLogRouting shouldBe TuiFrontend(KeyboardFidelityTier.Full).logRouting

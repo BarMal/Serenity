@@ -76,7 +76,7 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
             showLineNumbers = false
           ),
           cursorConfig = CursorConfig(
-            mode = CursorMode.Breathe,
+            mode = CursorMode.Blink,
             colors = CursorColorConfig(
               active = Some(Color(0x22, 0x44, 0x88)),
               inactive = Some(Color(0x88, 0x44, 0x22, 0x99))
@@ -137,7 +137,7 @@ class SessionStateConfigSpec extends AnyFlatSpec with Matchers:
     decoded.config.surfaceConfig.commandRunnerCursorGapRows shouldBe Some(3)
     decoded.config.surfaceConfig.renderFpsTarget shouldBe RenderFpsTarget.Fps120
     decoded.config.cursorConfig shouldBe CursorConfig(
-      mode = CursorMode.Breathe,
+      mode = CursorMode.Blink,
       colors = CursorColorConfig(
         active = Some(Color(0x22, 0x44, 0x88)),
         inactive = Some(Color(0x88, 0x44, 0x22, 0x99))

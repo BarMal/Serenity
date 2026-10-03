@@ -1,14 +1,12 @@
 package com.serenity.state.reducers
 
-import com.serenity.animation.*
-import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.richtext.{RichTextDocument, RichTextPosition, RichTextRange}
 import com.serenity.rope.*
 import com.serenity.state.models.*
 import com.serenity.state.undo.{BufferSnapshot, HistoryEntry}
 
 /** Low-level infrastructure shared by every family of [[EditorEventReducer]] event handling: applying one or many
-  * [[MultiCursorEdit]]s to a buffer's content, rich text document, comments and animations in lockstep. Extracted from
+  * [[MultiCursorEdit]]s to a buffer's content, rich text document and comments in lockstep. Extracted from
   * `EditorEventReducer` (which grew past its 600-line target) rather than any one event family, since every family that
   * edits content -- text editing, clipboard, deletion -- depends on this pairing being kept consistent.
   */
@@ -29,23 +27,6 @@ private[state] object EditorEditSupport:
 
   final case class MultiCursorEdit(ownerIndex: Int, start: Int, end: Int, insertedText: String)
 
-  def animationRemapEffects(
-    bufferId: BufferId,
-    before: Rope,
-    after: Rope,
-    edits: List[MultiCursorEdit]
-  ): List[AppEffect] =
-    if edits.isEmpty then Nil
-    else
-      List(
-        AppEffect.Animation(
-          AnimationEffect.RemapThroughEdits(bufferId, before, after, edits.map(toTextEdit))
-        )
-      )
-
-  def animationMergeEffects(bufferId: BufferId, delta: Map[CharacterKey, AnimatedCell]): List[AppEffect] =
-    if delta.isEmpty then Nil else List(AppEffect.Animation(AnimationEffect.Merge(bufferId, delta)))
-
   /** Declares the edit(s) just performed as undoable -- see #1016. `before` is the buffer as it stood immediately
     * before this call's edits; every caller already has it in scope as the receiver it edited. `groupable` mirrors
     * whether the triggering event was a character/tab insertion, the only two event kinds a consecutive run of which
@@ -62,9 +43,6 @@ private[state] object EditorEditSupport:
     else
       val entry = HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(before))
       List(AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable)))
-
-  private def toTextEdit(edit: MultiCursorEdit): TextEdit =
-    TextEdit(edit.start, edit.end, edit.insertedText)
 
   def backwardGraphemeDeletionRange(content: Rope, offset: Int): Option[(Int, Int)] =
     val beforeOrAt = content.graphemeBoundaryBeforeOrAt(offset)
@@ -491,106 +469,3 @@ private[state] object EditorEditSupport:
   def richTextPositionForOffset(content: Rope, offset: Int): RichTextPosition =
     val (line, column) = content.offsetToLineColumn(offset)
     RichTextPosition(line, column)
-
-  /** Returns the buffer with content/comments/etc. applied but animations untouched, plus the delta of newly animated
-    * cells for the caller to hand to the presentation layer (`#1001`) -- this function never had access to the buffer's
-    * *current* animations beyond merging into them, so it never needed to read them; only the merge itself moves to the
-    * caller.
-    */
-  def addInsertionAnimations(
-    buffer: Buffer,
-    state: AppState,
-    edits: List[MultiCursorEdit]
-  ): (Buffer, Map[CharacterKey, AnimatedCell]) =
-    val sortedEdits = edits
-      .filter(_.insertedText.nonEmpty)
-      .sortBy(edit => (edit.start, edit.end))
-
-    if sortedEdits.isEmpty then (buffer, Map.empty)
-    else
-      val insertedCells = insertedTransitionCells(buffer.document.content, sortedEdits, state)
-      if insertedCells.isEmpty then (buffer, Map.empty)
-      else
-        val plan = ElementTransitionPlanner.plan(
-          ElementTransitionRequest(TransitionScope.EditorInsertion),
-          state.persisted.config.editorInsertionTransitionSettings
-        )
-        if plan.kind == TransitionKind.Disabled then (buffer, Map.empty)
-        else if plan.kind == TransitionKind.Fade then
-          state.persisted.config.scaledCharacterAnimation match
-            case Some(animConfig) =>
-              insertedCells.headOption match
-                case Some((key, cell)) if insertedCells.size == 1 =>
-                  val delta = Map(
-                    key -> AnimatedCell.parametricForeground(
-                      cell.char,
-                      cell.startColor,
-                      cell.endColor,
-                      animConfig.steps
-                    )
-                  )
-                  (buffer, delta)
-                case _ =>
-                  val staggeredCells = insertedCells
-                    .groupBy { case (key, _) => key.line }
-                    .valuesIterator
-                    .flatMap(lineCells =>
-                      FlowAnimationBuilder.build(
-                        cells = lineCells,
-                        direction = FlowDirection.ByColumn,
-                        sweep = SweepDirection.Forward,
-                        steps = animConfig.steps,
-                        staggerFrames = 1
-                      )
-                    )
-                    .toMap
-                  (buffer, staggeredCells)
-            case None =>
-              (buffer, Map.empty)
-        else
-          val animationState = ElementTransitionLowerer.lower(
-            plan,
-            ElementTransitionCells(content = insertedCells),
-            tickRateMs = 16
-          )
-          (buffer, animationState.animations)
-
-  private def insertedTransitionCells(
-    content: Rope,
-    edits: List[MultiCursorEdit],
-    state: AppState,
-    maxAnimatedCells: Int = CellAnimation.DefaultMaxAnimatedCells
-  ): Map[CharacterKey, CellAnimation] =
-    val animationFor =
-      CellAnimation.curriedFor(state.persisted.theme.backgroundColor, state.persisted.theme.foregroundColor)
-    edits.foldLeft(Map.empty[CharacterKey, CellAnimation]) { (cells, edit) =>
-      val remainingBudget = maxAnimatedCells - cells.size
-      if remainingBudget <= 0 then cells
-      else
-        val finalStartOffset = remapEditBoundary(edit.start, edits, insertionAtBoundaryMoves = false)
-        cells ++ insertedCellsFromText(
-          content,
-          finalStartOffset,
-          edit.insertedText.take(remainingBudget),
-          animationFor
-        )
-    }
-
-  private def insertedCellsFromText(
-    content: Rope,
-    startOffset: Int,
-    insertedText: String,
-    animationFor: Char => CellAnimation
-  ): Map[CharacterKey, CellAnimation] =
-    insertedText
-      .foldLeft((Map.empty[CharacterKey, CellAnimation], startOffset)) {
-        case ((cells, offset), char) if char == '\n' =>
-          (cells, offset + 1)
-        case ((cells, offset), char) =>
-          val (line, column) = content.offsetToLineColumn(offset)
-          (
-            cells + (CharacterKey(column, line) -> animationFor(char)),
-            offset + 1
-          )
-      }
-      ._1

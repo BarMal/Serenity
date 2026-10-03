@@ -4,7 +4,6 @@ import java.nio.file.Path
 
 import cats.effect.*
 import cats.syntax.foldable.*
-import com.serenity.animation.AnimationState
 import com.serenity.config.PreferredWindowSize
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
@@ -108,8 +107,6 @@ private[manager] class StateManagerComposition(
       modelCommit.commitState(newState, fallbackState)
     def updateModelValidated(transition: Model => Option[Model]): IO[Unit] =
       modelCommit.updateValidated(transition)
-    def updateBufferAnimations(update: Map[BufferId, AnimationState] => Map[BufferId, AnimationState]): IO[Unit] =
-      modelCommit.updateBufferAnimations(update)
     def scheduleDocumentAnalysis(): IO[Unit]                     = operations.scheduleDocumentAnalysis()
     def scheduleFindSearch(request: FindSearchRequest): IO[Unit] = operations.scheduleFindSearch(request)
     def submitEffect(lane: Lane.Keyed, job: IO[Unit]): IO[Unit]  = operations.submitEffect(lane, job)

@@ -5,7 +5,6 @@ import java.awt.image.BufferedImage
 import java.nio.file.{Files, Path}
 
 import cats.effect.{IO, Resource}
-import com.serenity.animation.*
 import com.serenity.config.{AppConfig, MarkdownViewMode}
 import com.serenity.keystroke.events.{
   DeleteBackward,
@@ -319,20 +318,6 @@ object PerformanceBenchmarks:
     val framedLspMessages = lspMessages.flatMap(LspFramer.encode).toArray
     val projectTask       = ProjectTaskDetector.detect(projectRoot, ProjectTaskKind.Test)
     prepareCursorBaseFrame(plainScrollState, cursorWindow, renderCaches)
-    val animationCells = multilineState.persisted.buffers
-      .get(BufferId(1))
-      .map(buffer =>
-        com.serenity.state.manager.VisibleBufferAnimationCells.fromBuffer(
-          buffer,
-          wordWrapEnabled = false,
-          startColor = Theme.light.muted,
-          endColor = Theme.light.foreground
-        )
-      )
-      .getOrElse(Map.empty)
-    val animationState = AnimationState(
-      FlowAnimationBuilder.build(animationCells, FlowDirection.ByColumn, SweepDirection.Forward, 12)
-    )
     val fullFrame               = renderedFrame(richState, deviceScale = 1.0, renderCaches)
     val diagnosticsAndComments  = renderedFrame(diagnosticsState, deviceScale = 1.0, renderCaches)
     val hidpiFrame              = renderedFrame(commentsState, deviceScale = 2.0, renderCaches)
@@ -349,9 +334,8 @@ object PerformanceBenchmarks:
       )
     val markdownHtmlFragment =
       MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark", markdownPreviewCache)
-    val markdownLensFrame      = renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
-    val longMeasuredLineFrame  = renderedLongMeasuredLine(longMeasuredLine)
-    val advancedAnimationState = animationState.advanceAllAnimations()
+    val markdownLensFrame     = renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
+    val longMeasuredLineFrame = renderedLongMeasuredLine(longMeasuredLine)
 
     List(
       BenchmarkRunner.Benchmark(
@@ -428,7 +412,7 @@ object PerformanceBenchmarks:
         () => renderedFrame(commentsState, deviceScale = 2.0, renderCaches)
       )
     ) ++ reducerBenchmarks(editingState, plainScrollState, richScrollState, deepViewport) ++
-      AnimationTickBenchmarks.benchmarks(editingState) ++ DamageBenchmarks.benchmarks() ++ equalsBenchmarks() ++ List(
+      DamageBenchmarks.benchmarks() ++ equalsBenchmarks() ++ List(
         BenchmarkRunner.Benchmark(
           "find_replace.large_result_set",
           3,
@@ -501,13 +485,6 @@ object PerformanceBenchmarks:
           BenchmarkIterationCounts.RenderMarkdown,
           () => assert(renderedFrameHasPixels(markdownLensFrame)),
           () => renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
-        ),
-        BenchmarkRunner.Benchmark(
-          "animation.large_visible_tick",
-          3,
-          30,
-          () => assert(animationCells.nonEmpty && advancedAnimationState != animationState),
-          () => animationState.advanceAllAnimations()
         )
       )
 
@@ -694,7 +671,7 @@ object PerformanceBenchmarks:
     )
     surface.setFont(textFont)
     surface.clearViewport(Theme.light.background)
-    CharacterRenderer.renderMeasuredLineWithAnimation(
+    CharacterRenderer.renderMeasuredLine(
       surface,
       xOriginPx = 0.0f,
       yPx = 0,
@@ -702,7 +679,6 @@ object PerformanceBenchmarks:
       ascentPx = cellMetrics.ascent,
       line,
       Theme.light,
-      AnimationState.empty,
       clipRightXPx = Some(frameWidthPx.toFloat)
     )
     image
