@@ -42,7 +42,8 @@ final private[manager] class StateManagerOperationBoundary private (
     fileWriteLedger: FileWriteLedger,
     discoverDictionaryFingerprints: SpellCheckConfig => IO[List[SpellCheckDictionaryFingerprint]],
     dictionaryCache: DictionaryCache,
-    listDirectory: Path => IO[List[DirEntry]]
+    listDirectory: Path => IO[List[DirEntry]],
+    commitObserver: Ref[IO, (AppState, AppState) => IO[Unit]]
 ):
   private val DocumentAnalysisDebounce         = 150.millis
   private val FindSearchDebounce               = 50.millis
@@ -104,7 +105,12 @@ final private[manager] class StateManagerOperationBoundary private (
   private[manager] def afterCommit(fallbackState: AppState, committedState: AppState): IO[Unit] =
     logModalTransition(fallbackState, committedState) >> scheduleDocumentAnalysis() >>
       PanelContentSync.outlineRefreshDue(committedState, fallbackState).traverse_(scheduleOutlineRefresh) >>
-      PanelContentSync.explorerListingsDue(committedState, fallbackState).traverse_(listExplorerDirectory)
+      PanelContentSync.explorerListingsDue(committedState, fallbackState).traverse_(listExplorerDirectory) >>
+      commitObserver.get.flatMap(_(fallbackState, committedState))
+
+  /** Replaces the observer told of every commit `afterCommit` follows up, with the states before and after. */
+  def observeCommits(observer: (AppState, AppState) => IO[Unit]): IO[Unit] =
+    commitObserver.set(observer)
 
   private[manager] def logRejectedCommit(errors: List[String]): IO[Unit] =
     logger.error(s"State validation failed: ${errors.mkString(", ")}")
@@ -371,6 +377,7 @@ private[manager] object StateManagerOperationBoundary:
         .allocated
       dispatcher      <- StateManagerDispatcher.create(logger)
       fileWriteLedger <- FileWriteLedger.create
+      commitObserver  <- Ref.of[IO, (AppState, AppState) => IO[Unit]]((_, _) => IO.unit)
     yield new StateManagerOperationBoundary(
       pendingOperations,
       modelRef,
@@ -388,5 +395,6 @@ private[manager] object StateManagerOperationBoundary:
       fileWriteLedger,
       discoverDictionaryFingerprints,
       DictionaryCache(),
-      listDirectory
+      listDirectory,
+      commitObserver
     )

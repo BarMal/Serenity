@@ -42,7 +42,7 @@ final private[manager] class StateManagerEditorCapability(
       hasPanelGeometry     = state.runtime.motion.panelGeometry.nonEmpty
       hasCursorGlide       = state.persisted.buffers.values.exists(hasInFlightGlide)
       hasSelectionGeometry = state.persisted.buffers.values.exists(hasInFlightSelectionGeometry)
-      hasTypingActivity    = state.runtime.typingActivity.isActive
+      hasTypingActivity    = state.typingHidesFloatingStatusLine
       flairLevel           = state.persisted.config.visualFlairLevel
       hasCompanionSprite   = state.persisted.config.companionSpriteConfig.enabled && flairLevel != VisualFlairLevel.Off
       stillActive <-
@@ -54,23 +54,26 @@ final private[manager] class StateManagerEditorCapability(
           // A dispatch in flight would commit a state built from its own earlier snapshot over this tick's write
           // (#1564), and waiting for it would stall the render loop behind its I/O -- so skip this tick and report
           // still-active so the next frame retries.
-          IO(companionSpriteRandom.nextLong()).flatMap { companionSpriteSeed =>
-            operations
-              .runIfDispatcherIdle(advanceOneTick(hasCompanionSprite, flairLevel, companionSpriteSeed))
-              .map(_.getOrElse(true))
-          }
+          for
+            companionSpriteSeed <- IO(companionSpriteRandom.nextLong())
+            now                 <- IO.monotonic
+            advanced <- operations.runIfDispatcherIdle(
+              advanceOneTick(hasCompanionSprite, flairLevel, companionSpriteSeed, now.toNanos)
+            )
+          yield advanced.getOrElse(true)
     yield stillActive
 
   private def advanceOneTick(
     hasCompanionSprite: Boolean,
     flairLevel: VisualFlairLevel,
-    companionSpriteSeed: Long
+    companionSpriteSeed: Long,
+    nowNanos: Long
   ): IO[Boolean] =
     // An atomic, validated update rather than a `set`: writers outside the dispatcher (`updateState`, the
     // buffer/panel records) still exist, and this keeps the tick atomic with them. It may retry, so everything it
     // reads is passed in.
     modelCommit
-      .advanceTick(advanceModel(_, hasCompanionSprite, flairLevel, companionSpriteSeed))
+      .advanceTick(advanceModel(_, hasCompanionSprite, flairLevel, companionSpriteSeed, nowNanos))
       .map { next =>
         val newState = next.app
         newState.persisted.buffers.keys.exists(id => next.bufferAnimations.get(id).exists(_.hasActiveAnimations)) ||
@@ -80,7 +83,7 @@ final private[manager] class StateManagerEditorCapability(
         newState.runtime.motion.panelGeometry.nonEmpty ||
         newState.persisted.buffers.values.exists(hasInFlightGlide) ||
         newState.persisted.buffers.values.exists(hasInFlightSelectionGeometry) ||
-        newState.runtime.typingActivity.isActive ||
+        newState.typingHidesFloatingStatusLine ||
         hasCompanionSprite
       }
 
@@ -88,7 +91,8 @@ final private[manager] class StateManagerEditorCapability(
     current: Model,
     hasCompanionSprite: Boolean,
     flairLevel: VisualFlairLevel,
-    companionSpriteSeed: Long
+    companionSpriteSeed: Long,
+    nowNanos: Long
   ): Model =
     val state             = current.app
     val updatedTransition = state.runtime.themeDiscovery.transition.map(_.advance).filterNot(_.isComplete)
@@ -107,7 +111,7 @@ final private[manager] class StateManagerEditorCapability(
       ),
       runtime = state.runtime.copy(
         themeDiscovery = state.runtime.themeDiscovery.copy(transition = updatedTransition),
-        typingActivity = state.runtime.typingActivity.advance,
+        typingActivity = state.runtime.typingActivity.advance(nowNanos),
         companionSprite = advancedCompanionSprite,
         motion = state.runtime.motion.copy(columnTransitions = updatedColumnTransitions)
       )

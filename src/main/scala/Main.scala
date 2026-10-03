@@ -1,3 +1,4 @@
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.Duration
 
 import cats.effect.*
@@ -143,14 +144,14 @@ object Main extends IOApp:
                 val display = displayState.snapshot
                 if swingWin.metrics != display.codeMetrics then
                   swingWin.updateMetrics(display.codeMetrics, display.uiMetrics)
-              }.evalOn(paintEc)
+              }
             }
 
           def syncChromeTheme(state: com.serenity.state.models.AppState): IO[Unit] =
             Trace.timed("render.syncChromeTheme") {
               IO {
                 swingWin.updateChromeTheme(state.persisted.theme)
-              }.evalOn(paintEc)
+              }
             }
 
           AccessibilitySync.empty.flatMap { accessibilitySync =>
@@ -159,7 +160,6 @@ object Main extends IOApp:
                 accessibilitySync
                   .sync(state)(previous => IO(AccessibilitySnapshot.from(state, swingWin.viewportSize, previous)))
                   .flatMap(snapshot => IO(swingWin.updateAccessibility(snapshot)))
-                  .evalOn(paintEc)
               }
 
             val frontendRuntime = FrontendRuntime(
@@ -175,18 +175,16 @@ object Main extends IOApp:
                   )
                 ),
               renderFull = (state, vis, cc, damage, bufferAnimations, caches) =>
-                timedFrame(frameTimings, FrameKind.Full)(
+                timedFrame(frameTimings, FrameKind.Full, paintEc)(
                   syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
-                  IO(
-                    paintFullFrame(state, vis, cc, swingWin, displayState.snapshot, damage, bufferAnimations, caches)
-                  ).evalOn(paintEc)
+                  IO(paintFullFrame(state, vis, cc, swingWin, displayState.snapshot, damage, bufferAnimations, caches))
                 ),
               renderCursorOnly = (state, vis, cc, damage, bufferAnimations, caches) =>
-                timedFrame(frameTimings, FrameKind.CursorOnly)(
+                timedFrame(frameTimings, FrameKind.CursorOnly, paintEc)(
                   syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
                   IO(
                     paintCursorFrame(state, vis, cc, swingWin, displayState.snapshot, damage, bufferAnimations, caches)
-                  ).evalOn(paintEc)
+                  )
                 ),
               frameTimings = frameTimings
             )
@@ -223,10 +221,13 @@ object Main extends IOApp:
         }
     yield ()
 
-  private def timedFrame(timings: FrameTimings, kind: FrameKind)(sync: IO[Unit], draw: IO[Unit]): IO[Unit] =
-    IO(timings.renderStarted()) >> timings.timedIO(FramePhase.Sync)(sync) >> draw.guarantee(
-      IO(timings.renderFinished(kind))
-    )
+  /** Syncs window state and draws in a single hop onto the paint thread: each hop is a wait the frame pays for. */
+  private def timedFrame(timings: FrameTimings, kind: FrameKind, paintEc: ExecutionContext)(
+    sync: IO[Unit],
+    draw: IO[Unit]
+  ): IO[Unit] =
+    IO(timings.renderStarted()) >>
+      (timings.timedIO(FramePhase.Sync)(sync) >> draw).evalOn(paintEc).guarantee(IO(timings.renderFinished(kind)))
 
   private def resolveAutoTextScale(config: AppConfig, detectedTextScale: Double): AppConfig =
     config.withFontConfig(config.editorConfig.fontConfig.resolveAutoTextScale(detectedTextScale))

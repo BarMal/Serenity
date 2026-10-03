@@ -275,8 +275,8 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     WindowsNativeChrome.RoundedCornerPreference shouldBe 2
   }
 
-  "SwingWindow.NativeChromeThemeCache" should "avoid reapplying an unchanged supported palette" in {
-    val cache        = new SwingWindow.NativeChromeThemeCache
+  "SwingWindow.ChromePaletteCache" should "avoid reapplying an unchanged supported palette" in {
+    val cache        = new SwingWindow.ChromePaletteCache
     val lightPalette = SwingWindow.ChromePalette.fromTheme(Theme.light)
     val darkPalette  = SwingWindow.ChromePalette.fromTheme(Theme.dark)
 
@@ -286,8 +286,17 @@ class SwingWindowChromeMetricsSpec extends AnyFlatSpec with Matchers:
     cache.recordIfChanged(darkPalette, supported = true) shouldBe false
   }
 
+  it should "apply the chrome palette once for repeated identical themes" in {
+    val cache = new SwingWindow.ChromePaletteCache
+
+    val applied = List(Theme.dark, Theme.dark.copy(), Theme.dark, Theme.light, Theme.light)
+      .map(theme => cache.recordIfChanged(SwingWindow.ChromePalette.fromTheme(theme), supported = true))
+
+    applied shouldBe List(true, false, false, true, false)
+  }
+
   it should "leave the palette uncached when native chrome is unsupported" in {
-    val cache   = new SwingWindow.NativeChromeThemeCache
+    val cache   = new SwingWindow.ChromePaletteCache
     val palette = SwingWindow.ChromePalette.fromTheme(Theme.light)
 
     cache.recordIfChanged(palette, supported = false) shouldBe false

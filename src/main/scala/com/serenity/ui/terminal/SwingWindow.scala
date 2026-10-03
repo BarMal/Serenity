@@ -14,7 +14,7 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.{IO, Resource}
 import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
 import com.serenity.diagnostics.FrameTimings
-import com.serenity.ui.accessibility.{AccessibilitySnapshot, SwingAccessibilityBridge}
+import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySnapshot, SwingAccessibilityBridge}
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.Java2DScratchBuffers
@@ -41,33 +41,34 @@ class SwingWindow(
       initialChromeLayoutMetrics
     )
 
-  private val initialCanvasPixelSize  = initialCanvasResizeSnapshot.pixelSize
-  private val pixelSize               = new AtomicReference(initialCanvasPixelSize)
-  private val metricsRef              = new AtomicReference(initialMetrics)
-  private val chromeMetricsRef        = new AtomicReference(initialChromeLayoutMetrics)
-  private val chromePaletteRef        = new AtomicReference(SwingWindow.ChromePalette.fromTheme(Theme.default))
-  private val nativeChromeThemeCache  = new SwingWindow.NativeChromeThemeCache
-  private val pendingResize           = new AtomicReference[Option[ViewportSize]](None)
-  private val closeLatch              = new CountDownLatch(1)
-  private val baseImageRef            = new AtomicReference[Option[BufferedImage]](None)
-  private val publishedImagesRef      = new AtomicReference(SwingWindow.PublishedImages.empty)
-  private val previousCursorRectsRef  = new AtomicReference[scala.List[Rectangle]](Nil)
-  private val baseImagePool           = new SwingWindow.ReusableImagePool
-  private val cursorOverlayPool       = new SwingWindow.ReusableImagePool
-  private[serenity] val renderScratch = new Java2DScratchBuffers
-  private val savedBoundsRef          = new AtomicReference[Option[Rectangle]](None)
-  private val maximizedRef            = new AtomicBoolean(false)
-  private val maxBtnRef               = new AtomicReference[Option[ChromeControlButton]](None)
-  private val controlButtonsRef       = new AtomicReference[scala.List[ChromeControlButton]](Nil)
-  private val controlPanelRef         = new AtomicReference[Option[JPanel]](None)
-  private val titleBarRef             = new AtomicReference[Option[JPanel]](None)
-  private val titleLabelRef           = new AtomicReference[Option[JLabel]](None)
-  private val titleSpacerRef          = new AtomicReference[Option[JPanel]](None)
-  private val onResizeCallbackRef     = new AtomicReference[Option[() => Unit]](None)
-  private val onFocusCallbackRef      = new AtomicReference[Option[Boolean => Unit]](None)
-  private val resizeGlassPaneRef      = new AtomicReference[Option[JComponent]](None)
-  private val roundedCornerMaskRef    = new AtomicReference[Option[Int]](None)
-  private val roundedContentBuffers   = new SwingWindow.RoundedCornerMaskBufferCache
+  private val initialCanvasPixelSize   = initialCanvasResizeSnapshot.pixelSize
+  private val pixelSize                = new AtomicReference(initialCanvasPixelSize)
+  private val metricsRef               = new AtomicReference(initialMetrics)
+  private val chromeMetricsRef         = new AtomicReference(initialChromeLayoutMetrics)
+  private val chromePaletteRef         = new AtomicReference(SwingWindow.ChromePalette.fromTheme(Theme.default))
+  private val nativeChromeThemeCache   = new SwingWindow.ChromePaletteCache
+  private val customChromePaletteCache = new SwingWindow.ChromePaletteCache
+  private val pendingResize            = new AtomicReference[Option[ViewportSize]](None)
+  private val closeLatch               = new CountDownLatch(1)
+  private val baseImageRef             = new AtomicReference[Option[BufferedImage]](None)
+  private val publishedImagesRef       = new AtomicReference(SwingWindow.PublishedImages.empty)
+  private val previousCursorRectsRef   = new AtomicReference[scala.List[Rectangle]](Nil)
+  private val baseImagePool            = new SwingWindow.ReusableImagePool
+  private val cursorOverlayPool        = new SwingWindow.ReusableImagePool
+  private[serenity] val renderScratch  = new Java2DScratchBuffers
+  private val savedBoundsRef           = new AtomicReference[Option[Rectangle]](None)
+  private val maximizedRef             = new AtomicBoolean(false)
+  private val maxBtnRef                = new AtomicReference[Option[ChromeControlButton]](None)
+  private val controlButtonsRef        = new AtomicReference[scala.List[ChromeControlButton]](Nil)
+  private val controlPanelRef          = new AtomicReference[Option[JPanel]](None)
+  private val titleBarRef              = new AtomicReference[Option[JPanel]](None)
+  private val titleLabelRef            = new AtomicReference[Option[JLabel]](None)
+  private val titleSpacerRef           = new AtomicReference[Option[JPanel]](None)
+  private val onResizeCallbackRef      = new AtomicReference[Option[() => Unit]](None)
+  private val onFocusCallbackRef       = new AtomicReference[Option[Boolean => Unit]](None)
+  private val resizeGlassPaneRef       = new AtomicReference[Option[JComponent]](None)
+  private val roundedCornerMaskRef     = new AtomicReference[Option[Int]](None)
+  private val roundedContentBuffers    = new SwingWindow.RoundedCornerMaskBufferCache
   private val perPixelTranslucencySupported =
     SwingWindow.perPixelTranslucencySupported
   private val shapeUpdateCoalescer = new SwingWindow.CoalescedEdtUpdate(() => updateShape())
@@ -104,13 +105,16 @@ class SwingWindow(
         published.overlay.foreach(img => g.drawImage(img, 0, 0, getWidth, getHeight, null))
       finally frameTimings.paintFinished(paintStart)
 
-  private val accessibilityBridge = new SwingAccessibilityBridge(canvas)
+  private val accessibilityBridge      = new SwingAccessibilityBridge(canvas)
+  private val accessibilityPublishGate = new AccessibilityPublishGate
 
   /** Publish the semantic projection of the custom-painted canvas to Swing accessibility clients. */
   def updateAccessibility(snapshot: AccessibilitySnapshot): Unit =
-    val publish: Runnable = () => accessibilityBridge.publish(snapshot, metrics)
-    if SwingUtilities.isEventDispatchThread then publish.run()
-    else SwingUtilities.invokeLater(publish)
+    val currentMetrics = metrics
+    if accessibilityPublishGate.admit(snapshot, currentMetrics) then
+      val publish: Runnable = () => accessibilityBridge.publish(snapshot, currentMetrics)
+      if SwingUtilities.isEventDispatchThread then publish.run()
+      else SwingUtilities.invokeLater(publish)
 
   def onImageReady(image: BufferedImage): Unit =
     onImageReady(image, None)
@@ -361,10 +365,11 @@ class SwingWindow(
     )
     if usesCustomChrome then
       val palette = SwingWindow.ChromePalette.fromTheme(theme)
-      chromePaletteRef.set(palette)
-      val applyPalette: Runnable = () => applyChromePalette(palette)
-      if SwingUtilities.isEventDispatchThread then applyPalette.run()
-      else SwingUtilities.invokeLater(applyPalette)
+      if customChromePaletteCache.recordIfChanged(palette, supported = true) then
+        chromePaletteRef.set(palette)
+        val applyPalette: Runnable = () => applyChromePalette(palette)
+        if SwingUtilities.isEventDispatchThread then applyPalette.run()
+        else SwingUtilities.invokeLater(applyPalette)
     else if usesNativeThemedChrome then updateNativeChromeTheme(SwingWindow.ChromePalette.fromTheme(theme))
 
   private def updateNativeChromeTheme(palette: SwingWindow.ChromePalette): Unit =

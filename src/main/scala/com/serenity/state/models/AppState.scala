@@ -158,6 +158,12 @@ final case class AppState(
     if !persisted.config.statusLine.isShown then None
     else StatusLineText.render(this, persisted.config.statusLine.segments)
 
+  /** Whether a typing burst is holding the floating status row hidden -- the only thing `runtime.typingActivity`
+    * changes on screen, so with any other placement it needs no frames at all.
+    */
+  def typingHidesFloatingStatusLine: Boolean =
+    persisted.config.statusLine.isFloating && runtime.typingActivity.isActive
+
   /** The floating status row, derived each frame rather than stored: it follows the caret and steps aside for the
     * length of a typing burst (`runtime.typingActivity`) so nothing near the caret moves while text is going in.
     */

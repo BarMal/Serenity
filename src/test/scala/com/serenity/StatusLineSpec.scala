@@ -65,17 +65,14 @@ class StatusLineSpec extends AnyFlatSpec with Matchers:
 
   it should "step aside for the length of a typing burst, then come back" in {
     val base   = editorState()
-    val typing = base.copy(runtime = base.runtime.copy(typingActivity = base.runtime.typingActivity.observed))
+    val typing = base.copy(runtime = base.runtime.copy(typingActivity = base.runtime.typingActivity.observed(0L)))
 
     typing.floatingStatusLineSurface shouldBe None
 
-    val settled = Iterator
-      .iterate(typing)(state =>
-        state.copy(runtime = state.runtime.copy(typingActivity = state.runtime.typingActivity.advance))
-      )
-      .drop(TypingActivity.QuietTicks)
-      .next()
-    settled.floatingStatusLineSurface shouldBe defined
+    def advancedTo(nowNanos: Long): AppState =
+      typing.copy(runtime = typing.runtime.copy(typingActivity = typing.runtime.typingActivity.advance(nowNanos)))
+    advancedTo(TypingActivity.QuietWindow.toNanos - 1).floatingStatusLineSurface shouldBe None
+    advancedTo(TypingActivity.QuietWindow.toNanos).floatingStatusLineSurface shouldBe defined
   }
 
   "LayoutEngine.calculateLayout" should "place the floating status line below the active cursor as one unframed row" in {

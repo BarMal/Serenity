@@ -14,7 +14,7 @@ final class SwingAccessibilityBridge(canvas: JComponent):
   // relayed here, not recomputed.
   private val previous     = AtomicReference[Option[AccessibilitySnapshot]](None)
   private val materialized = AtomicReference[Option[(List[AccessibleNode], CellMetrics)]](None)
-  private val proxies      = AtomicReference[List[JComponent]](Nil)
+  private val proxies      = AtomicReference[List[JComponent & SemanticFocusProxy]](Nil)
 
   canvas.setLayout(null)
 
@@ -26,9 +26,14 @@ final class SwingAccessibilityBridge(canvas: JComponent):
     val priorDescription = previous.get.map(describe).orNull
     context.setAccessibleName(name)
     context.setAccessibleDescription(description)
-    if !materialized.get.contains((snapshot.nodes, metrics)) then
-      replaceChildren(snapshot.nodes, metrics)
-      materialized.set(Some((snapshot.nodes, metrics)))
+    materialized.get match
+      case Some((nodes, materializedMetrics)) if materializedMetrics == metrics && nodes == snapshot.nodes => ()
+      case Some((nodes, materializedMetrics)) if materializedMetrics == metrics && sameLayout(nodes, snapshot.nodes) =>
+        updateChildren(nodes, snapshot.nodes)
+        materialized.set(Some((snapshot.nodes, metrics)))
+      case _ =>
+        replaceChildren(snapshot.nodes, metrics)
+        materialized.set(Some((snapshot.nodes, metrics)))
     snapshot.announcements.foreach { announcement =>
       context.firePropertyChange(
         AccessibleContext.ACCESSIBLE_DESCRIPTION_PROPERTY,
@@ -49,8 +54,7 @@ final class SwingAccessibilityBridge(canvas: JComponent):
         node.bounds.width * metrics.charWidth,
         node.bounds.height * metrics.lineHeight
       )
-      component.getAccessibleContext.setAccessibleName(node.name)
-      component.getAccessibleContext.setAccessibleDescription(nodeDescription(node))
+      describeProxy(component, node)
       canvas.add(component)
       component
     }
@@ -58,32 +62,44 @@ final class SwingAccessibilityBridge(canvas: JComponent):
     canvas.revalidate()
     canvas.repaint()
 
+  private def sameLayout(materializedNodes: List[AccessibleNode], nodes: List[AccessibleNode]): Boolean =
+    materializedNodes.sizeCompare(nodes) == 0 &&
+      materializedNodes.lazyZip(nodes).forall { (before, after) =>
+        before.id == after.id && before.role == after.role && before.bounds == after.bounds
+      }
+
+  /** Same nodes in the same places: refresh the existing proxies rather than rebuilding them, so a keystroke changing
+    * the document's text costs no child removal, relayout or canvas repaint -- the proxies paint nothing.
+    */
+  private def updateChildren(materializedNodes: List[AccessibleNode], nodes: List[AccessibleNode]): Unit =
+    proxies.get.lazyZip(materializedNodes).lazyZip(nodes).foreach { (component, before, after) =>
+      val text = proxyText(after)
+      if text != proxyText(before) then text.foreach(component.setProxyText)
+      describeProxy(component, after)
+    }
+
+  private def describeProxy(component: JComponent & SemanticFocusProxy, node: AccessibleNode): Unit =
+    component.setSemanticFocused(node.focused)
+    component.getAccessibleContext.setAccessibleName(node.name)
+    component.getAccessibleContext.setAccessibleDescription(nodeDescription(node))
+
+  private def proxyText(node: AccessibleNode): Option[String] =
+    node.role match
+      case AccessibilityRole.Document | AccessibilityRole.TextField => Some(node.value.getOrElse(""))
+      case AccessibilityRole.Button | AccessibilityRole.Heading     => Some(node.name)
+      case AccessibilityRole.Status                                 => Some(node.value.getOrElse(node.name))
+      case AccessibilityRole.Dialog | AccessibilityRole.Panel       => None
+
   private def proxyFor(node: AccessibleNode): JComponent & SemanticFocusProxy =
     val component: JComponent & SemanticFocusProxy =
       node.role match
-        case AccessibilityRole.Document =>
-          val document = new TransparentTextArea
-          document.setText(node.value.getOrElse(""))
-          document
-        case AccessibilityRole.Button =>
-          val button = new TransparentButton
-          button.setText(node.name)
-          button
-        case AccessibilityRole.TextField =>
-          val field = new TransparentTextField
-          field.setText(node.value.getOrElse(""))
-          field
-        case AccessibilityRole.Status =>
-          val status = new TransparentLabel
-          status.setText(node.value.getOrElse(node.name))
-          status
-        case AccessibilityRole.Heading =>
-          val heading = new TransparentLabel
-          heading.setText(node.name)
-          heading
-        case AccessibilityRole.Dialog | AccessibilityRole.Panel => new TransparentPanel
+        case AccessibilityRole.Document                           => new TransparentTextArea
+        case AccessibilityRole.Button                             => new TransparentButton
+        case AccessibilityRole.TextField                          => new TransparentTextField
+        case AccessibilityRole.Status | AccessibilityRole.Heading => new TransparentLabel
+        case AccessibilityRole.Dialog | AccessibilityRole.Panel   => new TransparentPanel
+    proxyText(node).foreach(component.setProxyText)
     component.setFocusable(false)
-    component.setSemanticFocused(node.focused)
     component.setOpaque(false)
     component
 
@@ -103,6 +119,8 @@ final class SwingAccessibilityBridge(canvas: JComponent):
 
     final def setSemanticFocused(focused: Boolean): Unit = semanticallyFocused.set(focused)
 
+    def setProxyText(text: String): Unit
+
     final protected def withSemanticFocus(states: AccessibleStateSet): AccessibleStateSet =
       if semanticallyFocused.get then
         states.add(AccessibleState.FOCUSED)
@@ -110,6 +128,8 @@ final class SwingAccessibilityBridge(canvas: JComponent):
       states
 
   private class TransparentPanel extends JPanel with SemanticFocusProxy:
+
+    def setProxyText(text: String): Unit = ()
 
     override def getAccessibleContext: AccessibleContext =
       if accessibleContext == null then
@@ -124,6 +144,8 @@ final class SwingAccessibilityBridge(canvas: JComponent):
 
   private class TransparentLabel extends JLabel with SemanticFocusProxy:
 
+    def setProxyText(text: String): Unit = setText(text)
+
     override def getAccessibleContext: AccessibleContext =
       if accessibleContext == null then
         accessibleContext = new AccessibleJLabel:
@@ -136,6 +158,8 @@ final class SwingAccessibilityBridge(canvas: JComponent):
     override protected def paintBorder(graphics: Graphics): Unit    = ()
 
   private class TransparentTextArea extends JTextArea with SemanticFocusProxy:
+
+    def setProxyText(text: String): Unit = setText(text)
 
     override def getAccessibleContext: AccessibleContext =
       if accessibleContext == null then
@@ -150,6 +174,8 @@ final class SwingAccessibilityBridge(canvas: JComponent):
 
   private class TransparentTextField extends JTextField with SemanticFocusProxy:
 
+    def setProxyText(text: String): Unit = setText(text)
+
     override def getAccessibleContext: AccessibleContext =
       if accessibleContext == null then
         accessibleContext = new AccessibleJTextField:
@@ -162,6 +188,8 @@ final class SwingAccessibilityBridge(canvas: JComponent):
     override protected def paintBorder(graphics: Graphics): Unit    = ()
 
   private class TransparentButton extends JButton with SemanticFocusProxy:
+
+    def setProxyText(text: String): Unit = setText(text)
 
     override def getAccessibleContext: AccessibleContext =
       if accessibleContext == null then

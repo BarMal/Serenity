@@ -2,7 +2,7 @@ package com.serenity.ui.accessibility
 
 import cats.effect.{IO, Ref}
 import com.serenity.animation.sprite.CompanionSpriteState
-import com.serenity.state.models.AppState
+import com.serenity.state.models.{AppState, TypingActivity}
 
 /** Memoizes the accessibility snapshot against the `AppState` last synced, so the O(document-size) projection in
   * `AccessibilitySnapshot.from` — including materializing each visible buffer's full content for the document node — is
@@ -49,15 +49,18 @@ object AccessibilitySync:
       persisted = state.persisted.copy(
         buffers = state.persisted.buffers.view
           .mapValues(buffer =>
-            buffer.copy(
-              markdownPreviewEditGeneration = 0L,
-              markdownPreviewCommittedGeneration = 0L
-            )
+            buffer
+              .withCursorList(buffer.editing.cursors.map(_.copy(glide = None, selectionGeometry = None)))
+              .copy(
+                markdownPreviewEditGeneration = 0L,
+                markdownPreviewCommittedGeneration = 0L
+              )
           )
           .toMap
       ),
       runtime = state.runtime.copy(
         companionSprite = CompanionSpriteState.default,
+        typingActivity = TypingActivity.idle,
         themeDiscovery = state.runtime.themeDiscovery.copy(transition = None),
         motion = state.runtime.motion.copy(surfaceAnimations = Map.empty)
       )

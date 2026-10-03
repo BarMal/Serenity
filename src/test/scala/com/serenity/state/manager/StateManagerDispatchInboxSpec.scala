@@ -129,8 +129,15 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "skip a render tick that arrives mid-dispatch, report it still active, and advance on the next one" in {
-    val typing = AppState.initial.copy(runtime =
-      AppState.initial.runtime.copy(typingActivity = AppState.initial.runtime.typingActivity.observed)
+    // A burst whose quiet window has already lapsed, holding a floating status line hidden: the next tick that runs
+    // clears it, which is what shows whether a tick ran.
+    val typing = AppState.initial.copy(
+      persisted = AppState.initial.persisted.copy(config =
+        AppState.initial.persisted.config
+          .withStatusLineSegments(List(com.serenity.config.StatusSegment.Position))
+          .withStatusLinePlacement(com.serenity.config.StatusLinePlacement.Floating)
+      ),
+      runtime = AppState.initial.runtime.copy(typingActivity = TypingActivity(quietUntilNanos = Some(0L)))
     )
     val program =
       for
@@ -149,7 +156,8 @@ class StateManagerDispatchInboxSpec extends AnyFlatSpec with Matchers:
       yield
         stillActive shouldBe true
         midDispatch.runtime.typingActivity shouldBe beforeTick.runtime.typingActivity
-        nextFrame.runtime.typingActivity shouldBe committed.runtime.typingActivity.advance
+        committed.runtime.typingActivity.isActive shouldBe true
+        nextFrame.runtime.typingActivity shouldBe TypingActivity.idle
 
     runVirtual(program)
   }
