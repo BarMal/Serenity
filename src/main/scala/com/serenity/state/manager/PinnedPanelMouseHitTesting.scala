@@ -138,7 +138,10 @@ private[manager] object PinnedPanelMouseHitTesting:
     Option
       .when(click.clickCount >= 2)(pinnedDirectoryMouseHitAt(click, selectedState, authoritativeScene))
       .flatten
-      .map(hit => PinnedPanelComponent(hit.position).processEvent(PanelInputEvent.Activate, selectedState))
+      .map(hit =>
+        PinnedPanelComponent(hit.position, wrapCache = authoritativeScene.wrappedLines)
+          .processEvent(PanelInputEvent.Activate, selectedState)
+      )
 
   def locationClick(
     click: MouseClick,
@@ -150,12 +153,15 @@ private[manager] object PinnedPanelMouseHitTesting:
       pinnedCommentsMouseHitAt(click, state, authoritativeScene) match
         case Some((_, _, location)) =>
           Transition
-            .modify(PanelLocationNavigation.commentAt(_, location))
+            .modify(PanelLocationNavigation.commentAt(_, location, wrapCache = authoritativeScene.wrappedLines))
             .as(true)
         case None =>
           pinnedLocationMouseHitAt(click, state, authoritativeScene) match
-            case Some(location) => Transition.modify(PanelLocationNavigation.editorAt(_, location)).as(true)
-            case None           => Transition.pure(false)
+            case Some(location) =>
+              Transition
+                .modify(PanelLocationNavigation.editorAt(_, location, wrapCache = authoritativeScene.wrappedLines))
+                .as(true)
+            case None => Transition.pure(false)
 
   def panelResizeFromDrag(drag: MouseDrag, state: AppState): Option[LayoutEngine.PinnedPanelDragResize] =
     state.runtime.viewportSize.flatMap(viewportSize =>

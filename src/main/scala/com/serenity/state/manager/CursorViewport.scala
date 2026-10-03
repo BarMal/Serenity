@@ -5,7 +5,7 @@ import com.serenity.animation.{TransitionDirection, Tween}
 import com.serenity.config.AppConfigMotionOps.*
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot, WrappedLineCache}
+import com.serenity.ui.layout.{CellMetrics, LayoutEngine, TextLayoutSnapshot, VisualRowCounts, WrappedLineCache}
 
 /** Java2D/font measurement for cursor-visibility scrolling belongs at the effect boundary, not in a reducer -- a
   * reducer runs mid-edit against content the effect boundary has not seen yet. `adjustForCursor` is the shared
@@ -263,58 +263,32 @@ object CursorViewport:
           wrapCache = wrapCache
         )
 
-    // The number of visual rows a logical line occupies on screen -- 1 unless word wrap folds it across several
-    // rows, in which case it must be measured the same way `cursorVisualLine` above was, or the two disagree.
-    def visualRowCountForLine(lineIndex: Int): Int =
-      if !wordWrapEnabled then 1
-      else
-        val text = buffer.document.content.getLine(lineIndex).getOrElse("")
-        TextLayoutSnapshot
-          .boundedVisualLinesForText(
-            text,
-            lineIndex,
-            wrapWidthPx,
-            font,
-            cellMetricsOverride = cellMetricsOverride,
-            forceCellLayout = forceCellLayout,
-            wrapCache = wrapCache
-          )
-          .length
-          .max(1)
+    // Counted the same way `cursorVisualLine` above was measured, or the two disagree.
+    val visualRows =
+      if !wordWrapEnabled then VisualRowCounts.oneRowPerLine(buffer.document.content.lineCount)
+      else VisualRowCounts.forBuffer(buffer, wrapWidthPx, font, cellMetricsOverride, forceCellLayout, wrapCache)
 
-    // Desired top: walk backward from the cursor's own line in visual rows (not logical lines) until halfVisibleLines
-    // rows of context above the cursor's own visual row have been accounted for, or the buffer start is reached,
-    // carrying the partial offset into whatever line the walk lands on so the cursor stays centred. Forcing that offset
-    // to 0 (as before) whenever the top wasn't the cursor's own line let the cursor drift off-centre by up to a full
-    // wrapped line's worth of rows.
+    // Desired top: halfVisibleLines rows of context above the cursor's own visual row, counted in visual rows (not
+    // logical lines) and carrying the partial offset into whatever line that lands on so the cursor stays centred.
+    // Forcing that offset to 0 whenever the top wasn't the cursor's own line let the cursor drift off-centre by up to a
+    // full wrapped line's worth of rows.
     val scrollUpBudget = halfVisibleLines - cursorVisualLine
-    def walkBackward(line: Int, remainingBudget: Int): (Int, Int) =
-      if line <= 0 then (0, 0)
-      else
-        val previousLineRows = visualRowCountForLine(line - 1)
-        if previousLineRows >= remainingBudget then (line - 1, previousLineRows - remainingBudget)
-        else walkBackward(line - 1, remainingBudget - previousLineRows)
     val (rawTopLine, rawTopVisualLine) =
       if scrollUpBudget <= 0 then (cursor.line, math.max(0, cursorVisualLine - halfVisibleLines))
-      else walkBackward(cursor.line, scrollUpBudget)
+      else visualRows.rowAbove(cursor.line, scrollUpBudget)
 
-    // Bottom clamp: the latest (line, visual-row) start that still fills the viewport with real content, found by
-    // walking backward from the buffer's last line until visibleLines rows of content have been accounted for.
-    // Without this, a cursor near the end of a short-ish document can leave blank rows below the last line. Typewriter
-    // scrolling deliberately skips this clamp: its entire point is to hold the cursor's line at its centred row even
-    // while typing at the very end of the document, which means padding with blank rows below rather than showing as
-    // much real content as fits (#1204, #1293).
+    // Bottom clamp: the latest (line, visual-row) start that still fills the viewport with real content. Without this,
+    // a cursor near the end of a short-ish document can leave blank rows below the last line. Typewriter scrolling
+    // deliberately skips this clamp: its entire point is to hold the cursor's line at its centred row even while
+    // typing at the very end of the document, which means padding with blank rows below rather than showing as much
+    // real content as fits (#1204, #1293).
     val lineCount = buffer.document.content.lineCount
-    def bottomAlignedWindow(line: Int, remaining: Int): (Int, Int) =
-      val rows = visualRowCountForLine(line)
-      if remaining <= rows || line == 0 then (line, math.max(0, rows - remaining))
-      else bottomAlignedWindow(line - 1, remaining - rows)
     // Every line is at least one row, so the bottom-aligned top is never above `lineCount - effectiveVisibleLines`; a
     // desired top above that cannot exceed it, and the last screen need not be measured.
     def exceedsBottomWindow: Option[(Int, Int)] =
       if lineCount <= 0 || rawTopLine < lineCount - effectiveVisibleLines then None
       else
-        val (bottomLine, bottomVisualLine) = bottomAlignedWindow(lineCount - 1, effectiveVisibleLines)
+        val (bottomLine, bottomVisualLine) = visualRows.rowAbove(lineCount, effectiveVisibleLines)
         val exceedsBottom =
           rawTopLine > bottomLine || (rawTopLine == bottomLine && rawTopVisualLine > bottomVisualLine)
         Option.when(exceedsBottom)((bottomLine, bottomVisualLine))
@@ -383,20 +357,8 @@ object CursorViewport:
     val lineCount           = buffer.document.content.lineCount
     val visibleLines        = math.max(1, viewport.visibleLines)
 
-    def visualRowCountForLine(lineIndex: Int): Int =
-      val text = buffer.document.content.getLine(lineIndex).getOrElse("")
-      TextLayoutSnapshot
-        .boundedVisualLinesForText(
-          text,
-          lineIndex,
-          wrapWidthPx,
-          font,
-          cellMetricsOverride = cellMetricsOverride,
-          forceCellLayout = forceCellLayout,
-          wrapCache = wrapCache
-        )
-        .length
-        .max(1)
+    val visualRows =
+      VisualRowCounts.forBuffer(buffer, wrapWidthPx, font, cellMetricsOverride, forceCellLayout, wrapCache)
 
     val lineText = buffer.document.content.getLine(cursor.line).getOrElse("")
     val cursorVisualRowInLine =
@@ -412,13 +374,6 @@ object CursorViewport:
         wrapCache = wrapCache
       )
 
-    // Rows spanned by the lines [fromLine, toLineExclusive), walking forward -- bounded by the distance between the
-    // two lines, used both to place the cursor relative to the previous top and to walk that same distance again.
-    @annotation.tailrec
-    def rowsForward(fromLine: Int, toLineExclusive: Int, acc: Int): Int =
-      if fromLine >= toLineExclusive then acc
-      else rowsForward(fromLine + 1, toLineExclusive, acc + visualRowCountForLine(fromLine))
-
     // Multi-column page anchoring (issue #1338, Phase 2 / slice 1): a "page" shows `columnCount` columns side by side,
     // so the viewport anchors to a whole-page boundary (`pageRows` rows) rather than a single column (`visibleLines`
     // rows). With one column -- the fallback whenever the pane's full width is unknown -- `pageRows == visibleLines`,
@@ -426,21 +381,8 @@ object CursorViewport:
     val columnCount = columnCountForBuffer(buffer, currentState)
     val pageRows    = columnCount * visibleLines
 
-    @annotation.tailrec
-    def findTopForward(line: Int, consumedRows: Int, targetRow: Int): (Int, Int) =
-      if line >= lineCount then (math.max(0, lineCount - 1), 0)
-      else
-        val rows = visualRowCountForLine(line)
-        if consumedRows + rows > targetRow then (line, targetRow - consumedRows)
-        else findTopForward(line + 1, consumedRows + rows, targetRow)
-
-    @annotation.tailrec
-    def findTopBackward(line: Int, remainingDeficit: Int): (Int, Int) =
-      if line <= 0 then (0, 0)
-      else
-        val previousLineRows = visualRowCountForLine(line - 1)
-        if previousLineRows >= remainingDeficit then (line - 1, previousLineRows - remainingDeficit)
-        else findTopBackward(line - 1, remainingDeficit - previousLineRows)
+    def findTopForward(line: Int, targetRow: Int): (Int, Int) =
+      visualRows.rowBelow(line, targetRow).getOrElse((math.max(0, lineCount - 1), 0))
 
     val previousTopValid = viewport.topVisualLine % pageRows == 0
 
@@ -449,18 +391,15 @@ object CursorViewport:
       else if previousTopValid then
         val previousTopLine = math.max(0, math.min(viewport.topLine, lineCount - 1))
         val relativeCursorRow =
-          if cursor.line >= previousTopLine then
-            rowsForward(previousTopLine, cursor.line, 0) + cursorVisualRowInLine - viewport.topVisualLine
-          else -rowsForward(cursor.line, previousTopLine, 0) + cursorVisualRowInLine - viewport.topVisualLine
+          visualRows.rowsBetween(previousTopLine, cursor.line) + cursorVisualRowInLine - viewport.topVisualLine
         val targetOffsetFromPreviousTop      = Math.floorDiv(relativeCursorRow, pageRows) * pageRows
         val targetRowFromPreviousTopLineHead = viewport.topVisualLine + targetOffsetFromPreviousTop
-        if targetRowFromPreviousTopLineHead >= 0 then
-          findTopForward(previousTopLine, 0, targetRowFromPreviousTopLineHead)
-        else findTopBackward(previousTopLine, -targetRowFromPreviousTopLineHead)
+        if targetRowFromPreviousTopLineHead >= 0 then findTopForward(previousTopLine, targetRowFromPreviousTopLineHead)
+        else visualRows.rowAbove(previousTopLine, -targetRowFromPreviousTopLineHead)
       else
-        val absoluteCursorRow = rowsForward(0, cursor.line, 0) + cursorVisualRowInLine
+        val absoluteCursorRow = visualRows.rowsBetween(0, cursor.line) + cursorVisualRowInLine
         val targetVisualRow   = (absoluteCursorRow / pageRows) * pageRows
-        findTopForward(0, 0, targetVisualRow)
+        findTopForward(0, targetVisualRow)
 
     viewport.copy(topLine = topLine, leftColumn = 0, topVisualLine = topVisualLine)
 

@@ -29,7 +29,7 @@ import com.serenity.state.reducers.{
   ReducerResult,
   ThemeStateReducer
 }
-import com.serenity.ui.layout.{DirEntry, Symbol}
+import com.serenity.ui.layout.{DirEntry, Symbol, WrappedLineCache}
 import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.Theme
 
@@ -107,10 +107,15 @@ private[manager] enum EffectResult:
 
 private[manager] object EffectResult:
 
-  def applyIfCurrent(state: AppState, result: EffectResult): AppState =
+  def applyIfCurrent(
+    state: AppState,
+    result: EffectResult,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  ): AppState =
     result match
       case FindSearchCompleted(request, results) =>
-        CursorViewport.ensureVisibleCursors(state, ModalEventReducer.applyFindSearchResults(state, request, results))
+        val found = ModalEventReducer.applyFindSearchResults(state, request, results)
+        CursorViewport.ensureVisibleCursors(state, found, wrapCache = wrapCache)
       case OutlineRefreshed(bufferId, contentVersion, symbols) =>
         PanelContentSync.withRefreshedOutline(state, bufferId, contentVersion, symbols)
       case MarkdownPreviewSettled(bufferId, generation) =>
@@ -165,11 +170,16 @@ private[manager] object EffectResult:
       case FilesListed(pickerId, root, listing) =>
         FileFinderTransitions.withFilesListed(state, pickerId, root, listing)
 
-      case projectTask @ (ProjectTaskOutput(_, _) | ProjectTaskFinished(_, _)) => reduce(state, projectTask).state
-      case expired: CommandRunnerBindingExpired                                => reduce(state, expired).state
+      case projectTask @ (ProjectTaskOutput(_, _) | ProjectTaskFinished(_, _)) =>
+        reduce(state, projectTask, wrapCache).state
+      case expired: CommandRunnerBindingExpired => reduce(state, expired, wrapCache).state
 
   /** [[applyIfCurrent]] together with the effects its transition emits; only the cases matched here emit any. */
-  def reduce(state: AppState, result: EffectResult): ReducerResult =
+  def reduce(
+    state: AppState,
+    result: EffectResult,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  ): ReducerResult =
     result match
       case ProjectTaskOutput(taskId, chunk)     => ProjectTaskTransitions.outputArrived(state, taskId, chunk)
       case ProjectTaskFinished(taskId, outcome) => ProjectTaskTransitions.finished(state, taskId, outcome)
@@ -179,4 +189,4 @@ private[manager] object EffectResult:
           state,
           CommandRegistry.withToggleUI
         )
-      case other => ReducerResult.noEffects(applyIfCurrent(state, other))
+      case other => ReducerResult.noEffects(applyIfCurrent(state, other, wrapCache = wrapCache))

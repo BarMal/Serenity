@@ -5,14 +5,15 @@ import com.serenity.config.PanelEscapeTarget
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.{AppState, Focus, SurfaceContent, SurfacePresentation, UiSurface}
 import com.serenity.state.reducers.PanelFocusHistory
-import com.serenity.ui.layout.{LayoutEngine, PanelPosition, ViewportSize}
+import com.serenity.ui.layout.{LayoutEngine, PanelPosition, ViewportSize, WrappedLineCache}
 
 /** Keys for the panel focused at one edge: typing returns to the editor, Escape to wherever the app mode's setting
   * says, and Ctrl+Up/Down resize it, while moving within it depends on what it shows -- see [[ExplorerPanelKeys]],
   * [[ListPanelKeys]] and [[OutputPanelKeys]].
   */
 class PinnedPanelComponent(
-    position: PanelPosition
+    position: PanelPosition,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
 ) extends TypedFocusedComponent[PanelInputEvent]:
 
   protected def decodeEvent(event: Event): Option[PanelInputEvent] =
@@ -41,7 +42,7 @@ class PinnedPanelComponent(
           case SurfaceContent.DirectoryTree(tree, selectedPath) =>
             ExplorerPanelKeys.handle(movement, surface, tree, selectedPath, currentState, rows)
           case SurfaceContent.Outline(_, _) | SurfaceContent.Comments(_, _) | SurfaceContent.Diagnostics(_, _) =>
-            ListPanelKeys.handle(movement, surface, currentState, rows)
+            ListPanelKeys.handle(movement, surface, currentState, rows, wrapCache)
           case SurfaceContent.Terminal(text, cursor) =>
             OutputPanelKeys.handle(movement, surface, text, cursor, rows)
           case _ => None

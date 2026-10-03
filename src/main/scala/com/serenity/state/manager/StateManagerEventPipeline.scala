@@ -56,6 +56,8 @@ final private[manager] class StateManagerEventPipeline(
   // The same cache the scene wraps with, so a keystroke and the frame that follows it measure each line once.
   private val wrappedLines = authoritativeScene.wrappedLines
 
+  private val focusHandlers = new FocusHandlerRouting(wrappedLines)
+
   private def drainPendingOperations: cats.effect.IO[Unit] =
     operations.takeOperations.flatMap {
       case Nil => cats.effect.IO.unit
@@ -248,7 +250,7 @@ final private[manager] class StateManagerEventPipeline(
                 // pass -- without it, MoveUp/MoveDown/ExtendSelectionUp/ExtendSelectionDown move the cursor but never
                 // scroll the viewport to follow it.
                 modelCommit.commitState(
-                  CursorViewport.ensureVisibleCursors(prevState, reducedState, wrappedLines),
+                  CursorViewport.ensureVisibleCursors(prevState, reducedState, wrapCache = wrappedLines),
                   prevState
                 )
               case None => dispatchToFocusedHandler(vertical, prevState)
@@ -365,11 +367,11 @@ final private[manager] class StateManagerEventPipeline(
     */
   private def getLocalHandlerForFocus(focus: Focus, state: AppState): LocalEventHandler =
     focus match
-      case Focus.EditorPane(paneId) => new EditorPaneComponent(paneId, wrappedLines)(using balance)
+      case Focus.EditorPane(paneId) => new EditorPaneComponent(paneId, wrapCache = wrappedLines)(using balance)
       case Focus.Modal =>
         state.topModal match
           case None         => NoOpLocalEventHandler
-          case Some(dialog) => FocusHandlerRouting.forModalType(ModalEventReducer.modalType(dialog.modal))
+          case Some(dialog) => focusHandlers.forModalType(ModalEventReducer.modalType(dialog.modal))
       case Focus.Surface(surfaceId) =>
         state.surfaceById(surfaceId) match
           case None =>
@@ -378,10 +380,10 @@ final private[manager] class StateManagerEventPipeline(
             surface.presentation match
               case SurfacePresentation.Docked =>
                 state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)) match
-                  case Some(position) => FocusHandlerRouting.forPinnedPanel(position)
-                  case None           => FocusHandlerRouting.forSurfaceContent(surface.content)
+                  case Some(position) => focusHandlers.forPinnedPanel(position)
+                  case None           => focusHandlers.forSurfaceContent(surface.content)
               case SurfacePresentation.Floating(_, _) =>
-                FocusHandlerRouting.forSurfaceContent(surface.content)
+                focusHandlers.forSurfaceContent(surface.content)
 
   private[manager] def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
     commitReducerResult(result, fallbackState, identity)

@@ -4,7 +4,7 @@ import com.serenity.command.CommandRegistry
 import com.serenity.state.components.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalEventReducer
-import com.serenity.ui.layout.PanelPosition
+import com.serenity.ui.layout.{PanelPosition, WrappedLineCache}
 
 /** The `SurfaceContent -> LocalEventHandler` and `PanelPosition -> LocalEventHandler` associations that
   * [[StateManagerEventPipeline.getLocalHandlerForFocus]] dispatches focused input through.
@@ -14,9 +14,10 @@ import com.serenity.ui.layout.PanelPosition
   *
   * Components are stateless apart from their constructor arguments (verified by inspection: none of the
   * `state.components` classes hold a `var` or mutable field), so every handler built from fixed, constructor-time data
-  * is a `val`, built once and reused across every dispatch.
+  * is a `val`, built once per event pipeline and reused across every dispatch. The modal and pinned-panel handlers can
+  * move the cursor and place the viewport, so they measure through the pipeline's `wrapCache`.
   */
-private[manager] object FocusHandlerRouting:
+final private[manager] class FocusHandlerRouting(wrapCache: WrappedLineCache):
 
   private val registry = CommandRegistry.withToggleUI
 
@@ -36,18 +37,20 @@ private[manager] object FocusHandlerRouting:
   private val peekOverlay: LocalEventHandler = new PeekOverlayComponent()
   private val contextMenu: LocalEventHandler = new ContextMenuComponent()
 
-  private val modalTextPrompt: LocalEventHandler       = new ModalComponent(ModalType.TextPrompt)
-  private val modalFind: LocalEventHandler             = new ModalComponent(ModalType.Find)
-  private val modalFileWorkflow: LocalEventHandler     = new ModalComponent(ModalType.FileWorkflow)
-  private val modalReplaceWorkflow: LocalEventHandler  = new ModalComponent(ModalType.ReplaceWorkflow)
-  private val modalConfirm: LocalEventHandler          = new ModalComponent(ModalType.Confirm)
-  private val modalListPicker: LocalEventHandler       = new ModalComponent(ModalType.ListPicker)
-  private val modalPanelArrangement: LocalEventHandler = new ModalComponent(ModalType.PanelArrangement)
+  private val modalTextPrompt: LocalEventHandler   = new ModalComponent(ModalType.TextPrompt, wrapCache = wrapCache)
+  private val modalFind: LocalEventHandler         = new ModalComponent(ModalType.Find, wrapCache = wrapCache)
+  private val modalFileWorkflow: LocalEventHandler = new ModalComponent(ModalType.FileWorkflow, wrapCache = wrapCache)
+  private val modalReplaceWorkflow: LocalEventHandler =
+    new ModalComponent(ModalType.ReplaceWorkflow, wrapCache = wrapCache)
+  private val modalConfirm: LocalEventHandler    = new ModalComponent(ModalType.Confirm, wrapCache = wrapCache)
+  private val modalListPicker: LocalEventHandler = new ModalComponent(ModalType.ListPicker, wrapCache = wrapCache)
+  private val modalPanelArrangement: LocalEventHandler =
+    new ModalComponent(ModalType.PanelArrangement, wrapCache = wrapCache)
 
-  private val pinnedLeft: LocalEventHandler   = new PinnedPanelComponent(PanelPosition.Left)
-  private val pinnedRight: LocalEventHandler  = new PinnedPanelComponent(PanelPosition.Right)
-  private val pinnedBottom: LocalEventHandler = new PinnedPanelComponent(PanelPosition.Bottom)
-  private val pinnedTop: LocalEventHandler    = new PinnedPanelComponent(PanelPosition.Top)
+  private val pinnedLeft: LocalEventHandler   = new PinnedPanelComponent(PanelPosition.Left, wrapCache = wrapCache)
+  private val pinnedRight: LocalEventHandler  = new PinnedPanelComponent(PanelPosition.Right, wrapCache = wrapCache)
+  private val pinnedBottom: LocalEventHandler = new PinnedPanelComponent(PanelPosition.Bottom, wrapCache = wrapCache)
+  private val pinnedTop: LocalEventHandler    = new PinnedPanelComponent(PanelPosition.Top, wrapCache = wrapCache)
 
   private[manager] def forPinnedPanel(position: PanelPosition): LocalEventHandler =
     position match

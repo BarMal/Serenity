@@ -104,7 +104,13 @@ final private[manager] class StateManagerEffectHandlers(
   )
 
   private val navigationEffects =
-    new StateManagerNavigationEffects(currentState, logger, commitState, interpretEffect)
+    new StateManagerNavigationEffects(
+      currentState,
+      logger,
+      commitState,
+      interpretEffect,
+      wrapCache = runtime.renderCaches.wrappedLines
+    )
 
   private val panelEffects = new StateManagerPanelEffects(
     currentState,

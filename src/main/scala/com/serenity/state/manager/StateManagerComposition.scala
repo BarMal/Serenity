@@ -73,7 +73,8 @@ private[manager] class StateManagerComposition(
       runtimeSessionPersistence,
       runtimeLogger,
       runtimeLspQueue,
-      operations.fileLanes
+      operations.fileLanes,
+      wrapCache = runtimeRenderCaches.wrappedLines
     )
 
   // Stateless facade over the model, reused by `editor` (`events` builds its own
