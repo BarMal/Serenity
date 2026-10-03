@@ -5,11 +5,11 @@ import java.awt.{Color, Font}
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JPanel
 
-import com.serenity.config.{AppConfig, PostProcessingEffect}
+import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{Java2DRenderSurface, Java2DScratchBuffers, RendererEntryPoints}
+import com.serenity.ui.renderer.{Java2DRenderSurface, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -236,165 +236,6 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     image.getType shouldBe BufferedImage.TYPE_INT_ARGB
   }
 
-  it should "darken alternating device rows for the scanline post-process" in {
-    val image   = new BufferedImage(8, 8, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.WHITE)
-    surface.applyPostProcessing(PostProcessingEffect.Scanlines, animationPhase = 0L)
-    surface.flush()
-
-    new Color(image.getRGB(0, 1), true).getRed should be < new Color(image.getRGB(0, 0), true).getRed
-  }
-
-  it should "add a phosphor mask to the scanline post-process" in {
-    val image   = new BufferedImage(9, 9, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.WHITE)
-    surface.applyPostProcessing(PostProcessingEffect.Scanlines)
-    surface.flush()
-
-    val firstPhosphor  = new Color(image.getRGB(0, 0), true)
-    val secondPhosphor = new Color(image.getRGB(1, 0), true)
-    firstPhosphor.getRed should not be secondPhosphor.getRed
-  }
-
-  it should "move uneven, variably thick scanlines between animation phases" in {
-    def darkRows(phase: Long): List[Int] =
-      val image   = new BufferedImage(24, 24, BufferedImage.TYPE_INT_ARGB)
-      val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-      val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-      val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-      surface.clearViewport(Color.WHITE)
-      surface.applyPostProcessing(PostProcessingEffect.Scanlines, phase)
-      surface.flush()
-
-      (0 until image.getHeight).filter(y => new Color(image.getRGB(12, y), true).getRed < 230).toList
-
-    val initial = darkRows(phase = 0L)
-    val moved   = darkRows(phase = 1L)
-
-    initial should not be empty
-    initial.sliding(2).exists { case List(first, second) => second == first + 1; case _ => false } shouldBe true
-    moved should not be initial
-  }
-
-  it should "spread bright UI pixels into a glow" in {
-    val image   = new BufferedImage(9, 9, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.BLACK)
-    surface.fillPixelRect(4, 4, 1, 1, Color.WHITE)
-    surface.applyPostProcessing(PostProcessingEffect.Glow)
-    surface.flush()
-
-    new Color(image.getRGB(3, 4), true).getRed should be > 0
-    new Color(image.getRGB(4, 4), true).getRed should be >= 250
-  }
-
-  it should "extend the glow halo beyond immediately adjacent pixels" in {
-    val image   = new BufferedImage(11, 11, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.BLACK)
-    surface.fillPixelRect(5, 5, 1, 1, Color.WHITE)
-    surface.applyPostProcessing(PostProcessingEffect.Glow)
-    surface.flush()
-
-    new Color(image.getRGB(3, 5), true).getRed should be > 0
-  }
-
-  it should "spread dark glyphs into a halo on a light background" in {
-    val image   = new BufferedImage(11, 11, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.WHITE)
-    surface.fillPixelRect(5, 5, 1, 1, Color.BLACK)
-    surface.applyPostProcessing(PostProcessingEffect.Glow)
-    surface.flush()
-
-    new Color(image.getRGB(3, 5), true).getRed should be < 255
-    new Color(image.getRGB(5, 5), true) shouldBe Color.BLACK
-  }
-
-  it should "preserve sharp source glyphs when compositing glow" in {
-    val image   = new BufferedImage(11, 11, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.WHITE)
-    surface.fillPixelRect(5, 5, 1, 1, Color.BLACK)
-    surface.applyPostProcessing(PostProcessingEffect.Glow)
-    surface.flush()
-
-    new Color(image.getRGB(5, 5), true) shouldBe Color.BLACK
-    new Color(image.getRGB(3, 5), true).getRed should be > 210
-  }
-
-  it should "glow identically through recycled scratch buffers as through fresh ones" in {
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val scratch = Java2DScratchBuffers()
-    def glowFrame(dotX: Int, buffers: Java2DScratchBuffers): BufferedImage =
-      val image   = new BufferedImage(11, 11, BufferedImage.TYPE_INT_ARGB)
-      val surface = new Java2DRenderSurface(image, metrics, font, _ => (), scratch = buffers)
-      surface.clearViewport(Color.BLACK)
-      surface.fillPixelRect(dotX, 5, 1, 1, Color.WHITE)
-      surface.applyPostProcessing(PostProcessingEffect.Glow)
-      surface.flush()
-      image
-
-    val _        = glowFrame(dotX = 2, scratch)
-    val recycled = glowFrame(dotX = 8, scratch)
-    val fresh    = glowFrame(dotX = 8, Java2DScratchBuffers())
-
-    for
-      x <- 0 until 11
-      y <- 0 until 11
-    do recycled.getRGB(x, y) shouldBe fresh.getRGB(x, y)
-  }
-
-  it should "compose scanlines and glow in one post-process" in {
-    val image   = new BufferedImage(15, 15, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.BLACK)
-    surface.fillPixelRect(7, 7, 1, 1, Color.WHITE)
-    surface.applyPostProcessing(PostProcessingEffect.ScanlinesAndGlow, animationPhase = 0L)
-    surface.flush()
-
-    new Color(image.getRGB(5, 7), true).getRed should be > 0
-    (0 until image.getHeight).exists(y => new Color(image.getRGB(12, y), true).getRed < 230) shouldBe true
-  }
-
-  it should "not bloom scanlines across a light background when composing effects" in {
-    val image   = new BufferedImage(15, 15, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 1)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-
-    surface.clearViewport(Color.WHITE)
-    surface.applyPostProcessing(PostProcessingEffect.ScanlinesAndGlow, animationPhase = 0L)
-    surface.flush()
-
-    new Color(image.getRGB(6, 4), true).getRed shouldBe 255
-  }
-
   "RendererEntryPoints.render" should "clear pixels outside the whole-cell grid to the theme background" in {
     val image   = new BufferedImage(83, 57, BufferedImage.TYPE_INT_ARGB)
     val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
@@ -420,36 +261,6 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     )
 
     new Color(image.getRGB(82, 56), true) shouldBe Theme.light.background
-  }
-
-  it should "apply the configured post-process after rendering the frame" in {
-    val image   = new BufferedImage(83, 57, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
-    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-    val state = AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        theme = Theme.light,
-        config = AppConfig.default
-          .withLineNumbers(false)
-          .withoutStatusLine
-          .withPostProcessingEffect(PostProcessingEffect.Scanlines)
-      )
-    )
-
-    RendererEntryPoints.render(
-      state,
-      cursorVisible = true,
-      surface,
-      ViewportSize(8, 5),
-      font,
-      font,
-      metrics,
-      None,
-      com.serenity.state.manager.RenderCaches.create()
-    )
-
-    (0 until image.getHeight).exists(y => new Color(image.getRGB(82, y), true).getRed < 230) shouldBe true
   }
 
   // A background Color with alpha 0 is the transparency sentinel (#1240): `clearViewport`/`fillRect`/`putString` must

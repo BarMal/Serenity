@@ -235,9 +235,13 @@ object ConfigManager:
         deprecatedReplacement(entry.key).map(replacement => DeprecatedConfigEntry(entry.key, replacement))
       )
       .distinctBy(_.key)
+    val removedKeys = entries
+      .map(_.key)
+      .filter(RemovedConfigKeys.isRemoved)
+      .distinct
     val unknownKeys = entries
       .map(_.key)
-      .filterNot(isKnownConfigKey)
+      .filterNot(key => isKnownConfigKey(key) || RemovedConfigKeys.isRemoved(key))
       .distinct
     val invalidEntries = entries.flatMap(entry => invalidEntry(entry.key, entry.value, entry.valueType))
 
@@ -245,7 +249,8 @@ object ConfigManager:
       version = ConfigVersion.Current,
       deprecatedEntries = deprecatedEntries,
       unknownKeys = unknownKeys,
-      invalidEntries = invalidEntries
+      invalidEntries = invalidEntries,
+      removedKeys = removedKeys
     )
 
   private def parseHoconFile(path: Path): Config =

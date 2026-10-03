@@ -7,8 +7,7 @@ final case class ThemeConfig(
     name: String,
     ui: UiColors,
     syntax: SyntaxColors,
-    interactionStates: Option[InteractionStatesConfig] = None,
-    elevation: Option[ElevationConfig] = None
+    interactionStates: Option[InteractionStatesConfig] = None
 ) derives ConfigReader
 
 /** Semantic UI colors for the theme */
@@ -71,22 +70,6 @@ final case class InteractionStatesConfig(
     hover: Option[UiTokenConfig] = None,
     pressed: Option[UiTokenConfig] = None,
     disabled: Option[UiTokenConfig] = None
-) derives ConfigReader
-
-/** Optional override for one `ElevationLevel`'s shadow/tint. Both fields are independently optional, falling back to
-  * `ElevationLevels.derive` field-by-field when absent.
-  */
-final case class ElevationTreatmentConfig(
-    shadowOpacity: Option[Double] = None,
-    surfaceTint: Option[String] = None
-) derives ConfigReader
-
-/** Optional overrides for the four `ElevationLevel` tiers (issue #1090). */
-final case class ElevationConfig(
-    base: Option[ElevationTreatmentConfig] = None,
-    raised: Option[ElevationTreatmentConfig] = None,
-    floating: Option[ElevationTreatmentConfig] = None,
-    modal: Option[ElevationTreatmentConfig] = None
 ) derives ConfigReader
 
 object ThemeConfig:

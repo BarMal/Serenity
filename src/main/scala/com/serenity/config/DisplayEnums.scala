@@ -43,23 +43,6 @@ enum MaterialPreset(val configKey: String):
       case Crystal       => 0.42f
       case Custom        => 0.18f
 
-enum PostProcessingEffect(val configKey: String):
-  case Off              extends PostProcessingEffect("off")
-  case Scanlines        extends PostProcessingEffect("scanlines")
-  case Glow             extends PostProcessingEffect("glow")
-  case ScanlinesAndGlow extends PostProcessingEffect("scanlines-glow")
-
-object PostProcessingEffect:
-
-  def fromConfigKey(value: String): Option[PostProcessingEffect] =
-    value.trim.toLowerCase match
-      case "off" | "none" | "disabled"      => Some(PostProcessingEffect.Off)
-      case "scanlines" | "scanline" | "crt" => Some(PostProcessingEffect.Scanlines)
-      case "glow"                           => Some(PostProcessingEffect.Glow)
-      case "scanlines-glow" | "scanlines+glow" | "scanlines,glow" | "glow,scanlines" =>
-        Some(PostProcessingEffect.ScanlinesAndGlow)
-      case _ => None
-
 enum MotionPreset(val configKey: String):
   case Reduced    extends MotionPreset("reduced")
   case Subtle     extends MotionPreset("subtle")

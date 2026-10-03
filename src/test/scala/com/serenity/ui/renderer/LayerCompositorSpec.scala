@@ -111,11 +111,6 @@ class LayerCompositorSpec extends AnyFlatSpec with Matchers:
     def setAlpha(alpha: Float): Unit                                             = alphaCalls.updateAndGet(_ :+ alpha)
     def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit = ()
 
-    def applyPostProcessing(
-      effect: com.serenity.config.PostProcessingEffect,
-      animationPhase: Long = 0L
-    ): Unit = ()
-
     def setForegroundColor(color: java.awt.Color): Unit                     = ()
     def setBackgroundColor(color: java.awt.Color): Unit                     = ()
     def getBackgroundColor: java.awt.Color                                  = java.awt.Color.BLACK

@@ -8,12 +8,6 @@ import org.scalatest.matchers.should.Matchers
 
 class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
 
-  "PostProcessingEffect" should "parse supported configuration values" in {
-    PostProcessingEffect.fromConfigKey("off") shouldBe Some(PostProcessingEffect.Off)
-    PostProcessingEffect.fromConfigKey("crt") shouldBe Some(PostProcessingEffect.Scanlines)
-    PostProcessingEffect.fromConfigKey("glow") shouldBe Some(PostProcessingEffect.Glow)
-  }
-
   // #1529: the diagnostic-highlight blend weight was a hardcoded literal in `RendererHighlights`; it's a config value
   // now, clamped to [0, 1] like the other alpha-shaped settings.
   "SurfaceConfig.normalized" should "clamp diagnosticHighlightBlendWeight to [0, 1]" in {

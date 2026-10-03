@@ -5,11 +5,11 @@ import scala.jdk.CollectionConverters.*
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
+import com.serenity.testkit.LogbackLoggers
 import io.circe.Json
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.slf4j.LoggerFactory
 
 /** #1432: [[SessionConfigCodec.SessionField.decode]] was given a warning log when a field fails to decode (#1423), but
   * its sibling [[ConfigField.decode]] -- which covers the larger share of registered [[AppConfig]] fields -- stayed
@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory
   */
 class ConfigFieldDecodeSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEach:
 
-  private val logger   = LoggerFactory.getLogger("com.serenity.config.ConfigField")
+  private val logger   = LogbackLoggers.named("com.serenity.config.ConfigField")
   private val appender = new ListAppender[ILoggingEvent]()
 
   private val materialPresetField: ConfigField[MaterialPreset] =
@@ -36,10 +36,10 @@ class ConfigFieldDecodeSpec extends AnyFlatSpec with Matchers with BeforeAndAfte
   override def beforeEach(): Unit =
     appender.list.clear()
     appender.start()
-    logger.asInstanceOf[ch.qos.logback.classic.Logger].addAppender(appender)
+    logger.addAppender(appender)
 
   override def afterEach(): Unit =
-    logger.asInstanceOf[ch.qos.logback.classic.Logger].detachAppender(appender)
+    logger.detachAppender(appender)
     appender.stop()
 
   private def warnMessages: List[String] =

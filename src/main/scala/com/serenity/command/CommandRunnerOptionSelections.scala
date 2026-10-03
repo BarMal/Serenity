@@ -18,7 +18,6 @@ object CommandRunnerOptionSelections:
 
     Map(
       "material-preset" -> materialPresetIndex(surfaceConfig.materialPreset),
-      "post-processing" -> postProcessingEffectIndex(surfaceConfig.postProcessingEffect),
       "ui-shadows"      -> enabledIndex(surfaceConfig.uiShadowsEnabled),
       "motion-preset"   -> motionPresetIndex(surfaceConfig.motionPreset),
       "motion-accessibility" -> motionAccessibilityIndex(
@@ -160,13 +159,6 @@ object CommandRunnerOptionSelections:
       case MaterialPreset.Frosted => 2
       case MaterialPreset.Crystal => 3
       case MaterialPreset.Custom  => 4
-
-  private def postProcessingEffectIndex(effect: PostProcessingEffect): Int =
-    effect match
-      case PostProcessingEffect.Off              => 0
-      case PostProcessingEffect.Scanlines        => 1
-      case PostProcessingEffect.Glow             => 2
-      case PostProcessingEffect.ScanlinesAndGlow => 3
 
   private def motionPresetIndex(preset: MotionPreset): Int =
     preset match

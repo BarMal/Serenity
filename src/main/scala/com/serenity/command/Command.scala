@@ -310,14 +310,13 @@ enum SpellCheckIntent:
   // threaded through the command.
   case AddWordAtCursorToDictionary
 
-/** Settings with no more specific home: material/post-processing/shadows, render tuning, background, and the settings
-  * surface's own open/save commands.
+/** Settings with no more specific home: material/shadows, render tuning, background, and the settings surface's own
+  * open/save commands.
   */
 enum GeneralSettingsIntent:
   case OpenSettings
   case SaveConfig
   case SetMaterialPreset(preset: MaterialPreset)
-  case SetPostProcessingEffect(effect: PostProcessingEffect)
   case SetUiShadowsEnabled(enabled: Boolean)
   case SetRenderFpsTarget(target: RenderFpsTarget)
   case SetRenderDamageGranularity(granularity: RenderDamageGranularity)

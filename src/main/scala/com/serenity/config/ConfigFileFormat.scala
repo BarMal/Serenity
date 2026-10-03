@@ -163,8 +163,6 @@ object ConfigFileFormat:
       "UI material: solid, clear, frosted, crystal, custom"
     ),
     field("ui.material"),
-    comment("Post-processing: off, scanlines, glow, scanlines-glow"),
-    field("ui.post_processing"),
     comment("Draw soft shadows behind menus and panels"),
     field("ui.shadows"),
     comment("Background treatment behind panes: solid, transparent, frosted, glass-like"),

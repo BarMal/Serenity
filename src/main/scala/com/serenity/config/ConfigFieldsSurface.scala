@@ -12,16 +12,6 @@ private[config] object ConfigFieldsSurface:
       _.surfaceConfig.materialPreset,
       (config, value) => config.withMaterialPreset(value)
     ).restoredBy((config, value) => config.withSurfaceConfig(config.surfaceConfig.copy(materialPreset = value))),
-    named("ui.post_processing", "postProcessingEffect")(
-      enumerated(
-        PostProcessingEffect.fromConfigKey,
-        _.configKey,
-        text => PostProcessingEffect.values.find(_.toString == text)
-      )
-    )(
-      _.surfaceConfig.postProcessingEffect,
-      (config, value) => config.withPostProcessingEffect(value)
-    ),
     named("ui.shadows", "uiShadowsEnabled", "ui_shadows")(boolean)(
       _.surfaceConfig.uiShadowsEnabled,
       (config, value) => config.withUiShadowsEnabled(value)

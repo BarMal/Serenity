@@ -42,7 +42,6 @@ final case class SurfaceConfig(
     blurRadius: Float = 0.18f,
     backgroundStyle: BackgroundStyle = BackgroundStyle.Frosted,
     materialPreset: MaterialPreset = MaterialPreset.Frosted,
-    postProcessingEffect: PostProcessingEffect = PostProcessingEffect.Off,
     uiShadowsEnabled: Boolean = true,
     motionPreset: MotionPreset = MotionPreset.Reduced,
     elementTransitionSpeedScale: Double = 1.0,

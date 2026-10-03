@@ -37,14 +37,3 @@ class Java2DScratchBuffersSpec extends AnyFlatSpec with Matchers:
 
     scratch.withImage(20, 20)(identity) should be theSameInstanceAs latest
   }
-
-  "Java2DScratchBuffers.withGlowBuffers" should "reuse one set of buffers per frame size" in {
-    val scratch = Java2DScratchBuffers()
-    val first   = scratch.withGlowBuffers(16, 9)(identity)
-    val second  = scratch.withGlowBuffers(16, 9)(identity)
-    val resized = scratch.withGlowBuffers(8, 4)(identity)
-
-    second should be theSameInstanceAs first
-    resized should not be theSameInstanceAs(first)
-    resized.basePixels.length shouldBe 32
-  }

@@ -56,7 +56,6 @@ object RendererEntryPoints:
       cellMetrics,
       uiMetrics
     )
-    surface.effects.foreach(_.applyPostProcessing(state.persisted.config.surfaceConfig.postProcessingEffect))
     surface.flush()
 
   private[serenity] def withSceneIfNeeded[A](

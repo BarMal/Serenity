@@ -241,43 +241,6 @@ private[command] object CommandRunnerSettingsAppearanceItems:
       hint = Some("Material baseline for panels and overlays")
     )
 
-  private[command] def postProcessingOptionItem(
-    optionSelections: Map[String, Int]
-  ): CommandSurfaceItem.OptionItem =
-    CommandSurfaceItem.OptionItem(
-      id = "post-processing",
-      label = "Post-processing",
-      options = List(
-        CommandOption(
-          "Off",
-          CommandIntent.Settings(
-            SettingsIntent.General(GeneralSettingsIntent.SetPostProcessingEffect(PostProcessingEffect.Off))
-          )
-        ),
-        CommandOption(
-          "Scanlines",
-          CommandIntent.Settings(
-            SettingsIntent.General(GeneralSettingsIntent.SetPostProcessingEffect(PostProcessingEffect.Scanlines))
-          )
-        ),
-        CommandOption(
-          "Glow",
-          CommandIntent.Settings(
-            SettingsIntent.General(GeneralSettingsIntent.SetPostProcessingEffect(PostProcessingEffect.Glow))
-          )
-        ),
-        CommandOption(
-          "Scanlines + Glow",
-          CommandIntent.Settings(
-            SettingsIntent.General(GeneralSettingsIntent.SetPostProcessingEffect(PostProcessingEffect.ScanlinesAndGlow))
-          )
-        )
-      ),
-      selectedIndex = optionSelections.getOrElse("post-processing", 0),
-      category = CommandCategory.Settings,
-      hint = Some("Frame-wide scanlines, glow, or both")
-    )
-
   // issue #1044: was ordered Off/On (the one boolean toggle in this file built inline instead of through
   // `CommandRunnerSettingsOptionItemHelpers.enabledOptionItem`) -- normalized to that helper's On/Off convention,
   // the one every other boolean toggle in the settings tree already follows.

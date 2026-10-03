@@ -440,10 +440,6 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
       def setAlpha(alpha: Float): Unit = delegateEffects.setAlpha(alpha)
       def blurRegion(x: Int, y: Int, width: Int, height: Int, radius: Float): Unit =
         delegateEffects.blurRegion(x, y, width, height, radius)
-      def applyPostProcessing(
-        effect: com.serenity.config.PostProcessingEffect,
-        animationPhase: Long
-      ): Unit = delegateEffects.applyPostProcessing(effect, animationPhase)
   }
 
   override def roundedRects: Option[RoundedRectDrawing] = delegate.roundedRects.map { delegateRoundedRects =>

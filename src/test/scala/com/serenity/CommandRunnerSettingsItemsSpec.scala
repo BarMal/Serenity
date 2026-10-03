@@ -1,6 +1,6 @@
 package com.serenity.command
 
-import com.serenity.config.{BackgroundStyle, PostProcessingEffect, StatusSegment, WindowChromeMode}
+import com.serenity.config.{BackgroundStyle, StatusSegment, WindowChromeMode}
 import com.serenity.ui.presets.UiPreset
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -40,16 +40,6 @@ class CommandRunnerSettingsItemsSpec extends AnyFlatSpec with Matchers:
       )
     )
     background.options.map(_.label) shouldBe List("Solid", "Transparent", "Frosted", "Glass")
-
-    val postProcessing = CommandRunnerSettingsAppearanceItems.postProcessingOptionItem(Map("post-processing" -> 2))
-    postProcessing.label shouldBe "Post-processing"
-    postProcessing.selectedOption shouldBe "Glow"
-    postProcessing.selectedIntent shouldBe Some(
-      CommandIntent.Settings(
-        SettingsIntent.General(GeneralSettingsIntent.SetPostProcessingEffect(PostProcessingEffect.Glow))
-      )
-    )
-    postProcessing.options.map(_.label) shouldBe List("Off", "Scanlines", "Glow", "Scanlines + Glow")
 
     // issue #1044: options are ordered On (index 0), Off (index 1) -- the `enabledOptionItem` convention every
     // other boolean toggle in the settings tree follows.

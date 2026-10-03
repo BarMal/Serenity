@@ -249,7 +249,6 @@ object ConfigGenerators:
       focusedTextBody     <- Gen.oneOf(true, false)
       toolbar             <- Gen.oneOf(true, false)
       toolbarMode         <- oneOfEnum(ToolbarDisplayMode.values)
-      postProcessing      <- oneOfEnum(PostProcessingEffect.values)
       shadows             <- Gen.oneOf(true, false)
       visibleRows <- Gen.option(
         Gen.choose(AppConfig.MinCommandRunnerVisibleRows, AppConfig.MaxCommandRunnerVisibleRows)
@@ -300,7 +299,6 @@ object ConfigGenerators:
       focusedTextBodyEnabled = focusedTextBody,
       contextualToolbarEnabled = toolbar,
       contextualToolbarDisplayMode = toolbarMode,
-      postProcessingEffect = postProcessing,
       uiShadowsEnabled = shadows,
       commandRunnerVisibleRows = visibleRows,
       commandRunnerItemGapRows = itemGap,

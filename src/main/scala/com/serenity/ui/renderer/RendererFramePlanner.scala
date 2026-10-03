@@ -3,7 +3,6 @@ package com.serenity.ui.renderer
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
-import com.serenity.config.PostProcessingEffect
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -138,7 +137,6 @@ object RendererFramePlanner:
         commitFramePlan(framePlan, output)
         Some(editorRenderPlan)
 
-    surface.effects.foreach(_.applyPostProcessing(state.persisted.config.surfaceConfig.postProcessingEffect))
     surface.flush()
     editorRenderPlan
 
@@ -373,14 +371,13 @@ object RendererFramePlanner:
   /** Decide which pane rows this frame still has to draw, and which pixel bands it may keep from an earlier frame.
     *
     * Returns `None` — meaning "draw everything, remember nothing" — whenever the frame cannot be reasoned about safely:
-    * a surface that does not preserve pixels, or a post-processing pass that would compound over kept pixels. A
-    * floating/pinned/modal/expanded layer being visible no longer stands the whole optimisation down by itself
-    * (`#1000`, retiring the old `overlaysMayCoverPanes` check) -- `DamageProducer.fullRenderDamage` reports
-    * `Everything` whenever `uiSurfaces`/`focus` actually change, which still wipes out any stale
-    * shadow/blur/translucency bleed the instant an overlay appears, moves, resizes or changes content, while leaving
-    * row reuse active on every other frame an overlay merely sits on screen. `damage` is always folded into every
-    * tracked identity first, regardless of which branch this frame takes, so a pixel buffer that sits idle through a
-    * stood-down frame does not lose the damage that frame reported.
+    * a surface that does not preserve pixels. A floating/pinned/modal/expanded layer being visible no longer stands the
+    * whole optimisation down by itself (`#1000`, retiring the old `overlaysMayCoverPanes` check) --
+    * `DamageProducer.fullRenderDamage` reports `Everything` whenever `uiSurfaces`/`focus` actually change, which still
+    * wipes out any stale shadow/blur/translucency bleed the instant an overlay appears, moves, resizes or changes
+    * content, while leaving row reuse active on every other frame an overlay merely sits on screen. `damage` is always
+    * folded into every tracked identity first, regardless of which branch this frame takes, so a pixel buffer that sits
+    * idle through a stood-down frame does not lose the damage that frame reported.
     */
   private def planFrame(
     state: AppState,
@@ -394,7 +391,6 @@ object RendererFramePlanner:
     context.caches.frameState.accumulateScreenDamage(output, damage)
 
     val plan = context.surface.persistentContentKey
-      .filter(_ => state.persisted.config.surfaceConfig.postProcessingEffect == PostProcessingEffect.Off)
       .map { persistenceKey =>
         val panes   = RendererPaneSetup.paneRecordsFor(state, context, renderPlan)
         val paneIds = panes.keySet

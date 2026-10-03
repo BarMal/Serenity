@@ -45,7 +45,6 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     appearanceGroup.children.map(_.id) shouldBe List(
       "background-style",
       "material-preset",
-      "post-processing",
       "ui-shadows"
     )
   }
@@ -128,7 +127,6 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     nestedGroup("settings-surface-appearance").children.map(_.id) shouldBe List(
       "background-style",
       "material-preset",
-      "post-processing",
       "ui-shadows"
     )
     // issue #1046: command-runner visible-rows/item-gap-rows/cursor-gap-rows are no longer separate rows here --

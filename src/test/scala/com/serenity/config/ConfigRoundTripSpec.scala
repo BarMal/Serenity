@@ -86,7 +86,6 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withContextualToolbarDisplayMode(ToolbarDisplayMode.IconOnly)
     .withBlurRadius(0.42f)
     .withBackgroundStyle(BackgroundStyle.Solid)
-    .withPostProcessingEffect(PostProcessingEffect.Scanlines)
     .withUiShadowsEnabled(false)
     .withCommandRunnerVisibleRows(Some(11))
     .withCommandRunnerItemGapRows(Some(1.5))

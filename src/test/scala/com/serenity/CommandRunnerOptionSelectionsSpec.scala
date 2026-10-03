@@ -42,7 +42,6 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default.copy(
       surfaceConfig = AppConfig.default.surfaceConfig.copy(
         materialPreset = MaterialPreset.Crystal,
-        postProcessingEffect = PostProcessingEffect.ScanlinesAndGlow,
         uiShadowsEnabled = false,
         motionPreset = MotionPreset.Expressive,
         commandRunnerAnimation = AnimationConfig.quick,
@@ -83,7 +82,6 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     val selections = CommandRunnerOptionSelections.default(config)
 
     selections("material-preset") shouldBe 3
-    selections("post-processing") shouldBe 3
     // issue #1044: "ui-shadows" now encodes On=0/Off=1 like every other boolean toggle (`enabledIndex`) --
     // previously the one hand-rolled Off=0/On=1 encoding in this map, for a config with uiShadowsEnabled = false.
     selections("ui-shadows") shouldBe 1
