@@ -3,6 +3,7 @@ package com.serenity.state.reducers
 import com.serenity.command.RichTextIntent
 import com.serenity.richtext.*
 import com.serenity.state.models.*
+import com.serenity.state.undo.{BufferSnapshot, HistoryEntry}
 
 /** What a rich-text command does, given the kind of buffer it would format. */
 enum RichTextRoute:
@@ -43,7 +44,7 @@ object RichTextReducer:
   def reduce(intent: RichTextIntent, state: AppState): ReducerResult =
     activeMarkdownBuffer(state) match
       case Some((paneId, buffer)) => MarkdownFormattingReducer.reduce(intent, state, paneId, buffer)
-      case None                   => ReducerResult.noEffects(reduceRichText(intent, state))
+      case None                   => withUndoBoundary(state, reduceRichText(intent, state))
 
   /** Drops the buffer's rich-text document, so it goes back to plain text and what is on screen is what a plain-text
     * save writes.
@@ -55,6 +56,28 @@ object RichTextReducer:
           .copy(buffers = state.persisted.buffers.updated(bufferId, buffer.copy(richText = RichTextState())))
       )
     }
+
+  /** Formatting is undone like any other edit (#1935): a change to the active buffer's rich-text document records the
+    * buffer as it stood before. A change to the pending insertion style alone is not a step of its own.
+    */
+  private def withUndoBoundary(before: AppState, after: AppState): ReducerResult =
+    ReducerResult(after, formattingUndoBoundary(before, after).toList)
+
+  private def formattingUndoBoundary(before: AppState, after: AppState): Option[AppEffect] =
+    for
+      paneId <- before.persisted.layout.activeEditorPaneId
+      buffer <- activeEditorBuffer(before)
+      edited <- after.persisted.buffers.get(buffer.id)
+      if formattingChanged(buffer, edited)
+      entry = HistoryEntry.BufferEdit(buffer.id, paneId, BufferSnapshot.fromBuffer(buffer))
+    yield AppEffect.Undo(UndoEffect.RecordBoundary(entry, groupable = false))
+
+  // By identity: an unchanged command hands the very same document back, and comparing two documents by value would
+  // walk every paragraph of a long one on every formatting command.
+  private def formattingChanged(before: Buffer, after: Buffer): Boolean =
+    (before.richText.richTextDocument, after.richText.richTextDocument) match
+      case (Some(previous), Some(next)) => previous ne next
+      case (previous, next)             => previous.isDefined != next.isDefined
 
   private def activeMarkdownBuffer(state: AppState): Option[(PaneId, Buffer)] =
     for
