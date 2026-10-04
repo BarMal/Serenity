@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import scala.util.Random
 
-import com.serenity.keystroke.events.InsertChar
+import com.serenity.keystroke.events.{InsertChar, ResizeEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent}
 import com.serenity.state.models.*
@@ -207,3 +207,50 @@ class CursorCentringStabilitySpec extends AnyFlatSpec with Matchers:
       val rows = paintedRows(text, columns = 40, typewriter, fraction = 0.5, line = 1, keystrokes = 100)
       withClue(s"typewriter=$typewriter: ")(rows should centred)
   }
+
+  private def paintedSnapshot(state: AppState, caches: RenderCaches) =
+    val config = state.persisted.config.editorConfig.fontConfig
+    caches.authoritativeScene
+      .forState(
+        state,
+        state.runtime.viewportSize.getOrElse(fail("no viewport size")),
+        FontLoader.previewCodeFont(config),
+        FontLoader.previewTextFont(config)
+      )
+      .textSnapshot(paneId)
+      .getOrElse(fail("no text snapshot"))
+
+  /** A cursor deep inside a long wrapped paragraph, placed centred, so `topVisualLine` is a large offset. */
+  private def placedInLongParagraph(columns: Int, trailingLines: Vector[String]): AppState =
+    val random    = new Random(11)
+    val paragraph = Vector.fill(3_000)(words(random.nextInt(words.length))).mkString(" ")
+    val text      = (Vector("Heading", paragraph) ++ trailingLines).mkString("\n")
+    val raw       = stateWith(text, CursorPosition(1, paragraph.length / 2), columns, typewriter = false)
+    val synced =
+      com.serenity.state.reducers.SystemEventReducer.reduce(ResizeEvent(raw.runtime.viewportSize.get), raw).state
+    val placed = buffer(synced).copy(viewport = coldViewport(synced))
+    synced.copy(persisted = synced.persisted.copy(buffers = Map(bufferId -> placed)))
+
+  private def resizeSizes =
+    List(ViewportSize(50, 16), ViewportSize(140, 44), ViewportSize(70, 30), ViewportSize(36, 24))
+
+  "Resizing a pane showing a cursor deep in a long wrapped paragraph" should
+    "paint a full pane of rows and centre the cursor once resized" in {
+      List(Vector("Tail"), Vector.empty[String]).foreach(resizeThroughSizes)
+      succeed
+    }
+
+  private def resizeThroughSizes(trailingLines: Vector[String]): Unit =
+    resizeSizes.foldLeft(placedInLongParagraph(60, trailingLines)) { (before, size) =>
+      val resized = EventPipelineTransitions.resized(ResizeEvent(size), before).state
+      withClue(s"resized to $size: ") {
+        // The resize commits already placed, so no frame paints the stale offset: against a pane that grew past
+        // the document's end that offset paints no rows at all (#1978).
+        paintedSnapshot(resized, RenderCaches.create()).visualLines.length should be > 0
+        // Placement on resize leaves the cursor on the row a cold layout centres it on.
+        paintedCursorRow(resized, RenderCaches.create()) shouldBe coldCentre(resized)
+        buffer(resized).viewport shouldBe coldViewport(resized)
+      }
+      resized
+    }
+    ()
