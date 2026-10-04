@@ -1,15 +1,11 @@
 package com.serenity.state.manager
 
 import com.serenity.keystroke.events.InsertChar
-import java.awt.image.BufferedImage
-
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent}
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.renderer.{Java2DRenderSurface, RenderContext, RendererPaneSetup}
 import com.serenity.ui.layout.{
-  CellMetrics,
   LayoutEngine,
   ViewportSize,
   VisualRowCounts,
@@ -19,12 +15,13 @@ import com.serenity.ui.layout.{
   WrappedLineCache
 }
 import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.{MatchResult, Matcher}
 import org.scalatest.matchers.should.Matchers
 
 import scala.util.Random
 
-/** Typing inside a long wrapped paragraph must leave the cursor on the same screen row -- the centred one -- after every
-  * keystroke, and on the row a cold layout of the same state would centre it on (#1978).
+/** Typing inside a long wrapped paragraph must leave the cursor on the same screen row -- the centred one -- after
+  * every keystroke, and on the row a cold layout of the same state would centre it on (#1978).
   */
 class CursorCentringStabilitySpec extends AnyFlatSpec with Matchers:
 
@@ -112,10 +109,12 @@ class CursorCentringStabilitySpec extends AnyFlatSpec with Matchers:
     val lineLength = text.split("\n", -1)(line).length
     val cache      = WrappedLineCache.bounded()
     val start      = stateWith(text, CursorPosition(line, lineLength / 2), columns, typewriter)
-    val settled    = start.copy(persisted =
-      start.persisted.copy(buffers = start.persisted.buffers + (bufferId -> buffer(start).copy(viewport = coldViewport(start))))
+    val settled = start.copy(persisted =
+      start.persisted.copy(buffers =
+        start.persisted.buffers + (bufferId -> buffer(start).copy(viewport = coldViewport(start)))
+      )
     )
-    val typed = "the quick brown fox jumps over the lazy dog "
+    val typed       = "the quick brown fox jumps over the lazy dog "
     val expectedRow = cursorScreenRow(settled, buffer(settled).viewport)
     (0 until keystrokes).foldLeft(settled) { (state, index) =>
       val next = typeChar(cache, typed(index % typed.length))(state)
@@ -134,39 +133,43 @@ class CursorCentringStabilitySpec extends AnyFlatSpec with Matchers:
     do typeMidParagraph(loremDocument, line = 150 * 2, columns, typewriter, keystrokes = 120)
   }
 
-  /** The row, counted from the top of the pane, the renderer's own snapshot of `state` puts the cursor on. */
-  private def paintedCursorRow(state: AppState, cache: WrappedLineCache): Option[Int] =
-    val config      = state.persisted.config.editorConfig.fontConfig
-    val codeFont    = FontLoader.previewCodeFont(config)
-    val metrics     = CellMetrics.fromFont(codeFont)
-    val size        = state.runtime.viewportSize.getOrElse(fail("no viewport size"))
-    val layout      = LayoutEngine.calculateLayoutWithUI(state, size)
-    val contentRect = LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId).contentRect
-    val image       = new BufferedImage(size.width * metrics.charWidth, size.height * metrics.lineHeight, BufferedImage.TYPE_INT_ARGB)
-    val surface     = new Java2DRenderSurface(image, metrics, codeFont, _ => ())
-    val caches      = com.serenity.state.manager.RenderCaches.create()
-    val context = RenderContext(
-      surface,
-      layout,
-      true,
-      None,
-      codeFont,
-      FontLoader.previewTextFont(config),
-      FontLoader.previewUiFont(config),
-      metrics,
-      metrics,
-      caches = caches
+  /** The row, counted from the top of the pane, the renderer's own snapshot of `state` puts the cursor on, taken from
+    * the shared scene exactly as the window paints it.
+    */
+  private def paintedCursorRow(state: AppState, caches: RenderCaches): Option[Int] =
+    val config = state.persisted.config.editorConfig.fontConfig
+    val size   = state.runtime.viewportSize.getOrElse(fail("no viewport size"))
+    val scene = caches.authoritativeScene.forState(
+      state,
+      size,
+      FontLoader.previewCodeFont(config),
+      FontLoader.previewTextFont(config)
     )
     val b        = buffer(state)
-    val snapshot = RendererPaneSetup.snapshotForBuffer(b, contentRect, state, context)
+    val snapshot = scene.textSnapshot(paneId).getOrElse(fail("no text snapshot"))
     snapshot.navigationGeometry.visualRowIndexFor(b.editing.cursorPositions.head)
 
-  "The painted cursor row" should "stay on the centred row while typing mid-paragraph in the bench lorem document" in {
-    val text       = loremDocument
-    val line       = 300
+  private def coldCentre(state: AppState): Some[Int] = Some(cursorScreenRow(state, buffer(state).viewport))
+
+  /** Every keystroke painted the cursor on the cold-layout row, and that row never moved. */
+  private val centred: Matcher[List[(Option[Int], Some[Int])]] =
+    Matcher { rows =>
+      val ok = rows.forall((painted, cold) => painted == cold) && rows.map(_._2).distinct.size == 1
+      MatchResult(ok, s"painted/cold rows were $rows", "rows were centred")
+    }
+
+  private def paintedRows(
+    text: String,
+    columns: Int,
+    typewriter: Boolean,
+    fraction: Double,
+    line: Int,
+    keystrokes: Int
+  ): List[(Option[Int], Some[Int])] =
     val lineLength = text.split("\n", -1)(line).length
-    val cache      = WrappedLineCache.bounded()
-    val raw        = stateWith(text, CursorPosition(line, lineLength / 2), 100, typewriter = false)
+    val caches     = RenderCaches.create()
+    val cache      = caches.wrappedLines
+    val raw        = stateWith(text, CursorPosition(line, (lineLength * fraction).toInt), columns, typewriter)
     val size       = raw.runtime.viewportSize.getOrElse(fail("no viewport size"))
     val layout     = LayoutEngine.calculateLayoutWithUI(raw, size)
     val rect       = LayoutEngine.calculateEditorPaneLayouts(raw, layout)(paneId).contentRect
@@ -175,12 +178,32 @@ class CursorCentringStabilitySpec extends AnyFlatSpec with Matchers:
     val settled = start.copy(persisted =
       start.persisted.copy(buffers = start.persisted.buffers + (bufferId -> sized.copy(viewport = coldViewport(start))))
     )
-    val typed       = "the quick brown fox jumps over the lazy dog "
-    val centredRow  = paintedCursorRow(settled, cache)
-    val rows = (0 until 150).scanLeft((settled, centredRow)) {
-      case ((state, _), index) =>
-        val next = typeChar(cache, typed(index % typed.length))(state)
-        (next, paintedCursorRow(next, cache))
-    }
-    rows.map(_._2).distinct shouldBe List(centredRow)
+    val typed = "the quick brown fox jumps over the lazy dog "
+    (0 until keystrokes)
+      .scanLeft((settled, (paintedCursorRow(settled, caches), coldCentre(settled)))) {
+        case ((state, _), index) =>
+          val next = typeChar(cache, typed(index % typed.length))(state)
+          (next, (paintedCursorRow(next, caches), coldCentre(next)))
+      }
+      .map(_._2)
+      .toList
+
+  "The painted cursor row" should "stay on one row while typing mid-paragraph in the bench lorem document" in {
+    for
+      columns    <- List(50, 64, 80, 100, 117, 140)
+      typewriter <- List(false, true)
+      fraction   <- List(0.0, 0.5, 0.95)
+    do
+      withClue(s"columns=$columns typewriter=$typewriter fraction=$fraction: ")(
+        paintedRows(loremDocument, columns, typewriter, fraction, 300, 150) should centred
+      )
+  }
+
+  it should "stay on the cold-layout centre row inside one very long wrapped paragraph" in {
+    val random    = new Random(7)
+    val paragraph = Vector.fill(3_000)(words(random.nextInt(words.length))).mkString(" ")
+    val text      = Vector("Heading", paragraph, "Tail").mkString("\n")
+    for typewriter <- List(false, true) do
+      val rows = paintedRows(text, columns = 40, typewriter, fraction = 0.5, line = 1, keystrokes = 100)
+      withClue(s"typewriter=$typewriter: ")(rows should centred)
   }
