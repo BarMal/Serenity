@@ -466,40 +466,7 @@ final case class CommandRunner(
 object CommandRunner:
 
   private[command] def commandBindings(config: AppConfig): Map[String, String] =
-    Map(
-      "save"                  -> HotkeyAction.Save,
-      "save-as"               -> HotkeyAction.SaveAs,
-      "open"                  -> HotkeyAction.OpenFile,
-      "file-search"           -> HotkeyAction.FileSearch,
-      "go-to-file"            -> HotkeyAction.GoToFile,
-      "quit"                  -> HotkeyAction.Quit,
-      "new"                   -> HotkeyAction.NewTab,
-      "next-tab"              -> HotkeyAction.NextTab,
-      "previous-tab"          -> HotkeyAction.PreviousTab,
-      "close"                 -> HotkeyAction.CloseTab,
-      "split-pane-horizontal" -> HotkeyAction.SplitPaneHorizontal,
-      "split-pane-vertical"   -> HotkeyAction.SplitPaneVertical,
-      "toggle-chapter-ghosts" -> HotkeyAction.ToggleChapterGhosts,
-      "open-chapter-note"     -> HotkeyAction.OpenChapterNote,
-      "toggle-notes-pin"      -> HotkeyAction.ToggleNotesPin,
-      "close-pane"            -> HotkeyAction.ClosePane,
-      "find"                  -> HotkeyAction.Find,
-      "replace"               -> HotkeyAction.Replace,
-      "copy"                  -> HotkeyAction.Copy,
-      "cut"                   -> HotkeyAction.Cut,
-      "paste"                 -> HotkeyAction.Paste,
-      "select-all"            -> HotkeyAction.SelectAll,
-      "undo"                  -> HotkeyAction.Undo,
-      "redo"                  -> HotkeyAction.Redo,
-      "goto-line"             -> HotkeyAction.GoToLine,
-      "focus-left"            -> HotkeyAction.FocusLeft,
-      "focus-right"           -> HotkeyAction.FocusRight,
-      "focus-up"              -> HotkeyAction.FocusUp,
-      "focus-down"            -> HotkeyAction.FocusDown
-    ).flatMap {
-      case (commandName, action) =>
-        config.inputConfig.hotkeyConfig.bindingsFor(action).headOption.map(trigger => commandName -> trigger.render)
-    }
+    CommandKeyBindings.displayed(config.inputConfig.hotkeyConfig)
 
   /** Empty/inactive command runner */
   def empty: CommandRunner = CommandRunner(isActive = false)

@@ -13,6 +13,8 @@ object ConfigGroups:
 
   val dynamicPrefixes: List[String] = List("lsp.", "hotkey.", "keymap.")
 
+  private val commandHotkeyPrefix = "hotkey.command."
+
   def lsp(config: LspUserConfig): List[(String, HoconValue)] =
     config.servers
       .getOrElse(Map.empty)
@@ -33,6 +35,17 @@ object ConfigGroups:
       ConfigUtil.joinPath("hotkey", action.configKey) ->
         HoconValue.list(config.inputConfig.hotkeyConfig.bindingsFor(action).map(_.render))
     }
+
+  /** Registry command ids are lowercase words joined by hyphens, which HOCON takes unquoted -- so the id read back from
+    * a key is the id that was written.
+    */
+  def commandHotkeys(config: AppConfig): List[(String, HoconValue)] =
+    config.inputConfig.hotkeyConfig.commandBindings.toList.sortBy(_._1).map { (commandId, triggers) =>
+      ConfigUtil.joinPath("hotkey", "command", commandId) -> HoconValue.list(triggers.map(_.render))
+    }
+
+  def commandIdOf(key: String): Option[String] =
+    Option.when(key.startsWith(commandHotkeyPrefix))(key.stripPrefix(commandHotkeyPrefix)).filter(_.nonEmpty)
 
   def keymaps(config: AppConfig): List[(String, HoconValue)] =
     val keymap = config.inputConfig.focusedKeymapConfig

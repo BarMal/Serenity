@@ -84,24 +84,7 @@ object ConfigManager:
           case lspKey if lspKey.startsWith("lsp.") =>
             parseLspConfigEntry(config, lspKey, value.trim)
           case hotkeyKey if hotkeyKey.startsWith("hotkey.") =>
-            HotkeyAction.values
-              .find(action => s"hotkey.${action.configKey}" == hotkeyKey)
-              .flatMap { action =>
-                val triggers = value
-                  .split(",")
-                  .toList
-                  .map(_.trim)
-                  .filter(_.nonEmpty)
-                  .map(HotkeyTrigger.parse)
-                if triggers.nonEmpty && triggers.forall(_.isDefined) then
-                  Some(
-                    config.withHotkeyConfig(
-                      HotkeyConfig(config.inputConfig.hotkeyConfig.bindings + (action -> triggers.flatten))
-                    )
-                  )
-                else None
-              }
-              .getOrElse(config)
+            parseHotkeyEntry(config, hotkeyKey, value).getOrElse(config)
           case keymapKey if keymapKey.startsWith("keymap.") =>
             parseKeymapEntry(config, keymapKey, value.trim).getOrElse(config)
           case "config.version" =>
@@ -110,13 +93,15 @@ object ConfigManager:
             config)
     }
 
-    val scaled       = inferTextScaleMode(parsed, entries)
-    val withStatus   = LegacyStatusLineKeys.applied(scaled, entries.map(entry => entry.key -> entry.value))
-    val withLists    = applyHoconLists(withStatus, source)
-    val withLspLists = PreferredWindowSizeParsing.applied(applyHoconLspLists(withLists, source), source)
+    val scaled             = inferTextScaleMode(parsed, entries)
+    val withStatus         = LegacyStatusLineKeys.applied(scaled, entries.map(entry => entry.key -> entry.value))
+    val withLists          = applyHoconLists(withStatus, source)
+    val withLspLists       = PreferredWindowSizeParsing.applied(applyHoconLspLists(withLists, source), source)
+    val explicitCommandIds = entries.flatMap(entry => ConfigGroups.commandIdOf(entry.key)).toSet
+    val hotkeys            = withLspLists.inputConfig.hotkeyConfig.yieldingDefaultCommandBindings(explicitCommandIds)
     HotkeyConfig
-      .fromBindings(withLspLists.inputConfig.hotkeyConfig.bindings)
-      .fold(_ => withLspLists.withHotkeyConfig(HotkeyConfig()), withLspLists.withHotkeyConfig)
+      .validate(hotkeys)
+      .fold(_ => withLspLists.withHotkeyConfig(HotkeyConfig()), _ => withLspLists.withHotkeyConfig(hotkeys))
 
   /** Generate configuration file content from AppConfig */
   def configToString(config: AppConfig): String = ConfigFileFormat.render(config)
@@ -354,6 +339,26 @@ object ConfigManager:
               false
 
     Option.when(invalid)(InvalidConfigEntry(key, value, "Invalid value for supported config key"))
+
+  /** One `hotkey.<action>` or `hotkey.command.<command id>` entry. An action needs at least one key; a command's empty
+    * list is kept, because it is how a shipped default is unbound.
+    */
+  private def parseHotkeyEntry(config: AppConfig, key: String, value: String): Option[AppConfig] =
+    val hotkeys  = config.inputConfig.hotkeyConfig
+    val triggers = value.split(",").toList.map(_.trim).filter(_.nonEmpty).map(HotkeyTrigger.parse)
+    Option
+      .when(triggers.forall(_.isDefined))(triggers.flatten)
+      .flatMap { parsed =>
+        ConfigGroups.commandIdOf(key) match
+          case Some(commandId) =>
+            Some(hotkeys.copy(commandBindings = hotkeys.commandBindings + (commandId -> parsed)))
+          case None =>
+            HotkeyAction.values
+              .find(action => s"hotkey.${action.configKey}" == key)
+              .filter(_ => parsed.nonEmpty)
+              .map(action => hotkeys.copy(bindings = hotkeys.bindings + (action -> parsed)))
+      }
+      .map(config.withHotkeyConfig)
 
   /** One `keymap.<group>.<action> = binding` entry, for whichever of the five focused keymap groups the key names. */
   private def parseKeymapEntry(config: AppConfig, key: String, binding: String): Option[AppConfig] =

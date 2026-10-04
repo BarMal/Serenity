@@ -62,7 +62,7 @@ object UiPresetDiff:
     */
   private def groupChanges(current: AppConfig, resolved: AppConfig): List[PresetChange] =
     List(
-      groupChange("hotkey", "Keyboard shortcuts", ConfigGroups.hotkeys(current), ConfigGroups.hotkeys(resolved)),
+      groupChange("hotkey", "Keyboard shortcuts", allHotkeys(current), allHotkeys(resolved)),
       groupChange("keymap", "Focused keymap", ConfigGroups.keymaps(current), ConfigGroups.keymaps(resolved)),
       groupChange(
         "lsp",
@@ -155,6 +155,9 @@ object UiPresetDiff:
       if selectedKeys.contains("hotkey") then applyHotkeyGroup(withScalars, resolved) else withScalars
     val withKeymaps = if selectedKeys.contains("keymap") then applyKeymapGroup(withHotkeys, resolved) else withHotkeys
     if selectedKeys.contains("lsp") then applyLspGroup(withKeymaps, resolved) else withKeymaps
+
+  private def allHotkeys(config: AppConfig): List[(String, HoconValue)] =
+    ConfigGroups.hotkeys(config) ++ ConfigGroups.commandHotkeys(config)
 
   private def applyHotkeyGroup(base: AppConfig, resolved: AppConfig): AppConfig =
     base.withHotkeyConfig(resolved.inputConfig.hotkeyConfig)

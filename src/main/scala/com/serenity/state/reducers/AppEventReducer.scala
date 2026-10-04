@@ -1,6 +1,6 @@
 package com.serenity.state.reducers
 
-import com.serenity.command.{CommandRegistry, CommandRunner, FileFinderCommands}
+import com.serenity.command.{CommandKeyBindings, CommandRegistry, CommandRunner, FileFinderCommands}
 import com.serenity.input.{CursorPeekDetector, CursorPeekState}
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
@@ -85,6 +85,10 @@ object AppEventReducer:
 
       case GoToFile =>
         ReducerResult.withEffect(state, AppEffect.ExecuteCommand(FileFinderCommands.goToFile))
+
+      case RunCommand(commandId) =>
+        val command = CommandKeyBindings.runnable(registry, commandId, state.commandRunnerContext)
+        ReducerResult(state, command.map(AppEffect.ExecuteCommand(_)).toList)
 
       case FocusInDirection(direction) =>
         ReducerResult.noEffects(DirectionalFocus.moved(state, direction))

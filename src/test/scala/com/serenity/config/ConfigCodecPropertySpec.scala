@@ -67,6 +67,7 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
     // Keyed maps with their own codecs, dynamic key prefixes and specs (see `ConfigGenerators`).
     "languageToolsConfig.lspUserConfig.servers",
     "inputConfig.hotkeyConfig.bindings",
+    "inputConfig.hotkeyConfig.commandBindings",
     "inputConfig.hotkeyConfig.overrides",
     "inputConfig.focusedKeymapConfig.editor.bindings",
     "inputConfig.focusedKeymapConfig.commandRunner.bindings",
