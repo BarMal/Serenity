@@ -95,6 +95,12 @@ object AppRuntime:
         windowFocused.discrete.find(identity).compile.drain
     }
 
+  /** Whether the caret blinks on after `blinks` idle ticks without input, or has blinked through the configured cursor
+    * blink timeout and should hold solid (#1883).
+    */
+  private[serenity] def keepsBlinking(config: AppConfig, blinkInterval: FiniteDuration, blinks: Int): Boolean =
+    config.cursorBlinkTimeout.forall(timeout => blinkInterval * blinks.toLong < timeout)
+
   /** The fast phase stands down once no fresh damage arrived while it was running -- `pendingDamage` is drained to
     * `Damage.Nothing` when the phase starts, so any non-`Nothing` value here means `emitDamage` was called again since,
     * and the loop should carry straight on to another frame rather than idle.
