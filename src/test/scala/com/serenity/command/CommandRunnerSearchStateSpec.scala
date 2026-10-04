@@ -7,6 +7,7 @@ import com.serenity.keystroke.events.Paste
 import com.serenity.state.models.*
 import com.serenity.state.reducers.CommandRunnerReducer
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.layout.Layout
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
