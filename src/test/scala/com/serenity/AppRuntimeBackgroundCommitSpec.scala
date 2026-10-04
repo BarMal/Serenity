@@ -6,6 +6,7 @@ import com.serenity.app.AppRuntime
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import fs2.concurrent.SignallingRef
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -65,4 +66,24 @@ class AppRuntimeBackgroundCommitSpec extends AnyFlatSpec with Matchers:
     yield result
 
     program.unsafeRunSync() shouldBe Vector(true -> false)
+  }
+
+  "AppRuntime.followFrameTimingSetting" should "publish frame timing turning on or off, and nothing else" in {
+    val off = AppState.initial
+    val on  = AppState.initial(off.persisted.config.withFrameTiming(true))
+
+    val program = for
+      enabled <- SignallingRef.of[IO, Boolean](false)
+      follow = AppRuntime.followFrameTimingSetting(enabled)
+      _         <- follow(off, on)
+      turnedOn  <- enabled.get
+      _         <- enabled.set(false)
+      _         <- follow(on, on)
+      unchanged <- enabled.get
+      _         <- enabled.set(true)
+      _         <- follow(on, off)
+      turnedOff <- enabled.get
+    yield (turnedOn, unchanged, turnedOff)
+
+    program.unsafeRunSync() shouldBe ((true, false, false))
   }

@@ -177,9 +177,14 @@ object AppRuntime:
         // damage rather than none -- inputEventPhase is the one caller that reports real per-event damage.
         requestFastRender = emitDamage(Damage.Everything)
         typingQuietTimer <- TypingQuietTimer.create(timerSupervisor, TypingQuietTimer.expireIn(stateManager))
+        frameTimingEnabled <- SignallingRef.of[IO, Boolean](
+          initialState.persisted.config.surfaceConfig.frameTimingEnabled
+        )
         wakeOnCommit = wakeRenderLoopOnCommit(emitDamage)
+        observeTransition = (before: AppState, after: AppState) =>
+          typingQuietTimer.onCommit(before, after) >> followFrameTimingSetting(frameTimingEnabled)(before, after)
         _ <- stateManager.runtimeLifecycle.observeCommits((before, after) =>
-          wakeOnCommit(before, after) >> typingQuietTimer.onCommit(before, after)
+          wakeOnCommit(before, after) >> observeTransition(before, after)
         )
         _             <- IO(registerResizeCallback(resizeCallbackBridge(requestFastRender, resizeCallbackDispatcher)))
         cursorVisible <- Ref.of[IO, Boolean](true)
@@ -216,7 +221,7 @@ object AppRuntime:
             translatorCache,
             runtime.frameTimings,
             onUserInput = firstInput.complete(()).void,
-            observeBatch = typingQuietTimer.onCommit,
+            observeBatch = observeTransition,
             logEvent = (event, focus) => AppRuntimeLogging.logSelectiveEvents(event, focus, logger)
           )
         )
@@ -263,7 +268,8 @@ object AppRuntime:
                     watcher,
                     awaitExternalQuit,
                     appConfig,
-                    runtime.frameTimings
+                    runtime.frameTimings,
+                    frameTimingEnabled
                   )
                 )
               }
@@ -280,7 +286,8 @@ object AppRuntime:
     fileChangeWatcher: com.serenity.io.FileChangeWatcher,
     awaitExternalQuit: IO[Unit],
     appConfig: AppConfig,
-    frameTimings: FrameTimings
+    frameTimings: FrameTimings,
+    frameTimingEnabled: SignallingRef[IO, Boolean]
   )(using logger: Logger[IO]): IO[Unit] =
     val (lifecycle, quitSignal) = (stateManager.runtimeLifecycle, stateManager.runtimeLifecycle.awaitQuit.attempt)
     (
@@ -319,16 +326,21 @@ object AppRuntime:
       ),
       AppRuntimeRenderLoops.superviseLoop("frame timing report", lifecycle.forceQuit)(
         FrameTimingReport
-          .stream(
-            frameTimings,
-            stateManager.getCurrentState.map(_.persisted.config.surfaceConfig.frameTimingEnabled),
-            line => logger.info(line)
-          )
+          .stream(frameTimings, frameTimingEnabled.discrete, line => logger.info(line))
           .interruptWhen(quitSignal)
           .compile
           .drain
       )
     ).parMapN((_, _, _, _, _, _, _, _, _) => ())
+
+  /** Publishes `ui.render.frame_timing` only when a commit changes it, so the report stream sleeps through ordinary
+    * edits.
+    */
+  private[serenity] def followFrameTimingSetting(
+    frameTimingEnabled: SignallingRef[IO, Boolean]
+  )(before: AppState, after: AppState): IO[Unit] =
+    val enabled = after.persisted.config.surfaceConfig.frameTimingEnabled
+    IO.whenA(enabled != before.persisted.config.surfaceConfig.frameTimingEnabled)(frameTimingEnabled.set(enabled))
 
   /** Background half of external-change detection (#1623), complementing the focus-in re-check: each cycle, re-derives
     * the watched directory set from the currently open local buffers (`FileChangeWatcher.sync` handles buffers
