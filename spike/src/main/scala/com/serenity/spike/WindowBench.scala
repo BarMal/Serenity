@@ -20,10 +20,20 @@ import org.jetbrains.skiko.{SkiaLayer, SkiaLayerProperties, SkikoRenderDelegate}
 final case class Painted(request: Long, atNanos: Long, edtMs: Double, frameMs: Double)
 
 /** A `JFrame` holding a `SkiaLayer`, and the three ways of getting a frame into it (see [[Pipeline]]). */
-final class SkikoHost(pipeline: Pipeline, initial: EditorState, shaping: Shaping, subpixelText: Boolean):
+final class SkikoHost(
+    pipeline: Pipeline,
+    initial: EditorState,
+    shaping: Shaping,
+    subpixelText: Boolean,
+    textCache: TextCache,
+    windowSize: (Int, Int)
+):
   val painted: LinkedBlockingQueue[Painted] = LinkedBlockingQueue()
   val renderCalls: AtomicLong               = AtomicLong()
   val direct: AtomicReference[(EditorState, Long)] = AtomicReference((initial, 0L))
+
+  /** The device-pixel size `onRender` was last given: the layer's real size, whatever the spike asked for. */
+  val renderSize: AtomicReference[(Int, Int)] = AtomicReference((0, 0))
 
   private var edtRenderer: SkiaSceneRenderer = null
   private var picture: Picture               = null
@@ -35,11 +45,16 @@ final class SkikoHost(pipeline: Pipeline, initial: EditorState, shaping: Shaping
   private val delegate = new SkikoRenderDelegate:
     def onRender(canvas: Canvas, width: Int, height: Int, nanoTime: Long): Unit =
       renderCalls.incrementAndGet()
+      renderSize.set((width, height))
       val started = System.nanoTime
       val request = pipeline match
         case Pipeline.Direct =>
           val (state, request) = direct.get
-          if edtRenderer == null then edtRenderer = SkiaSceneRenderer(layer.getContentScale, shaping, subpixelText)
+          if edtRenderer == null then
+            edtRenderer = SkiaSceneRenderer(layer.getContentScale, shaping, subpixelText, textCache)
+          // The state is drawn into the layer's actual size: a tiled window is often far smaller than requested, and
+          // drawing the fixed 1500x1000 scene there put the caret row (and every edit) below the visible area.
+          edtRenderer.resize(width / edtRenderer.scale, height / edtRenderer.scale)
           edtRenderer.draw(canvas, state)
           request
         case Pipeline.Picture =>
@@ -63,7 +78,7 @@ final class SkikoHost(pipeline: Pipeline, initial: EditorState, shaping: Shaping
   // mask bits 0, 2 and 3 select the defaults, the properties (which read skiko.renderApi) are passed explicitly.
   val layer: SkiaLayer = SkiaLayer(null, SkiaLayerProperties(), null, null, 13, null)
   layer.setRenderDelegate(delegate)
-  layer.setPreferredSize(Dimension(Geometry.LogicalWidth, Geometry.LogicalHeight))
+  layer.setPreferredSize(Dimension(windowSize._1, windowSize._2))
 
   val frame: JFrame = JFrame("Serenity Skiko spike")
   frame.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE)
@@ -113,15 +128,23 @@ final class SkikoHost(pipeline: Pipeline, initial: EditorState, shaping: Shaping
     result.get
 
 /** Produces frames for the pipeline off the EDT (picture and raster); direct mode only hands the state over. */
-final class FrameProducer(pipeline: Pipeline, host: SkikoHost, scale: Float, shaping: Shaping, subpixelText: Boolean):
-  private val renderer = SkiaSceneRenderer(scale, shaping, subpixelText)
-  private val width    = math.round(Geometry.LogicalWidth * scale)
-  private val height   = math.round(Geometry.LogicalHeight * scale)
+final class FrameProducer(
+    pipeline: Pipeline,
+    host: SkikoHost,
+    scale: Float,
+    shaping: Shaping,
+    subpixelText: Boolean,
+    textCache: TextCache
+):
+  private val renderer = SkiaSceneRenderer(scale, shaping, subpixelText, textCache)
+  // Sized to the layer as first painted; the off-EDT pipelines do not follow later resizes.
+  private val (width, height) = host.renderSize.get
+  renderer.resize(width / scale, height / scale)
   // Two surfaces so the one being drawn never has a live snapshot (no copy-on-write); each frame redraws its own
   // damage plus the previous frame's, which the other surface already holds.
   private val surfaces      = Vector.fill(2)(Surface.Companion.makeRasterN32Premul(width, height))
   private var next          = 0
-  private var lastDamage    = renderer.fullViewport
+  private var lastDamage    = renderer.viewport
   private var primedSurfaces = 0
 
   /** Worker-thread milliseconds spent producing `state` for `request`, with `damage` in logical pixels. */
@@ -145,7 +168,7 @@ final class FrameProducer(pipeline: Pipeline, host: SkikoHost, scale: Float, sha
         var snapshot: Image = null
         val ms = Timing.ms {
           val clip =
-            if primedSurfaces < 2 then renderer.fullViewport
+            if primedSurfaces < 2 then renderer.viewport
             else
               Rect.Companion.makeLTRB(
                 math.min(damage.getLeft, lastDamage.getLeft),
@@ -163,7 +186,9 @@ final class FrameProducer(pipeline: Pipeline, host: SkikoHost, scale: Float, sha
         host.publishImage(snapshot, request)
         ms
 
-  def fullViewport: Rect = renderer.fullViewport
+  def fullViewport: Rect = renderer.viewport
+
+  def pageRows: Int = math.max(1, renderer.visibleRowCount - 1)
 
   def damage(before: EditorState, after: EditorState): Rect = renderer.damage(before, after)
 
@@ -173,7 +198,7 @@ object WindowBench:
     val lines   = LoremDocument.load(options.document)
     val wrap    = SerenityWrap()
     val initial = EditorState.initial(lines, wrap.apply)
-    val host    = onEdtCreate(options.pipeline, initial, options.shaping, options.subpixelText)
+    val host    = onEdtCreate(options, initial)
     val name    = s"window.${options.pipeline.toString.toLowerCase}"
 
     host.requestRedraw()
@@ -185,18 +210,28 @@ object WindowBench:
         val scale = host.onEdt(host.layer.getContentScale)
         val api   = host.onEdt(host.layer.getRenderApi.toString)
         val info  = host.onEdt(Option(host.layer.getRenderInfo).getOrElse("").replace('\n', ' '))
-        Report.note(s"$name.setup", s"render_api=$api content_scale=$scale first_frame_ms=${f"${first.frameMs}%.2f"}")
+        val (layerW, layerH) = host.renderSize.get
+        Report.note(
+          s"$name.setup",
+          s"render_api=$api content_scale=$scale first_frame_ms=${f"${first.frameMs}%.2f"} layer_px=${layerW}x$layerH " +
+            s"viewport_logical=${f"${layerW / scale}%.0f"}x${f"${layerH / scale}%.0f"} " +
+            s"requested_logical=${options.windowSize._1}x${options.windowSize._2} cache=${options.textCache}"
+        )
         Report.note(s"$name.render_info", info)
-        val producer = FrameProducer(options.pipeline, host, scale, options.shaping, options.subpixelText)
+        val producer = FrameProducer(options.pipeline, host, scale, options.shaping, options.subpixelText, options.textCache)
         if interactive then Interactive(host, producer, initial, wrap, name).start()
         else
           measure(options, host, producer, initial, wrap, name)
           options.screenshot.foreach(path => screenshot(host, path))
           val _ = host.onEdt(host.frame.dispose())
 
-  private def onEdtCreate(pipeline: Pipeline, initial: EditorState, shaping: Shaping, subpixelText: Boolean): SkikoHost =
+  private def onEdtCreate(options: SpikeOptions, initial: EditorState): SkikoHost =
     val created = AtomicReference[SkikoHost]()
-    SwingUtilities.invokeAndWait(() => created.set(SkikoHost(pipeline, initial, shaping, subpixelText)))
+    SwingUtilities.invokeAndWait(() =>
+      created.set(
+        SkikoHost(options.pipeline, initial, options.shaping, options.subpixelText, options.textCache, options.windowSize)
+      )
+    )
     created.get
 
   private def measure(
@@ -228,6 +263,52 @@ object WindowBench:
     Report.result(s"$name.full_frame.total", totalMs.result(), "(worker + EDT frame task)")
     Report.result(s"$name.full_frame.request_to_painted", roundTripMs.result(), s"missed=$missed")
 
+    // Back-to-back frames above can wait on vsync (Skiko's Linux GL redrawer swaps with interval 1 and runs a frame
+    // limiter); one frame per pace interval separates the frame's own cost from that wait.
+    val pacedWorker, pacedFrame = Vector.newBuilder[Double]
+    var pacedMissed             = 0
+    (0 until options.frames).foreach { _ =>
+      val id      = request.incrementAndGet()
+      val started = System.nanoTime
+      val worker  = producer.produce(initial, id, producer.fullViewport)
+      host.requestRedraw()
+      host.awaitPainted(id, 5_000L) match
+        case Some(p) => pacedWorker += worker; pacedFrame += worker + p.frameMs
+        case None    => pacedMissed += 1
+      Timing.parkMs(math.max(0L, options.paceMs - (System.nanoTime - started) / 1_000_000L))
+    }
+    Report.result(
+      s"$name.full_frame_paced.total",
+      pacedFrame.result(),
+      s"(worker + EDT frame task, one full frame every ${options.paceMs} ms) missed=$pacedMissed"
+    )
+
+    def scrollSeries(label: String, step: Int): Unit =
+      val half                   = math.min(options.scrolls / 2, (initial.totalRows - 1 - initial.anchorRow) / step)
+      var state                  = initial
+      val scrollWorker, scrollMs = Vector.newBuilder[Double]
+      var scrollMissed           = 0
+      (0 until 2 * half).foreach { index =>
+        val id      = request.incrementAndGet()
+        val started = System.nanoTime
+        state = state.scrolled(if index < half then step else -step)
+        val worker = producer.produce(state, id, producer.fullViewport)
+        host.requestRedraw()
+        host.awaitPainted(id, 5_000L) match
+          case Some(p) => scrollWorker += worker; scrollMs += (p.atNanos - started) / 1e6
+          case None    => scrollMissed += 1
+        Timing.parkMs(math.max(0L, options.paceMs - (System.nanoTime - started) / 1_000_000L))
+      }
+      Report.result(
+        s"$name.scroll.$label",
+        scrollMs.result(),
+        s"($step rows per event, $half down then back up, paced ${options.paceMs} ms; event -> end of the EDT frame " +
+          s"task; full repaint, no blit) missed=$scrollMissed"
+      )
+
+    scrollSeries("wheel", options.wheelRows)
+    scrollSeries("page", producer.pageRows)
+
     val letters                                        = TypingLetters()
     var state                                          = initial
     val updateMs, keyWorkerMs, keyEdtMs, damagedMs, i2p = Vector.newBuilder[Double]
@@ -243,7 +324,7 @@ object WindowBench:
       host.awaitPainted(id, 5_000L) match
         case Some(p) =>
           keyWorkerMs += worker; keyEdtMs += p.frameMs
-          if damage.getHeight < Geometry.LogicalHeight / 2 then damagedMs += worker + p.frameMs
+          if damage.getHeight < producer.fullViewport.getHeight / 2 then damagedMs += worker + p.frameMs
           i2p += (p.atNanos - started) / 1e6
         case None => typedMissed += 1
       Timing.parkMs(math.max(0L, options.paceMs - (System.nanoTime - started) / 1_000_000L))
@@ -314,6 +395,12 @@ final class Interactive(
     Report.result(s"$name.interactive.input_to_paint", all, "(KeyEvent/InputMethodEvent listener -> end of the EDT frame task)")
 
   def start(): Unit =
+    // The picture and raster pipelines only show what the producer published: without this the window stays blank
+    // until the first key.
+    worker.execute { () =>
+      val _ = producer.produce(initial, 0L, producer.fullViewport)
+      host.requestRedraw()
+    }
     host.onEdt {
       host.layer.enableInputMethods(true)
       host.layer.addKeyListener(new KeyAdapter:

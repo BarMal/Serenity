@@ -22,7 +22,12 @@ final class LineShaped(line: TextLine) extends ShapedText:
 /** HarfBuzz output kept on the JVM: one positioned `TextBlob` to paint and a caret array read from the same glyph
   * positions, so painting and caret stops cannot disagree (the property #1876 wants).
   */
-final class RunShaped(blob: Option[TextBlob], carets: Array[Float]) extends ShapedText:
+final class RunShaped(
+    blob: Option[TextBlob],
+    carets: Array[Float],
+    val glyphs: Array[Short],
+    val xs: Array[Float]
+) extends ShapedText:
   def draw(canvas: Canvas, x: Float, baseline: Float, paint: Paint): Unit =
     blob.foreach(b => canvas.drawTextBlob(b, x, baseline, paint))
   def coord(offset: Int): Float = carets(math.max(0, math.min(carets.length - 1, offset)))
@@ -39,7 +44,7 @@ final class ExplicitRunShaper(font: Font):
   private val options = ShapingOptions.Companion.getDEFAULT()
 
   def shape(text: String): RunShaped =
-    if text.isEmpty then RunShaped(None, Array(0f))
+    if text.isEmpty then RunShaped(None, Array(0f), Array.emptyShortArray, Array.emptyFloatArray)
     else
       val handler = GlyphCollector()
       val end     = text.length
@@ -55,7 +60,7 @@ final class ExplicitRunShaper(font: Font):
       )
       val (glyphs, xs, carets) = handler.finish(end)
       val blob                 = Option.when(glyphs.nonEmpty)(TextBlob.Companion.makeFromPosH(glyphs, xs, 0f, font))
-      RunShaped(blob, carets)
+      RunShaped(blob, carets, glyphs, xs)
 
 /** Collects glyph ids, x positions and clusters across runs. */
 final class GlyphCollector extends RunHandler:

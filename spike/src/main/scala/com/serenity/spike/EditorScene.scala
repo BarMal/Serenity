@@ -14,6 +14,8 @@ object Geometry:
   val GutterWidth: Float = 64f
   val TextLeft: Float    = GutterWidth + 24f
   val WrapWidthPx: Int   = (LogicalWidth - TextLeft - 40f).toInt
+  /** Room right of `TextLeft` for a wrapped row; painted rows are narrower than the wrap width (see the parity notes). */
+  val TextAreaWidth: Float = LogicalWidth - TextLeft
   val FontSize: Float    = 14f
   val LineHeight: Float  = 21f
   val Baseline: Float    = 15f
@@ -27,7 +29,8 @@ final case class EditorState(
     rowStarts: IArray[Int],
     caretLine: Int,
     caretColumn: Int,
-    generation: Long
+    generation: Long,
+    scrollRows: Int = 0
 ):
   def totalRows: Int = rowStarts(rowStarts.length - 1)
 
@@ -37,6 +40,14 @@ final case class EditorState(
     math.max(0, index)
 
   def caretGlobalRow: Int = rowStarts(caretLine) + caretRowInLine
+
+  /** The global row drawn on the viewport's centre band: the caret's row, shifted by any scrolling since. */
+  def anchorRow: Int = caretGlobalRow + scrollRows
+
+  /** The view moved by `rows` (positive: down the document), clamped to the document; the caret stays where it is. */
+  def scrolled(rows: Int): EditorState =
+    val anchor = math.max(0, math.min(totalRows - 1, anchorRow + rows))
+    copy(scrollRows = anchor - caretGlobalRow)
 
   /** The line and row index of a global visual row, by binary search over `rowStarts`. */
   def locate(globalRow: Int): (Int, Int) =

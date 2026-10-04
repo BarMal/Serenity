@@ -30,7 +30,13 @@ final case class SpikeOptions(
     screenshot: Option[Path] = None,
     shaping: Shaping = Shaping.Explicit,
     subpixelText: Boolean = true,
-    fontFile: String = "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"
+    fontFile: String = "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
+    windowSize: (Int, Int) = (Geometry.LogicalWidth, Geometry.LogicalHeight),
+    textCache: TextCache = TextCache.Rows,
+    scrollBlit: Boolean = false,
+    wheelRows: Int = 3,
+    scrolls: Int = 120,
+    vsync: Option[Boolean] = None
 )
 
 object SpikeOptions:
@@ -39,7 +45,9 @@ object SpikeOptions:
       |                  [--render-api=SOFTWARE_FAST|SOFTWARE_COMPAT|OPENGL|VULKAN] [--doc=lorem.txt] [--scale=2]
       |                  [--frames=120] [--keys=200] [--pace-ms=60] [--idle-s=10] [--iterations=20]
       |                  [--screenshot=out.png] [--shaper=explicit|reused|textline] [--subpixel-text=true|false]
-      |                  [--font-file=/path/DejaVuSerif.ttf]""".stripMargin
+      |                  [--font-file=/path/DejaVuSerif.ttf] [--window=1500x1000]
+      |                  [--cache=rows|blob|picture|image] [--scroll-blit=true|false] [--wheel-rows=3] [--scrolls=120]
+      |                  [--vsync=true|false]""".stripMargin
 
   def parse(args: List[String]): Either[String, SpikeOptions] =
     args.foldLeft[Either[String, SpikeOptions]](Right(SpikeOptions())) { (parsed, arg) =>
@@ -61,7 +69,21 @@ object SpikeOptions:
             value.toIntOption.toRight(s"bad $arg").map(v => options.copy(shapingIterations = v))
           case "screenshot" :: value :: Nil => Right(options.copy(screenshot = Some(Paths.get(value))))
           case "font-file" :: value :: Nil  => Right(options.copy(fontFile = value))
+          case "window" :: value :: Nil =>
+            value.split("x").toList.flatMap(_.toIntOption) match
+              case w :: h :: Nil => Right(options.copy(windowSize = (w, h)))
+              case _             => Left(s"bad $arg")
           case "subpixel-text" :: value :: Nil => value.toBooleanOption.toRight(s"bad $arg").map(v => options.copy(subpixelText = v))
+          case "cache" :: value :: Nil =>
+            TextCache.values.find(_.toString.equalsIgnoreCase(value)).toRight(s"bad $arg").map(c =>
+              options.copy(textCache = c)
+            )
+          case "scroll-blit" :: value :: Nil =>
+            value.toBooleanOption.toRight(s"bad $arg").map(v => options.copy(scrollBlit = v))
+          case "wheel-rows" :: value :: Nil => value.toIntOption.toRight(s"bad $arg").map(v => options.copy(wheelRows = v))
+          case "scrolls" :: value :: Nil    => value.toIntOption.toRight(s"bad $arg").map(v => options.copy(scrolls = v))
+          case "vsync" :: value :: Nil =>
+            value.toBooleanOption.toRight(s"bad $arg").map(v => options.copy(vsync = Some(v)))
           case "shaper" :: "explicit" :: Nil => Right(options.copy(shaping = Shaping.Explicit))
           case "shaper" :: "reused" :: Nil   => Right(options.copy(shaping = Shaping.Reused))
           case "shaper" :: "textline" :: Nil => Right(options.copy(shaping = Shaping.TextLineMake))
@@ -82,11 +104,14 @@ object SkikoSpike:
         val toolkit = ToolkitSelection.install.unsafeRunSync()
         Report.note("env.toolkit", s"${toolkit.choice} (${toolkit.reason})")
         options.renderApi.foreach(api => System.setProperty("skiko.renderApi", api))
+        options.vsync.foreach(on => System.setProperty("skiko.vsync.enabled", on.toString))
         Report.note(
           "env.jvm",
           s"${System.getProperty("java.vm.vendor")} ${System.getProperty("java.version")} " +
             s"cores=${Runtime.getRuntime.availableProcessors} SKIKO_RENDER_API=${sys.env.getOrElse("SKIKO_RENDER_API", "")} " +
-            s"skiko.renderApi=${Option(System.getProperty("skiko.renderApi")).getOrElse("")}"
+            s"skiko.renderApi=${Option(System.getProperty("skiko.renderApi")).getOrElse("")} " +
+            s"skiko.vsync.enabled=${Option(System.getProperty("skiko.vsync.enabled")).getOrElse("")} " +
+            s"skiko.gpu.resourceCacheLimit=${Option(System.getProperty("skiko.gpu.resourceCacheLimit")).getOrElse("")}"
         )
         options.mode match
           case "headless"    => HeadlessBench.run(options)
