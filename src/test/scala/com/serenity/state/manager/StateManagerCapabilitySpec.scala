@@ -312,7 +312,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
         beforeDocumentAnalysisStart = starts.update(_ + 1)
       )
-      _                        <- operations.modelCommit.commitState(initialState, initialState)
+      _                        <- operations.modelCommit.commitState(initialState.copy(), initialState)
       _                        <- operations.modelCommit.commitState(movedCursorState, initialState)
       afterCursorMove          <- starts.get
       _                        <- operations.modelCommit.commitState(editedState, movedCursorState)

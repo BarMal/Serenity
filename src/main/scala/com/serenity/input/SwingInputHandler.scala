@@ -83,13 +83,16 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   private def enqueueMouse(event: Event): Unit =
     enqueue(QueuedMouse(event))
 
-  /** Cursor-peek prototype: raw bare-modifier press/release and non-modifier-key-pressed signals, always emitted
-    * regardless of `commandRunnerCursorPeekEnabled` -- like mouse-move events, the translator emits unconditionally and
-    * `AppEventReducer` (which has `AppState`/`AppConfig`) decides whether the flag makes them relevant. See
-    * `GlobalAppEvent.scala`'s `CursorPeekModifierPressed`/`CursorPeekModifierReleased`/`CursorPeekOtherKeyPressed`.
-    */
   private def enqueueRaw(event: Event): Unit =
     enqueue(QueuedRaw(event))
+
+  /** Cursor-peek prototype: raw bare-modifier press/release and non-modifier-key-pressed signals. Dropped here while
+    * the prototype is off, so a key press costs no dispatch of its own (#1845); `AppEventReducer` still decides what
+    * they do once it is on. See `GlobalAppEvent.scala`'s `CursorPeekModifierPressed`/`CursorPeekModifierReleased`/
+    * `CursorPeekOtherKeyPressed`.
+    */
+  private def enqueueCursorPeek(event: Event): Unit =
+    if inputRouter.cursorPeekEnabled then enqueueRaw(event)
 
   private def enqueue(input: QueuedInput): Unit =
     if !shutdownFlag.get() then
@@ -136,10 +139,10 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
       translateTyped(e).foreach(enqueueInput)
     override def keyPressed(e: KeyEvent): Unit =
       translatePressed(e).foreach(enqueueInput)
-      modifierOf(e).foreach((_, modifier) => enqueueRaw(CursorPeekModifierPressed(modifier, e.getWhen)))
+      modifierOf(e).foreach((_, modifier) => enqueueCursorPeek(CursorPeekModifierPressed(modifier, e.getWhen)))
     override def keyReleased(e: KeyEvent): Unit =
       translateModifierReleased(e)
-      modifierOf(e).foreach((_, modifier) => enqueueRaw(CursorPeekModifierReleased(modifier, e.getWhen))))
+      modifierOf(e).foreach((_, modifier) => enqueueCursorPeek(CursorPeekModifierReleased(modifier, e.getWhen))))
 
   // AWT reports a wheel notch as one "unit scroll" of `getScrollAmount` units; the platform's own amount is a system
   // preference this setting stands in for, so a notch is `wheelScrollLines` lines whatever the OS says. A block scroll
@@ -356,7 +359,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
       case None if isModifierKey(e) => None
       case None =>
         pendingModifierTap.set(ModifierTapDetector.otherKeyPressed(pendingModifierTap.get))
-        enqueueRaw(CursorPeekOtherKeyPressed)
+        enqueueCursorPeek(CursorPeekOtherKeyPressed)
         val m = mods(e)
         e.getKeyCode match
           case VK_UP         => Some(KeyStrokeInfo(InputKey.ArrowUp, None, m))

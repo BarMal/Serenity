@@ -159,11 +159,10 @@ object AppEventReducer:
 
   // --- Cursor-peek prototype (issue: command-runner-cursor-peek-prototype) -----------------------------------
   //
-  // Experimental, off by default (`SurfaceConfig.commandRunnerCursorPeekEnabled`). `SwingInputHandler` always emits
-  // the raw `CursorPeekModifierPressed`/`Released`/`OtherKeyPressed` events regardless of the flag -- like mouse-move
-  // events, the translator emits unconditionally and this reducer is where the flag actually gates behaviour: every
-  // handler below bails out to an unchanged `state` first when the flag is off, so disabling it is a true no-op, not
-  // just an unused code path.
+  // Experimental, off by default (`SurfaceConfig.commandRunnerCursorPeekEnabled`). `SwingInputHandler` drops the raw
+  // `CursorPeekModifierPressed`/`Released`/`OtherKeyPressed` events while the flag is off (#1845), but the input side
+  // only learns of a config change once the batch that made it is applied, so every handler below still bails out to
+  // an unchanged `state` first when the flag is off -- disabling it is a true no-op, not just an unused code path.
   //
   // `state.runtime.pointerGesture.cursorPeekAnchor` is the cursor position frozen at the moment a peek begins
   // (`PeekBegin`), and is plain data -- reducers may not reach into `LayoutEngine`

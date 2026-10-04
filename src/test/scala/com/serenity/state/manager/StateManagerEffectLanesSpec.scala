@@ -231,7 +231,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
     val program =
       for
         (stateRef, operations) <- boundaryOver(firstEdit)
-        _                      <- operations.modelCommit.commitState(firstEdit, firstEdit)
+        _                      <- operations.modelCommit.commitState(firstEdit.copy(), firstEdit)
         _                      <- IO.sleep(50.millis)
         _                      <- operations.modelCommit.commitState(secondEdit, firstEdit)
         _                      <- IO.sleep(110.millis)
@@ -250,7 +250,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
         starts                 <- Ref.of[IO, Int](0)
         (stateRef, operations) <- boundaryOver(edited, beforeDocumentAnalysisStart = starts.update(_ + 1))
         _                      <- operations.shutdownEffects()
-        _                      <- operations.modelCommit.commitState(edited, edited)
+        _                      <- operations.modelCommit.commitState(edited.copy(), edited)
         _                      <- IO.sleep(1.second)
         started                <- starts.get
         diagnostics            <- stateRef.get.map(spellingDiagnosticStarts)

@@ -153,9 +153,12 @@ object AppRuntime:
           frontend.capabilities,
           configNotice
         )
-        inputRouter    <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
-        inputHandler   <- runtime.inputHandler(inputRouter)
-        _              <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
+        inputRouter  <- InputRouter.create[IO, Event](new TextEntryTranslator(appConfig))
+        inputHandler <- runtime.inputHandler(inputRouter)
+        _            <- inputRouter.setActiveTranslator(FocusedInputTranslator.forState(initialState))
+        _ <- inputRouter.setCursorPeekEnabled(
+          initialState.persisted.config.surfaceConfig.commandRunnerCursorPeekEnabled
+        )
         fastModeSignal <- SignallingRef.of[IO, Boolean](false)
         pendingDamage  <- Ref.of[IO, Damage](Damage.Nothing)
         // Separate from pendingDamage: that ref answers "did more damage arrive while the fast phase ran" (see

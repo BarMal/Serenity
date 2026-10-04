@@ -371,9 +371,9 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     handler.keyStrokeInfoStream.take(1).compile.last.unsafeRunTimed(250.millis) shouldBe None
   }
 
-  it should "always emit a raw CursorPeekModifierPressed for a bare modifier press, regardless of any pending double-tap hotkey" in {
+  it should "emit a raw CursorPeekModifierPressed for a bare modifier press, regardless of any pending double-tap hotkey" in {
     val component = new JPanel()
-    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val router    = cursorPeekRouter()
     val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
     val listener  = component.getKeyListeners.head
     val now       = System.currentTimeMillis()
@@ -384,9 +384,9 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
       Some(CursorPeekModifierPressed(Modifier.Meta, now))
   }
 
-  it should "always emit a raw CursorPeekModifierReleased for a bare modifier release" in {
+  it should "emit a raw CursorPeekModifierReleased for a bare modifier release" in {
     val component = new JPanel()
-    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val router    = cursorPeekRouter()
     val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
     val listener  = component.getKeyListeners.head
     val now       = System.currentTimeMillis()
@@ -401,7 +401,7 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
 
   it should "emit raw modifier press/release events for any modifier, not only the cursor-peek prototype's own" in {
     val component = new JPanel()
-    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val router    = cursorPeekRouter()
     val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
     val listener  = component.getKeyListeners.head
     val now       = System.currentTimeMillis()
@@ -414,7 +414,7 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
 
   it should "emit a raw CursorPeekOtherKeyPressed for a non-modifier key press" in {
     val component = new JPanel()
-    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val router    = cursorPeekRouter()
     val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
     val listener  = component.getKeyListeners.head
     val now       = System.currentTimeMillis()
@@ -425,9 +425,28 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
       Some(CursorPeekOtherKeyPressed)
   }
 
-  it should "not surface the new raw cursor-peek events on keyStrokeInfoStream" in {
+  it should "emit no cursor-peek events while cursor peek is disabled" in {
     val component = new JPanel()
     val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
+    val listener  = component.getKeyListeners.head
+    val now       = System.currentTimeMillis()
+
+    listener.keyPressed(KeyEvent(component, KeyEvent.KEY_PRESSED, now, 0, KeyEvent.VK_SHIFT, '\u0000'))
+    listener.keyPressed(
+      KeyEvent(component, KeyEvent.KEY_PRESSED, now + 1, InputEvent.SHIFT_DOWN_MASK, KeyEvent.VK_A, 'A')
+    )
+    listener.keyTyped(KeyEvent(component, KeyEvent.KEY_TYPED, now + 2, 0, KeyEvent.VK_UNDEFINED, 'A'))
+    listener.keyReleased(KeyEvent(component, KeyEvent.KEY_RELEASED, now + 3, 0, KeyEvent.VK_SHIFT, '\u0000'))
+    listener.keyTyped(KeyEvent(component, KeyEvent.KEY_TYPED, now + 4, 0, KeyEvent.VK_UNDEFINED, 'b'))
+
+    handler.eventStream.take(2).compile.toList.unsafeRunTimed(StreamObservationTimeout) shouldBe
+      Some(List(InsertChar('A'), InsertChar('b')))
+  }
+
+  it should "not surface the new raw cursor-peek events on keyStrokeInfoStream" in {
+    val component = new JPanel()
+    val router    = cursorPeekRouter()
     val handler   = new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
     val listener  = component.getKeyListeners.head
     val now       = System.currentTimeMillis()
@@ -554,6 +573,12 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
     handler.eventStream.take(1).compile.last.unsafeRunTimed(StreamObservationTimeout).flatten shouldBe
       Some(InsertChar('a'))
   }
+
+  private def cursorPeekRouter(): InputRouter[IO, Event] =
+    InputRouter
+      .create[IO, Event](new TextEntryTranslator)
+      .flatTap(_.setCursorPeekEnabled(true))
+      .unsafeRunSync()
 
   private def isWaitingForSwingInput(thread: Thread, trace: Array[StackTraceElement]): Boolean =
     thread.getState == Thread.State.WAITING &&
