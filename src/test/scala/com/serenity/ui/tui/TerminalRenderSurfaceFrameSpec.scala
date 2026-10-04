@@ -6,7 +6,14 @@ import java.io.StringWriter
 import com.serenity.config.AppConfig
 import com.serenity.state.models.UiSurface
 import com.serenity.ui.layout.{CellMetrics, LayoutRect, OverlayRow}
-import com.serenity.ui.renderer.{PinnedPanelRenderer, TextOverlayRenderer, TextOverlayView, TextPanelRow, TextPanelView}
+import com.serenity.ui.renderer.{
+  PinnedPanelRenderer,
+  RenderColor,
+  TextOverlayRenderer,
+  TextOverlayView,
+  TextPanelRow,
+  TextPanelView
+}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -37,7 +44,7 @@ class TerminalRenderSurfaceFrameSpec extends AnyFlatSpec with Matchers:
 
   "strokeRect" should "draw a rounded box-drawing frame on the rect's outermost cells" in {
     val (rs, writer) = surface(6, 5)
-    rs.panelOutlines.get.strokeRect(1, 1, 4, 3, Color.RED, 1f)
+    rs.panelOutlines.get.strokeRect(1, 1, 4, 3, RenderColor.fromAwt(Color.RED), 1f)
 
     val screen = screenOf(rs, writer, 6, 5)
     screen.rowText(0) shouldBe "      "
@@ -51,14 +58,14 @@ class TerminalRenderSurfaceFrameSpec extends AnyFlatSpec with Matchers:
 
   it should "keep each frame cell's background and restore the colours it found" in {
     val (rs, writer) = surface(4, 3)
-    rs.setBackgroundColor(Color.BLUE)
+    rs.setBackgroundColor(RenderColor.fromAwt(Color.BLUE))
     rs.fillRect(0, 0, 4, 3, ' ')
-    rs.setBackgroundColor(Color.GREEN)
+    rs.setBackgroundColor(RenderColor.fromAwt(Color.GREEN))
     rs.fillRect(0, 1, 1, 1, ' ')
-    rs.setForegroundColor(Color.YELLOW)
-    rs.setBackgroundColor(Color.MAGENTA)
+    rs.setForegroundColor(RenderColor.fromAwt(Color.YELLOW))
+    rs.setBackgroundColor(RenderColor.fromAwt(Color.MAGENTA))
 
-    rs.panelOutlines.get.strokeRect(0, 0, 4, 3, Color.RED, 1f)
+    rs.panelOutlines.get.strokeRect(0, 0, 4, 3, RenderColor.fromAwt(Color.RED), 1f)
     rs.putString(1, 1, "x")
 
     val screen = screenOf(rs, writer, 4, 3)
@@ -74,8 +81,8 @@ class TerminalRenderSurfaceFrameSpec extends AnyFlatSpec with Matchers:
     rs.flush()
     writer.getBuffer.setLength(0)
 
-    rs.panelOutlines.get.strokeRect(0, 0, 1, 4, Color.RED, 1f)
-    rs.panelOutlines.get.strokeRect(0, 0, 4, 1, Color.RED, 1f)
+    rs.panelOutlines.get.strokeRect(0, 0, 1, 4, RenderColor.fromAwt(Color.RED), 1f)
+    rs.panelOutlines.get.strokeRect(0, 0, 4, 1, RenderColor.fromAwt(Color.RED), 1f)
     rs.flush()
 
     writer.toString shouldBe ""
@@ -84,7 +91,7 @@ class TerminalRenderSurfaceFrameSpec extends AnyFlatSpec with Matchers:
   it should "respect an active clip" in {
     val (rs, writer) = surface(6, 3)
     rs.panelOutlines.get.withRectClip(0, 0, 3, 3) {
-      rs.panelOutlines.get.strokeRect(0, 0, 6, 3, Color.RED, 1f)
+      rs.panelOutlines.get.strokeRect(0, 0, 6, 3, RenderColor.fromAwt(Color.RED), 1f)
     }
 
     val screen = screenOf(rs, writer, 6, 3)

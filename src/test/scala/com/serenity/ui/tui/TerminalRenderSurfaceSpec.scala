@@ -7,7 +7,13 @@ import com.serenity.config.CursorMode
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
-import com.serenity.ui.renderer.{HardwareCursorShape, HardwareCursorStyle, RendererCursorOverlay, RendererEntryPoints}
+import com.serenity.ui.renderer.{
+  HardwareCursorShape,
+  HardwareCursorStyle,
+  RenderColor,
+  RendererCursorOverlay,
+  RendererEntryPoints
+}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -30,8 +36,8 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
   "putString/fillRect" should "forward to the underlying screen buffer, visible through flush's ANSI diff" in {
     val (rs, writer) = surface()
-    rs.setForegroundColor(Color.RED)
-    rs.setBackgroundColor(Color.BLUE)
+    rs.setForegroundColor(RenderColor.fromAwt(Color.RED))
+    rs.setBackgroundColor(RenderColor.fromAwt(Color.BLUE))
     rs.putString(1, 2, "hi")
     rs.flush()
 
@@ -57,8 +63,8 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
   // combination end to end through `flush`, rather than leaving it as an untested description-only claim.
   "flush" should "capture damage from multiple distinct paint calls -- chrome, panel, and a clipped modal -- in one frame" in {
     val (rs, writer) = surface(width = 20, height = 6)
-    rs.setForegroundColor(Color.WHITE)
-    rs.setBackgroundColor(Color.BLACK)
+    rs.setForegroundColor(RenderColor.fromAwt(Color.WHITE))
+    rs.setBackgroundColor(RenderColor.fromAwt(Color.BLACK))
 
     rs.putString(0, 0, "TITLEBAR") // chrome
     rs.fillRect(0, 2, 3, 2, '#')   // panel
@@ -82,14 +88,14 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
   "clearViewportExcept" should "blank every cell outside the preserved rectangles and leave the rest untouched" in {
     val (rs, writer) = surface(width = 4, height = 2)
-    rs.setForegroundColor(Color.WHITE)
-    rs.setBackgroundColor(Color.BLACK)
+    rs.setForegroundColor(RenderColor.fromAwt(Color.WHITE))
+    rs.setBackgroundColor(RenderColor.fromAwt(Color.BLACK))
     rs.putString(0, 0, "ab")
     rs.putString(2, 0, "cd")
     rs.flush()
     writer.getBuffer.setLength(0)
 
-    rs.clearViewportExcept(Color.BLACK, List(PixelRect(0, 0, 2, 1)))
+    rs.clearViewportExcept(RenderColor.fromAwt(Color.BLACK), List(PixelRect(0, 0, 2, 1)))
     rs.flush()
 
     // "ab" was preserved and never rewritten, so it produces no diff; "cd" was cleared to blanks.
@@ -108,11 +114,24 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     rs.text.fontRenderContext shouldBe None
   }
 
+  "RenderColor" should "reach the terminal cells as the same truecolor SGR, with alpha 0 still the default background" in {
+    val (rs, writer) = surface(width = 3, height = 1)
+    val foreground   = RenderColor.fromArgb(0xff0a141e)
+    val transparent  = RenderColor.fromArgb(0x00000000)
+    rs.setForegroundColor(foreground)
+    rs.setBackgroundColor(transparent)
+    rs.putString(0, 0, "x")
+    rs.flush()
+
+    writer.toString should include("38;2;10;20;30;49mx")
+    rs.getBackgroundColor shouldBe transparent
+  }
+
   "the required text/pixels capability groups" should "be present and inert rather than throwing" in {
     val (rs, _) = surface()
     noException should be thrownBy rs.text.drawRunPx(0f, 0, 1f, 1, 1, "x")
     noException should be thrownBy rs.text.withLogicalPixelRow(0, 0)(())
-    noException should be thrownBy rs.pixels.fillPixelRect(0, 0, 1, 1, Color.RED)
+    noException should be thrownBy rs.pixels.fillPixelRect(0, 0, 1, 1, RenderColor.fromAwt(Color.RED))
     noException should be thrownBy rs.pixels.withPixelTranslation(0.0, 0.0)(())
   }
 
@@ -128,7 +147,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     rs.flush() // baseline frame, so the next flush's diff reflects only what fillPixelRect did (nothing)
     writer.getBuffer.setLength(0)
 
-    rs.pixels.fillPixelRect(1, 1, 2, 1, Color.RED)
+    rs.pixels.fillPixelRect(1, 1, 2, 1, RenderColor.fromAwt(Color.RED))
     rs.flush()
 
     writer.toString shouldBe ""
@@ -159,7 +178,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
   it should "leave a fully transparent source cell unpainted rather than drawing an arbitrary color" in {
     val (rs, writer) = surface(width = 3, height = 3)
-    rs.setBackgroundColor(Color.GREEN)
+    rs.setBackgroundColor(RenderColor.fromAwt(Color.GREEN))
     rs.fillRect(0, 0, 3, 3, ' ') // pre-fill so "unpainted" is observable
     rs.flush()
     writer.getBuffer.setLength(0)
@@ -187,8 +206,8 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
   "withRectClip" should "restrict putString to a rectangular cell region" in {
     val (rs, writer) = surface(width = 4, height = 1)
-    rs.setForegroundColor(Color.WHITE)
-    rs.setBackgroundColor(Color.BLACK)
+    rs.setForegroundColor(RenderColor.fromAwt(Color.WHITE))
+    rs.setBackgroundColor(RenderColor.fromAwt(Color.BLACK))
     rs.panelOutlines shouldBe defined
     rs.panelOutlines.get.withRectClip(0, 0, 2, 1) {
       rs.putString(0, 0, "abcd") // would overflow the 2-wide clip if it weren't enforced

@@ -60,8 +60,8 @@ object RendererGutter:
     val railRect = LayoutRect(railX, contentRect.y, placement.gutterWidthCells, contentRect.height)
     val snapshot = placement.snapshot
 
-    surface.setBackgroundColor(gutterBackground(state))
-    surface.setForegroundColor(state.persisted.theme.muted)
+    surface.setBackgroundColor(RenderColor.fromAwt(gutterBackground(state)))
+    surface.setForegroundColor(RenderColor.fromAwt(state.persisted.theme.muted))
     surface.fillRect(railRect.x, railRect.y, railRect.width, railRect.height, ' ')
 
     val wordWrapEnabled = state.persisted.config.surfaceConfig.wordWrapEnabled
@@ -99,8 +99,8 @@ object RendererGutter:
     val surface    = context.surface
     val background = gutterBackground(state)
 
-    surface.setBackgroundColor(background)
-    surface.setForegroundColor(state.persisted.theme.muted)
+    surface.setBackgroundColor(RenderColor.fromAwt(background))
+    surface.setForegroundColor(RenderColor.fromAwt(state.persisted.theme.muted))
 
     surface.fillRect(lineRect.x, lineRect.y, lineRect.width, lineRect.height, ' ')
 
@@ -115,9 +115,9 @@ object RendererGutter:
     // below) leaves a gap -- reading as a dashed line rather than one continuous rule. Recolouring rather than
     // redrawing the text keeps every existing rendered string identical; only the boundary column's background changes.
     val dividerX = if dividerOnLeft then lineRect.x else lineRect.x + lineRect.width - 1
-    surface.setBackgroundColor(state.persisted.theme.panelBorder)
+    surface.setBackgroundColor(RenderColor.fromAwt(state.persisted.theme.panelBorder))
     surface.fillRect(dividerX, lineRect.y, 1, lineRect.height, ' ')
-    surface.setBackgroundColor(background)
+    surface.setBackgroundColor(RenderColor.fromAwt(background))
 
     diagnosticRows.foreach {
       case (rowY, diagnostics) =>
@@ -306,8 +306,8 @@ object RendererGutter:
         case Some(1) => state.persisted.theme.error.foreground
         case Some(2) => state.persisted.theme.warning.foreground
         case _       => state.persisted.theme.muted
-      surface.setForegroundColor(color)
-      surface.setBackgroundColor(gutterBackground(state))
+      surface.setForegroundColor(RenderColor.fromAwt(color))
+      surface.setBackgroundColor(RenderColor.fromAwt(gutterBackground(state)))
       val markerX = if dividerOnLeft then lineRect.x else lineRect.x + lineRect.width - 1
       surface.putString(markerX, screenY, "!")
 
@@ -320,8 +320,8 @@ object RendererGutter:
       val surface = context.surface
       val colors  = state.persisted.config.statusLine.colors
 
-      surface.setBackgroundColor(colors.backgroundOr(gutterBackground(state)))
-      surface.setForegroundColor(colors.foregroundOr(state.persisted.theme.panel.foreground))
+      surface.setBackgroundColor(RenderColor.fromAwt(colors.backgroundOr(gutterBackground(state))))
+      surface.setForegroundColor(RenderColor.fromAwt(colors.foregroundOr(state.persisted.theme.panel.foreground)))
       surface.fillRect(gutterRect.x, gutterRect.y, gutterRect.width, gutterRect.height, ' ')
 
       val content = s" ${state.statusLineText.getOrElse(emptyWorkspaceStatus(state))} "

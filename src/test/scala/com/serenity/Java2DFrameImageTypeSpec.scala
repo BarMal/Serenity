@@ -9,7 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
-import com.serenity.ui.renderer.{Java2DRenderSurface, RendererEntryPoints}
+import com.serenity.ui.renderer.{Java2DRenderSurface, RenderColor, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -106,10 +106,10 @@ class Java2DFrameImageTypeSpec extends AnyFlatSpec with Matchers:
     def filled(imageType: Int): BufferedImage =
       val image   = new BufferedImage(40, 32, imageType)
       val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
-      surface.setBackgroundColor(Color.WHITE)
+      surface.setBackgroundColor(RenderColor.fromAwt(Color.WHITE))
       surface.fillRect(0, 0, 5, 2, ' ')
-      surface.setBackgroundColor(new Color(200, 100, 50, 0))
-      surface.setForegroundColor(Color.YELLOW)
+      surface.setBackgroundColor(RenderColor.fromAwt(new Color(200, 100, 50, 0)))
+      surface.setForegroundColor(RenderColor.fromAwt(Color.YELLOW))
       surface.putString(1, 0, "ab")
       surface.flush()
       image

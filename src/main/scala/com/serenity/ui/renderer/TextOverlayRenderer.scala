@@ -60,8 +60,8 @@ object TextOverlayRenderer:
 
     withOptionalRectClip(surface, rect.x, rect.y, rect.width, rect.height) {
       for y <- rect.y until rect.bottom do
-        surface.setForegroundColor(fg)
-        surface.setBackgroundColor(bg)
+        surface.setForegroundColor(RenderColor.fromAwt(fg))
+        surface.setBackgroundColor(RenderColor.fromAwt(bg))
         surface.putString(rect.x, y, " " * rect.width)
 
       val textInsetPx = SurfaceTextInset.px(config)
@@ -76,8 +76,8 @@ object TextOverlayRenderer:
     if !isQuietLine then drawBorder(surface, overlay, theme, config)
 
     surface.effects.foreach(_.setAlpha(1.0f))
-    surface.setForegroundColor(theme.foreground)
-    surface.setBackgroundColor(theme.background)
+    surface.setForegroundColor(RenderColor.fromAwt(theme.foreground))
+    surface.setBackgroundColor(RenderColor.fromAwt(theme.background))
 
   private def drawBorder(
     surface: RenderSurface,
@@ -91,7 +91,14 @@ object TextOverlayRenderer:
     // the default border.
     if overlay.borderCells > 0 && rect.width >= 2 && rect.height >= 2 then
       surface.panelOutlines.foreach(
-        _.strokeRect(rect.x, rect.y, rect.width, rect.height, theme.border, config.scaledUiOutlineThicknessPx)
+        _.strokeRect(
+          rect.x,
+          rect.y,
+          rect.width,
+          rect.height,
+          RenderColor.fromAwt(theme.border),
+          config.scaledUiOutlineThicknessPx
+        )
       )
 
   /** Falls back to running `render` unclipped when the surface can't clip -- content still draws. */

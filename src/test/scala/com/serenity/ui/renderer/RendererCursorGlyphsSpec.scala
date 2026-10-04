@@ -171,11 +171,11 @@ class RendererCursorGlyphsSpec extends AnyFlatSpec with Matchers:
     * one to construct.
     */
   private class NoopSurface extends RenderSurface:
-    def text: TextDrawing                      = throw new UnsupportedOperationException("not exercised by these specs")
-    def pixels: PixelDrawing                   = throw new UnsupportedOperationException("not exercised by these specs")
-    def setForegroundColor(color: Color): Unit = ()
-    def setBackgroundColor(color: Color): Unit = ()
-    def getBackgroundColor: Color              = Color.BLACK
+    def text: TextDrawing    = throw new UnsupportedOperationException("not exercised by these specs")
+    def pixels: PixelDrawing = throw new UnsupportedOperationException("not exercised by these specs")
+    def setForegroundColor(color: RenderColor): Unit                        = ()
+    def setBackgroundColor(color: RenderColor): Unit                        = ()
+    def getBackgroundColor: RenderColor                                     = RenderColor.fromAwt(Color.BLACK)
     def putString(x: Int, y: Int, s: String): Unit                          = ()
     def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit = ()
     def enableStyle(style: com.serenity.ui.theme.TextStyle): Unit           = ()

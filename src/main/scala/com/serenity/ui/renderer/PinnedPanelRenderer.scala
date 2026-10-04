@@ -18,8 +18,8 @@ object PinnedPanelRenderer:
     val rect            = panel.rect
     val panelBackground = theme.panel.background
 
-    surface.setForegroundColor(theme.panel.foreground)
-    surface.setBackgroundColor(panelBackground)
+    surface.setForegroundColor(RenderColor.fromAwt(theme.panel.foreground))
+    surface.setBackgroundColor(RenderColor.fromAwt(panelBackground))
     for y <- rect.y until rect.bottom do surface.putString(rect.x, y, " " * rect.width)
 
     val textInsetPx = SurfaceTextInset.px(config)
@@ -27,8 +27,8 @@ object PinnedPanelRenderer:
     drawTitle(surface, panel, theme, textInsetPx)
     drawComposition(surface, panel.composition, theme, panelBackground, cellMetrics, textInsetPx)
 
-    surface.setForegroundColor(theme.foreground)
-    surface.setBackgroundColor(theme.background)
+    surface.setForegroundColor(RenderColor.fromAwt(theme.foreground))
+    surface.setBackgroundColor(RenderColor.fromAwt(theme.background))
 
   private def drawBorder(
     surface: RenderSurface,
@@ -39,7 +39,14 @@ object PinnedPanelRenderer:
     val rect = panel.rect
     if rect.width >= 2 && rect.height >= 2 then
       surface.panelOutlines.foreach(
-        _.strokeRect(rect.x, rect.y, rect.width, rect.height, theme.border, config.scaledUiOutlineThicknessPx)
+        _.strokeRect(
+          rect.x,
+          rect.y,
+          rect.width,
+          rect.height,
+          RenderColor.fromAwt(theme.border),
+          config.scaledUiOutlineThicknessPx
+        )
       )
 
   private def drawTitle(
@@ -81,8 +88,8 @@ object PinnedPanelRenderer:
               OverlaySegmentRowRenderer.toneForeground(box.tone, theme).getOrElse(theme.panel.foreground),
               OverlaySegmentRowRenderer.toneBackground(box.tone, theme).getOrElse(panelBackground)
             )
-        surface.setForegroundColor(foreground)
-        surface.setBackgroundColor(background)
+        surface.setForegroundColor(RenderColor.fromAwt(foreground))
+        surface.setBackgroundColor(RenderColor.fromAwt(background))
         if box.selected then
           surface.enableStyle(theme.focusStyle)
           fillRowBackground(surface, cellMetrics, x, y, width, background)
@@ -108,8 +115,14 @@ object PinnedPanelRenderer:
   ): Unit =
     val leftPx  = cellMetrics.toPixelX(x)
     val rightPx = cellMetrics.toPixelX(x + width)
-    surface.pixels.fillPixelRect(leftPx, cellMetrics.toPixelY(y), rightPx - leftPx, cellMetrics.lineHeight, color)
+    surface.pixels.fillPixelRect(
+      leftPx,
+      cellMetrics.toPixelY(y),
+      rightPx - leftPx,
+      cellMetrics.lineHeight,
+      RenderColor.fromAwt(color)
+    )
 
   private def renderText(surface: RenderSurface, x: Int, y: Int, text: String, foreground: Color): Unit =
-    surface.setForegroundColor(foreground)
+    surface.setForegroundColor(RenderColor.fromAwt(foreground))
     text.zipWithIndex.foreach((char, index) => CharacterRenderer.renderChar(surface, x + index, y, char))

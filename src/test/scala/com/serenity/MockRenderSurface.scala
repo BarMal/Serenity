@@ -11,6 +11,7 @@ import com.serenity.ui.renderer.{
   HardwareCursor,
   PanelOutlineDrawing,
   PixelDrawing,
+  RenderColor,
   RenderSurface,
   SurfaceContentIdentity,
   TextDrawing
@@ -78,7 +79,7 @@ class MockRenderSurface(
   override def persistentContentKey: Option[SurfaceContentIdentity] =
     Option.when(persistentContent)(SurfaceContentIdentity(this))
 
-  override def clearViewportExcept(color: Color, preserved: scala.collection.immutable.List[PixelRect]): Unit =
+  override def clearViewportExcept(color: RenderColor, preserved: scala.collection.immutable.List[PixelRect]): Unit =
     if preserved.isEmpty then clearViewport(color)
     else
       val metrics = CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12))
@@ -92,11 +93,11 @@ class MockRenderSurface(
         }
         if !kept then
           chars(y)(x) = ' '
-          bgs(y)(x) = color
+          bgs(y)(x) = color.toAwt
 
-  def setForegroundColor(color: Color): Unit = currentFg.set(color)
-  def setBackgroundColor(color: Color): Unit = currentBg.set(color)
-  def getBackgroundColor: Color              = currentBg.get()
+  def setForegroundColor(color: RenderColor): Unit = currentFg.set(color.toAwt)
+  def setBackgroundColor(color: RenderColor): Unit = currentBg.set(color.toAwt)
+  def getBackgroundColor: RenderColor              = RenderColor.fromAwt(currentBg.get())
 
   def putString(x: Int, y: Int, s: String): Unit =
     putStringCallsBuffer += PutStringCall(x, y, s)
@@ -221,8 +222,8 @@ class MockRenderSurface(
   private val drawImageCallsBuffer     = scala.collection.mutable.ListBuffer.empty[DrawImageCall]
   private val alphaCallsBuffer         = scala.collection.mutable.ListBuffer.empty[Float]
 
-  override def strokeRect(x: Int, y: Int, width: Int, height: Int, color: Color, strokeWidth: Float): Unit =
-    strokeRectCallsBuffer += StrokeRectCall(x, y, width, height, color, strokeWidth)
+  override def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =
+    strokeRectCallsBuffer += StrokeRectCall(x, y, width, height, color.toAwt, strokeWidth)
 
   def strokeRectCalls: List[StrokeRectCall] = strokeRectCallsBuffer.toList
 
@@ -239,8 +240,8 @@ class MockRenderSurface(
     currentAlpha.set(alpha)
     alphaCallsBuffer += alpha
 
-  override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit =
-    fillPixelRectCallsBuffer += FillPixelRectCall(xPx, yPx, widthPx, heightPx, color)
+  override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit =
+    fillPixelRectCallsBuffer += FillPixelRectCall(xPx, yPx, widthPx, heightPx, color.toAwt)
 
   override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
     drawImageCallsBuffer += DrawImageCall(image, x, y, width, height)

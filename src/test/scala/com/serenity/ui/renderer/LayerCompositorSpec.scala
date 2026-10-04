@@ -110,9 +110,9 @@ class LayerCompositorSpec extends AnyFlatSpec with Matchers:
     override def effects: Option[Effects] = Some(this)
     def setAlpha(alpha: Float): Unit      = alphaCalls.updateAndGet(_ :+ alpha)
 
-    def setForegroundColor(color: java.awt.Color): Unit                     = ()
-    def setBackgroundColor(color: java.awt.Color): Unit                     = ()
-    def getBackgroundColor: java.awt.Color                                  = java.awt.Color.BLACK
+    def setForegroundColor(color: RenderColor): Unit                        = ()
+    def setBackgroundColor(color: RenderColor): Unit                        = ()
+    def getBackgroundColor: RenderColor                                     = RenderColor.fromArgb(0xff000000)
     def putString(x: Int, y: Int, s: String): Unit                          = ()
     def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit = ()
     def enableStyle(style: com.serenity.ui.theme.TextStyle): Unit           = ()
@@ -125,9 +125,9 @@ class LayerCompositorSpec extends AnyFlatSpec with Matchers:
     def flush(): Unit        = ()
 
   private class NoEffectsSurface extends RenderSurface:
-    def setForegroundColor(color: java.awt.Color): Unit                     = ()
-    def setBackgroundColor(color: java.awt.Color): Unit                     = ()
-    def getBackgroundColor: java.awt.Color                                  = java.awt.Color.BLACK
+    def setForegroundColor(color: RenderColor): Unit                        = ()
+    def setBackgroundColor(color: RenderColor): Unit                        = ()
+    def getBackgroundColor: RenderColor                                     = RenderColor.fromArgb(0xff000000)
     def putString(x: Int, y: Int, s: String): Unit                          = ()
     def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit = ()
     def enableStyle(style: com.serenity.ui.theme.TextStyle): Unit           = ()

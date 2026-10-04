@@ -1,6 +1,5 @@
 package com.serenity.ui.tui
 
-import java.awt.Color
 import java.awt.font.FontRenderContext
 import java.awt.image.BufferedImage
 import java.io.Writer
@@ -46,11 +45,11 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
   override def persistentContentKey: Option[SurfaceContentIdentity] =
     Some(SurfaceContentIdentity(screenBuffer))
 
-  def setForegroundColor(color: Color): Unit = screenBuffer.setForegroundColor(color)
-  def setBackgroundColor(color: Color): Unit = screenBuffer.setBackgroundColor(color)
-  def getBackgroundColor: Color              = screenBuffer.getBackgroundColor
+  def setForegroundColor(color: RenderColor): Unit = screenBuffer.setForegroundColor(color.toAwt)
+  def setBackgroundColor(color: RenderColor): Unit = screenBuffer.setBackgroundColor(color.toAwt)
+  def getBackgroundColor: RenderColor              = RenderColor.fromAwt(screenBuffer.getBackgroundColor)
 
-  override def clearViewportExcept(color: Color, preserved: List[PixelRect]): Unit =
+  override def clearViewportExcept(color: RenderColor, preserved: List[PixelRect]): Unit =
     if preserved.isEmpty then clearViewport(color)
     else
       setBackgroundColor(color)
@@ -186,7 +185,7 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
   // reliably blanked two characters of "alpha" immediately after the gutter on every frame). TUI's real caret is
   // `HardwareCursor` (`present`/`hide`, DECSCUSR/CUP) -- this call is simply never meant to paint cell content here,
   // so it must stay inert the way #1012 originally left it.
-  override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit = ()
+  override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit = ()
 
   override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
     val previousForeground = screenBuffer.getForegroundColor
@@ -213,11 +212,11 @@ final class TerminalRenderSurface(width: Int, height: Int, writer: Writer, cellM
     * glyphs. Only the foreground changes: each cell keeps the background already painted under it, so the frame sits on
     * the panel's own colour.
     */
-  override def strokeRect(x: Int, y: Int, width: Int, height: Int, color: Color, strokeWidth: Float): Unit =
+  override def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =
     if width >= 2 && height >= 2 then
       val previousForeground = screenBuffer.getForegroundColor
       val previousBackground = screenBuffer.getBackgroundColor
-      screenBuffer.setForegroundColor(color)
+      screenBuffer.setForegroundColor(color.toAwt)
       TerminalRenderSurface.frameGlyphs(x, y, width, height).foreach { glyph =>
         screenBuffer.setBackgroundColor(screenBuffer.backgroundAt(glyph.x, glyph.y).getOrElse(previousBackground))
         screenBuffer.putString(glyph.x, glyph.y, glyph.char.toString)

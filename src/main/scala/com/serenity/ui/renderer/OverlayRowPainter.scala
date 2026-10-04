@@ -82,8 +82,8 @@ private[renderer] object OverlayRowPainter:
     val rowLeftXPx  = cellMetrics.toPixelX(x)
     val rowRightXPx = cellMetrics.toPixelX(x + width)
 
-    surface.setForegroundColor(rowForeground)
-    surface.setBackgroundColor(rowBackground)
+    surface.setForegroundColor(RenderColor.fromAwt(rowForeground))
+    surface.setBackgroundColor(RenderColor.fromAwt(rowBackground))
     if rowView.row.selected then
       pixelHeight.foreach { height =>
         surface.pixels.fillPixelRect(
@@ -91,7 +91,7 @@ private[renderer] object OverlayRowPainter:
           yPx = pixelY.getOrElse(cellMetrics.toPixelY(y)),
           widthPx = rowRightXPx - rowLeftXPx,
           heightPx = height,
-          color = rowBackground
+          color = RenderColor.fromAwt(rowBackground)
         )
       }
     if rowView.row.selected then surface.enableStyle(theme.focusStyle)
@@ -233,8 +233,8 @@ private[renderer] object OverlayRowPainter:
               rowRightXPx
             )
           else if placement.cellColumn >= 0 && placement.cellColumn < width then
-            surface.setForegroundColor(theme.background)
-            surface.setBackgroundColor(theme.cursor)
+            surface.setForegroundColor(RenderColor.fromAwt(theme.background))
+            surface.setBackgroundColor(RenderColor.fromAwt(theme.cursor))
             CharacterRenderer.renderChar(surface, placement.x + placement.cellColumn, y, ' ')
         }
 
@@ -370,4 +370,4 @@ private[renderer] object OverlayRowPainter:
     val caretWidthPx = math.min(rawWidthPx, math.max(1, maxRightXPx - minXPx))
     val unclampedXPx = cellMetrics.toPixelX(x) + math.round(caretXs.lastOption.getOrElse(0.0f))
     val xPx          = math.max(minXPx, math.min(unclampedXPx, maxRightXPx - caretWidthPx))
-    surface.pixels.fillPixelRect(xPx, yPx, caretWidthPx, cellMetrics.lineHeight, theme.cursor)
+    surface.pixels.fillPixelRect(xPx, yPx, caretWidthPx, cellMetrics.lineHeight, RenderColor.fromAwt(theme.cursor))

@@ -22,6 +22,7 @@ import com.serenity.ui.renderer.{
   Java2DRenderSurface,
   PanelOutlineDrawing,
   PixelDrawing,
+  RenderColor,
   RenderSurface,
   RendererEntryPoints,
   SurfaceContentIdentity,
@@ -340,17 +341,17 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
 
   override def persistentContentKey: Option[SurfaceContentIdentity] = delegate.persistentContentKey
 
-  def setForegroundColor(color: Color): Unit =
-    foregroundColor.set(color)
+  def setForegroundColor(color: RenderColor): Unit =
+    foregroundColor.set(color.toAwt)
     delegate.setForegroundColor(color)
 
-  def setBackgroundColor(color: Color): Unit =
-    backgroundColor.set(color)
+  def setBackgroundColor(color: RenderColor): Unit =
+    backgroundColor.set(color.toAwt)
     delegate.setBackgroundColor(color)
 
-  def getBackgroundColor: Color = delegate.getBackgroundColor
+  def getBackgroundColor: RenderColor = delegate.getBackgroundColor
 
-  override def clearViewportExcept(color: Color, preserved: scala.collection.immutable.List[PixelRect]): Unit =
+  override def clearViewportExcept(color: RenderColor, preserved: scala.collection.immutable.List[PixelRect]): Unit =
     delegate.clearViewportExcept(color, preserved)
 
   def putString(x: Int, y: Int, text: String): Unit =
@@ -408,7 +409,7 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
     * through this surface during a translated block rendered at the untranslated position.
     */
   private val pixelDrawing: PixelDrawing = new PixelDrawing:
-    def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit =
+    def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit =
       delegate.pixels.fillPixelRect(xPx, yPx, widthPx, heightPx, color)
 
     def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
@@ -427,8 +428,8 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
 
   override def panelOutlines: Option[PanelOutlineDrawing] = delegate.panelOutlines.map { delegateOutlines =>
     new PanelOutlineDrawing:
-      def strokeRect(x: Int, y: Int, width: Int, height: Int, color: Color, strokeWidth: Float): Unit =
-        bordersBuffer += ScenarioBorder(LayoutRect(x, y, width, height), color)
+      def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =
+        bordersBuffer += ScenarioBorder(LayoutRect(x, y, width, height), color.toAwt)
         delegateOutlines.strokeRect(x, y, width, height, color, strokeWidth)
 
       def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =

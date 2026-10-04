@@ -1,7 +1,5 @@
 package com.serenity.ui.renderer
 
-import java.awt.Color
-
 import scala.annotation.unused
 
 import com.serenity.ui.layout.PixelRect
@@ -33,11 +31,11 @@ trait RenderSurface:
     * though each frame is a fresh surface, or every frame starts a new cache entry (#1798).
     */
   def layerCacheOwner: ScreenIdentity = ScreenIdentity(this)
-  def setForegroundColor(color: Color): Unit
-  def setBackgroundColor(color: Color): Unit
-  def getBackgroundColor: Color
+  def setForegroundColor(color: RenderColor): Unit
+  def setBackgroundColor(color: RenderColor): Unit
+  def getBackgroundColor: RenderColor
 
-  def clearViewport(color: Color): Unit =
+  def clearViewport(color: RenderColor): Unit =
     setBackgroundColor(color)
     fillRect(0, 0, viewportWidth, viewportHeight, ' ')
 
@@ -46,7 +44,7 @@ trait RenderSurface:
     * The default clears everything, which is why callers must check [[persistentContentKey]] first: a surface without a
     * persistent key preserves nothing, so its caller has to redraw the content it would otherwise have skipped.
     */
-  def clearViewportExcept(color: Color, @unused preserved: List[PixelRect]): Unit =
+  def clearViewportExcept(color: RenderColor, @unused preserved: List[PixelRect]): Unit =
     clearViewport(color)
 
   def putString(x: Int, y: Int, s: String): Unit

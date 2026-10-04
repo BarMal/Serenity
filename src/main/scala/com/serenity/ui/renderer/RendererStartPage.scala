@@ -14,8 +14,8 @@ object RendererStartPage:
     val lineHeightPx = math.max(context.cellMetrics.lineHeight, textMetrics.lineHeight)
     val yPx          = centeredBlockTopPx(rect, context.cellMetrics, 1, lineHeightPx)
     context.surface.text.setFont(context.textFont)
-    context.surface.setForegroundColor(theme.foreground)
-    context.surface.setBackgroundColor(theme.background)
+    context.surface.setForegroundColor(RenderColor.fromAwt(theme.foreground))
+    context.surface.setBackgroundColor(RenderColor.fromAwt(theme.background))
     renderAlignedTextLine(
       surface = context.surface,
       line = "Empty document — start typing",
@@ -40,8 +40,8 @@ object RendererStartPage:
     val startYPx     = centeredBlockTopPx(rect, context.cellMetrics, lines.length, lineHeightPx)
 
     context.surface.text.setFont(context.textFont)
-    context.surface.setForegroundColor(theme.muted)
-    context.surface.setBackgroundColor(theme.background)
+    context.surface.setForegroundColor(RenderColor.fromAwt(theme.muted))
+    context.surface.setBackgroundColor(RenderColor.fromAwt(theme.background))
 
     lines.zipWithIndex.foreach {
       case (line, index) =>
@@ -127,8 +127,8 @@ object RendererStartPage:
           val isSelected  = optionIndex.contains(page.selectedIndex)
 
           if isSelected then
-            surface.setForegroundColor(theme.highlighted.foreground)
-            surface.setBackgroundColor(theme.highlighted.background)
+            surface.setForegroundColor(RenderColor.fromAwt(theme.highlighted.foreground))
+            surface.setBackgroundColor(RenderColor.fromAwt(theme.highlighted.background))
             surface.enableStyle(theme.focusStyle)
             optionIndex.flatMap(actionBounds.get).foreach { bounds =>
               surface.pixels.fillPixelRect(
@@ -136,7 +136,7 @@ object RendererStartPage:
                 yPx = bounds.yPx,
                 widthPx = bounds.widthPx,
                 heightPx = bounds.heightPx,
-                color = theme.highlighted.background
+                color = RenderColor.fromAwt(theme.highlighted.background)
               )
             }
             renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics)
@@ -145,8 +145,8 @@ object RendererStartPage:
             val foreground =
               if lineIndex == 0 || isOption then theme.foreground
               else theme.muted
-            surface.setForegroundColor(foreground)
-            surface.setBackgroundColor(theme.background)
+            surface.setForegroundColor(RenderColor.fromAwt(foreground))
+            surface.setBackgroundColor(RenderColor.fromAwt(theme.background))
             renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics)
     }
 
@@ -180,8 +180,8 @@ object RendererStartPage:
         val rowsFromBottom = hintLines.size - index
         val yPx            = viewportHeightPx - (rowsFromBottom * lineHeightPx)
         if yPx >= 0 && yPx + lineHeightPx <= viewportHeightPx then
-          surface.setForegroundColor(theme.muted)
-          surface.setBackgroundColor(theme.background)
+          surface.setForegroundColor(RenderColor.fromAwt(theme.muted))
+          surface.setBackgroundColor(RenderColor.fromAwt(theme.background))
           renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics)
     }
 
