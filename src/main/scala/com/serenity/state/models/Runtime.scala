@@ -53,7 +53,10 @@ final case class Runtime(
     // are untouched by hiding the ghosts.
     chapterGhostsVisible: Boolean = true,
     // Never persisted: the pane showing chapter notes, and whether it follows the cursor's chapter or is pinned.
-    notesPane: Option[NotesPane] = None
+    notesPane: Option[NotesPane] = None,
+    // Never persisted: the paned buffers' indexes as of the last commit (#1864), so the copies made in between reuse
+    // them. See `AppState.withBufferIndexesRefreshed`.
+    bufferIndexMemos: BufferIndexMemos = BufferIndexMemos.empty
 ):
 
   /** A typed character restarts the quiet window for cursor-adjacent surfaces. */

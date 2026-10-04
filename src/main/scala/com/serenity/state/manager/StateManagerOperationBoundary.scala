@@ -354,6 +354,7 @@ private[manager] object StateManagerOperationBoundary:
       .map(PanelContentSync.synced(_, fallbackState))
       .map(NotesPaneSync.synced(_, fallbackState))
       .map(PanelArrangement.resyncedIn)
+      .map(_.withBufferIndexesRefreshed)
 
   /** A directory listing for an explorer. `FileBrowser` lists a missing directory as empty, which an explorer would
     * show as an empty folder, so an empty listing is checked for the directory still being there.

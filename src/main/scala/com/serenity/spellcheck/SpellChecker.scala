@@ -1,5 +1,7 @@
 package com.serenity.spellcheck
 
+import java.nio.file.Path
+
 import com.serenity.config.{SpellCheckConfig, SpellCheckDictionaryFingerprint}
 import com.serenity.lsp.client.DocumentUri
 import com.serenity.lsp.model.*
@@ -182,7 +184,11 @@ object SpellChecker:
     Option.when(end > start)(line.substring(start, end))
 
   def diagnosticsUri(buffer: Buffer): DocumentUri =
-    buffer.document.filePath.map(path => DocumentUri(path.toUri.toString)).getOrElse(bufferDiagnosticsUri(buffer.id))
+    diagnosticsUri(buffer.id, buffer.document.filePath)
+
+  /** `Path.toUri` stats the file on Unix, so callers on a hot path should hold on to the result. */
+  def diagnosticsUri(bufferId: BufferId, filePath: Option[Path]): DocumentUri =
+    filePath.map(path => DocumentUri(path.toUri.toString)).getOrElse(bufferDiagnosticsUri(bufferId))
 
   def bufferDiagnosticsUri(bufferId: BufferId): DocumentUri =
     DocumentUri(s"buffer:${bufferId.value}")
