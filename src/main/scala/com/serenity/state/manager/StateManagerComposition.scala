@@ -243,7 +243,7 @@ private[manager] class StateManagerComposition(
       def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
         workflow.beginCloseAction(scope, state)
 
-  private val events =
+  private[manager] val events =
     new StateManagerEventPipeline(
       eventStatePort,
       eventEffectPort,
@@ -289,7 +289,9 @@ private[manager] class StateManagerComposition(
     modelCommit.currentState.flatMap(state => effects.interpretCommand(command, state)) >> drainPendingOperations >>
       operations.awaitEffects
 
-  /** The whole batch is one dispatch, so no other writer lands between its events. */
+  /** The whole batch is one dispatch, so no other writer lands between its events, nor reads a typed run's keys before
+    * the run is centred.
+    */
   private[manager] def dispatchEventBatch[A](inputs: List[A], steps: EventBatchSteps[A]): IO[EventBatch[A]] =
     operations.dispatch(
       operations.unobserved(
@@ -297,7 +299,8 @@ private[manager] class StateManagerComposition(
           inputs,
           steps,
           modelCommit.model,
-          events.applyEventOnDispatcher
+          events.applyEventOnDispatcher,
+          TypedRuns(events.typedRunStep, events.commitTypedRun, TypedRuns.MaxKeys)
         )
       )
     )
