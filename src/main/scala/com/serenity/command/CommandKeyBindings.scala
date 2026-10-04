@@ -20,16 +20,9 @@ object CommandKeyBindings:
       .flatMap((commandId, keys) => keys.headOption.map(key => commandId.value -> key.render))
       .toMap
 
-  /** The command a key bound by id runs, when the palette would let it run here: offered in this mode and frontend
-    * ([[CommandScope]]) and with its prerequisites met.
-    */
+  /** The command a key bound by id runs, when the palette would let it run here ([[CommandAvailability]]). */
   def runnable(registry: CommandRegistry, commandId: String, context: CommandRunnerContext): Option[Command] =
-    registry
-      .findCommand(commandId)
-      .filter(command =>
-        CommandRelevance.isAvailable(command, context.editingContext) &&
-          CommandPrerequisites.unmetReason(command, context).isEmpty
-      )
+    registry.findCommand(commandId).filter(CommandAvailability.of(_, context).isRunnable)
 
   /** The registry command a global hotkey action performs, if there is one. Exhaustive, so a new action has to say. */
   def commandFor(action: HotkeyAction): Option[CommandId] =

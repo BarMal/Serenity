@@ -31,7 +31,7 @@ final case class SelectableList[+A](
 
   /** The items the viewport shows, each with its index. */
   def visible(visibleRows: Int): Vector[(A, Int)] =
-    items.zipWithIndex.slice(offset, offset + math.max(1, visibleRows))
+    items.slice(offset, offset + math.max(1, visibleRows)).zip(Iterator.from(offset.max(0)))
 
   def update(input: WidgetInput, visibleRows: Int): (SelectableList[A], Option[ListOutcome[A]]) =
     input match

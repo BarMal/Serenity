@@ -1,5 +1,7 @@
 package com.serenity.ui.widget
 
+import java.lang.management.ManagementFactory
+
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -10,6 +12,24 @@ class SelectableListSpec extends AnyFlatSpec with Matchers:
 
   private def after(list: SelectableList[String], inputs: WidgetInput*): SelectableList[String] =
     inputs.foldLeft(list)((current, input) => current.update(input, rows)._1)
+
+  private val allocationBean = ManagementFactory.getThreadMXBean match
+    case bean: com.sun.management.ThreadMXBean if bean.isThreadAllocatedMemorySupported =>
+      if !bean.isThreadAllocatedMemoryEnabled then bean.setThreadAllocatedMemoryEnabled(true)
+      Some(bean)
+    case _ => None
+
+  /** Warms up first so the sample measures JIT-compiled code, as `UndoStatePerformanceSpec` does. */
+  private def allocatedBytesForVisible(list: SelectableList[String]): Option[Long] =
+    allocationBean.map { bean =>
+      val threadId = Thread.currentThread().threadId()
+      (1 to 200).foreach(_ => assert(list.visible(rows).nonEmpty))
+      val before  = bean.getThreadAllocatedBytes(threadId)
+      val visible = list.visible(rows)
+      val after   = bean.getThreadAllocatedBytes(threadId)
+      assert(visible.size == rows)
+      after - before
+    }
 
   "A selectable list" should "start on its first item and move with the arrows" in {
     after(letters, WidgetInput.Down, WidgetInput.Down).selectedItem shouldBe Some("c")
@@ -87,6 +107,26 @@ class SelectableListSpec extends AnyFlatSpec with Matchers:
     reloaded.selectedItem shouldBe Some("d")
     onD.withItems(Vector("x", "y"), rows)(_ == _).selectedItem shouldBe Some("y")
     onD.withItems(Vector.empty[String], rows)(_ == _).selected shouldBe None
+  }
+
+  it should "show the viewport's items with their indices, clipped at either end" in {
+    letters.copy(offset = 8).visible(rows) shouldBe Vector(("i", 8), ("j", 9))
+    letters.copy(offset = -2).visible(rows) shouldBe Vector(("a", 0), ("b", 1))
+    letters.copy(offset = 3).visible(0) shouldBe Vector(("d", 3))
+    SelectableList.of(Seq.empty[String]).visible(rows) shouldBe Vector.empty
+  }
+
+  it should "touch only the visible range when listing what the viewport shows" in {
+    val small = SelectableList.of((0 until 10).map(_.toString)).copy(offset = 5)
+    val large = SelectableList.of((0 until 200_000).map(_.toString)).copy(offset = 100_000)
+    (allocatedBytesForVisible(small), allocatedBytesForVisible(large)) match
+      case (Some(smallBytes), Some(largeBytes)) =>
+        // Zipping every item before slicing allocates a tuple and a boxed index per item, megabytes here.
+        withClue(s"10 items allocated ${smallBytes}B, 200,000 items allocated ${largeBytes}B: ") {
+          largeBytes should be < 64_000L
+        }
+      case _ =>
+        info("JVM per-thread allocation counter unsupported on this runtime -- skipping the allocation assertion")
   }
 
   it should "ignore input it has no meaning for" in {
