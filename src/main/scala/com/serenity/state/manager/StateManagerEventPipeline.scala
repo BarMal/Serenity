@@ -205,6 +205,42 @@ final private[manager] class StateManagerEventPipeline(
       }
     }
 
+  /** The model dispatching `event` would commit, uncentred, when it is a character typed into an editor pane with
+    * nothing else to do but its undo bookkeeping; `None` sends it through [[applyEventOnDispatcher]] instead. Folded
+    * over a run of keys and committed once by [[commitTypedRun]] (#1985).
+    */
+  private[manager] def typedRunStep(event: Event, model: Model, nowNanos: Long): Option[Model] =
+    event match
+      case key: InsertChar =>
+        val prevState = EventPipelineTransitions.typingObserved(event, nowNanos)(
+          EventPipelineTransitions.commandRunnerFocusNormalized(model.app)
+        )
+        if prevState.hasBlockingModal then None
+        else
+          FocusScopes.peekKeyOutcome(key, prevState) match
+            case FocusScopes.PeekKeyOutcome.PassedOn(base) =>
+              base.persisted.focus match
+                case Focus.EditorPane(paneId) =>
+                  new EditorPaneComponent(paneId, wrapCache = wrappedLines)(using balance)
+                    .typedWithoutCentring(key, base)
+                    .filter(_.effects.forall(ModelCommit.isModelEffect))
+                    .flatMap(result =>
+                      StateManagerOperationBoundary
+                        .prepareCommit(result.state, model.app)
+                        .toOption
+                        .map(committed => EventPipelineTransitions.committed(model, result).copy(app = committed))
+                    )
+                case _ => None
+            case FocusScopes.PeekKeyOutcome.Consumed(_) => None
+      case _ => None
+
+  /** Commits a run [[typedRunStep]] folded from `start`, with the cursor centred once for all of its keys. */
+  private[manager] def commitTypedRun(start: Model, typed: Model): cats.effect.IO[Unit] =
+    val centred = typed.copy(app = CursorViewport.ensureVisibleCursors(start.app, typed.app, wrapCache = wrappedLines))
+    modelCommit.commitValidated(start.app)(_ => centred) >>
+      lspDocumentSync.enqueueChangedLspDocuments(start.app) >>
+      scheduleMarkdownPreviewCommits(start.app)
+
   private def allowedWhileBlockingModal(event: Event): Boolean =
     event match
       case _: SystemEvent | _: MouseInputEvent => true

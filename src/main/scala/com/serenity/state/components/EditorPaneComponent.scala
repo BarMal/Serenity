@@ -46,3 +46,15 @@ class EditorPaneComponent(
     val reduced      = EditorEventReducer.reduce(event, paneId, currentState, geometry)
     val visibleState = CursorViewport.ensureVisibleCursors(currentState, reduced.state, wrapCache)
     ComponentResult.reducerResult(ReducerResult(visibleState, reduced.effects))
+
+  /** A typed character's edit with the cursor left where centring found it, for a caller that centres a whole run of
+    * them once (#1985). `None` for anything else, including a key whose reduction would need the pane's geometry.
+    */
+  def typedWithoutCentring(event: Event, currentState: AppState): Option[ReducerResult] =
+    event match
+      case typed: InsertChar if currentState.persisted.layout.editorPanes.contains(paneId) =>
+        EditorEventReducer.geometryRequirement(typed, currentState) match
+          case EditorEventReducer.GeometryRequirement.NotNeeded =>
+            Some(EditorEventReducer.reduce(typed, paneId, currentState))
+          case _ => None
+      case _ => None
