@@ -277,3 +277,23 @@ libraryDependencies ++= Seq(
 // replacing three independent hand-rolled approximations that could (and did, see #1271) disagree with each other.
 // Dependency only in this step -- see #1277 step 1 for the assembled-JAR size measurement that gated this addition.
 libraryDependencies += "com.ibm.icu" % "icu4j" % "78.3"
+
+// Throwaway Skiko spike (#1812, Skia plan step 2). A separate project so `sbt test`, the gate and the assembled jar of
+// the root project are untouched: root does not aggregate it. 0.150.2 is only on the Skiko release page, not on Maven
+// Central, so the spike uses 0.150.1, the newest 0.150.x that Central serves.
+val skikoVersion = "0.150.1"
+
+lazy val spike = (project in file("spike"))
+  .dependsOn(root)
+  .settings(
+    name := "serenity-skiko-spike",
+    libraryDependencies ++= Seq(
+      "org.jetbrains.skiko" % "skiko-awt"                   % skikoVersion,
+      "org.jetbrains.skiko" % "skiko-awt-runtime-linux-x64" % skikoVersion
+    ),
+    run / fork          := true,
+    run / connectInput  := true,
+    run / baseDirectory := (ThisBuild / baseDirectory).value,
+    run / javaOptions ++= Seq("-Xmx2g"),
+    Compile / mainClass := Some("com.serenity.spike.SkikoSpike")
+  )
