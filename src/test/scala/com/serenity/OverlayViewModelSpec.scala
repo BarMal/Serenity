@@ -7,6 +7,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.OverlayViewModel
+import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -177,7 +178,7 @@ class OverlayViewModelSpec extends AnyFlatSpec with Matchers:
         uiSurfaces = List(
           UiSurface(
             SurfaceId("find"),
-            SurfaceContent.ModalWorkflow(Modal.Find("two", Vector(FindResult(1, 0)), 0)),
+            SurfaceContent.ModalWorkflow(Modal.Find(TextField.of("two"), Vector(FindResult(1, 0)), 0)),
             SurfacePresentation.Floating(Some(CursorPosition(1, 2)), SurfacePlacement.BelowCursor)
           )
         )

@@ -316,7 +316,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
 
     fixture.currentState.runtime.uiSurfaces.map(_.content) match
       case List(SurfaceContent.ModalWorkflow(Modal.Find(query, results, _))) =>
-        query shouldBe "cat"
+        query.text shouldBe "cat"
         results.size shouldBe 2
       case other => fail(s"Expected a single Find modal surface, got $other")
   }

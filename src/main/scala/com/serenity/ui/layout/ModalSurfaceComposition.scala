@@ -2,6 +2,7 @@ package com.serenity.ui.layout
 
 import com.serenity.config.{HotkeyTrigger, ModalKeyAction}
 import com.serenity.state.models.*
+import com.serenity.ui.widget.TextField
 
 /** Declarative composition plans for blocking workflow surfaces. Every [[ConfirmPrompt]] is composed in
   * `ConfirmComposition` and every [[ListPicker]] in `ListPickerComposition`, split out to keep this file under the
@@ -74,16 +75,16 @@ object ModalSurfaceComposition:
     inputPlan(prompt.label, prompt.input, focusId, frameRect, prompt.field.caret)
 
   private def findPlan(
-    query: String,
+    query: TextField,
     results: Vector[FindResult],
     currentIndex: Int,
     frameRect: LayoutRect
   ): ResolvedSurfaceComposition =
     val content   = SurfaceFrameLayout(frameRect).contentRect
     val bounds    = logicalRect(content.x, content.y, content.width, content.height)
-    val resultSet = FindResultSet.normalized(query, results, currentIndex)
+    val resultSet = FindResultSet.normalized(query.text, results, currentIndex)
     val headerBox = textBox("find", rowRect(bounds, 0))
-    val queryBox  = inputBox("Find", query, SurfaceFocusId("find"), rowRect(bounds, 1))
+    val queryBox  = inputBox("Find", query.text, SurfaceFocusId("find"), rowRect(bounds, 1), caret = Some(query.caret))
     val resultBoxes = resultSet.visibleResults(math.max(0, content.height - 3)).zipWithIndex.map {
       case ((result, index), offset) =>
         textBox(
@@ -91,7 +92,7 @@ object ModalSurfaceComposition:
           rowRect(bounds, offset + 2),
           selected = index == resultSet.currentIndex,
           focusId = Some(SurfaceFocusId(s"find-result-$index")),
-          actionId = Some(SurfaceActionId(s"find-result-$index"))
+          action = Some(SurfaceAction.SelectFindResult(index))
         )
     }
     val footer = Option.when(resultSet.query.nonEmpty) {
@@ -315,7 +316,7 @@ object ModalSurfaceComposition:
       for
         focusId <- box.focusId
         label   <- box.semanticLabel
-      yield SurfaceHitRegion(box.rect, focusId, box.actionId, label)
+      yield SurfaceHitRegion(box.rect, focusId, box.actionId, label, box.action)
     }
     ResolvedSurfaceComposition(
       bounds = bounds,
@@ -333,7 +334,8 @@ object ModalSurfaceComposition:
     layout: SurfacePaintLayout = SurfacePaintLayout.Plain,
     focusId: Option[SurfaceFocusId] = None,
     actionId: Option[SurfaceActionId] = None,
-    tone: OverlayTone = OverlayTone.Normal
+    tone: OverlayTone = OverlayTone.Normal,
+    action: Option[SurfaceAction] = None
   ): SurfacePaintBox =
     SurfacePaintBox(
       SurfacePaintKind.Text,
@@ -345,7 +347,8 @@ object ModalSurfaceComposition:
       selected = selected,
       segments = segments,
       layout = layout,
-      tone = tone
+      tone = tone,
+      action = action
     )
 
   private def headingBox(text: String, rect: LogicalPixelRect): SurfacePaintBox =

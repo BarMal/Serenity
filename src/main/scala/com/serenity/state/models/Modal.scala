@@ -3,6 +3,7 @@ package com.serenity.state.models
 import com.serenity.io.{DocumentFormat, FileType, SaveFormat}
 import com.serenity.session.SessionId
 import com.serenity.text.TextEditing
+import com.serenity.ui.widget.TextField
 
 final case class FileWorkflowSuggestion(
     value: String,
@@ -455,8 +456,9 @@ enum Modal:
       arrangement: com.serenity.state.models.PanelArrangement
   )
 
+  /** Find in the current buffer: the query being typed, and what it has matched so far. */
   case Find(
-      query: String,
+      query: TextField,
       results: Vector[FindResult],
       currentIndex: Int
   )

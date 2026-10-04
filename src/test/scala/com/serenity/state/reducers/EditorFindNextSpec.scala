@@ -5,6 +5,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
 import com.serenity.ui.layout.TextLayoutSnapshot
+import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -67,7 +68,9 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
     val updatedState = EditorEventReducer.reduce(OpenFind, paneId, initialState).state
     val modalSurface = updatedState.modalSurface
 
-    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("", Vector.empty, 0)))
+    modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(Modal.Find(TextField.of(""), Vector.empty, 0))
+    )
     modalSurface.map(_.presentation) shouldBe Some(
       SurfacePresentation.Floating(Some(CursorPosition(0, 1)), SurfacePlacement.BelowCursor)
     )
@@ -99,7 +102,7 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
     val modalSurface = updatedState.modalSurface
 
     modalSurface.map(_.content) shouldBe Some(
-      SurfaceContent.ModalWorkflow(Modal.Find("alpha", Vector(FindResult(0, 0), FindResult(2, 0)), 1))
+      SurfaceContent.ModalWorkflow(Modal.Find(TextField.of("alpha"), Vector(FindResult(0, 0), FindResult(2, 0)), 1))
     )
     modalSurface.map(_.presentation) shouldBe Some(
       SurfacePresentation.Floating(Some(CursorPosition(2, 0)), SurfacePlacement.BelowCursor)

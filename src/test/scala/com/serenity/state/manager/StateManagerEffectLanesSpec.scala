@@ -8,6 +8,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.testkit.VirtualTime.runVirtual
+import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
@@ -49,7 +50,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
   private def withFindQuery(state: AppState, query: String): AppState =
     state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
       case surface if surface.id == findSurfaceId =>
-        surface.copy(content = SurfaceContent.ModalWorkflow(Modal.Find(query, Vector.empty, 0)))
+        surface.copy(content = SurfaceContent.ModalWorkflow(Modal.Find(TextField.of(query), Vector.empty, 0)))
       case other => other
     }))
 
@@ -61,7 +62,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
         List(
           UiSurface(
             findSurfaceId,
-            SurfaceContent.ModalWorkflow(Modal.Find("", Vector.empty, 0)),
+            SurfaceContent.ModalWorkflow(Modal.Find(TextField.of(""), Vector.empty, 0)),
             SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
         )
@@ -104,8 +105,8 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
       yield (midBurst, settled)
 
     runVirtual(program) shouldBe (
-      Some(Modal.Find("needle", Vector.empty, 0)),
-      Some(Modal.Find("needle", Vector(FindResult(0, 0), FindResult(0, 14)), 0))
+      Some(Modal.Find(TextField.of("needle"), Vector.empty, 0)),
+      Some(Modal.Find(TextField.of("needle"), Vector(FindResult(0, 0), FindResult(0, 14)), 0))
     )
   }
 
@@ -120,7 +121,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
         after                  <- stateRef.get
       yield (findModal(after), after.persisted.buffers(editorBufferId).findState)
 
-    runVirtual(program) shouldBe (Some(Modal.Find("noodle", Vector.empty, 0)), None)
+    runVirtual(program) shouldBe (Some(Modal.Find(TextField.of("noodle"), Vector.empty, 0)), None)
   }
 
   private val previewA = BufferId(1)

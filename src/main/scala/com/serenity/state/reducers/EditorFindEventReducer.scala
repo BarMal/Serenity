@@ -2,6 +2,7 @@ package com.serenity.state.reducers
 
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
+import com.serenity.ui.widget.TextField
 
 /** Goto-line/find/replace modal opening and find-next -- the family that reads or advances find state rather than
   * editing the document. Split out of `EditorEventReducer.reduceCursorsEditEvent`'s sibling dispatch when that file
@@ -59,6 +60,6 @@ private[reducers] object EditorFindEventReducer:
     buffer.findState match
       case Some(FindState(query, results, currentIndex)) if query.nonEmpty =>
         val resultSet = FindResultSet.normalized(query, results, currentIndex)
-        Modal.Find(resultSet.query, resultSet.results, resultSet.currentIndex)
+        Modal.Find(TextField.of(resultSet.query), resultSet.results, resultSet.currentIndex)
       case _ =>
-        Modal.Find("", Vector.empty, 0)
+        Modal.Find(TextField(), Vector.empty, 0)

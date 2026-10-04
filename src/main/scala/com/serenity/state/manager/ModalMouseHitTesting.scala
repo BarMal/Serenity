@@ -33,7 +33,10 @@ private[manager] object ModalMouseHitTesting:
           val submits =
             Set(ModalType.Confirm, ModalType.ListPicker).contains(clickedType) &&
               hit.actionId.nonEmpty
-          reduce(clickedType, ModalClick(hit.focusId.value, hit.actionId.map(_.value))) *>
+          val clicked: ModalInputEvent = hit.action match
+            case Some(action) => ModalActionClick(action)
+            case None         => ModalClick(hit.focusId.value, hit.actionId.map(_.value))
+          reduce(clickedType, clicked) *>
             (if submits then reduce(clickedType, ModalSubmit) else Transition.unit)
         }
       case _ =>

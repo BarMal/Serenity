@@ -2,11 +2,12 @@ package com.serenity.state.reducers
 
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
-import com.serenity.text.TextEditing
+import com.serenity.ui.layout.SurfaceAction
+import com.serenity.ui.widget.{TextField, TextFieldOutcome, WidgetInput}
 
-/** Find modal input -- query editing, navigating between results, and applying search results computed asynchronously
-  * by the find-search effect. Split out of `ModalEventReducer`'s per-modal-type dispatch when that file grew past its
-  * 600-line target.
+/** Find modal input: typing, deletes, paste, Left/Right and Home/End edit the query through its `TextField`, and each
+  * change to the query's text starts a new search; Up/Down, Enter, find-next and Ctrl+Home/Ctrl+End move between the
+  * results, as does clicking one. Also applies search results computed asynchronously by the find-search effect.
   */
 private[reducers] object ModalFindReducer:
   import ModalEventReducer.{currentModal, dismissToPane, updateModal}
@@ -14,128 +15,98 @@ private[reducers] object ModalFindReducer:
   def reduce(event: ModalInputEvent, currentState: AppState): ReducerResult =
     event match
       case ModalDismiss => ReducerResult.noEffects(dismissToPane(currentState))
-      case ModalInsertChar(char) =>
-        currentModal(currentState) match
-          case Some((id, Modal.Find(query, _, _))) =>
-            updateFindQuery(currentState, id, query + char)
-          case _ => ReducerResult.noEffects(currentState)
-      case ModalDeleteBackward =>
-        currentModal(currentState) match
-          case Some((id, Modal.Find(query, _, _))) if query.nonEmpty =>
-            updateFindQuery(currentState, id, query.dropRight(1))
-          case _ => ReducerResult.noEffects(currentState)
-      case ModalDeleteForward =>
-        ReducerResult.noEffects(currentState)
-      case ModalDeleteWordBackward =>
-        currentModal(currentState) match
-          case Some((id, Modal.Find(query, _, _))) =>
-            updateFindQuery(currentState, id, TextEditing.deleteWordBackward(query))
-          case _ => ReducerResult.noEffects(currentState)
-      case ModalDeleteWordForward =>
-        currentModal(currentState) match
-          case Some((id, Modal.Find(query, _, _))) =>
-            updateFindQuery(currentState, id, TextEditing.deleteWordForward(query))
-          case _ => ReducerResult.noEffects(currentState)
-      case ModalFindNext | ModalNavigate(Direction.Down) | ModalNavigate(Direction.Right) =>
-        currentModal(currentState) match
-          case Some((id, Modal.Find(query, results, currentIndex))) if query.nonEmpty =>
-            ReducerResult.noEffects(updateFindSelection(currentState, id, query, results, currentIndex + 1))
-          case _ => ReducerResult.noEffects(currentState)
-      case ModalNavigate(Direction.Up) | ModalNavigate(Direction.Left) =>
-        currentModal(currentState) match
-          case Some((id, Modal.Find(query, results, currentIndex))) if query.nonEmpty =>
-            ReducerResult.noEffects(updateFindSelection(currentState, id, query, results, currentIndex - 1))
-          case _ => ReducerResult.noEffects(currentState)
-      case ModalFirst => ReducerResult.noEffects(findSelectionAt(currentState)(_ => 0))
-      case ModalLast  => ReducerResult.noEffects(findSelectionAt(currentState)(_ - 1))
-      case ModalSubmit =>
-        currentModal(currentState) match
-          case Some((id, Modal.Find(query, results, currentIndex))) if query.nonEmpty =>
-            val nextIndex =
-              if results.nonEmpty then currentIndex + 1
-              else 0
-            ReducerResult.noEffects(updateFindSelection(currentState, id, query, results, nextIndex))
-          case _ =>
-            ReducerResult.noEffects(currentState)
-      case ModalClick(_, Some(actionId)) if actionId.startsWith("find-result-") =>
-        currentModal(currentState) match
-          case Some((id, Modal.Find(query, results, _))) if query.nonEmpty =>
-            actionId.stripPrefix("find-result-").toIntOption match
-              case Some(index) if index >= 0 && index < results.length =>
-                ReducerResult.noEffects(updateFindSelection(currentState, id, query, results, index))
-              case _ => ReducerResult.noEffects(currentState)
-          case _ => ReducerResult.noEffects(currentState)
-      case ModalClick(_, _) =>
-        ReducerResult.noEffects(currentState)
       case _ =>
-        ReducerResult.noEffects(currentState)
+        currentModal(currentState) match
+          case Some((id, find: Modal.Find)) =>
+            queryEditing(event, currentState).fold(navigated(event, id, find, currentState))(
+              edited(id, find, _, currentState)
+            )
+          case _ => ReducerResult.noEffects(currentState)
+
+  private def queryEditing(event: ModalInputEvent, state: AppState): Option[WidgetInput] =
+    event match
+      case ModalInsertChar(char)          => Some(WidgetInput.Insert(char))
+      case ModalDeleteBackward            => Some(WidgetInput.DeleteBackward)
+      case ModalDeleteForward             => Some(WidgetInput.DeleteForward)
+      case ModalDeleteWordBackward        => Some(WidgetInput.DeleteWordBackward)
+      case ModalDeleteWordForward         => Some(WidgetInput.DeleteWordForward)
+      case ModalPaste                     => state.runtime.clipboard.map(WidgetInput.InsertText(_))
+      case ModalNavigate(Direction.Left)  => Some(WidgetInput.Left)
+      case ModalNavigate(Direction.Right) => Some(WidgetInput.Right)
+      case ModalLineStart                 => Some(WidgetInput.First)
+      case ModalLineEnd                   => Some(WidgetInput.Last)
+      case _                              => None
+
+  private def edited(id: SurfaceId, find: Modal.Find, input: WidgetInput, state: AppState): ReducerResult =
+    val (query, outcome) = find.query.update(input)
+    outcome match
+      case Some(TextFieldOutcome.Changed(_)) => updateFindQuery(state, id, query)
+      case _ if query == find.query          => ReducerResult.noEffects(state)
+      case _ => ReducerResult.noEffects(updateModal(state, id, find.copy(query = query)))
+
+  private def navigated(event: ModalInputEvent, id: SurfaceId, find: Modal.Find, state: AppState): ReducerResult =
+    val requestedIndex = event match
+      case ModalFindNext | ModalNavigate(Direction.Down) => Some(find.currentIndex + 1)
+      case ModalNavigate(Direction.Up)                   => Some(find.currentIndex - 1)
+      case ModalFirst                                    => Some(0)
+      case ModalLast                                     => Some(find.results.length - 1)
+      case ModalSubmit => Some(if find.results.nonEmpty then find.currentIndex + 1 else 0)
+      case ModalActionClick(SurfaceAction.SelectFindResult(index)) if find.results.indices.contains(index) =>
+        Some(index)
+      case _ => None
+    requestedIndex
+      .filter(_ => find.query.text.nonEmpty)
+      .fold(ReducerResult.noEffects(state))(index =>
+        ReducerResult.noEffects(updateFindSelection(state, id, find.query, find.results, index))
+      )
 
   def applyFindSearchResults(
     state: AppState,
     request: FindSearchRequest,
     results: Vector[FindResult]
   ): AppState =
-    val modalIsCurrent = state.runtime.uiSurfaces.exists {
-      case UiSurface(id, SurfaceContent.ModalWorkflow(Modal.Find(query, _, _)), _, _) =>
-        id == request.surfaceId && query == request.query
-      case _ =>
-        false
+    val currentQuery = state.runtime.uiSurfaces.collectFirst {
+      case UiSurface(id, SurfaceContent.ModalWorkflow(Modal.Find(query, _, _)), _, _)
+          if id == request.surfaceId && query.text == request.query =>
+        query
     }
     val contentIsCurrent =
       state.persisted.buffers.get(request.bufferId).exists(_.document.content.eq(request.content))
 
-    if !modalIsCurrent || !contentIsCurrent || !activeBufferId(state).contains(request.bufferId) then state
-    else
-      val firstAtOrAfterCaret = state.persisted.buffers
-        .get(request.bufferId)
-        .fold(0)(buffer => FindResultSet.indexAtOrAfter(results, buffer.editing.cursors.head.position))
-      state.runtime.uiSurfaces.find(_.id == request.surfaceId) match
-        case Some(surface) => updateFindSelection(state, surface.id, request.query, results, firstAtOrAfterCaret)
-        case None          => state
-
-  private def findSelectionAt(state: AppState)(index: Int => Int): AppState =
-    currentModal(state) match
-      case Some((id, Modal.Find(query, results, _))) if query.nonEmpty =>
-        updateFindSelection(state, id, query, results, index(results.length))
+    currentQuery match
+      case Some(query) if contentIsCurrent && activeBufferId(state).contains(request.bufferId) =>
+        val firstAtOrAfterCaret = state.persisted.buffers
+          .get(request.bufferId)
+          .fold(0)(buffer => FindResultSet.indexAtOrAfter(results, buffer.editing.cursors.head.position))
+        updateFindSelection(state, request.surfaceId, query, results, firstAtOrAfterCaret)
       case _ => state
 
-  private def updateFindQuery(state: AppState, id: SurfaceId, query: String): ReducerResult =
-    val currentQueryMatches = state
-      .surfaceById(id)
-      .exists(_.content match
-        case SurfaceContent.ModalWorkflow(Modal.Find(currentQuery, _, _)) => currentQuery == query
-        case _                                                            => false)
-    if currentQueryMatches then ReducerResult.noEffects(state)
+  private def updateFindQuery(state: AppState, id: SurfaceId, query: TextField): ReducerResult =
+    val queryState = updateModal(state, id, Modal.Find(query, Vector.empty, 0))
+    val clearedState = activeBufferId(queryState)
+      .map(bufferId => clearFindState(queryState, bufferId))
+      .getOrElse(queryState)
+    if query.text.isEmpty then ReducerResult.noEffects(clearedState)
     else
-      val queryState = updateModal(state, id, Modal.Find(query, Vector.empty, 0))
-      val clearedState = activeBufferId(queryState)
-        .map(bufferId => clearFindState(queryState, bufferId))
-        .getOrElse(queryState)
-      if query.isEmpty then ReducerResult.noEffects(clearedState)
-      else
-        (for
-          bufferId <- activeBufferId(clearedState)
-          buffer   <- clearedState.persisted.buffers.get(bufferId)
-        yield ReducerResult.withEffect(
-          clearedState,
-          AppEffect.Workflow(
-            WorkflowEffect.RefreshFind(FindSearchRequest(id, bufferId, query, buffer.document.content))
-          )
-        )).getOrElse(ReducerResult.noEffects(clearedState))
+      (for
+        bufferId <- activeBufferId(clearedState)
+        buffer   <- clearedState.persisted.buffers.get(bufferId)
+      yield ReducerResult.withEffect(
+        clearedState,
+        AppEffect.Workflow(
+          WorkflowEffect.RefreshFind(FindSearchRequest(id, bufferId, query.text, buffer.document.content))
+        )
+      )).getOrElse(ReducerResult.noEffects(clearedState))
 
   private def updateFindSelection(
     state: AppState,
     id: SurfaceId,
-    query: String,
+    query: TextField,
     results: Vector[FindResult],
     requestedIndex: Int
   ): AppState =
-    val resultSet = FindResultSet.normalized(query, results, requestedIndex)
-    val modalState = updateModal(
-      state,
-      id,
-      Modal.Find(resultSet.query, resultSet.results, resultSet.currentIndex)
-    )
+    val resultSet  = FindResultSet.normalized(query.text, results, requestedIndex)
+    val modalState = updateModal(state, id, Modal.Find(query, resultSet.results, resultSet.currentIndex))
 
     if resultSet.query.isEmpty || resultSet.results.isEmpty then clearActiveFindState(modalState)
     else applyFindMatch(modalState, resultSet)

@@ -76,7 +76,8 @@ private[manager] object FocusScopes:
       case ModalSubmit              => Some(NewLine)
       case ModalFindNext            => Some(FindNext)
       case ModalDismiss             => Some(Escape)
-      case ModalMove(_) | ModalCreateDirectory | ModalOpenAsProjectRoot | ModalClick(_, _) => None
+      case ModalMove(_) | ModalCreateDirectory | ModalOpenAsProjectRoot | ModalClick(_, _) | ModalActionClick(_) =>
+        None
 
   private def moveFor(direction: Direction): EditorEvent =
     direction match
