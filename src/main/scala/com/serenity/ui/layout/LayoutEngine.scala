@@ -391,8 +391,7 @@ object LayoutEngine:
   def updateViewportDimensions(viewport: Viewport, panelRect: LayoutRect): Viewport =
     viewport.copy(
       visibleLines = panelRect.height,
-      visibleColumns = panelRect.width,
-      topVisualLine = viewport.topVisualLine.min(math.max(0, panelRect.height - 1))
+      visibleColumns = panelRect.width
     )
 
   def updateBufferViewportDimensions(buffer: Buffer, panelRect: LayoutRect, wordWrapEnabled: Boolean): Viewport =
@@ -515,8 +514,7 @@ object LayoutEngine:
   def updateViewportDimensions(viewport: Viewport, panelRect: LayoutRect, metrics: CellMetrics): Viewport =
     viewport.copy(
       visibleLines = panelRect.height / metrics.lineHeight,
-      visibleColumns = panelRect.width / metrics.charWidth,
-      topVisualLine = viewport.topVisualLine.min(math.max(0, panelRect.height / metrics.lineHeight - 1))
+      visibleColumns = panelRect.width / metrics.charWidth
     )
 
   def syncViewportDimensions(state: AppState, viewportSize: ViewportSize): AppState =

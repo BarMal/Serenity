@@ -187,12 +187,10 @@ object RendererPaneSetup:
     val visibleLines = math.max(1, panelHeightPx / math.max(1, bufferMetrics.lineHeight))
     val sizedViewport = baseViewport.copy(
       visibleColumns = visibleColumns,
-      visibleLines = visibleLines,
-      topVisualLine = baseViewport.topVisualLine.min(math.max(0, visibleLines - 1))
+      visibleLines = visibleLines
     )
     val scrollViewport = baseViewport.copy(
-      visibleLines = visibleLines,
-      topVisualLine = baseViewport.topVisualLine.min(math.max(0, visibleLines - 1))
+      visibleLines = visibleLines
     )
     val leftColumn =
       if visibleColumns == baseViewport.visibleColumns then baseViewport.leftColumn

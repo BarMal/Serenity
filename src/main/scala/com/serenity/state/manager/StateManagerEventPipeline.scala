@@ -7,6 +7,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.components.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
+import com.serenity.ui.layout.WrappedLineCache
 import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 
 /** Minimal state boundary for resize routing. */
@@ -14,10 +15,13 @@ private[manager] trait ResizeEventPort:
   def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit]
 
 /** Routes resize transitions without depending on command, workflow, or runtime services. */
-final private[manager] class ResizeEventHandler(port: ResizeEventPort):
+final private[manager] class ResizeEventHandler(
+    port: ResizeEventPort,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+):
 
   def apply(event: ResizeEvent, previousState: AppState): cats.effect.IO[Unit] =
-    port.applyReducerResult(EventPipelineTransitions.resized(event, previousState), previousState)
+    port.applyReducerResult(EventPipelineTransitions.resized(event, previousState, wrapCache), previousState)
 
 private[manager] object StateManagerEventPipeline:
 
@@ -78,11 +82,11 @@ final private[manager] class StateManagerEventPipeline(
   private def interpretCommand(command: com.serenity.command.Command, state: AppState): cats.effect.IO[Unit] =
     effects.interpretCommand(command, state) >> drainPendingOperations
 
-  private val resizeEvents = new ResizeEventHandler(
-    new ResizeEventPort:
-      def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
-        StateManagerEventPipeline.this.applyReducerResult(result, fallbackState)
-  )
+  private val resizePort = new ResizeEventPort:
+    def applyReducerResult(result: ReducerResult, fallbackState: AppState): cats.effect.IO[Unit] =
+      StateManagerEventPipeline.this.applyReducerResult(result, fallbackState)
+
+  private val resizeEvents = new ResizeEventHandler(resizePort, wrappedLines)
 
   private val lspDocumentSync = new LspDocumentSync(
     LspDocumentSyncPort(

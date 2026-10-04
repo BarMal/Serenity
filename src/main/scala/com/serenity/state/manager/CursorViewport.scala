@@ -21,21 +21,31 @@ object CursorViewport:
         val beforeBuffer = before.persisted.buffers.get(bufferId)
         val headMoved =
           beforeBuffer.exists(_.editing.cursorPositions.headOption != buffer.editing.cursorPositions.headOption)
-        if !headMoved then state
-        else
-          buffer.editing.cursorPositions.headOption match
-            case Some(cursor) =>
-              val surfaceConfig    = state.persisted.config.surfaceConfig
-              val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
-              val placement =
-                if columnModeActive then adjustForCursorColumnMode(buffer, state, cursor, wrapCache)
-                else adjustForCursor(buffer, state, cursor, wrapCache)
-              val updatedBuffer = buffer.copy(viewport = placement)
-              state.copy(persisted =
-                state.persisted.copy(buffers = state.persisted.buffers + (bufferId -> updatedBuffer))
-              )
-            case None => state
+        if headMoved then placeCursor(state, buffer, wrapCache) else state
     }
+
+  /** Places every buffer an editor pane shows, for a change of pane geometry: a resize re-wraps the text, so the
+    * viewport placed against the old wrap no longer holds the cursor on its centred row.
+    */
+  def replaceShownCursors(state: AppState, wrapCache: WrappedLineCache = WrappedLineCache.Uncached): AppState =
+    val shown = state.persisted.layout.editorPanes.values.flatMap(_.bufferId).toSet
+    state.persisted.buffers.foldLeft(state) {
+      case (current, (bufferId, buffer)) =>
+        if shown.contains(bufferId) then placeCursor(current, buffer, wrapCache) else current
+    }
+
+  private def placeCursor(state: AppState, buffer: Buffer, wrapCache: WrappedLineCache): AppState =
+    buffer.editing.cursorPositions.headOption match
+      case Some(cursor) =>
+        val surfaceConfig    = state.persisted.config.surfaceConfig
+        val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
+        val placement =
+          if columnModeActive then adjustForCursorColumnMode(buffer, state, cursor, wrapCache)
+          else adjustForCursor(buffer, state, cursor, wrapCache)
+        state.copy(persisted =
+          state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> buffer.copy(viewport = placement)))
+        )
+      case None => state
 
   def adjustForCursor(
     buffer: Buffer,

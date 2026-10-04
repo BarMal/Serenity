@@ -4,7 +4,7 @@ import com.serenity.keystroke.events.{Event, InsertChar, ResizeEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId, Focus, SurfaceContent, replacedWhere}
 import com.serenity.state.reducers.{AppEventReducer, ReducerResult, SystemEventReducer}
-import com.serenity.ui.layout.SplitAxis
+import com.serenity.ui.layout.{SplitAxis, WrappedLineCache}
 import com.serenity.ui.presets.UiPreset
 
 /** The event pipeline's own steps around a reducer, as pure functions, so each lands in the event's single validated
@@ -12,9 +12,14 @@ import com.serenity.ui.presets.UiPreset
   */
 private[manager] object EventPipelineTransitions:
 
-  def resized(event: ResizeEvent, state: AppState): ReducerResult =
-    val reduced = SystemEventReducer.reduce(event, state)
-    reduced.copy(state = AppEventReducer.rebalancePanes(reduced.state, reduced.state.focusedBufferId))
+  def resized(
+    event: ResizeEvent,
+    state: AppState,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  ): ReducerResult =
+    val reduced  = SystemEventReducer.reduce(event, state)
+    val balanced = AppEventReducer.rebalancePanes(reduced.state, reduced.state.focusedBufferId)
+    reduced.copy(state = CursorViewport.replaceShownCursors(balanced, wrapCache))
 
   // Resolving the frozen cursor anchor to a screen position needs LayoutEngine, which reducers may not touch
   // (ArchitectureChecks.ForbiddenImports), so the pipeline does it right after the reduce that may have set it.
