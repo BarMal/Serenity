@@ -239,10 +239,10 @@ object RendererGutter:
   private def useMeasuredLineNumberFont(buffer: Buffer, context: RenderContext): Boolean =
     buffer.typographyRole != TypographyRole.Code && context.fontForBuffer(buffer) != context.codeFont
 
-  private final case class MeasuredLineNumberFont(font: Font, fontRenderContext: FontRenderContext):
+  final private case class MeasuredLineNumberFont(font: Font, fontRenderContext: FontRenderContext):
     def widthPx(text: String): Float = TextAlignment.measureTextWidth(text, font, fontRenderContext)
 
-  private final case class MeasuredLineNumberRun(xPx: Float, widthPx: Float, text: String)
+  final private case class MeasuredLineNumberRun(xPx: Float, widthPx: Float, text: String)
 
   /** The buffer's own font for a measured counter, shrunk just enough for the widest visible number to fit the digit
     * cells (#1979). `LayoutEngine` sizes the counter by digit count on the code-font cell grid it shares with the TUI,
