@@ -23,21 +23,28 @@ final private[manager] case class LspDocumentSyncPort(
 final private[manager] class LspDocumentSync(port: LspDocumentSyncPort):
   import port.*
 
+  /** A prose workspace never announces its documents to a server (see `announceOpenedToLsp`), so its edits have no one
+    * to sync to and must not pay for collecting the whole text on every keystroke (#1834).
+    */
   def enqueueChangedLspDocuments(previousState: AppState): IO[Unit] =
     currentState.flatMap { currentState =>
-      candidateLspBufferIds(previousState, currentState).toList.traverse_ { bufferId =>
-        currentState.persisted.buffers.get(bufferId) match
-          case None => IO.unit
-          case Some(buffer) =>
-            val changedContent =
-              previousState.persisted.buffers.get(bufferId).exists(_.document.content != buffer.document.content)
-            (for
-              path       <- buffer.document.filePath
-              languageId <- buffer.document.language
-              if changedContent
-            yield AppEffect.LspQueue(
-              LspQueueEffect.DocumentChanged(path.toUri.toString, languageId, buffer.document.content.collect())
-            ))
-              .fold(IO.unit)(interpretEffect)
-      }
+      if !currentState.editingContext.hasCodeTooling then IO.unit
+      else enqueueChanged(previousState, currentState)
+    }
+
+  private def enqueueChanged(previousState: AppState, currentState: AppState): IO[Unit] =
+    candidateLspBufferIds(previousState, currentState).toList.traverse_ { bufferId =>
+      currentState.persisted.buffers.get(bufferId) match
+        case None => IO.unit
+        case Some(buffer) =>
+          val changedContent =
+            previousState.persisted.buffers.get(bufferId).exists(_.document.content != buffer.document.content)
+          (for
+            path       <- buffer.document.filePath
+            languageId <- buffer.document.language
+            if changedContent
+          yield AppEffect.LspQueue(
+            LspQueueEffect.DocumentChanged(path.toUri.toString, languageId, buffer.document.content.collect())
+          ))
+            .fold(IO.unit)(interpretEffect)
     }

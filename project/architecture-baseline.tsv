@@ -62,9 +62,12 @@
 # paydown: PerformanceBenchmarks.scala grew by 1 line (764 -> 765): `main` opens a second, laptop-sized window for
 # LaptopFrameBenchmarks' present benchmark (#1798 follow-up). The benchmarks themselves live in their own file and the
 # name-prefix selection in BenchmarkRunner.runMatching; what's left here is the one extra resource acquisition.
+# paydown: LspManager.scala grew by 2 lines (673 -> 675): FileChanged with no server reports
+# LspSemanticTokensUnavailable only on a document's first sight instead of on every edit (#1834), which needs the
+# text-mirror update to report whether the document was already known, plus a one-line note on why.
 main/scala/com/serenity/app/RuntimeDisplayState.scala	forbidden mutable state at line 78: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/io/SwingFileDialog.scala	forbidden mutable state at line 35: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
-main/scala/com/serenity/lsp/LspManager.scala	file length	673
+main/scala/com/serenity/lsp/LspManager.scala	file length	675
 main/scala/com/serenity/rope/Rope.scala	file length	631
 main/scala/com/serenity/spellcheck/HunspellFreeCompoundMatcher.scala	forbidden mutable state at line 106: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/RendererCursorOverlay.scala	forbidden mutable state at line 270: a top-level object may not hold AtomicReference/AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)	1

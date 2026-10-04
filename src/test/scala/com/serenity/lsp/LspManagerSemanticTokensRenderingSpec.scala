@@ -268,3 +268,35 @@ class LspManagerSemanticTokensRenderingSpec extends AnyFlatSpec with Matchers:
 
     runVirtual(program)
   }
+
+  it should "emit LspSemanticTokensUnavailable once per document, not again on each edit, while no server exists" in {
+    val unopenedUri = "file:///workspace/Bar.scala"
+    val program = for
+      effects <- Queue.unbounded[IO, Option[LspEffect]]
+      events  <- Ref.of[IO, List[Event]](Nil)
+      provider = new LspManager.ConnectionProvider:
+        def resolve(
+          languageId: LanguageId,
+          fileUri: DocumentUri,
+          onDiagnostics: (DocumentUri, List[com.serenity.lsp.model.Diagnostic]) => IO[Unit]
+        ): IO[Option[LspManager.ResolvedConnection]] = IO.pure(None)
+      _ <- effects.offer(Some(LspEffect.FileOpened(uri, LanguageId.Scala, "object Foo")))
+      _ <- effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo1", 2)))
+      _ <- effects.offer(Some(LspEffect.FileChanged(uri, LanguageId.Scala, "object Foo12", 3)))
+      _ <- effects.offer(Some(LspEffect.FileChanged(unopenedUri, LanguageId.Scala, "object Bar1", 2)))
+      _ <- effects.offer(Some(LspEffect.FileChanged(unopenedUri, LanguageId.Scala, "object Bar12", 3)))
+      _ <- effects.offer(None)
+      _ <- LspManager.runWithProvider(
+        Stream.fromQueueNoneTerminated(effects),
+        event => events.update(_ :+ event),
+        logger,
+        provider
+      )
+      seen <- events.get
+    yield seen shouldBe List(
+      LspEvent.LspSemanticTokensUnavailable(uri),
+      LspEvent.LspSemanticTokensUnavailable(unopenedUri)
+    )
+
+    runVirtual(program)
+  }
