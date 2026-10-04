@@ -1,5 +1,8 @@
 package com.serenity.ui.renderer
 
+import java.awt.Font
+import java.awt.font.FontRenderContext
+
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -148,7 +151,8 @@ object RendererGutter:
             renderPlan.layoutContract.rightLineNumberRowSlots(snapshot.map(_.visualLines.length).getOrElse(0))
           else renderPlan.layoutContract.lineNumberRowSlots(snapshot.map(_.visualLines.length).getOrElse(0))
         snapshot.toList.flatMap { snapshot =>
-          val rowMetrics = RendererPaneContent.textRowMetrics(lineRect, context, snapshot)
+          val rowMetrics   = RendererPaneContent.textRowMetrics(lineRect, context, snapshot)
+          val measuredFont = measuredLineNumberFont(buffer, snapshot, context, lineRect)
           rowSlots.toList.flatMap {
             case SurfaceContentRowSlot(SurfaceContentRowKind.Item(index), rowY) if rowMetrics.lineFits(index) =>
               snapshot.visualLines.lift(index).toList.flatMap { visualLine =>
@@ -159,7 +163,7 @@ object RendererGutter:
                   lineRect,
                   surface,
                   pane,
-                  buffer,
+                  measuredFont,
                   snapshot,
                   rowMetrics.lineTopPx(index),
                   visualLine,
@@ -179,7 +183,7 @@ object RendererGutter:
     lineRect: LayoutRect,
     surface: RenderSurface,
     pane: EditorPane,
-    buffer: Option[Buffer],
+    measuredFont: Option[MeasuredLineNumberFont],
     snapshot: TextLayoutSnapshot,
     lineTopPx: Int,
     visualLine: TextVisualLine,
@@ -196,27 +200,33 @@ object RendererGutter:
         // one, so digits always sit against the panel edge and the divider always against the content.
         if dividerOnLeft then " " + rightAligned else rightAligned + " "
       else continuationIndicatorText(lineRect.width)
-    val measuredLineNumberFont = buffer.filter(useMeasuredLineNumberFont(_, context))
-    if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) && measuredLineNumberFont.nonEmpty then
-      measuredLineNumberFont.foreach(buf => surface.text.setFont(context.fontForBuffer(buf)))
-      // Issue #1542 (pixel-precision follow-up): nudge the digits a sub-cell amount away from the pane's outer edge --
-      // right for a left counter, left for a right one -- the same `SurfaceTextInset` value every other piece of framed
-      // chrome already insets by. Purely a paint-time refinement, entirely inside the whole cell `lineRect` already
-      // reserves: `LayoutEngine`'s cell grid (hit-testing, drag-resize, the TUI's own rendering) is untouched.
-      val insetPx       = SurfaceTextInset.px(state.persisted.config)
-      val marginInsetPx = if dividerOnLeft then -insetPx else insetPx
-      surface.pixels.withPixelTranslation(marginInsetPx, 0.0) {
-        surface.text.drawRunPx(
-          context.cellMetrics.toPixelX(lineRect.x).toFloat,
-          lineTopPx,
-          lineRect.width * context.cellMetrics.charWidth.toFloat,
-          snapshot.lineHeightPx,
-          snapshot.ascentPx,
-          lineNumberText
-        )
-      }
-      surface.text.setFont(context.uiFont)
-    else surface.putString(lineRect.x, rowY, lineNumberText)
+    measuredFont match
+      case Some(measured) =>
+        surface.text.setFont(measured.font)
+        // Issue #1542 (pixel-precision follow-up): nudge the digits a sub-cell amount away from the pane's outer edge
+        // -- right for a left counter, left for a right one -- the same `SurfaceTextInset` value every other piece of
+        // framed chrome already insets by. Purely a paint-time refinement: `LayoutEngine`'s cell grid (hit-testing,
+        // drag-resize, the TUI's own rendering) is untouched.
+        val insetPx       = SurfaceTextInset.px(state.persisted.config)
+        val marginInsetPx = if dividerOnLeft then -insetPx else insetPx
+        val run =
+          if rendersLineNumber then
+            val digits        = (visualLine.bufferLine + 1).toString
+            val digitsWidthPx = measured.widthPx(digits)
+            val startPx       = measuredDigitsStartPx(digitsWidthPx, lineRect, context, insetPx, dividerOnLeft)
+            // The run is drawn inside the inset translation, so its anchor is given in the untranslated frame.
+            MeasuredLineNumberRun((startPx - marginInsetPx).toFloat, digitsWidthPx, digits)
+          else
+            MeasuredLineNumberRun(
+              context.cellMetrics.toPixelX(lineRect.x).toFloat,
+              lineRect.width * context.cellMetrics.charWidth.toFloat,
+              lineNumberText
+            )
+        surface.pixels.withPixelTranslation(marginInsetPx, 0.0) {
+          surface.text.drawRunPx(run.xPx, lineTopPx, run.widthPx, snapshot.lineHeightPx, snapshot.ascentPx, run.text)
+        }
+        surface.text.setFont(context.uiFont)
+      case None => surface.putString(lineRect.x, rowY, lineNumberText)
     if rendersLineNumber then
       for
         bufferId   <- pane.bufferId.toList
@@ -228,6 +238,51 @@ object RendererGutter:
 
   private def useMeasuredLineNumberFont(buffer: Buffer, context: RenderContext): Boolean =
     buffer.typographyRole != TypographyRole.Code && context.fontForBuffer(buffer) != context.codeFont
+
+  private final case class MeasuredLineNumberFont(font: Font, fontRenderContext: FontRenderContext):
+    def widthPx(text: String): Float = TextAlignment.measureTextWidth(text, font, fontRenderContext)
+
+  private final case class MeasuredLineNumberRun(xPx: Float, widthPx: Float, text: String)
+
+  /** The buffer's own font for a measured counter, shrunk just enough for the widest visible number to fit the digit
+    * cells (#1979). `LayoutEngine` sizes the counter by digit count on the code-font cell grid it shares with the TUI,
+    * and a proportional font's digits can be wider than a code cell -- unshrunk, the last digit runs under the divider.
+    */
+  private def measuredLineNumberFont(
+    buffer: Option[Buffer],
+    snapshot: TextLayoutSnapshot,
+    context: RenderContext,
+    lineRect: LayoutRect
+  ): Option[MeasuredLineNumberFont] =
+    for
+      measuredBuffer    <- buffer.filter(useMeasuredLineNumberFont(_, context))
+      fontRenderContext <- context.surface.text.fontRenderContext
+      if RendererPaneSetup.usesMeasuredDrawing(snapshot, context)
+    yield
+      val bufferFont  = MeasuredLineNumberFont(context.fontForBuffer(measuredBuffer), fontRenderContext)
+      val widestPx    = snapshot.visualLines.map(line => bufferFont.widthPx((line.bufferLine + 1).toString)).maxOption
+      val digitAreaPx = math.max(1, lineRect.width - 1) * context.cellMetrics.charWidth.toFloat
+      widestPx.filter(_ > digitAreaPx) match
+        case Some(overflowingPx) =>
+          bufferFont.copy(font = bufferFont.font.deriveFont(bufferFont.font.getSize2D * digitAreaPx / overflowingPx))
+        case None => bufferFont
+
+  /** Where a measured number's digits start on screen: flush against the divider for a left counter, and against the
+    * outer edge less the margin inset for a right one, but never across the divider -- it is painted after the digits
+    * and would cover any that overran it (#1979).
+    */
+  private def measuredDigitsStartPx(
+    digitsWidthPx: Float,
+    lineRect: LayoutRect,
+    context: RenderContext,
+    insetPx: Double,
+    dividerOnLeft: Boolean
+  ): Double =
+    val cellWidthPx = context.cellMetrics.charWidth.toDouble
+    val rectLeftPx  = context.cellMetrics.toPixelX(lineRect.x).toDouble
+    val rectRightPx = context.cellMetrics.toPixelX(lineRect.right).toDouble
+    if dividerOnLeft then math.max(rectRightPx - insetPx - digitsWidthPx, rectLeftPx + cellWidthPx)
+    else rectRightPx - cellWidthPx - digitsWidthPx
 
   private def shouldRenderLineNumberForVisualLine(visualLine: TextVisualLine, wordWrapEnabled: Boolean): Boolean =
     !wordWrapEnabled || visualLine.startColumn == 0
