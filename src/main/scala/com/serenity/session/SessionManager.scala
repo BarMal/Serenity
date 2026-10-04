@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.*
 import java.util.UUID
 
+import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters.*
 import scala.util.Try
 
@@ -546,8 +547,13 @@ object SessionManager:
       saveInterval: Option[scala.concurrent.duration.FiniteDuration] = None,
       persistUnsavedBuffers: Boolean = false,
       maxSessionHistory: Int = 5,
-      maxUndoDepth: Int = 1000
+      maxUndoDepth: Int = 1000,
+      saveOnEditIdle: Option[scala.concurrent.duration.FiniteDuration] = None
   )
+
+  object SessionPolicy:
+    /** The GUI and TUI policy: unsaved edits reach the session a second after typing pauses, so a crash keeps them. */
+    val interactive: SessionPolicy = SessionPolicy(saveOnEditIdle = Some(1.second))
 
 /** Session persistence integration for StateManager.
   */
@@ -564,6 +570,7 @@ class SessionPersistence(
       case SessionSaveTrigger.AppClose   => policy.saveOnAppClose
       case SessionSaveTrigger.Manual     => true
       case SessionSaveTrigger.Interval   => policy.saveInterval.isDefined
+      case SessionSaveTrigger.EditIdle   => policy.saveOnEditIdle.isDefined
 
     if shouldSave then sessionManager.saveSession(appState)
     else IO.unit
@@ -583,3 +590,4 @@ enum SessionSaveTrigger:
   case AppClose
   case Manual
   case Interval
+  case EditIdle

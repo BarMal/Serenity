@@ -161,7 +161,9 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
       }
       .getOrElse(fail("Expected comment lens"))
     lens.draft shouldBe "Comment"
-    lens.target shouldBe Some(DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Comment"))
+    lens.target shouldBe Some(
+      CommentLensTarget(0, DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Comment"))
+    )
 
     stateManager
       .updateState { state =>
@@ -221,7 +223,9 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
       .collect { case UiSurface(_, SurfaceContent.CommentLens(lens), _, _) => lens }
       .getOrElse(fail("Expected the comment lens to open after previous-document-comment"))
     previousLens.draft shouldBe "Revise opening"
-    previousLens.target shouldBe Some(DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Revise opening"))
+    previousLens.target shouldBe Some(
+      CommentLensTarget(0, DocumentComment(CursorPosition(0, 0), CursorPosition(0, 7), "Revise opening"))
+    )
 
     executeCommandThroughRunner(stateManager, "next-document-comment", "next-document-comment")
 
@@ -231,7 +235,9 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
       .collect { case UiSurface(_, SurfaceContent.CommentLens(lens), _, _) => lens }
       .getOrElse(fail("Expected the comment lens to open after next-document-comment"))
     nextLens.draft shouldBe "Tighten this"
-    nextLens.target shouldBe Some(DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this"))
+    nextLens.target shouldBe Some(
+      CommentLensTarget(1, DocumentComment(CursorPosition(1, 0), CursorPosition(1, 6), "Tighten this"))
+    )
   }
 
   it should "add custom authored document comments and update existing comments at the cursor" in {

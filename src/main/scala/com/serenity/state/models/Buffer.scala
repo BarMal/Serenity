@@ -8,7 +8,7 @@ import com.serenity.io.{DocumentFormat, DocumentRevision, FileType}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{RichTextDocument, RichTextFidelity, RichTextStyle}
 import com.serenity.rope.Rope
-import com.serenity.text.LineEnding
+import com.serenity.text.{LineEnding, TextEncoding}
 
 opaque type BufferId = Int
 
@@ -78,6 +78,10 @@ final case class Document(
     // Recorded on load so saving can reproduce the file it came from; `Rope` has already normalised the content
     // itself to LF by the time it reaches here.
     lineEnding: LineEnding = LineEnding.default,
+    // Recorded on load for the same reason as `lineEnding` (#1627); a BOM is stripped from `content` and only
+    // `hasBom` remembers it.
+    encoding: TextEncoding = TextEncoding.default,
+    hasBom: Boolean = false,
     // Captured from `DocumentStorageProvider` on every successful open and save (#1623), so a later save or
     // focus-in re-check can tell whether the on-disk file changed underneath this buffer since it was last
     // read, rather than only detecting a stale write after silently overwriting external changes.

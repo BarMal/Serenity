@@ -88,7 +88,7 @@ final private[manager] class StateManagerEffectHandlers(
     new StateManagerKeybindingEffects(currentState, commitAppValidated, configEffects.updateConfig)
 
   private val richTextEffects =
-    new StateManagerRichTextEffects(currentState, commitState, interpretEffect, showPeek)
+    new StateManagerRichTextEffects(currentState, updateModelValidated, interpretEffect, showPeek)
 
   private val projectLspEffects = new StateManagerProjectLspEffects(
     lspQueue,

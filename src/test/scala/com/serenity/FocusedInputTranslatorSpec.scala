@@ -366,7 +366,7 @@ class FocusedInputTranslatorSpec extends AnyFlatSpec with Matchers:
                 RenderedComment(0, "Review this", "Review this"),
                 "Review this",
                 11,
-                Some(DocumentComment(CursorPosition(0, 0), CursorPosition(0, 6), "Review this"))
+                Some(CommentLensTarget(0, DocumentComment(CursorPosition(0, 0), CursorPosition(0, 6), "Review this")))
               )
             ),
             SurfacePresentation.Floating(None, SurfacePlacement.AboveCursor)

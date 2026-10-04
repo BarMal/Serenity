@@ -176,9 +176,21 @@ final private[manager] class StateManagerFilePersistence(
             .flatMap(expected => fileManager.saveBuffer(withRevision(save.snapshot, expected)))
         case SaveKind.SaveAs => fileManager.saveBuffer(save.snapshot, save.target)
     write.attempt.flatMap {
-      case Right(saved) => writes.wrote(path, saved.document.revision).as(EffectResult.FileSaved(save, saved))
-      case Left(error)  => IO.pure(EffectResult.FileSaveFailed(save, error))
+      case Right(saved) =>
+        warnIfEncodingChanged(save, saved) >>
+          writes.wrote(path, saved.document.revision).as(EffectResult.FileSaved(save, saved))
+      case Left(error) => IO.pure(EffectResult.FileSaveFailed(save, error))
     }
+
+  /** `FileManager` writes UTF-8 when the buffer can no longer be encoded as its file was (#1627). */
+  private def warnIfEncodingChanged(save: FileSave, saved: Buffer): IO[Unit] =
+    val opened = save.snapshot.document.encoding
+    IO.whenA(saved.document.encoding != opened)(
+      logger.warn(
+        s"[FILE] ${save.target} holds characters ${opened.configKey} cannot represent; saved as " +
+          s"${saved.document.encoding.configKey} instead"
+      )
+    )
 
   private def commitSave(result: EffectResult, onFailure: Throwable => IO[Unit]): IO[Unit] =
     result match

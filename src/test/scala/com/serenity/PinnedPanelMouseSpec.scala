@@ -352,7 +352,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
       case SurfaceContent.CommentLens(lens) => lens
       case other                            => fail(s"Expected CommentLens content, got $other")
     lensState.draft shouldBe "Tighten this"
-    lensState.target shouldBe Some(comment)
+    lensState.target shouldBe Some(CommentLensTarget(0, comment))
     updated.persisted.focus shouldBe Focus.Surface(lensSurface.id)
   }
 

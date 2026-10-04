@@ -2,9 +2,11 @@ package com.serenity.state.manager
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.richtext.{InlineMark, RichTextDocument, RichTextPosition, RichTextRange}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.undo.{HistoryEntry, UndoState}
+import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -160,6 +162,65 @@ class StateManagerReplaceWorkflowSpec extends AnyFlatSpec with Matchers:
     h.workflow.submitReplaceWorkflowEffect(surfaceId).unsafeRunSync()
 
     h.undo.undoStack should have size 1
+  }
+
+  private val boldSat = RichTextRange(RichTextPosition(0, 4), RichTextPosition(0, 7))
+
+  /** A replace prompt over "cat sat, cat ran" with "sat" in bold, its rich text in sync with the buffer. */
+  private def formattedStateWith(action: ReplaceWorkflowAction): AppState =
+    val workflow = ReplaceWorkflowState(findText = "cat", replacementText = "tiger", selectedAction = action)
+    val state    = stateWith(workflow, "cat sat, cat ran")
+    val buffer   = state.persisted.buffers(bufferId)
+    val bold     = RichTextDocument.fromPlainText("cat sat, cat ran").toggleMark(boldSat, InlineMark.Bold)
+
+    val formatted =
+      buffer.copy(richText = buffer.richText.withSyncedDocument(Some(bold), buffer.document.contentVersion))
+    state.copy(persisted = state.persisted.copy(buffers = Map(bufferId -> formatted)))
+
+  private def boldText(buffer: Buffer): List[String] =
+    buffer.richText.richTextDocument.toList
+      .flatMap(_.paragraphs.flatMap(_.runs))
+      .filter(_.style.marks.contains(InlineMark.Bold))
+      .map(_.text)
+
+  private def assertFormattingCarried(before: AppState, after: AppState, expectedText: String): Assertion =
+    val previous = before.persisted.buffers(bufferId)
+    val replaced = after.persisted.buffers(bufferId)
+    replaced.document.content.collect() shouldBe expectedText
+    replaced.document.contentVersion should be > previous.document.contentVersion
+    replaced.richTextInSync shouldBe true
+    replaced.richText.richTextDocument.map(_.plainText) shouldBe Some(expectedText)
+    boldText(replaced) shouldBe List("sat")
+
+  "ReplaceAll in a formatted buffer" should "carry its formatting onto the new text and advance contentVersion" in {
+    val before = formattedStateWith(ReplaceWorkflowAction.ReplaceAll)
+    val h      = harness(before)
+
+    h.workflow.submitReplaceWorkflowEffect(surfaceId).unsafeRunSync()
+
+    assertFormattingCarried(before, h.currentState, "tiger sat, tiger ran")
+  }
+
+  it should "restore the original formatting, in sync, when undone" in {
+    val before = formattedStateWith(ReplaceWorkflowAction.ReplaceAll)
+    val h      = harness(before)
+
+    h.workflow.submitReplaceWorkflowEffect(surfaceId).unsafeRunSync()
+    val undone = UndoRecording.undone(h.modelRef.get.unsafeRunSync()).getOrElse(fail("expected an undo step"))
+
+    val restored = undone.app.persisted.buffers(bufferId)
+    restored.document.content.collect() shouldBe "cat sat, cat ran"
+    restored.richText.richTextDocument shouldBe before.persisted.buffers(bufferId).richText.richTextDocument
+    restored.richTextInSync shouldBe true
+  }
+
+  "ReplaceNext in a formatted buffer" should "carry its formatting onto the new text and advance contentVersion" in {
+    val before = formattedStateWith(ReplaceWorkflowAction.ReplaceNext)
+    val h      = harness(before)
+
+    h.workflow.submitReplaceWorkflowEffect(surfaceId).unsafeRunSync()
+
+    assertFormattingCarried(before, h.currentState, "tiger sat, cat ran")
   }
 
   "submitReplaceWorkflowEffect when the surface isn't a replace-workflow surface" should "do nothing" in {

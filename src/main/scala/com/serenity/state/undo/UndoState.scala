@@ -5,8 +5,13 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEditSupport
 import com.serenity.ui.layout.{Layout, WorkspaceNodeId, WorkspaceTree}
 
+/** A buffer as it stood before an undoable change. `richText` travels with `content` because a rich-text document only
+  * means anything against the text it was built for (#1935); `richTextInSync` records whether it did match that text.
+  */
 final case class BufferSnapshot(
     content: Rope,
+    richText: RichTextState,
+    richTextInSync: Boolean,
     editing: EditingState,
     viewport: Viewport,
     findState: Option[FindState],
@@ -14,17 +19,22 @@ final case class BufferSnapshot(
 ):
 
   def restoreInto(buffer: Buffer): Buffer =
+    // Bumped even when `content` is the current text: whatever was stamped against the current version (the rich
+    // text, an outline) was stamped against the state being undone, not this one.
+    val restoredDocument = buffer.document.withContent(content).copy(isNewEmpty = isNewEmpty)
     buffer.copy(
-      document = buffer.document.copy(
-        content = content,
-        isDirty = true,
-        isNewEmpty = isNewEmpty
-      ),
+      document = restoredDocument,
       editing = editing,
       viewport = viewport,
       findState = findState,
       annotations =
-        EditorEditSupport.adjustAnnotationsAcrossReplacement(buffer.annotations, buffer.document.content, content)
+        EditorEditSupport.adjustAnnotationsAcrossReplacement(buffer.annotations, buffer.document.content, content),
+      // Fidelity describes the file as last read or written, not this edit state: undoing past a save must not bring
+      // back a lossy-import warning that save already settled.
+      richText = richText.copy(
+        richTextFidelity = buffer.richText.richTextFidelity,
+        richTextSyncedVersion = Option.when(richTextInSync)(restoredDocument.contentVersion)
+      )
     )
 
 object BufferSnapshot:
@@ -32,6 +42,8 @@ object BufferSnapshot:
   def fromBuffer(buffer: Buffer): BufferSnapshot =
     BufferSnapshot(
       content = buffer.document.content,
+      richText = buffer.richText,
+      richTextInSync = buffer.richTextInSync,
       editing = buffer.editing,
       viewport = buffer.viewport,
       findState = buffer.findState,

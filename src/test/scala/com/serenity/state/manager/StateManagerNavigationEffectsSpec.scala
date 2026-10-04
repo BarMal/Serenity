@@ -256,7 +256,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.nav.interpretComments(CommentsIntent.ToggleCommentLens).unsafeRunSync()
 
     fixture.currentState.runtime.uiSurfaces.map(_.content) match
-      case List(SurfaceContent.CommentLens(lensState)) => lensState.target shouldBe Some(comment)
+      case List(SurfaceContent.CommentLens(lensState)) => lensState.target shouldBe Some(CommentLensTarget(0, comment))
       case other                                       => fail(s"Expected a single CommentLens surface, got $other")
   }
 
@@ -335,7 +335,7 @@ class StateManagerNavigationEffectsSpec extends AnyFlatSpec with Matchers:
     val after = fixture.currentState
     after.activeCursorPosition shouldBe Some(CursorPosition(2, 0))
     after.runtime.uiSurfaces.map(_.content) match
-      case List(SurfaceContent.CommentLens(lensState)) => lensState.target shouldBe Some(second)
+      case List(SurfaceContent.CommentLens(lensState)) => lensState.target shouldBe Some(CommentLensTarget(1, second))
       case other                                       => fail(s"Expected a single CommentLens surface, got $other")
   }
 

@@ -10,6 +10,7 @@ import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.AppEffect
+import com.serenity.state.undo.UndoState
 import com.serenity.testkit.EditingStateFixtures
 import com.serenity.ui.layout.{PeekContent, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -27,14 +28,17 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
   private val paneId   = PaneId(0)
 
   final private class Harness(
-      val stateRef: Ref[IO, AppState],
+      val modelRef: Ref[IO, Model],
       val notices: Ref[IO, List[PeekContent]],
       val richText: StateManagerRichTextEffects
   ):
-    def currentBuffer: Buffer = stateRef.get.unsafeRunSync().persisted.buffers(bufferId)
+    def state: AppState       = modelRef.get.unsafeRunSync().app
+    def currentBuffer: Buffer = state.persisted.buffers(bufferId)
 
-  private def validatingCommit(stateRef: Ref[IO, AppState]): (AppState, AppState) => IO[Unit] =
-    (newState, fallbackState) => stateRef.set(AppStateValidation.validated(newState).getOrElse(fallbackState))
+  private def validatingUpdate(modelRef: Ref[IO, Model])(transition: Model => Option[Model]): IO[Unit] =
+    modelRef.update(model =>
+      transition(model).filter(next => AppStateValidation.validated(next.app).isRight).getOrElse(model)
+    )
 
   private val noEffectsExpected: AppEffect => IO[Unit] =
     effect => IO.raiseError(new IllegalStateException(s"unexpected effect $effect"))
@@ -53,14 +57,14 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
       ),
       runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
     )
-    val stateRef = Ref.of[IO, AppState](state).unsafeRunSync()
+    val modelRef = Ref.of[IO, Model](Model(state, UndoState())).unsafeRunSync()
     val notices  = Ref.of[IO, List[PeekContent]](Nil).unsafeRunSync()
-    new Harness(stateRef, notices, effectsOver(stateRef, notices))
+    new Harness(modelRef, notices, effectsOver(modelRef, notices))
 
-  private def effectsOver(stateRef: Ref[IO, AppState], notices: Ref[IO, List[PeekContent]]) =
+  private def effectsOver(modelRef: Ref[IO, Model], notices: Ref[IO, List[PeekContent]]) =
     new StateManagerRichTextEffects(
-      stateRef.get,
-      validatingCommit(stateRef),
+      modelRef.get.map(_.app),
+      validatingUpdate(modelRef),
       noEffectsExpected,
       (notice, _) => notices.update(_ :+ notice)
     )
@@ -129,24 +133,27 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
       AppState.initial.persisted
         .copy(layout = AppState.initial.persisted.layout.copy(editorPanes = Map.empty, activeEditorPaneId = None))
     )
-    val stateRef = Ref.of[IO, AppState](noActivePane).unsafeRunSync()
-    val richText = effectsOver(stateRef, Ref.of[IO, List[PeekContent]](Nil).unsafeRunSync())
+    val modelRef = Ref.of[IO, Model](Model(noActivePane, UndoState())).unsafeRunSync()
+    val richText = effectsOver(modelRef, Ref.of[IO, List[PeekContent]](Nil).unsafeRunSync())
 
     richText.interpret(RichTextIntent.ToggleRichTextMark(InlineMark.Bold)).unsafeRunSync()
 
-    stateRef.get.unsafeRunSync() shouldBe noActivePane
+    modelRef.get.unsafeRunSync().app shouldBe noActivePane
   }
 
   it should "commit through validation, keeping the prior state when the result is invalid" in {
     val fixture = harness(bufferWithSelection("hello world", selection(0, 0, 0, 5)))
-    val invalid = fixture.stateRef
-      .updateAndGet(state => state.copy(persisted = state.persisted.copy(bufferOrder = List(bufferId, bufferId))))
+    val invalid = fixture.modelRef
+      .updateAndGet(model =>
+        model.copy(app = model.app.copy(persisted = model.app.persisted.copy(bufferOrder = List(bufferId, bufferId))))
+      )
       .unsafeRunSync()
+      .app
     AppStateValidation.validationErrors(invalid) should not be empty
 
     fixture.richText.interpret(RichTextIntent.ToggleRichTextMark(InlineMark.Bold)).unsafeRunSync()
 
-    fixture.stateRef.get.unsafeRunSync() shouldBe invalid
+    fixture.state shouldBe invalid
   }
 
   it should "apply a font family to the selected range" in {
@@ -238,7 +245,7 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
 
     fixture.richText.interpret(RichTextIntent.ToggleRichTextMark(InlineMark.Bold)).unsafeRunSync()
 
-    fixture.stateRef.get.unsafeRunSync().runtime.uiSurfaces.map(_.content) should matchPattern {
+    fixture.state.runtime.uiSurfaces.map(_.content) should matchPattern {
       case List(SurfaceContent.ModalWorkflow(Modal.Confirm(_))) =>
     }
     fixture.currentBuffer.richText.richTextDocument shouldBe None
@@ -252,8 +259,22 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
     fixture.richText.interpret(RichTextIntent.ToggleRichTextMark(InlineMark.Bold)).unsafeRunSync()
 
     fixture.currentBuffer shouldBe code
-    fixture.stateRef.get.unsafeRunSync().runtime.uiSurfaces shouldBe empty
+    fixture.state.runtime.uiSurfaces shouldBe empty
     fixture.notices.get.unsafeRunSync() shouldBe List(
       PeekContent.QuickInfo("Formatting isn't available in code files.")
     )
+  }
+
+  it should "record a formatting command as an undo step that restores the previous formatting" in {
+    val fixture = harness(bufferWithSelection("hello world", selection(0, 0, 0, 5)))
+    fixture.richText.interpret(RichTextIntent.ToggleRichTextMark(InlineMark.Italic)).unsafeRunSync()
+    val italic = fixture.currentBuffer
+
+    fixture.richText.interpret(RichTextIntent.ToggleRichTextMark(InlineMark.Bold)).unsafeRunSync()
+    val undone = UndoRecording.undone(fixture.modelRef.get.unsafeRunSync()).getOrElse(fail("expected an undo step"))
+
+    val restored = undone.app.persisted.buffers(bufferId)
+    restored.richText.richTextDocument shouldBe italic.richText.richTextDocument
+    restored.richTextInSync shouldBe true
+    undone.undo.redoStack should have size 1
   }
