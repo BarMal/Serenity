@@ -33,28 +33,29 @@ object StartupWarmUp:
   final case class Plan(rounds: Int, paragraphs: Int)
 
   object Plan:
-    val default: Plan = Plan(rounds = 12, paragraphs = 60)
+    val default: Plan = Plan(rounds = 8, paragraphs = 60)
 
   enum Outcome:
     case Completed(steps: Int)
     case Interrupted
 
-  /** Typing a word and taking it back, then the moves a writer makes most. */
-  val round: List[Event] =
-    "lorem ".toList.map(InsertChar(_)) ++ List.fill(6)(DeleteBackward) ++ List(
-      MoveDown,
-      MoveDown,
-      MoveWordRight,
-      MoveRight,
-      NewLine,
-      DeleteBackward,
-      MoveUp,
-      MoveUp,
-      MoveWordLeft,
-      MoveLeft,
-      PageDown,
-      PageUp
-    )
+  /** What a writer does between words, aimed at the paths the caches cannot absorb: every letter typed changes its
+    * paragraph's text, so the paragraph is measured, wrapped and indexed again, and the caret follows. The letters are
+    * new each round (seeded by `index`) and each stretch is taken back, so the document stays prose of the same shape
+    * while no round repeats text an earlier one left in the wrap cache.
+    */
+  def round(index: Int): List[Event] =
+    val random = new scala.util.Random(RoundSeed + index)
+    def typedThenTakenBack(count: Int): List[Event] =
+      List.fill(count)(InsertChar(if random.nextInt(6) == 0 then ' ' else ('a' + random.nextInt(26)).toChar)) ++
+        List.fill(count)(DeleteBackward)
+    val dive = 6 + 3 * (index % 4)
+    List.fill(2 + index % 4)(MoveWordRight) ++
+      typedThenTakenBack(10) ++
+      List(NewLine) ++ typedThenTakenBack(3) ++ List(DeleteBackward) ++
+      List(MoveToEnd) ++ typedThenTakenBack(6) ++
+      List.fill(dive)(MoveDown) ++ typedThenTakenBack(5) ++ List.fill(dive)(MoveUp) ++
+      List(MoveWordRight, MoveRight, MoveWordLeft, MoveLeft, PageDown, PageUp, MoveToStart)
 
   def pendingInputInterruptsWarmUp(input: PendingInput): Boolean =
     input match
@@ -66,6 +67,8 @@ object StartupWarmUp:
     event match
       case _: MouseMove | _: LspEvent | _: ResizeEvent => false
       case _                                           => true
+
+  private val RoundSeed = 1812L
 
   private val Words = Vector(
     "lorem",
@@ -98,12 +101,22 @@ object StartupWarmUp:
     "laboris"
   )
 
-  /** Paragraphs of 40-120 words separated by blank lines, the same every time. */
+  /** Prose paragraphs separated by blank lines, the same every time: mostly 40-120 words, with a very short one, a
+    * paragraph of over a thousand characters and one of several thousand, since how long a paragraph is decides what a
+    * keystroke in it costs.
+    */
   def document(paragraphs: Int): String =
     val random = new scala.util.Random(1798L)
+    def wordCount(paragraph: Int): Int =
+      val ordinary = 40 + random.nextInt(81)
+      paragraph match
+        case 1 => 230
+        case 3 => 12
+        case 6 => 450
+        case _ => ordinary
     List
-      .fill(paragraphs) {
-        Vector.fill(40 + random.nextInt(81))(Words(random.nextInt(Words.size))).mkString(" ").capitalize + "."
+      .tabulate(paragraphs) { paragraph =>
+        Vector.fill(wordCount(paragraph))(Words(random.nextInt(Words.size))).mkString(" ").capitalize + "."
       }
       .mkString("\n\n")
 
@@ -166,7 +179,7 @@ object StartupWarmUp:
             case Some(_) => IO.pure(Outcome.Interrupted)
             case None    => step(event) >> remaining(rest, steps + 1)
           }
-    remaining(List.fill(plan.rounds)(round).flatten, 0)
+    remaining(List.range(0, plan.rounds).flatMap(round), 0)
 
   private def throwawayEditor(config: AppConfig, theme: Theme, viewport: ViewportSize, content: String)(using
     Balance

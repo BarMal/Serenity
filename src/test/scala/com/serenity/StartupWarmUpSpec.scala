@@ -18,12 +18,13 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, AppStateValidation, Damage, Focus}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
+import org.scalatest.concurrent.Eventually
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.{NoOpFactory, NoOpLogger}
 
-class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
+class StartupWarmUpSpec extends AnyFlatSpec with Matchers with Eventually:
 
   given Balance           = Balance.default
   given LoggerFactory[IO] = NoOpFactory[IO]
@@ -49,7 +50,7 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
     val document = StartupWarmUp.document(paragraphs = 5)
     document shouldBe StartupWarmUp.document(paragraphs = 5)
     document.split("\n\n", -1).length shouldBe 5
-    document.split("\n\n").foreach(paragraph => paragraph.split(' ').length should be >= 40)
+    document.split("\n\n").foreach(paragraph => paragraph.split(' ').length should be >= 12)
   }
 
   "StartupWarmUp.seeded" should "put the document in the focused pane of a state that still validates" in {
@@ -88,7 +89,7 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
     yield (outcome, result)
 
     val (outcome, drawn) = program.unsafeRunTimed(60.seconds).getOrElse(fail("the warm-up did not finish"))
-    val steps            = smallPlan.rounds * StartupWarmUp.round.size
+    val steps            = List.range(0, smallPlan.rounds).map(StartupWarmUp.round(_).size).sum
 
     outcome shouldBe StartupWarmUp.Outcome.Completed(steps)
     drawn.full.size shouldBe steps
@@ -120,14 +121,16 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
         smallPlan
       )
       modelAfter <- user.getModel
-    yield (modelBefore, modelAfter, filesBefore, sessionFiles(sessionRoot), before, warmUpDirectories)
+    yield (modelBefore, modelAfter, filesBefore, sessionFiles(sessionRoot), before)
 
-    val (modelBefore, modelAfter, filesBefore, filesAfter, directoriesBefore, directoriesAfter) =
+    val (modelBefore, modelAfter, filesBefore, filesAfter, directoriesBefore) =
       program.unsafeRunTimed(60.seconds).getOrElse(fail("the warm-up did not finish"))
 
     modelAfter shouldBe modelBefore
     filesAfter shouldBe filesBefore
-    directoriesAfter shouldBe directoriesBefore
+    // Suites run in parallel and AppRuntimeStartupWarmUpSpec starts warm-ups of its own, whose directories are in the
+    // temp directory until their app quits. Ours would stay, so what must settle is anything this run left behind.
+    eventually(timeout(30.seconds))((warmUpDirectories -- directoriesBefore) shouldBe empty)
   }
 
   // The input lands from inside the third frame, so the loop itself must see it before a fourth step starts: waiting on

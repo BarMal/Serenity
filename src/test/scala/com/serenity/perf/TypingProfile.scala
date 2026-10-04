@@ -1,28 +1,38 @@
 package com.serenity.perf
 
 import java.lang.management.ManagementFactory
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.LockSupport
+import javax.swing.JPanel
 
 import scala.annotation.tailrec
+import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.app.StartupWarmUp
+import cats.effect.{Deferred, IO}
+import com.serenity.app.{OffscreenWarmUpFrames, RuntimeDisplayState, StartupWarmUp}
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{Event, InsertChar, MoveDown, MoveUp, PageDown, PageUp}
 import com.serenity.perf.TypingStatistics.{Bucket, BucketSummary, Summary}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
+import com.serenity.ui.layout.ViewportSize
+import com.serenity.ui.theme.Theme
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.noop.NoOpLogger
 
 /** Replays one per-keystroke scenario against a live `StateManager` for long enough to profile it, outside the CI perf
   * gate. Run it under JFR as `bench/README.md` describes.
   *
   * {{{
-  * TypingProfile <scenario> <seconds | keys> [--warmup-s=10] [--pace-ms=100] [--warm-ms=0]
+  * TypingProfile <scenario> <seconds | keys> [--warmup-s=10] [--pace-ms=100] [--warm-ms=0] [--real-warm-ms=0]
   * }}}
   *
   * `typing_random`, `typing_long_paragraph`, `move_down_up` and `page_down_up` warm up for `--warmup-s`, then run for
   * the given seconds. `cold_typing` types the given number of random letters in a fresh JVM with no warm-up, pausing
   * `--pace-ms` between keys outside the timed region; `--warm-ms` first replays the startup warm-up on a separate
-  * `StateManager` for that long.
+  * `StateManager` for that long. `--real-warm-ms` instead runs the app's own `StartupWarmUp.run`, drawing into an
+  * offscreen Java2D image (so it needs a display), and stops it after that long as the user's first input would.
   */
 object TypingProfile:
   given Balance = Balance.default
@@ -30,10 +40,10 @@ object TypingProfile:
   private val LongParagraphChars = 4_000
   private val DriftWindow        = 400
 
-  final private case class Options(warmupSeconds: Int, paceMs: Long, warmMs: Long)
+  final private case class Options(warmupSeconds: Int, paceMs: Long, warmMs: Long, realWarmMs: Long)
 
   private object Options:
-    private val defaults = Options(warmupSeconds = 10, paceMs = 100, warmMs = 0)
+    private val defaults = Options(warmupSeconds = 10, paceMs = 100, warmMs = 0, realWarmMs = 0)
 
     def parse(flags: List[String]): Either[String, Options] =
       flags.foldLeft[Either[String, Options]](Right(defaults)) { (parsed, flag) =>
@@ -45,6 +55,8 @@ object TypingProfile:
               value.toLongOption.toRight(s"bad $flag").map(v => options.copy(paceMs = v))
             case "warm-ms" :: value :: Nil =>
               value.toLongOption.toRight(s"bad $flag").map(v => options.copy(warmMs = v))
+            case "real-warm-ms" :: value :: Nil =>
+              value.toLongOption.toRight(s"bad $flag").map(v => options.copy(realWarmMs = v))
             case _ => Left(s"unknown flag $flag")
         )
       }
@@ -54,7 +66,7 @@ object TypingProfile:
 
   private val Usage =
     "usage: TypingProfile <typing_random|typing_long_paragraph|cold_typing|move_down_up|page_down_up> " +
-      "<seconds|keys> [--warmup-s=10] [--pace-ms=100] [--warm-ms=0]"
+      "<seconds|keys> [--warmup-s=10] [--pace-ms=100] [--warm-ms=0] [--real-warm-ms=0]"
 
   def main(args: Array[String]): Unit =
     val outcome = for
@@ -137,6 +149,7 @@ object TypingProfile:
   private def coldTyping(keys: Int, options: Options): Unit =
     val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager()
     if options.warmMs > 0 then println(s"warm burst rounds=${warmBurst(options.warmMs)}")
+    if options.realWarmMs > 0 then println(realWarmUp(options.realWarmMs))
     val paceNanos = options.paceMs * 1_000_000L
     val samplesMs = BenchmarkFixtures
       .randomLetters(seed = 42L)
@@ -166,7 +179,29 @@ object TypingProfile:
     val (other, _) =
       LaptopFrameBenchmarks.proseStateManager(paragraphs = StartupWarmUp.Plan.default.paragraphs, cursorLine = 2)
     val deadline = System.nanoTime + milliseconds * 1_000_000L
-    untilNanoTime(deadline).map(_ => StartupWarmUp.round.foreach(apply(other, _))).size
+    untilNanoTime(deadline).zipWithIndex.map((_, index) => StartupWarmUp.round(index).foreach(apply(other, _))).size
+
+  /** The app's own warm-up pipeline, interrupted `milliseconds` after it starts like a first keystroke would. */
+  private def realWarmUp(milliseconds: Long): String =
+    given Logger[IO] = NoOpLogger[IO]
+    val config       = AppConfig.default
+    val program = for
+      display    <- RuntimeDisplayState.create(config.editorConfig.fontConfig)
+      firstInput <- Deferred[IO, Unit]
+      canvas = new JPanel
+      _ <- IO(canvas.setSize(1280, 800))
+      framesDrawn = new AtomicInteger(0)
+      frames = OffscreenWarmUpFrames
+        .forCanvas(canvas, () => ViewportSize(120, 40), () => display.snapshot)
+        .map(offscreen =>
+          offscreen.copy(full =
+            (state, damage, caches) => IO(framesDrawn.incrementAndGet()) >> offscreen.full(state, damage, caches)
+          )
+        )
+      _       <- (IO.sleep(milliseconds.millis) >> firstInput.complete(())).start
+      outcome <- StartupWarmUp.run(config, Theme.dark, ViewportSize(120, 40), frames, firstInput).timed
+    yield s"real warm-up ${outcome._2} after ${outcome._1.toMillis}ms, steps=${framesDrawn.get}"
+    program.unsafeRunSync()
 
   @tailrec
   private def parkUntil(deadline: Long): Unit =
