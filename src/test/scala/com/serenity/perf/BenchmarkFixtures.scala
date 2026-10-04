@@ -78,51 +78,62 @@ private[perf] object BenchmarkFixtures:
       .map(i => s"Line $i with enough text to exercise wrapping, comments, and cursor movement.")
       .mkString("\n")
 
+  private val loremWords = Vector(
+    "lorem",
+    "ipsum",
+    "dolor",
+    "sit",
+    "amet",
+    "consectetur",
+    "adipiscing",
+    "elit",
+    "sed",
+    "do",
+    "eiusmod",
+    "tempor",
+    "incididunt",
+    "ut",
+    "labore",
+    "et",
+    "dolore",
+    "magna",
+    "aliqua",
+    "enim",
+    "ad",
+    "minim",
+    "veniam",
+    "quis",
+    "nostrud",
+    "exercitation",
+    "ullamco",
+    "laboris",
+    "nisi",
+    "aliquip",
+    "ex",
+    "ea",
+    "commodo",
+    "consequat"
+  )
+
   /** Deterministic lorem ipsum: paragraphs of 40-120 words separated by blank lines, like prose a writer keeps. */
   def loremIpsumProse(paragraphs: Int): String =
-    val words = Vector(
-      "lorem",
-      "ipsum",
-      "dolor",
-      "sit",
-      "amet",
-      "consectetur",
-      "adipiscing",
-      "elit",
-      "sed",
-      "do",
-      "eiusmod",
-      "tempor",
-      "incididunt",
-      "ut",
-      "labore",
-      "et",
-      "dolore",
-      "magna",
-      "aliqua",
-      "enim",
-      "ad",
-      "minim",
-      "veniam",
-      "quis",
-      "nostrud",
-      "exercitation",
-      "ullamco",
-      "laboris",
-      "nisi",
-      "aliquip",
-      "ex",
-      "ea",
-      "commodo",
-      "consequat"
-    )
     val random = new scala.util.Random(1798L)
     (1 to paragraphs)
       .map { _ =>
-        val sentence = Vector.fill(40 + random.nextInt(81))(words(random.nextInt(words.size))).mkString(" ")
+        val sentence = Vector.fill(40 + random.nextInt(81))(loremWords(random.nextInt(loremWords.size))).mkString(" ")
         sentence.capitalize + "."
       }
       .mkString("\n\n")
+
+  /** One paragraph of exactly `chars` characters: the lorem words in order, single-spaced, never ending on a space. */
+  def longParagraph(chars: Int): String =
+    val text = LazyList.continually(loremWords).flatten.flatMap(word => ' ' +: word).drop(1).take(chars).mkString
+    if text.endsWith(" ") then text.dropRight(1) + "." else text
+
+  /** Seeded lowercase letters with about one in six a space, so typed text never repeats the way a..z cycling does. */
+  def randomLetters(seed: Long): Iterator[Char] =
+    val random = new scala.util.Random(seed)
+    Iterator.continually(if random.nextInt(6) == 0 then ' ' else ('a' + random.nextInt(26)).toChar)
 
   def largeFindDocument(matches: Int): String =
     (1 to matches).map(index => s"needle $index with replacement candidate").mkString("\n")
