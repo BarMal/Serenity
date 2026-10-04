@@ -188,28 +188,44 @@ final private[manager] class StateManagerEventPipeline(
     given org.typelevel.log4cats.Logger[cats.effect.IO] = logger
     def eventLabel                                      = s"event.${event.getClass.getSimpleName}"
     Trace.timed(eventLabel) {
-      cats.effect.IO.monotonic.product(modelCommit.currentState).flatMap { (now, rawState) =>
-        // Not written back on its own: every handler builds on `prevState`, so the normalised focus and any typing
-        // activity land in the event's own commit (and `prepareCommit` normalises every commit anyway).
-        val prevState = EventPipelineTransitions.typingObserved(event, now.toNanos)(
-          EventPipelineTransitions.commandRunnerFocusNormalized(rawState)
-        )
-        val handleEvent: cats.effect.IO[Unit] =
-          if prevState.hasBlockingModal && !allowedWhileBlockingModal(event) then cats.effect.IO.unit
-          else Trace.timed(s"$eventLabel.dispatch")(dispatchEvent(event, prevState))
-        handleEvent >>
-          Trace.timed(s"$eventLabel.enqueueChangedLspDocuments")(
-            lspDocumentSync.enqueueChangedLspDocuments(prevState)
-          ) >>
-          Trace.timed(s"$eventLabel.scheduleMarkdownPreviewCommits")(scheduleMarkdownPreviewCommits(prevState))
+      cats.effect.IO.monotonic.product(modelCommit.model).flatMap { (now, model) =>
+        typedRunStep(event, model, now.toNanos, joining = false) match
+          case Some(typed) => commitTypedRun(model, typed)
+          case None        => dispatchGeneral(event, eventLabel, now.toNanos, model.app)
       }
     }
 
-  /** The model dispatching `event` would commit, uncentred, when it is a character typed into an editor pane with
-    * nothing else to do but its undo bookkeeping; `None` sends it through [[applyEventOnDispatcher]] instead. Folded
-    * over a run of keys and committed once by [[commitTypedRun]] (#1985).
+  private def dispatchGeneral(event: Event, eventLabel: String, nowNanos: Long, rawState: AppState)(using
+    org.typelevel.log4cats.Logger[cats.effect.IO]
+  ): cats.effect.IO[Unit] =
+    // Not written back on its own: every handler builds on `prevState`, so the normalised focus and any typing
+    // activity land in the event's own commit (and `prepareCommit` normalises every commit anyway).
+    val prevState = EventPipelineTransitions.typingObserved(event, nowNanos)(
+      EventPipelineTransitions.commandRunnerFocusNormalized(rawState)
+    )
+    val handleEvent: cats.effect.IO[Unit] =
+      if prevState.hasBlockingModal && !allowedWhileBlockingModal(event) then cats.effect.IO.unit
+      else Trace.timed(s"$eventLabel.dispatch")(dispatchEvent(event, prevState))
+    handleEvent >>
+      Trace.timed(s"$eventLabel.enqueueChangedLspDocuments")(
+        lspDocumentSync.enqueueChangedLspDocuments(prevState)
+      ) >>
+      Trace.timed(s"$eventLabel.scheduleMarkdownPreviewCommits")(scheduleMarkdownPreviewCommits(prevState))
+
+  /** The model a character typed into an editor pane commits, before centring, when its only effect is undo
+    * bookkeeping; `None` for any other event, which takes the general dispatch. Every typed key goes through here,
+    * whether dispatched alone or folded into a batch's run, and [[commitTypedRun]] centres and commits it (#1985).
+    *
+    * A key `joining` a run is refused if it keeps an undo snapshot -- a new group or a non-groupable step -- since that
+    * snapshot would hold the run's uncentred viewport; the run settles first and the key starts the next one.
     */
-  private[manager] def typedRunStep(event: Event, model: Model, nowNanos: Long): Option[Model] =
+  private[manager] def typedRunStep(event: Event, model: Model, nowNanos: Long, joining: Boolean): Option[Model] =
+    typedKeyModel(event, model, nowNanos).filterNot(typed => joining && keepsUndoSnapshot(model, typed))
+
+  private def keepsUndoSnapshot(before: Model, after: Model): Boolean =
+    (after.undo.undoStack ne before.undo.undoStack) || (after.undo.pendingGroup ne before.undo.pendingGroup)
+
+  private def typedKeyModel(event: Event, model: Model, nowNanos: Long): Option[Model] =
     event match
       case key: InsertChar =>
         val prevState = EventPipelineTransitions.typingObserved(event, nowNanos)(

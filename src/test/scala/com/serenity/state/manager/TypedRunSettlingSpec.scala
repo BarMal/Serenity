@@ -117,6 +117,12 @@ class TypedRunSettlingSpec extends AnyFlatSpec with Matchers:
     matchesPerKey(wrapped, mixed, after = List.fill(6)(Undo) ++ List.fill(4)(Redo) ++ List(Undo))
   }
 
+  it should "undo a smart-punctuation substitution made mid-run to the centred viewport per-key typing keeps" in {
+    val quoted = "he said \"so long\" -- then 'left' at once ".toList.map(InsertChar(_))
+    val slices = List(typed(40, 31L) ++ quoted ++ typed(40, 32L) ++ quoted, quoted ++ typed(25, 33L))
+    matchesPerKey(wrapped.withSmartPunctuation(true), slices, after = List.fill(12)(Undo) ++ List.fill(6)(Redo))
+  }
+
   it should "never let the model be read with the cursor off its centred row" in {
     val program = for
       (stateManager, bufferId) <- editor(wrapped)

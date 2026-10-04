@@ -243,7 +243,7 @@ private[manager] class StateManagerComposition(
       def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] =
         workflow.beginCloseAction(scope, state)
 
-  private val events =
+  private[manager] val events =
     new StateManagerEventPipeline(
       eventStatePort,
       eventEffectPort,
