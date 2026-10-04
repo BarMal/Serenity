@@ -1,10 +1,16 @@
 package com.serenity.state.manager
 
 import com.serenity.keystroke.events.InsertChar
+import java.awt.image.BufferedImage
+
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent}
 import com.serenity.state.models.*
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.renderer.{Java2DRenderSurface, RenderContext, RendererPaneSetup}
 import com.serenity.ui.layout.{
+  CellMetrics,
+  LayoutEngine,
   ViewportSize,
   VisualRowCounts,
   WorkspaceNode,
@@ -126,4 +132,55 @@ class CursorCentringStabilitySpec extends AnyFlatSpec with Matchers:
       columns    <- List(60, 80, 100, 120)
       typewriter <- List(false, true)
     do typeMidParagraph(loremDocument, line = 150 * 2, columns, typewriter, keystrokes = 120)
+  }
+
+  /** The row, counted from the top of the pane, the renderer's own snapshot of `state` puts the cursor on. */
+  private def paintedCursorRow(state: AppState, cache: WrappedLineCache): Option[Int] =
+    val config      = state.persisted.config.editorConfig.fontConfig
+    val codeFont    = FontLoader.previewCodeFont(config)
+    val metrics     = CellMetrics.fromFont(codeFont)
+    val size        = state.runtime.viewportSize.getOrElse(fail("no viewport size"))
+    val layout      = LayoutEngine.calculateLayoutWithUI(state, size)
+    val contentRect = LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId).contentRect
+    val image       = new BufferedImage(size.width * metrics.charWidth, size.height * metrics.lineHeight, BufferedImage.TYPE_INT_ARGB)
+    val surface     = new Java2DRenderSurface(image, metrics, codeFont, _ => ())
+    val caches      = com.serenity.state.manager.RenderCaches.create()
+    val context = RenderContext(
+      surface,
+      layout,
+      true,
+      None,
+      codeFont,
+      FontLoader.previewTextFont(config),
+      FontLoader.previewUiFont(config),
+      metrics,
+      metrics,
+      caches = caches
+    )
+    val b        = buffer(state)
+    val snapshot = RendererPaneSetup.snapshotForBuffer(b, contentRect, state, context)
+    snapshot.navigationGeometry.visualRowIndexFor(b.editing.cursorPositions.head)
+
+  "The painted cursor row" should "stay on the centred row while typing mid-paragraph in the bench lorem document" in {
+    val text       = loremDocument
+    val line       = 300
+    val lineLength = text.split("\n", -1)(line).length
+    val cache      = WrappedLineCache.bounded()
+    val raw        = stateWith(text, CursorPosition(line, lineLength / 2), 100, typewriter = false)
+    val size       = raw.runtime.viewportSize.getOrElse(fail("no viewport size"))
+    val layout     = LayoutEngine.calculateLayoutWithUI(raw, size)
+    val rect       = LayoutEngine.calculateEditorPaneLayouts(raw, layout)(paneId).contentRect
+    val sized      = buffer(raw).copy(viewport = LayoutEngine.updateBufferViewportDimensions(buffer(raw), rect, true))
+    val start      = raw.copy(persisted = raw.persisted.copy(buffers = Map(bufferId -> sized)))
+    val settled = start.copy(persisted =
+      start.persisted.copy(buffers = start.persisted.buffers + (bufferId -> sized.copy(viewport = coldViewport(start))))
+    )
+    val typed       = "the quick brown fox jumps over the lazy dog "
+    val centredRow  = paintedCursorRow(settled, cache)
+    val rows = (0 until 150).scanLeft((settled, centredRow)) {
+      case ((state, _), index) =>
+        val next = typeChar(cache, typed(index % typed.length))(state)
+        (next, paintedCursorRow(next, cache))
+    }
+    rows.map(_._2).distinct shouldBe List(centredRow)
   }
