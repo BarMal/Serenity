@@ -10,77 +10,38 @@ final case class AppState(
     runtime: Runtime = Runtime()
 ):
 
-  // Per-buffer, not a whole-workspace wrapper map: a fresh `AppState` snapshot is produced on essentially every edit
-  // (#1456), so a caller reaching for one buffer's index must not pay an O(buffers) map-build to get there. Only the
-  // buffers actually placed in a pane are indexed eagerly, below, at construction -- the render path
-  // (`RendererPaneSetup.prepareEditorPaneRenderPlan`) revisits exactly those buffers every frame until the next edit
-  // produces a new `AppState` (and so a freshly recomputed map), which is the same amortization the old cache gave a
-  // paned buffer after its first touch. `annotationIndex`/`semanticTokensAvailability` still answer for any buffer,
-  // paned or not -- one outside a pane is simply computed on demand, uncached, since nothing re-renders it every frame
-  // to make caching worth its keep.
-  //
-  // `markdownFenceIndex` is NOT precomputed here, unlike the other two: nothing in the render path calls it per frame
-  // (`RendererPaneSetup` never reads it), so there is no amortized cost to recoup -- only a whole-buffer `getLine` scan
-  // (`MarkdownBlockLens.fenceRangeIndex`) that every paned buffer would otherwise pay at construction regardless of
-  // language, on every edit. It is computed on demand, exactly like a non-paned buffer's index.
-  //
-  // Plain immutable fields, not `AtomicReference` (#1677): a mutable field -- even one instance-scoped and never
-  // observed to leak across instances -- still turns `AppState` into a value nothing can safely treat as pure data:
-  // `copy`, `equals`/`hashCode`, and every place that reasons about two `AppState`s as independent, referentially
-  // transparent values (not least running two of them in the same JVM in tests) has to reason around it instead.
-  // Eagerly computing just the paned buffers' indexes at construction removes the field without reintroducing the
-  // O(buffers) rebuild #1456 fixed, since construction cost here scales with the pane count, not the buffer count.
+  // The paned buffers' annotation and semantic-token indexes are read by the renderer every frame. They are derived
+  // values (#1864): `withBufferIndexesRefreshed` brings their memos up to date once per commit, recomputing only those
+  // whose inputs changed, and every copy made afterwards reads them for free. A memo whose inputs have since changed is
+  // never served -- that buffer's index is computed on demand instead, as for a buffer outside every pane.
   private def panedBufferIds: Set[BufferId] =
     persisted.layout.editorPanes.values.flatMap(_.bufferId).toSet
 
-  private val annotationIndexByPanedBuffer: Map[BufferId, AnnotationLineIndex] =
-    panedBufferIds.flatMap(id => persisted.buffers.get(id).map(buffer => id -> computeAnnotationIndex(buffer))).toMap
+  private def indexSource(buffer: Buffer): BufferIndexes.Source =
+    BufferIndexes.Source(buffer, runtime.languageService)
 
-  private val semanticTokensAvailabilityByPanedBuffer: Map[BufferId, SemanticTokensAvailability] =
-    panedBufferIds
-      .flatMap(id => persisted.buffers.get(id).map(buffer => id -> computeSemanticTokensAvailability(buffer)))
-      .toMap
+  def withBufferIndexesRefreshed: AppState =
+    val sources = panedBufferIds.flatMap(id => persisted.buffers.get(id).map(buffer => id -> indexSource(buffer))).toMap
+    val memos   = runtime.bufferIndexMemos.refreshed(sources)
+    if memos eq runtime.bufferIndexMemos then this else copy(runtime = runtime.copy(bufferIndexMemos = memos))
 
-  /** `bufferId`'s annotation index -- precomputed if `bufferId` is placed in a pane (`annotationIndexByPanedBuffer`),
-    * computed fresh on demand otherwise.
-    */
   def annotationIndex(bufferId: BufferId): Option[AnnotationLineIndex] =
     persisted.buffers.get(bufferId).map { buffer =>
-      annotationIndexByPanedBuffer.getOrElse(bufferId, computeAnnotationIndex(buffer))
+      BufferIndexes.annotations.valueFor(runtime.bufferIndexMemos.annotations.get(bufferId), indexSource(buffer))
     }
 
-  private def computeAnnotationIndex(buffer: Buffer): AnnotationLineIndex =
-    val diagnostics =
-      runtime.languageService.diagnosticsState.diagnostics
-        .getOrElse(com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer), Nil)
-    AnnotationLineIndex(
-      buffer.annotations.documentComments.toVector,
-      diagnostics.groupMap(_.range.start.line)(identity)
-    )
-
-  /** `bufferId`'s semantic-tokens status -- precomputed if `bufferId` is placed in a pane
-    * (`semanticTokensAvailabilityByPanedBuffer`), computed fresh on demand otherwise. See
-    * [[SemanticTokensAvailability]] for what each case means and how the renderer treats it: `Pending` (no entry in
+  /** See [[SemanticTokensAvailability]] for what each case means and how the renderer treats it: `Pending` (no entry in
     * `runtime.languageService.semanticTokensState` at all yet) is deliberately distinct from `Unavailable` (confirmed
     * via `unavailableUris`) -- a request still in flight must not render the same muted style as a confirmed absence
     * (issue #859/#1177 rendering-slice review finding).
     */
   def semanticTokensAvailability(bufferId: BufferId): Option[SemanticTokensAvailability] =
     persisted.buffers.get(bufferId).map { buffer =>
-      semanticTokensAvailabilityByPanedBuffer.getOrElse(bufferId, computeSemanticTokensAvailability(buffer))
+      BufferIndexes.semanticTokens.valueFor(runtime.bufferIndexMemos.semanticTokens.get(bufferId), indexSource(buffer))
     }
 
-  private def computeSemanticTokensAvailability(buffer: Buffer): SemanticTokensAvailability =
-    val uri = com.serenity.spellcheck.SpellChecker.diagnosticsUri(buffer)
-    runtime.languageService.semanticTokensState.byUri.get(uri) match
-      case Some(tokens) => SemanticTokensAvailability.Available(tokens.groupBy(_.line))
-      case None =>
-        if runtime.languageService.semanticTokensState.unavailableUris.contains(uri) then
-          SemanticTokensAvailability.Unavailable
-        else SemanticTokensAvailability.Pending
-
-  /** `bufferId`'s markdown fence-range index, computed fresh on demand -- see the class-level comment on why this one,
-    * unlike [[annotationIndex]] and [[semanticTokensAvailability]], is never precomputed for a paned buffer.
+  /** Computed on demand, unmemoised: nothing reads it per frame, and its input is the content, which every edit
+    * changes.
     */
   def markdownFenceIndex(bufferId: BufferId): Option[MarkdownBlockLens.FenceRangeIndex] =
     persisted.buffers.get(bufferId).map(computeMarkdownFenceIndex)
