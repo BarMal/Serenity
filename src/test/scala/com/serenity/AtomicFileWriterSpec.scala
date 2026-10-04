@@ -426,7 +426,7 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
 
       AtomicFileWriter.writeString(target, "after").unsafeRunSync()
 
-      Files.getAttribute(target, "unix:nlink") shouldBe 2
+      Files.getAttribute(target, "unix:nlink").toString shouldBe "2"
       Files.isSameFile(target, sibling) shouldBe true
       Files.readString(sibling) shouldBe "after"
       Files.list(directory).toArray.map(_.asInstanceOf[Path].getFileName.toString).sorted shouldBe
@@ -449,7 +449,7 @@ class AtomicFileWriterSpec extends AnyFlatSpec with Matchers:
 
       result.left.toOption.map(_.getCause.getMessage) shouldBe Some("disk full")
       Files.readString(sibling) shouldBe "before"
-      Files.getAttribute(target, "unix:nlink") shouldBe 2
+      Files.getAttribute(target, "unix:nlink").toString shouldBe "2"
       fileSystem.operations.map(_._1) shouldBe
         Vector("copyFile", "syncFile", "overwriteInPlace", "overwriteInPlace", "syncFile")
       Files.list(directory).toArray.map(_.asInstanceOf[Path].getFileName.toString).sorted shouldBe
