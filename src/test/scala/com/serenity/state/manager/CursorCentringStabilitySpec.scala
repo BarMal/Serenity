@@ -1,5 +1,7 @@
 package com.serenity.state.manager
 
+import scala.util.Random
+
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent}
@@ -15,10 +17,8 @@ import com.serenity.ui.layout.{
   WrappedLineCache
 }
 import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.matchers.{MatchResult, Matcher}
 import org.scalatest.matchers.should.Matchers
-
-import scala.util.Random
+import org.scalatest.matchers.{MatchResult, Matcher}
 
 /** Typing inside a long wrapped paragraph must leave the cursor on the same screen row -- the centred one -- after
   * every keystroke, and on the row a cold layout of the same state would centre it on (#1978).
