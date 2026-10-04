@@ -59,6 +59,9 @@ object CommentRendering:
     * none) -- rather than on every transition the cursor happens to still be inside one for. Otherwise dismissing the
     * lens with Escape (which closes it without moving the cursor out of the comment) would have this immediately reopen
     * the very lens Escape just closed.
+    *
+    * Closes on genuine exit likewise, or when the cursor moves: a read-only lens opened on a source-code comment by the
+    * `comment-lens` command leaves focus in the editor (#1674), and must survive the transition that opened it.
     */
   def syncFloatingLensWithCursor(state: AppState, previousState: AppState): AppState =
     if state.persisted.config.surfaceConfig.commentDisplayMode != CommentDisplayMode.Floating then state
@@ -69,8 +72,16 @@ object CommentRendering:
             case Some(_) if hasActiveSelection(state, paneId)                                      => state
             case Some(comment) if documentCommentAtCursor(previousState, paneId).contains(comment) => state
             case Some(_) => openLensAtCursor(state, CommentLensMode.ReadOnly)
-            case None    => dismissFloatingLens(state)
+            case None
+                if documentCommentAtCursor(previousState, paneId).isDefined ||
+                  cursorMoved(state, previousState, paneId) =>
+              dismissFloatingLens(state)
+            case None => state
         case _ => state
+
+  private def cursorMoved(state: AppState, previousState: AppState, paneId: PaneId): Boolean =
+    paneBuffer(state, paneId).map(_.editing.cursorPositions) !=
+      paneBuffer(previousState, paneId).map(_.editing.cursorPositions)
 
   private def paneBuffer(state: AppState, paneId: PaneId): Option[Buffer] =
     for
