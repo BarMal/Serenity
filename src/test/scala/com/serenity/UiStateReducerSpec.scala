@@ -63,7 +63,7 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val findShown    = ModalStateReducer.show(Modal.Find("", Nil, 0), state).state
+    val findShown    = ModalStateReducer.show(Modal.Find("", Vector.empty, 0), state).state
     val findSurface  = findShown.modalSurface.getOrElse(fail("Expected find modal surface"))
     val replaceShown = ModalStateReducer.show(Modal.ReplaceWorkflow(ReplaceWorkflowState()), state).state
     val replaceSurface =

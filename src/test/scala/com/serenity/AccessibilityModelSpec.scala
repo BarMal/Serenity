@@ -160,7 +160,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
           "No saved sessions"
         )
       ),
-      SurfaceId("find") -> Modal.Find("needle", List(FindResult(1, 2), FindResult(4, 5)), currentIndex = 1),
+      SurfaceId("find") -> Modal.Find("needle", Vector(FindResult(1, 2), FindResult(4, 5)), currentIndex = 1),
       SurfaceId("file") -> Modal.FileWorkflow(
         FileWorkflowState(
           mode = FileWorkflowMode.SaveAs,

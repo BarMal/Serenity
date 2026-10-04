@@ -73,7 +73,7 @@ private[reducers] object ModalFindReducer:
   def applyFindSearchResults(
     state: AppState,
     request: FindSearchRequest,
-    results: List[FindResult]
+    results: Vector[FindResult]
   ): AppState =
     val modalIsCurrent = state.runtime.uiSurfaces.exists {
       case UiSurface(id, SurfaceContent.ModalWorkflow(Modal.Find(query, _, _)), _, _) =>
@@ -86,8 +86,11 @@ private[reducers] object ModalFindReducer:
 
     if !modalIsCurrent || !contentIsCurrent || !activeBufferId(state).contains(request.bufferId) then state
     else
+      val firstAtOrAfterCaret = state.persisted.buffers
+        .get(request.bufferId)
+        .fold(0)(buffer => FindResultSet.indexAtOrAfter(results, buffer.editing.cursors.head.position))
       state.runtime.uiSurfaces.find(_.id == request.surfaceId) match
-        case Some(surface) => updateFindSelection(state, surface.id, request.query, results, requestedIndex = 0)
+        case Some(surface) => updateFindSelection(state, surface.id, request.query, results, firstAtOrAfterCaret)
         case None          => state
 
   private def findSelectionAt(state: AppState)(index: Int => Int): AppState =
@@ -104,7 +107,7 @@ private[reducers] object ModalFindReducer:
         case _                                                            => false)
     if currentQueryMatches then ReducerResult.noEffects(state)
     else
-      val queryState = updateModal(state, id, Modal.Find(query, Nil, 0))
+      val queryState = updateModal(state, id, Modal.Find(query, Vector.empty, 0))
       val clearedState = activeBufferId(queryState)
         .map(bufferId => clearFindState(queryState, bufferId))
         .getOrElse(queryState)
@@ -124,7 +127,7 @@ private[reducers] object ModalFindReducer:
     state: AppState,
     id: SurfaceId,
     query: String,
-    results: List[FindResult],
+    results: Vector[FindResult],
     requestedIndex: Int
   ): AppState =
     val resultSet = FindResultSet.normalized(query, results, requestedIndex)

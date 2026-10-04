@@ -450,7 +450,7 @@ class EditorLayoutContractSurfacesSpec extends AnyFlatSpec with Matchers:
     val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.default)
     val pinnedPanel = UiSurface(
       SurfaceId("find-panel"),
-      SurfaceContent.ModalWorkflow(Modal.Find("needle", List(FindResult(2, 4)), 0)),
+      SurfaceContent.ModalWorkflow(Modal.Find("needle", Vector(FindResult(2, 4)), 0)),
       SurfacePresentation.Docked
     )
     val quickInfo = UiSurface(

@@ -457,7 +457,7 @@ enum Modal:
 
   case Find(
       query: String,
-      results: List[FindResult],
+      results: Vector[FindResult],
       currentIndex: Int
   )
 

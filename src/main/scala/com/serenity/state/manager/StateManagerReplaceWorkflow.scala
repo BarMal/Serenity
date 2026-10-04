@@ -193,6 +193,7 @@ private[manager] object ReplaceWorkflowTransitions:
       .filter(offset => isWholeGraphemeMatch(content, offset, findText.length))
       .map(offset => content.offsetToCursorPosition(offset))
       .map(cursor => FindResult(cursor.line, cursor.column))
+      .toVector
     val resultSet = FindResultSet.normalized(findText, results, requestedIndex)
     Option.when(resultSet.results.nonEmpty)(FindState.fromResultSet(resultSet))
 

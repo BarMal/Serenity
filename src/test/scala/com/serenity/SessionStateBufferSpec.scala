@@ -136,7 +136,7 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
     val buffer = baseBuffer.copy(
       editing = EditingState(List(CursorPosition(3, 7))),
       viewport = Viewport(topLine = 2, leftColumn = 1, visibleLines = 24, visibleColumns = 80),
-      findState = Some(FindState("round", List(FindResult(0, 5), FindResult(5, 9)), 1)),
+      findState = Some(FindState("round", Vector(FindResult(0, 5), FindResult(5, 9)), 1)),
       annotations = baseBuffer.annotations.copy(
         bookmarks = List(CursorPosition(1, 2), CursorPosition(8, 0)),
         documentComments = List(
@@ -169,7 +169,7 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
     restoredBuffer.editing.cursorPositions.head shouldBe CursorPosition(3, 7)
     restoredBuffer.viewport.topLine shouldBe 2
     restoredBuffer.viewport.leftColumn shouldBe 1
-    restoredBuffer.findState shouldBe Some(FindState("round", List(FindResult(0, 5), FindResult(5, 9)), 1))
+    restoredBuffer.findState shouldBe Some(FindState("round", Vector(FindResult(0, 5), FindResult(5, 9)), 1))
     restoredBuffer.annotations.bookmarks shouldBe List(CursorPosition(1, 2), CursorPosition(8, 0))
     restoredBuffer.annotations.documentComments shouldBe List(
       DocumentComment(CursorPosition(2, 0), CursorPosition(2, 9), "Review this paragraph.")
@@ -329,10 +329,10 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
 
     val buffer1 = Buffer
       .fromFile(BufferId(40), file1, "apple banana cherry")
-      .copy(findState = Some(FindState("apple", List(FindResult(0, 0)), 0)))
+      .copy(findState = Some(FindState("apple", Vector(FindResult(0, 0)), 0)))
     val buffer2 = Buffer
       .fromFile(BufferId(41), file2, "dog elephant fox")
-      .copy(findState = Some(FindState("elephant", List(FindResult(1, 0)), 0)))
+      .copy(findState = Some(FindState("elephant", Vector(FindResult(1, 0)), 0)))
     val appState = AppState.initial.copy(
       persisted = AppState.initial.persisted.copy(
         buffers = Map(buffer1.id -> buffer1, buffer2.id -> buffer2),
@@ -360,6 +360,6 @@ class SessionStateBufferSpec extends AnyFlatSpec with Matchers:
 
     val restored = SessionState.toAppState(decoded.toOption.get, Theme.default)
 
-    restored.persisted.buffers(buffer1.id).findState shouldBe Some(FindState("apple", List(FindResult(0, 0)), 0))
-    restored.persisted.buffers(buffer2.id).findState shouldBe Some(FindState("elephant", List(FindResult(1, 0)), 0))
+    restored.persisted.buffers(buffer1.id).findState shouldBe Some(FindState("apple", Vector(FindResult(0, 0)), 0))
+    restored.persisted.buffers(buffer2.id).findState shouldBe Some(FindState("elephant", Vector(FindResult(1, 0)), 0))
   }

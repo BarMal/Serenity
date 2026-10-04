@@ -158,7 +158,7 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
   it should "retain the current floating presentation for modal workflows" in {
     val modal = UiSurface(
       SurfaceId("find"),
-      SurfaceContent.ModalWorkflow(Modal.Find("needle", Nil, 0)),
+      SurfaceContent.ModalWorkflow(Modal.Find("needle", Vector.empty, 0)),
       SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.BelowCursor)
     )
 

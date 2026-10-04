@@ -544,12 +544,13 @@ final private[manager] class StateManagerEffectHandlers(
       .flatMap { buffer =>
         buffer.findState match
           case Some(FindState(query, _, currentIndex)) if query.nonEmpty =>
-            val resultSet = FindResultSet.normalized(query, findMatches(buffer, query).map(toFindResult), currentIndex)
+            val resultSet =
+              FindResultSet.normalized(query, findMatches(buffer, query).map(toFindResult).toVector, currentIndex)
             Some(Modal.Find(resultSet.query, resultSet.results, resultSet.currentIndex))
           case _ =>
             None
       }
-      .getOrElse(Modal.Find("", Nil, 0))
+      .getOrElse(Modal.Find("", Vector.empty, 0))
 
   private def findMatches(buffer: Buffer, query: String): List[CursorPosition] =
     if query.isEmpty then Nil

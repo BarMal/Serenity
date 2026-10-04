@@ -306,7 +306,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
   it should "show a find modal seeded from the buffer's existing find state" in {
     val buffer = Buffer
       .fromString(bufferId, "cat dog cat")
-      .copy(findState = Some(FindState(query = "cat", results = Nil, currentIndex = 0)))
+      .copy(findState = Some(FindState(query = "cat", results = Vector.empty, currentIndex = 0)))
     val state   = AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
     val fixture = harness(state)
 

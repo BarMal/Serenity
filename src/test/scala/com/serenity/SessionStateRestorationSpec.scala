@@ -38,7 +38,7 @@ class SessionStateRestorationSpec extends AnyFlatSpec with Matchers:
       )
     )
     decoded.toOption.map(SessionFindState.toFindState) shouldBe Some(
-      FindState("legacy", List(FindResult(2, 0), FindResult(4, 0)), 1)
+      FindState("legacy", Vector(FindResult(2, 0), FindResult(4, 0)), 1)
     )
   }
 
