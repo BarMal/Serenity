@@ -484,6 +484,64 @@ class SwingInputHandlerSpec extends AnyFlatSpec with Matchers:
       Some(InsertChar('a'))
   }
 
+  private def typeTwoKeysAroundAMouseMove(component: JPanel): Unit =
+    val key    = component.getKeyListeners.head
+    val motion = component.getMouseMotionListeners.head
+    key.keyTyped(KeyEvent(component, KeyEvent.KEY_TYPED, System.currentTimeMillis(), 0, KeyEvent.VK_UNDEFINED, 'a'))
+    motion.mouseMoved(
+      java.awt.event.MouseEvent(component, java.awt.event.MouseEvent.MOUSE_MOVED, 2L, 0, 8, 16, 0, false)
+    )
+    key.keyPressed(
+      KeyEvent(
+        component,
+        KeyEvent.KEY_PRESSED,
+        System.currentTimeMillis(),
+        0,
+        KeyEvent.VK_LEFT,
+        KeyEvent.CHAR_UNDEFINED
+      )
+    )
+
+  it should "stamp each keystroke, and only keystrokes, onto the latency trace as it is queued and taken" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val timings   = com.serenity.diagnostics.FrameTimings()
+    timings.keyLatency.setEnabled(true)
+    val handler = new SwingInputHandler[IO, Event](
+      component,
+      router,
+      () => CellMetrics(8, 16, 13),
+      () => CellMetrics(8, 16, 13),
+      frameTimings = timings
+    )
+
+    typeTwoKeysAroundAMouseMove(component)
+    val batches = handler.inputBatches.take(1).compile.toList.unsafeRunTimed(StreamObservationTimeout)
+
+    batches.map(_.map(_.size)) shouldBe Some(List(3))
+    timings.keyLatency.pendingKeys.map(key => (key.seq, key.enqueuedAt.isDefined, key.dequeuedAt.isDefined)) shouldBe
+      Vector((0L, true, true), (1L, true, true))
+  }
+
+  it should "leave the latency trace empty while it is off" in {
+    val component = new JPanel()
+    val router    = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val timings   = com.serenity.diagnostics.FrameTimings()
+    val handler = new SwingInputHandler[IO, Event](
+      component,
+      router,
+      () => CellMetrics(8, 16, 13),
+      () => CellMetrics(8, 16, 13),
+      frameTimings = timings
+    )
+
+    typeTwoKeysAroundAMouseMove(component)
+    val batches = handler.inputBatches.take(1).compile.toList.unsafeRunTimed(StreamObservationTimeout)
+
+    batches.map(_.map(_.size)) shouldBe Some(List(3))
+    timings.keyLatency.pendingKeys shouldBe empty
+  }
+
   private def isWaitingForSwingInput(thread: Thread, trace: Array[StackTraceElement]): Boolean =
     thread.getState == Thread.State.WAITING &&
       trace.exists(frame => frame.getClassName.startsWith(classOf[SwingInputHandler[?, ?]].getName)) &&

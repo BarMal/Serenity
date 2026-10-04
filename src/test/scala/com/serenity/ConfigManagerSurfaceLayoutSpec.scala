@@ -205,6 +205,22 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
     ConfigManager.configToString(config) should include("ui.render.frame_timing = true")
   }
 
+  it should "default the keystroke latency trace to off, then load and write it" in {
+    AppConfig.default.surfaceConfig.latencyTraceEnabled shouldBe false
+
+    val configFile = Files.createTempFile("serenity-render-latency-trace-config", ".conf")
+    Files.writeString(
+      configFile,
+      """ui.render.latency_trace = true
+        |""".stripMargin
+    )
+
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    config.surfaceConfig.latencyTraceEnabled shouldBe true
+    ConfigManager.configToString(config) should include("ui.render.latency_trace = true")
+  }
+
   it should "default the startup warm-up to on, then load and write it" in {
     AppConfig.default.surfaceConfig.startupWarmUpEnabled shouldBe true
 

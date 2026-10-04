@@ -77,8 +77,10 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   private val pendingModifierTap = new AtomicReference[ModifierTapState](ModifierTapState.empty)
   private val wheelRemainder     = new AtomicReference[WheelScrollState](WheelScrollState.empty)
 
-  private def enqueueInput(info: KeyStrokeInfo): Unit =
+  private def enqueueKey(info: KeyStrokeInfo, e: KeyEvent): Unit =
+    frameTimings.keyLatency.keyReceived(e.getWhen)
     enqueue(QueuedKey(info))
+    frameTimings.keyLatency.keyEnqueued()
 
   private def enqueueMouse(event: Event): Unit =
     enqueue(QueuedMouse(event))
@@ -136,9 +138,9 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
 
   component.addKeyListener(new KeyAdapter:
     override def keyTyped(e: KeyEvent): Unit =
-      translateTyped(e).foreach(enqueueInput)
+      translateTyped(e).foreach(enqueueKey(_, e))
     override def keyPressed(e: KeyEvent): Unit =
-      translatePressed(e).foreach(enqueueInput)
+      translatePressed(e).foreach(enqueueKey(_, e))
       modifierOf(e).foreach((_, modifier) => enqueueCursorPeek(CursorPeekModifierPressed(modifier, e.getWhen)))
     override def keyReleased(e: KeyEvent): Unit =
       translateModifierReleased(e)
@@ -272,7 +274,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
         Stream
           .repeatEval(takeBatch)
           .takeThrough(batch => !batch.contains(QueuedShutdown))
-          .evalMap(batch => Sync[F].delay(Chunk.from(batch.flatMap(pendingInput))))
+          .evalMap(batch => Sync[F].delay { traceDequeuedKeys(batch); Chunk.from(batch.flatMap(pendingInput)) })
           .filter(_.nonEmpty)
     }
 
@@ -286,6 +288,13 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   private def drainAvailable(taken: Vector[QueuedInput]): Vector[QueuedInput] =
     if taken.lastOption.contains(QueuedShutdown) || !inputAvailable.tryAcquire() then taken
     else drainAvailable(taken :+ Option(inputQueue.poll()).getOrElse(QueuedShutdown))
+
+  private def traceDequeuedKeys(batch: Vector[QueuedInput]): Unit =
+    if frameTimings.keyLatency.isEnabled then
+      frameTimings.keyLatency.keysDequeued(batch.count {
+        case QueuedKey(_) => true
+        case _            => false
+      })
 
   private def pendingInput(input: QueuedInput): Option[PendingInput] =
     input match

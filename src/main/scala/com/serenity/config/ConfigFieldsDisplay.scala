@@ -50,6 +50,10 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.frameTimingEnabled,
       (config, value) => config.withFrameTiming(value)
     ),
+    field("ui.render.latency_trace", "render.latency_trace", "render_latency_trace")(boolean)(
+      _.surfaceConfig.latencyTraceEnabled,
+      (config, value) => config.withLatencyTrace(value)
+    ),
     field("startup.warm_up", "startup_warm_up")(boolean)(
       _.surfaceConfig.startupWarmUpEnabled,
       (config, value) => config.withStartupWarmUp(value)

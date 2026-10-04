@@ -87,3 +87,23 @@ class AppRuntimeBackgroundCommitSpec extends AnyFlatSpec with Matchers:
 
     program.unsafeRunSync() shouldBe ((true, false, false))
   }
+
+  "AppRuntime.followLatencyTraceSetting" should "publish the latency trace turning on or off, and nothing else" in {
+    val off = AppState.initial
+    val on  = AppState.initial(off.persisted.config.withLatencyTrace(true))
+
+    val program = for
+      enabled <- SignallingRef.of[IO, Boolean](false)
+      follow = AppRuntime.followLatencyTraceSetting(enabled)
+      _         <- follow(off, on)
+      turnedOn  <- enabled.get
+      _         <- enabled.set(false)
+      _         <- follow(on, on)
+      unchanged <- enabled.get
+      _         <- enabled.set(true)
+      _         <- follow(on, off)
+      turnedOff <- enabled.get
+    yield (turnedOn, unchanged, turnedOff)
+
+    program.unsafeRunSync() shouldBe ((true, false, false))
+  }

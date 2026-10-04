@@ -39,6 +39,25 @@ java -cp serenity-perf.jar com.serenity.perf.PerformanceBenchmarks laptop.
 
 Results land in `bench/bench-results/<label>-*.txt`. Keep the CPU governor and power source the same across labels (baseline A used `powersave` on AC), and leave the keyboard and mouse alone while it runs, since the input is injected into the focused window.
 
+## Per-keystroke latency trace
+
+`[FRAME]` reports each phase's percentiles over its own population (every frame, every input chain), so its p50s do not add up to `input-to-paint`. `ui.render.latency_trace = true` (default off) follows each keystroke instead and logs one line per painted keystroke, then a summary every 5 seconds:
+
+```
+[LATENCY] seq=41 when_to_edt=3 edt_to_enqueue=0.01 queue=0.21 dispatch=0.08 apply=4.90 damage=0.31 frame_wait=0.00 pacing_wait=7.95 pre_render=0.05 render=14.80 publish_to_paint=12.40 paint=2.90 total=43.61 ms
+[LATENCY] summary window=5.0s keys=48 unpainted=0 | when_to_edt p50=... p95=... | ... | total p50=... p95=... ms
+```
+
+The stages run back to back, so they add up to `total`: the event thread receiving the key to queueing it (`edt_to_enqueue`), waiting for the input loop (`queue`), the batch's earlier work before its dispatch (`dispatch`), applying it (`apply`), diffing and emitting damage (`damage`), waiting for the render loop to start a fast frame, including a frame already under way (`frame_wait`), the frame deadline (`pacing_wait`), the resize check before the frame reads the model (`pre_render`), drawing until the image is published (`render`), waiting for Swing to start painting it (`publish_to_paint`) and the paint itself (`paint`). `when_to_edt` is the wall-clock gap from the OS event time (`KeyEvent.getWhen`) to the event thread, outside `total`. Nothing after `paintComponent` returns (Swing's back-buffer blit, the compositor) is visible to the app. `unpainted` counts keystrokes whose frame changed nothing on screen. The per-keystroke lines are written in a batch with each summary.
+
+To trace a bench run, add `ui.render.latency_trace = true` to the config `bench-laptop.sh`'s `run_once` seeds (next to `ui.render.frame_timing = true`), and keep the lines before the script deletes its isolated home, for example by adding `grep "\[LATENCY\]" "$log_file" >> "$out" || true` beside its `[FRAME]` grep. Outside the script, set it in the `config.conf` the jar reads and use `~/.serenity/serenity.log`. Then summarise:
+
+```bash
+python3 bench/latency-summary.py bench/bench-results/<label>-run1.txt
+```
+
+It prints p50/p95/max per stage over every keystroke, and each stage's share of the summed p50s.
+
 ## Profiling the per-keystroke state path with JFR
 
 `com.serenity.perf.TypingProfile` (test scope, not run by CI) replays one keystroke scenario against a live `StateManager` so a Java Flight Recorder recording has enough samples to show where the time goes. Scenarios: `typing_random`, `typing_long_paragraph`, `typing_in_long_document` (5,000 paragraphs), `cold_typing`, `move_down_up`, `page_down_up`; the second argument is seconds (keys for `cold_typing`). Flags: `--warmup-s=10` (warm-up before timing), `--pace-ms=100` and `--warm-ms=0` (`cold_typing` only: pause between keys, and a startup warm-up burst on a separate `StateManager` first).
