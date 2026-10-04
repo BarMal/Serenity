@@ -1,5 +1,7 @@
 package com.serenity.state.manager
 
+import scala.concurrent.duration.*
+
 import cats.effect.IO
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
@@ -86,4 +88,26 @@ class LspEffectQueueSpec extends AnyFlatSpec with Matchers:
       LspEffect.FileOpened(scalaUri, LanguageId.Python, "ab"),
       LspEffect.FileChanged(scalaUri, LanguageId.Python, "abc", 2)
     )
+  }
+
+  it should "keep delivering a document's edits after a consumer is cancelled as a change arrives" in {
+    val cancelPoints = (0 to 3).toList
+    val nextTexts = cancelPoints.map { cedesBeforeCancel =>
+      runVirtual(
+        for
+          queue    <- LspEffectQueue.create
+          _        <- queue.enqueue(LspEffect.FileOpened(scalaUri, LanguageId.Scala, "a"))
+          _        <- queue.stream.take(1).compile.drain
+          consumer <- queue.stream.take(1).compile.drain.start
+          _        <- IO.cede
+          _        <- queue.enqueueDocumentChange(scalaUri, LanguageId.Scala, "ab")
+          _        <- IO.cede.replicateA_(cedesBeforeCancel)
+          _        <- consumer.cancel
+          _        <- queue.enqueueDocumentChange(scalaUri, LanguageId.Scala, "abc")
+          next     <- queue.stream.take(1).compile.toList.timeout(1.second).attempt
+        yield next.map(_.collect { case LspEffect.FileChanged(_, _, text, _) => text })
+      )
+    }
+
+    nextTexts shouldBe cancelPoints.map(_ => Right(List("abc")))
   }

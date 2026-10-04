@@ -125,11 +125,14 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
     Files.writeString(tempFile, "object Change")
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
+      val opened = sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync()
+
       sm.applyEvent(InsertChar('a')).unsafeRunSync()
       sm.applyEvent(InsertChar('b')).unsafeRunSync()
       sm.applyEvent(InsertChar('c')).unsafeRunSync()
 
-      val effects = sm.lspEffectSource.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync()
+      val effects =
+        opened ++ sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync()
       val currentText =
         sm.getCurrentState
           .unsafeRunSync()
@@ -169,10 +172,12 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
     Files.writeString(tempFile, "object Stalled")
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
+      val opened = sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync()
 
       (1 to 600).foreach(_ => sm.applyEvent(InsertChar('x')).unsafeRunSync())
 
-      val effects = sm.lspEffectSource.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync()
+      val effects =
+        opened ++ sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync()
       val currentText =
         sm.getCurrentState
           .unsafeRunSync()
