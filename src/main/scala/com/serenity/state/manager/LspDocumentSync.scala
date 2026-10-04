@@ -58,7 +58,7 @@ private[manager] object LspDocumentSync:
   /** The documents a commit stopped managing: a buffer left `persisted.buffers` and no open buffer holds its path any
     * more, so closing one of two tabs on the same file leaves the server's copy open for the other.
     */
-  def closedDocuments(before: AppState, after: AppState): List[LspEffect.FileClosed] =
+  def closedDocuments(before: AppState, after: AppState): List[LspEffect] =
     val removed =
       if before.persisted.buffers eq after.persisted.buffers then Nil
       else before.persisted.buffers.values.toList.filterNot(buffer => after.persisted.buffers.contains(buffer.id))
