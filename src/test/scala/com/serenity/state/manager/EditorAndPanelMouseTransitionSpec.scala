@@ -163,8 +163,8 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
 
   private def selectedPath(state: AppState): Option[java.nio.file.Path] =
     state.surfaceById(explorer).map(_.content) match
-      case Some(SurfaceContent.DirectoryTree(_, selected)) => selected
-      case other                                           => fail(s"Expected the explorer tree, got $other")
+      case Some(SurfaceContent.DirectoryTree(_, selected, _)) => selected
+      case other                                              => fail(s"Expected the explorer tree, got $other")
 
   "PinnedPanelMouseHitTesting.select" should "select and focus the clicked directory row" in {
     val state  = withExplorer

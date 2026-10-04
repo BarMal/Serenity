@@ -28,10 +28,11 @@ class DirectoryTreeSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   )
 
   "forTree" should "paint one text box per visible row, matching PanelContentResolver's row text" in {
-    val frameRect    = LayoutRect(0, 0, 24, 10)
-    val expectedRows = PanelContentResolver.directoryTreeRowViews(frameRect, tree, selectedPath = None)
+    val frameRect = LayoutRect(0, 0, 24, 10)
+    val expectedRows =
+      PanelContentResolver.directoryTreeRowViews(frameRect, tree, selectedPath = None, scrollOffset = 0)
 
-    val resolved = DirectoryTreeSurfaceComposition.forTree(tree, selectedPath = None, frameRect)
+    val resolved = DirectoryTreeSurfaceComposition.forTree(tree, selectedPath = None, scrollOffset = 0, frameRect)
 
     resolved.paintBoxes.map(_.text) shouldBe expectedRows.map(view => Some(view.row.plainText))
   }
@@ -39,7 +40,7 @@ class DirectoryTreeSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   it should "mark the selected path's row as selected" in {
     val frameRect = LayoutRect(0, 0, 24, 10)
 
-    val resolved = DirectoryTreeSurfaceComposition.forTree(tree, selectedPath = Some(src), frameRect)
+    val resolved = DirectoryTreeSurfaceComposition.forTree(tree, selectedPath = Some(src), scrollOffset = 0, frameRect)
 
     resolved.paintBoxes.map(_.selected) shouldBe List(false, true, false, false)
   }
@@ -47,7 +48,7 @@ class DirectoryTreeSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   it should "resolve hitAt to the exact row clicked, addressed by its filesystem path" in {
     val frameRect = LayoutRect(0, 0, 24, 10)
 
-    val resolved = DirectoryTreeSurfaceComposition.forTree(tree, selectedPath = None, frameRect)
+    val resolved = DirectoryTreeSurfaceComposition.forTree(tree, selectedPath = None, scrollOffset = 0, frameRect)
 
     val testBox = resolved.paintBoxes.find(_.text.exists(_.endsWith("test"))).getOrElse(fail("expected a row for test"))
     val hit     = resolved.hitAt(testBox.rect.x, testBox.rect.y)
@@ -56,10 +57,11 @@ class DirectoryTreeSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "clip rows to the panel's height the same way PanelContentResolver does" in {
-    val frameRect    = LayoutRect(0, 0, 24, 4)
-    val expectedRows = PanelContentResolver.directoryTreeRowViews(frameRect, tree, selectedPath = None)
+    val frameRect = LayoutRect(0, 0, 24, 4)
+    val expectedRows =
+      PanelContentResolver.directoryTreeRowViews(frameRect, tree, selectedPath = None, scrollOffset = 0)
 
-    val resolved = DirectoryTreeSurfaceComposition.forTree(tree, selectedPath = None, frameRect)
+    val resolved = DirectoryTreeSurfaceComposition.forTree(tree, selectedPath = None, scrollOffset = 0, frameRect)
 
     resolved.paintBoxes.size shouldBe expectedRows.size
     resolved.paintBoxes.size should be < DirectoryTreeData.visibleRows(tree).size
@@ -68,7 +70,7 @@ class DirectoryTreeSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   it should "expose a focus order matching on-screen row order" in {
     val frameRect = LayoutRect(0, 0, 24, 10)
 
-    val resolved = DirectoryTreeSurfaceComposition.forTree(tree, selectedPath = None, frameRect)
+    val resolved = DirectoryTreeSurfaceComposition.forTree(tree, selectedPath = None, scrollOffset = 0, frameRect)
 
     resolved.focusOrder.size shouldBe resolved.paintBoxes.size
   }
@@ -80,7 +82,12 @@ class DirectoryTreeSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
       failed = Map(test -> "Permission denied")
     )
 
-    val rows = PanelContentResolver.directoryTreeRowViews(LayoutRect(0, 0, 40, 10), waiting, selectedPath = None)
+    val rows = PanelContentResolver.directoryTreeRowViews(
+      LayoutRect(0, 0, 40, 10),
+      waiting,
+      selectedPath = None,
+      scrollOffset = 0
+    )
 
     rows.map(_.row.plainText) should contain allOf ("  ▾ src  loading…", "  ▾ test  couldn't open: Permission denied")
     rows.flatMap(_.row.segments).map(segment => segment.text -> segment.tone) should contain allOf (

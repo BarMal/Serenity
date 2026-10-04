@@ -89,7 +89,7 @@ final private[manager] class FocusHandlerRouting(wrapCache: WrappedLineCache):
       case SurfaceContent.DirectoryListing(_, _, _) => peekOverlay
       case SurfaceContent.ContextMenu(_)            => contextMenu
       case SurfaceContent.MarkdownPreview(_, _)     => peekOverlay
-      case SurfaceContent.DirectoryTree(_, _)       => peekOverlay
+      case SurfaceContent.DirectoryTree(_, _, _)    => peekOverlay
       case SurfaceContent.Terminal(_, _)            => peekOverlay
       case SurfaceContent.Outline(_, _)             => peekOverlay
       case SurfaceContent.Comments(_, _)            => peekOverlay

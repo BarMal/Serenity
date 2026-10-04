@@ -247,7 +247,8 @@ object OverlayViewModel:
           // the real, item-count accurate rows/header/footer it produces -- see its own doc comment.
           case SurfaceContent.ContextMenu(_) | SurfaceContent.CommandPalette(_) | SurfaceContent.CommandRunnerPeek(_) |
               SurfaceContent.ContextualToolbar(_) | SurfaceContent.CommentLens(_) | SurfaceContent.Outline(_, _) |
-              SurfaceContent.Diagnostics(_, _) | SurfaceContent.DirectoryTree(_, _) | SurfaceContent.Comments(_, _) =>
+              SurfaceContent.Diagnostics(_, _) | SurfaceContent.DirectoryTree(_, _, _) |
+              SurfaceContent.Comments(_, _) =>
             ResolvedSurfaceContent()
           case _ =>
             SurfaceContentResolver.resolve(
@@ -270,18 +271,18 @@ object OverlayViewModel:
 
   private def isComposedContent(content: SurfaceContent): Boolean =
     content match
-      case SurfaceContent.ModalWorkflow(_)     => true
-      case SurfaceContent.ContextMenu(_)       => true
-      case SurfaceContent.CommandPalette(_)    => true
-      case SurfaceContent.CommandRunnerPeek(_) => true
-      case SurfaceContent.TabBar(_, _)         => true
-      case SurfaceContent.ContextualToolbar(_) => true
-      case SurfaceContent.CommentLens(_)       => true
-      case SurfaceContent.Outline(_, _)        => true
-      case SurfaceContent.Diagnostics(_, _)    => true
-      case SurfaceContent.DirectoryTree(_, _)  => true
-      case SurfaceContent.Comments(_, _)       => true
-      case _                                   => false
+      case SurfaceContent.ModalWorkflow(_)       => true
+      case SurfaceContent.ContextMenu(_)         => true
+      case SurfaceContent.CommandPalette(_)      => true
+      case SurfaceContent.CommandRunnerPeek(_)   => true
+      case SurfaceContent.TabBar(_, _)           => true
+      case SurfaceContent.ContextualToolbar(_)   => true
+      case SurfaceContent.CommentLens(_)         => true
+      case SurfaceContent.Outline(_, _)          => true
+      case SurfaceContent.Diagnostics(_, _)      => true
+      case SurfaceContent.DirectoryTree(_, _, _) => true
+      case SurfaceContent.Comments(_, _)         => true
+      case _                                     => false
 
   private def collapsedContentView(content: com.serenity.state.models.SurfaceContent): ResolvedSurfaceContent =
     content match
@@ -354,8 +355,8 @@ object OverlayViewModel:
         Some(ContextualToolbarSurfaceComposition.forToolbar(toolbarState, state, rect))
       case SurfaceContent.CommentLens(lens) =>
         Some(CommentLensSurfaceComposition.forLens(lens, rect))
-      case SurfaceContent.DirectoryTree(tree, selectedPath) =>
-        Some(DirectoryTreeSurfaceComposition.forTree(tree, selectedPath, rect))
+      case SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset) =>
+        Some(DirectoryTreeSurfaceComposition.forTree(tree, selectedPath, scrollOffset, rect))
       case SurfaceContent.Outline(symbols, activeLocation) =>
         Some(OutlineSurfaceComposition.forOutline(symbols, activeSymbolLocation(symbols, activeLocation, state), rect))
       case SurfaceContent.Comments(symbols, activeLocation) =>

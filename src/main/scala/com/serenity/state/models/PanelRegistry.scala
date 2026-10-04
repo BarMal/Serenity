@@ -22,17 +22,17 @@ object PanelId:
 
   def of(content: PanelContent): PanelId =
     content match
-      case PanelContent.DirectoryTree(_, _)   => Explorer
-      case PanelContent.Outline(_, _)         => Outline
-      case PanelContent.Comments(_, _)        => Comments
-      case PanelContent.Diagnostics(_, _)     => Diagnostics
-      case PanelContent.MarkdownPreview(_, _) => MarkdownPreview
-      case PanelContent.Terminal(_, _)        => ProjectOutput
+      case PanelContent.DirectoryTree(_, _, _) => Explorer
+      case PanelContent.Outline(_, _)          => Outline
+      case PanelContent.Comments(_, _)         => Comments
+      case PanelContent.Diagnostics(_, _)      => Diagnostics
+      case PanelContent.MarkdownPreview(_, _)  => MarkdownPreview
+      case PanelContent.Terminal(_, _)         => ProjectOutput
 
   /** Exhaustive over [[SurfaceContent]] on purpose: a new kind of content has to decide whether it is a panel. */
   def forContent(content: SurfaceContent): Option[PanelId] =
     content match
-      case SurfaceContent.DirectoryTree(_, _)       => Some(Explorer)
+      case SurfaceContent.DirectoryTree(_, _, _)    => Some(Explorer)
       case SurfaceContent.Outline(_, _)             => Some(Outline)
       case SurfaceContent.Comments(_, _)            => Some(Comments)
       case SurfaceContent.Diagnostics(_, _)         => Some(Diagnostics)

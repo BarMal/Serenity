@@ -274,7 +274,11 @@ enum SurfaceContent:
   case SymbolDefinition(symbol: String, location: Location)
   case StatusLine(text: String)
   case DirectoryListing(path: Path, entries: List[DirEntry], selectedPath: Option[Path] = None)
-  case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None)
+
+  /** `scrollOffset` is the first row shown, stored rather than derived from the selection (as in
+    * `ui.widget.SelectableList`), so moving the selection within the rows already shown leaves the view where it is.
+    */
+  case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None, scrollOffset: Int = 0)
   case CommandPalette(runner: CommandRunner)
 
   /** The experimental command-runner cursor-peek prototype's single peek panel (`SurfaceId.CursorPeek`,

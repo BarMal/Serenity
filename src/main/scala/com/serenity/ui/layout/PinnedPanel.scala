@@ -3,6 +3,7 @@ package com.serenity.ui.layout
 import java.nio.file.Path
 
 import com.serenity.state.models.{BufferId, SurfaceContent, SurfaceId}
+import com.serenity.ui.widget.{EndBehaviour, SelectableList}
 
 enum PanelPosition:
   case Left, Right, Bottom, Top
@@ -26,8 +27,8 @@ final case class PinnedPanel(
   * (issue #1009).
   */
 enum PanelContent(val asSurfaceContent: SurfaceContent):
-  case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None)
-      extends PanelContent(SurfaceContent.DirectoryTree(tree, selectedPath))
+  case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None, scrollOffset: Int = 0)
+      extends PanelContent(SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset))
   case Terminal(buffer: String, cursor: Int) extends PanelContent(SurfaceContent.Terminal(buffer, cursor))
   case Outline(symbols: List[Symbol], activeLocation: Option[Location] = None)
       extends PanelContent(SurfaceContent.Outline(symbols, activeLocation))
@@ -43,7 +44,8 @@ object PanelContent:
   /** The pinnable subset of `SurfaceContent` -- `None` for any case that is not a panel content kind. */
   def fromSurfaceContent(content: SurfaceContent): Option[PanelContent] =
     content match
-      case SurfaceContent.DirectoryTree(tree, selectedPath)   => Some(DirectoryTree(tree, selectedPath))
+      case SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset) =>
+        Some(DirectoryTree(tree, selectedPath, scrollOffset))
       case SurfaceContent.Terminal(buffer, cursor)            => Some(Terminal(buffer, cursor))
       case SurfaceContent.Outline(symbols, activeLocation)    => Some(Outline(symbols, activeLocation))
       case SurfaceContent.Comments(symbols, activeLocation)   => Some(Comments(symbols, activeLocation))
@@ -62,6 +64,11 @@ final case class DirectoryTreeData(
     stale: Set[Path] = Set.empty,
     failed: Map[Path, String] = Map.empty
 ):
+
+  /** Flattened once per tree value. Moving the selection or repainting reuses the same tree, so only what makes a new
+    * one -- expanding, collapsing or a new listing -- pays for flattening again.
+    */
+  private lazy val flattenedRows: Vector[DirectoryTreeRow] = DirectoryTreeData.flatten(this)
 
   def awaitingListing: Set[Path] =
     (expandedPaths + rootPath).filter(path =>
@@ -100,13 +107,32 @@ final case class DirectoryTreeRow(
 
 object DirectoryTreeData:
 
-  def visibleRows(tree: DirectoryTreeData): List[DirectoryTreeRow] =
-    rootRow(tree) :: flattenChildren(tree, tree.rootPath, depth = 1)
+  def visibleRows(tree: DirectoryTreeData): Vector[DirectoryTreeRow] = tree.flattenedRows
+
+  /** The visible rows as a list selecting `selectedPath`'s row, scrolled from `scrollOffset` just far enough to show
+    * that row in `viewportRows` -- the one place the explorer's keys, painting and hit-testing get their window from.
+    */
+  def rowList(
+    tree: DirectoryTreeData,
+    selectedPath: Option[Path],
+    scrollOffset: Int,
+    viewportRows: Int
+  ): SelectableList[DirectoryTreeRow] =
+    val rows   = visibleRows(tree)
+    val stored = SelectableList(rows, offset = scrollOffset, endBehaviour = EndBehaviour.Stop)
+    selectedPath
+      .map(path => rows.indexWhere(_.path == path))
+      .filter(_ >= 0)
+      .fold(stored.scrollBy(0, viewportRows))(stored.select(_, viewportRows))
 
   def visibleEntries(tree: DirectoryTreeData): List[(DirEntry, Int)] =
     visibleRows(tree)
       .filterNot(_.isRoot)
       .map(row => DirEntry(row.path, row.name, row.isDirectory) -> (row.depth - 1))
+      .toList
+
+  private def flatten(tree: DirectoryTreeData): Vector[DirectoryTreeRow] =
+    rootRow(tree) +: flattenChildren(tree, tree.rootPath, depth = 1)
 
   private def rootRow(tree: DirectoryTreeData): DirectoryTreeRow =
     DirectoryTreeRow(
@@ -121,24 +147,21 @@ object DirectoryTreeData:
       failure = tree.failed.get(tree.rootPath)
     )
 
-  private def flattenChildren(tree: DirectoryTreeData, directory: Path, depth: Int): List[DirectoryTreeRow] =
-    tree.entries.getOrElse(directory, Nil).flatMap { entry =>
-      val current = List(
-        DirectoryTreeRow(
-          path = entry.path,
-          name = entry.name,
-          isDirectory = entry.isDirectory,
-          depth = depth,
-          isRoot = false,
-          isExpanded = entry.isDirectory && tree.expandedPaths.contains(entry.path),
-          isLoaded = entry.isDirectory && tree.entries.contains(entry.path),
-          isLoading = tree.loading.contains(entry.path),
-          failure = tree.failed.get(entry.path)
-        )
+  private def flattenChildren(tree: DirectoryTreeData, directory: Path, depth: Int): Vector[DirectoryTreeRow] =
+    tree.entries.getOrElse(directory, Nil).toVector.flatMap { entry =>
+      val isExpanded = entry.isDirectory && tree.expandedPaths.contains(entry.path)
+      val row = DirectoryTreeRow(
+        path = entry.path,
+        name = entry.name,
+        isDirectory = entry.isDirectory,
+        depth = depth,
+        isRoot = false,
+        isExpanded = isExpanded,
+        isLoaded = entry.isDirectory && tree.entries.contains(entry.path),
+        isLoading = tree.loading.contains(entry.path),
+        failure = tree.failed.get(entry.path)
       )
-      if entry.isDirectory && tree.expandedPaths.contains(entry.path) then
-        current ++ flattenChildren(tree, entry.path, depth + 1)
-      else current
+      if isExpanded then row +: flattenChildren(tree, entry.path, depth + 1) else Vector(row)
     }
 
 final case class DirEntry(

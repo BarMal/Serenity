@@ -41,10 +41,14 @@ private[manager] object PanelContentSync:
   /** Marks each of `directories` a docked explorer has listed as stale, so it is listed again. */
   def withStaleDirectories(state: AppState, directories: Set[Path]): AppState =
     val updated = state.runtime.uiSurfaces.map {
-      case surface @ UiSurface(_, SurfaceContent.DirectoryTree(tree, selectedPath), SurfacePresentation.Docked, _)
-          if directories.exists(tree.entries.contains) =>
+      case surface @ UiSurface(
+            _,
+            SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset),
+            SurfacePresentation.Docked,
+            _
+          ) if directories.exists(tree.entries.contains) =>
         val stale = tree.stale ++ directories.filter(tree.entries.contains)
-        surface.copy(content = SurfaceContent.DirectoryTree(tree.copy(stale = stale), selectedPath))
+        surface.copy(content = SurfaceContent.DirectoryTree(tree.copy(stale = stale), selectedPath, scrollOffset))
       case surface => surface
     }
     state.copy(runtime = state.runtime.copy(uiSurfaces = updated))
@@ -108,8 +112,8 @@ private[manager] object PanelContentSync:
           if sourceSwitched(source, previousSource) ||
             !(sourceDiagnostics(state, source) eq sourceDiagnostics(previous, source)) =>
         Some(diagnosticsContent(state, source))
-      case SurfaceContent.DirectoryTree(tree, selectedPath) if tree.awaitingListing.nonEmpty =>
-        Some(SurfaceContent.DirectoryTree(tree.listingRequested(tree.awaitingListing), selectedPath))
+      case SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset) if tree.awaitingListing.nonEmpty =>
+        Some(SurfaceContent.DirectoryTree(tree.listingRequested(tree.awaitingListing), selectedPath, scrollOffset))
       case SurfaceContent.Terminal(shown, cursor)
           if state.runtime.projectTasks.terminalText != previous.runtime.projectTasks.terminalText =>
         // Scrolled back (the cursor short of the end), the panel stays where it is; otherwise it follows the output.
@@ -142,7 +146,7 @@ private[manager] object PanelContentSync:
 
   private def dockedTrees(state: AppState): List[(SurfaceId, DirectoryTreeData)] =
     state.runtime.uiSurfaces.collect {
-      case UiSurface(id, SurfaceContent.DirectoryTree(tree, _), SurfacePresentation.Docked, _) => id -> tree
+      case UiSurface(id, SurfaceContent.DirectoryTree(tree, _, _), SurfacePresentation.Docked, _) => id -> tree
     }
 
   private def hasDockedOutline(state: AppState): Boolean =

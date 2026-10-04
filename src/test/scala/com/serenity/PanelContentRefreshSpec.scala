@@ -55,7 +55,7 @@ class PanelContentRefreshSpec extends AnyFlatSpec with Matchers with StateManage
   private val explorerId = SurfaceId("explorer")
 
   private def explorerTree(state: AppState): Option[DirectoryTreeData] =
-    state.surfaceById(explorerId).map(_.content).collect { case SurfaceContent.DirectoryTree(tree, _) => tree }
+    state.surfaceById(explorerId).map(_.content).collect { case SurfaceContent.DirectoryTree(tree, _, _) => tree }
 
   "A docked explorer" should "list its root and expanded directories however it was docked" in {
     val root = Files.createTempDirectory("panel-refresh-explorer")

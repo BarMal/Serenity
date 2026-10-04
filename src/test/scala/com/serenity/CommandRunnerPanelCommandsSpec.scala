@@ -76,7 +76,7 @@ class CommandRunnerPanelCommandsSpec extends AnyFlatSpec with Matchers:
     updatedState.commandRunnerSurface shouldBe None
     val pinnedSurface = updatedState.pinnedSurfaces
       .collectFirst {
-        case surface @ com.serenity.state.models.UiSurface(_, SurfaceContent.DirectoryTree(tree, _), _, _)
+        case surface @ com.serenity.state.models.UiSurface(_, SurfaceContent.DirectoryTree(tree, _, _), _, _)
             if isPinnedAt(updatedState, surface, PanelPosition.Left) =>
           surface -> tree.rootPath
       }

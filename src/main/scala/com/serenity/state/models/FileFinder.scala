@@ -58,7 +58,7 @@ object FileFinder:
   /** The root a docked explorer shows -- where "Open as root" points the app -- if one is docked. */
   def explorerRoot(state: AppState): Option[Path] =
     state.runtime.uiSurfaces.collectFirst {
-      case UiSurface(_, SurfaceContent.DirectoryTree(tree, _), SurfacePresentation.Docked, _) => tree.rootPath
+      case UiSurface(_, SurfaceContent.DirectoryTree(tree, _, _), SurfacePresentation.Docked, _) => tree.rootPath
     }
 
   private def truncatedTitle: String = s"$Title (first ${"%,d".formatLocal(Locale.ROOT, MaxListedFiles)} files)"

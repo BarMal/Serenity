@@ -39,8 +39,8 @@ class PinnedPanelComponent(
       case movement =>
         val rows = visibleRows(surface, currentState)
         val handled = surface.content match
-          case SurfaceContent.DirectoryTree(tree, selectedPath) =>
-            ExplorerPanelKeys.handle(movement, surface, tree, selectedPath, currentState, rows)
+          case SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset) =>
+            ExplorerPanelKeys.handle(movement, surface, tree, selectedPath, scrollOffset, currentState, rows)
           case SurfaceContent.Outline(_, _) | SurfaceContent.Comments(_, _) | SurfaceContent.Diagnostics(_, _) =>
             ListPanelKeys.handle(movement, surface, currentState, rows, wrapCache)
           case SurfaceContent.Terminal(text, cursor) =>

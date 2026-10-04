@@ -97,7 +97,7 @@ object SessionPinnedPanel:
     */
   private def toSnapshot(content: PanelContent): SessionPanelContent =
     content match
-      case PanelContent.DirectoryTree(tree, selectedPath) =>
+      case PanelContent.DirectoryTree(tree, selectedPath, _) =>
         SessionPanelContent.DirectoryTree(
           rootPath = tree.rootPath.toString,
           selectedPath = selectedPath.map(_.toString),

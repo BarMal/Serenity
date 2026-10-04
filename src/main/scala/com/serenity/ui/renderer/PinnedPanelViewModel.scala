@@ -157,8 +157,8 @@ object PinnedPanelViewModel:
     state: Option[AppState]
   ): ResolvedSurfaceComposition =
     surface.content match
-      case SurfaceContent.DirectoryTree(tree, selectedPath) =>
-        DirectoryTreeSurfaceComposition.forTree(tree, selectedPath, rect)
+      case SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset) =>
+        DirectoryTreeSurfaceComposition.forTree(tree, selectedPath, scrollOffset, rect)
       case SurfaceContent.Outline(symbols, activeLocation) =>
         OutlineSurfaceComposition.forOutline(symbols, activeSymbolLocation(symbols, activeLocation, state), rect)
       case SurfaceContent.Diagnostics(issues, activeLocation) =>
