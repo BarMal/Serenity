@@ -9,6 +9,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.*
 import com.serenity.config.AppConfigOps.*
+import com.serenity.diagnostics.{KeyLatencyTrace, LatencyStage}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Damage}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -95,6 +96,68 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
 
     pacing.frameStarts shouldBe Vector(1.second + interval)
     pacing.delays shouldBe Vector(interval - 5.millis)
+  }
+
+  it should "stamp a frame's wake, pacing deadline and model read onto the latency trace" in {
+    val interval = AppRuntime.fastFrameInterval(RenderFpsTarget.Fps60)
+    val nanos    = new java.util.concurrent.atomic.AtomicLong(1.second.toNanos)
+    val trace    = KeyLatencyTrace(() => nanos.get())
+    trace.setEnabled(true)
+    trace.keyReceived(System.currentTimeMillis())
+    trace.keyEnqueued()
+    trace.keysDequeued(1)
+    trace.dispatchStarted()
+    trace.keysApplied(1)
+    trace.damageEmitted()
+
+    val state = AppState.initial.copy(persisted =
+      AppState.initial.persisted
+        .copy(config = AppState.initial.persisted.config.withRenderFpsTarget(RenderFpsTarget.Fps60))
+    )
+    val program = for
+      lastStart          <- Ref.of[IO, Option[FiniteDuration]](Some(1.second - 5.millis))
+      fastModeSignal     <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
+      pendingDamage      <- Ref.of[IO, Damage](Damage.Nothing)
+      pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
+      stateManager = new com.serenity.state.manager.StateEngine:
+        def getCurrentState: IO[AppState] = IO.pure(state)
+        def getModel: IO[com.serenity.state.manager.Model] =
+          IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState()))
+        def updateStateValidated(update: AppState => AppState): IO[Unit]     = IO.unit
+        def applyEvent(event: com.serenity.keystroke.events.Event): IO[Unit] = IO.unit
+      given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
+      _ <- AppRuntimeRenderLoops
+        .fastRenderPhase(
+          stateManager,
+          fastModeSignal,
+          pendingDamage,
+          pendingPaintDamage,
+          IO.pure(Some(state)),
+          IO.unit,
+          (
+            _: AppState,
+            _: Boolean,
+            _: Option[Color],
+            _: Damage,
+            _: com.serenity.state.manager.RenderCaches
+          ) => IO(nanos.addAndGet(3.millis.toNanos)) >> IO(trace.framePublished()),
+          com.serenity.state.manager.RenderCaches.create(),
+          delay => IO(nanos.addAndGet(delay.toNanos)).void,
+          frameClock = IO(nanos.get().nanos),
+          lastFrameStart = lastStart,
+          keyLatency = trace
+        )
+        .compile
+        .drain
+    yield ()
+    program.unsafeRunTimed(10.seconds).getOrElse(fail("the fast render phase did not finish"))
+    trace.paintStarted()
+    trace.paintFinished()
+
+    val painted = trace.drain().keys
+    painted.map(_.stage(LatencyStage.FrameWait)) shouldBe Vector(0L)
+    painted.map(_.stage(LatencyStage.PacingWait)) shouldBe Vector((interval - 5.millis).toNanos)
+    painted.map(_.stage(LatencyStage.Render)) shouldBe Vector(3.millis.toNanos)
   }
 
   final private case class PacedFrames(frameStarts: Vector[FiniteDuration], delays: Vector[FiniteDuration])

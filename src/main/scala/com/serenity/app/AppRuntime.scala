@@ -11,7 +11,7 @@ import cats.syntax.foldable.*
 import cats.syntax.parallel.*
 import cats.syntax.semigroup.*
 import com.serenity.config.{AppConfig, RenderFpsTarget}
-import com.serenity.diagnostics.{FrameTimingReport, FrameTimings}
+import com.serenity.diagnostics.{FrameTimingReport, FrameTimings, KeyLatencyReport}
 import com.serenity.frontend.{Frontend, FrontendRuntime}
 import com.serenity.input.*
 import com.serenity.keystroke.events.Event
@@ -180,9 +180,13 @@ object AppRuntime:
         frameTimingEnabled <- SignallingRef.of[IO, Boolean](
           initialState.persisted.config.surfaceConfig.frameTimingEnabled
         )
+        latencyTraceEnabled <- SignallingRef.of[IO, Boolean](
+          initialState.persisted.config.surfaceConfig.latencyTraceEnabled
+        )
         wakeOnCommit = wakeRenderLoopOnCommit(emitDamage)
         observeTransition = (before: AppState, after: AppState) =>
-          typingQuietTimer.onCommit(before, after) >> followFrameTimingSetting(frameTimingEnabled)(before, after)
+          typingQuietTimer.onCommit(before, after) >> followFrameTimingSetting(frameTimingEnabled)(before, after) >>
+            followLatencyTraceSetting(latencyTraceEnabled)(before, after)
         _ <- stateManager.runtimeLifecycle.observeCommits((before, after) =>
           wakeOnCommit(before, after) >> observeTransition(before, after)
         )
@@ -254,7 +258,8 @@ object AppRuntime:
                   checkResizeAndHandle,
                   runtime.renderFull,
                   stateManager.renderCaches,
-                  lastFrameStart = lastFastFrameStart
+                  lastFrameStart = lastFastFrameStart,
+                  keyLatency = runtime.frameTimings.keyLatency
                 )
 
                 val renderLoop = AppRuntimeRenderLoops.renderLoop(idlePhase, fastPhase)
@@ -269,7 +274,8 @@ object AppRuntime:
                     awaitExternalQuit,
                     appConfig,
                     runtime.frameTimings,
-                    frameTimingEnabled
+                    frameTimingEnabled,
+                    latencyTraceEnabled
                   )
                 )
               }
@@ -287,7 +293,8 @@ object AppRuntime:
     awaitExternalQuit: IO[Unit],
     appConfig: AppConfig,
     frameTimings: FrameTimings,
-    frameTimingEnabled: SignallingRef[IO, Boolean]
+    frameTimingEnabled: SignallingRef[IO, Boolean],
+    latencyTraceEnabled: SignallingRef[IO, Boolean]
   )(using logger: Logger[IO]): IO[Unit] =
     val (lifecycle, quitSignal) = (stateManager.runtimeLifecycle, stateManager.runtimeLifecycle.awaitQuit.attempt)
     (
@@ -330,8 +337,15 @@ object AppRuntime:
           .interruptWhen(quitSignal)
           .compile
           .drain
+      ),
+      AppRuntimeRenderLoops.superviseLoop("latency trace report", lifecycle.forceQuit)(
+        KeyLatencyReport
+          .stream(frameTimings.keyLatency, latencyTraceEnabled.discrete, line => logger.info(line))
+          .interruptWhen(quitSignal)
+          .compile
+          .drain
       )
-    ).parMapN((_, _, _, _, _, _, _, _, _) => ())
+    ).parMapN((_, _, _, _, _, _, _, _, _, _) => ())
 
   /** Publishes `ui.render.frame_timing` only when a commit changes it, so the report stream sleeps through ordinary
     * edits.
@@ -341,6 +355,13 @@ object AppRuntime:
   )(before: AppState, after: AppState): IO[Unit] =
     val enabled = after.persisted.config.surfaceConfig.frameTimingEnabled
     IO.whenA(enabled != before.persisted.config.surfaceConfig.frameTimingEnabled)(frameTimingEnabled.set(enabled))
+
+  /** Publishes `ui.render.latency_trace` only when a commit changes it. */
+  private[serenity] def followLatencyTraceSetting(
+    latencyTraceEnabled: SignallingRef[IO, Boolean]
+  )(before: AppState, after: AppState): IO[Unit] =
+    val enabled = after.persisted.config.surfaceConfig.latencyTraceEnabled
+    IO.whenA(enabled != before.persisted.config.surfaceConfig.latencyTraceEnabled)(latencyTraceEnabled.set(enabled))
 
   /** Background half of external-change detection (#1623), complementing the focus-in re-check: each cycle, re-derives
     * the watched directory set from the currently open local buffers (`FileChangeWatcher.sync` handles buffers

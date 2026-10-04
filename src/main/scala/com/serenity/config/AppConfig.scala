@@ -208,6 +208,9 @@ final case class AppConfig(
   def withFrameTiming(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(frameTimingEnabled = enabled))
 
+  def withLatencyTrace(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(latencyTraceEnabled = enabled))
+
   def withStartupWarmUp(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(startupWarmUpEnabled = enabled))
 

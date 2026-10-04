@@ -1,0 +1,143 @@
+name: Bench Artifacts
+
+# Builds ready-to-run benchmark jars so the benchmark laptop only downloads and runs them, never builds -- see
+# bench/README.md for the laptop flow. Manual only: it never runs on push or pull requests.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or SHA to build Serenity.jar and serenity-perf.jar from
+        required: true
+        default: master
+      spike_ref:
+        description: Optional branch, tag or SHA of the Skiko spike to build too (empty skips it)
+        required: false
+        default: ''
+
+run-name: Bench artifacts for ${{ inputs.ref }}${{ inputs.spike_ref != '' && format(' + spike {0}', inputs.spike_ref) || '' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build benchmark artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      # The workflow's own checkout supplies the injected sbt settings in bench/ci, so any `ref` -- including commits
+      # older than this workflow -- can be built the same way.
+      - name: Check out workflow sources
+        uses: actions/checkout@v4
+        with:
+          path: workflow-src
+
+      - name: Check out ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          path: serenity
+
+      - name: Check out spike ref
+        if: inputs.spike_ref != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.spike_ref }}
+          path: spike-src
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: sbt
+
+      - name: Set up sbt launcher
+        uses: sbt/setup-sbt@v1
+
+      # perf-assembly.sbt is copied in, not committed, so the main jar's build is exactly the ref's own.
+      - name: Build Serenity.jar and serenity-perf.jar
+        working-directory: serenity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp ../workflow-src/bench/ci/perf-assembly.sbt perf-assembly.sbt
+          sbt -v assembly "Test / assembly"
+
+      - name: Build serenity-spike.jar
+        if: inputs.spike_ref != ''
+        working-directory: spike-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp ../workflow-src/bench/ci/spike-assembly.sbt spike-assembly.sbt
+          sbt -v spike/assembly
+
+      - name: Assemble bundle
+        id: bundle
+        shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_SPIKE_REF: ${{ inputs.spike_ref }}
+        run: |
+          set -euo pipefail
+          SHA="$(git -C serenity rev-parse HEAD)"
+          SHORT_SHA="${SHA:0:7}"
+          OUT="bundle"
+          mkdir -p "$OUT/bench"
+          cp serenity/target/scala-*/Serenity.jar "$OUT/Serenity.jar"
+          cp serenity/target/scala-*/serenity-perf.jar "$OUT/serenity-perf.jar"
+          find serenity/bench -maxdepth 1 -type f -exec cp {} "$OUT/bench/" \;
+
+          SPIKE_SHA=""
+          if [ -n "$INPUT_SPIKE_REF" ]; then
+            SPIKE_SHA="$(git -C spike-src rev-parse HEAD)"
+            mkdir -p "$OUT/spike"
+            cp spike-src/spike/target/scala-*/serenity-spike.jar "$OUT/spike/serenity-spike.jar"
+            cp spike-src/spike/README.md "$OUT/spike/README.md"
+          fi
+
+          {
+            echo "Serenity benchmark artifacts"
+            echo
+            echo "ref:          $INPUT_REF"
+            echo "commit:       $SHA"
+            if [ -n "$SPIKE_SHA" ]; then
+              echo "spike ref:    $INPUT_SPIKE_REF"
+              echo "spike commit: $SPIKE_SHA"
+            fi
+            echo "built by:     $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "build java:   $(java -version 2>&1 | head -n 1)"
+            echo "run with:     any Java 21+ (the jars target Java 21 bytecode)"
+            echo
+            echo "Artifact zips drop the executable bit, so run scripts through their interpreter (or chmod +x bench/*.sh)."
+            echo
+            echo "# Laptop app benchmark (bench/README.md)"
+            echo "python3 bench/gen-lorem.py > bench/lorem-bench.txt"
+            echo "nix-shell -p xdotool wmctrl python3 xorg.xwininfo --run \"bash bench/bench-laptop.sh \$PWD/Serenity.jar <label>\""
+            echo
+            echo "# In-process benchmarks (needs a display; filter by name prefix)"
+            echo "java -cp serenity-perf.jar com.serenity.perf.PerformanceBenchmarks laptop."
+            echo
+            echo "# JFR typing profile"
+            echo "java -XX:StartFlightRecording:filename=typing_random.jfr,settings=profile,jdk.ExecutionSample#period=1ms \\"
+            echo "  -cp serenity-perf.jar com.serenity.perf.TypingProfile typing_random 30"
+            echo "python3 bench/jfr-aggregate.py typing_random.jfr --top 20"
+            if [ -n "$SPIKE_SHA" ]; then
+              echo
+              echo "# Skiko spike (spike/README.md; CP replaces the exported classpath there)"
+              echo "CP=\"\$PWD/spike/serenity-spike.jar\""
+              echo "MAIN=\"com.serenity.spike.SkikoSpike --doc=bench/lorem-bench.txt\""
+              echo "java -Xmx2g -cp \"\$CP\" \$MAIN --mode=shaping --iterations=20"
+            fi
+          } > "$OUT/MANIFEST.txt"
+          cat "$OUT/MANIFEST.txt"
+          echo "name=bench-$SHORT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.bundle.outputs.name }}
+          path: bundle/
+          if-no-files-found: error
+          retention-days: 14

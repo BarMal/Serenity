@@ -7,7 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.*
 import cats.syntax.foldable.*
 import com.serenity.config.AppConfig
-import com.serenity.diagnostics.{FrameTimings, Trace}
+import com.serenity.diagnostics.{FrameTimings, KeyLatencyTrace, Trace}
 import com.serenity.input.*
 import com.serenity.keystroke.events.Event
 import com.serenity.state.manager.*
@@ -202,14 +202,30 @@ private[serenity] object AppRuntimeRenderLoops:
       _     <- IO(context.frameTimings.inputApplyStarted())
       batch <- context.stateManager.applyEventBatch(inputs, steps)
       _     <- IO(context.frameTimings.inputApplyFinished())
+      _     <- IO(traceAppliedKeys(context.frameTimings.keyLatency, inputs, batch.remaining))
       _     <- batch.applied.traverse_(context.logEvent(_, batch.after.app.persisted.focus))
       _     <- context.observeBatch(batch.before.app, batch.after.app)
       _ <- IO.whenA(batch.applied.nonEmpty)(
-        context.emitDamage(DamageProducer.forTransition(batch.before.app, batch.after.app))
+        context.emitDamage(DamageProducer.forTransition(batch.before.app, batch.after.app)) >>
+          IO(context.frameTimings.keyLatency.damageEmitted())
       )
       _ <- batch.isolated.fold(IO.unit)(applyIsolated(context, steps, _))
       _ <- IO.whenA(batch.remaining.nonEmpty)(dispatchInputs(context, steps, batch.remaining))
     yield ()
+
+  /** Counts the isolated input as applied with its slice, as it leaves `remaining` there, so later keystrokes keep
+    * their place in arrival order.
+    */
+  private def traceAppliedKeys(
+    trace: KeyLatencyTrace,
+    inputs: List[PendingInput],
+    remaining: List[PendingInput]
+  ): Unit =
+    if trace.isEnabled then
+      trace.keysApplied(inputs.take(inputs.size - remaining.size).count {
+        case PendingInput.Keystroke(_) => true
+        case PendingInput.Ready(_)     => false
+      })
 
   private def applyIsolated(context: InputBatchContext, steps: EventBatchSteps[PendingInput], event: Event)(using
     com.serenity.rope.Balance
@@ -283,16 +299,22 @@ private[serenity] object AppRuntimeRenderLoops:
     renderCaches: com.serenity.state.manager.RenderCaches,
     sleep: FiniteDuration => IO[Unit] = IO.sleep,
     frameClock: IO[FiniteDuration] = IO.monotonic,
-    lastFrameStart: Ref[IO, Option[FiniteDuration]] = Ref.unsafe[IO, Option[FiniteDuration]](None)
+    lastFrameStart: Ref[IO, Option[FiniteDuration]] = Ref.unsafe[IO, Option[FiniteDuration]](None),
+    keyLatency: KeyLatencyTrace = KeyLatencyTrace()
   )(using logger: Logger[IO]): Stream[IO, Unit] =
     Stream
       .eval(
         for
+          _            <- IO(keyLatency.frameWoke())
           _            <- pendingDamage.set(Damage.Nothing)
           stateAtStart <- stateManager.getCurrentState
           interval = AppRuntime.fastFrameInterval(stateAtStart.persisted.config.surfaceConfig.renderFpsTarget)
           _ <- awaitFrameDeadline(interval, lastFrameStart, frameClock, sleep)
+          _ <- IO(keyLatency.frameDeadlineReached())
           _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(checkResizeAndHandle)
+          // Before the read, so a keystroke whose damage lands during it is credited to the next frame, never to one
+          // that may not show it.
+          _ <- IO(keyLatency.frameModelRead())
           model <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
             stateManager.getModel
           )
@@ -301,6 +323,7 @@ private[serenity] object AppRuntimeRenderLoops:
           _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(model.app)))(
             renderFull(model.app, true, None, paintDamage, renderCaches)
           )
+          _ <- IO(keyLatency.frameEnded())
         yield ()
       )
       .onFinalize(settleFastMode(fastModeSignal, pendingDamage))

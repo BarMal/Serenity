@@ -73,6 +73,7 @@ final case class SurfaceConfig(
     // less than compositing that image back over the whole frame (#1798).
     layerCachingEnabled: Boolean = false,
     frameTimingEnabled: Boolean = false,
+    latencyTraceEnabled: Boolean = false,
     startupWarmUpEnabled: Boolean = true,
     // How strongly a misspelled-word/LSP diagnostic's severity colour shows through its highlight, versus the colour
     // it's painted over -- the current (possibly focus-mode-dimmed) foreground/background, not always the theme's own

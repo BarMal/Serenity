@@ -7,6 +7,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.AppConfig
 import com.serenity.config.AppConfigOps.*
+import com.serenity.diagnostics.FrameTimings
 import com.serenity.input.{InputRouter, PendingInput, SystemClipboard}
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.translators.TextEntryTranslator
@@ -52,7 +53,8 @@ class AppRuntimeInputBatchSpec extends AnyFlatSpec with Matchers:
     batches: List[List[PendingInput]],
     emitDamage: Damage => IO[Unit] = _ => IO.unit,
     clipboard: SystemClipboard[IO] = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit),
-    logEvent: (Event, Focus) => IO[Unit] = (_, _) => IO.unit
+    logEvent: (Event, Focus) => IO[Unit] = (_, _) => IO.unit,
+    frameTimings: FrameTimings = FrameTimings()
   ): IO[Unit] =
     for
       router          <- InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default))
@@ -66,7 +68,7 @@ class AppRuntimeInputBatchSpec extends AnyFlatSpec with Matchers:
         cursorVisible,
         emitDamage,
         translatorCache,
-        com.serenity.diagnostics.FrameTimings(),
+        frameTimings,
         logEvent = logEvent
       )
       _ <- Stream
@@ -208,4 +210,46 @@ class AppRuntimeInputBatchSpec extends AnyFlatSpec with Matchers:
       "InsertChar(f)",
       "damage"
     )
+  }
+
+  private def traceArrivals(timings: FrameTimings, keys: Int): Unit =
+    (1 to keys).foreach { _ =>
+      timings.keyLatency.keyReceived(System.currentTimeMillis())
+      timings.keyLatency.keyEnqueued()
+    }
+    timings.keyLatency.keysDequeued(keys)
+
+  it should "stamp every keystroke a batch applies, and its damage, onto the latency trace" in {
+    val clipboard = SystemClipboard[IO](readText = IO.pure(Some("X")), writeText = _ => IO.unit)
+    val timings   = FrameTimings()
+    timings.keyLatency.setEnabled(true)
+    traceArrivals(timings, keys = 3)
+
+    val program = for
+      stateManager <- editorWithEmptyBuffer()
+      _ <- runBatches(
+        stateManager,
+        List(List(key('a'), PendingInput.Ready(Paste), key('b')), List(PendingInput.Ready(MoveLeft), key('c'))),
+        clipboard = clipboard,
+        frameTimings = timings
+      )
+    yield ()
+    program.unsafeRunSync()
+
+    timings.keyLatency.pendingKeys.map(key => (key.appliedAt.isDefined, key.damagedAt.isDefined)) shouldBe
+      Vector.fill(3)((true, true))
+  }
+
+  it should "leave the latency trace untouched while it is off" in {
+    val timings = FrameTimings()
+    traceArrivals(timings, keys = 1)
+
+    val program = for
+      stateManager <- editorWithEmptyBuffer()
+      _            <- runBatches(stateManager, List(List(key('a'))), frameTimings = timings)
+      state        <- stateManager.getCurrentState
+    yield focusedText(state)
+
+    program.unsafeRunSync() shouldBe Some("a")
+    timings.keyLatency.pendingKeys shouldBe empty
   }

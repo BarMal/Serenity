@@ -160,15 +160,24 @@ object FrameTimingState:
 final class FrameTimings(clock: () => Long = () => System.nanoTime()):
   private val state = new AtomicReference(FrameTimingState.start(clock()))
 
+  /** Rides along with the frame phases so the frontends that already report them feed it without further wiring. */
+  val keyLatency: KeyLatencyTrace = KeyLatencyTrace(clock)
+
   private def update(transition: (FrameTimingState, Long) => FrameTimingState): Unit =
     val now = clock()
     val _   = state.updateAndGet(transition(_, now))
 
   def inputArrived(): Unit       = update(_.inputArrived(_))
-  def inputApplyStarted(): Unit  = update(_.inputApplyStarted(_))
   def inputApplyFinished(): Unit = update(_.inputApplyFinished(_))
   def renderStarted(): Unit      = update(_.renderStarted(_))
-  def framePublished(): Unit     = update(_.framePublished(_))
+
+  def inputApplyStarted(): Unit =
+    update(_.inputApplyStarted(_))
+    keyLatency.dispatchStarted()
+
+  def framePublished(): Unit =
+    update(_.framePublished(_))
+    keyLatency.framePublished()
 
   def renderFinished(kind: FrameKind): Unit = update(_.renderFinished(kind, _))
 
@@ -176,9 +185,12 @@ final class FrameTimings(clock: () => Long = () => System.nanoTime()):
   def paintStarted(): Long =
     val now = clock()
     val _   = state.updateAndGet(_.paintStarted(now))
+    keyLatency.paintStarted()
     now
 
-  def paintFinished(startedAt: Long): Unit = update(_.paintFinished(startedAt, _))
+  def paintFinished(startedAt: Long): Unit =
+    update(_.paintFinished(startedAt, _))
+    keyLatency.paintFinished()
 
   def timed[A](phase: FramePhase)(work: => A): A =
     val start = clock()

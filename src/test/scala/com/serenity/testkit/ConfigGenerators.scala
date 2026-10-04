@@ -212,6 +212,7 @@ object ConfigGenerators:
       )
       layerCaching <- Gen.oneOf(true, false)
       frameTiming  <- Gen.oneOf(true, false)
+      latencyTrace <- Gen.oneOf(true, false)
       warmUp       <- Gen.oneOf(true, false)
       diagnosticBlendWeight <- double(
         AppConfig.MinDiagnosticHighlightBlendWeight,
@@ -247,6 +248,7 @@ object ConfigGenerators:
       rendererFrameStateCacheCapacity = frameStateCacheCapacity,
       layerCachingEnabled = layerCaching,
       frameTimingEnabled = frameTiming,
+      latencyTraceEnabled = latencyTrace,
       startupWarmUpEnabled = warmUp,
       diagnosticHighlightBlendWeight = diagnosticBlendWeight,
       columnModeEnabled = columnMode,
