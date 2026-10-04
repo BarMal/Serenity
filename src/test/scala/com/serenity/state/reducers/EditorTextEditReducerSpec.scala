@@ -4,6 +4,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.state.undo.HistoryEntry
 import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
@@ -31,6 +32,16 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
   private def stateWithSmartPunctuation(text: String, cursor: CursorPosition): AppState =
     val before = stateWith(text, cursor)
     before.copy(persisted = before.persisted.copy(config = before.persisted.config.withSmartPunctuation(true)))
+
+  private def stateWithSmartPunctuationIn(language: LanguageId, text: String, cursor: CursorPosition): AppState =
+    val before = stateWithSmartPunctuation(text, cursor)
+    val buffer = before.persisted.buffers(bufferId)
+    val tagged = buffer.copy(document = buffer.document.copy(language = Some(language)))
+    before.copy(persisted = before.persisted.copy(buffers = Map(bufferId -> tagged)))
+
+  private def textAfterTyping(typed: String, state: AppState): String =
+    val after = typed.foldLeft(state)((current, c) => EditorEventReducer.reduce(InsertChar(c), paneId, current).state)
+    after.persisted.buffers(bufferId).document.content.collect()
 
   private def stateWithMarkdown(text: String, cursor: CursorPosition): AppState =
     val before         = stateWith(text, cursor)
@@ -122,12 +133,54 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
     bufferAfter(InsertChar('-'), before).document.content.collect() shouldBe "a-"
   }
 
-  "InsertChar with smart punctuation enabled" should "turn a second consecutive hyphen into an em dash" in {
+  "InsertChar with smart punctuation enabled" should "turn a second consecutive hyphen into an en dash" in {
     val before = stateWithSmartPunctuation("a-", CursorPosition(0, 2))
 
     val after = bufferAfter(InsertChar('-'), before)
-    after.document.content.collect() shouldBe "a—"
+    after.document.content.collect() shouldBe "a–"
     after.editing.cursorPositions shouldBe List(CursorPosition(0, 2))
+  }
+
+  it should "turn three hyphens typed mid-line into a single em dash, never an em dash and a hyphen" in {
+    val before = stateWithSmartPunctuation("a ", CursorPosition(0, 2))
+
+    textAfterTyping("---", before) shouldBe "a —"
+  }
+
+  it should "leave three hyphens typed at the start of a line literal, as a thematic break or front-matter fence" in {
+    val before = stateWithSmartPunctuation("title\n", CursorPosition(1, 0))
+
+    textAfterTyping("---", before) shouldBe "title\n---"
+  }
+
+  it should "leave a Markdown table delimiter row literal" in {
+    val before = stateWithSmartPunctuationIn(LanguageId.Markdown, "", CursorPosition(0, 0))
+
+    textAfterTyping("|---|", before) shouldBe "|---|"
+  }
+
+  it should "not substitute in a code buffer" in {
+    val before = stateWithSmartPunctuationIn(LanguageId.Scala, "x ", CursorPosition(0, 2))
+
+    textAfterTyping("-- \"s\" ...", before) shouldBe "x -- \"s\" ..."
+  }
+
+  it should "substitute in Markdown prose outside code" in {
+    val before = stateWithSmartPunctuationIn(LanguageId.Markdown, "a", CursorPosition(0, 1))
+
+    textAfterTyping("--", before) shouldBe "a–"
+  }
+
+  it should "not substitute inside a Markdown code span" in {
+    val before = stateWithSmartPunctuationIn(LanguageId.Markdown, "run `a", CursorPosition(0, 6))
+
+    textAfterTyping("--\"", before) shouldBe "run `a--\""
+  }
+
+  it should "not substitute inside a fenced Markdown code block" in {
+    val before = stateWithSmartPunctuationIn(LanguageId.Markdown, "```\na\n```", CursorPosition(1, 1))
+
+    textAfterTyping("--", before) shouldBe "```\na--\n```"
   }
 
   it should "turn a third consecutive period into a true ellipsis" in {
@@ -181,12 +234,17 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
     bufferAfter(NewLine, before).editing.cursorPositions shouldBe List(CursorPosition(3, 0))
   }
 
-  it should "record a single undo boundary for the replacement, not a separate one for the deleted hyphen" in {
+  it should "record the literal keystroke with the typing run and the substitution as an undo step of its own" in {
     val before = stateWithSmartPunctuation("a-", CursorPosition(0, 2))
 
-    EditorEventReducer.reduce(InsertChar('-'), paneId, before).effects.collect {
+    val boundaries = EditorEventReducer.reduce(InsertChar('-'), paneId, before).effects.collect {
       case AppEffect.Undo(boundary: UndoEffect.RecordBoundary) => boundary
-    } should have size 1
+    }
+    val snapshotTexts = boundaries.map(_.entry).collect {
+      case edit: HistoryEntry.BufferEdit => edit.snapshot.content.collect()
+    }
+    boundaries.map(_.groupable) shouldBe List(true, false)
+    snapshotTexts shouldBe List("a-", "a--")
   }
 
   /** All four deletion events share one selection arm (`deleteSelectedRanges`) ahead of their own without-a-selection
