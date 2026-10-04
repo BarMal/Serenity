@@ -1,11 +1,14 @@
 package com.serenity.io
 
+import java.io.IOException
+import java.nio.channels.FileChannel
 import java.nio.charset.StandardCharsets
 import java.nio.file.attribute.DosFileAttributeView
-import java.nio.file.{AtomicMoveNotSupportedException, Files, Path, StandardCopyOption}
+import java.nio.file.{AtomicMoveNotSupportedException, Files, Path, StandardCopyOption, StandardOpenOption}
+import java.util.Locale
 
 import scala.util.control.NonFatal
-import scala.util.{Failure, Try}
+import scala.util.{Failure, Success, Try, Using}
 
 import cats.effect.IO
 
@@ -18,11 +21,46 @@ private[serenity] trait AtomicFileSystem:
   def createDirectories(path: Path): Path
   def createTempFile(directory: Path, prefix: String, suffix: String): Path
   def exists(path: Path): Boolean
+  def realPath(path: Path): Path
+
+  /** `None` where the filesystem exposes no link count (anything without the `unix` attribute view). */
+  def linkCount(path: Path): Option[Int]
+
   def copyAttributes(source: Path, target: Path): Path
+  def copyFile(source: Path, target: Path): Path
+  def readBytes(path: Path): Array[Byte]
   def write(path: Path, bytes: Array[Byte]): Path
+
+  /** Truncates and rewrites `path`'s existing inode rather than replacing it, so its other hardlinks see the write. */
+  def overwriteInPlace(path: Path, bytes: Array[Byte]): Path
+
+  def syncFile(path: Path): Unit
+  def syncDirectory(directory: Path): Unit
   def moveAtomically(source: Path, target: Path): Path
   def moveReplacing(source: Path, target: Path): Path
   def deleteIfExists(path: Path): Boolean
+
+/** What a failed fsync of the parent directory, after the rename that replaced a file, means for the save. */
+private[serenity] enum DirectorySyncPolicy:
+  /** POSIX: without the directory fsync the rename itself may not survive a crash, so the save reports it. */
+  case Propagate
+
+  /** Windows cannot open a directory as a `FileChannel` at all, so there is no directory fsync to perform. */
+  case IgnoreFailure
+
+  def run(sync: () => Unit): Unit =
+    this match
+      case DirectorySyncPolicy.Propagate => sync()
+      case DirectorySyncPolicy.IgnoreFailure =>
+        try sync()
+        catch case _: IOException => ()
+
+private[serenity] object DirectorySyncPolicy:
+
+  def forOs(osName: String): DirectorySyncPolicy =
+    if osName.toLowerCase(Locale.ROOT).startsWith("windows") then IgnoreFailure else Propagate
+
+  val current: DirectorySyncPolicy = forOs(System.getProperty("os.name", ""))
 
 /** Writes complete files through a temporary sibling before replacing the target. */
 object AtomicFileWriter:
@@ -34,6 +72,32 @@ object AtomicFileWriter:
       Files.createTempFile(directory, prefix, suffix)
 
     def exists(path: Path): Boolean = Files.exists(path)
+
+    def realPath(path: Path): Path = path.toRealPath()
+
+    def linkCount(path: Path): Option[Int] =
+      try
+        Files.getAttribute(path, "unix:nlink") match
+          case count: Integer => Some(count.intValue)
+          case _              => None
+      catch case _: UnsupportedOperationException | _: IllegalArgumentException => None
+
+    def copyFile(source: Path, target: Path): Path =
+      Files.copy(source, target, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
+
+    def readBytes(path: Path): Array[Byte] = Files.readAllBytes(path)
+
+    def overwriteInPlace(path: Path, bytes: Array[Byte]): Path =
+      Files.write(path, bytes, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)
+
+    def syncFile(path: Path): Unit =
+      Using.resource(FileChannel.open(path, StandardOpenOption.WRITE))(_.force(true))
+
+    def syncDirectory(directory: Path): Unit =
+      DirectorySyncPolicy.current.run(() => forceDirectory(directory))
+
+    private def forceDirectory(directory: Path): Unit =
+      Using.resource(FileChannel.open(directory, StandardOpenOption.READ))(_.force(true))
 
     // Carries `source`'s POSIX permissions onto the freshly-created (empty) `target` temp file, so the atomic move
     // that later replaces `source` with it doesn't silently narrow the file down to the temp file's own default,
@@ -102,31 +166,78 @@ object AtomicFileWriter:
     IO.blocking(writeBytesBlocking(path, bytes, fileSystem))
 
   private def writeBytesBlocking(path: Path, bytes: Array[Byte], fileSystem: AtomicFileSystem): Unit =
-    val target    = path.toAbsolutePath.normalize
-    val directory = Option(target.getParent).getOrElse(target)
-
     // This is the synchronous boundary both writeBytes (via IO.blocking, which converts a thrown
     // exception into a failed IO) and ConfigManagerTestSupport.saveConfig (plain try/catch) rely on -- so it must
     // keep raising on failure. Try#get raises for us instead of a literal `throw`, and Try already only
     // catches NonFatal, matching the two catch clauses this replaces.
     Try {
+      // Writing beside the symlink's real target, not the link, keeps the link in place (#1881).
+      val target    = if fileSystem.exists(path) then fileSystem.realPath(path) else path.toAbsolutePath.normalize
+      val directory = Option(target.getParent).getOrElse(target)
       val _         = fileSystem.createDirectories(directory)
-      val prefix    = s".${target.getFileName.toString}."
-      val temporary = fileSystem.createTempFile(directory, prefix, ".tmp")
-      try
-        if fileSystem.exists(target) then
-          val _ = fileSystem.copyAttributes(target, temporary)
-        val _ = fileSystem.write(temporary, bytes)
-        try
-          val _ = fileSystem.moveAtomically(temporary, target)
-        catch
-          case _: AtomicMoveNotSupportedException =>
-            val _ = fileSystem.moveReplacing(temporary, target)
-      finally deleteQuietly(temporary, fileSystem)
+      if fileSystem.exists(target) && fileSystem.linkCount(target).exists(_ > 1) then
+        overwriteHardLinkedTarget(target, directory, bytes, fileSystem)
+      else replaceAtomically(target, directory, bytes, fileSystem)
     }.recoverWith {
       case error: AtomicFileWriteException => Failure(error)
       case NonFatal(error)                 => Failure(AtomicFileWriteException(path, error))
     }.get
+
+  private def temporaryPrefix(target: Path): String = s".${target.getFileName.toString}."
+
+  // The temp file is fsynced before the rename and the directory after it: without the first, a crash can leave the
+  // renamed file empty (ext4 delayed allocation); without the second, the rename itself may be lost.
+  private def replaceAtomically(
+    target: Path,
+    directory: Path,
+    bytes: Array[Byte],
+    fileSystem: AtomicFileSystem
+  ): Unit =
+    val temporary = fileSystem.createTempFile(directory, temporaryPrefix(target), ".tmp")
+    try
+      if fileSystem.exists(target) then
+        val _ = fileSystem.copyAttributes(target, temporary)
+      val _ = fileSystem.write(temporary, bytes)
+      fileSystem.syncFile(temporary)
+      try
+        val _ = fileSystem.moveAtomically(temporary, target)
+      catch
+        case _: AtomicMoveNotSupportedException =>
+          val _ = fileSystem.moveReplacing(temporary, target)
+      fileSystem.syncDirectory(directory)
+    finally deleteQuietly(temporary, fileSystem)
+
+  // A rename would give `target` a fresh inode and split it from its other hardlinks, so it is overwritten in place
+  // instead (Vim's `backupcopy`). The in-place write is not atomic, hence the synced backup to restore from; the
+  // backup is kept on disk only if that restore fails too, since it is then the sole copy of the original content.
+  private def overwriteHardLinkedTarget(
+    target: Path,
+    directory: Path,
+    bytes: Array[Byte],
+    fileSystem: AtomicFileSystem
+  ): Unit =
+    val backup   = fileSystem.createTempFile(directory, temporaryPrefix(target), ".bak")
+    val backedUp = Try(copyDurably(target, backup, fileSystem))
+    val written  = backedUp.flatMap(_ => Try(overwriteDurably(target, bytes, fileSystem)))
+    val targetIntact =
+      (backedUp, written) match
+        case (Success(_), Failure(writeError)) =>
+          Try(overwriteDurably(target, fileSystem.readBytes(backup), fileSystem)) match
+            case Success(_) => true
+            case Failure(restoreError) =>
+              writeError.addSuppressed(restoreError)
+              false
+        case _ => true
+    if targetIntact then deleteQuietly(backup, fileSystem)
+    written.get
+
+  private def copyDurably(source: Path, target: Path, fileSystem: AtomicFileSystem): Unit =
+    val _ = fileSystem.copyFile(source, target)
+    fileSystem.syncFile(target)
+
+  private def overwriteDurably(target: Path, bytes: Array[Byte], fileSystem: AtomicFileSystem): Unit =
+    val _ = fileSystem.overwriteInPlace(target, bytes)
+    fileSystem.syncFile(target)
 
   private def deleteQuietly(path: Path, fileSystem: AtomicFileSystem): Unit =
     try fileSystem.deleteIfExists(path): Unit
