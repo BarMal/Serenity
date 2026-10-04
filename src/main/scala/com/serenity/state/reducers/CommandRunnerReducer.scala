@@ -307,12 +307,23 @@ object CommandRunnerReducer:
           else ReducerResult.noEffects(state)
 
   private def reducePaste(state: AppState, registry: CommandRegistry): ReducerResult =
-    state.runtime.clipboard
-      .getOrElse("")
-      .filter(char => char != '\r' && char != '\n')
-      .foldLeft(ReducerResult.noEffects(state))((result, char) =>
+    val pasted = state.runtime.clipboard.getOrElse("").filter(char => char != '\r' && char != '\n')
+    if pasted.nonEmpty && typingSearchesRoot(state) then
+      given CommandRegistry = registry
+      ReducerResult.noEffects(replaceRunner(state, r => r.updateSearchTerm(r.searchTerm + pasted)))
+    else
+      pasted.foldLeft(ReducerResult.noEffects(state))((result, char) =>
         reduceActive(RunnerInsertChar(char), result.state, registry)
       )
+
+  /** Whether a typed character would go to the root search box -- the case where pasting it one character at a time
+    * would search once per character (#1854).
+    */
+  private def typingSearchesRoot(state: AppState): Boolean =
+    !submenuHasFocus(state) && currentRunner(state).exists { runner =>
+      val inputSelected = runner.selectedItem.collect { case input: CommandSurfaceItem.InputItem => input }.nonEmpty
+      runner.editingItemId.isEmpty && !inputSelected
+    }
 
   private def reduceVerticalNavigate(delta: Int, state: AppState): ReducerResult =
     if submenuHasFocus(state) then ReducerResult.noEffects(replaceRunner(state, _.moveSubmenuSelection(delta)))
