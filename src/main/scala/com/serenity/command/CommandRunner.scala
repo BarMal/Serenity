@@ -171,16 +171,13 @@ final case class CommandRunner(
   def updateSearchTerm(term: String)(using registry: CommandRegistry): CommandRunner =
     val filtered =
       if term.isEmpty then registry.getAllCommands
-      // issue #1048: `searchCommands` already ranks by fuzzy relevance; re-sorting (stably) by recency on top of
-      // that lets a recently-used command float above an equally (or less) relevant one without ever displacing a
-      // clearly stronger match, since a `sortBy` is stable across ties in `-commandUsage`.
       else
         // Filtered before the cap, so commands this mode/frontend hides can't crowd available ones out of it.
-        registry
+        val matches = registry
           .searchCommands(term, maxResults = registry.getAllCommands.size)
           .filter(CommandRelevance.isAvailable(_, context.editingContext))
           .take(50)
-          .sortBy(command => -commandUsage.getOrElse(CommandId(command.name), 0))
+        CommandRanking.ranked(matches, term, commandUsage)
     val updatedState = CommandPaletteState(term, 0, filtered)
     val updatedSurface = surface match
       case CommandRunnerSurface.Palette(_)     => CommandRunnerSurface.Palette(updatedState)
