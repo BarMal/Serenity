@@ -11,7 +11,31 @@ import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
   * control character (except tab) touches it. Carets over a context-free span are plain sums of advances taken from the
   * span's start, so a row cut out of a measured paragraph has exactly the carets the row measures alone.
   */
-final private[layout] class GlyphAdvances private (advances: Array[Float], contextFreeBefore: Array[Int]):
+final private[layout] class GlyphAdvances private (
+    private val advances: Array[Float],
+    private val contextFreeBefore: Array[Int]
+):
+
+  def length: Int = advances.length
+
+  /** These advances with `[keep, tailFrom)` replaced by `middle`: the text before `keep` and from `tailFrom` on is kept
+    * as measured, so both must be cuts that shaping does not read across (see [[ShapingBarriers]]).
+    */
+  def spliced(keep: Int, middle: GlyphAdvances, tailFrom: Int): GlyphAdvances =
+    val tailLength = advances.length - tailFrom
+    val tailAt     = keep + middle.length
+    val merged     = new Array[Float](tailAt + tailLength)
+    System.arraycopy(advances, 0, merged, 0, keep)
+    System.arraycopy(middle.advances, 0, merged, keep, middle.length)
+    System.arraycopy(advances, tailFrom, merged, tailAt, tailLength)
+    val keptFree   = contextFreeBefore(keep)
+    val middleFree = keptFree + middle.contextFreeBefore(middle.length)
+    val counts     = new Array[Int](merged.length + 1)
+    System.arraycopy(contextFreeBefore, 0, counts, 0, keep + 1)
+    (1 to middle.length).foreach(index => counts(keep + index) = keptFree + middle.contextFreeBefore(index))
+    val tailShift = middleFree - contextFreeBefore(tailFrom)
+    (1 to tailLength).foreach(index => counts(tailAt + index) = tailShift + contextFreeBefore(tailFrom + index))
+    new GlyphAdvances(merged, counts)
 
   def isContextFree(from: Int, until: Int): Boolean =
     contextFreeBefore(until) - contextFreeBefore(from) == until - from
