@@ -134,7 +134,8 @@ class MockRenderSurface(
       background: Color,
       font: Option[Font],
       clipGlyphToRun: Boolean,
-      activeStyle: TextStyle
+      activeStyle: TextStyle,
+      translationXPx: Double
   )
 
   private val drawRunPxCallsBuffer = scala.collection.mutable.ListBuffer.empty[DrawRunPxCall]
@@ -167,7 +168,8 @@ class MockRenderSurface(
       currentBg.get(),
       currentFont.get(),
       clipGlyphToRun,
-      currentStyle.get()
+      currentStyle.get(),
+      currentPixelTranslation.get().xPx
     )
     val metrics =
       currentFont
