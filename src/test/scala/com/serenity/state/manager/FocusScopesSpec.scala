@@ -2,6 +2,7 @@ package com.serenity.state.manager
 
 import com.serenity.TestWorkspaceTrees
 import com.serenity.keystroke.events.*
+import com.serenity.rope.Balance
 import com.serenity.state.components.ComponentResult
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{Layout, PanelContent}
@@ -10,6 +11,8 @@ import org.scalatest.matchers.should.Matchers
 
 /** #1940: an unhandled key bubbles from a focused surface to the editor pane, unless the surface is modal. */
 class FocusScopesSpec extends AnyFlatSpec with Matchers:
+
+  given Balance = Balance.default
 
   private val paneId   = PaneId(0)
   private val bufferId = BufferId(0)
