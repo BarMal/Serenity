@@ -240,9 +240,8 @@ class EditorTextEditReducerSpec extends AnyFlatSpec with Matchers with OptionVal
     val boundaries = EditorEventReducer.reduce(InsertChar('-'), paneId, before).effects.collect {
       case AppEffect.Undo(boundary: UndoEffect.RecordBoundary) => boundary
     }
-    val snapshotTexts = boundaries.map(_.entry).collect {
-      case edit: HistoryEntry.BufferEdit => edit.snapshot.content.collect()
-    }
+    val snapshotTexts =
+      boundaries.map(_.entry).collect { case edit: HistoryEntry.BufferEdit => edit.snapshot.content.collect() }
     boundaries.map(_.groupable) shouldBe List(true, false)
     snapshotTexts shouldBe List("a-", "a--")
   }

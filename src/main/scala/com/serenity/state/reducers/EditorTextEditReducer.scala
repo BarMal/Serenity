@@ -235,9 +235,9 @@ private[reducers] object EditorTextEditReducer:
     ReducerResult.fromTransition(
       currentState,
       Focused.modifyBufferWithIdAndEmit(buffer.id) { current =>
-        val (literal, literalEdit) = replaceSelectionOrInsert(current, cursor, char.toString)
-        val substitutionStart = literalEdit.start - charsToReplace
-        val literalEnd        = literalEdit.start + literalEdit.insertedText.length
+        val (literal, literalEdit)        = replaceSelectionOrInsert(current, cursor, char.toString)
+        val substitutionStart             = literalEdit.start - charsToReplace
+        val literalEnd                    = literalEdit.start + literalEdit.insertedText.length
         val (substituted, substituteEdit) = replaceRange(literal, substitutionStart, literalEnd, substitutedText)
         val literalStep    = undoBoundaryEffects(buffer.id, paneId, buffer, List(literalEdit), groupable = true)
         val substituteStep = undoBoundaryEffects(buffer.id, paneId, literal, List(substituteEdit), groupable = false)
@@ -269,9 +269,8 @@ private[reducers] object EditorTextEditReducer:
         newContent,
         List(edit)
       ),
-      richText = buffer.richText.copy(richTextDocument =
-        richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText)
-      )
+      richText =
+        buffer.richText.copy(richTextDocument = richTextDocumentAfterEdit(buffer, startOffset, endOffset, insertedText))
     )
     (replaced, edit)
 

@@ -179,7 +179,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
     cursorVisible: Ref[IO, Boolean],
     painted: Ref[IO, Vector[Boolean]]
   ): Stream[IO, Unit] =
-    val state = AppState.initial(config)
+    val state        = AppState.initial(config)
     given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
     Stream
       .eval(SignallingRef.of[IO, Boolean](true))

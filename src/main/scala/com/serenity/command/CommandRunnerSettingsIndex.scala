@@ -109,6 +109,7 @@ object CommandRunnerSettingsIndex:
   )
 
   private object SearchableGroup:
+
     def from(group: CommandSurfaceItem.GroupItem): SearchableGroup =
       SearchableGroup(
         group = group,

@@ -106,4 +106,5 @@ class CommandRunnerSearchStateSpec extends AnyFlatSpec with Matchers:
         case SurfaceContent.CommandPalette(runner) => Some(runner)
         case _                                     => None)
       .getOrElse(fail("expected the command palette to be open"))
+
 end CommandRunnerSearchStateSpec

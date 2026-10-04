@@ -173,8 +173,8 @@ object ThemeManager:
   * `ListMap` made every lookup a linear walk of up to 4096 keys.
   *
   * The key holds the whole [[Theme]] value, not its `name`: a hot-reloaded theme file keeps its name with new colours,
-  * and renderers derive same-named variants via `copy` (e.g. `RendererMarkdownLens`'s lens theme), so a name key
-  * could serve stale colours. `Theme` carries no version or generation id to key on instead.
+  * and renderers derive same-named variants via `copy` (e.g. `RendererMarkdownLens`'s lens theme), so a name key could
+  * serve stale colours. `Theme` carries no version or generation id to key on instead.
   *
   * Instance-scoped (issue #1677): one instance is created per render-owning entity (held on
   * [[com.serenity.state.manager.RenderCaches]], threaded through [[com.serenity.ui.renderer.RenderContext]] to every

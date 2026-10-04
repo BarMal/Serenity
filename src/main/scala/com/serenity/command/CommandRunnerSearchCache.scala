@@ -8,13 +8,13 @@ final class CommandRunnerQueryResults(val index: CommandRunnerSettingsIndex, val
 
 /** The search state a `CommandRunner` carries from copy to copy: the settings index, and the results for its query.
   *
-  * Every cache compares equal to every other. What it holds is derived entirely from the runner's own fields, so a
-  * warm cache and a cold one must not make two otherwise-identical runners unequal.
+  * Every cache compares equal to every other. What it holds is derived entirely from the runner's own fields, so a warm
+  * cache and a cold one must not make two otherwise-identical runners unequal.
   */
 final class CommandRunnerSearchCache private (carried: Option[CommandRunnerQueryResults]):
 
-  /** The carried results when they still match `inputs` and `query`; otherwise new ones, reusing the carried index
-    * when only the query moved.
+  /** The carried results when they still match `inputs` and `query`; otherwise new ones, reusing the carried index when
+    * only the query moved.
     */
   def resultsFor(inputs: CommandRunnerSettingsIndex.Inputs, query: String): CommandRunnerQueryResults =
     carried match

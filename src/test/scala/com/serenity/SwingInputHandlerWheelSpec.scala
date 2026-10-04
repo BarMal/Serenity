@@ -27,11 +27,11 @@ class SwingInputHandlerWheelSpec extends AnyFlatSpec with Matchers:
     new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13))
 
   private def scrollWheel(
-      component: JPanel,
-      modifiers: Int,
-      scrollType: Int,
-      wheelRotation: Int,
-      preciseRotation: Double
+    component: JPanel,
+    modifiers: Int,
+    scrollType: Int,
+    wheelRotation: Int,
+    preciseRotation: Double
   ): Unit =
     component.getMouseWheelListeners.head.mouseWheelMoved(
       new MouseWheelEvent(

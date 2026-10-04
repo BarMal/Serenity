@@ -56,8 +56,8 @@ final private[manager] class LspEffectQueue private (
     takeLive.flatMap(_.fold(take)(IO.pure))
 
   /** Dequeues one entry and settles its bookkeeping as one step: a cancel landing between the two would leave `open`
-    * naming a change no longer queued, so every later edit to that document would join it and never be sent. `None`
-    * is a change already superseded; the retry happens outside the mask so the next wait stays cancelable.
+    * naming a change no longer queued, so every later edit to that document would join it and never be sent. `None` is
+    * a change already superseded; the retry happens outside the mask so the next wait stays cancelable.
     */
   private def takeLive: IO[Option[LspEffect]] =
     IO.uncancelable { poll =>

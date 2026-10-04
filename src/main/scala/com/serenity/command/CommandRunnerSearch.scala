@@ -35,6 +35,7 @@ private[command] object CommandRunnerSearch:
   final private[command] case class SettingHaystack(label: String, id: String, labelAndHint: String, everything: String)
 
   private[command] object SettingHaystack:
+
     def of(item: CommandSurfaceItem, breadcrumb: String): SettingHaystack =
       val label = normalizedSearchTerm(itemLabel(item))
       val id    = normalizedSearchTerm(item.id)
