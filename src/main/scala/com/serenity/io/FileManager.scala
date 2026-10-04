@@ -1,6 +1,5 @@
 package com.serenity.io
 
-import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
 import cats.effect.IO
@@ -45,6 +44,11 @@ object FileManagerError:
   final case class StorageFailure(error: DocumentStorageError)
       extends FileManagerError(s"Document storage error: $error")
 
+  /** Raised instead of opening a file whose bytes look binary (#1627): shown as text it would be garbage, and saved
+    * back it would be destroyed.
+    */
+  final case class BinaryContent(path: Path) extends FileManagerError(s"Not a text file: $path")
+
 class FileManager(using balance: Balance):
 
   private val storage: DocumentStorageProvider = LocalDocumentStorageProvider()
@@ -73,8 +77,9 @@ class FileManager(using balance: Balance):
         }
       case _ =>
         ensureSupported(path, _.canOpen, FileManagerError.UnsupportedForOpen.apply) >>
-          openStored(location).map { stored =>
-            bufferFromContent(bufferId, path, new String(stored.content, StandardCharsets.UTF_8), stored.revision)
+          openStored(location).flatMap { stored =>
+            IO.fromOption(TextFileCodec.decode(stored.content))(FileManagerError.BinaryContent(path))
+              .map(decoded => bufferFromContent(bufferId, path, decoded, stored.revision))
           }
 
   def saveBuffer(buffer: Buffer, path: Path): IO[Buffer] =
@@ -83,9 +88,9 @@ class FileManager(using balance: Balance):
       case FileType.Markdown =>
         for
           _ <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
-          content = contentForSave(buffer, markdownContentForSave(buffer)).getBytes(StandardCharsets.UTF_8)
-          stored <- saveStored(path, content, expectedRevision)
-        yield savedBuffer(buffer, path, None, stored.revision)
+          encoded = encodedForSave(buffer, markdownContentForSave(buffer))
+          stored <- saveStored(path, encoded.bytes, expectedRevision)
+        yield savedAs(encoded, savedBuffer(buffer, path, None, stored.revision))
       case FileType.RichText =>
         val document = richTextDocumentForSave(buffer)
         saveStored(path, RtfDocumentCodec.writeBytes(document), expectedRevision)
@@ -101,9 +106,9 @@ class FileManager(using balance: Balance):
       case _ =>
         for
           _ <- ensureSupported(path, _.canSave, FileManagerError.UnsupportedForSave.apply)
-          content = contentForSave(buffer, buffer.document.content.collect()).getBytes(StandardCharsets.UTF_8)
-          stored <- saveStored(path, content, expectedRevision)
-        yield savedBuffer(buffer, path, None, stored.revision))
+          encoded = encodedForSave(buffer, buffer.document.content.collect())
+          stored <- saveStored(path, encoded.bytes, expectedRevision)
+        yield savedAs(encoded, savedBuffer(buffer, path, None, stored.revision)))
 
   /** Save buffer to its existing file path */
   def saveBuffer(buffer: Buffer): IO[Buffer] =
@@ -133,24 +138,38 @@ class FileManager(using balance: Balance):
     storage.open(StorageLocation.Local(path)).map(_.toOption.flatMap(_.revision))
 
   /** Editor content is LF-only, because `Rope` normalised it on the way in. A file that arrived with CRLF is written
-    * back with CRLF, so an ordinary save does not rewrite every line of it.
+    * back with CRLF, and in the encoding and BOM it arrived with, so an ordinary save does not rewrite every line of
+    * it.
     */
-  private def contentForSave(buffer: Buffer, normalizedContent: String): String =
-    buffer.document.lineEnding.applyTo(normalizedContent)
+  private def encodedForSave(buffer: Buffer, normalizedContent: String): EncodedText =
+    val document = buffer.document
+    TextFileCodec.encodeOrFallBackToUtf8(
+      document.lineEnding.applyTo(normalizedContent),
+      document.encoding,
+      document.hasBom
+    )
+
+  /** Records what the file was actually written as, which differs from what it was opened as when
+    * [[TextFileCodec.encodeOrFallBackToUtf8]] had to fall back.
+    */
+  private def savedAs(encoded: EncodedText, saved: Buffer): Buffer =
+    saved.copy(document = saved.document.copy(encoding = encoded.encoding, hasBom = encoded.hasBom))
 
   private def bufferFromContent(
     bufferId: BufferId,
     path: Path,
-    content: String,
+    decoded: DecodedText,
     revision: Option[DocumentRevision]
   ): Buffer =
     Buffer(
       id = bufferId,
       document = com.serenity.state.models.Document(
-        content = com.serenity.rope.Rope(content),
+        content = com.serenity.rope.Rope(decoded.content),
         filePath = Some(path),
         language = languageFromPath(path),
-        lineEnding = LineEnding.detect(content),
+        lineEnding = LineEnding.detect(decoded.content),
+        encoding = decoded.encoding,
+        hasBom = decoded.hasBom,
         revision = revision
       )
     )

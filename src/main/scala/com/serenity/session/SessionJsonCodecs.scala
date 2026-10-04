@@ -116,6 +116,8 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     placeholders     <- cursor.getOrElse[List[SessionPlaceholder]]("placeholders")(Nil)
     darlings         <- cursor.getOrElse[List[SessionDarling]]("darlings")(Nil)
     lineEnding       <- cursor.getOrElse[Option[String]]("lineEnding")(None)
+    encoding         <- cursor.getOrElse[Option[String]]("encoding")(None)
+    hasBom           <- cursor.getOrElse[Boolean]("hasBom")(false)
     revision         <- cursor.getOrElse[Option[String]]("revision")(None)
     hidden           <- cursor.getOrElse[Boolean]("hidden")(false)
     notes            <- cursor.getOrElse[List[SessionNote]]("notes")(Nil)
@@ -136,6 +138,8 @@ given Decoder[SessionBuffer] = Decoder.instance { cursor =>
     placeholders,
     darlings,
     lineEnding,
+    encoding,
+    hasBom,
     revision,
     hidden,
     notes

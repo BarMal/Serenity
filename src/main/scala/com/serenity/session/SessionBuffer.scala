@@ -7,7 +7,7 @@ import com.serenity.io.{DocumentRevision, FileManager}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
 import com.serenity.state.models.*
-import com.serenity.text.LineEnding
+import com.serenity.text.{LineEnding, TextEncoding}
 
 final case class SessionBuffer(
     id: Int,
@@ -27,6 +27,8 @@ final case class SessionBuffer(
     placeholders: List[SessionPlaceholder] = Nil,
     darlings: List[SessionDarling] = Nil,
     lineEnding: Option[String] = None,
+    encoding: Option[String] = None,
+    hasBom: Boolean = false,
     // The on-disk revision the buffer's content was based on (#1670), so a dirty buffer restored from the session
     // still detects a file changed since.
     revision: Option[String] = None,
@@ -89,6 +91,8 @@ object SessionBuffer:
       language = buffer.document.language.map(_.id),
       isNewEmpty = buffer.document.isNewEmpty,
       lineEnding = Some(buffer.document.lineEnding.configKey),
+      encoding = Some(buffer.document.encoding.configKey),
+      hasBom = buffer.document.hasBom,
       cursors = buffer.editing.cursorPositions.map(SessionCursorPosition.fromCursorPosition),
       viewport = SessionViewport.fromViewport(buffer.viewport),
       // Clean, file-backed buffers rely on the on-disk file (see toBufferIO's disk-read fallback) --
@@ -123,6 +127,9 @@ object SessionBuffer:
         // A session written before line endings were recorded has no key to restore; LineEnding.default matches
         // what that session's buffers would have been saved with anyway.
         lineEnding = sessionBuffer.lineEnding.flatMap(LineEnding.fromConfigKey).getOrElse(LineEnding.default),
+        // Likewise for a session written before encodings were recorded (#1627): every file was read as UTF-8.
+        encoding = sessionBuffer.encoding.flatMap(TextEncoding.fromConfigKey).getOrElse(TextEncoding.default),
+        hasBom = sessionBuffer.hasBom,
         revision = sessionBuffer.revision.map(DocumentRevision.apply)
       ),
       editing = EditingState(sessionBuffer.cursors.map(SessionCursorPosition.toCursorPosition)),
