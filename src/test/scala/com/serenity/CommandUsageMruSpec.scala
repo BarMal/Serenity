@@ -14,6 +14,9 @@ import org.scalatest.matchers.should.Matchers
   */
 class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
+  private def registryCommand(name: String): Command =
+    CommandRegistry.withToggleUI.findCommand(name).getOrElse(fail(s"no registry command $name"))
+
   private def runnerFrom(sm: com.serenity.state.manager.StateManager): CommandRunner =
     sm.getCurrentState
       .unsafeRunSync()
@@ -26,25 +29,15 @@ class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTes
   "executing a command" should "record its use on AppState.persisted, surviving the palette closing" in {
     val sm = createStateManager("CommandUsageMru")
 
-    val command = Command.typed(
-      "test-mru-command",
-      "A test command for MRU tracking",
-      CommandIntent.Edit(EditIntent.Undo),
-      label = "Test MRU Command"
-    )
+    val command = registryCommand("undo")
     sm.executeCommand(command).unsafeRunSync()
 
     sm.getCurrentState.unsafeRunSync().persisted.commandUsage should contain key CommandId(command.name)
   }
 
   it should "seed the freshly-activated palette's own commandUsage on the next open" in {
-    val sm = createStateManager("CommandUsageMruReopen")
-    val command = Command.typed(
-      "test-mru-reopen-command",
-      "A test command for MRU tracking across reopen",
-      CommandIntent.Edit(EditIntent.Undo),
-      label = "Test MRU Reopen Command"
-    )
+    val sm      = createStateManager("CommandUsageMruReopen")
+    val command = registryCommand("undo")
     sm.executeCommand(command).unsafeRunSync()
 
     // Open, then close, then reopen the palette -- CommandRunner.empty is reconstructed fresh each time.
@@ -90,7 +83,8 @@ class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTes
     themeChooser(state) shouldBe defined
   }
 
-  "the theme chooser" should "leave command usage untouched while previewing, and record the theme picked" in {
+  // #1877: a theme pick is no palette command, so it never enters the recency table.
+  "the theme chooser" should "leave command usage untouched while previewing and by the theme picked" in {
     val sm = createStateManager("CommandUsageMruThemePreview")
     runFromPalette(sm, "Open Theme Chooser", "theme-chooser")
 
@@ -98,9 +92,11 @@ class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTes
     val previewing = sm.getCurrentState.unsafeRunSync()
     mostRecentCommand(previewing) shouldBe Some("theme-chooser")
 
-    val highlighted = themeChooser(previewing).flatMap(_.selectedChoice).getOrElse(fail("expected a highlighted theme"))
+    themeChooser(previewing).flatMap(_.selectedChoice) shouldBe defined
     sm.applyEvent(Enter).unsafeRunSync()
-    mostRecentCommand(sm.getCurrentState.unsafeRunSync()) shouldBe Some(highlighted.action.name)
+    val picked = sm.getCurrentState.unsafeRunSync()
+    themeChooser(picked) shouldBe None
+    mostRecentCommand(picked) shouldBe Some("theme-chooser")
   }
 
   it should "leave the theme creator open and most recent" in {

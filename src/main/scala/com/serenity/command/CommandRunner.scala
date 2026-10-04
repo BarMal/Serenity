@@ -205,8 +205,7 @@ final case class CommandRunner(
     * run before it.
     */
   def recordCommandUsage(name: String): CommandRunner =
-    val nextGeneration = commandUsage.values.maxOption.getOrElse(0) + 1
-    copy(commandUsage = commandUsage + (CommandId(name) -> nextGeneration))
+    copy(commandUsage = CommandUsageHistory.recorded(commandUsage, CommandId(name)))
 
   def settingsGroups: List[CommandSurfaceItem.GroupItem] =
     searchResults.index.settingsGroups
