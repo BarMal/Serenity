@@ -52,17 +52,87 @@ private[layout] object GlyphAdvances:
     resolver: LineFontResolver,
     frc: FontRenderContext
   ): GlyphAdvances =
-    val chars       = text.substring(from, until).toCharArray
+    val chars = new Array[Char](until - from)
+    text.getChars(from, until, chars, 0)
     val advances    = new Array[Float](chars.length)
     val contextFree = new Array[Boolean](chars.length)
     val origin      = absoluteStartColumn + from
     resolver.fontRuns(origin, origin + chars.length).foreach { (runStart, runEnd, font) =>
       measureRun(chars, runStart - origin, runEnd - origin, font, frc, advances, contextFree)
     }
-    val contextFreeBefore = contextFree.scanLeft(0)((count, free) => if free then count + 1 else count)
-    new GlyphAdvances(advances, contextFreeBefore)
+    new GlyphAdvances(advances, contextFreeCounts(contextFree))
+
+  private def contextFreeCounts(contextFree: Array[Boolean]): Array[Int] =
+    val counts = new Array[Int](contextFree.length + 1)
+    @annotation.tailrec
+    def count(index: Int): Unit =
+      if index < contextFree.length then
+        counts(index + 1) = counts(index) + (if contextFree(index) then 1 else 0)
+        count(index + 1)
+    count(0)
+    counts
+
+  /** What makes one character's advance independent of its neighbours, given the advance the font measured for it. */
+  def isContextFreeAdvance(char: Char, single: Array[Char], advance: Float): Boolean =
+    isContextFreeCharacter(char) && !Font.textRequiresLayout(single, 0, 1) &&
+      (advance == 0.0f || advance >= SmallestDistinctAdvancePx)
 
   private def measureRun(
+    chars: Array[Char],
+    start: Int,
+    end: Int,
+    font: Font,
+    frc: FontRenderContext,
+    advances: Array[Float],
+    contextFree: Array[Boolean]
+  ): Unit =
+    val table = GlyphAdvanceTable.shared.forFont(font, frc)
+    if !readFromTable(chars, start, end, table, advances, contextFree) then
+      measureRunWithGlyphVector(chars, start, end, font, frc, advances, contextFree)
+    else if font.hasLayoutAttributes && end > start then
+      val runChars = java.util.Arrays.copyOfRange(chars, start, end)
+      clearShapedCharacters(runChars, start, font, frc, nominalCodes(runChars, table), advances, contextFree)
+
+  /** Fills `[start, end)` from the table, or returns false, leaving it untouched, when any character of the run must be
+    * measured with the run: a surrogate, a format or control character, one needing layout or a vanishing advance. Such
+    * a run keeps the one glyph vector per run it always had. A font with layout attributes still shapes the run to find
+    * its kerning pairs and ligatures; the table only replaces the nominal measurement the shaped result is compared to.
+    */
+  private def readFromTable(
+    chars: Array[Char],
+    start: Int,
+    end: Int,
+    table: GlyphAdvanceTable,
+    advances: Array[Float],
+    contextFree: Array[Boolean]
+  ): Boolean =
+    @annotation.tailrec
+    def read(index: Int): Boolean =
+      if index == end then true
+      else
+        val cell = table.advanceCell(chars(index))
+        if GlyphAdvanceTable.isUnsuited(cell) then false
+        else
+          advances(index) = GlyphAdvanceTable.advanceOf(cell)
+          contextFree(index) = true
+          read(index + 1)
+    read(start) || {
+      java.util.Arrays.fill(advances, start, end, 0.0f)
+      java.util.Arrays.fill(contextFree, start, end, false)
+      false
+    }
+
+  private def nominalCodes(runChars: Array[Char], table: GlyphAdvanceTable): Array[Int] =
+    val codes = new Array[Int](runChars.length)
+    @annotation.tailrec
+    def fill(index: Int): Array[Int] =
+      if index == runChars.length then codes
+      else
+        codes(index) = table.glyphCode(runChars(index))
+        fill(index + 1)
+    fill(0)
+
+  private def measureRunWithGlyphVector(
     chars: Array[Char],
     start: Int,
     end: Int,
