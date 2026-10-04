@@ -15,9 +15,12 @@ final private[layout] class ParagraphMeasurement private (
     start: Int,
     end: Int,
     boundaries: Array[Int],
-    advances: Option[GlyphAdvances]
+    val advances: Option[GlyphAdvances]
 ):
   import ParagraphMeasurement.*
+
+  /** Characters whose glyph advances this window measured. */
+  def measuredChars: Int = if advances.isDefined then end - start else 0
 
   /** This window, or a fresh one from `from` when the next row could run past its end. */
   def coveringRowAt(from: Int, rowsLeft: Int): ParagraphMeasurement =
@@ -67,7 +70,7 @@ private[layout] object ParagraphMeasurement:
   /** Comfortably above the largest gap seen between summed glyph advances and `TextLayout` carets (under 0.01px). */
   private val DecisionGuardPx = 0.05f
 
-  private val MaxWindowChars = 16384
+  private[layout] val MaxWindowChars = 16384
 
   private val threadLocalCharacterBreaks: ThreadLocal[BreakIterator] =
     ThreadLocal.withInitial(() => BreakIterator.getCharacterInstance())
@@ -80,6 +83,12 @@ private[layout] object ParagraphMeasurement:
       GlyphAdvances.measure(spec.text, from, end, spec.baseColumn, spec.resolver, spec.frc)
     )
     new ParagraphMeasurement(spec, from, end, boundariesOf(spec.text, from, end), advances)
+
+  /** A window over the whole of `spec.text` whose advances were assembled rather than measured in one sweep. It holds
+    * no grapheme boundaries, so every row sweeps its own, which agrees with reading them off a window's boundaries.
+    */
+  def assembled(spec: WrappedLineKey, advances: Option[GlyphAdvances]): ParagraphMeasurement =
+    new ParagraphMeasurement(spec, 0, spec.text.length, Array.empty[Int], advances)
 
   /** The first candidate the per-row search measures, in characters. */
   def initialCandidateLength(panelWidthPx: Int, cellMetrics: CellMetrics): Int =

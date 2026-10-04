@@ -385,49 +385,72 @@ object TextLayoutSnapshot:
         paragraphRole,
         dropCapGlyphWidthPx
       )
-      wrapCache.wrapped(spec, bufferLine, maxVisualLines)(limit => wrapRows(spec, bufferLine, limit))
+      wrapCache.wrapped(spec, bufferLine, maxVisualLines)(
+        limit => wrapRows(spec, bufferLine, limit),
+        predecessors => IncrementalWrap.rewrap(spec, bufferLine, predecessors)
+      )
 
-  private def wrapRows(spec: WrappedLineKey, bufferLine: Int, maxVisualLines: Int): Vector[TextVisualLine] =
+  private[layout] def wrapRows(spec: WrappedLineKey, bufferLine: Int, maxVisualLines: Int): RowWrap =
     import spec.{baseColumn, cellMetrics, dropCapGlyphWidthPx, frc, measuredLayout, paragraphRole, resolver, text}
     if text.isEmpty then
-      Vector(
-        DropCapLayout.applyInset(
-          shapeSegment("", bufferLine, baseColumn, baseColumn, resolver, frc, measuredLayout, cellMetrics),
-          paragraphRole,
-          lineWithinParagraph = 0,
-          dropCapGlyphWidthPx
-        )
-      )
+      val empty = shapeSegment("", bufferLine, baseColumn, baseColumn, resolver, frc, measuredLayout, cellMetrics)
+      RowWrap(Vector(DropCapLayout.applyInset(empty, paragraphRole, 0, dropCapGlyphWidthPx)), 1, 0, None)
     else
+      val initial   = ParagraphMeasurement(spec, 0, maxVisualLines)
+      val traceable = maxVisualLines == Int.MaxValue && IncrementalWrap.traceable(spec)
       @annotation.tailrec
-      def loop(startColumn: Int, measured: ParagraphMeasurement, acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
-        if startColumn >= text.length || acc.length >= maxVisualLines then acc
+      def loop(
+        startColumn: Int,
+        measured: ParagraphMeasurement,
+        acc: Vector[TextVisualLine],
+        reaches: Vector[Int]
+      ): (Vector[TextVisualLine], Vector[Int]) =
+        if startColumn >= text.length || acc.length >= maxVisualLines then (acc, reaches)
         else
-          val lineWithinParagraph = acc.length
-          val paragraph           = measured.coveringRowAt(startColumn, maxVisualLines - lineWithinParagraph)
-          val insetPx             = DropCapLayout.leftInsetPx(paragraphRole, lineWithinParagraph, dropCapGlyphWidthPx)
-          val wrapWidthPx         = math.max(1, spec.panelWidthPx - math.round(insetPx))
-          val segmentStart        = baseColumn + startColumn
-          val fit                 = fittingSegment(paragraph, text, startColumn, wrapWidthPx, segmentStart, spec)
-          val segmentLength       = wordBoundarySegmentLength(text, startColumn, fit.length)
-          val endColumnInSlice    = startColumn + segmentLength
-          val visualLine = shapeSegment(
-            text.substring(startColumn, endColumnInSlice),
-            bufferLine,
-            segmentStart,
-            baseColumn + endColumnInSlice,
-            resolver,
-            frc,
-            measuredLayout,
-            cellMetrics,
-            fit.caretXsForPrefix(segmentLength),
-            Some(paragraph.graphemeOffsets(startColumn, endColumnInSlice))
-          )
-          val insetLine =
-            DropCapLayout.applyInset(visualLine, paragraphRole, lineWithinParagraph, dropCapGlyphWidthPx)
-          loop(endColumnInSlice, paragraph, acc :+ insetLine)
+          val paragraph = measured.coveringRowAt(startColumn, maxVisualLines - acc.length)
+          val row       = wrapRow(spec, bufferLine, paragraph, startColumn, acc.length)
+          val reach =
+            if traceable then reaches :+ IncrementalWrap.reachOf(spec, startColumn, row.fitLength) else reaches
+          loop(row.endColumn, paragraph, acc :+ row.line, reach)
 
-      loop(0, ParagraphMeasurement(spec, 0, maxVisualLines), Vector.empty)
+      val (rows, reaches) = loop(0, initial, Vector.empty, Vector.empty)
+      val trace           = Option.when(traceable)(WrapTrace(IArray.from(reaches), initial.advances))
+      RowWrap(rows, rows.length, initial.measuredChars, trace)
+
+  /** One visual row starting at `startColumn`, the shared step of the cold wrap and [[IncrementalWrap]]. `paragraph`
+    * must already cover the row.
+    */
+  private[layout] def wrapRow(
+    spec: WrappedLineKey,
+    bufferLine: Int,
+    paragraph: ParagraphMeasurement,
+    startColumn: Int,
+    lineWithinParagraph: Int
+  ): WrappedRow =
+    import spec.{baseColumn, cellMetrics, dropCapGlyphWidthPx, frc, measuredLayout, paragraphRole, resolver, text}
+    val insetPx          = DropCapLayout.leftInsetPx(paragraphRole, lineWithinParagraph, dropCapGlyphWidthPx)
+    val wrapWidthPx      = math.max(1, spec.panelWidthPx - math.round(insetPx))
+    val segmentStart     = baseColumn + startColumn
+    val fit              = fittingSegment(paragraph, text, startColumn, wrapWidthPx, segmentStart, spec)
+    val segmentLength    = wordBoundarySegmentLength(text, startColumn, fit.length)
+    val endColumnInSlice = startColumn + segmentLength
+    val visualLine = shapeSegment(
+      text.substring(startColumn, endColumnInSlice),
+      bufferLine,
+      segmentStart,
+      baseColumn + endColumnInSlice,
+      resolver,
+      frc,
+      measuredLayout,
+      cellMetrics,
+      fit.caretXsForPrefix(segmentLength),
+      Some(paragraph.graphemeOffsets(startColumn, endColumnInSlice))
+    )
+    WrappedRow(
+      DropCapLayout.applyInset(visualLine, paragraphRole, lineWithinParagraph, dropCapGlyphWidthPx),
+      endColumnInSlice,
+      fit.length
+    )
 
   /** Where to break `text` once `fittingLength` characters have used up the available pixel width: the last legal
     * UAX#14 line-break boundary at or before `fittingLength`, per `BreakIterator.getLineInstance` -- covering no-break
@@ -448,7 +471,7 @@ object TextLayoutSnapshot:
   /** Reads `line` from `from` on through a character iterator rather than a per-row substring of the paragraph's
     * remainder, which made wrapping one long paragraph quadratic in its length.
     */
-  private def wordBoundarySegmentLength(line: String, from: Int, fittingLength: Int): Int =
+  private[layout] def wordBoundarySegmentLength(line: String, from: Int, fittingLength: Int): Int =
     if fittingLength >= line.length - from then line.length - from
     else
       val boundary = threadLocalLineBreakIterator.get()
@@ -456,7 +479,7 @@ object TextLayoutSnapshot:
       val candidate = boundary.preceding(from + fittingLength + 1) - from
       if candidate > 0 then candidate else fittingLength
 
-  private def shapeSegment(
+  private[layout] def shapeSegment(
     text: String,
     bufferLine: Int,
     startColumn: Int,
