@@ -2,6 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.IO
 import cats.syntax.foldable.*
+import com.serenity.lsp.LspEffect
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
 
@@ -48,3 +49,26 @@ final private[manager] class LspDocumentSync(port: LspDocumentSyncPort):
           ))
             .fold(IO.unit)(interpretEffect)
     }
+
+private[manager] object LspDocumentSync:
+
+  def announceClosed(lspQueue: LspEffectQueue)(before: AppState, after: AppState): IO[Unit] =
+    closedDocuments(before, after).traverse_(lspQueue.enqueue)
+
+  /** The documents a commit stopped managing: a buffer left `persisted.buffers` and no open buffer holds its path any
+    * more, so closing one of two tabs on the same file leaves the server's copy open for the other.
+    */
+  def closedDocuments(before: AppState, after: AppState): List[LspEffect.FileClosed] =
+    val removed =
+      if before.persisted.buffers eq after.persisted.buffers then Nil
+      else before.persisted.buffers.values.toList.filterNot(buffer => after.persisted.buffers.contains(buffer.id))
+    if removed.isEmpty then Nil
+    else
+      val stillOpen = after.persisted.buffers.values.flatMap(_.document.filePath).toSet
+      removed.flatMap { buffer =>
+        for
+          path       <- buffer.document.filePath
+          languageId <- buffer.document.language
+          if !stillOpen.contains(path)
+        yield LspEffect.FileClosed(path.toUri.toString, languageId)
+      }.distinct
