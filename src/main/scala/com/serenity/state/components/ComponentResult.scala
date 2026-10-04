@@ -14,6 +14,15 @@ enum ComponentResult:
   case Dismiss
   case ExecuteCommand(command: Command)
 
+  /** The focused scope declined the event, which goes on to the next scope out: from a surface to the editor pane. */
+  case Unhandled
+
+  def bubbles: Boolean =
+    this match
+      case Unhandled          => true
+      case Composite(results) => results.exists(_.bubbles)
+      case _                  => false
+
 object ComponentResult:
 
   /** `combine` flattens rather than nesting, so associativity holds structurally rather than merely behaviourally. */
@@ -36,3 +45,4 @@ object ComponentResult:
   def noChange: ComponentResult                             = NoChange
   def composite(results: ComponentResult*): ComponentResult = Composite(results.toList)
   def executeCommand(command: Command): ComponentResult     = ExecuteCommand(command)
+  def unhandled: ComponentResult                            = Unhandled

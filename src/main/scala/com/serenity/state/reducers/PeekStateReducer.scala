@@ -18,7 +18,7 @@ object PeekStateReducer:
         .copy(runtime =
           stateWithId.runtime.copy(uiSurfaces = stateWithId.runtime.uiSurfaces.filterNot(_.isFloatingPeek) :+ surface)
         )
-        .pushFocus(Focus.Surface(surfaceId))
+        .pushFocusUnlessPeek(surface)
     )
 
   /** Removes the peek and, if it held focus, hands focus back to what held it before -- the active pane if nothing did.

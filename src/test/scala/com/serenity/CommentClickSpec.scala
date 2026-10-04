@@ -82,7 +82,7 @@ class CommentClickSpec extends AnyFlatSpec with Matchers:
     val lens  = commentLensState(state).getOrElse(fail("Expected comment lens"))
     lens.mode shouldBe CommentLensMode.ReadOnly
     lens.target shouldBe Some(CommentLensTarget(0, comment))
-    state.persisted.focus shouldBe Focus.Surface(SurfaceId("comment-lens"))
+    state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
 
   it should "still move the cursor to the clicked position" in {

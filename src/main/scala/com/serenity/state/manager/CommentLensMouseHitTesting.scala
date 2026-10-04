@@ -58,9 +58,11 @@ private[manager] object CommentLensMouseHitTesting:
       if MouseHitTestGeometry.insideFloatingSurface(click, state, viewportSize, surface, authoritativeScene)
     yield (surface, lens)
 
+  /** The read-only lens was a peek without focus; clicking into it to edit is the explicit gesture that focuses it. */
   private def replaceLensMode(state: AppState, surface: UiSurface, lens: CommentLensState): AppState =
-    state.copy(runtime =
-      state.runtime.copy(uiSurfaces =
-        state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(_.copy(content = SurfaceContent.CommentLens(lens)))
+    val replaced = surface.copy(content = SurfaceContent.CommentLens(lens))
+    state
+      .copy(runtime =
+        state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(_ => replaced))
       )
-    )
+      .pushFocusUnlessPeek(replaced)

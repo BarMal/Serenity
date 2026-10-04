@@ -62,10 +62,8 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(Enter).unsafeRunSync()
 
-  "Command runner" should "toggle a cursor-attached comment lens for the active comment" in {
-    val stateManager = createStateManager()
-    val bufferId     = BufferId(0)
-
+  private def withCaretInCodeComment(stateManager: StateManager): Unit =
+    val bufferId = BufferId(0)
     stateManager
       .updateState { state =>
         val buffer = state.persisted
@@ -84,6 +82,18 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
       }
       .unsafeRunSync()
 
+  private val toggleCommentLens =
+    Command.typed(
+      "comment-lens",
+      "Toggle comment lens.",
+      CommandIntent.Comments(CommentsIntent.ToggleCommentLens),
+      CommandCategory.View
+    )
+
+  "Command runner" should "toggle a cursor-attached comment lens for the active comment" in {
+    val stateManager = createStateManager()
+    withCaretInCodeComment(stateManager)
+
     executeCommandThroughRunner(stateManager, "comment-lens", "comment-lens")
 
     val shownState = stateManager.getCurrentState.unsafeRunSync()
@@ -99,24 +109,45 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
     lens.comment.inlineMarkdown shouldBe "Review this value"
     lens.draft shouldBe "// **Review** this value"
     lens.target shouldBe None
-    shownState.persisted.focus shouldBe Focus.Surface(shownState.commentLensSurface.get.id)
+    shownState.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
     shownState.commentLensSurface.get.dismissOnMove shouldBe false
 
-    stateManager
-      .executeCommand(
-        Command.typed(
-          "comment-lens",
-          "Toggle comment lens.",
-          CommandIntent.Comments(CommentsIntent.ToggleCommentLens),
-          CommandCategory.View
-        )
-      )
-      .unsafeRunSync()
+    stateManager.executeCommand(toggleCommentLens).unsafeRunSync()
 
     val hiddenState = stateManager.getCurrentState.unsafeRunSync()
     hiddenState.commentLensSurface shouldBe None
     hiddenState.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
     hiddenState.runtime.focusHistory shouldBe Nil
+  }
+
+  it should "close a code comment's read-only lens when the caret moves off the comment" in {
+    val stateManager = createStateManager()
+    withCaretInCodeComment(stateManager)
+    stateManager.executeCommand(toggleCommentLens).unsafeRunSync()
+    stateManager.getCurrentState.unsafeRunSync().commentLensSurface shouldBe defined
+
+    stateManager.applyEvent(MoveUp).unsafeRunSync()
+
+    val movedState = stateManager.getCurrentState.unsafeRunSync()
+    movedState.commentLensSurface shouldBe None
+    movedState.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+  }
+
+  it should "leave focus where it is when toggling off a lens that never held it" in {
+    val stateManager = createStateManager()
+    withCaretInCodeComment(stateManager)
+    val earlierFocus = List(Focus.EditorPane(PaneId(7)))
+    stateManager
+      .updateState(state => state.copy(runtime = state.runtime.copy(focusHistory = earlierFocus)))
+      .unsafeRunSync()
+    stateManager.executeCommand(toggleCommentLens).unsafeRunSync()
+
+    stateManager.executeCommand(toggleCommentLens).unsafeRunSync()
+
+    val hiddenState = stateManager.getCurrentState.unsafeRunSync()
+    hiddenState.commentLensSurface shouldBe None
+    hiddenState.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
+    hiddenState.runtime.focusHistory shouldBe earlierFocus
   }
 
   it should "add, navigate, render, and delete authored document comments" in {

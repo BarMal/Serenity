@@ -107,7 +107,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
       // When: Show peek overlay
       _ <- stateManager.updateStateValidated(state => PeekStateReducer.show(content, cursor, state).state)
 
-      // Then: Focus should be on the peek surface
+      // Then: Focus should stay with the editor
       peekState <- stateManager.getCurrentState
       peekSurface = peekState.runtime.uiSurfaces.find(
         _.content == SurfaceContent.DirectoryListing(
@@ -120,7 +120,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
         )
       )
       _ = peekSurface shouldBe defined
-      _ = peekState.persisted.focus shouldBe Focus.Surface(peekSurface.get.id)
+      _ = peekState.persisted.focus should matchPattern { case Focus.EditorPane(_) => }
       _ = peekSurface.get.presentation shouldBe SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor)
 
       // When: Dismiss peek overlay

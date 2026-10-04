@@ -77,10 +77,12 @@ private[manager] object NavigationTransitions:
           case Some(_) => applied(CommentRendering.openLensAtCursor(state))
           case None    => ignored("[CMD] Comment lens requested without an active comment")
 
+  /** A read-only lens never held focus (#1674), so only a focused one hands it back. */
   private def dismissCommentLens(state: AppState): AppState =
-    state
-      .copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(isCommentLensSurface)))
-      .popFocus
+    val lensHeldFocus = state.commentLensSurface.exists(lens => state.persisted.focus == Focus.Surface(lens.id))
+    val dismissed =
+      state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(isCommentLensSurface)))
+    if lensHeldFocus then dismissed.popFocus else dismissed
 
   private def isCommentLensSurface(surface: UiSurface): Boolean =
     surface.content match

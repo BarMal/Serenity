@@ -238,7 +238,8 @@ enum SurfacePresentation:
 /** Whether the above-cursor comment lens is a passive, read-only display or the existing always-editable draft state
   * (#1222). `ReadOnly` is reached by clicking a highlighted comment range in floating display mode; a further click
   * inside the lens body transitions it to `Editable`. Every keyboard-invoked open (the `comment-lens` command) opens
-  * directly into `Editable`. A source-code comment is always `ReadOnly` (see [[CommentLensState.withMode]]).
+  * directly into `Editable`. A source-code comment is always `ReadOnly` (see [[CommentLensState.withMode]]). A
+  * `ReadOnly` lens is a [[SurfaceFocusPolicy.Peek]], so it never takes focus from the editor (#1674).
   */
 enum CommentLensMode:
   case ReadOnly
@@ -325,12 +326,35 @@ enum SurfaceContent:
     */
   case RecentFilesInMode(mode: AppMode, paths: List[java.nio.file.Path])
 
+/** How a surface shares the keyboard with the editor beneath it (#1940). */
+enum SurfaceFocusPolicy:
+
+  /** Shown without ever taking focus, so every key still reaches what had it. Escape closes it; with `dismissOnMove`,
+    * so does any other key, which then carries on as if the peek were not there.
+    */
+  case Peek
+
+  /** Takes focus; a key it leaves unhandled goes on to the editor pane. */
+  case Focusable
+
+  /** Takes focus and keeps every key, handled or not. */
+  case Modal
+
 final case class UiSurface(
     id: SurfaceId,
     content: SurfaceContent,
     presentation: SurfacePresentation,
     dismissOnMove: Boolean = false
 ):
+
+  /** Derived from what the surface shows rather than stored, so a comment lens's policy cannot drift from its mode. */
+  def focusPolicy: SurfaceFocusPolicy =
+    content match
+      case SurfaceContent.CommentLens(lens) if lens.mode == CommentLensMode.ReadOnly => SurfaceFocusPolicy.Peek
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.ModalWorkflow(_) | SurfaceContent.ThemeCreator(_) =>
+        SurfaceFocusPolicy.Modal
+      case _ if isFloatingPeek => SurfaceFocusPolicy.Peek
+      case _                   => SurfaceFocusPolicy.Focusable
 
   /** A floating peek (`PeekStateReducer`), recognised by what it shows: the comment lens and the command runner's
     * cursor peek float above the cursor too, and a peek pinned as a docked panel is no longer one.

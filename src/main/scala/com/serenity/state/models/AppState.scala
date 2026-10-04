@@ -416,6 +416,10 @@ final case class AppState(
       runtime = runtime.copy(focusHistory = persisted.focus :: deduplicated)
     )
 
+  /** A peek is shown without ever taking focus (#1940), so only other surfaces are focused here. */
+  def pushFocusUnlessPeek(surface: UiSurface): AppState =
+    if surface.focusPolicy == SurfaceFocusPolicy.Peek then this else pushFocus(Focus.Surface(surface.id))
+
   def popFocus: AppState =
     runtime.focusHistory match
       case head :: tail =>

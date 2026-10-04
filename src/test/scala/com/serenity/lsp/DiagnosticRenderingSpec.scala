@@ -89,7 +89,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     val surface = result.state.runtime.uiSurfaces.headOption.getOrElse(fail("Expected hover surface"))
     surface.content shouldBe SurfaceContent.QuickInfo("def map[B](f: A => B): List[B]")
     surface.presentation shouldBe SurfacePresentation.Floating(Some(CursorPosition(2, 4)), SurfacePlacement.AboveCursor)
-    result.state.persisted.focus shouldBe Focus.Surface(surface.id)
+    result.state.persisted.focus shouldBe AppState.initial.persisted.focus
   }
 
   it should "show LSP definition locations as symbol-definition peek surfaces" in {
@@ -118,7 +118,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
     val surface = result.state.runtime.uiSurfaces.headOption.getOrElse(fail("Expected completion surface"))
     surface.content shouldBe SurfaceContent.QuickInfo("map\nmapValues")
     surface.presentation shouldBe SurfacePresentation.Floating(Some(CursorPosition(2, 4)), SurfacePlacement.AboveCursor)
-    result.state.persisted.focus shouldBe Focus.Surface(surface.id)
+    result.state.persisted.focus shouldBe AppState.initial.persisted.focus
   }
 
   it should "show an explicit empty state when LSP completion returns no candidates" in {
