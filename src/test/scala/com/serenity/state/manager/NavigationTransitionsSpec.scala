@@ -50,7 +50,7 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
   private def buffer0(state: AppState): Buffer =
     state.persisted.buffers.getOrElse(BufferId(0), fail("expected buffer 0"))
 
-  private def commentLensTargets(state: AppState): List[Option[DocumentComment]] =
+  private def commentLensTargets(state: AppState): List[Option[CommentLensTarget]] =
     state.runtime.uiSurfaces.map(_.content).collect { case SurfaceContent.CommentLens(lens) => lens.target }
 
   private val lines    = "line0\nline1\nline2"
@@ -296,7 +296,7 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
 
     val result = validApplied(NavigationTransitions.comments(CommentsIntent.ToggleCommentLens, state))
 
-    commentLensTargets(result.state) shouldBe List(Some(comment))
+    commentLensTargets(result.state) shouldBe List(Some(CommentLensTarget(0, comment)))
   }
 
   it should "dismiss an open comment lens and restore the prior focus" in {
@@ -402,7 +402,7 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
     val result = validApplied(NavigationTransitions.comments(CommentsIntent.NextDocumentComment, state))
 
     result.state.activeCursorPosition shouldBe Some(CursorPosition(2, 0))
-    commentLensTargets(result.state) shouldBe List(Some(second))
+    commentLensTargets(result.state) shouldBe List(Some(CommentLensTarget(1, second)))
   }
 
   it should "open the lens without moving when the only comment is already under the cursor (#1183)" in {
@@ -413,7 +413,7 @@ class NavigationTransitionsSpec extends AnyFlatSpec with Matchers:
 
     result.state.activeCursorPosition shouldBe Some(CursorPosition(1, 0))
     result.state.runtime.navigation shouldBe state.runtime.navigation
-    commentLensTargets(result.state) shouldBe List(Some(only))
+    commentLensTargets(result.state) shouldBe List(Some(CommentLensTarget(0, only)))
     result.effects shouldBe Nil
   }
 

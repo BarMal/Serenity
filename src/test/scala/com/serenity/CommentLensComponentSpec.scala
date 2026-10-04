@@ -1,7 +1,8 @@
 package com.serenity
 
-import com.serenity.document.RenderedComment
+import com.serenity.document.{CommentRendering, RenderedComment}
 import com.serenity.keystroke.events.*
+import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.components.{CommentLensComponent, ComponentResult}
 import com.serenity.state.models.*
@@ -45,7 +46,7 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
                 RenderedComment(0, "Initial", "Initial"),
                 "Initial",
                 "Initial".length,
-                Some(comment)
+                Some(CommentLensTarget(0, comment))
               )
             ),
             SurfacePresentation.Floating(Some(CursorPosition(0, 3)), SurfacePlacement.AboveCursor)
@@ -118,12 +119,123 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
     dismissed.persisted.buffers(bufferId).annotations.documentComments shouldBe List(comment)
   }
 
+  "A comment lens on a source-code comment" should "open read-only, so typing is never silently discarded" in {
+    val buffer = Buffer
+      .fromString(bufferId, "// a source note\nval x = 1")
+      .copy(editing = EditingState(List(CursorPosition(0, 4))))
+    val editor = baseState.copy(
+      persisted = baseState.persisted.copy(
+        buffers = Map(bufferId -> buffer.copy(document = buffer.document.copy(language = Some(LanguageId.Scala)))),
+        focus = Focus.EditorPane(paneId)
+      ),
+      runtime = baseState.runtime.copy(uiSurfaces = Nil)
+    )
+
+    val opened = CommentRendering.openLensAtCursor(editor)
+
+    commentLens(opened).target shouldBe None
+    commentLens(opened).mode shouldBe CommentLensMode.ReadOnly
+    component.processEvent(ModalInsertChar('!'), opened) shouldBe ComponentResult.noChange
+  }
+
+  it should "ignore edit events even when constructed editable" in {
+    val untargeted = withLens(baseState)(_.copy(target = None, mode = CommentLensMode.Editable))
+
+    component.processEvent(ModalInsertChar('!'), untargeted) shouldBe ComponentResult.noChange
+    component.processEvent(ModalSubmit, untargeted) shouldBe ComponentResult.noChange
+  }
+
+  "Saving an emptied comment draft" should "delete the comment rather than save placeholder text" in {
+    val emptied = withLens(baseState)(_.copy(draft = "  ", cursor = 2))
+
+    val saved = stateAfter(component.processEvent(ModalSubmit, emptied), emptied)
+
+    saved.commentLensSurface shouldBe None
+    saved.persisted.buffers(bufferId).annotations.documentComments shouldBe Nil
+    saved.persisted.buffers(bufferId).document.isDirty shouldBe true
+  }
+
+  "Deleting in the comment draft" should "remove a whole emoji grapheme on Backspace" in {
+    val thumbsUp  = "\uD83D\uDC4D\uD83C\uDFFD"
+    val draft     = s"Hi $thumbsUp"
+    val withEmoji = withLens(baseState)(_.copy(draft = draft, cursor = draft.length))
+
+    val deleted = stateAfter(component.processEvent(ModalDeleteBackward, withEmoji), withEmoji)
+
+    commentLens(deleted).draft shouldBe "Hi "
+    commentLens(deleted).cursor shouldBe 3
+  }
+
+  it should "remove a whole emoji grapheme on Delete" in {
+    val thumbsUp  = "\uD83D\uDC4D\uD83C\uDFFD"
+    val withEmoji = withLens(baseState)(_.copy(draft = s"$thumbsUp!", cursor = 0))
+
+    val deleted = stateAfter(component.processEvent(ModalDeleteForward, withEmoji), withEmoji)
+
+    commentLens(deleted).draft shouldBe "!"
+    commentLens(deleted).cursor shouldBe 0
+  }
+
+  it should "snap a cursor inside a surrogate pair to the grapheme boundary before deleting" in {
+    val thumbsUp  = "\uD83D\uDC4D"
+    val withEmoji = withLens(baseState)(_.copy(draft = s"a$thumbsUp", cursor = 2))
+
+    val deleted = stateAfter(component.processEvent(ModalDeleteBackward, withEmoji), withEmoji)
+
+    commentLens(deleted).draft shouldBe thumbsUp
+    commentLens(deleted).cursor shouldBe 0
+  }
+
+  "Saving a comment draft" should "change only the targeted one of two identical comments" in {
+    val twins      = withComments(baseState, List(comment, comment))
+    val secondTwin = withLens(twins)(_.copy(target = Some(CommentLensTarget(1, comment))))
+    val edited     = stateAfter(component.processEvent(ModalInsertChar('!'), secondTwin), secondTwin)
+    val saved      = stateAfter(component.processEvent(ModalSubmit, edited), edited)
+
+    saved.persisted.buffers(bufferId).annotations.documentComments shouldBe
+      List(comment, comment.copy(text = "Initial!"))
+  }
+
+  it should "still reach a comment whose range an edit shifted while the lens was open" in {
+    val edited  = stateAfter(component.processEvent(ModalInsertChar('!'), baseState), baseState)
+    val shifted = DocumentComment(CursorPosition(0, 2), CursorPosition(0, 9), "Initial")
+    val moved   = withComments(edited, List(shifted))
+
+    val saved = stateAfter(component.processEvent(ModalSubmit, moved), moved)
+
+    saved.persisted.buffers(bufferId).annotations.documentComments shouldBe List(shifted.copy(text = "Initial!"))
+  }
+
+  it should "leave the comments alone when the targeted slot no longer holds the opened comment" in {
+    val other    = DocumentComment(CursorPosition(0, 8), CursorPosition(0, 17), "Unrelated")
+    val replaced = withComments(baseState, List(other))
+
+    val saved = stateAfter(component.processEvent(ModalSubmit, replaced), replaced)
+
+    saved.commentLensSurface shouldBe None
+    saved.persisted.buffers(bufferId).annotations.documentComments shouldBe List(other)
+  }
+
+  private def withComments(state: AppState, comments: List[DocumentComment]): AppState =
+    val buffer = state.persisted.buffers(bufferId)
+    state.copy(persisted =
+      state.persisted.copy(buffers =
+        state.persisted.buffers.updated(
+          bufferId,
+          buffer.copy(annotations = buffer.annotations.copy(documentComments = comments))
+        )
+      )
+    )
+
   private def withLensMode(state: AppState, mode: CommentLensMode): AppState =
+    withLens(state)(_.copy(mode = mode))
+
+  private def withLens(state: AppState)(change: CommentLensState => CommentLensState): AppState =
     state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
       case surface if surface.id == lensId =>
         surface.content match
           case SurfaceContent.CommentLens(lens) =>
-            surface.copy(content = SurfaceContent.CommentLens(lens.copy(mode = mode)))
+            surface.copy(content = SurfaceContent.CommentLens(change(lens)))
           case _ => surface
       case surface => surface
     }))

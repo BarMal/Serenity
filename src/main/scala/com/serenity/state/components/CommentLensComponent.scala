@@ -2,7 +2,7 @@ package com.serenity.state.components
 
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
-import com.serenity.text.TextEditing
+import com.serenity.ui.widget.{TextField, WidgetInput}
 
 class CommentLensComponent extends TypedFocusedComponent[ModalInputEvent]:
 
@@ -14,33 +14,20 @@ class CommentLensComponent extends TypedFocusedComponent[ModalInputEvent]:
       case None => ComponentResult.dismiss
       case Some(surface) =>
         surface.content match
-          case SurfaceContent.CommentLens(lens) if lens.mode == CommentLensMode.ReadOnly =>
-            // A read-only lens (opened by clicking a highlighted comment range in floating display mode) only
-            // responds to dismiss; entering edit state is a mouse gesture (click-in-body), handled by
-            // `CommentLensMouseHitTesting` before this component ever sees a keystroke.
+          case SurfaceContent.CommentLens(lens @ CommentLensState(_, _, _, Some(target), CommentLensMode.Editable)) =>
             event match
+              case ModalSubmit =>
+                ComponentResult.updateState(_ => saveAndDismiss(state, surface, target, lens.draft))
               case ModalDismiss =>
                 ComponentResult.updateState(_ => dismiss(state, surface))
-              case _ =>
-                ComponentResult.noChange
-          case SurfaceContent.CommentLens(lens) =>
+              case other =>
+                editing(other).fold(ComponentResult.noChange) { input =>
+                  ComponentResult.updateState(_ => replaceLens(state, surface, edited(lens, input)))
+                }
+          case SurfaceContent.CommentLens(_) =>
+            // A read-only lens only responds to dismiss; entering edit state is a mouse gesture (click-in-body),
+            // handled by `CommentLensMouseHitTesting` before this component ever sees a keystroke.
             event match
-              case ModalInsertChar(char) =>
-                ComponentResult.updateState(_ => replaceLens(state, surface, insertChar(lens, char)))
-              case ModalDeleteBackward =>
-                ComponentResult.updateState(_ => replaceLens(state, surface, deleteBackward(lens)))
-              case ModalDeleteForward =>
-                ComponentResult.updateState(_ => replaceLens(state, surface, deleteForward(lens)))
-              case ModalDeleteWordBackward =>
-                ComponentResult.updateState(_ => replaceLens(state, surface, deleteWordBackward(lens)))
-              case ModalDeleteWordForward =>
-                ComponentResult.updateState(_ => replaceLens(state, surface, deleteWordForward(lens)))
-              case ModalNavigate(Direction.Left) =>
-                ComponentResult.updateState(_ => replaceLens(state, surface, moveCursor(lens, -1)))
-              case ModalNavigate(Direction.Right) =>
-                ComponentResult.updateState(_ => replaceLens(state, surface, moveCursor(lens, 1)))
-              case ModalSubmit =>
-                ComponentResult.updateState(_ => saveAndDismiss(state, surface, lens))
               case ModalDismiss =>
                 ComponentResult.updateState(_ => dismiss(state, surface))
               case _ =>
@@ -48,85 +35,57 @@ class CommentLensComponent extends TypedFocusedComponent[ModalInputEvent]:
           case _ =>
             ComponentResult.noChange
 
-  private def insertChar(lens: CommentLensState, char: Char): CommentLensState =
-    val cursor = lens.clampedCursor
-    lens.copy(
-      draft = lens.draft.substring(0, cursor) + char + lens.draft.substring(cursor),
-      cursor = cursor + 1
-    )
+  private def editing(event: ModalInputEvent): Option[WidgetInput] =
+    event match
+      case ModalInsertChar(char)          => Some(WidgetInput.Insert(char))
+      case ModalDeleteBackward            => Some(WidgetInput.DeleteBackward)
+      case ModalDeleteForward             => Some(WidgetInput.DeleteForward)
+      case ModalDeleteWordBackward        => Some(WidgetInput.DeleteWordBackward)
+      case ModalDeleteWordForward         => Some(WidgetInput.DeleteWordForward)
+      case ModalNavigate(Direction.Left)  => Some(WidgetInput.Left)
+      case ModalNavigate(Direction.Right) => Some(WidgetInput.Right)
+      case _                              => None
 
-  private def deleteBackward(lens: CommentLensState): CommentLensState =
-    val cursor = lens.clampedCursor
-    if cursor == 0 then lens.copy(cursor = cursor)
-    else
-      lens.copy(
-        draft = lens.draft.substring(0, cursor - 1) + lens.draft.substring(cursor),
-        cursor = cursor - 1
-      )
-
-  private def deleteForward(lens: CommentLensState): CommentLensState =
-    val cursor = lens.clampedCursor
-    if cursor >= lens.draft.length then lens.copy(cursor = cursor)
-    else
-      lens.copy(
-        draft = lens.draft.substring(0, cursor) + lens.draft.substring(cursor + 1),
-        cursor = cursor
-      )
-
-  private def deleteWordBackward(lens: CommentLensState): CommentLensState =
-    val cursor   = lens.clampedCursor
-    val boundary = TextEditing.previousWordBoundary(lens.draft, cursor)
-    lens.copy(
-      draft = lens.draft.substring(0, boundary) + lens.draft.substring(cursor),
-      cursor = boundary
-    )
-
-  private def deleteWordForward(lens: CommentLensState): CommentLensState =
-    val cursor   = lens.clampedCursor
-    val boundary = TextEditing.nextWordBoundary(lens.draft, cursor)
-    lens.copy(
-      draft = lens.draft.substring(0, cursor) + lens.draft.substring(boundary),
-      cursor = cursor
-    )
-
-  private def moveCursor(lens: CommentLensState, delta: Int): CommentLensState =
-    lens.copy(cursor = math.max(0, math.min(lens.clampedCursor + delta, lens.draft.length)))
+  private def edited(lens: CommentLensState, input: WidgetInput): CommentLensState =
+    val (field, _) = TextField(lens.draft).movedTo(lens.clampedCursor).update(input)
+    lens.copy(draft = field.text, cursor = field.caret)
 
   private def replaceLens(state: AppState, surface: UiSurface, lens: CommentLensState): AppState =
     state.copy(runtime =
       state.runtime.copy(uiSurfaces =
-        state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
-          _.copy(content = SurfaceContent.CommentLens(lens.copy(cursor = lens.clampedCursor)))
-        )
+        state.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(_.copy(content = SurfaceContent.CommentLens(lens)))
       )
     )
 
-  private def saveAndDismiss(state: AppState, surface: UiSurface, lens: CommentLensState): AppState =
-    val savedText = Option(lens.draft.trim).filter(_.nonEmpty).getOrElse("Comment")
-    val withSavedComment = lens.target match
-      case Some(target) =>
-        state.persisted.layout.activeEditorPaneId
-          .flatMap(state.persisted.layout.editorPanes.get)
-          .flatMap(_.bufferId)
-          .flatMap(state.persisted.buffers.get)
-          .fold(state) { buffer =>
-            val updatedComments = buffer.annotations.documentComments.map { comment =>
-              if comment == target then comment.copy(text = savedText) else comment
-            }
-            if updatedComments == buffer.annotations.documentComments then state
-            else
-              state.copy(persisted =
-                state.persisted.copy(buffers =
-                  state.persisted.buffers + (buffer.id -> buffer.copy(
-                    annotations = buffer.annotations.copy(documentComments = updatedComments),
-                    document = buffer.document.copy(isDirty = true)
-                  ))
-                )
+  private def saveAndDismiss(state: AppState, surface: UiSurface, target: CommentLensTarget, draft: String): AppState =
+    dismiss(savedDraft(state, target, draft.trim), surface)
+
+  /** An emptied draft deletes the comment. A target whose slot no longer holds the comment the lens opened on (the
+    * list was restructured underneath it) is left alone rather than overwriting whichever comment now sits there.
+    */
+  private def savedDraft(state: AppState, target: CommentLensTarget, text: String): AppState =
+    state.persisted.layout.activeEditorPaneId
+      .flatMap(state.persisted.layout.editorPanes.get)
+      .flatMap(_.bufferId)
+      .flatMap(state.persisted.buffers.get)
+      .fold(state) { buffer =>
+        val comments = buffer.annotations.documentComments
+        comments.lift(target.index).filter(_.text == target.comment.text).fold(state) { current =>
+          val updatedComments =
+            if text.isEmpty then comments.patch(target.index, Nil, 1)
+            else comments.updated(target.index, current.copy(text = text))
+          if updatedComments == comments then state
+          else
+            state.copy(persisted =
+              state.persisted.copy(buffers =
+                state.persisted.buffers + (buffer.id -> buffer.copy(
+                  annotations = buffer.annotations.copy(documentComments = updatedComments),
+                  document = buffer.document.copy(isDirty = true)
+                ))
               )
-          }
-      case None =>
-        state
-    dismiss(withSavedComment, surface)
+            )
+        }
+      }
 
   private def dismiss(state: AppState, surface: UiSurface): AppState =
     val withoutLens =

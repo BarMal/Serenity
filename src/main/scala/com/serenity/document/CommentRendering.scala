@@ -33,7 +33,7 @@ object CommentRendering:
       case Some((cursor, lens)) =>
         val surface = UiSurface(
           id = SurfaceId("comment-lens"),
-          content = SurfaceContent.CommentLens(lens.copy(mode = mode)),
+          content = SurfaceContent.CommentLens(lens.withMode(mode)),
           presentation = SurfacePresentation.Floating(Some(cursor), SurfacePlacement.AboveCursor)
         )
         state
@@ -101,8 +101,10 @@ object CommentRendering:
       cursor   <- buffer.editing.cursorPositions.headOption
       comment  <- atCursor(buffer)
     yield
-      val target = buffer.annotations.documentComments.find(_.contains(cursor))
-      val draft  = target.map(_.text).getOrElse(comment.raw)
+      val target = buffer.annotations.documentComments.zipWithIndex.collectFirst {
+        case (authored, index) if authored.contains(cursor) => CommentLensTarget(index, authored)
+      }
+      val draft = target.map(_.comment.text).getOrElse(comment.raw)
       (cursor, CommentLensState(comment = comment, draft = draft, cursor = draft.length, target = target))
 
   private def isCommentLensSurface(surface: UiSurface): Boolean =

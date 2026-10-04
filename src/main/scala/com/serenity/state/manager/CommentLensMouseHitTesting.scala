@@ -40,7 +40,7 @@ private[manager] object CommentLensMouseHitTesting:
   def click(click: MouseClick, state: AppState, authoritativeScene: AuthoritativeUiScene): Transition[Boolean] =
     readOnlyLensClickedInBody(click, state, authoritativeScene) match
       case Some((surface, lens)) =>
-        Transition.modify(replaceLensMode(_, surface, lens.copy(mode = CommentLensMode.Editable))).as(true)
+        Transition.modify(replaceLensMode(_, surface, lens.withMode(CommentLensMode.Editable))).as(true)
       case None =>
         Transition.pure(false)
 
