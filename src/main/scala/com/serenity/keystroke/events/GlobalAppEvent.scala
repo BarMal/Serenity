@@ -35,6 +35,11 @@ case object MoveTabRight                  extends GlobalAppEvent // Ctrl+Shift+P
 case object FileSearch                    extends GlobalAppEvent // Ctrl+Shift+F
 case object GoToFile                      extends GlobalAppEvent // Ctrl+E
 
+/** Runs the registry command with this id (`Command.name`), as choosing it in the palette would: a global key bound to
+  * a command rather than to a `HotkeyAction` (issue #1922).
+  */
+final case class RunCommand(commandId: String) extends GlobalAppEvent
+
 /** Moves focus to the editor pane or docked panel next to the focused one on screen (Alt+Arrow by default). */
 final case class FocusInDirection(direction: Direction) extends GlobalAppEvent
 

@@ -152,6 +152,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withWheelScrollLines(5)
     .withPanelEscapeTarget(AppMode.Code, PanelEscapeTarget.Previous)
     .withPanelEscapeTarget(AppMode.Prose, PanelEscapeTarget.Previous)
+    .withHotkeyConfig(HotkeyConfig().withCommandBinding("toggle-line-numbers", "ctrl+alt+l"))
 
   private def differences(path: String, before: Any, after: Any): List[String] =
     (before, after) match

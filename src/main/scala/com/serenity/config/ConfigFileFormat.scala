@@ -221,6 +221,9 @@ object ConfigFileFormat:
     comment("Hotkey overrides"),
     group(ConfigGroups.hotkeys),
     blank,
+    comment("Keys for any palette command, by its id: hotkey.command.<id> = [\"ctrl+alt+k\"]; [] unbinds it"),
+    group(ConfigGroups.commandHotkeys),
+    blank,
     comment("Focused keymap overrides"),
     group(ConfigGroups.keymaps)
   )
