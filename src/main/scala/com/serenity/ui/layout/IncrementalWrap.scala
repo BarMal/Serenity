@@ -89,10 +89,22 @@ private[layout] object IncrementalWrap:
   def rewrap(spec: WrappedLineKey, bufferLine: Int, predecessors: Seq[Predecessor]): Option[RowWrap] =
     if predecessors.isEmpty || !traceable(spec) then None
     else
-      predecessors
-        .flatMap(candidate => EditSpan.between(candidate.key.text, spec.text).map(candidate -> _))
-        .minByOption((_, edit) => edit.changedChars)
+      closestEdit(spec.text, predecessors.iterator)
         .flatMap((candidate, edit) => resume(spec, bufferLine, candidate, edit))
+
+  /** Candidates arrive newest first, and an edit of a character or two cannot be beaten, so the scan stops there. */
+  private def closestEdit(text: String, candidates: Iterator[Predecessor]): Option[(Predecessor, EditSpan)] =
+    @annotation.tailrec
+    def scan(best: Option[(Predecessor, EditSpan)]): Option[(Predecessor, EditSpan)] =
+      if best.exists(_._2.changedChars <= SmallestEditChars) || !candidates.hasNext then best
+      else
+        val candidate = candidates.next()
+        val closer =
+          EditSpan.between(candidate.key.text, text).filter(edit => best.forall(_._2.changedChars > edit.changedChars))
+        scan(closer.map(candidate -> _).orElse(best))
+    scan(None)
+
+  private val SmallestEditChars = 2
 
   final private case class EditSpan(prefix: Int, suffix: Int, oldLength: Int, newLength: Int):
     def changedChars: Int = oldLength + newLength - 2 * (prefix + suffix)
@@ -107,19 +119,21 @@ private[layout] object IncrementalWrap:
       Option
         .when(old != text && math.abs(old.length - text.length) <= MaxEditChars) {
           val shared = math.min(old.length, text.length)
-          val prefix = commonLength(shared, index => old.charAt(index) == text.charAt(index))
-          val suffix = commonLength(
-            shared - prefix,
-            index => old.charAt(old.length - 1 - index) == text.charAt(text.length - 1 - index)
-          )
-          EditSpan(prefix, suffix, old.length, text.length)
+          val prefix = commonPrefix(old, text, shared)
+          EditSpan(prefix, commonSuffix(old, text, shared - prefix), old.length, text.length)
         }
         .filter(_.changedChars <= MaxEditChars)
 
-    private def commonLength(limit: Int, same: Int => Boolean): Int =
-      @annotation.tailrec
-      def loop(count: Int): Int = if count < limit && same(count) then loop(count + 1) else count
-      loop(0)
+    @annotation.tailrec
+    private def commonPrefix(old: String, text: String, limit: Int, count: Int = 0): Int =
+      if count < limit && old.charAt(count) == text.charAt(count) then commonPrefix(old, text, limit, count + 1)
+      else count
+
+    @annotation.tailrec
+    private def commonSuffix(old: String, text: String, limit: Int, count: Int = 0): Int =
+      if count < limit && old.charAt(old.length - 1 - count) == text.charAt(text.length - 1 - count) then
+        commonSuffix(old, text, limit, count + 1)
+      else count
 
   /** The advances for the new text and the first offset from which they are the old ones. */
   final private case class Assembled(advances: Option[GlyphAdvances], untouchedFrom: Int, measuredChars: Int)
@@ -161,21 +175,35 @@ private[layout] object IncrementalWrap:
             else search(low, middle - 1)
         search(0, oldRows.length - 1)
 
-      def reuseFrom(oldIndex: Int, rows: Vector[TextVisualLine], rowReaches: Vector[Int]): RowWrap =
+      def reuseFrom(oldIndex: Int, rows: Vector[TextVisualLine], freshReaches: Vector[Int]): RowWrap =
         val tail = oldRows.drop(oldIndex).map(shifted(_, edit.delta, bufferLine, candidate.bufferLine))
-        val tailReaches =
-          reaches.drop(oldIndex).toVector.map(reach => if reach == ToEndOfText then reach else reach + edit.delta)
-        done(rows ++ tail, rowReaches ++ tailReaches, computed = rows.length - kept)
+        done(rows ++ tail, freshReaches, oldIndex, computed = rows.length - kept)
 
-      def done(rows: Vector[TextVisualLine], allReaches: Vector[Int], computed: Int): RowWrap =
-        RowWrap(rows, computed, assembled.measuredChars, Some(WrapTrace(IArray.from(allReaches), assembled.advances)))
+      /** The reaches of the kept rows, the fresh ones, and the old ones from `tailFrom` shifted by the length change.
+        */
+      def done(rows: Vector[TextVisualLine], freshReaches: Vector[Int], tailFrom: Int, computed: Int): RowWrap =
+        val tailLength = if tailFrom < 0 then 0 else reaches.length - tailFrom
+        val merged     = new Array[Int](kept + freshReaches.length + tailLength)
+        (0 until kept).foreach(index => merged(index) = reaches(index))
+        freshReaches.indices.foreach(index => merged(kept + index) = freshReaches(index))
+        val tailAt = kept + freshReaches.length
+        (0 until tailLength).foreach { index =>
+          val reach = reaches(tailFrom + index)
+          merged(tailAt + index) = if reach == ToEndOfText then reach else reach + edit.delta
+        }
+        RowWrap(
+          rows,
+          computed,
+          assembled.measuredChars,
+          Some(WrapTrace(IArray.unsafeFromArray(merged), assembled.advances))
+        )
 
       @annotation.tailrec
-      def walk(startColumn: Int, rows: Vector[TextVisualLine], rowReaches: Vector[Int]): RowWrap =
+      def walk(startColumn: Int, rows: Vector[TextVisualLine], freshReaches: Vector[Int]): RowWrap =
         val row       = TextLayoutSnapshot.wrapRow(spec, bufferLine, measured, startColumn, rows.length)
         val nextRows  = rows :+ row.line
-        val nextReach = rowReaches :+ reachOf(spec, startColumn, row.fitLength)
-        if row.endColumn >= spec.text.length then done(nextRows, nextReach, computed = nextRows.length - kept)
+        val nextReach = freshReaches :+ reachOf(spec, startColumn, row.fitLength)
+        if row.endColumn >= spec.text.length then done(nextRows, nextReach, -1, computed = nextRows.length - kept)
         else
           val unchanged = Option.when(row.endColumn >= assembled.untouchedFrom)(row.endColumn - edit.delta)
           unchanged.flatMap(oldRowStarting) match
@@ -184,7 +212,7 @@ private[layout] object IncrementalWrap:
 
       val keptRows = oldRows.take(kept).map(shifted(_, 0, bufferLine, candidate.bufferLine))
       val resumeAt = if kept == 0 then 0 else oldRows(kept - 1).endColumn - spec.baseColumn
-      walk(resumeAt, keptRows, Vector.from(reaches.take(kept)))
+      walk(resumeAt, keptRows, Vector.empty)
     }
 
   /** `row` moved by `delta` columns onto `bufferLine`, which is what the cold wrap of the shifted text produces. */

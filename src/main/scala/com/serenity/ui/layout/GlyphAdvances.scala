@@ -30,11 +30,11 @@ final private[layout] class GlyphAdvances private (
     System.arraycopy(advances, tailFrom, merged, tailAt, tailLength)
     val keptFree   = contextFreeBefore(keep)
     val middleFree = keptFree + middle.contextFreeBefore(middle.length)
-    val counts = Array.tabulate(merged.length + 1) { index =>
-      if index <= keep then contextFreeBefore(index)
-      else if index <= tailAt then keptFree + middle.contextFreeBefore(index - keep)
-      else middleFree + contextFreeBefore(tailFrom + index - tailAt) - contextFreeBefore(tailFrom)
-    }
+    val counts     = new Array[Int](merged.length + 1)
+    System.arraycopy(contextFreeBefore, 0, counts, 0, keep + 1)
+    (1 to middle.length).foreach(index => counts(keep + index) = keptFree + middle.contextFreeBefore(index))
+    val tailShift = middleFree - contextFreeBefore(tailFrom)
+    (1 to tailLength).foreach(index => counts(tailAt + index) = tailShift + contextFreeBefore(tailFrom + index))
     new GlyphAdvances(merged, counts)
 
   def isContextFree(from: Int, until: Int): Boolean =
