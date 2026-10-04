@@ -77,7 +77,7 @@ class AboveCursorOverlayStackSpec extends AnyFlatSpec with Matchers:
 
   it should "collapse the unfocused lens to a one-line summary when the full stack does not fit above the cursor" in {
     val line   = roomForLensAndCollapsedPeekOnly
-    val state  = lensAndPeek(line)
+    val state  = unfocusedLensAndPeek(line)
     val layout = layoutOf(state)
     val lens   = rectOf(layout, lensId(state))
     val peek   = rectOf(layout, peekId(state))
@@ -90,7 +90,7 @@ class AboveCursorOverlayStackSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "clamp the stack into the pane, without overlap, when even collapsing leaves no room above the cursor" in {
-    val state  = lensAndPeek(1)
+    val state  = unfocusedLensAndPeek(1)
     val layout = layoutOf(state)
     val lens   = rectOf(layout, lensId(state))
     val peek   = rectOf(layout, peekId(state))
@@ -127,7 +127,7 @@ class AboveCursorOverlayStackSpec extends AnyFlatSpec with Matchers:
 
   it should "render a collapsed stacked surface as its one-line summary rather than its full composition" in {
     val line      = roomForLensAndCollapsedPeekOnly
-    val state     = lensAndPeek(line)
+    val state     = unfocusedLensAndPeek(line)
     val lensAlone = withLens(line)
     val fullLens = OverlayViewModel
       .fromState(lensAlone, layoutOf(lensAlone))
@@ -143,6 +143,10 @@ class AboveCursorOverlayStackSpec extends AnyFlatSpec with Matchers:
     lensView.composition.map(_.paintBoxes.size) shouldBe Some(1)
     fullLens.composition.map(_.paintBoxes.size).getOrElse(0) should be > 1
   }
+
+  /** An editable lens holds focus, so it never collapses; a read-only one is a peek and leaves focus in the editor. */
+  private def unfocusedLensAndPeek(line: Int): AppState =
+    lensAndPeek(line, CommentLensMode.ReadOnly)
 
   /** A cursor line with room above it for the peek plus a collapsed lens, but not for the peek plus the full lens. */
   private def roomForLensAndCollapsedPeekOnly: Int =

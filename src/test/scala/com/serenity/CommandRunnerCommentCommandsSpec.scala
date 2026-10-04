@@ -99,7 +99,7 @@ class CommandRunnerCommentCommandsSpec extends AnyFlatSpec with Matchers:
     lens.comment.inlineMarkdown shouldBe "Review this value"
     lens.draft shouldBe "// **Review** this value"
     lens.target shouldBe None
-    shownState.persisted.focus shouldBe Focus.Surface(shownState.commentLensSurface.get.id)
+    shownState.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
     shownState.commentLensSurface.get.dismissOnMove shouldBe false
 
     stateManager
