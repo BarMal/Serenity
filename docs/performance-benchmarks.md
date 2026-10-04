@@ -26,7 +26,19 @@ Scenarios cover:
   painting a 1500x1000 window. The window needs a screen at least that large, so run it with
   `xvfb-run -a -s "-screen 0 1920x1200x24"`.
 
+- `laptop.input.state_manager.typing_random_letters`: seeded-random letters (about one in six a space) typed at the
+  prose cursor, so nearly every keystroke misses the wrap cache that `continuous_typing`'s cyclic a..z and
+  `type_and_delete`'s re-typed text hit.
+- `laptop.input.state_manager.typing_long_paragraph`: the same typing into one 4000-character paragraph with no
+  newlines, to show per-keystroke cost against paragraph length.
+
 Pass name prefixes to run only some scenarios, e.g. `sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks laptop."`.
+
+## Profiling the keystroke path
+
+`com.serenity.perf.TypingProfile` (test scope, not run by CI) drives one keystroke scenario (random typing, long
+paragraph, cold paced typing, move, page) for long enough to profile with JFR and prints p50/p95/mean per event;
+`bench/jfr-aggregate.py` turns the recording into phase shares. Commands are in `bench/README.md`.
 
 ## Frame timing in the running app
 

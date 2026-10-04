@@ -140,7 +140,7 @@ private[perf] object LaptopFrameBenchmarks:
     )
 
   def benchmarks(presentWindow: SwingWindow)(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    renderBenchmarks ++ interactionBenchmarks ++ inputBenchmarks ++
+    renderBenchmarks ++ interactionBenchmarks ++ inputBenchmarks ++ typingBenchmarks ++
       List(presentBenchmark(presentWindow), presentCaretBenchmark(presentWindow))
 
   private def renderBenchmarks: List[BenchmarkRunner.Benchmark] =
@@ -171,22 +171,31 @@ private[perf] object LaptopFrameBenchmarks:
     * resized to the laptop grid (the StateManager otherwise wraps at its 80x24 default) and scrolled so the cursor is
     * on screen, since off-screen editing skips work a real session pays for.
     */
-  private def proseStateManager(
+  private[perf] def proseStateManager(
     paragraphs: Int = 300,
     config: AppConfig = AppConfig.default,
     cursorLine: Int = 150
+  )(using IORuntime): (StateManager, BufferId) =
+    stateManagerHolding(BenchmarkFixtures.loremIpsumProse(paragraphs), config, cursorLine, cursorColumn = 40)
+
+  /** [[proseStateManager]] over any `text`, with the cursor placed at `cursorLine`, `cursorColumn`. */
+  private[perf] def stateManagerHolding(
+    text: String,
+    config: AppConfig = AppConfig.default,
+    cursorLine: Int = 0,
+    cursorColumn: Int = 0
   )(using IORuntime): (StateManager, BufferId) =
     given LoggerFactory[IO] = NoOpFactory[IO]
     val sessionRoot         = Files.createTempDirectory("serenity-laptop-benchmarks")
     val stateManager = StateManager.apply(NoOpLogger[IO], sessionRootOverride = Some(sessionRoot)).unsafeRunSync()
     val proseBufferId = (for
       _       <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))
-      created <- stateManager.createBuffer(BenchmarkFixtures.loremIpsumProse(paragraphs), None)
+      created <- stateManager.createBuffer(text, None)
       state   <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, created)
       _ <- stateManager.applyEvent(ResizeEvent(viewport))
-      _ <- stateManager.setCursorPosition(paneId, cursorLine, 40)
+      _ <- stateManager.setCursorPosition(paneId, cursorLine, cursorColumn)
       _ <- stateManager.updateState(scrolledToCursor(created))
     yield created).unsafeRunSync()
     (stateManager, proseBufferId)
@@ -265,6 +274,47 @@ private[perf] object LaptopFrameBenchmarks:
         () => roundTrip(PageDown, PageUp)
       )
     ) ++ typewriterBenchmarks ++ goToLineBenchmarks
+
+  /** Typing seeded-random letters, so almost every keystroke edits text the wrap cache has not seen: the cyclic a..z of
+    * `continuous_typing` and the re-typed text of `type_and_delete` repeat wraps and flatter the typing path. Paragraph
+    * length is the variable between the two, as a paragraph's wrap is redone on every keystroke.
+    */
+  private[perf] def typingBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
+    List(
+      typingBenchmark("laptop.input.state_manager.typing_random_letters", proseStateManager()),
+      typingBenchmark(
+        "laptop.input.state_manager.typing_long_paragraph",
+        stateManagerHolding(
+          BenchmarkFixtures.longParagraph(LongParagraphChars),
+          cursorColumn = LongParagraphChars / 2
+        )
+      )
+    )
+
+  private val LongParagraphChars = 4_000
+
+  private def typingBenchmark(name: String, session: (StateManager, BufferId))(using
+    IORuntime
+  ): BenchmarkRunner.Benchmark =
+    val (stateManager, bufferId) = session
+    def buffer: Option[Buffer]   = stateManager.getCurrentState.unsafeRunSync().persisted.buffers.get(bufferId)
+    def length: Option[Int]      = buffer.map(_.document.content.weight)
+    def cursorOnScreen: Boolean =
+      buffer
+        .flatMap(b => b.editing.cursorPositions.headOption.map(b -> _))
+        .exists((b, c) => c.line >= b.viewport.topLine && b.viewport.visibleLines > 24)
+    val letters = BenchmarkFixtures.randomLetters(seed = 42L)
+    BenchmarkRunner.Benchmark(
+      name,
+      3,
+      BenchmarkIterationCounts.RandomTyping,
+      () =>
+        val before = length
+        stateManager.applyEvent(InsertChar(letters.next())).unsafeRunSync()
+        assert(length == before.map(_ + 1) && cursorOnScreen, s"typing did not grow the document: $before -> $length")
+      ,
+      () => stateManager.applyEvent(InsertChar(letters.next())).unsafeRunSync()
+    )
 
   private def typewriterBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
     val typewriter =

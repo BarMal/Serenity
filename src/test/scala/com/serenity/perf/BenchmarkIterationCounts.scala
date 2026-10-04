@@ -47,6 +47,9 @@ package com.serenity.perf
   *     runs at both counts showed `p95`/`max` spike sharply (once to 11.66ms against a ~2ms p50), which points at
   *     GC-pause sensitivity as the next thing to check if CI keeps flagging this after the bump -- see
   *     `BenchmarkRunner.AllocationTracked`.
+  *
+  * `laptop.input.state_manager.typing_*` (issues #1798, #1812) take the 20 samples their `laptop.input.*` neighbours
+  * already use; no CV comparison was run for them, so the count is a convention, not a derivation.
   */
 private[perf] object BenchmarkIterationCounts:
   val Damage                = 60
@@ -54,3 +57,4 @@ private[perf] object BenchmarkIterationCounts:
   val LspFramer             = 48
   val RenderMarkdown        = 24
   val LayoutVisibleViewport = 60
+  val RandomTyping          = 20

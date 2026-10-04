@@ -38,6 +38,16 @@ class BenchmarkIterationsSpec extends AnyFlatSpec with Matchers:
     all(benchmarks.map(_.iterations)) shouldBe BenchmarkIterationCounts.Reducer
   }
 
+  "every laptop typing scenario" should "use BenchmarkIterationCounts.RandomTyping" in {
+    import cats.effect.unsafe.implicits.global
+    val benchmarks = LaptopFrameBenchmarks.typingBenchmarks
+    benchmarks.map(_.name) shouldBe List(
+      "laptop.input.state_manager.typing_random_letters",
+      "laptop.input.state_manager.typing_long_paragraph"
+    )
+    all(benchmarks.map(_.iterations)) shouldBe BenchmarkIterationCounts.RandomTyping
+  }
+
   "the chosen iteration counts" should "actually be larger than the previous, false-positive-prone counts" in {
     // Regression guard on the audit's conclusion itself: these must stay well above the old 8-30 range, not just be
     // internally consistent with each other.
