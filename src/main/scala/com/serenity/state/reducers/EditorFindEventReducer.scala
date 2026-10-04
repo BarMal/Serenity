@@ -1,7 +1,6 @@
 package com.serenity.state.reducers
 
 import com.serenity.keystroke.events.*
-import com.serenity.rope.*
 import com.serenity.state.models.*
 
 /** Goto-line/find/replace modal opening and find-next -- the family that reads or advances find state rather than
@@ -29,14 +28,17 @@ private[reducers] object EditorFindEventReducer:
       case FindNext =>
         buffer.findState match
           case Some(FindState(query, storedResults, currentIndex)) if storedResults.nonEmpty =>
-            val validResults = storedResults.filter { result =>
-              isWholeGraphemeMatch(
-                buffer.document.content,
-                buffer.document.content.lineColumnToOffset(result.line, result.column),
-                query.length
-              )
-            }
-            val resultSet = FindResultSet.normalized(query, validResults, currentIndex + 1)
+            val content = buffer.document.content
+            val resultSet =
+              if storedResults.forall(FindSearch.stillMatches(content, query, _)) then
+                FindResultSet.normalized(query, storedResults, currentIndex + 1)
+              else
+                val refreshed = FindSearch.results(content, query)
+                FindResultSet.normalized(
+                  query,
+                  refreshed,
+                  FindResultSet.indexAfter(refreshed, buffer.editing.cursors.head.position)
+                )
             if resultSet.results.isEmpty then applyBuffer(_.copy(findState = None))
             else
               val selected = resultSet.results(resultSet.currentIndex)
@@ -59,7 +61,4 @@ private[reducers] object EditorFindEventReducer:
         val resultSet = FindResultSet.normalized(query, results, currentIndex)
         Modal.Find(resultSet.query, resultSet.results, resultSet.currentIndex)
       case _ =>
-        Modal.Find("", Nil, 0)
-
-  private def isWholeGraphemeMatch(content: Rope, offset: Int, length: Int): Boolean =
-    content.isWholeGraphemeRange(offset, offset + length)
+        Modal.Find("", Vector.empty, 0)

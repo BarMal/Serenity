@@ -64,15 +64,26 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
       sm.applyEvent(Quit).unsafeRunSync()
   }
 
-  // A "close buffer, expect FileClosed" test previously lived here, driven through
-  // StateManagerEditorCapability.closeBuffer. That façade method was deleted in #1183 as dead production code (no
-  // caller outside test-scenario setup) -- and deleting it surfaced that it was, in fact, the *only* code path that
-  // ever emitted LspEffect.FileClosed for a genuinely closed buffer. The real production close-tab flow
-  // (StateManagerWorkflowCapability.closeBufferUsingExistingFlow -> EditorState.closeFocusedTab) does not notify the
-  // LSP server at all. FileClosed coverage for the two paths that ARE reachable from production remains below
-  // (SetBufferLanguage's language switch, and saveBufferAs's URI change) -- but closing a tab never reaching a real
-  // LSP server is a genuine gap, not something this façade-deletion PR should silently paper over or fix. Flagged
-  // for a follow-up issue rather than addressed here.
+  it should "emit FileClosed when the tab holding an LSP document is closed" in {
+    val sm       = makeStateManager()
+    val tempFile = Files.createTempFile("test-lsp-close-tab", ".scala")
+    Files.writeString(tempFile, "object Closed")
+    try
+      sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
+      sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.drain.unsafeRunSync()
+
+      sm.applyEvent(CloseTab).unsafeRunSync()
+
+      val stillOpen =
+        sm.getCurrentState.unsafeRunSync().persisted.buffers.values.exists(_.document.filePath.contains(tempFile))
+      stillOpen shouldBe false
+      sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync() shouldBe List(
+        LspEffect.FileClosed(tempFile.toUri.toString, LanguageId.Scala)
+      )
+    finally
+      Files.deleteIfExists(tempFile)
+      sm.applyEvent(Quit).unsafeRunSync()
+  }
 
   it should "not emit FileOpened for files without a known language" in {
     val sm       = makeStateManager()
@@ -125,11 +136,14 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
     Files.writeString(tempFile, "object Change")
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
+      val opened = sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync()
+
       sm.applyEvent(InsertChar('a')).unsafeRunSync()
       sm.applyEvent(InsertChar('b')).unsafeRunSync()
       sm.applyEvent(InsertChar('c')).unsafeRunSync()
 
-      val effects = sm.lspEffectSource.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync()
+      val effects =
+        opened ++ sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync()
       val currentText =
         sm.getCurrentState
           .unsafeRunSync()
@@ -169,10 +183,12 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
     Files.writeString(tempFile, "object Stalled")
     try
       sm.applyEvent(LoadFile(tempFile)).unsafeRunSync()
+      val opened = sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync()
 
       (1 to 600).foreach(_ => sm.applyEvent(InsertChar('x')).unsafeRunSync())
 
-      val effects = sm.lspEffectSource.lspEffectStream.take(2).timeout(2.seconds).compile.toList.unsafeRunSync()
+      val effects =
+        opened ++ sm.lspEffectSource.lspEffectStream.take(1).timeout(2.seconds).compile.toList.unsafeRunSync()
       val currentText =
         sm.getCurrentState
           .unsafeRunSync()

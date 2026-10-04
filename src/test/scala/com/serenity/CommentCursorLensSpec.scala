@@ -73,7 +73,7 @@ class CommentCursorLensSpec extends AnyFlatSpec with Matchers:
 
     val lens = commentLensState(state).getOrElse(fail("Expected the comment lens to open on keyboard cursor move"))
     lens.mode shouldBe CommentLensMode.ReadOnly
-    lens.target shouldBe Some(comment)
+    lens.target shouldBe Some(CommentLensTarget(0, comment))
     state.persisted.focus shouldBe Focus.Surface(SurfaceId("comment-lens"))
   }
 

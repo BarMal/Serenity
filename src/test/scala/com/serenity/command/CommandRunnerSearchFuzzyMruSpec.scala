@@ -117,6 +117,27 @@ class CommandRunnerSearchFuzzyMruSpec extends AnyFlatSpec with Matchers:
     used.filteredCommands.indexOf(commandB) should be < used.filteredCommands.indexOf(commandA)
   }
 
+  // issue #1861: recency used to be the primary sort key, so any used command beat every unused one.
+  it should "rank an unused label-prefix match above a used command matching only on its description" in {
+    val descriptionOnly = Command.typed(
+      "toggle-sidebar",
+      "Hide the widget panel.",
+      CommandIntent.Edit(EditIntent.Undo),
+      label = "Toggle Sidebar"
+    )
+    val labelPrefix =
+      Command.typed("show-gallery", "Show the gallery.", CommandIntent.Edit(EditIntent.Undo), label = "Widget Gallery")
+    given CommandRegistry = CommandRegistry(List(descriptionOnly, labelPrefix))
+
+    val searched = CommandRunner.empty
+      .recordCommandUsage(descriptionOnly.name)
+      .updateSearchTerm("widget")
+
+    searched.filteredCommands shouldBe List(labelPrefix, descriptionOnly)
+    searched.visibleItems.collect { case CommandSurfaceItem.CommandItem(command, _) => command } shouldBe
+      List(labelPrefix, descriptionOnly)
+  }
+
   // issue #1049: opening to a raw registry-order list showed an arbitrary top rather than anything personalized.
   "CommandRunner.visibleItems" should "show a recently used command first on an empty (just-opened) query" in {
     val commandA                    = testCommand("test-alpha-widget", "Alpha Widget")

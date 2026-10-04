@@ -184,8 +184,10 @@ object LspManager:
                     connectionProvider
                   )
               case None =>
-                documentTexts.update(_ + (uri -> text)) >>
-                  applyEvent(LspEvent.LspSemanticTokensUnavailable(rawUri))
+                // Already reported by FileOpened or this document's first edit; a repeat is a commit per keystroke.
+                documentTexts
+                  .modify(texts => (texts + (uri -> text), texts.contains(uri)))
+                  .flatMap(reported => applyEvent(LspEvent.LspSemanticTokensUnavailable(rawUri)).unlessA(reported))
             }
 
       case LspEffect.FileClosed(rawUri, languageId) =>

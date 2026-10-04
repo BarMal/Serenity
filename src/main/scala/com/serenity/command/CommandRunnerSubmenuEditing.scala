@@ -199,7 +199,8 @@ private[command] trait CommandRunnerSubmenuEditing:
         items.lift(pageSelectedIndex(surface.current)) match
           case Some(option: CommandSurfaceItem.OptionItem) =>
             val updatedOption = option.moveSelection(delta)
-            copy(optionSelections = optionSelections + (option.id -> updatedOption.selectedIndex))
+            val selections    = optionSelections + (option.id -> updatedOption.selectedIndex)
+            copy(optionSelections = selections).withSearchCacheRefreshed
           case _ =>
             this
       case None =>
@@ -209,7 +210,7 @@ private[command] trait CommandRunnerSubmenuEditing:
     selectedItem match
       case Some(option: CommandSurfaceItem.OptionItem) =>
         val updatedOption = option.moveSelection(delta)
-        copy(optionSelections = optionSelections + (option.id -> updatedOption.selectedIndex))
+        copy(optionSelections = optionSelections + (option.id -> updatedOption.selectedIndex)).withSearchCacheRefreshed
       case _ =>
         this
 

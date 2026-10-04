@@ -56,14 +56,14 @@ object PinnedPanelContentReducer:
   ): AppState =
     state.surfaceById(surfaceId).fold(state) { surface =>
       surface.content match
-        case SurfaceContent.DirectoryTree(tree, selectedPath) if tree.loading.contains(path) =>
+        case SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset) if tree.loading.contains(path) =>
           val content = listing match
             case Right(entries) =>
               val selected =
                 if path == tree.rootPath then selectedPath.orElse(entries.headOption.map(_.path)) else selectedPath
-              SurfaceContent.DirectoryTree(tree.listed(path, entries), selected)
+              SurfaceContent.DirectoryTree(tree.listed(path, entries), selected, scrollOffset)
             case Left(reason) =>
-              SurfaceContent.DirectoryTree(tree.listingFailed(path, reason), selectedPath)
+              SurfaceContent.DirectoryTree(tree.listingFailed(path, reason), selectedPath, scrollOffset)
           replaceSurface(state, surface.copy(content = content))
         case _ => state
     }
@@ -71,8 +71,9 @@ object PinnedPanelContentReducer:
   def selectFileInExplorer(targetPath: Path, state: AppState): ReducerResult =
     val selected = newestPinned(state)(isPanel(PanelId.Explorer)).flatMap { surface =>
       surface.content match
-        case SurfaceContent.DirectoryTree(tree, _) =>
-          Some(replaceSurface(state, surface.copy(content = SurfaceContent.DirectoryTree(tree, Some(targetPath)))))
+        case SurfaceContent.DirectoryTree(tree, _, scrollOffset) =>
+          val revealed = SurfaceContent.DirectoryTree(tree, Some(targetPath), scrollOffset)
+          Some(replaceSurface(state, surface.copy(content = revealed)))
         case _ => None
     }
     ReducerResult.noEffects(selected.getOrElse(state))
@@ -82,10 +83,11 @@ object PinnedPanelContentReducer:
     val withoutSource = Option(source.getParent).fold(state) { sourceDir =>
       state.pinnedSurfaces.foldLeft(state) { (current, surface) =>
         surface.content match
-          case SurfaceContent.DirectoryTree(tree, selectedPath) =>
+          case SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset) =>
             tree.entries.get(sourceDir).fold(current) { listed =>
-              val pruned = tree.copy(entries = tree.entries.updated(sourceDir, listed.filterNot(_.path == source)))
-              replaceSurface(current, surface.copy(content = SurfaceContent.DirectoryTree(pruned, selectedPath)))
+              val pruned  = tree.copy(entries = tree.entries.updated(sourceDir, listed.filterNot(_.path == source)))
+              val content = SurfaceContent.DirectoryTree(pruned, selectedPath, scrollOffset)
+              replaceSurface(current, surface.copy(content = content))
             }
           case _ => current
       }

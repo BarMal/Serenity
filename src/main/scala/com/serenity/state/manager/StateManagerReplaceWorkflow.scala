@@ -1,8 +1,10 @@
 package com.serenity.state.manager
 
 import cats.effect.IO
+import com.serenity.richtext.RichTextDocument
 import com.serenity.rope.*
 import com.serenity.state.models.*
+import com.serenity.state.reducers.EditorEditSupport
 import com.serenity.state.undo.{BufferSnapshot, HistoryEntry, UndoState}
 
 /** Submits the Find/Replace prompt: the decision is [[ReplaceWorkflowTransitions.submitted]], committed as one model
@@ -66,13 +68,8 @@ private[manager] object ReplaceWorkflowTransitions:
     buffer: Buffer,
     matches: List[Int]
   ): Model =
-    val updatedContent =
-      replaceMatchesInRanges(
-        rope = buffer.document.content,
-        matchOffsets = matches,
-        findText = workflow.findText,
-        replacementText = workflow.replacementText
-      )
+    val (updatedContent, updatedRichText) =
+      replaceMatches(buffer, matches, workflow.findText, workflow.replacementText)
     val cursorOffset =
       finalCursorOffsetAfterReplacements(
         matches,
@@ -82,12 +79,7 @@ private[manager] object ReplaceWorkflowTransitions:
     val newCursor = updatedContent.offsetToCursorPosition(cursorOffset)
     val updatedFindState =
       refreshedFindState(updatedContent, workflow.findText, requestedIndex = 0)
-    val updatedBuffer = buffer.copy(
-      document = buffer.document.copy(
-        content = updatedContent,
-        isDirty = true,
-        isNewEmpty = false
-      ),
+    val updatedBuffer = withReplacedContent(buffer, updatedContent, updatedRichText).copy(
       editing = EditingState(List(newCursor)),
       findState = updatedFindState
     )
@@ -112,12 +104,8 @@ private[manager] object ReplaceWorkflowTransitions:
   )(using Balance): Model =
     val startOffset = nextReplaceMatchOffset(buffer, matches)
     val endOffset   = startOffset + workflow.findText.length
-    // startOffset/endOffset come from a match found against this same content, so this is expected to
-    // always succeed; no-op back to the unedited content rather than crash if that invariant ever breaks.
-    val updatedContent = buffer.document.content
-      .delete(startOffset, endOffset)
-      .flatMap(_.insert(startOffset, workflow.replacementText))
-      .getOrElse(buffer.document.content)
+    val (updatedContent, updatedRichText) =
+      replaceMatches(buffer, List(startOffset), workflow.findText, workflow.replacementText)
     val cursorOffset = startOffset + workflow.replacementText.length
     val newCursor    = updatedContent.offsetToCursorPosition(cursorOffset)
     val updatedFindState =
@@ -137,12 +125,7 @@ private[manager] object ReplaceWorkflowTransitions:
           )
         case ReplaceWorkflowScope.CurrentBuffer =>
           None
-    val updatedBuffer = buffer.copy(
-      document = buffer.document.copy(
-        content = updatedContent,
-        isDirty = true,
-        isNewEmpty = false
-      ),
+    val updatedBuffer = withReplacedContent(buffer, updatedContent, updatedRichText).copy(
       editing = EditingState.fromCursors(
         List(replacementSelection.fold(Cursor(newCursor))(Cursor(_)))
       ),
@@ -210,6 +193,7 @@ private[manager] object ReplaceWorkflowTransitions:
       .filter(offset => isWholeGraphemeMatch(content, offset, findText.length))
       .map(offset => content.offsetToCursorPosition(offset))
       .map(cursor => FindResult(cursor.line, cursor.column))
+      .toVector
     val resultSet = FindResultSet.normalized(findText, results, requestedIndex)
     Option.when(resultSet.results.nonEmpty)(FindState.fromResultSet(resultSet))
 
@@ -225,21 +209,31 @@ private[manager] object ReplaceWorkflowTransitions:
       case index => index
     refreshedFindState(content, findText, requestedIndex)
 
-  private def replaceMatchesInRanges(
-    rope: com.serenity.rope.Rope,
+  /** The buffer's content and rich-text document with every match at `matchOffsets` replaced, the document remapped in
+    * step with the text so its formatting survives the replacement (#1935).
+    */
+  private def replaceMatches(
+    buffer: Buffer,
     matchOffsets: List[Int],
     findText: String,
     replacementText: String
-  ): com.serenity.rope.Rope =
-    matchOffsets.sorted.reverse.foldLeft(rope) { (current, offset) =>
-      // `offset` comes from a match found against `current` (offsets are processed highest-first, so earlier
-      // replacements never shift a not-yet-processed one), so this is expected to always succeed; no-op that one
-      // replacement rather than corrupt the rope if that invariant ever breaks.
+  ): (Rope, Option[RichTextDocument]) =
+    val edits = matchOffsets.sorted.reverse.zipWithIndex.map { (offset, index) =>
+      EditorEditSupport.MultiCursorEdit(index, offset, offset + findText.length, replacementText)
+    }
+    EditorEditSupport.foldEditsWithRichText(buffer, edits) { (current, edit) =>
+      // `edit` comes from a match found against `current` (edits are applied highest-first, so earlier replacements
+      // never shift a not-yet-applied one), so this is expected to always succeed; no-op that one replacement rather
+      // than corrupt the rope if that invariant ever breaks.
       current
-        .delete(offset, offset + findText.length)
-        .flatMap(_.insert(offset, replacementText))
+        .delete(edit.start, edit.end)
+        .flatMap(_.insert(edit.start, edit.insertedText))
         .getOrElse(current)
     }
+
+  private def withReplacedContent(buffer: Buffer, content: Rope, richText: Option[RichTextDocument]): Buffer =
+    val document = buffer.document.withContent(content)
+    buffer.copy(document = document, richText = buffer.richText.withSyncedDocument(richText, document.contentVersion))
 
   private def finalCursorOffsetAfterReplacements(
     matchOffsets: List[Int],

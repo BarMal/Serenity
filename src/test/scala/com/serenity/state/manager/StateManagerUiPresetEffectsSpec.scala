@@ -61,7 +61,7 @@ class StateManagerUiPresetEffectsSpec extends AnyFlatSpec with Matchers:
         state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(PanelPosition.Left)
       )
       .map(_.content)
-      .collect { case SurfaceContent.DirectoryTree(tree, _) => tree.awaitingListing }
+      .collect { case SurfaceContent.DirectoryTree(tree, _, _) => tree.awaitingListing }
       .flatten
       .toSet
 

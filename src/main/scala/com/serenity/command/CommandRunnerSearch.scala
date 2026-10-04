@@ -1,6 +1,7 @@
 package com.serenity.command
 
 import java.util.Locale
+import java.util.regex.Pattern
 
 /** Search-matching and ranking helpers for the palette and settings search. Split out of `CommandRunner`'s companion
   * object to keep both under the architecture size targets -- see `CommandRunner`'s doc.
@@ -9,13 +10,11 @@ private[command] object CommandRunnerSearch:
 
   private[command] val MaximumSettingSearchResults = 10
 
+  private val NonAlphanumericRun: Pattern = Pattern.compile("[^\\p{L}\\p{N}]+")
+
   private[command] def normalizedSearchTerm(term: String): String =
-    term.trim
-      .stripPrefix("\"")
-      .stripSuffix("\"")
-      .toLowerCase(Locale.ROOT)
-      .replaceAll("[^\\p{L}\\p{N}]+", " ")
-      .trim
+    val unquoted = term.trim.stripPrefix("\"").stripSuffix("\"").toLowerCase(Locale.ROOT)
+    NonAlphanumericRun.matcher(unquoted).replaceAll(" ").trim
 
   private[command] def isSpecificSettingQuery(term: String): Boolean =
     term.split(" ").count(_.nonEmpty) > 1
@@ -32,10 +31,20 @@ private[command] object CommandRunnerSearch:
         label == term || id == term
       case _ => false
 
-  private[command] def settingSearchRank(item: CommandSurfaceItem, breadcrumb: String, term: String): Option[Int] =
-    val label = normalizedSearchTerm(itemLabel(item))
-    val id    = normalizedSearchTerm(item.id)
-    val scope = normalizedSearchTerm(breadcrumb)
+  /** One settings leaf's searchable text, normalised once when the settings index is built rather than per query. */
+  final private[command] case class SettingHaystack(label: String, id: String, labelAndHint: String, everything: String)
+
+  private[command] object SettingHaystack:
+
+    def of(item: CommandSurfaceItem, breadcrumb: String): SettingHaystack =
+      val label = normalizedSearchTerm(itemLabel(item))
+      val id    = normalizedSearchTerm(item.id)
+      val scope = normalizedSearchTerm(breadcrumb)
+      val hint  = normalizedSearchTerm(itemHint(item).getOrElse(""))
+      SettingHaystack(label, id, s"$label $hint", s"$label $id $scope $hint")
+
+  /** `terms` is `term` split on spaces, passed in so a query splits once rather than once per leaf. */
+  private[command] def settingSearchRank(haystack: SettingHaystack, term: String, terms: List[String]): Option[Int] =
     // issue #1549: an item's hint (rendered next to it, e.g. "also controls how many command runner/palette items
     // are visible at once") is real, user-facing text describing what the setting does, but was silently excluded
     // from this rank -- a query for exactly the words a hint uses to describe a setting (when its label/id/breadcrumb
@@ -48,15 +57,11 @@ private[command] object CommandRunnerSearch:
     // for "command runner" match a wall of unrelated key bindings ahead of Interface Density, whose *hint* actually
     // describes the command runner/palette's visible-item count. A match against the human-facing label/hint is real
     // relevance; a match that only exists via id/breadcrumb namespacing is a weaker, tie-breaking signal.
-    val terms                      = term.split(" ").filter(_.nonEmpty).toList
-    def allMatch(haystack: String) = terms.nonEmpty && terms.forall(haystack.contains)
-    val hint                       = normalizedSearchTerm(itemHint(item).getOrElse(""))
-    val labelOrHintMatch           = allMatch(s"$label $hint")
-    val idOrScopeAlsoMatch         = allMatch(s"$label $id $scope $hint")
-    if label == term || id == term then Some(0)
-    else if label.startsWith(term) || id.startsWith(term) then Some(1)
-    else if labelOrHintMatch then Some(2)
-    else if idOrScopeAlsoMatch then Some(3)
+    def allMatch(text: String) = terms.nonEmpty && terms.forall(text.contains)
+    if haystack.label == term || haystack.id == term then Some(0)
+    else if haystack.label.startsWith(term) || haystack.id.startsWith(term) then Some(1)
+    else if allMatch(haystack.labelAndHint) then Some(2)
+    else if allMatch(haystack.everything) then Some(3)
     else None
 
   private[command] def itemLabel(item: CommandSurfaceItem): String =

@@ -133,11 +133,8 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
       .interpretCommand(command(CommandIntent.File(FileIntent.OpenRecentFile(missing))), AppState.initial)
       .unsafeRunSync()
 
-    // issue #1048: interpretCommand records MRU usage for every command it runs regardless of outcome, so the
-    // otherwise-no-op file load still bumps `persisted.commandUsage` for `command`'s own "test-command" name.
-    fixture.currentState shouldBe AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(commandUsage = Map(CommandId("test-command") -> 1))
-    )
+    // #1877: "test-command" is no registry command, so its run leaves the recency table alone as well.
+    fixture.currentState shouldBe AppState.initial
   }
 
   it should "route CloseAll, CloseOthers, and CloseCurrentFile to their close scopes" in {
@@ -276,7 +273,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
   }
 
   it should "run an unrecorded command without counting it towards recency, unlike a recorded one" in {
-    val closeAll = command(CommandIntent.File(FileIntent.CloseAll))
+    val closeAll = registryCommand("close-all")
     val fixture  = harness()
 
     fixture.handlers.interpretEffect(AppEffect.ExecuteCommandUnrecorded(closeAll)).unsafeRunSync()
@@ -309,7 +306,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
   it should "show a find modal seeded from the buffer's existing find state" in {
     val buffer = Buffer
       .fromString(bufferId, "cat dog cat")
-      .copy(findState = Some(FindState(query = "cat", results = Nil, currentIndex = 0)))
+      .copy(findState = Some(FindState(query = "cat", results = Vector.empty, currentIndex = 0)))
     val state   = AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> buffer)))
     val fixture = harness(state)
 
@@ -371,7 +368,7 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
     val fixture  = harness(loadSessionResult = IO.pure(Some(restored)))
 
     fixture.handlers
-      .interpretCommand(command(CommandIntent.Session(SessionIntent.RestoreSession)), AppState.initial)
+      .interpretCommand(registryCommand("restore-session"), AppState.initial)
       .unsafeRunSync()
 
     fixture.currentState.runtime.nextBufferId shouldBe BufferId(99)
@@ -383,17 +380,20 @@ class StateManagerEffectHandlersSpec extends AnyFlatSpec with Matchers with Stat
     val fixture = harness(loadSessionResult = IO.pure(None))
 
     fixture.handlers
-      .interpretCommand(command(CommandIntent.Session(SessionIntent.RestoreSession)), AppState.initial)
+      .interpretCommand(registryCommand("restore-session"), AppState.initial)
       .unsafeRunSync()
 
-    // issue #1048: interpretCommand records MRU usage for every command it runs regardless of outcome, so the
-    // otherwise-no-op restore still commits a bump of `persisted.commandUsage` for `command`'s own "test-command" name.
+    // issue #1048: interpretCommand records MRU usage for every registry command it runs regardless of outcome, so
+    // the otherwise-no-op restore still commits a bump of `persisted.commandUsage` for "restore-session".
     fixture.committedStates.get.unsafeRunSync() shouldBe List(usageRecorded(AppState.initial))
     fixture.currentState shouldBe usageRecorded(AppState.initial)
   }
 
   private def usageRecorded(state: AppState): AppState =
-    state.copy(persisted = state.persisted.copy(commandUsage = Map(CommandId("test-command") -> 1)))
+    state.copy(persisted = state.persisted.copy(commandUsage = Map(CommandId("restore-session") -> 1)))
+
+  private def registryCommand(name: String): Command =
+    CommandRegistry.withToggleUI.findCommand(name).getOrElse(fail(s"no registry command $name"))
 
   // ---------------------------------------------------------------------------------------------------------------
   // Direct save/load entry points

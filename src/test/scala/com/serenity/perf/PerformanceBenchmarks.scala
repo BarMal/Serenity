@@ -273,7 +273,7 @@ object PerformanceBenchmarks:
       )
     val findResultSet = FindResultSet.normalized(
       "needle",
-      (0 until 12_000).toList.map(line => FindResult(line, 10)),
+      (0 until 12_000).toVector.map(line => FindResult(line, 10)),
       requestedIndex = 6_000
     )
     val findQuerySurfaceId = SurfaceId("benchmark-find")
@@ -283,7 +283,7 @@ object PerformanceBenchmarks:
         List(
           UiSurface(
             findQuerySurfaceId,
-            SurfaceContent.ModalWorkflow(Modal.Find("needle", Nil, 0)),
+            SurfaceContent.ModalWorkflow(Modal.Find("needle", Vector.empty, 0)),
             SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
         )
@@ -305,7 +305,7 @@ object PerformanceBenchmarks:
         List(
           UiSurface(
             findQuerySurfaceId,
-            SurfaceContent.ModalWorkflow(Modal.Find("needl", Nil, 0)),
+            SurfaceContent.ModalWorkflow(Modal.Find("needl", Vector.empty, 0)),
             SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
         )

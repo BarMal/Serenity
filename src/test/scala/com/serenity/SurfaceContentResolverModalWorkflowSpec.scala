@@ -93,7 +93,7 @@ class SurfaceContentResolverModalWorkflowSpec extends AnyFlatSpec with Matchers:
     // `ModalSurfaceComposition` (issue #819) is now the sole source of truth for what a `ModalWorkflow` surface
     // paints -- see `ModalSurfaceCompositionSpec` for coverage of each modal kind's actual content.
     val floating = SurfaceContentResolver.resolve(
-      SurfaceContent.ModalWorkflow(Modal.Find("needle", Nil, 0)),
+      SurfaceContent.ModalWorkflow(Modal.Find("needle", Vector.empty, 0)),
       LayoutRect(0, 0, 60, 12),
       SurfaceRenderMode.Floating
     )

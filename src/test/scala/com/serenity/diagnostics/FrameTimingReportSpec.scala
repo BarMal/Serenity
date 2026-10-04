@@ -1,7 +1,12 @@
 package com.serenity.diagnostics
 
+import scala.concurrent.duration.*
+
+import cats.effect.testkit.TestControl
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
+import com.serenity.testkit.VirtualTime.runVirtual
+import fs2.concurrent.SignallingRef
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -39,4 +44,40 @@ class FrameTimingReportSpec extends AnyFlatSpec with Matchers:
 
     logged shouldBe empty
     timings.drain().frames shouldBe empty
+  }
+
+  "FrameTimingReport.stream" should "schedule no wakeups at all while frame timing is off" in {
+    val program = for
+      enabled <- SignallingRef.of[IO, Boolean](false)
+      _       <- FrameTimingReport.stream(FrameTimings(), enabled.discrete, _ => IO.unit).compile.drain
+    yield ()
+
+    val parked = (for
+      control  <- TestControl.execute(program)
+      _        <- control.tickFor(1.minute)
+      finished <- control.results
+      idle     <- control.isDeadlocked
+    yield (finished, idle)).unsafeRunSync()
+
+    parked shouldBe ((None, true))
+  }
+
+  it should "log one line per interval only while frame timing is on" in {
+    val program = for
+      enabled <- SignallingRef.of[IO, Boolean](false)
+      lines   <- Ref.of[IO, Int](0)
+      report = FrameTimingReport.stream(withOneFrame(), enabled.discrete, _ => lines.update(_ + 1))
+      fiber    <- report.compile.drain.start
+      _        <- IO.sleep(FrameTimingReport.Interval * 3)
+      whileOff <- lines.get
+      _        <- enabled.set(true)
+      _        <- IO.sleep(FrameTimingReport.Interval * 2 + 1.second)
+      whileOn  <- lines.get
+      _        <- enabled.set(false)
+      _        <- IO.sleep(FrameTimingReport.Interval * 3)
+      afterOff <- lines.get
+      _        <- fiber.cancel
+    yield (whileOff, whileOn, afterOff)
+
+    runVirtual(program) shouldBe ((0, 2, 2))
   }

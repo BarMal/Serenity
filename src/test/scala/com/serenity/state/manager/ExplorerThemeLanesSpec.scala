@@ -124,7 +124,7 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
     FileEntry(path, path.getFileName.toString, isDirectory, None, 0L)
 
   private def explorerTree(state: AppState): Option[DirectoryTreeData] =
-    state.pinnedSurfaces.collectFirst { case UiSurface(_, SurfaceContent.DirectoryTree(tree, _), _, _) => tree }
+    state.pinnedSurfaces.collectFirst { case UiSurface(_, SurfaceContent.DirectoryTree(tree, _, _), _, _) => tree }
 
   /** An explorer rooted at [[root]] whose `src` row is selected and focused, ready for Enter to expand it. */
   private def explorerOnChild(manager: StateManager): IO[Unit] =
@@ -239,7 +239,7 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
         _      <- opening.joinWithNever
         filled <- awaitValue(manager.getCurrentState)(explorerTree(_).exists(_.entries.contains(cwd)))
         selected = filled.pinnedSurfaces.collectFirst {
-          case UiSurface(_, SurfaceContent.DirectoryTree(_, sel), _, _) =>
+          case UiSurface(_, SurfaceContent.DirectoryTree(_, sel, _), _, _) =>
             sel
         }
       yield (pinned.map(t => (t.rootPath, t.entries)), explorerTree(filled).map(_.entries(cwd)), selected, cwd)
@@ -303,7 +303,7 @@ class ExplorerThemeLanesSpec extends AnyFlatSpec with Matchers:
         .find(surface =>
           state.persisted.layout.workspaceTree.flatMap(_.positionForSurface(surface.id)).contains(position)
         )
-        .collect { case UiSurface(_, SurfaceContent.DirectoryTree(tree, _), _, _) => tree }
+        .collect { case UiSurface(_, SurfaceContent.DirectoryTree(tree, _, _), _, _) => tree }
         .flatMap(_.entries.get(child))
     val program =
       for

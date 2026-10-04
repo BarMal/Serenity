@@ -14,5 +14,11 @@ object FrameTimingReport:
   def tick(timings: FrameTimings, enabled: IO[Boolean], log: String => IO[Unit]): IO[Unit] =
     IO(timings.drain()).flatMap(summary => enabled.flatMap(on => if on then log(summary.logLine) else IO.unit))
 
-  def stream(timings: FrameTimings, enabled: IO[Boolean], log: String => IO[Unit]): Stream[IO, Unit] =
-    Stream.awakeEvery[IO](Interval).evalMap(_ => tick(timings, enabled, log))
+  /** Runs a report timer only while `enabled` last said on, so with frame timing off nothing wakes at all (#1938). */
+  def stream(timings: FrameTimings, enabled: Stream[IO, Boolean], log: String => IO[Unit]): Stream[IO, Unit] =
+    enabled.changes.switchMap(on => if on then reporting(timings, log) else Stream.empty)
+
+  /** Discards what gathered while timing was off, so the first line covers only its own window. */
+  private def reporting(timings: FrameTimings, log: String => IO[Unit]): Stream[IO, Unit] =
+    Stream.exec(IO(timings.drain()).void) ++
+      Stream.awakeEvery[IO](Interval).evalMap(_ => tick(timings, IO.pure(true), log))

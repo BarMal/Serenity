@@ -66,7 +66,7 @@ object ModalEventReducer:
   def applyFindSearchResults(
     state: AppState,
     request: FindSearchRequest,
-    results: List[FindResult]
+    results: Vector[FindResult]
   ): AppState =
     ModalFindReducer.applyFindSearchResults(state, request, results)
 

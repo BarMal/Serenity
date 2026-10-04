@@ -450,3 +450,124 @@ class RichTextDocumentSpec extends AnyFlatSpec with Matchers:
     viaEdit shouldBe direct
     viaEdit.hashCode() shouldBe direct.hashCode()
   }
+
+  private val boldStyle = RichTextStyle(marks = Set(InlineMark.Bold))
+
+  private def linesDocument(count: Int): RichTextDocument =
+    RichTextDocument((0 until count).map(index => RichTextParagraph.plain(s"line-$index")).toList)
+
+  private def indicesNotReferenceEqual(before: RichTextDocument, after: RichTextDocument): List[Int] =
+    before.paragraphs
+      .zip(after.paragraphs)
+      .zipWithIndex
+      .collect { case ((previous, next), index) if !(previous eq next) => index }
+
+  it should "keep paragraphs an in-paragraph edit did not touch reference-equal to the previous document's" in {
+    val document = linesDocument(200)
+
+    val edited = document
+      .replaceRange(RichTextRange(RichTextPosition(120, 4), RichTextPosition(120, 4)), "x")
+      .normalized
+
+    edited.paragraphAt(120).map(_.plainText) shouldBe Some("linex-120")
+    indicesNotReferenceEqual(document, edited) shouldBe List(120)
+  }
+
+  it should "keep untouched paragraphs reference-equal through a styled insertion followed by normalisation" in {
+    val document = linesDocument(200)
+
+    val inserted = document.replaceRange(RichTextRange(RichTextPosition(7, 0), RichTextPosition(7, 0)), "new ")
+    val styled = inserted
+      .updateInlineStyle(RichTextRange(RichTextPosition(7, 0), RichTextPosition(7, 4)))(_ => boldStyle)
+      .normalized
+
+    styled.paragraphAt(7).map(_.runs) shouldBe Some(List(RichTextRun("new ", boldStyle), RichTextRun("line-7")))
+    indicesNotReferenceEqual(document, styled) shouldBe List(7)
+  }
+
+  it should "keep paragraphs around a newline-splitting edit reference-equal to their pre-edit counterparts" in {
+    val document = linesDocument(50)
+
+    val split = document
+      .replaceRange(RichTextRange(RichTextPosition(10, 2), RichTextPosition(10, 2)), "\n")
+      .normalized
+
+    val unchangedBefore = split.paragraphs.take(10).zip(document.paragraphs.take(10))
+    val shiftedAfter    = split.paragraphs.drop(12).zip(document.paragraphs.drop(11))
+    split.paragraphs.map(_.plainText).slice(10, 12) shouldBe List("li", "ne-10")
+    shiftedAfter.length shouldBe 39
+    (unchangedBefore ++ shiftedAfter).filterNot((next, previous) => next eq previous) shouldBe empty
+  }
+
+  it should "normalise every paragraph of a document that was not normalised before an edit" in {
+    val document = RichTextDocument(
+      List(
+        RichTextParagraph(
+          List(RichTextRun("Hello", boldStyle), RichTextRun("", boldStyle), RichTextRun(" world", boldStyle))
+        ),
+        RichTextParagraph(List(RichTextRun("a"), RichTextRun("b"))),
+        RichTextParagraph.plain("")
+      )
+    )
+
+    val edited = document.replaceRange(RichTextRange(RichTextPosition(1, 1), RichTextPosition(1, 1)), "X")
+
+    edited.paragraphs.map(_.runs) shouldBe List(
+      List(RichTextRun("Hello world", boldStyle)),
+      List(RichTextRun("aXb")),
+      Nil
+    )
+  }
+
+  it should "normalise to the same paragraphs as normalising each flattened paragraph, whatever edits came before" in {
+    val unnormalised = RichTextDocument(
+      List(
+        RichTextParagraph(
+          List(RichTextRun("alpha", boldStyle), RichTextRun("", boldStyle), RichTextRun(" beta", boldStyle))
+        ),
+        RichTextParagraph.plain(""),
+        RichTextParagraph(List(RichTextRun("gam"), RichTextRun("ma"))),
+        RichTextParagraph.plain("delta")
+      )
+    )
+    val range = RichTextRange(RichTextPosition(2, 1), RichTextPosition(3, 2))
+    val edits: List[RichTextDocument => RichTextDocument] = List(
+      _.applyMark(range, InlineMark.Italic),
+      _.toggleMark(range, InlineMark.Bold),
+      _.setFontSize(range, 18.0f),
+      _.setParagraphRole(range, ParagraphRole.Heading(2)),
+      _.replaceRange(range, "one\ntwo"),
+      _.replaceRange(RichTextRange(RichTextPosition(3, 1), RichTextPosition(3, 1)), "z"),
+      _.normalized.applyMark(RichTextRange(RichTextPosition(0, 0), RichTextPosition(0, 5)), InlineMark.Italic)
+    )
+
+    edits.foreach { edit =>
+      val edited = edit(unnormalised)
+      edited.normalized.paragraphs shouldBe edited.paragraphs.map(_.normalized)
+      edited.normalized.paragraphs.forall(_.isNormalized) shouldBe true
+    }
+  }
+
+  it should "merge runs an edit leaves adjacent with the same style when normalised" in {
+    val document = RichTextDocument.oneParagraph("alpha beta").normalized
+    val range    = RichTextRange(RichTextPosition(0, 2), RichTextPosition(0, 6))
+
+    val marked = document.applyMark(range, InlineMark.Bold)
+
+    marked.normalized.paragraphs.head.runs shouldBe List(
+      RichTextRun("al"),
+      RichTextRun("pha ", boldStyle),
+      RichTextRun("beta")
+    )
+    marked.updateInlineStyle(range)(_ => RichTextStyle.empty).normalized.paragraphs.head.runs shouldBe List(
+      RichTextRun("alpha beta")
+    )
+  }
+
+  "RichTextParagraph" should "cache its plain text and report its length without changing equality" in {
+    val paragraph = RichTextParagraph(List(RichTextRun("ab", boldStyle), RichTextRun("cd")))
+
+    (paragraph.plainText eq paragraph.plainText) shouldBe true
+    paragraph.plainTextLength shouldBe 4
+    paragraph shouldBe RichTextParagraph(List(RichTextRun("ab", boldStyle), RichTextRun("cd")))
+  }

@@ -44,7 +44,9 @@ final private[manager] class StateManagerOperationBoundary private (
     listDirectory: Path => IO[List[DirEntry]],
     commitObserver: Ref[IO, (AppState, AppState) => IO[Unit]],
     wrapCache: WrappedLineCache,
-    commitsUnobserved: Ref[IO, Boolean]
+    commitsUnobserved: Ref[IO, Boolean],
+    editIdleSessionSave: Option[EditIdleSessionSave],
+    announceClosedDocuments: (AppState, AppState) => IO[Unit]
 ):
   private val DocumentAnalysisDebounce         = 150.millis
   private val FindSearchDebounce               = 50.millis
@@ -54,6 +56,8 @@ final private[manager] class StateManagerOperationBoundary private (
   private val OutlineRefreshLane: Lane.Keyed   = Lane.Keyed(LaneKey.OutlineRefresh, LanePolicy.SwitchLatest)
   private val DocumentAnalysisLane: Lane.Keyed = Lane.Keyed(LaneKey.Analysis, LanePolicy.SwitchLatest)
   private val ShutdownGracePeriod              = 5.seconds
+
+  private val EditIdleSessionSaveLane: Lane.Keyed = Lane.Keyed(LaneKey.EditIdleSessionSave, LanePolicy.SwitchLatest)
 
   // Built here, over the dispatcher's own model ref, because every commit it makes runs this boundary's follow-up work.
   val modelCommit: ModelCommit = new ModelCommit(modelRef, this, wrapCache)
@@ -101,6 +105,8 @@ final private[manager] class StateManagerOperationBoundary private (
     logModalTransition(fallbackState, committedState) >> scheduleDocumentAnalysis() >>
       PanelContentSync.outlineRefreshDue(committedState, fallbackState).traverse_(scheduleOutlineRefresh) >>
       PanelContentSync.explorerListingsDue(committedState, fallbackState).traverse_(listExplorerDirectory) >>
+      scheduleSessionSaveIfDue(fallbackState, committedState) >>
+      announceClosedDocuments(fallbackState, committedState) >>
       commitsUnobserved.get.ifM(IO.unit, commitObserver.get.flatMap(_(fallbackState, committedState)))
 
   /** Replaces the observer told of every commit `afterCommit` follows up, with the states before and after. */
@@ -281,6 +287,16 @@ final private[manager] class StateManagerOperationBoundary private (
       }
     )
 
+  private def scheduleSessionSaveIfDue(before: AppState, after: AppState): IO[Unit] =
+    editIdleSessionSave.filter(_ => EditIdleSessionSave.due(before, after)).traverse_(scheduleSessionSave)
+
+  /** Every edit restarts the pause; the save itself runs on the session lane, where a later edit cannot cut it off. */
+  private def scheduleSessionSave(editIdle: EditIdleSessionSave): IO[Unit] =
+    val save = modelCommit.currentState
+      .flatMap(editIdle.save)
+      .handleErrorWith(error => logger.error(error)("[SESSION] Saving the session after edits paused failed"))
+    submit(EditIdleSessionSaveLane, IO.sleep(editIdle.idle) >> submit(StateManagerWorkflowCapability.SessionLane, save))
+
   private def listExplorerDirectory(surfaceId: SurfaceId, path: Path): IO[Unit] =
     submit(
       Lane.Keyed(LaneKey.ExplorerListing(surfaceId, path.toAbsolutePath.normalize), LanePolicy.SwitchLatest),
@@ -364,7 +380,11 @@ private[manager] object StateManagerOperationBoundary:
     discoverDictionaryFingerprints: SpellCheckConfig => IO[List[SpellCheckDictionaryFingerprint]] = config =>
       IO.blocking(SpellCheckConfig.discoverDictionaryFingerprints(config)),
     listDirectory: Path => IO[List[DirEntry]] = explorerListing(FileBrowser.listDirectory),
-    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
+    editIdleSessionSave: Option[EditIdleSessionSave] = None,
+    // A commit is the one place every way a buffer leaves `persisted.buffers` passes through -- tab close, close
+    // workflows, session replacement -- so the LSP hears of each closed document here rather than per close path.
+    announceClosedDocuments: (AppState, AppState) => IO[Unit] = (_, _) => IO.unit
   ): IO[StateManagerOperationBoundary] =
     for
       pendingOperations         <- Ref.of[IO, List[StateManagerOperation]](Nil)
@@ -401,5 +421,7 @@ private[manager] object StateManagerOperationBoundary:
       listDirectory,
       commitObserver,
       wrapCache,
-      commitsUnobserved
+      commitsUnobserved,
+      editIdleSessionSave,
+      announceClosedDocuments
     )

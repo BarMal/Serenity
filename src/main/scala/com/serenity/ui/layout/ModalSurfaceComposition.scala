@@ -36,8 +36,7 @@ object ModalSurfaceComposition:
     val actionRows = math.max(1, targetRows)
     modal match
       case Modal.TextPrompt(_)                 => 3
-      case Modal.Find(_, Nil, _)               => 5
-      case Modal.Find(_, _, _)                 => 6
+      case Modal.Find(_, results, _)           => if results.isEmpty then 5 else 6
       case Modal.ListPicker(picker)            => ListPickerComposition.frameHeight(picker)
       case Modal.PanelArrangement(arrangement) => PanelArrangementComposition.frameHeight(arrangement)
       case Modal.ReplaceWorkflow(workflow) =>
@@ -76,7 +75,7 @@ object ModalSurfaceComposition:
 
   private def findPlan(
     query: String,
-    results: List[FindResult],
+    results: Vector[FindResult],
     currentIndex: Int,
     frameRect: LayoutRect
   ): ResolvedSurfaceComposition =

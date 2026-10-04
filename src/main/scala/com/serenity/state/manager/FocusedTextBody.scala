@@ -1,8 +1,7 @@
 package com.serenity.state.manager
 
-import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.MarkdownBlockLens
-import com.serenity.state.models.Buffer
+import com.serenity.state.models.{Buffer, BufferKind, EditingContext}
 
 /** The contiguous range of buffer lines focused-text-body dimming treats as "active" around a given line -- shared by
   * `Renderer` (which uses it to decide which rows to dim) and `DamageProducer` (which uses it to detect when the range
@@ -18,8 +17,18 @@ object FocusedTextBody:
     * the active line falls outside the buffer's current extent.
     */
   def activeRange(buffer: Buffer, activeLine: Option[Int]): Option[Range.Inclusive] =
-    if buffer.document.language.contains(LanguageId.Markdown) then markdownRange(buffer, activeLine)
-    else plainTextRange(buffer, activeLine)
+    EditingContext.bufferKind(buffer) match
+      case BufferKind.Markdown                       => markdownRange(buffer, activeLine)
+      case BufferKind.RichText                       => richTextParagraph(buffer, activeLine)
+      case BufferKind.PlainText | BufferKind.Code(_) => plainTextRange(buffer, activeLine)
+
+  /** A rich-text paragraph is exactly one line, with no blank line between paragraphs (#1853), so the blank-line rule
+    * [[plainTextRange]] applies would make the whole document active.
+    */
+  private def richTextParagraph(buffer: Buffer, activeLine: Option[Int]): Option[Range.Inclusive] =
+    activeLine
+      .filter(line => line >= 0 && line < buffer.document.content.lineCount)
+      .map(line => line to line)
 
   private def markdownRange(buffer: Buffer, activeLine: Option[Int]): Option[Range.Inclusive] =
     activeLine

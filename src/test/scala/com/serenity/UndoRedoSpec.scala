@@ -251,7 +251,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
         document = initialBuffer.document.copy(isNewEmpty = true),
         editing = EditingStateFixtures(cursors = List(CursorPosition(2, 0)), preferredColumn = Some(0)),
         viewport = Viewport(topLine = 2, leftColumn = 1, visibleLines = 8, visibleColumns = 40),
-        findState = Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
+        findState = Some(FindState("alpha", Vector(FindResult(0, 0), FindResult(2, 0)), 1))
       )
 
     updateBuffer(bufferId, beforeBuffer)
@@ -276,7 +276,7 @@ class UndoRedoSpec extends AnyFlatSpec with Matchers:
     undone.editing.cursorPositions shouldBe List(CursorPosition(2, 0))
     undone.editing.cursors.head.preferredColumn shouldBe Some(0)
     undone.viewport shouldBe beforeBuffer.viewport
-    undone.findState shouldBe Some(FindState("alpha", List(FindResult(0, 0), FindResult(2, 0)), 1))
+    undone.findState shouldBe Some(FindState("alpha", Vector(FindResult(0, 0), FindResult(2, 0)), 1))
     undone.document.isNewEmpty shouldBe true
 
   it should "undo and redo multi-cursor cut with the full cursor set" in new UndoFixture:

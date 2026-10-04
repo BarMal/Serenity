@@ -209,6 +209,7 @@ object Main extends IOApp:
               makeStateManager = Some(logger =>
                 com.serenity.state.manager.StateManager.apply(
                   logger,
+                  policy = com.serenity.session.SessionManager.SessionPolicy.interactive,
                   onFontConfigChanged = config =>
                     displayState.update(config) >>
                       IO.blocking {

@@ -9,6 +9,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.AppMode
+import com.serenity.keystroke.events.InsertChar
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -82,6 +83,38 @@ class LspAppModeGatingSpec extends AnyFlatSpec with Matchers:
         .unsafeRunSync()
       setBufferPath(stateManager, file)
       setLanguage(stateManager, LanguageId.Scala)
+
+      val outcome =
+        runVirtual(
+          stateManager.lspEffectSource.lspEffectStream
+            .take(1)
+            .compile
+            .lastOrError
+            .timeout(500.millis)
+            .attempt
+        )
+      outcome.left.map(_.getClass) shouldBe Left(classOf[TimeoutException])
+    finally Files.deleteIfExists(file): Unit
+  }
+
+  "Editing a Markdown buffer in prose mode" should "not enqueue an LSP document change" in {
+    val stateManager = createStateManager()
+    val file         = Files.createTempFile("lsp-mode-gating-prose-edit", ".md")
+    try
+      stateManager
+        .executeCommand(
+          Command.typed(
+            "app-mode-prose",
+            "Switch to prose mode",
+            CommandIntent.View(ViewIntent.SetAppMode(AppMode.Prose)),
+            CommandCategory.Settings
+          )
+        )
+        .unsafeRunSync()
+      setBufferPath(stateManager, file)
+      setLanguage(stateManager, LanguageId.Markdown)
+      stateManager.applyEvent(InsertChar('a')).unsafeRunSync()
+      stateManager.applyEvent(InsertChar('b')).unsafeRunSync()
 
       val outcome =
         runVirtual(

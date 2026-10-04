@@ -81,7 +81,7 @@ class CommentClickSpec extends AnyFlatSpec with Matchers:
     val state = sm.getCurrentState.unsafeRunSync()
     val lens  = commentLensState(state).getOrElse(fail("Expected comment lens"))
     lens.mode shouldBe CommentLensMode.ReadOnly
-    lens.target shouldBe Some(comment)
+    lens.target shouldBe Some(CommentLensTarget(0, comment))
     state.persisted.focus shouldBe Focus.Surface(SurfaceId("comment-lens"))
   }
 
@@ -155,7 +155,7 @@ class CommentClickSpec extends AnyFlatSpec with Matchers:
 
     val after = sm.getCurrentState.unsafeRunSync()
     commentLensState(after).map(_.mode) shouldBe Some(CommentLensMode.Editable)
-    commentLensState(after).map(_.target) shouldBe Some(Some(comment))
+    commentLensState(after).map(_.target) shouldBe Some(Some(CommentLensTarget(0, comment)))
     after.persisted.focus shouldBe Focus.Surface(SurfaceId("comment-lens"))
   }
 

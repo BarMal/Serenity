@@ -42,4 +42,13 @@ class SessionCommandUsageCodecSpec extends AnyFlatSpec with Matchers:
     SessionState.toAppState(sessionWithRecents, Theme.default).persisted.commandUsage shouldBe
       recents.map { case (name, generation) => CommandId(name) -> generation }
   }
+  // #1877: older sessions saved option-cycling intents and settings row ids as if they were commands.
+  it should "drop recents that name no registry command when restoring" in {
+    val withJunk = sessionWithRecents.copy(commandUsage =
+      recents + ("Settings(Font(SetTextFontFamily(Menlo)))" -> 4) + ("code-font-size" -> 5)
+    )
+
+    SessionState.toAppState(withJunk, Theme.default).persisted.commandUsage shouldBe
+      recents.map { case (name, generation) => CommandId(name) -> generation }
+  }
 end SessionCommandUsageCodecSpec

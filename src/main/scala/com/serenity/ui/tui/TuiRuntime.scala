@@ -165,6 +165,7 @@ object TuiRuntime:
     logger =>
       StateManager.apply(
         logger,
+        policy = com.serenity.session.SessionManager.SessionPolicy.interactive,
         initialConfig = terminalConfig,
         sessionRootOverride = sessionRootOverride,
         configPersistencePath = configPersistencePath,

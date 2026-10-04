@@ -68,8 +68,8 @@ class FileWorkflowOpenAsProjectRootStateManagerSpec extends AnyFlatSpec with Mat
       finalState.topModal shouldBe None
 
       def rootPathOf(surface: UiSurface): Option[java.nio.file.Path] = surface.content match
-        case SurfaceContent.DirectoryTree(tree, _) => Some(tree.rootPath)
-        case _                                     => None
+        case SurfaceContent.DirectoryTree(tree, _, _) => Some(tree.rootPath)
+        case _                                        => None
 
       val pinnedRoot = finalState.pinnedSurfaces.find(surface => rootPathOf(surface).contains(tempDir))
       pinnedRoot shouldBe defined

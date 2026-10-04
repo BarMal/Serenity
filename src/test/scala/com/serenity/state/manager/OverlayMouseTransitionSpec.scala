@@ -5,6 +5,7 @@ import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.AppConfigOps.*
 import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
+import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.ui.layout.*
@@ -112,6 +113,35 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
     result.effects shouldBe Nil
     result.state.commentLensSurface.map(_.content) should matchPattern {
       case Some(SurfaceContent.CommentLens(lens)) if lens.mode == CommentLensMode.Editable =>
+    }
+  }
+
+  it should "keep a source-code comment's lens read-only on a click inside its body" in {
+    val base   = editorState("// a source note\nval x = 1")
+    val buffer = base.persisted.buffers(BufferId(0))
+    val onSourceComment = base.copy(persisted =
+      base.persisted.copy(buffers =
+        Map(
+          BufferId(0) -> buffer.copy(
+            document = buffer.document.copy(language = Some(LanguageId.Scala)),
+            editing = EditingState(List(CursorPosition(0, 4)))
+          )
+        )
+      )
+    )
+    val opened = CommentRendering.openLensAtCursor(onSourceComment, CommentLensMode.ReadOnly)
+    val lensId = opened.commentLensSurface.map(_.id).getOrElse(fail("Expected a comment lens"))
+    val frame = EditorLayoutContract
+      .from(opened, viewport, LayoutEngine.calculateLayoutWithUI(opened, viewport))
+      .overlayRect(lensId)
+      .getOrElse(fail("Expected the lens overlay rect"))
+
+    val (result, claimed) =
+      run(opened)(CommentLensMouseHitTesting.click(MouseClick(frame.x, frame.y), opened, AuthoritativeUiScene()))
+
+    claimed shouldBe true
+    result.state.commentLensSurface.map(_.content) should matchPattern {
+      case Some(SurfaceContent.CommentLens(lens)) if lens.mode == CommentLensMode.ReadOnly =>
     }
   }
 

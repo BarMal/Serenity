@@ -236,24 +236,36 @@ enum SurfacePresentation:
   case Docked
 
 /** Whether the above-cursor comment lens is a passive, read-only display or the existing always-editable draft state
-  * (#1222). `ReadOnly` is only reachable by clicking a highlighted comment range in floating display mode; a further
-  * click inside the lens body transitions it to `Editable`. Every keyboard-invoked open (the `comment-lens` command)
-  * still opens directly into `Editable`, unchanged from before this mode existed.
+  * (#1222). `ReadOnly` is reached by clicking a highlighted comment range in floating display mode; a further click
+  * inside the lens body transitions it to `Editable`. Every keyboard-invoked open (the `comment-lens` command) opens
+  * directly into `Editable`. A source-code comment is always `ReadOnly` (see [[CommentLensState.withMode]]).
   */
 enum CommentLensMode:
   case ReadOnly
   case Editable
+
+/** The authored comment a lens writes back to. `index` (its position in the buffer's `documentComments`) is what
+  * identifies it: two comments can be structurally equal, and an edit elsewhere shifts a comment's range without moving
+  * its position in the list. `comment` is the snapshot the draft was opened from.
+  */
+final case class CommentLensTarget(index: Int, comment: DocumentComment)
 
 /** Focused draft state for editing an authored document comment from the above-cursor lens. */
 final case class CommentLensState(
     comment: RenderedComment,
     draft: String,
     cursor: Int,
-    target: Option[DocumentComment],
+    target: Option[CommentLensTarget],
     mode: CommentLensMode = CommentLensMode.Editable
 ):
   def clampedCursor: Int =
     math.max(0, math.min(cursor, draft.length))
+
+  /** A source-code comment has no authored target to write a draft back to, so it stays read-only whatever mode is
+    * requested -- an editable lens on it would discard everything typed (#1914).
+    */
+  def withMode(requested: CommentLensMode): CommentLensState =
+    copy(mode = if target.isDefined then requested else CommentLensMode.ReadOnly)
 
 enum SurfaceContent:
   case StartPage(page: StartupPage)
@@ -262,7 +274,11 @@ enum SurfaceContent:
   case SymbolDefinition(symbol: String, location: Location)
   case StatusLine(text: String)
   case DirectoryListing(path: Path, entries: List[DirEntry], selectedPath: Option[Path] = None)
-  case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None)
+
+  /** `scrollOffset` is the first row shown, stored rather than derived from the selection (as in
+    * `ui.widget.SelectableList`), so moving the selection within the rows already shown leaves the view where it is.
+    */
+  case DirectoryTree(tree: DirectoryTreeData, selectedPath: Option[Path] = None, scrollOffset: Int = 0)
   case CommandPalette(runner: CommandRunner)
 
   /** The experimental command-runner cursor-peek prototype's single peek panel (`SurfaceId.CursorPeek`,

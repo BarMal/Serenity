@@ -43,6 +43,8 @@ private[manager] object FileResults:
             filePath = saved.document.filePath,
             language = saved.document.language,
             revision = saved.document.revision,
+            encoding = saved.document.encoding,
+            hasBom = saved.document.hasBom,
             isDirty = current.document.isDirty && !unchanged
           )
           val richText =

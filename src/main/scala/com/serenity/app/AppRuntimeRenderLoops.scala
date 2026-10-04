@@ -24,6 +24,9 @@ import org.typelevel.log4cats.Logger
   */
 private[serenity] object AppRuntimeRenderLoops:
 
+  /** Blinks the caret until the cursor blink timeout passes, then holds it solid and parks on `fastModeSignal` with no
+    * timer left to wake it (#1883).
+    */
   private[serenity] def idleRenderPhase(
     loadModel: IO[Model],
     fastModeSignal: SignallingRef[IO, Boolean],
@@ -38,21 +41,84 @@ private[serenity] object AppRuntimeRenderLoops:
     renderCaches: com.serenity.state.manager.RenderCaches
   )(using Logger[IO]): Stream[IO, Unit] =
     Stream
-      .repeatEval(AppRuntime.awaitFocusedIdleTick(loadModel.map(_.app), windowFocused, cursorIdleInterval))
-      .interruptWhen(fastModeSignal.discrete)
-      .evalMap(_ =>
-        runIdleRenderStep(
-          currentStateForDiagnostics,
-          loadModel,
-          pendingPaintDamage,
-          checkResizeAndHandle,
-          cursorVisible,
-          renderCursorOnly,
-          requestFastRender,
-          cursorIdleInterval,
-          renderCaches
-        )
+      .eval(Ref.of[IO, Int](0))
+      .flatMap(blinks =>
+        blinkTicks(loadModel, windowFocused, cursorIdleInterval, blinks) ++
+          Stream.emit(IdleTick.HoldSolid) ++ Stream.never[IO]
       )
+      .interruptWhen(fastModeSignal.discrete)
+      .evalMap {
+        case IdleTick.Blink =>
+          runIdleRenderStep(
+            currentStateForDiagnostics,
+            loadModel,
+            pendingPaintDamage,
+            checkResizeAndHandle,
+            cursorVisible,
+            renderCursorOnly,
+            requestFastRender,
+            cursorIdleInterval,
+            renderCaches
+          )
+        case IdleTick.HoldSolid =>
+          holdCaretSolid(
+            currentStateForDiagnostics,
+            loadModel,
+            pendingPaintDamage,
+            cursorVisible,
+            renderCursorOnly,
+            requestFastRender,
+            renderCaches
+          )
+      }
+
+  private enum IdleTick:
+    case Blink, HoldSolid
+
+  /** Counts from the start of the idle phase, which input, any repaint and losing focus all restart -- so the timeout
+    * runs from the last activity, and runs afresh after the window is refocused.
+    */
+  private def blinkTicks(
+    loadModel: IO[Model],
+    windowFocused: SignallingRef[IO, Boolean],
+    cursorIdleInterval: AppConfig => Option[FiniteDuration],
+    blinks: Ref[IO, Int]
+  ): Stream[IO, IdleTick] =
+    Stream
+      .repeatEval(
+        for
+          _     <- AppRuntime.awaitFocusedIdleTick(loadModel.map(_.app), windowFocused, cursorIdleInterval)
+          count <- blinks.updateAndGet(_ + 1)
+          model <- loadModel
+          config = model.app.persisted.config
+        yield cursorIdleInterval(config).forall(AppRuntime.keepsBlinking(config, _, count))
+      )
+      .takeWhile(identity)
+      .as(IdleTick.Blink)
+
+  /** Paints the caret visible if the last blink left it hidden, so it stays solid while the phase waits. Like a blink
+    * frame, it reads content damage without draining it.
+    */
+  private def holdCaretSolid(
+    currentStateForDiagnostics: IO[Option[AppState]],
+    loadModel: IO[Model],
+    pendingPaintDamage: Ref[IO, Damage],
+    cursorVisible: Ref[IO, Boolean],
+    renderCursorOnly: AppRuntime.RenderFn,
+    requestFastRender: IO[Unit],
+    renderCaches: com.serenity.state.manager.RenderCaches
+  )(using Logger[IO]): IO[Unit] =
+    val paintVisibleCaret =
+      for
+        model       <- withRuntimeDiagnostics("render loop", "idle.state", currentStateForDiagnostics)(loadModel)
+        paintDamage <- pendingPaintDamage.get
+        _ <- withRuntimeDiagnostics("render loop", "idle.cursor-render", IO.pure(Some(model.app)))(
+          renderCursorOnly(model.app, true, None, paintDamage, renderCaches)
+        )
+      yield ()
+    cursorVisible.getAndSet(true).flatMap { wasVisible =>
+      IO.unlessA(wasVisible)(paintVisibleCaret.handleErrorWith(recoverIdleCursorRenderFailure(_, requestFastRender)))
+    }
 
   /** One event per batch, for callers holding events that are already translated. */
   private[serenity] def inputEventPhase(
@@ -185,7 +251,8 @@ private[serenity] object AppRuntimeRenderLoops:
   ): IO[Unit] =
     stateManager.getCurrentState.flatMap { state =>
       cachedTranslators(state.persisted.config, translatorCache).flatMap(translators =>
-        inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state, translators))
+        inputRouter.setActiveTranslator(FocusedInputTranslator.forState(state, translators)) >>
+          inputRouter.setCursorPeekEnabled(state.persisted.config.surfaceConfig.commandRunnerCursorPeekEnabled)
       )
     }
 

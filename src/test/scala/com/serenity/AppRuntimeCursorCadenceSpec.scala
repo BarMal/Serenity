@@ -1,7 +1,10 @@
 package com.serenity
 
+import java.nio.file.Files
+
 import scala.concurrent.duration.*
 
+import com.serenity.app.AppRuntime
 import com.serenity.config.*
 import com.serenity.frontend.{GuiFrontend, TuiFrontend}
 import com.serenity.keystroke.KeyboardFidelityTier
@@ -30,3 +33,37 @@ class AppRuntimeCursorCadenceSpec extends AnyFlatSpec with Matchers:
       GuiFrontend.cursorIdleInterval(AppConfig.default) shouldBe Some(500.millis)
       tui.cursorIdleInterval(AppConfig.default.withCursorMode(CursorMode.Blink)) shouldBe None
     }
+
+  "AppConfig.cursorBlinkTimeout" should "default to ten seconds, after GTK's gtk-cursor-blink-timeout" in {
+    AppConfig.default.cursorBlinkTimeout shouldBe Some(10.seconds)
+  }
+
+  it should "be absent, so the caret blinks for as long as the window is focused, when set to 0" in {
+    AppConfig.default.withCursorBlinkTimeoutMillis(0L).cursorBlinkTimeout shouldBe None
+    AppConfig.default.withCursorBlinkTimeoutMillis(-1L).cursorBlinkTimeout shouldBe None
+  }
+
+  it should "load from and write to the config file" in {
+    val configFile = Files.createTempFile("serenity-cursor-blink-timeout-config", ".conf")
+    Files.writeString(
+      configFile,
+      """editor.cursor.blink_timeout_ms = 3000
+        |""".stripMargin
+    )
+
+    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
+
+    config.cursorBlinkTimeout shouldBe Some(3.seconds)
+    ConfigManager.configToString(config) should include("editor.cursor.blink_timeout_ms = 3000")
+  }
+
+  "AppRuntime.keepsBlinking" should "blink until the time spent blinking reaches the timeout" in {
+    val config = AppConfig.default.withCursorBlinkTimeoutMillis(2000L)
+
+    AppRuntime.keepsBlinking(config, 500.millis, 3) shouldBe true
+    AppRuntime.keepsBlinking(config, 500.millis, 4) shouldBe false
+  }
+
+  it should "never stop blinking when the timeout is 0" in {
+    AppRuntime.keepsBlinking(AppConfig.default.withCursorBlinkTimeoutMillis(0L), 500.millis, 10000) shouldBe true
+  }

@@ -26,9 +26,14 @@ final case class CursorColorConfig(
   def inactiveOr(activeColor: Color): Color =
     inactive.getOrElse(activeColor)
 
+/** `blinkTimeoutMillis` is how long a focused caret keeps blinking without input before it holds solid, so an idle
+  * editor stops waking to redraw it (#1883, after GTK's `gtk-cursor-blink-timeout`); 0 blinks for as long as the window
+  * stays focused.
+  */
 final case class CursorConfig(
     mode: CursorMode = CursorMode.Blink,
-    colors: CursorColorConfig = CursorColorConfig()
+    colors: CursorColorConfig = CursorColorConfig(),
+    blinkTimeoutMillis: Long = 10000L
 )
 
 final case class EditorConfig(

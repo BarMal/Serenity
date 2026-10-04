@@ -20,12 +20,13 @@ object DirectoryTreeSurfaceComposition extends RowCompositionSupport:
   def forTree(
     tree: DirectoryTreeData,
     selectedPath: Option[Path],
+    scrollOffset: Int,
     frameRect: LayoutRect
   ): ResolvedSurfaceComposition =
-    val content     = SurfaceContent.DirectoryTree(tree, selectedPath)
+    val content     = SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset)
     val contentRect = SurfaceFrameLayout.forContent(frameRect, content).contentRect
     val bounds      = logicalRect(contentRect.x, contentRect.y, contentRect.width, contentRect.height)
-    val rowViews    = PanelContentResolver.directoryTreeRowViews(frameRect, tree, selectedPath)
+    val rowViews    = PanelContentResolver.directoryTreeRowViews(frameRect, tree, selectedPath, scrollOffset)
 
     val slots = SurfaceFrameLayout.contentRowSlotsFor(
       contentRect,
@@ -40,6 +41,17 @@ object DirectoryTreeSurfaceComposition extends RowCompositionSupport:
     }
 
     planWithRowHits(bounds, boxes)
+
+  /** The scroll offset `forTree` actually paints: the stored one, moved as far as keeping the selection in view needs.
+    * Storing this back with a newly clicked row keeps the rows from shifting under the pointer.
+    */
+  def shownScrollOffset(
+    tree: DirectoryTreeData,
+    selectedPath: Option[Path],
+    scrollOffset: Int,
+    frameRect: LayoutRect
+  ): Int =
+    PanelContentResolver.directoryTreeWindow(frameRect, tree, selectedPath, scrollOffset).offset
 
   private def toRowBox(
     view: PanelContentResolver.DirectoryTreeRowView,

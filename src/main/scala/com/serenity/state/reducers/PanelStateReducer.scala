@@ -255,10 +255,10 @@ object PanelStateReducer:
             dismissOnMove = false
           )
         )
-      case SurfaceContent.DirectoryTree(tree, selectedPath) =>
+      case SurfaceContent.DirectoryTree(tree, selectedPath, scrollOffset) =>
         Some(
           surface.copy(
-            content = SurfaceContent.DirectoryTree(tree, selectedPath.orElse(Some(tree.rootPath))),
+            content = SurfaceContent.DirectoryTree(tree, selectedPath.orElse(Some(tree.rootPath)), scrollOffset),
             presentation = SurfacePresentation.Docked,
             dismissOnMove = false
           )

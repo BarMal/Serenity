@@ -49,7 +49,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
   private def withFindQuery(state: AppState, query: String): AppState =
     state.copy(runtime = state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.map {
       case surface if surface.id == findSurfaceId =>
-        surface.copy(content = SurfaceContent.ModalWorkflow(Modal.Find(query, Nil, 0)))
+        surface.copy(content = SurfaceContent.ModalWorkflow(Modal.Find(query, Vector.empty, 0)))
       case other => other
     }))
 
@@ -61,7 +61,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
         List(
           UiSurface(
             findSurfaceId,
-            SurfaceContent.ModalWorkflow(Modal.Find("", Nil, 0)),
+            SurfaceContent.ModalWorkflow(Modal.Find("", Vector.empty, 0)),
             SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
         )
@@ -104,8 +104,8 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
       yield (midBurst, settled)
 
     runVirtual(program) shouldBe (
-      Some(Modal.Find("needle", Nil, 0)),
-      Some(Modal.Find("needle", List(FindResult(0, 0), FindResult(0, 14)), 0))
+      Some(Modal.Find("needle", Vector.empty, 0)),
+      Some(Modal.Find("needle", Vector(FindResult(0, 0), FindResult(0, 14)), 0))
     )
   }
 
@@ -120,7 +120,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
         after                  <- stateRef.get
       yield (findModal(after), after.persisted.buffers(editorBufferId).findState)
 
-    runVirtual(program) shouldBe (Some(Modal.Find("noodle", Nil, 0)), None)
+    runVirtual(program) shouldBe (Some(Modal.Find("noodle", Vector.empty, 0)), None)
   }
 
   private val previewA = BufferId(1)
@@ -231,7 +231,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
     val program =
       for
         (stateRef, operations) <- boundaryOver(firstEdit)
-        _                      <- operations.modelCommit.commitState(firstEdit, firstEdit)
+        _                      <- operations.modelCommit.commitState(firstEdit.copy(), firstEdit)
         _                      <- IO.sleep(50.millis)
         _                      <- operations.modelCommit.commitState(secondEdit, firstEdit)
         _                      <- IO.sleep(110.millis)
@@ -250,7 +250,7 @@ class StateManagerEffectLanesSpec extends AnyFlatSpec with Matchers:
         starts                 <- Ref.of[IO, Int](0)
         (stateRef, operations) <- boundaryOver(edited, beforeDocumentAnalysisStart = starts.update(_ + 1))
         _                      <- operations.shutdownEffects()
-        _                      <- operations.modelCommit.commitState(edited, edited)
+        _                      <- operations.modelCommit.commitState(edited.copy(), edited)
         _                      <- IO.sleep(1.second)
         started                <- starts.get
         diagnostics            <- stateRef.get.map(spellingDiagnosticStarts)
