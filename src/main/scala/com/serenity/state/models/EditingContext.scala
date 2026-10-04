@@ -37,7 +37,8 @@ final case class EditingContext(
     mode: AppMode,
     buffer: Option[BufferKind],
     shell: Shell,
-    focus: Focus
+    focus: Focus,
+    hasSelection: Boolean = false
 ):
 
   def isCodeWorkspace: Boolean  = mode == AppMode.Code
@@ -60,7 +61,8 @@ object EditingContext:
       mode = state.persisted.config.appMode,
       buffer = state.activeBuffer.map(bufferKind),
       shell = Shell.of(state.runtime.capabilities),
-      focus = state.persisted.focus
+      focus = state.persisted.focus,
+      hasSelection = state.activeBuffer.exists(_.primarySelection.isDefined)
     )
 
   def bufferKind(buffer: Buffer): BufferKind =

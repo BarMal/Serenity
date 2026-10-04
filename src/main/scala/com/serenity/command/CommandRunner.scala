@@ -123,9 +123,11 @@ final case class CommandRunner(
       case CommandRunnerSurface.PresetDiffReview(presetName, changes, _) =>
         presetDiffReviewItems(presetName, changes)
       case CommandRunnerSurface.Palette(state) =>
-        val commandItems = state.filteredCommands
-          .filter(CommandRelevance.isAvailable(_, context.editingContext))
-          .map(command => CommandSurfaceItem.CommandItem(command, CommandPrerequisites.unmetReason(command, context)))
+        val offered = state.filteredCommands
+          .map(command => command -> CommandAvailability.of(command, context))
+          .filter((_, availability) => availability.isOffered)
+        def itemsOf(commands: List[(Command, Availability)]): List[CommandSurfaceItem.CommandItem] =
+          commands.map((command, availability) => CommandSurfaceItem.CommandItem(command, availability.disabledReason))
         // Category tabs are retired (issue #931): an empty query is just every command, no category to default to.
         // Settings are still reachable here -- via search, below -- exactly as issue #931's "fold into text search"
         // intends; there is just no longer a separate navigation mode for it.
@@ -136,13 +138,19 @@ final case class CommandRunner(
         // never-used command in its original relative order -- so a fresh session (empty `commandUsage`) still
         // shows the exact same "sensible default set" it always has.
         // Settings is a fixed first row that no amount of recency reorders past; behind it come the commands that
-        // can act on the current editing context (`CommandRelevance`), recently used ones first.
+        // can act on the current editing context (`CommandRelevance`): those it boosts (`CommandAvailability`) first,
+        // then recently used ones.
         if state.searchTerm.isEmpty then
-          val (settingsEntry, commands) = commandItems.partition(item => CommandRelevance.isSettingsEntry(item.command))
-          settingsEntry ++ commands
-            .filter(item => CommandRelevance.isRelevant(item.command, context.editingContext))
-            .sortBy(item => -commandUsage.getOrElse(CommandId(item.command.name), 0))
+          val (settingsEntry, commands) = offered.partition((command, _) => CommandRelevance.isSettingsEntry(command))
+          itemsOf(settingsEntry) ++ itemsOf(
+            commands
+              .filter((command, _) => CommandRelevance.isRelevant(command, context.editingContext))
+              .sortBy((command, availability) =>
+                (!availability.isBoosted, -commandUsage.getOrElse(CommandId(command.name), 0))
+              )
+          )
         else
+          val commandItems = itemsOf(offered)
           val (strongCommandMatches, remainingCommandMatches) =
             commandItems.partition(item => CommandRunnerSearch.isStrongCommandMatch(item.command, state.searchTerm))
           val (exactCommandMatches, remainingStrongCommandMatches) =
@@ -172,12 +180,12 @@ final case class CommandRunner(
     val filtered =
       if term.isEmpty then registry.getAllCommands
       else
-        // Filtered before the cap, so commands this mode/frontend hides can't crowd available ones out of it.
+        // Filtered and ranked before the cap, so hidden commands can't crowd offered ones out of it, nor the cap
+        // drop a command its boosts would have lifted into it.
         val matches = registry
           .searchCommands(term, maxResults = registry.getAllCommands.size)
-          .filter(CommandRelevance.isAvailable(_, context.editingContext))
-          .take(50)
-        CommandRanking.ranked(matches, term, commandUsage)
+          .filter(CommandAvailability.of(_, context).isOffered)
+        CommandRanking.ranked(matches, term, commandUsage, context).take(50)
     val updatedState = CommandPaletteState(term, 0, filtered)
     val updatedSurface = surface match
       case CommandRunnerSurface.Palette(_)     => CommandRunnerSurface.Palette(updatedState)
