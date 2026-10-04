@@ -50,7 +50,7 @@ object RendererCursorGlyphs:
                     screenYPx,
                     widthPx,
                     caretHeightPx,
-                    effectiveCursorColor
+                    RenderColor.fromAwt(effectiveCursorColor)
                   )
                   List(PixelRect(caretXPx, screenYPx, widthPx, caretHeightPx))
                 case None => Nil

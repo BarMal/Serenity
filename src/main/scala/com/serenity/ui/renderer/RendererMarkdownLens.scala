@@ -241,15 +241,15 @@ object RendererMarkdownLens:
           )
         )
         val lensY = rect.y + placement.top
-        context.surface.setBackgroundColor(lensBackground)
+        context.surface.setBackgroundColor(RenderColor.fromAwt(lensBackground))
         context.surface.fillRect(rect.x, lensY, rect.width, placement.height, ' ')
         blockVisualLines.zipWithIndex.foreach {
           case (visualLine, index) =>
             val screenY = lensY + index
             if screenY >= rect.y && screenY < rect.bottom && screenY >= 0 && screenY < context.surface.viewportHeight
             then
-              context.surface.setForegroundColor(state.persisted.theme.foreground)
-              context.surface.setBackgroundColor(lensBackground)
+              context.surface.setForegroundColor(RenderColor.fromAwt(state.persisted.theme.foreground))
+              context.surface.setBackgroundColor(RenderColor.fromAwt(lensBackground))
               if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
                 CharacterRenderer.renderMeasuredLine(
                   context.surface,
@@ -348,7 +348,7 @@ object RendererMarkdownLens:
                       screenYPx,
                       widthPx,
                       context.cellMetrics.lineHeight,
-                      effectiveCursorColor
+                      RenderColor.fromAwt(effectiveCursorColor)
                     )
                 }
             case _ => ()

@@ -29,9 +29,9 @@ final class CaretRecordingSurface private (
     ):
   private val fills = new AtomicReference(Vector.empty[CaretRecordingSurface.CaretFill])
 
-  override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit =
+  override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit =
     val _ = fills.updateAndGet(
-      _ :+ CaretRecordingSurface.CaretFill(PixelRect(xPx, yPx, widthPx.max(1), heightPx.max(1)), color)
+      _ :+ CaretRecordingSurface.CaretFill(PixelRect(xPx, yPx, widthPx.max(1), heightPx.max(1)), color.toAwt)
     )
 
   def recordedFills: List[CaretRecordingSurface.CaretFill] = fills.get().toList

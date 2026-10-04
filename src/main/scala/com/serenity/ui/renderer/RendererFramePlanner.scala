@@ -56,7 +56,7 @@ object RendererFramePlanner:
         case _                              => None
     } match
       case Some(page) =>
-        surface.clearViewport(state.persisted.theme.background)
+        surface.clearViewport(RenderColor.fromAwt(state.persisted.theme.background))
         forgetPreservedContent(surface, output, caches)
         RendererStartPage.renderStartPage(
           page,
@@ -128,9 +128,9 @@ object RendererFramePlanner:
         caches.frameState.rememberSnapshots(surface, editorRenderPlan.snapshots)
         framePlan match
           case Some(plan) if plan.preserved.nonEmpty =>
-            surface.clearViewportExcept(state.persisted.theme.background, plan.preserved)
+            surface.clearViewportExcept(RenderColor.fromAwt(state.persisted.theme.background), plan.preserved)
           case _ =>
-            surface.clearViewport(state.persisted.theme.background)
+            surface.clearViewport(RenderColor.fromAwt(state.persisted.theme.background))
         paintFrameLayers(state, context, editorRenderPlan, finalizedScene, framePlan, damage)
         commitFramePlan(framePlan, output)
         Some(editorRenderPlan)

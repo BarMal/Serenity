@@ -18,8 +18,8 @@ class RenderSurfaceCapabilitiesSpec extends AnyFlatSpec with Matchers:
 
   private class RecordingPixelDrawing extends PixelDrawing:
     private val calls = scala.collection.mutable.ListBuffer.empty[(BufferedImage, Int, Int, Int, Int)]
-    def drawImageCalls: List[(BufferedImage, Int, Int, Int, Int)]                                   = calls.toList
-    def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: java.awt.Color): Unit = ()
+    def drawImageCalls: List[(BufferedImage, Int, Int, Int, Int)]                                = calls.toList
+    def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit = ()
     def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
       calls += ((image, x, y, width, height))
     def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit = render

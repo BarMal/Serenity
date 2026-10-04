@@ -5,7 +5,7 @@ import java.awt.{Color, Dimension, Font}
 import javax.swing.JPanel
 
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.Java2DRenderSurface
+import com.serenity.ui.renderer.{Java2DRenderSurface, RenderColor}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -58,7 +58,7 @@ class RenderSurfaceDrawRunPxSpec extends AnyFlatSpec with Matchers:
     panel.setSize(Dimension(40, 30))
 
     val surface = Java2DRenderSurface.forImage(image, metrics, font, panel, _ => ())
-    surface.fillPixelRect(0, 0, 2, 2, Color.BLUE)
+    surface.fillPixelRect(0, 0, 2, 2, RenderColor.fromAwt(Color.BLUE))
     surface.flush()
 
     image.getRGB(0, 0) shouldBe Color.BLUE.getRGB

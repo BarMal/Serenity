@@ -78,6 +78,7 @@ class Java2DRenderSurface(
 
   private val fgRef                   = AtomicReference(Color.WHITE)
   private val bgRef                   = AtomicReference(Color.BLACK)
+  private val lastPaintColorRef       = AtomicReference(Color.WHITE)
   private val baseFontRef             = AtomicReference(font)
   private val logicalPixelRowOverride = AtomicReference[Option[(Int, Int)]](None)
 
@@ -117,9 +118,14 @@ class Java2DRenderSurface(
           g.drawString(s, xPx, (yPx + ascentPx).toFloat)
         finally g.setClip(savedClip)
 
-  def setForegroundColor(color: Color): Unit = fgRef.set(color)
-  def setBackgroundColor(color: Color): Unit = bgRef.set(color)
-  def getBackgroundColor: Color              = bgRef.get()
+  def setForegroundColor(color: RenderColor): Unit = fgRef.set(Java2DRenderSurface.awtColor(color, fgRef.get()))
+  def setBackgroundColor(color: RenderColor): Unit = bgRef.set(Java2DRenderSurface.awtColor(color, bgRef.get()))
+  def getBackgroundColor: RenderColor              = RenderColor.fromAwt(bgRef.get())
+
+  private def paintColor(color: RenderColor): Color =
+    val awt = Java2DRenderSurface.awtColor(color, lastPaintColorRef.get())
+    lastPaintColorRef.set(awt)
+    awt
 
   /** The backing image doubles as the persistence key: whoever hands the same image back next frame gets the pixels
     * this frame leaves behind. Only surfaces built with `contentPersists` advertise it, because an image the caller
@@ -147,17 +153,18 @@ class Java2DRenderSurface(
       g.setColor(color)
       g.fillRect(px, py, pw, ph)
 
-  override def clearViewport(color: Color): Unit =
-    bgRef.set(color)
-    fillBackground(color, 0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx)
+  override def clearViewport(color: RenderColor): Unit =
+    setBackgroundColor(color)
+    fillBackground(bgRef.get(), 0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx)
 
-  override def clearViewportExcept(color: Color, preserved: scala.collection.immutable.List[PixelRect]): Unit =
+  override def clearViewportExcept(color: RenderColor, preserved: scala.collection.immutable.List[PixelRect]): Unit =
     if preserved.isEmpty then clearViewport(color)
     else
-      bgRef.set(color)
+      setBackgroundColor(color)
+      val background = bgRef.get()
       PixelRect
         .uncoveredWithin(PixelRect(0, 0, effectiveLogicalWidthPx, effectiveLogicalHeightPx), preserved)
-        .foreach(rect => fillBackground(color, rect.xPx, rect.yPx, rect.widthPx, rect.heightPx))
+        .foreach(rect => fillBackground(background, rect.xPx, rect.yPx, rect.widthPx, rect.heightPx))
 
   def putString(x: Int, y: Int, s: String): Unit =
     if s.nonEmpty then
@@ -210,14 +217,14 @@ class Java2DRenderSurface(
   override def setAlpha(alpha: Float): Unit =
     g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha.max(0f).min(1f)))
 
-  override def strokeRect(x: Int, y: Int, width: Int, height: Int, color: Color, strokeWidth: Float): Unit =
+  override def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =
     val px          = metrics.toPixelX(x)
     val py          = metrics.toPixelY(y)
     val pw          = width * metrics.charWidth
     val ph          = height * metrics.lineHeight
     val inset       = math.ceil(strokeWidth / 2).toInt
     val savedStroke = g.getStroke
-    g.setColor(color)
+    g.setColor(paintColor(color))
     g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_SQUARE, BasicStroke.JOIN_MITER))
     g.drawRect(px + inset, py + inset, pw - 2 * inset, ph - 2 * inset)
     g.setStroke(savedStroke)
@@ -238,9 +245,9 @@ class Java2DRenderSurface(
     yPx: Int,
     widthPx: Int,
     heightPx: Int,
-    color: Color
+    color: RenderColor
   ): Unit =
-    g.setColor(color)
+    g.setColor(paintColor(color))
     g.fillRect(xPx, yPx, widthPx.max(1), heightPx.max(1))
 
   override def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit =
@@ -286,6 +293,12 @@ object Java2DRenderSurface:
     * no-op. Returning `false` tells the (never-invoked) caller not to bother scheduling further notifications.
     */
   private[serenity] val NoOpImageObserver: ImageObserver = (_, _, _, _, _, _) => false
+
+  /** Reuses `current` when it already carries `color`, so a renderer re-setting the same theme colour on every run does
+    * not allocate a fresh `java.awt.Color` each time.
+    */
+  private def awtColor(color: RenderColor, current: Color): Color =
+    if current.getRGB == color.argb then current else color.toAwt
 
   def forFrame(
     metrics: CellMetrics,

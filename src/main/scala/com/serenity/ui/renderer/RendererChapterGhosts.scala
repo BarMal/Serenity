@@ -57,8 +57,8 @@ object RendererChapterGhosts:
     val text = ghost.take(math.max(0, rect.right - screenX))
     if text.nonEmpty then
       val surface = context.surface
-      surface.setForegroundColor(theme.placeholder)
-      surface.setBackgroundColor(theme.background)
+      surface.setForegroundColor(RenderColor.fromAwt(theme.placeholder))
+      surface.setBackgroundColor(RenderColor.fromAwt(theme.background))
       if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
         val xOriginPx       = context.cellMetrics.toPixelX(rect.x).toFloat
         val contentRightXPx = context.cellMetrics.toPixelX(rect.right).toFloat
@@ -71,4 +71,4 @@ object RendererChapterGhosts:
           text
         )
       else CharacterRenderer.renderString(surface, screenX, rect.y + index, text)
-      surface.setForegroundColor(theme.foreground)
+      surface.setForegroundColor(RenderColor.fromAwt(theme.foreground))

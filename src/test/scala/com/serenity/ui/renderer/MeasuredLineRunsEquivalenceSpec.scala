@@ -174,8 +174,8 @@ private object OriginalMeasuredLine:
         val clippedEndXPx    = clipRightXPx.fold(endXPx)(_.min(endXPx))
         val widthPx          = clippedEndXPx - startXPx
         if widthPx > 0.0f then
-          surface.setForegroundColor(run.foreground)
-          surface.setBackgroundColor(run.background)
+          surface.setForegroundColor(RenderColor.fromAwt(run.foreground))
+          surface.setBackgroundColor(RenderColor.fromAwt(run.background))
           surface.enableStyle(run.style)
           try surface.text.drawRunPx(startXPx, yPx, widthPx, lineHeightPx, ascentPx, run.text.toString)
           finally surface.disableStyle(run.style)

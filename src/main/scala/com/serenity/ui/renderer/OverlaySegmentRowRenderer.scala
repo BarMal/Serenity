@@ -96,8 +96,8 @@ object OverlaySegmentRowRenderer:
           val afterCell = cursorX + cellWidth
           val afterSeparator =
             if segment.trailingSeparator && afterCell < x + width then
-              surface.setForegroundColor(defaultForeground)
-              surface.setBackgroundColor(defaultBackground)
+              surface.setForegroundColor(RenderColor.fromAwt(defaultForeground))
+              surface.setBackgroundColor(RenderColor.fromAwt(defaultBackground))
               CharacterRenderer.renderChar(surface, afterCell, y, '│')
               afterCell + 1
             else afterCell
@@ -305,8 +305,8 @@ object OverlaySegmentRowRenderer:
             if segment.selected then theme.highlighted.foreground.withAlpha(defaultForeground.getAlpha)
             else toneForeground(segment.tone, theme).fold(defaultForeground)(_.withAlpha(defaultForeground.getAlpha))
           )
-      surface.setForegroundColor(segmentForeground)
-      surface.setBackgroundColor(segmentBackground)
+      surface.setForegroundColor(RenderColor.fromAwt(segmentForeground))
+      surface.setBackgroundColor(RenderColor.fromAwt(segmentBackground))
       val inlineIcon = segment.inlineIcon.filter(_ => width > 0)
       inlineIcon.foreach { icon =>
         segment.inlineIconFontFamily.foreach(family =>

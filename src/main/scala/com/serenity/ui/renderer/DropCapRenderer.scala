@@ -49,8 +49,8 @@ object DropCapRenderer:
     background: Color
   ): Unit =
     if glyphText.nonEmpty && glyphWidthPx > 0.0f && glyphHeightPx > 0 then
-      surface.setForegroundColor(foreground)
-      surface.setBackgroundColor(background)
+      surface.setForegroundColor(RenderColor.fromAwt(foreground))
+      surface.setBackgroundColor(RenderColor.fromAwt(background))
       surface.enableStyle(glyphStyle)
       try surface.text.drawRunPx(xOriginPx, yTopPx, glyphWidthPx, glyphHeightPx, glyphAscentPx, glyphText)
       finally surface.disableStyle(glyphStyle)
@@ -67,8 +67,8 @@ object DropCapRenderer:
     background: Color
   ): Unit =
     if glyphText.nonEmpty then
-      surface.setForegroundColor(accentForeground)
-      surface.setBackgroundColor(background)
+      surface.setForegroundColor(RenderColor.fromAwt(accentForeground))
+      surface.setBackgroundColor(RenderColor.fromAwt(background))
       val boldStyle = TextStyle(isBold = true)
       surface.enableStyle(boldStyle)
       try surface.putString(x, y, glyphText)

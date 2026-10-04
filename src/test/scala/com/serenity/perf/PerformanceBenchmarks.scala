@@ -35,7 +35,13 @@ import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{EditorEventReducer, ModalEventReducer}
 import com.serenity.ui.layout.{CellMetrics, Layout, TextLayoutSnapshot}
-import com.serenity.ui.renderer.{CharacterRenderer, Java2DRenderSurface, RendererCursorOverlay, RendererEntryPoints}
+import com.serenity.ui.renderer.{
+  CharacterRenderer,
+  Java2DRenderSurface,
+  RenderColor,
+  RendererCursorOverlay,
+  RendererEntryPoints
+}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.widget.TextField
@@ -671,7 +677,7 @@ object PerformanceBenchmarks:
       logicalHeightPx = frameHeightPx
     )
     surface.setFont(textFont)
-    surface.clearViewport(Theme.light.background)
+    surface.clearViewport(RenderColor.fromAwt(Theme.light.background))
     CharacterRenderer.renderMeasuredLine(
       surface,
       xOriginPx = 0.0f,

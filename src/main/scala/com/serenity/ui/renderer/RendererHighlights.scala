@@ -237,8 +237,8 @@ object RendererHighlights:
             RendererCursorGlyphs.measuredRunWidthWithin(rect, context, startXPx, startXPx + desiredWidthPx).foreach {
               widthPx =>
                 val combinedStyle = style.combine(extraStyle)
-                surface.setForegroundColor(foreground)
-                surface.setBackgroundColor(background)
+                surface.setForegroundColor(RenderColor.fromAwt(foreground))
+                surface.setBackgroundColor(RenderColor.fromAwt(background))
                 surface.enableStyle(combinedStyle)
                 try
                   surface.text.drawRunPx(
@@ -264,8 +264,8 @@ object RendererHighlights:
             val charToRender =
               if charIndex >= 0 && charIndex < visualLine.text.length then visualLine.text.charAt(charIndex)
               else ' '
-            surface.setForegroundColor(foreground)
-            surface.setBackgroundColor(background)
+            surface.setForegroundColor(RenderColor.fromAwt(foreground))
+            surface.setBackgroundColor(RenderColor.fromAwt(background))
             CharacterRenderer.renderChar(surface, screenX, screenY, charToRender)
         }
       finally surface.disableStyle(extraStyle)

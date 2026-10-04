@@ -9,7 +9,7 @@ import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{Java2DRenderSurface, RendererEntryPoints}
+import com.serenity.ui.renderer.{Java2DRenderSurface, RenderColor, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -27,13 +27,13 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val lowAlphaSurface =
       new Java2DRenderSurface(lowAlphaImage, metrics, font, _ => ())
     lowAlphaSurface.setAlpha(0.25f)
-    lowAlphaSurface.strokeRect(1, 1, 4, 3, color = java.awt.Color.WHITE, strokeWidth = 2.0f)
+    lowAlphaSurface.strokeRect(1, 1, 4, 3, color = RenderColor.fromAwt(java.awt.Color.WHITE), strokeWidth = 2.0f)
     lowAlphaSurface.flush()
 
     val fullAlphaSurface =
       new Java2DRenderSurface(fullAlphaImage, metrics, font, _ => ())
     fullAlphaSurface.setAlpha(1.0f)
-    fullAlphaSurface.strokeRect(1, 1, 4, 3, color = java.awt.Color.WHITE, strokeWidth = 2.0f)
+    fullAlphaSurface.strokeRect(1, 1, 4, 3, color = RenderColor.fromAwt(java.awt.Color.WHITE), strokeWidth = 2.0f)
     fullAlphaSurface.flush()
 
     maxAlpha(lowAlphaImage) should be < maxAlpha(fullAlphaImage)
@@ -45,9 +45,9 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
 
-    surface.clearViewport(Color.WHITE)
+    surface.clearViewport(RenderColor.fromAwt(Color.WHITE))
     surface.withRectClip(x = 1, y = 1, width = 2, height = 2) {
-      surface.fillPixelRect(0, 0, 120, 120, Color.BLACK)
+      surface.fillPixelRect(0, 0, 120, 120, RenderColor.fromAwt(Color.BLACK))
     }
     surface.flush()
 
@@ -87,8 +87,8 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val font    = new Font(Font.SANS_SERIF, Font.BOLD, 40)
     val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
 
-    surface.setBackgroundColor(Color.WHITE)
-    surface.setForegroundColor(Color.BLACK)
+    surface.setBackgroundColor(RenderColor.fromAwt(Color.WHITE))
+    surface.setForegroundColor(RenderColor.fromAwt(Color.BLACK))
     surface.drawRunPx(xPx = 10.0f, yPx = 5, bgWidthPx = 24.0f, lineHeightPx = 40, ascentPx = 32, s = "WWWWWW")
     surface.flush()
 
@@ -109,8 +109,8 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
     val renderContext = surface.fontRenderContext.getOrElse(fail("Java2D surface must expose its font render context"))
     val backgroundWidth = font.getStringBounds("f", renderContext).getWidth.toFloat
-    surface.setBackgroundColor(Color.WHITE)
-    surface.setForegroundColor(Color.BLACK)
+    surface.setBackgroundColor(RenderColor.fromAwt(Color.WHITE))
+    surface.setForegroundColor(RenderColor.fromAwt(Color.BLACK))
     surface.drawRunPx(xPx = 20.0f, yPx = 5, bgWidthPx = backgroundWidth, lineHeightPx = 50, ascentPx = 38, s = "f")
     surface.flush()
 
@@ -131,10 +131,10 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
     val renderContext = surface.fontRenderContext.getOrElse(fail("Java2D surface must expose its font render context"))
     val backgroundWidth = font.getStringBounds("f", renderContext).getWidth.toFloat
-    surface.setBackgroundColor(Color.BLACK)
-    surface.setForegroundColor(Color.BLUE)
+    surface.setBackgroundColor(RenderColor.fromAwt(Color.BLACK))
+    surface.setForegroundColor(RenderColor.fromAwt(Color.BLUE))
     surface.drawRunPx(xPx = 20.0f, yPx = 5, bgWidthPx = backgroundWidth, lineHeightPx = 50, ascentPx = 38, s = "f")
-    surface.setForegroundColor(Color.RED)
+    surface.setForegroundColor(RenderColor.fromAwt(Color.RED))
     surface.drawRunPx(
       xPx = 20.0f,
       yPx = 5,
@@ -229,12 +229,12 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
 
-    surface.clearViewport(Color.RED)
+    surface.clearViewport(RenderColor.fromAwt(Color.RED))
     surface.flush()
     new Color(image.getRGB(5, 5), true).getAlpha shouldBe 255
 
     val reopened = new Java2DRenderSurface(image, metrics, font, _ => ())
-    reopened.clearViewport(new Color(0, 0, 0, 0))
+    reopened.clearViewport(RenderColor.fromAwt(new Color(0, 0, 0, 0)))
     reopened.flush()
 
     new Color(image.getRGB(5, 5), true).getAlpha shouldBe 0
@@ -246,7 +246,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
 
-    surface.clearViewport(Color.BLUE)
+    surface.clearViewport(RenderColor.fromAwt(Color.BLUE))
     surface.flush()
 
     new Color(image.getRGB(3, 3), true) shouldBe new Color(0, 0, 255, 255)
@@ -258,14 +258,14 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
 
-    surface.setBackgroundColor(Color.RED)
+    surface.setBackgroundColor(RenderColor.fromAwt(Color.RED))
     surface.putString(0, 0, "a")
     surface.flush()
     new Color(image.getRGB(2, 2), true).getAlpha shouldBe 255
 
     val reopened = new Java2DRenderSurface(image, metrics, font, _ => ())
-    reopened.setForegroundColor(Color.WHITE)
-    reopened.setBackgroundColor(new Color(0, 0, 0, 0))
+    reopened.setForegroundColor(RenderColor.fromAwt(Color.WHITE))
+    reopened.setBackgroundColor(RenderColor.fromAwt(new Color(0, 0, 0, 0)))
     reopened.putString(0, 0, " ")
     reopened.flush()
 

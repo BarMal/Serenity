@@ -1,8 +1,8 @@
 package com.serenity.ui.renderer
 
+import java.awt.Font
 import java.awt.font.FontRenderContext
 import java.awt.image.BufferedImage
-import java.awt.{Color, Font}
 
 /** Character- and pixel-run text drawing. Every real [[RenderSurface]] implements this -- a surface that cannot draw
   * text cannot render Serenity's UI -- so [[RenderSurface.text]] exposes it directly rather than as an `Option`: the
@@ -36,7 +36,7 @@ trait TextDrawing:
   * [[RenderSurface.pixels]] exposes it directly rather than as an `Option`.
   */
 trait PixelDrawing:
-  def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit
+  def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit
   def drawImage(image: BufferedImage, x: Int, y: Int, width: Int, height: Int): Unit
 
   /** Composite a whole-surface layer image (a modal/panel layer buffer, produced by
@@ -135,7 +135,7 @@ trait HardwareCursor:
   */
 trait PanelOutlineDrawing:
 
-  def strokeRect(x: Int, y: Int, width: Int, height: Int, color: Color, strokeWidth: Float): Unit
+  def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit
 
   /** Restrict drawing performed by `render` to a rectangle in cell coordinates. */
   def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit

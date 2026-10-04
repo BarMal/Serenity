@@ -48,13 +48,13 @@ class Java2DClearViewportExceptSpec extends AnyFlatSpec with Matchers:
 
       val actual  = noisyImage(scale)
       val surface = new Java2DRenderSurface(actual, metrics, font, _ => (), logicalWidth, logicalHeight, scale, scale)
-      surface.clearViewportExcept(colour, preserved)
+      surface.clearViewportExcept(RenderColor.fromAwt(colour), preserved)
       surface.flush()
 
       val fullyCleared = noisyImage(scale)
       val clearAll =
         new Java2DRenderSurface(fullyCleared, metrics, font, _ => (), logicalWidth, logicalHeight, scale, scale)
-      clearAll.clearViewport(colour)
+      clearAll.clearViewport(RenderColor.fromAwt(colour))
       clearAll.flush()
 
       // The clip used to leave the device column straddling a fractional right edge stale; filling rectangles clears it,

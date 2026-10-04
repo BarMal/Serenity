@@ -6,7 +6,7 @@ import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JPanel
 
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.Java2DRenderSurface
+import com.serenity.ui.renderer.{Java2DRenderSurface, RenderColor}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -104,7 +104,7 @@ class Java2DLayerSurfaceSpec extends AnyFlatSpec with Matchers:
     val layer = surface.layerBuffers
       .getOrElse(fail("expected layer buffer support"))
       .newLayerSurface(image => flushedRef.set(Some(image)))
-    layer.pixels.fillPixelRect(0, 0, 20, 20, Color.RED)
+    layer.pixels.fillPixelRect(0, 0, 20, 20, RenderColor.fromAwt(Color.RED))
     layer.flush()
     val layerPixels = flushedRef.get().getOrElse(fail("layer was not flushed"))
     new Color(layerPixels.getRGB(30, 30), true).getAlpha shouldBe 0
@@ -115,7 +115,7 @@ class Java2DLayerSurfaceSpec extends AnyFlatSpec with Matchers:
     try graphics.drawImage(layerPixels, 0, 0, null)
     finally graphics.dispose()
     val direct = stripedImage(40, 40)
-    new Java2DRenderSurface(direct, metrics, font, _ => ()).fillPixelRect(0, 0, 20, 20, Color.RED)
+    new Java2DRenderSurface(direct, metrics, font, _ => ()).fillPixelRect(0, 0, 20, 20, RenderColor.fromAwt(Color.RED))
 
     for
       x <- 0 until 40

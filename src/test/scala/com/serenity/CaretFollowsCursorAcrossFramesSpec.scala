@@ -1,7 +1,7 @@
 package com.serenity
 
+import java.awt.Font
 import java.awt.image.BufferedImage
-import java.awt.{Color, Font}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -15,6 +15,7 @@ import com.serenity.ui.layout.{PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{
   CaretRecordingSurface,
   Java2DRenderSurface,
+  RenderColor,
   RendererCursorOverlay,
   RendererEntryPoints,
   ScreenIdentity
@@ -57,7 +58,7 @@ class CaretFollowsCursorAcrossFramesSpec extends AnyFlatSpec with Matchers:
       if !flushed.get() then super.flush()
       flushed.set(true)
 
-    override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: Color): Unit =
+    override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit =
       if flushed.get() then
         val _ = fills.updateAndGet(_ :+ PixelRect(xPx, yPx, widthPx, heightPx))
       else super.fillPixelRect(xPx, yPx, widthPx, heightPx, color)
