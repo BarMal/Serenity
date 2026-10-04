@@ -83,16 +83,20 @@ sealed trait ParagraphTree:
       case ParagraphTree.Branch(left, right, _, _) => left.existsAny(p) || right.existsAny(p)
 
   /** Applies `f` to every paragraph, preserving the existing tree shape (no rebalancing is needed: the paragraph count
-    * of every subtree is unchanged).
+    * of every subtree is unchanged). Subtrees whose paragraphs `f` returns unchanged (by reference) are shared rather
+    * than rebuilt.
     */
   def mapAll(f: RichTextParagraph => RichTextParagraph): ParagraphTree =
     this match
-      case ParagraphTree.Empty           => ParagraphTree.Empty
-      case ParagraphTree.Leaf(paragraph) => ParagraphTree.Leaf(f(paragraph))
-      case ParagraphTree.Branch(left, right, count, _) =>
+      case ParagraphTree.Empty => ParagraphTree.Empty
+      case ParagraphTree.Leaf(paragraph) =>
+        val mapped = f(paragraph)
+        if mapped eq paragraph then this else ParagraphTree.Leaf(mapped)
+      case branch @ ParagraphTree.Branch(left, right, count, _) =>
         val newLeft  = left.mapAll(f)
         val newRight = right.mapAll(f)
-        ParagraphTree.Branch(newLeft, newRight, count, newLeft.charCount + newRight.charCount)
+        if (newLeft eq left) && (newRight eq right) then branch
+        else ParagraphTree.Branch(newLeft, newRight, count, newLeft.charCount + newRight.charCount)
 
   /** Replaces the paragraphs in `[startIndex, endIndex]` (inclusive, clamped to `[0, paragraphCount - 1]` by the
     * caller) with `replacement`, via `O(log n)` split/link plus the `O(m)` cost of building the replacement span.
@@ -110,7 +114,7 @@ object ParagraphTree:
 
   final case class Leaf(paragraph: RichTextParagraph) extends ParagraphTree:
     def paragraphCount: Int = 1
-    def charCount: Int      = paragraph.plainText.length
+    def charCount: Int      = paragraph.plainTextLength
 
   final case class Branch private[ParagraphTree] (
       left: ParagraphTree,
