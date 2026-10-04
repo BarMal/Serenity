@@ -56,49 +56,71 @@ object VisualLineIndexStore:
   def followEdit(index: VisualLineIndex, before: Rope, after: Rope): VisualLineIndex =
     if index.lineCount != before.lineCount then VisualLineIndex.unmeasured(after.lineCount)
     else
-      val beforeLeaves = leafStrings(before)
-      val afterLeaves  = leafStrings(after)
-      val bound        = math.min(before.weight, after.weight)
-      val prefix       = commonPrefix(beforeLeaves, afterLeaves, bound)
-      if prefix == bound && before.weight == after.weight then index
+      val bound  = math.min(before.weight, after.weight)
+      val prefix = sharedRun(before, after, bound, fromEnd = false)
+      if prefix.length == bound && before.weight == after.weight then index
       else
-        val suffix          = commonPrefix(beforeLeaves.reverse, afterLeaves.reverse, bound - prefix, fromEnd = true)
-        val (firstLine, _)  = after.offsetToLineColumn(prefix)
-        val (lastBefore, _) = before.offsetToLineColumn(before.weight - suffix)
-        val (lastAfter, _)  = after.offsetToLineColumn(after.weight - suffix)
-        val followed        = index.replacedLines(firstLine, lastBefore - firstLine + 1, lastAfter - firstLine + 1)
+        val suffix     = sharedRun(before, after, bound - prefix.length, fromEnd = true)
+        val firstLine  = prefix.newlines
+        val lastBefore = before.newlineCount - suffix.newlines
+        val lastAfter  = after.newlineCount - suffix.newlines
+        val followed   = index.replacedLines(firstLine, lastBefore - firstLine + 1, lastAfter - firstLine + 1)
         if followed.lineCount == after.lineCount then followed else VisualLineIndex.unmeasured(after.lineCount)
 
-  /** An edit rebuilds only the leaves it touches, so every other leaf keeps the very same string: comparing those by
-    * reference makes finding an edit proportional to the leaf count rather than the document's length, which a
-    * `RopeDiff` walk splitting both trees is not.
-    */
-  private def leafStrings(rope: Rope): Vector[String] =
-    @tailrec
-    def collect(pending: List[Rope], acc: Vector[String]): Vector[String] =
-      pending match
-        case Node(left, right) :: rest            => collect(left :: right :: rest, acc)
-        case Leaf(value) :: rest if value.isEmpty => collect(rest, acc)
-        case Leaf(value) :: rest                  => collect(rest, acc :+ value)
-        case Nil                                  => acc
-    collect(List(rope), Vector.empty)
+  final private case class Run(length: Int, newlines: Int):
+    def plus(more: Run): Run = Run(length + more.length, newlines + more.newlines)
 
-  /** How many characters `a` and `b` share from their start (or, `fromEnd`, from their end, with both leaf vectors
-    * already reversed), up to `bound`.
+  /** The text `a` and `b` share from their start (or, `fromEnd`, their end), at most `limit` characters, found by
+    * walking both trees in step. An edit rebuilds only the nodes on its path and the leaves it touches, so the walk
+    * skips every subtree and leaf string the two ropes hold in common by reference, and costs the tree's depth plus the
+    * changed region rather than the document. Nodes that never line up are expanded and compared leaf by leaf, then
+    * character by character: slower, never wrong. The run's newline count is what lets the caller find the lines either
+    * side of the change without descending the ropes again.
     */
-  private def commonPrefix(a: Vector[String], b: Vector[String], bound: Int, fromEnd: Boolean = false): Int =
-    def charAt(leaf: String, offset: Int): Char = leaf.charAt(if fromEnd then leaf.length - 1 - offset else offset)
+  private def sharedRun(a: Rope, b: Rope, limit: Int, fromEnd: Boolean): Run =
+    def expand(node: Node, rest: List[Rope]): List[Rope] =
+      if fromEnd then node.right :: node.left :: rest else node.left :: node.right :: rest
+
+    def matching(x: String, xUsed: Int, y: String, yUsed: Int, count: Int): Run =
+      def at(value: String, used: Int, offset: Int): Char =
+        value.charAt(if fromEnd then value.length - 1 - used - offset else used + offset)
+      @tailrec
+      def scan(offset: Int, newlines: Int): Run =
+        if offset >= count then Run(count, newlines)
+        else
+          val char = at(x, xUsed, offset)
+          if char != at(y, yUsed, offset) then Run(offset, newlines)
+          else scan(offset + 1, if char == '\n' then newlines + 1 else newlines)
+      scan(0, 0)
+
+    def same(x: AnyRef, y: AnyRef): Boolean = x eq y
+
     @tailrec
-    def sharedLeaves(index: Int, shared: Int): (Int, Int) =
-      if index < a.length && index < b.length && (a(index) eq b(index)) && shared + a(index).length <= bound then
-        sharedLeaves(index + 1, shared + a(index).length)
-      else (index, shared)
-    @tailrec
-    def sharedChars(aLeaf: Int, aOffset: Int, bLeaf: Int, bOffset: Int, shared: Int): Int =
-      if shared >= bound || aLeaf >= a.length || bLeaf >= b.length then shared
-      else if aOffset >= a(aLeaf).length then sharedChars(aLeaf + 1, 0, bLeaf, bOffset, shared)
-      else if bOffset >= b(bLeaf).length then sharedChars(aLeaf, aOffset, bLeaf + 1, 0, shared)
-      else if charAt(a(aLeaf), aOffset) != charAt(b(bLeaf), bOffset) then shared
-      else sharedChars(aLeaf, aOffset + 1, bLeaf, bOffset + 1, shared + 1)
-    val (leaf, shared) = sharedLeaves(0, 0)
-    sharedChars(leaf, 0, leaf, 0, shared)
+    def walk(left: List[Rope], leftUsed: Int, right: List[Rope], rightUsed: Int, run: Run): Run =
+      if run.length >= limit then run
+      else
+        (left, right) match
+          case (x :: xs, y :: ys) =>
+            if same(x, y) && leftUsed == 0 && rightUsed == 0 && run.length + x.weight <= limit then
+              walk(xs, 0, ys, 0, run.plus(Run(x.weight, x.newlineCount)))
+            else
+              (x, y) match
+                case (Leaf(s), _) if leftUsed >= s.length  => walk(xs, 0, right, rightUsed, run)
+                case (_, Leaf(t)) if rightUsed >= t.length => walk(left, leftUsed, ys, 0, run)
+                case (Leaf(s), Leaf(t)) =>
+                  val count = math.min(math.min(s.length - leftUsed, t.length - rightUsed), limit - run.length)
+                  val shared =
+                    if same(s, t) && leftUsed == 0 && rightUsed == 0 && count == s.length then
+                      Run(count, x.newlineCount)
+                    else matching(s, leftUsed, t, rightUsed, count)
+                  if shared.length < count then run.plus(shared)
+                  else walk(left, leftUsed + count, right, rightUsed + count, run.plus(shared))
+                case (nodeX: Node, nodeY: Node) =>
+                  if nodeX.weight > nodeY.weight then walk(expand(nodeX, xs), leftUsed, right, rightUsed, run)
+                  else if nodeY.weight > nodeX.weight then walk(left, leftUsed, expand(nodeY, ys), rightUsed, run)
+                  else walk(expand(nodeX, xs), leftUsed, expand(nodeY, ys), rightUsed, run)
+                case (nodeX: Node, _) => walk(expand(nodeX, xs), leftUsed, right, rightUsed, run)
+                case (_, nodeY: Node) => walk(left, leftUsed, expand(nodeY, ys), rightUsed, run)
+          case _ => run
+
+    walk(List(a), 0, List(b), 0, Run(0, 0))
