@@ -96,7 +96,7 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
     val peekSurface = shown.state.runtime.uiSurfaces.find(_.content == SurfaceContent.QuickInfo("signature"))
 
     peekSurface shouldBe defined
-    shown.state.persisted.focus shouldBe Focus.Surface(peekSurface.get.id)
+    shown.state.persisted.focus shouldBe Focus.EditorPane(paneId)
     peekSurface.get.presentation shouldBe SurfacePresentation.Floating(
       Some(CursorPosition(3, 4)),
       SurfacePlacement.AboveCursor

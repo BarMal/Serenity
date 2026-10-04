@@ -99,12 +99,12 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
     saved.persisted.buffers(bufferId).document.isDirty shouldBe true
   }
 
-  it should "ignore edit events while read-only" in {
+  it should "pass edit events on to the editor while read-only" in {
     val readOnlyState = withLensMode(baseState, CommentLensMode.ReadOnly)
 
     val result = component.processEvent(ModalInsertChar('!'), readOnlyState)
 
-    result shouldBe ComponentResult.noChange
+    result shouldBe ComponentResult.unhandled
   }
 
   it should "still dismiss without saving on Escape while read-only" in {
@@ -135,14 +135,15 @@ class CommentLensComponentSpec extends AnyFlatSpec with Matchers:
 
     commentLens(opened).target shouldBe None
     commentLens(opened).mode shouldBe CommentLensMode.ReadOnly
-    component.processEvent(ModalInsertChar('!'), opened) shouldBe ComponentResult.noChange
+    opened.persisted.focus shouldBe Focus.EditorPane(paneId)
+    component.processEvent(ModalInsertChar('!'), opened) shouldBe ComponentResult.unhandled
   }
 
-  it should "ignore edit events even when constructed editable" in {
+  it should "leave the draft alone even when constructed editable" in {
     val untargeted = withLens(baseState)(_.copy(target = None, mode = CommentLensMode.Editable))
 
-    component.processEvent(ModalInsertChar('!'), untargeted) shouldBe ComponentResult.noChange
-    component.processEvent(ModalSubmit, untargeted) shouldBe ComponentResult.noChange
+    component.processEvent(ModalInsertChar('!'), untargeted) shouldBe ComponentResult.unhandled
+    component.processEvent(ModalSubmit, untargeted) shouldBe ComponentResult.unhandled
   }
 
   "Saving an emptied comment draft" should "delete the comment rather than save placeholder text" in {

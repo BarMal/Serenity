@@ -212,11 +212,15 @@ object PanelStateReducer:
       )
     )
 
+  /** A peek never holds focus (#1940), so it is found by what it shows rather than as the focused surface. */
   def pinPeekOverlay(position: PanelPosition, state: AppState): ReducerResult =
-    pinActiveFloatingSurface(position, state)
+    pinFloatingSurface(state.peekSurface, position, state)
 
   def pinActiveFloatingSurface(position: PanelPosition, state: AppState): ReducerResult =
-    activeFloatingSurface(state)
+    pinFloatingSurface(activeFloatingSurface(state), position, state)
+
+  private def pinFloatingSurface(floating: Option[UiSurface], position: PanelPosition, state: AppState): ReducerResult =
+    floating
       .flatMap(toPinnedSurface)
       .map { panel =>
         val tree = state.persisted.layout.workspaceTree.flatMap { workspaceTree =>

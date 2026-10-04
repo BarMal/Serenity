@@ -232,26 +232,10 @@ final private[manager] class StateManagerEventPipeline(
         mouseHitTesting.handleMouseDrag(drag, prevState)
       case move: MouseMove =>
         mouseHitTesting.handleMouseMove(move, prevState)
-      case vertical: VerticalNavigationEvent =>
-        prevState.persisted.focus match
-          case Focus.EditorPane(paneId) =>
-            EditorGeometryProducer.forPane(prevState, paneId, wrapCache = wrappedLines) match
-              case Some(geometry) =>
-                val reducedState =
-                  EditorEventReducer.reduceVerticalNavigation(vertical, paneId, prevState, geometry).state
-                // #1042 carved vertical nav out to dispatch here directly rather than through
-                // dispatchToFocusedHandler/EditorPaneComponent, which is the only place that otherwise applies this
-                // pass -- without it, MoveUp/MoveDown/ExtendSelectionUp/ExtendSelectionDown move the cursor but never
-                // scroll the viewport to follow it.
-                modelCommit.commitState(
-                  CursorViewport.ensureVisibleCursors(prevState, reducedState, wrapCache = wrappedLines),
-                  prevState
-                )
-              case None => dispatchToFocusedHandler(vertical, prevState)
-          case _ => dispatchToFocusedHandler(vertical, prevState)
-
-      case _: (TextEntryEvent | SurfaceEvent) =>
-        dispatchToFocusedHandler(event, prevState)
+      case key: (VerticalNavigationEvent | TextEntryEvent | SurfaceEvent) =>
+        FocusScopes.peekKeyOutcome(key, prevState) match
+          case FocusScopes.PeekKeyOutcome.Consumed(closed)     => modelCommit.commitState(closed, prevState)
+          case FocusScopes.PeekKeyOutcome.PassedOn(afterPeeks) => dispatchToFocusedHandler(key, afterPeeks, prevState)
 
   private def afterOutsideModalDismissed(event: MouseInputEvent, prevState: AppState)(
     handle: AppState => cats.effect.IO[Unit]
@@ -264,19 +248,52 @@ final private[manager] class StateManagerEventPipeline(
       case Some(dismissed) => applyReducerResult(dismissed, prevState) >> modelCommit.currentState.flatMap(handle)
       case None            => handle(prevState)
 
-  private def dispatchToFocusedHandler(event: Event, prevState: AppState): cats.effect.IO[Unit] =
-    val logCommandRunnerEvent =
-      focusedCommandRunner(prevState) match
-        case Some(runner) =>
-          logger.debug(s"[COMMAND-RUNNER] ${StateManager.describeCommandRunnerEvent(event, runner)}")
-        case None =>
-          cats.effect.IO.unit
+  /** `base` is `prevState` with whatever the key already did to the peeks; the commit is checked against `prevState`. A
+    * surface's unhandled key bubbles out to the editor pane (#1940).
+    */
+  private def dispatchToFocusedHandler(event: Event, base: AppState, prevState: AppState): cats.effect.IO[Unit] =
+    base.persisted.focus match
+      case Focus.EditorPane(paneId) => dispatchToEditorPane(event, paneId, base, prevState)
+      case focus =>
+        val logCommandRunnerEvent =
+          focusedCommandRunner(base) match
+            case Some(runner) =>
+              logger.debug(s"[COMMAND-RUNNER] ${StateManager.describeCommandRunnerEvent(event, runner)}")
+            case None =>
+              cats.effect.IO.unit
 
-    val result =
-      getLocalHandlerForFocus(prevState.persisted.focus, prevState).processEvent(event, prevState)
+        val result = getLocalHandlerForFocus(focus, base).processEvent(event, base)
 
-    logCommandRunnerEvent >>
-      applyComponentResult(result, prevState).flatMap(newState => modelCommit.commitState(newState, prevState))
+        logCommandRunnerEvent >>
+          applyComponentResult(result, base).flatMap { handled =>
+            FocusScopes.bubbleTarget(focus, result, base).zip(FocusScopes.asEditorEvent(event)) match
+              case Some((paneId, editorEvent)) => dispatchToEditorPane(editorEvent, paneId, handled, prevState)
+              case None                        => modelCommit.commitState(handled, prevState)
+          }
+
+  private def dispatchToEditorPane(
+    event: Event,
+    paneId: PaneId,
+    base: AppState,
+    prevState: AppState
+  ): cats.effect.IO[Unit] =
+    val verticalGeometry = event match
+      case vertical: VerticalNavigationEvent =>
+        EditorGeometryProducer.forPane(base, paneId, wrapCache = wrappedLines).map(vertical -> _)
+      case _ => None
+    verticalGeometry match
+      case Some((vertical, geometry)) =>
+        val reducedState = EditorEventReducer.reduceVerticalNavigation(vertical, paneId, base, geometry).state
+        // #1042 carved vertical nav out to dispatch here directly rather than through EditorPaneComponent, which is the
+        // only place that otherwise applies this pass -- without it, MoveUp/MoveDown/ExtendSelectionUp/
+        // ExtendSelectionDown move the cursor but never scroll the viewport to follow it.
+        modelCommit.commitState(
+          CursorViewport.ensureVisibleCursors(base, reducedState, wrapCache = wrappedLines),
+          prevState
+        )
+      case None =>
+        val result = new EditorPaneComponent(paneId, wrapCache = wrappedLines)(using balance).processEvent(event, base)
+        applyComponentResult(result, base).flatMap(newState => modelCommit.commitState(newState, prevState))
 
   /** Routed by type alone: `CloseTab` and `Quit` previously had to precede the `GlobalAppEvent` branch. */
   private def dispatchGlobalAppEvent(event: GlobalAppEvent, prevState: AppState): cats.effect.IO[Unit] =
@@ -403,6 +420,7 @@ final private[manager] class StateManagerEventPipeline(
   private[manager] def applyComponentResult(result: ComponentResult, state: AppState): cats.effect.IO[AppState] =
     result match
       case ComponentResult.NoChange            => cats.effect.IO.pure(state)
+      case ComponentResult.Unhandled           => cats.effect.IO.pure(state)
       case ComponentResult.StateChange(update) => cats.effect.IO.pure(update(state))
       case ComponentResult.ReducerUpdate(result) =>
         modelCommit.currentState.flatMap(committed => applyReducerResult(result, committed)) >> modelCommit.currentState

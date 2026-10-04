@@ -10,11 +10,7 @@ class PeekOverlayComponent() extends TypedFocusedComponent[PeekInputEvent]:
 
   protected def processTypedEvent(event: PeekInputEvent, currentState: AppState): ComponentResult =
     event match
-      case PeekInputEvent.Navigate(_) =>
-        ComponentResult.dismiss
-      case PeekInputEvent.Accept =>
-        ComponentResult.dismiss
       case PeekInputEvent.Dismiss =>
         ComponentResult.dismiss
-      case PeekInputEvent.OtherInput =>
-        ComponentResult.dismiss
+      case PeekInputEvent.Navigate(_) | PeekInputEvent.Accept | PeekInputEvent.OtherInput =>
+        ComponentResult.composite(ComponentResult.dismiss, ComponentResult.unhandled)

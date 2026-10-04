@@ -208,7 +208,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
     val peekState   = stateManager.getCurrentState.unsafeRunSync()
     val peekSurface = peekState.runtime.uiSurfaces.find(_.content == SurfaceContent.QuickInfo("hint"))
     peekSurface shouldBe defined
-    peekState.persisted.focus shouldBe Focus.Surface(peekSurface.get.id)
+    peekState.persisted.focus shouldBe Focus.EditorPane(com.serenity.state.models.PaneId(0))
 
     stateManager.applyEvent(PeekInputEvent.Dismiss).unsafeRunSync()
     val finalState = stateManager.getCurrentState.unsafeRunSync()

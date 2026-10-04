@@ -26,7 +26,8 @@ object CommentRendering:
     openLensAtCursor(state, CommentLensMode.Editable)
 
   /** As [[openLensAtCursor]], but lets the caller pick the opened lens's display mode. Floating display mode's
-    * click-to-open (see `MouseHitTesting`) opens `ReadOnly`; every other caller keeps passing `Editable`.
+    * click-to-open (see `MouseHitTesting`) opens `ReadOnly`; every other caller keeps passing `Editable`. Only an
+    * editable lens takes focus: a read-only one is a peek, so typing still reaches the buffer (#1674).
     */
   def openLensAtCursor(state: AppState, mode: CommentLensMode): AppState =
     activeEditorComment(state) match
@@ -40,7 +41,7 @@ object CommentRendering:
           .copy(runtime =
             state.runtime.copy(uiSurfaces = state.runtime.uiSurfaces.filterNot(isCommentLensSurface) :+ surface)
           )
-          .pushFocus(Focus.Surface(surface.id))
+          .pushFocusUnlessPeek(surface)
       case None =>
         state
 
@@ -48,16 +49,16 @@ object CommentRendering:
     * `StateManagerOperationBoundary.prepareCommit` (#1550), so a keyboard cursor move opens/closes it exactly the way a
     * mouse click already did: moving into a `DocumentComment`'s range opens the same read-only lens `MouseHitTesting`'s
     * click handler opens, and moving out of it -- by any further interaction, not only a click -- closes it. Scoped to
-    * `Focus.EditorPane` so it never touches a lens the user is actively interacting with
-    * (`Focus.Surface(comment-lens)`, entered by `openLensAtCursor`/`CommentLensMouseHitTesting` the moment the lens
-    * opens), and only opens for a plain (collapsed-cursor) move -- a double/triple-click word/line selection or a
-    * shift-click/shift-arrow range selection landing inside the range is a selection gesture, not a request to read the
-    * comment, matching `MouseHitTesting.opensFloatingCommentLens`'s own click-count/shift exclusion.
+    * `Focus.EditorPane` so it never touches a lens the user is actively editing (`Focus.Surface(comment-lens)`, entered
+    * only by an explicit edit: the `comment-lens` command or a click in the lens body), and only opens for a plain
+    * (collapsed-cursor) move -- a double/triple-click word/line selection or a shift-click/shift-arrow range selection
+    * landing inside the range is a selection gesture, not a request to read the comment, matching
+    * `MouseHitTesting.opensFloatingCommentLens`'s own click-count/shift exclusion.
     *
     * Opens only on genuine *entry* into a comment's range -- `previousState`'s cursor was over a different comment (or
     * none) -- rather than on every transition the cursor happens to still be inside one for. Otherwise dismissing the
-    * lens with Escape (which moves focus back to `Focus.EditorPane` without moving the cursor out of the comment) would
-    * have this immediately reopen the very lens Escape just closed.
+    * lens with Escape (which closes it without moving the cursor out of the comment) would have this immediately reopen
+    * the very lens Escape just closed.
     */
   def syncFloatingLensWithCursor(state: AppState, previousState: AppState): AppState =
     if state.persisted.config.surfaceConfig.commentDisplayMode != CommentDisplayMode.Floating then state

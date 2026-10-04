@@ -31,9 +31,9 @@ class SurfaceOperationReducersSpec extends AnyFlatSpec with Matchers:
   private val withPeek: AppState =
     PeekStateReducer.show(PeekContent.QuickInfo("info"), CursorPosition(0, 0), AppState.initial).state
 
-  "PeekStateReducer.show" should "focus a new floating peek surface" in {
+  "PeekStateReducer.show" should "show a new floating peek surface without taking focus" in {
     withPeek.runtime.uiSurfaces should have size 1
-    withPeek.persisted.focus shouldBe Focus.Surface(withPeek.runtime.uiSurfaces.head.id)
+    withPeek.persisted.focus shouldBe AppState.initial.persisted.focus
     valid(withPeek) shouldBe true
   }
 
