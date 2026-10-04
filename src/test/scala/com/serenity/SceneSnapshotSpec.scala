@@ -7,6 +7,7 @@ import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -158,7 +159,7 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
   it should "retain the current floating presentation for modal workflows" in {
     val modal = UiSurface(
       SurfaceId("find"),
-      SurfaceContent.ModalWorkflow(Modal.Find("needle", Vector.empty, 0)),
+      SurfaceContent.ModalWorkflow(Modal.Find(TextField.of("needle"), Vector.empty, 0)),
       SurfacePresentation.Floating(Some(CursorPosition(0, 0)), SurfacePlacement.BelowCursor)
     )
 

@@ -14,6 +14,7 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalStateReducer, PeekStateReducer}
 import com.serenity.testkit.AwaitCondition.awaitValue
 import com.serenity.ui.layout.*
+import com.serenity.ui.widget.TextField
 import org.scalatest.concurrent.Eventually
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -288,7 +289,7 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
 
     val updatedState = stateManager.getCurrentState.unsafeRunSync()
     updatedState.modalSurface.map(_.content) shouldBe Some(
-      SurfaceContent.ModalWorkflow(Modal.Find("need", Vector.empty, 0))
+      SurfaceContent.ModalWorkflow(Modal.Find(TextField.of("need"), Vector.empty, 0))
     )
     updatedState.persisted.buffers(bufferId).findState shouldBe None
   }

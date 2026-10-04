@@ -8,6 +8,7 @@ import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.ui.accessibility.{AccessibilityRole, AccessibilitySnapshot}
 import com.serenity.ui.layout.*
+import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -160,7 +161,8 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
           "No saved sessions"
         )
       ),
-      SurfaceId("find") -> Modal.Find("needle", Vector(FindResult(1, 2), FindResult(4, 5)), currentIndex = 1),
+      SurfaceId("find") -> Modal
+        .Find(TextField.of("needle"), Vector(FindResult(1, 2), FindResult(4, 5)), currentIndex = 1),
       SurfaceId("file") -> Modal.FileWorkflow(
         FileWorkflowState(
           mode = FileWorkflowMode.SaveAs,

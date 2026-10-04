@@ -38,6 +38,7 @@ import com.serenity.ui.layout.{CellMetrics, Layout, TextLayoutSnapshot}
 import com.serenity.ui.renderer.{CharacterRenderer, Java2DRenderSurface, RendererCursorOverlay, RendererEntryPoints}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.ui.theme.Theme
+import com.serenity.ui.widget.TextField
 import io.circe.Json
 
 object PerformanceBenchmarks:
@@ -283,7 +284,7 @@ object PerformanceBenchmarks:
         List(
           UiSurface(
             findQuerySurfaceId,
-            SurfaceContent.ModalWorkflow(Modal.Find("needle", Vector.empty, 0)),
+            SurfaceContent.ModalWorkflow(Modal.Find(TextField.of("needle"), Vector.empty, 0)),
             SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
         )
@@ -305,7 +306,7 @@ object PerformanceBenchmarks:
         List(
           UiSurface(
             findQuerySurfaceId,
-            SurfaceContent.ModalWorkflow(Modal.Find("needl", Vector.empty, 0)),
+            SurfaceContent.ModalWorkflow(Modal.Find(TextField.of("needl"), Vector.empty, 0)),
             SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
           )
         )

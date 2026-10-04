@@ -8,6 +8,7 @@ import com.serenity.state.components.{CommandRunnerComponent, ComponentResult}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.AppEventReducer
 import com.serenity.ui.layout.Layout
+import com.serenity.ui.widget.TextField
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -66,7 +67,7 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
           uiSurfaces = List(
             UiSurface(
               SurfaceId("find"),
-              SurfaceContent.ModalWorkflow(Modal.Find("needle", Vector.empty, 0)),
+              SurfaceContent.ModalWorkflow(Modal.Find(TextField.of("needle"), Vector.empty, 0)),
               SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
             )
           ),

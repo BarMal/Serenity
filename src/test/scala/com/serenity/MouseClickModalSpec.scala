@@ -10,6 +10,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -149,7 +150,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
     findManager.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
     val findSurface = UiSurface(
       SurfaceId("find-click"),
-      SurfaceContent.ModalWorkflow(Modal.Find("needle", Vector(FindResult(0, 0), FindResult(1, 0)), 0)),
+      SurfaceContent.ModalWorkflow(Modal.Find(TextField.of("needle"), Vector(FindResult(0, 0), FindResult(1, 0)), 0)),
       SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
     )
     findManager
@@ -170,7 +171,7 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
       .forModal(findSurface.content.asInstanceOf[SurfaceContent.ModalWorkflow].modal, findNode.frameRect, 2)
       .get
       .hitRegions
-      .find(_.actionId.contains(SurfaceActionId("find-result-0")))
+      .find(_.action.contains(SurfaceAction.SelectFindResult(0)))
       .getOrElse(fail("Expected find result hit region"))
     findManager.applyEvent(MouseClick(findHit.rect.x.toInt, findHit.rect.y.toInt)).unsafeRunSync()
     findManager.getCurrentState

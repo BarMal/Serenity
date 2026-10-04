@@ -1,5 +1,7 @@
 package com.serenity.keystroke.events
 
+import com.serenity.ui.layout.SurfaceAction
+
 sealed trait ModalInputEvent
 
 final case class ModalInsertChar(char: Char) extends ModalInputEvent
@@ -44,6 +46,9 @@ case object ModalCreateDirectory extends ModalInputEvent
   */
 case object ModalOpenAsProjectRoot                                     extends ModalInputEvent
 final case class ModalClick(focusId: String, actionId: Option[String]) extends ModalInputEvent
+
+/** A click on an item whose hit region carries a typed [[SurfaceAction]], sent in place of a [[ModalClick]]. */
+final case class ModalActionClick(action: SurfaceAction) extends ModalInputEvent
 
 object ModalInputEvent:
 

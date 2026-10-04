@@ -9,6 +9,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -82,7 +83,9 @@ class CommandRunnerFindReplaceCommandsSpec extends AnyFlatSpec with Matchers:
     val modalSurface = updatedState.modalSurface
 
     updatedState.commandRunnerSurface shouldBe None
-    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("", Vector.empty, 0)))
+    modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(Modal.Find(TextField.of(""), Vector.empty, 0))
+    )
     modalSurface.map(_.presentation) shouldBe Some(
       SurfacePresentation.Floating(Some(cursor), SurfacePlacement.BelowCursor)
     )
@@ -114,7 +117,7 @@ class CommandRunnerFindReplaceCommandsSpec extends AnyFlatSpec with Matchers:
 
     updatedState.commandRunnerSurface shouldBe None
     modalSurface.map(_.content) shouldBe Some(
-      SurfaceContent.ModalWorkflow(Modal.Find("alpha", Vector(FindResult(0, 0), FindResult(2, 0)), 1))
+      SurfaceContent.ModalWorkflow(Modal.Find(TextField.of("alpha"), Vector(FindResult(0, 0), FindResult(2, 0)), 1))
     )
     modalSurface.map(_.presentation) shouldBe Some(
       SurfacePresentation.Floating(Some(CursorPosition(2, 0)), SurfacePlacement.BelowCursor)
@@ -131,7 +134,9 @@ class CommandRunnerFindReplaceCommandsSpec extends AnyFlatSpec with Matchers:
     val modalSurface = updatedState.modalSurface
 
     updatedState.commandRunnerSurface shouldBe None
-    modalSurface.map(_.content) shouldBe Some(SurfaceContent.ModalWorkflow(Modal.Find("", Vector.empty, 0)))
+    modalSurface.map(_.content) shouldBe Some(
+      SurfaceContent.ModalWorkflow(Modal.Find(TextField.of(""), Vector.empty, 0))
+    )
     updatedState.persisted.focus shouldBe Focus.Surface(modalSurface.get.id)
   }
 

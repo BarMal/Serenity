@@ -14,6 +14,7 @@ import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.*
 import com.serenity.ui.layout.{PanelPosition, PeekContent}
+import com.serenity.ui.widget.TextField
 
 /** A buffer's file seen on disk at a revision other than the one the buffer held when it was read (#1623). */
 final private[manager] case class ExternalRevisionObservation(
@@ -546,11 +547,11 @@ final private[manager] class StateManagerEffectHandlers(
           case Some(FindState(query, _, currentIndex)) if query.nonEmpty =>
             val resultSet =
               FindResultSet.normalized(query, findMatches(buffer, query).map(toFindResult).toVector, currentIndex)
-            Some(Modal.Find(resultSet.query, resultSet.results, resultSet.currentIndex))
+            Some(Modal.Find(TextField.of(resultSet.query), resultSet.results, resultSet.currentIndex))
           case _ =>
             None
       }
-      .getOrElse(Modal.Find("", Vector.empty, 0))
+      .getOrElse(Modal.Find(TextField(), Vector.empty, 0))
 
   private def findMatches(buffer: Buffer, query: String): List[CursorPosition] =
     if query.isEmpty then Nil

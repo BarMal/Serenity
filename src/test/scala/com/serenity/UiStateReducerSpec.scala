@@ -7,6 +7,7 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ModalStateReducer, PanelStateReducer, PeekStateReducer, UndoEffect}
 import com.serenity.state.undo.HistoryEntry
 import com.serenity.ui.layout.*
+import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -63,7 +64,7 @@ class UiStateReducerSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val findShown    = ModalStateReducer.show(Modal.Find("", Vector.empty, 0), state).state
+    val findShown    = ModalStateReducer.show(Modal.Find(TextField.of(""), Vector.empty, 0), state).state
     val findSurface  = findShown.modalSurface.getOrElse(fail("Expected find modal surface"))
     val replaceShown = ModalStateReducer.show(Modal.ReplaceWorkflow(ReplaceWorkflowState()), state).state
     val replaceSurface =
